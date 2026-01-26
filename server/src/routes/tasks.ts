@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { TaskService } from '../services/task-service.js';
 import type { CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
 
-const router = Router();
+const router: RouterType = Router();
 const taskService = new TaskService();
 
 // Validation schemas

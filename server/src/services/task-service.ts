@@ -2,8 +2,16 @@ import fs from 'fs/promises';
 import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
-import slugify from 'slugify';
-import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
+import type { Task, CreateTaskInput, UpdateTaskInput, ReviewComment } from '@veritas-kanban/shared';
+
+// Simple slug function to avoid CJS/ESM issues with slugify
+function makeSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
 
 const TASKS_DIR = path.join(process.cwd(), 'tasks', 'active');
 const ARCHIVE_DIR = path.join(process.cwd(), 'tasks', 'archive');
@@ -24,7 +32,7 @@ export class TaskService {
   }
 
   private taskToFilename(task: Task): string {
-    const slug = slugify(task.title, { lower: true, strict: true }).slice(0, 50);
+    const slug = makeSlug(task.title);
     return `${task.id}-${slug}.md`;
   }
 
@@ -36,7 +44,7 @@ export class TaskService {
     // Add review comments section if present
     if (reviewComments && reviewComments.length > 0) {
       const commentsSection = reviewComments
-        .map(c => `- **${c.file}:${c.line}** - ${c.content}`)
+        .map((c: ReviewComment) => `- **${c.file}:${c.line}** - ${c.content}`)
         .join('\n');
       return content + '\n\n## Review Comments\n\n' + commentsSection;
     }
@@ -89,7 +97,7 @@ export class TaskService {
     );
 
     // Sort by updated date, newest first
-    return tasks.sort((a, b) => 
+    return tasks.sort((a: Task, b: Task) => 
       new Date(b.updated).getTime() - new Date(a.updated).getTime()
     );
   }
@@ -128,9 +136,13 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return null;
 
+    // Handle git field separately to merge properly
+    const { git: gitUpdate, ...restInput } = input;
+    
     const updatedTask: Task = {
       ...task,
-      ...input,
+      ...restInput,
+      git: gitUpdate ? { ...task.git, ...gitUpdate } as Task['git'] : task.git,
       updated: new Date().toISOString(),
     };
 
