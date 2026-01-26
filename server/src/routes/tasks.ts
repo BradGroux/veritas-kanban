@@ -33,6 +33,14 @@ const attemptSchema = z.object({
   ended: z.string().optional(),
 }).optional();
 
+const reviewCommentSchema = z.object({
+  id: z.string(),
+  file: z.string(),
+  line: z.number(),
+  content: z.string(),
+  created: z.string(),
+});
+
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
@@ -43,6 +51,7 @@ const updateTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
   git: gitSchema,
   attempt: attemptSchema,
+  reviewComments: z.array(reviewCommentSchema).optional(),
 });
 
 // GET /api/tasks - List all tasks

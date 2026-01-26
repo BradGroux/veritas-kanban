@@ -75,6 +75,7 @@ export interface UpdateTaskInput {
   tags?: string[];
   git?: Partial<TaskGit>;
   attempt?: TaskAttempt;
+  reviewComments?: ReviewComment[];
 }
 
 export interface TaskFilters {

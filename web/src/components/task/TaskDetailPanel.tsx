@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { Trash2, Code, Search, FileText, Zap, Calendar, Clock, GitBranch, Bot, FileDiff } from 'lucide-react';
-import type { Task, TaskType, TaskStatus, TaskPriority } from '@veritas-kanban/shared';
+import type { Task, TaskType, TaskStatus, TaskPriority, ReviewComment } from '@veritas-kanban/shared';
 import { GitSection } from './GitSection';
 import { AgentPanel } from './AgentPanel';
 import { DiffViewer } from './DiffViewer';
@@ -97,6 +97,7 @@ function useDebouncedSave(task: Task | null, updateTask: ReturnType<typeof useUp
           project: localTask.project,
           tags: localTask.tags,
           git: localTask.git,
+          reviewComments: localTask.reviewComments,
         },
       });
       setIsDirty(false);
@@ -346,7 +347,17 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
             {/* Changes Tab */}
             {isCodeTask && hasWorktree && (
               <TabsContent value="changes" className="mt-0">
-                <DiffViewer task={localTask} />
+                <DiffViewer
+                  task={localTask}
+                  onAddComment={(comment: ReviewComment) => {
+                    const newComments = [...(localTask.reviewComments || []), comment];
+                    updateField('reviewComments', newComments);
+                  }}
+                  onRemoveComment={(commentId: string) => {
+                    const newComments = (localTask.reviewComments || []).filter(c => c.id !== commentId);
+                    updateField('reviewComments', newComments.length > 0 ? newComments : undefined);
+                  }}
+                />
               </TabsContent>
             )}
           </div>
