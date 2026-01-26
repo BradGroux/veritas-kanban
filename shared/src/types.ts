@@ -74,6 +74,7 @@ export interface UpdateTaskInput {
   project?: string;
   tags?: string[];
   git?: Partial<TaskGit>;
+  attempt?: TaskAttempt;
 }
 
 export interface TaskFilters {

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { RepoConfig } from '@veritas-kanban/shared';
+import type { RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared';
 
 export function useConfig() {
   return useQuery({
@@ -61,5 +61,27 @@ export function useRepoBranches(repoName: string | undefined) {
     queryKey: ['config', 'repos', repoName, 'branches'],
     queryFn: () => api.config.repos.branches(repoName!),
     enabled: !!repoName,
+  });
+}
+
+export function useUpdateAgents() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (agents: AgentConfig[]) => api.config.agents.update(agents),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+    },
+  });
+}
+
+export function useSetDefaultAgent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (agent: AgentType) => api.config.agents.setDefault(agent),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+    },
   });
 }

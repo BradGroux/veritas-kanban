@@ -1,4 +1,4 @@
-import type { Task, CreateTaskInput, UpdateTaskInput, AppConfig, RepoConfig } from '@veritas-kanban/shared';
+import type { Task, CreateTaskInput, UpdateTaskInput, AppConfig, RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared';
 
 const API_BASE = '/api';
 
@@ -109,6 +109,26 @@ export const api = {
         return handleResponse<string[]>(response);
       },
     },
+
+    agents: {
+      update: async (agents: AgentConfig[]): Promise<AppConfig> => {
+        const response = await fetch(`${API_BASE}/config/agents`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agents),
+        });
+        return handleResponse<AppConfig>(response);
+      },
+
+      setDefault: async (agent: AgentType): Promise<AppConfig> => {
+        const response = await fetch(`${API_BASE}/config/default-agent`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent }),
+        });
+        return handleResponse<AppConfig>(response);
+      },
+    },
   },
 
   worktree: {
@@ -150,7 +170,77 @@ export const api = {
       return handleResponse<{ command: string }>(response);
     },
   },
+
+  agent: {
+    start: async (taskId: string, agent?: AgentType): Promise<AgentStatus> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent }),
+      });
+      return handleResponse<AgentStatus>(response);
+    },
+
+    sendMessage: async (taskId: string, message: string): Promise<void> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      return handleResponse<void>(response);
+    },
+
+    stop: async (taskId: string): Promise<void> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/stop`, {
+        method: 'POST',
+      });
+      return handleResponse<void>(response);
+    },
+
+    status: async (taskId: string): Promise<AgentStatusResponse> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/status`);
+      return handleResponse<AgentStatusResponse>(response);
+    },
+
+    listAttempts: async (taskId: string): Promise<string[]> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/attempts`);
+      return handleResponse<string[]>(response);
+    },
+
+    getLog: async (taskId: string, attemptId: string): Promise<string> => {
+      const response = await fetch(`${API_BASE}/agents/${taskId}/attempts/${attemptId}/log`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch log');
+      }
+      return response.text();
+    },
+  },
 };
+
+// Types for agent
+export interface AgentStatus {
+  taskId: string;
+  attemptId: string;
+  agent: AgentType;
+  status: string;
+  pid?: number;
+  startedAt?: string;
+}
+
+export interface AgentStatusResponse {
+  running: boolean;
+  taskId?: string;
+  attemptId?: string;
+  agent?: AgentType;
+  status?: string;
+  pid?: number;
+}
+
+export interface AgentOutput {
+  type: 'stdout' | 'stderr' | 'stdin' | 'system';
+  content: string;
+  timestamp: string;
+}
 
 // Types for worktree
 export interface WorktreeInfo {

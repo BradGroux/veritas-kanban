@@ -26,9 +26,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useConfig, useAddRepo, useRemoveRepo, useValidateRepoPath } from '@/hooks/useConfig';
-import { Plus, Trash2, Check, X, Loader2, FolderGit2 } from 'lucide-react';
-import type { RepoConfig } from '@veritas-kanban/shared';
+import { 
+  useConfig, 
+  useAddRepo, 
+  useRemoveRepo, 
+  useValidateRepoPath,
+  useUpdateAgents,
+  useSetDefaultAgent,
+} from '@/hooks/useConfig';
+import { Plus, Trash2, Check, X, Loader2, FolderGit2, Bot, Star } from 'lucide-react';
+import type { RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 
 interface SettingsDialogProps {
@@ -54,7 +61,6 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
       setPathValid(result.valid);
       setBranches(result.branches);
       
-      // Auto-set default branch if available
       if (result.branches.includes('main')) {
         setDefaultBranch('main');
       } else if (result.branches.includes('master')) {
@@ -70,15 +76,8 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!name || !path || !pathValid) return;
-
-    await addRepo.mutateAsync({
-      name,
-      path,
-      defaultBranch,
-    });
-
+    await addRepo.mutateAsync({ name, path, defaultBranch });
     onClose();
   };
 
@@ -201,7 +200,7 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Remove repository?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove "{repo.name}" from your configuration. The actual repository files will not be affected.
+                This will remove "{repo.name}" from your configuration.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -220,9 +219,81 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
   );
 }
 
+function AgentItem({ 
+  agent, 
+  isDefault,
+  onToggle,
+  onSetDefault,
+}: { 
+  agent: AgentConfig; 
+  isDefault: boolean;
+  onToggle: () => void;
+  onSetDefault: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between py-2 px-3 rounded-md border',
+        agent.enabled ? 'bg-card' : 'bg-muted/30'
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onToggle}
+          className={cn(
+            'h-5 w-5 rounded border-2 flex items-center justify-center transition-colors',
+            agent.enabled 
+              ? 'bg-primary border-primary text-primary-foreground' 
+              : 'border-muted-foreground/50'
+          )}
+        >
+          {agent.enabled && <Check className="h-3 w-3" />}
+        </button>
+        <Bot className="h-4 w-4 text-muted-foreground" />
+        <div>
+          <div className={cn('font-medium', !agent.enabled && 'text-muted-foreground')}>
+            {agent.name}
+          </div>
+          <code className="text-xs text-muted-foreground">
+            {agent.command} {agent.args.join(' ')}
+          </code>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {agent.enabled && (
+          <Button
+            variant={isDefault ? 'default' : 'ghost'}
+            size="sm"
+            className="h-7"
+            onClick={onSetDefault}
+            disabled={isDefault}
+          >
+            <Star className={cn('h-3 w-3 mr-1', isDefault && 'fill-current')} />
+            {isDefault ? 'Default' : 'Set Default'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { data: config, isLoading } = useConfig();
   const [showAddForm, setShowAddForm] = useState(false);
+  const updateAgents = useUpdateAgents();
+  const setDefaultAgent = useSetDefaultAgent();
+
+  const handleToggleAgent = (agentType: AgentType) => {
+    if (!config) return;
+    const updatedAgents = config.agents.map(a => 
+      a.type === agentType ? { ...a, enabled: !a.enabled } : a
+    );
+    updateAgents.mutate(updatedAgents);
+  };
+
+  const handleSetDefaultAgent = (agentType: AgentType) => {
+    setDefaultAgent.mutate(agentType);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,33 +338,27 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             )}
           </div>
 
-          {/* Agents Section (read-only for now) */}
+          {/* Agents Section */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium">AI Agents</h3>
-            <div className="text-xs text-muted-foreground">
-              Agent configuration is coming in Sprint 3.
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">AI Agents</h3>
+              <span className="text-xs text-muted-foreground">
+                Enable agents to use on code tasks
+              </span>
             </div>
-            {config?.agents && (
-              <div className="space-y-1">
-                {config.agents.map((agent) => (
-                  <div
+            
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : (
+              <div className="space-y-2">
+                {config?.agents.map((agent) => (
+                  <AgentItem
                     key={agent.type}
-                    className={cn(
-                      'flex items-center justify-between py-2 px-3 rounded-md border',
-                      agent.enabled ? 'bg-card' : 'bg-muted/30 opacity-60'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'h-2 w-2 rounded-full',
-                        agent.enabled ? 'bg-green-500' : 'bg-gray-400'
-                      )} />
-                      <span className="text-sm">{agent.name}</span>
-                    </div>
-                    <code className="text-xs text-muted-foreground">
-                      {agent.command}
-                    </code>
-                  </div>
+                    agent={agent}
+                    isDefault={config.defaultAgent === agent.type}
+                    onToggle={() => handleToggleAgent(agent.type)}
+                    onSetDefault={() => handleSetDefaultAgent(agent.type)}
+                  />
                 ))}
               </div>
             )}

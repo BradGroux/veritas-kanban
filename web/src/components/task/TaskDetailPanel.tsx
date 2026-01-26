@@ -31,6 +31,7 @@ import { useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { Trash2, Code, Search, FileText, Zap, Calendar, Clock } from 'lucide-react';
 import type { Task, TaskType, TaskStatus, TaskPriority } from '@veritas-kanban/shared';
 import { GitSection } from './GitSection';
+import { AgentPanel } from './AgentPanel';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -271,6 +272,11 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
               task={localTask}
               onGitChange={(git) => updateField('git', git as Task['git'])}
             />
+          )}
+
+          {/* AI Agent (code tasks with worktree only) */}
+          {localTask.type === 'code' && (
+            <AgentPanel task={localTask} />
           )}
 
           {/* Metadata */}
