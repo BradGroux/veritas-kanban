@@ -13,6 +13,7 @@ interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
   onClick?: () => void;
+  isSelected?: boolean;
 }
 
 const typeIcons: Record<TaskType, React.ReactNode> = {
@@ -35,7 +36,7 @@ const priorityColors: Record<TaskPriority, string> = {
   low: 'bg-slate-500/20 text-slate-400',
 };
 
-export function TaskCard({ task, isDragging, onClick }: TaskCardProps) {
+export function TaskCard({ task, isDragging, onClick, isSelected }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging: isCurrentlyDragging } = useDraggable({
     id: task.id,
   });
@@ -68,7 +69,8 @@ export function TaskCard({ task, isDragging, onClick }: TaskCardProps) {
               'border-l-2',
               typeColors[task.type],
               isDragging && 'opacity-50 shadow-lg rotate-2 scale-105',
-              isCurrentlyDragging && 'opacity-50'
+              isCurrentlyDragging && 'opacity-50',
+              isSelected && 'ring-2 ring-primary border-primary'
             )}
           >
             <div className="flex items-start gap-2">

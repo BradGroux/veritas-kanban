@@ -13,8 +13,9 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TaskCard } from '@/components/task/TaskCard';
+import { useKeyboard } from '@/hooks/useKeyboard';
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -65,6 +66,40 @@ export function KanbanBoard() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  
+  const {
+    selectedTaskId,
+    setTasks,
+    setOnOpenTask,
+    setOnMoveTask,
+  } = useKeyboard();
+
+  // Register tasks with keyboard context
+  useEffect(() => {
+    if (tasks) {
+      setTasks(tasks);
+    }
+  }, [tasks, setTasks]);
+
+  // Handler for opening a task
+  const handleTaskClick = useCallback((task: Task) => {
+    setSelectedTask(task);
+    setDetailOpen(true);
+  }, []);
+
+  // Handler for moving a task
+  const handleMoveTask = useCallback((taskId: string, status: TaskStatus) => {
+    updateTask.mutate({ id: taskId, input: { status } });
+  }, [updateTask]);
+
+  // Register callbacks with keyboard context
+  useEffect(() => {
+    setOnOpenTask(handleTaskClick);
+  }, [handleTaskClick, setOnOpenTask]);
+
+  useEffect(() => {
+    setOnMoveTask(handleMoveTask);
+  }, [handleMoveTask, setOnMoveTask]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -97,11 +132,6 @@ export function KanbanBoard() {
         input: { status: newStatus },
       });
     }
-  };
-
-  const handleTaskClick = (task: Task) => {
-    setSelectedTask(task);
-    setDetailOpen(true);
   };
 
   const handleDetailClose = (open: boolean) => {
@@ -152,6 +182,7 @@ export function KanbanBoard() {
               title={column.title}
               tasks={tasksByStatus[column.id]}
               onTaskClick={handleTaskClick}
+              selectedTaskId={selectedTaskId}
             />
           ))}
         </div>

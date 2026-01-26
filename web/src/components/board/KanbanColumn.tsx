@@ -8,6 +8,7 @@ interface KanbanColumnProps {
   title: string;
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
+  selectedTaskId?: string | null;
 }
 
 const columnColors: Record<TaskStatus, string> = {
@@ -17,7 +18,7 @@ const columnColors: Record<TaskStatus, string> = {
   'done': 'border-t-green-500',
 };
 
-export function KanbanColumn({ id, title, tasks, onTaskClick }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, tasks, onTaskClick, selectedTaskId }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
@@ -52,6 +53,7 @@ export function KanbanColumn({ id, title, tasks, onTaskClick }: KanbanColumnProp
               key={task.id} 
               task={task} 
               onClick={() => onTaskClick?.(task)}
+              isSelected={task.id === selectedTaskId}
             />
           ))
         )}
