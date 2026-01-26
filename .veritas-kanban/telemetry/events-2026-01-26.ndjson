@@ -1,0 +1,74 @@
+{"type":"task.status_changed","taskId":"task_20260126_aBQTa1","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_Z59CbWwyw1pX","timestamp":"2026-01-26T18:15:12.599Z"}
+{"type":"task.status_changed","taskId":"task_20260126_aBQTa1","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_fYLl8w1bYJRa","timestamp":"2026-01-26T18:16:03.216Z"}
+{"type":"task.status_changed","taskId":"task_20260126_8SKJ8t","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_MxOy_3PoxCMc","timestamp":"2026-01-26T18:16:10.078Z"}
+{"type":"task.status_changed","taskId":"task_20260126_8SKJ8t","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_P1GeDpxBoA03","timestamp":"2026-01-26T18:16:46.712Z"}
+{"type":"task.status_changed","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_0MqXCivHw30K","timestamp":"2026-01-26T18:16:53.836Z"}
+{"type":"task.status_changed","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_kEGbpQZKH4E3","timestamp":"2026-01-26T18:18:04.871Z"}
+{"type":"task.status_changed","taskId":"task_20260126_caioxm","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_ifXjPLXomNEC","timestamp":"2026-01-26T18:18:13.089Z"}
+{"type":"task.status_changed","taskId":"task_20260126_pSMY_Y","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_41T_uWaiYg5r","timestamp":"2026-01-26T18:18:17.215Z"}
+{"type":"task.status_changed","taskId":"task_20260126_caioxm","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_021tQaQ_td41","timestamp":"2026-01-26T18:20:02.491Z"}
+{"type":"task.status_changed","taskId":"task_20260126_pSMY_Y","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_q_QsqwqkvSxP","timestamp":"2026-01-26T18:20:02.570Z"}
+{"type":"task.status_changed","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"in-progress","previousStatus":"todo","id":"evt_IvtZcUOXKfoM","timestamp":"2026-01-26T18:34:08.722Z"}
+{"type":"task.status_changed","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_GFruPQ80OAdH","timestamp":"2026-01-26T18:36:08.124Z"}
+{"type":"task.archived","taskId":"task_20260126_PcoH5E","project":"veritas-kanban","status":"done","id":"evt_7dKn0Er0ddtS","timestamp":"2026-01-26T18:42:04.111Z"}
+{"type":"task.archived","taskId":"task_20260126_elXGhz","project":"veritas-kanban","status":"done","id":"evt_Cd_ZzUgS8ouS","timestamp":"2026-01-26T18:42:04.114Z"}
+{"type":"task.archived","taskId":"task_20260126_FTRJ_R","project":"veritas-kanban","status":"done","id":"evt_tT1XSEm8YPay","timestamp":"2026-01-26T18:42:04.116Z"}
+{"type":"task.archived","taskId":"task_20260126_d6o4vo","project":"veritas-kanban","status":"done","id":"evt__AvIGnc2q699","timestamp":"2026-01-26T18:42:04.117Z"}
+{"type":"task.archived","taskId":"task_20260126_byvNgE","project":"veritas-kanban","status":"done","id":"evt_CrEBFvN9X4A-","timestamp":"2026-01-26T18:42:04.119Z"}
+{"type":"task.archived","taskId":"task_20260126_m4OisW","project":"veritas-kanban","status":"done","id":"evt_zH0_XY8MM2QM","timestamp":"2026-01-26T18:42:04.121Z"}
+{"type":"task.archived","taskId":"task_20260126_eZNCQk","project":"veritas-kanban","status":"done","id":"evt_w0UJP5MVMDQt","timestamp":"2026-01-26T18:42:04.122Z"}
+{"type":"task.archived","taskId":"task_20260126_leQOQ5","project":"veritas-kanban","status":"done","id":"evt_4GSVeYMfCiBb","timestamp":"2026-01-26T18:42:04.123Z"}
+{"type":"task.archived","taskId":"task_20260126_tFaKR6","project":"veritas-kanban","status":"done","id":"evt_SnVqe2bExinP","timestamp":"2026-01-26T18:42:04.125Z"}
+{"type":"task.archived","taskId":"task_20260126_UBz41o","project":"veritas-kanban","status":"done","id":"evt_F4YvzIugMc4h","timestamp":"2026-01-26T18:42:04.126Z"}
+{"type":"task.archived","taskId":"task_20260126_wzj1d0","project":"veritas-kanban","status":"done","id":"evt_77CtwjYuhJKJ","timestamp":"2026-01-26T18:42:04.127Z"}
+{"type":"task.created","taskId":"task_20260126_UZYsUY","project":"Dashboard Test","status":"todo","id":"evt_3AsA7P95bdyo","timestamp":"2026-01-26T18:43:20.680Z"}
+{"type":"task.created","taskId":"task_20260126_7woED_","project":"Dashboard Test","status":"todo","id":"evt_jn_TO6R0NvRO","timestamp":"2026-01-26T18:43:20.745Z"}
+{"type":"task.created","taskId":"task_20260126_ZfmWI8","project":"Dashboard Test","status":"todo","id":"evt_UluNP6Z0HqKY","timestamp":"2026-01-26T18:43:20.806Z"}
+{"type":"task.created","taskId":"task_20260126_Pq8tK0","project":"Dashboard Test","status":"todo","id":"evt_hrYYUqyOLr7o","timestamp":"2026-01-26T18:43:20.859Z"}
+{"type":"run.tokens","taskId":"task_20260126_Pq8tK0","attemptId":"attempt_test_1769453014993_egxy","agent":"claude-code","project":"Dashboard Test","inputTokens":12500,"outputTokens":3200,"totalTokens":15700,"model":"claude-sonnet-4-5","id":"evt_9oB2f_xE88dj","timestamp":"2026-01-26T18:43:34.996Z"}
+{"type":"run.tokens","taskId":"task_20260126_ZfmWI8","attemptId":"attempt_test_1769453015098_xyzn","agent":"claude-code","project":"Dashboard Test","inputTokens":18000,"outputTokens":4500,"totalTokens":22500,"model":"claude-sonnet-4-5","id":"evt_IbCKp1AKn8qU","timestamp":"2026-01-26T18:43:35.102Z"}
+{"type":"run.tokens","taskId":"task_20260126_7woED_","attemptId":"attempt_test_1769453015205_e8dp","agent":"claude-code","project":"Dashboard Test","inputTokens":8000,"outputTokens":1200,"totalTokens":9200,"model":"claude-sonnet-4-5","id":"evt_sVMmBh1OvEDy","timestamp":"2026-01-26T18:43:35.210Z"}
+{"type":"run.tokens","taskId":"task_20260126_UZYsUY","attemptId":"attempt_test_1769453015315_w5e8","agent":"claude-code","project":"Dashboard Test","inputTokens":3500,"outputTokens":800,"totalTokens":4300,"model":"claude-sonnet-4-5","id":"evt_7vJSEC6KB8IF","timestamp":"2026-01-26T18:43:35.320Z"}
+{"type":"run.started","taskId":"task_20260126_UZYsUY","attemptId":"attempt_sim_001","agent":"claude-code","project":"Dashboard Test","id":"evt_mkvinbob_gxuwel","timestamp":"2026-01-26T18:43:49.595Z"}
+{"type":"run.completed","taskId":"task_20260126_UZYsUY","attemptId":"attempt_sim_001","agent":"claude-code","project":"Dashboard Test","durationMs":180000,"exitCode":0,"success":true,"id":"evt_mkvinbob_y55xb5","timestamp":"2026-01-26T18:43:49.595Z"}
+{"type":"run.started","taskId":"task_20260126_7woED_","attemptId":"attempt_sim_002","agent":"claude-code","project":"Dashboard Test","id":"evt_mkvinboe_xa44eb","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.completed","taskId":"task_20260126_7woED_","attemptId":"attempt_sim_002","agent":"claude-code","project":"Dashboard Test","durationMs":245000,"exitCode":0,"success":true,"id":"evt_mkvinboe_cll4h6","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.started","taskId":"task_20260126_Pq8tK0","attemptId":"attempt_sim_003","agent":"claude-code","project":"Dashboard Test","id":"evt_mkvinboe_42j6q2","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.completed","taskId":"task_20260126_Pq8tK0","attemptId":"attempt_sim_003","agent":"claude-code","project":"Dashboard Test","durationMs":45000,"exitCode":0,"success":true,"id":"evt_mkvinboe_p53ezv","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.started","taskId":"task_20260126_ZfmWI8","attemptId":"attempt_sim_004","agent":"claude-code","project":"Dashboard Test","id":"evt_mkvinboe_ior8mc","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.completed","taskId":"task_20260126_ZfmWI8","attemptId":"attempt_sim_004","agent":"claude-code","project":"Dashboard Test","durationMs":120000,"exitCode":1,"success":false,"id":"evt_mkvinboe_c0bf7h","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.started","taskId":"task_20260126_desyd5","attemptId":"attempt_sim_005","agent":"claude-code","project":"Sprint 8","id":"evt_mkvinboe_lajax8","timestamp":"2026-01-26T18:43:49.598Z"}
+{"type":"run.completed","taskId":"task_20260126_desyd5","attemptId":"attempt_sim_005","agent":"claude-code","project":"Sprint 8","durationMs":320000,"exitCode":0,"success":true,"id":"evt_mkvinbof_4gpyi4","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"run.started","taskId":"task_20260126_kgLjM8","attemptId":"attempt_sim_006","agent":"claude-code","project":"Sprint 8","id":"evt_mkvinbof_ez3mzv","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"run.completed","taskId":"task_20260126_kgLjM8","attemptId":"attempt_sim_006","agent":"claude-code","project":"Sprint 8","durationMs":95000,"exitCode":0,"success":true,"id":"evt_mkvinbof_zl72o1","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"run.started","taskId":"task_20260126_aBQTa1","attemptId":"attempt_sim_007","agent":"claude-code","project":"Sprint 8","id":"evt_mkvinbof_lsi250","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"run.completed","taskId":"task_20260126_aBQTa1","attemptId":"attempt_sim_007","agent":"claude-code","project":"Sprint 8","durationMs":110000,"exitCode":0,"success":true,"id":"evt_mkvinbof_3iwm78","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"run.error","taskId":"task_20260126_ZfmWI8","attemptId":"attempt_sim_err","agent":"claude-code","project":"Dashboard Test","error":"Simulated spawn failure","success":false,"id":"evt_mkvinbof_8gbg6h","timestamp":"2026-01-26T18:43:49.599Z"}
+{"type":"task.status_changed","taskId":"task_20260126_UZYsUY","project":"Dashboard Test","status":"done","previousStatus":"todo","id":"evt_qyQd0Oc694WE","timestamp":"2026-01-26T18:43:54.602Z"}
+{"type":"task.status_changed","taskId":"task_20260126_7woED_","project":"Dashboard Test","status":"done","previousStatus":"todo","id":"evt_VrGpXU_STcbJ","timestamp":"2026-01-26T18:43:54.685Z"}
+{"type":"task.status_changed","taskId":"task_20260126_Pq8tK0","project":"Dashboard Test","status":"review","previousStatus":"todo","id":"evt_oSCWb9NhgiZS","timestamp":"2026-01-26T18:43:54.765Z"}
+{"type":"task.status_changed","taskId":"task_20260126_ZfmWI8","project":"Dashboard Test","status":"in-progress","previousStatus":"todo","id":"evt_WO098Dh0dyU6","timestamp":"2026-01-26T18:43:54.844Z"}
+{"type":"task.archived","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"done","id":"evt_nrocELEC4JZK","timestamp":"2026-01-26T18:44:48.723Z"}
+{"type":"task.archived","taskId":"task_20260126_pSMY_Y","project":"Sprint 8","status":"done","id":"evt_CEBSs0bOjaZZ","timestamp":"2026-01-26T18:44:48.725Z"}
+{"type":"task.archived","taskId":"task_20260126_caioxm","project":"Sprint 8","status":"done","id":"evt_Ohze5Eq5ZayS","timestamp":"2026-01-26T18:44:48.726Z"}
+{"type":"task.archived","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"done","id":"evt_84F27EVvgZw8","timestamp":"2026-01-26T18:44:48.728Z"}
+{"type":"task.archived","taskId":"task_20260126_8SKJ8t","project":"Sprint 8","status":"done","id":"evt_3skJEWBkcaZR","timestamp":"2026-01-26T18:44:48.730Z"}
+{"type":"task.archived","taskId":"task_20260126_aBQTa1","project":"Sprint 8","status":"done","id":"evt_--7j35xQnbeP","timestamp":"2026-01-26T18:44:48.730Z"}
+{"type":"task.archived","taskId":"task_20260126_kgLjM8","project":"Sprint 8","status":"done","id":"evt_kDiH5QXEO7yI","timestamp":"2026-01-26T18:44:48.731Z"}
+{"type":"task.archived","taskId":"task_20260126_desyd5","project":"Sprint 8","status":"done","id":"evt_30BWxyrPmRFz","timestamp":"2026-01-26T18:44:48.732Z"}
+{"type":"task.restored","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"done","id":"evt_va-2i42eYcGf","timestamp":"2026-01-26T21:27:03.349Z"}
+{"type":"task.restored","taskId":"task_20260126_pSMY_Y","project":"Sprint 8","status":"done","id":"evt_-sztLMg3yPmn","timestamp":"2026-01-26T21:27:04.591Z"}
+{"type":"task.restored","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"done","id":"evt_Hq71SEAjXMkN","timestamp":"2026-01-26T21:27:05.488Z"}
+{"type":"task.restored","taskId":"task_20260126_aBQTa1","project":"Sprint 8","status":"done","id":"evt__f8f6t6--Kzy","timestamp":"2026-01-26T21:27:06.175Z"}
+{"type":"task.restored","taskId":"task_20260126_desyd5","project":"Sprint 8","status":"done","id":"evt_y3FIUjBg1TgX","timestamp":"2026-01-26T21:27:07.210Z"}
+{"type":"task.status_changed","taskId":"task_20260126_desyd5","project":"Sprint 8","status":"review","previousStatus":"done","id":"evt_7WoPnu398QEU","timestamp":"2026-01-26T21:27:09.945Z"}
+{"type":"task.status_changed","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"in-progress","previousStatus":"done","id":"evt_D8lkESPlWhgE","timestamp":"2026-01-26T21:27:11.355Z"}
+{"type":"task.status_changed","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"todo","previousStatus":"done","id":"evt_gC5nX7SpZFD1","timestamp":"2026-01-26T21:27:12.817Z"}
+{"type":"task.status_changed","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"done","previousStatus":"todo","id":"evt_3pmMMvfnFmSM","timestamp":"2026-01-26T21:29:02.148Z"}
+{"type":"task.status_changed","taskId":"task_20260126_desyd5","project":"Sprint 8","status":"done","previousStatus":"review","id":"evt_tmNxMcXwMLtl","timestamp":"2026-01-26T21:29:03.354Z"}
+{"type":"task.status_changed","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"done","previousStatus":"in-progress","id":"evt_-O_lStUBHA6Q","timestamp":"2026-01-26T21:29:04.742Z"}
+{"type":"task.archived","taskId":"task_20260126_HCSqiT","project":"Sprint 8","status":"done","id":"evt_kRNHJqJpv-n4","timestamp":"2026-01-26T21:29:06.867Z"}
+{"type":"task.archived","taskId":"task_20260126_desyd5","project":"Sprint 8","status":"done","id":"evt_m-K5ZBnN1v4V","timestamp":"2026-01-26T21:29:06.869Z"}
+{"type":"task.archived","taskId":"task_20260126_vfkPKg","project":"Sprint 8","status":"done","id":"evt_3h9NRcGQfvV0","timestamp":"2026-01-26T21:29:06.870Z"}
+{"type":"task.archived","taskId":"task_20260126_aBQTa1","project":"Sprint 8","status":"done","id":"evt_VOaTamvsdimh","timestamp":"2026-01-26T21:29:06.871Z"}
+{"type":"task.archived","taskId":"task_20260126_pSMY_Y","project":"Sprint 8","status":"done","id":"evt_cQd9-vhhJgZ9","timestamp":"2026-01-26T21:29:06.872Z"}

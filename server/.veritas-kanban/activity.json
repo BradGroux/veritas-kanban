@@ -1,5 +1,664 @@
 [
   {
+    "id": "activity_1769462946873_y8th7hcyf",
+    "type": "project_archived",
+    "taskId": "Sprint 8",
+    "taskTitle": "Sprint 8",
+    "details": {
+      "taskCount": 5
+    },
+    "timestamp": "2026-01-26T21:29:06.873Z"
+  },
+  {
+    "id": "activity_1769462944742_jjcuh85ci",
+    "type": "status_changed",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:29:04.742Z"
+  },
+  {
+    "id": "activity_1769462943355_ptv5o2k5k",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "review",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:29:03.355Z"
+  },
+  {
+    "id": "activity_1769462942150_y355wscag",
+    "type": "status_changed",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:29:02.150Z"
+  },
+  {
+    "id": "activity_1769462832818_27tddubx8",
+    "type": "status_changed",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "from": "done",
+      "status": "todo"
+    },
+    "timestamp": "2026-01-26T21:27:12.818Z"
+  },
+  {
+    "id": "activity_1769462831356_6u2qsyb77",
+    "type": "status_changed",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "from": "done",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T21:27:11.356Z"
+  },
+  {
+    "id": "activity_1769462829946_objzpjpyr",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "done",
+      "status": "review"
+    },
+    "timestamp": "2026-01-26T21:27:09.946Z"
+  },
+  {
+    "id": "activity_1769462827210_31os5t2fr",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "archived",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:27:07.210Z"
+  },
+  {
+    "id": "activity_1769462826175_txd5tmllb",
+    "type": "status_changed",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "details": {
+      "from": "archived",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:27:06.175Z"
+  },
+  {
+    "id": "activity_1769462825488_vz1oupv5t",
+    "type": "status_changed",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "from": "archived",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:27:05.488Z"
+  },
+  {
+    "id": "activity_1769462824591_8sy9p9ko4",
+    "type": "status_changed",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "details": {
+      "from": "archived",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:27:04.591Z"
+  },
+  {
+    "id": "activity_1769462823350_fvi6f16qa",
+    "type": "status_changed",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "from": "archived",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T21:27:03.350Z"
+  },
+  {
+    "id": "activity_1769454004283_akggyhs9w",
+    "type": "task_deleted",
+    "taskId": "task_20260126_UZYsUY",
+    "taskTitle": "Test Task 1: Success Run",
+    "timestamp": "2026-01-26T19:00:04.283Z"
+  },
+  {
+    "id": "activity_1769454001199_2l8akjm12",
+    "type": "task_deleted",
+    "taskId": "task_20260126_7woED_",
+    "taskTitle": "Test Task 2: Another Success",
+    "timestamp": "2026-01-26T19:00:01.199Z"
+  },
+  {
+    "id": "activity_1769453997941_fvudasza4",
+    "type": "task_deleted",
+    "taskId": "task_20260126_Pq8tK0",
+    "taskTitle": "Test Task 4: Quick Success",
+    "timestamp": "2026-01-26T18:59:57.941Z"
+  },
+  {
+    "id": "activity_1769453994103_32i7hmzqt",
+    "type": "task_deleted",
+    "taskId": "task_20260126_ZfmWI8",
+    "taskTitle": "Test Task 3: Failed Run",
+    "timestamp": "2026-01-26T18:59:54.103Z"
+  },
+  {
+    "id": "activity_1769453088732_hk70bv3rq",
+    "type": "project_archived",
+    "taskId": "Sprint 8",
+    "taskTitle": "Sprint 8",
+    "details": {
+      "taskCount": 8
+    },
+    "timestamp": "2026-01-26T18:44:48.732Z"
+  },
+  {
+    "id": "activity_1769453034844_n3s072u75",
+    "type": "status_changed",
+    "taskId": "task_20260126_ZfmWI8",
+    "taskTitle": "Test Task 3: Failed Run",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:43:54.844Z"
+  },
+  {
+    "id": "activity_1769453034765_xwfzg1zgn",
+    "type": "status_changed",
+    "taskId": "task_20260126_Pq8tK0",
+    "taskTitle": "Test Task 4: Quick Success",
+    "details": {
+      "from": "todo",
+      "status": "review"
+    },
+    "timestamp": "2026-01-26T18:43:54.765Z"
+  },
+  {
+    "id": "activity_1769453034685_isvxmmflp",
+    "type": "status_changed",
+    "taskId": "task_20260126_7woED_",
+    "taskTitle": "Test Task 2: Another Success",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:43:54.685Z"
+  },
+  {
+    "id": "activity_1769453034603_0shvech9c",
+    "type": "status_changed",
+    "taskId": "task_20260126_UZYsUY",
+    "taskTitle": "Test Task 1: Success Run",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:43:54.603Z"
+  },
+  {
+    "id": "activity_1769453000859_ilipd0693",
+    "type": "task_created",
+    "taskId": "task_20260126_Pq8tK0",
+    "taskTitle": "Test Task 4: Quick Success",
+    "details": {
+      "type": "code",
+      "priority": "low",
+      "project": "Dashboard Test"
+    },
+    "timestamp": "2026-01-26T18:43:20.859Z"
+  },
+  {
+    "id": "activity_1769453000806_80o8hf9o6",
+    "type": "task_created",
+    "taskId": "task_20260126_ZfmWI8",
+    "taskTitle": "Test Task 3: Failed Run",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "Dashboard Test"
+    },
+    "timestamp": "2026-01-26T18:43:20.806Z"
+  },
+  {
+    "id": "activity_1769453000745_870mzawqx",
+    "type": "task_created",
+    "taskId": "task_20260126_7woED_",
+    "taskTitle": "Test Task 2: Another Success",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "Dashboard Test"
+    },
+    "timestamp": "2026-01-26T18:43:20.745Z"
+  },
+  {
+    "id": "activity_1769453000681_mdmhhzfqz",
+    "type": "task_created",
+    "taskId": "task_20260126_UZYsUY",
+    "taskTitle": "Test Task 1: Success Run",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "Dashboard Test"
+    },
+    "timestamp": "2026-01-26T18:43:20.681Z"
+  },
+  {
+    "id": "activity_1769452924128_3xsfwyoy0",
+    "type": "project_archived",
+    "taskId": "veritas-kanban",
+    "taskTitle": "veritas-kanban",
+    "details": {
+      "taskCount": 11
+    },
+    "timestamp": "2026-01-26T18:42:04.128Z"
+  },
+  {
+    "id": "activity_1769452568125_q7uiuw7zo",
+    "type": "status_changed",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:36:08.125Z"
+  },
+  {
+    "id": "activity_1769452448722_4r34xzpke",
+    "type": "status_changed",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:34:08.722Z"
+  },
+  {
+    "id": "activity_1769452447669_kczr3pejl",
+    "type": "task_updated",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "timestamp": "2026-01-26T18:34:07.669Z"
+  },
+  {
+    "id": "activity_1769451602570_zx3w886dz",
+    "type": "status_changed",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:20:02.570Z"
+  },
+  {
+    "id": "activity_1769451602491_8bi00zf3z",
+    "type": "status_changed",
+    "taskId": "task_20260126_caioxm",
+    "taskTitle": "US-806: Dashboard Component",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:20:02.491Z"
+  },
+  {
+    "id": "activity_1769451497215_igxkrg9na",
+    "type": "status_changed",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:18:17.215Z"
+  },
+  {
+    "id": "activity_1769451497144_jiq8ikslt",
+    "type": "task_updated",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "timestamp": "2026-01-26T18:18:17.144Z"
+  },
+  {
+    "id": "activity_1769451493089_118u0n0z1",
+    "type": "status_changed",
+    "taskId": "task_20260126_caioxm",
+    "taskTitle": "US-806: Dashboard Component",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:18:13.089Z"
+  },
+  {
+    "id": "activity_1769451491938_3x38sc3pg",
+    "type": "task_updated",
+    "taskId": "task_20260126_caioxm",
+    "taskTitle": "US-806: Dashboard Component",
+    "timestamp": "2026-01-26T18:18:11.938Z"
+  },
+  {
+    "id": "activity_1769451484871_9uajpr7l7",
+    "type": "status_changed",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:18:04.872Z"
+  },
+  {
+    "id": "activity_1769451413836_poc77g6kk",
+    "type": "status_changed",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:16:53.836Z"
+  },
+  {
+    "id": "activity_1769451412830_v9nww3xfb",
+    "type": "task_updated",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "timestamp": "2026-01-26T18:16:52.830Z"
+  },
+  {
+    "id": "activity_1769451406712_fi23jwbqr",
+    "type": "status_changed",
+    "taskId": "task_20260126_8SKJ8t",
+    "taskTitle": "US-804: Token Usage Tracking",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:16:46.712Z"
+  },
+  {
+    "id": "activity_1769451370078_2pgsz7dp8",
+    "type": "status_changed",
+    "taskId": "task_20260126_8SKJ8t",
+    "taskTitle": "US-804: Token Usage Tracking",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:16:10.078Z"
+  },
+  {
+    "id": "activity_1769451368906_dn12oop49",
+    "type": "task_updated",
+    "taskId": "task_20260126_8SKJ8t",
+    "taskTitle": "US-804: Token Usage Tracking",
+    "timestamp": "2026-01-26T18:16:08.906Z"
+  },
+  {
+    "id": "activity_1769451363216_z3o9d64mc",
+    "type": "status_changed",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:16:03.216Z"
+  },
+  {
+    "id": "activity_1769451312599_79qujupwm",
+    "type": "status_changed",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:15:12.599Z"
+  },
+  {
+    "id": "activity_1769451307395_4sg4ltnrt",
+    "type": "status_changed",
+    "taskId": "task_20260126_kgLjM8",
+    "taskTitle": "US-802: Emit Task Events",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:15:07.395Z"
+  },
+  {
+    "id": "activity_1769451243067_iewp0heay",
+    "type": "status_changed",
+    "taskId": "task_20260126_kgLjM8",
+    "taskTitle": "US-802: Emit Task Events",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T18:14:03.067Z"
+  },
+  {
+    "id": "activity_1769451237699_1kzi8vxr5",
+    "type": "task_updated",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "timestamp": "2026-01-26T18:13:57.699Z"
+  },
+  {
+    "id": "activity_1769451237676_klh0bdovk",
+    "type": "task_updated",
+    "taskId": "task_20260126_kgLjM8",
+    "taskTitle": "US-802: Emit Task Events",
+    "timestamp": "2026-01-26T18:13:57.676Z"
+  },
+  {
+    "id": "activity_1769451228567_56nk8m0fr",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "review",
+      "status": "done"
+    },
+    "timestamp": "2026-01-26T18:13:48.567Z"
+  },
+  {
+    "id": "activity_1769450526308_5rj5szulf",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "in-progress",
+      "status": "review"
+    },
+    "timestamp": "2026-01-26T18:02:06.308Z"
+  },
+  {
+    "id": "activity_1769450349617_dmxopagt4",
+    "type": "status_changed",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-26T17:59:09.617Z"
+  },
+  {
+    "id": "activity_1769450341746_gt7ekh3rx",
+    "type": "task_updated",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "timestamp": "2026-01-26T17:59:01.746Z"
+  },
+  {
+    "id": "activity_1769450290443_ehy6y16h4",
+    "type": "task_updated",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "timestamp": "2026-01-26T17:58:10.443Z"
+  },
+  {
+    "id": "activity_1769450290429_jpgcematc",
+    "type": "task_updated",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "timestamp": "2026-01-26T17:58:10.429Z"
+  },
+  {
+    "id": "activity_1769450290415_2cqmlxoov",
+    "type": "task_updated",
+    "taskId": "task_20260126_caioxm",
+    "taskTitle": "US-806: Dashboard Component",
+    "timestamp": "2026-01-26T17:58:10.415Z"
+  },
+  {
+    "id": "activity_1769450290401_hq35eyk7j",
+    "type": "task_updated",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "timestamp": "2026-01-26T17:58:10.401Z"
+  },
+  {
+    "id": "activity_1769450290388_uf2aqihgw",
+    "type": "task_updated",
+    "taskId": "task_20260126_8SKJ8t",
+    "taskTitle": "US-804: Token Usage Tracking",
+    "timestamp": "2026-01-26T17:58:10.388Z"
+  },
+  {
+    "id": "activity_1769450290373_4i6gi7tdn",
+    "type": "task_updated",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "timestamp": "2026-01-26T17:58:10.373Z"
+  },
+  {
+    "id": "activity_1769450290324_q0gedznuj",
+    "type": "task_updated",
+    "taskId": "task_20260126_kgLjM8",
+    "taskTitle": "US-802: Emit Task Events",
+    "timestamp": "2026-01-26T17:58:10.324Z"
+  },
+  {
+    "id": "activity_1769450275527_mn0i00lkl",
+    "type": "task_created",
+    "taskId": "task_20260126_vfkPKg",
+    "taskTitle": "US-808: Optional Traces (Stretch)",
+    "details": {
+      "type": "code",
+      "priority": "low",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:55.527Z"
+  },
+  {
+    "id": "activity_1769450275474_mprychh2p",
+    "type": "task_created",
+    "taskId": "task_20260126_pSMY_Y",
+    "taskTitle": "US-807: Dashboard Placement",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:55.474Z"
+  },
+  {
+    "id": "activity_1769450275420_csokqg065",
+    "type": "task_created",
+    "taskId": "task_20260126_caioxm",
+    "taskTitle": "US-806: Dashboard Component",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:55.420Z"
+  },
+  {
+    "id": "activity_1769450275365_4akuovlq5",
+    "type": "task_created",
+    "taskId": "task_20260126_HCSqiT",
+    "taskTitle": "US-805: Metrics API",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:55.365Z"
+  },
+  {
+    "id": "activity_1769450252743_xx89yq6ne",
+    "type": "task_created",
+    "taskId": "task_20260126_8SKJ8t",
+    "taskTitle": "US-804: Token Usage Tracking",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:32.743Z"
+  },
+  {
+    "id": "activity_1769450252689_dejjxuezs",
+    "type": "task_created",
+    "taskId": "task_20260126_aBQTa1",
+    "taskTitle": "US-803: Emit Run Events",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:32.689Z"
+  },
+  {
+    "id": "activity_1769450252634_w6utau64q",
+    "type": "task_created",
+    "taskId": "task_20260126_kgLjM8",
+    "taskTitle": "US-802: Emit Task Events",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:32.634Z"
+  },
+  {
+    "id": "activity_1769450237943_armw0090q",
+    "type": "task_created",
+    "taskId": "task_20260126_desyd5",
+    "taskTitle": "US-801: Telemetry Service",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "Sprint 8"
+    },
+    "timestamp": "2026-01-26T17:57:17.943Z"
+  },
+  {
     "id": "activity_1769449288760_hzmmgfxfi",
     "type": "task_deleted",
     "taskId": "task_20260126_9VIZY1",
@@ -328,258 +987,5 @@
     "taskId": "task_20260126_yi65DL",
     "taskTitle": "Second test task",
     "timestamp": "2026-01-26T11:46:45.464Z"
-  },
-  {
-    "id": "activity_1769427996756_k3castu7l",
-    "type": "status_changed",
-    "taskId": "task_20260126_tFaKR6",
-    "taskTitle": "US-703: Subtasks",
-    "details": {
-      "from": "todo",
-      "status": "in-progress"
-    },
-    "timestamp": "2026-01-26T11:46:36.756Z"
-  },
-  {
-    "id": "activity_1769427993177_w3qclietr",
-    "type": "task_created",
-    "taskId": "task_20260126_tFaKR6",
-    "taskTitle": "US-703: Subtasks",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:46:33.177Z"
-  },
-  {
-    "id": "activity_1769427992175_6yjkl8qzb",
-    "type": "status_changed",
-    "taskId": "task_20260126_yi65DL",
-    "taskTitle": "Second test task",
-    "details": {
-      "from": "archived",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T11:46:32.175Z"
-  },
-  {
-    "id": "activity_1769427982787_zlmx7wl1j",
-    "type": "status_changed",
-    "taskId": "task_20260126_UBz41o",
-    "taskTitle": "US-702: Restore from archive",
-    "details": {
-      "from": "in-progress",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T11:46:22.788Z"
-  },
-  {
-    "id": "activity_1769427885455_irs3lpfay",
-    "type": "status_changed",
-    "taskId": "task_20260126_UBz41o",
-    "taskTitle": "US-702: Restore from archive",
-    "details": {
-      "from": "todo",
-      "status": "in-progress"
-    },
-    "timestamp": "2026-01-26T11:44:45.455Z"
-  },
-  {
-    "id": "activity_1769427882031_qsa7fjdlb",
-    "type": "task_created",
-    "taskId": "task_20260126_UBz41o",
-    "taskTitle": "US-702: Restore from archive",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:44:42.031Z"
-  },
-  {
-    "id": "activity_1769427809793_r57vixvwa",
-    "type": "task_updated",
-    "taskId": "task_20260126_wzj1d0",
-    "taskTitle": "US-701: Archive sidebar",
-    "timestamp": "2026-01-26T11:43:29.793Z"
-  },
-  {
-    "id": "activity_1769427062484_c9s4q6kiq",
-    "type": "task_created",
-    "taskId": "task_20260126_PcoH5E",
-    "taskTitle": "US-711: Running indicator on task cards",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:31:02.484Z"
-  },
-  {
-    "id": "activity_1769426843932_va7q38kfq",
-    "type": "task_updated",
-    "taskId": "task_20260126_wzj1d0",
-    "taskTitle": "US-701: Archive sidebar",
-    "timestamp": "2026-01-26T11:27:23.932Z"
-  },
-  {
-    "id": "activity_1769426832160_ckd9ynr0s",
-    "type": "status_changed",
-    "taskId": "task_20260126_wzj1d0",
-    "taskTitle": "US-701: Archive sidebar",
-    "details": {
-      "from": "todo",
-      "status": "in-progress"
-    },
-    "timestamp": "2026-01-26T11:27:12.160Z"
-  },
-  {
-    "id": "activity_1769426654428_vcko3ka0i",
-    "type": "task_created",
-    "taskId": "task_20260126_elXGhz",
-    "taskTitle": "US-710: Time tracking",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.428Z"
-  },
-  {
-    "id": "activity_1769426654373_3sx4g575u",
-    "type": "task_created",
-    "taskId": "task_20260126_FTRJ_R",
-    "taskTitle": "US-709: Merge conflict resolution",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.373Z"
-  },
-  {
-    "id": "activity_1769426654317_vz3lqt7sc",
-    "type": "task_created",
-    "taskId": "task_20260126_d6o4vo",
-    "taskTitle": "US-708: Preview mode",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.317Z"
-  },
-  {
-    "id": "activity_1769426654262_g4s2n5id1",
-    "type": "task_created",
-    "taskId": "task_20260126_byvNgE",
-    "taskTitle": "US-707: GitHub PR creation",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.262Z"
-  },
-  {
-    "id": "activity_1769426654206_6mkga8z5k",
-    "type": "task_created",
-    "taskId": "task_20260126_P376Wt",
-    "taskTitle": "US-706: Auto-archive suggestions",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.206Z"
-  },
-  {
-    "id": "activity_1769426654151_v10yku57g",
-    "type": "task_created",
-    "taskId": "task_20260126_SqIKXl",
-    "taskTitle": "US-705: Multiple task attempts",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.151Z"
-  },
-  {
-    "id": "activity_1769426654094_4yg4jtf9p",
-    "type": "task_created",
-    "taskId": "task_20260126_XH-580",
-    "taskTitle": "US-704: Task dependencies",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.094Z"
-  },
-  {
-    "id": "activity_1769426654037_1xexkmken",
-    "type": "task_created",
-    "taskId": "task_20260126_PoYogZ",
-    "taskTitle": "US-703: Subtasks",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:14.037Z"
-  },
-  {
-    "id": "activity_1769426653980_n61qyzkco",
-    "type": "task_created",
-    "taskId": "task_20260126_LC4p7w",
-    "taskTitle": "US-702: Restore from archive",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:13.980Z"
-  },
-  {
-    "id": "activity_1769426653910_4i0p9vgob",
-    "type": "task_created",
-    "taskId": "task_20260126_wzj1d0",
-    "taskTitle": "US-701: Archive sidebar",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:24:13.910Z"
-  },
-  {
-    "id": "activity_1769426109397_ly0ytott4",
-    "type": "task_deleted",
-    "taskId": "task_20260126_RUfUa_",
-    "taskTitle": "Research competitor pricing",
-    "timestamp": "2026-01-26T11:15:09.397Z"
-  },
-  {
-    "id": "activity_1769426106655_ixe9eypey",
-    "type": "task_deleted",
-    "taskId": "task_20260126_ZnrflF",
-    "taskTitle": "Testing Code task",
-    "timestamp": "2026-01-26T11:15:06.655Z"
-  },
-  {
-    "id": "activity_1769426103592_0ffbky6lq",
-    "type": "task_deleted",
-    "taskId": "task_20260126_dXDEPj",
-    "taskTitle": "Write blog post on AI agents",
-    "timestamp": "2026-01-26T11:15:03.592Z"
-  },
-  {
-    "id": "activity_1769426100268_ha59nz9x5",
-    "type": "task_deleted",
-    "taskId": "task_20260126_z6KAvr",
-    "taskTitle": "Implement user authentication",
-    "timestamp": "2026-01-26T11:15:00.268Z"
   }
 ]
