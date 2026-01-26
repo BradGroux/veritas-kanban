@@ -215,7 +215,64 @@ export const api = {
       return response.text();
     },
   },
+
+  diff: {
+    getSummary: async (taskId: string): Promise<DiffSummary> => {
+      const response = await fetch(`${API_BASE}/diff/${taskId}`);
+      return handleResponse<DiffSummary>(response);
+    },
+
+    getFileDiff: async (taskId: string, filePath: string): Promise<FileDiff> => {
+      const response = await fetch(`${API_BASE}/diff/${taskId}/file?path=${encodeURIComponent(filePath)}`);
+      return handleResponse<FileDiff>(response);
+    },
+
+    getFullDiff: async (taskId: string): Promise<FileDiff[]> => {
+      const response = await fetch(`${API_BASE}/diff/${taskId}/full`);
+      return handleResponse<FileDiff[]>(response);
+    },
+  },
 };
+
+// Types for diff
+export interface FileChange {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  additions: number;
+  deletions: number;
+  oldPath?: string;
+}
+
+export interface DiffSummary {
+  files: FileChange[];
+  totalAdditions: number;
+  totalDeletions: number;
+  totalFiles: number;
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+}
+
+export interface DiffLine {
+  type: 'context' | 'add' | 'delete';
+  content: string;
+  oldNumber?: number;
+  newNumber?: number;
+}
+
+export interface FileDiff {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  hunks: DiffHunk[];
+  language: string;
+  additions: number;
+  deletions: number;
+}
 
 // Types for agent
 export interface AgentStatus {

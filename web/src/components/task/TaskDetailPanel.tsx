@@ -6,6 +6,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -28,10 +34,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
-import { Trash2, Code, Search, FileText, Zap, Calendar, Clock } from 'lucide-react';
+import { Trash2, Code, Search, FileText, Zap, Calendar, Clock, GitBranch, Bot, FileDiff } from 'lucide-react';
 import type { Task, TaskType, TaskStatus, TaskPriority } from '@veritas-kanban/shared';
 import { GitSection } from './GitSection';
 import { AgentPanel } from './AgentPanel';
+import { DiffViewer } from './DiffViewer';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -70,13 +77,11 @@ function useDebouncedSave(task: Task | null, updateTask: ReturnType<typeof useUp
   const [localTask, setLocalTask] = useState<Task | null>(task);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Sync with external task when it changes
   useEffect(() => {
     setLocalTask(task);
     setIsDirty(false);
   }, [task]);
 
-  // Debounced save
   useEffect(() => {
     if (!isDirty || !localTask) return;
 
@@ -112,15 +117,14 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const { localTask, updateField, isDirty } = useDebouncedSave(task, updateTask);
+  const [activeTab, setActiveTab] = useState('details');
 
-  // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && open) {
         onOpenChange(false);
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onOpenChange]);
@@ -143,10 +147,13 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
     });
   };
 
+  const isCodeTask = localTask.type === 'code';
+  const hasWorktree = !!localTask.git?.worktreePath;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[500px] sm:max-w-[500px] overflow-y-auto">
-        <SheetHeader className="space-y-1">
+      <SheetContent className="w-[700px] sm:max-w-[700px] overflow-hidden flex flex-col">
+        <SheetHeader className="space-y-1 flex-shrink-0">
           <div className="flex items-center gap-2 text-muted-foreground">
             {typeIcons[localTask.type]}
             <span className="text-xs uppercase tracking-wide">{typeLabels[localTask.type]} Task</span>
@@ -164,165 +171,186 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
           </SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
-          {/* Description */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground">Description</Label>
-            <Textarea
-              value={localTask.description}
-              onChange={(e) => updateField('description', e.target.value)}
-              placeholder="Add a description..."
-              rows={4}
-              className="resize-none"
-            />
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden mt-4">
+          <TabsList className={`grid w-full ${isCodeTask ? 'grid-cols-4' : 'grid-cols-1'}`}>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            {isCodeTask && (
+              <>
+                <TabsTrigger value="git" className="flex items-center gap-1">
+                  <GitBranch className="h-3 w-3" />
+                  Git
+                </TabsTrigger>
+                <TabsTrigger value="agent" className="flex items-center gap-1">
+                  <Bot className="h-3 w-3" />
+                  Agent
+                </TabsTrigger>
+                <TabsTrigger value="changes" disabled={!hasWorktree} className="flex items-center gap-1">
+                  <FileDiff className="h-3 w-3" />
+                  Changes
+                </TabsTrigger>
+              </>
+            )}
+          </TabsList>
 
-          {/* Status, Type, Priority grid */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Status</Label>
-              <Select
-                value={localTask.status}
-                onValueChange={(v) => updateField('status', v as TaskStatus)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex-1 overflow-y-auto mt-4">
+            {/* Details Tab */}
+            <TabsContent value="details" className="mt-0 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Description</Label>
+                <Textarea
+                  value={localTask.description}
+                  onChange={(e) => updateField('description', e.target.value)}
+                  placeholder="Add a description..."
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Type</Label>
-              <Select
-                value={localTask.type}
-                onValueChange={(v) => updateField('type', v as TaskType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(typeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      <div className="flex items-center gap-2">
-                        {typeIcons[value as TaskType]}
-                        {label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Priority</Label>
-              <Select
-                value={localTask.priority}
-                onValueChange={(v) => updateField('priority', v as TaskPriority)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(priorityLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Project */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground">Project</Label>
-            <Input
-              value={localTask.project || ''}
-              onChange={(e) => updateField('project', e.target.value || undefined)}
-              placeholder="Add to a project..."
-            />
-          </div>
-
-          {/* Tags */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground">Tags</Label>
-            <Input
-              value={localTask.tags?.join(', ') || ''}
-              onChange={(e) => {
-                const tags = e.target.value
-                  .split(',')
-                  .map(t => t.trim())
-                  .filter(Boolean);
-                updateField('tags', tags.length > 0 ? tags : undefined);
-              }}
-              placeholder="Add tags (comma-separated)..."
-            />
-          </div>
-
-          {/* Git Integration (code tasks only) */}
-          {localTask.type === 'code' && (
-            <GitSection
-              task={localTask}
-              onGitChange={(git) => updateField('git', git as Task['git'])}
-            />
-          )}
-
-          {/* AI Agent (code tasks with worktree only) */}
-          {localTask.type === 'code' && (
-            <AgentPanel task={localTask} />
-          )}
-
-          {/* Metadata */}
-          <div className="border-t pt-4 space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <span>Created: {formatDate(localTask.created)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>Updated: {formatDate(localTask.updated)}</span>
-            </div>
-            <div className="text-xs font-mono opacity-50">
-              ID: {localTask.id}
-            </div>
-          </div>
-
-          {/* Delete button */}
-          <div className="border-t pt-4">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Task
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this task?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete "{localTask.title}". This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Status</Label>
+                  <Select
+                    value={localTask.status}
+                    onValueChange={(v) => updateField('status', v as TaskStatus)}
                   >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(statusLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Type</Label>
+                  <Select
+                    value={localTask.type}
+                    onValueChange={(v) => updateField('type', v as TaskType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(typeLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          <div className="flex items-center gap-2">
+                            {typeIcons[value as TaskType]}
+                            {label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Priority</Label>
+                  <Select
+                    value={localTask.priority}
+                    onValueChange={(v) => updateField('priority', v as TaskPriority)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(priorityLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Project</Label>
+                <Input
+                  value={localTask.project || ''}
+                  onChange={(e) => updateField('project', e.target.value || undefined)}
+                  placeholder="Add to a project..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Tags</Label>
+                <Input
+                  value={localTask.tags?.join(', ') || ''}
+                  onChange={(e) => {
+                    const tags = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                    updateField('tags', tags.length > 0 ? tags : undefined);
+                  }}
+                  placeholder="Add tags (comma-separated)..."
+                />
+              </div>
+
+              <div className="border-t pt-4 space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span>Created: {formatDate(localTask.created)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span>Updated: {formatDate(localTask.updated)}</span>
+                </div>
+                <div className="text-xs font-mono opacity-50">ID: {localTask.id}</div>
+              </div>
+
+              <div className="border-t pt-4">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Task
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete "{localTask.title}".
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </TabsContent>
+
+            {/* Git Tab */}
+            {isCodeTask && (
+              <TabsContent value="git" className="mt-0">
+                <GitSection
+                  task={localTask}
+                  onGitChange={(git) => updateField('git', git as Task['git'])}
+                />
+              </TabsContent>
+            )}
+
+            {/* Agent Tab */}
+            {isCodeTask && (
+              <TabsContent value="agent" className="mt-0">
+                <AgentPanel task={localTask} />
+              </TabsContent>
+            )}
+
+            {/* Changes Tab */}
+            {isCodeTask && hasWorktree && (
+              <TabsContent value="changes" className="mt-0">
+                <DiffViewer task={localTask} />
+              </TabsContent>
+            )}
           </div>
-        </div>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );

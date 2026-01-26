@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { taskRoutes } from './routes/tasks.js';
 import { configRoutes } from './routes/config.js';
 import { agentRoutes, agentService } from './routes/agents.js';
+import { diffRoutes } from './routes/diff.js';
 import type { AgentOutput } from './services/agent-service.js';
 
 const app = express();
@@ -23,6 +24,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/tasks', taskRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/agents', agentRoutes);
+app.use('/api/diff', diffRoutes);
 
 // Create HTTP server
 const server = createServer(app);
