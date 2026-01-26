@@ -1,0 +1,150 @@
+[
+  {
+    "id": "activity_1769426654428_vcko3ka0i",
+    "type": "task_created",
+    "taskId": "task_20260126_elXGhz",
+    "taskTitle": "US-710: Time tracking",
+    "details": {
+      "type": "code",
+      "priority": "low",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.428Z"
+  },
+  {
+    "id": "activity_1769426654373_3sx4g575u",
+    "type": "task_created",
+    "taskId": "task_20260126_FTRJ_R",
+    "taskTitle": "US-709: Merge conflict resolution",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.373Z"
+  },
+  {
+    "id": "activity_1769426654317_vz3lqt7sc",
+    "type": "task_created",
+    "taskId": "task_20260126_d6o4vo",
+    "taskTitle": "US-708: Preview mode",
+    "details": {
+      "type": "code",
+      "priority": "low",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.317Z"
+  },
+  {
+    "id": "activity_1769426654262_g4s2n5id1",
+    "type": "task_created",
+    "taskId": "task_20260126_byvNgE",
+    "taskTitle": "US-707: GitHub PR creation",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.262Z"
+  },
+  {
+    "id": "activity_1769426654206_6mkga8z5k",
+    "type": "task_created",
+    "taskId": "task_20260126_P376Wt",
+    "taskTitle": "US-706: Auto-archive suggestions",
+    "details": {
+      "type": "code",
+      "priority": "low",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.206Z"
+  },
+  {
+    "id": "activity_1769426654151_v10yku57g",
+    "type": "task_created",
+    "taskId": "task_20260126_SqIKXl",
+    "taskTitle": "US-705: Multiple task attempts",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.151Z"
+  },
+  {
+    "id": "activity_1769426654094_4yg4jtf9p",
+    "type": "task_created",
+    "taskId": "task_20260126_XH-580",
+    "taskTitle": "US-704: Task dependencies",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.094Z"
+  },
+  {
+    "id": "activity_1769426654037_1xexkmken",
+    "type": "task_created",
+    "taskId": "task_20260126_PoYogZ",
+    "taskTitle": "US-703: Subtasks",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:14.037Z"
+  },
+  {
+    "id": "activity_1769426653980_n61qyzkco",
+    "type": "task_created",
+    "taskId": "task_20260126_LC4p7w",
+    "taskTitle": "US-702: Restore from archive",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:13.980Z"
+  },
+  {
+    "id": "activity_1769426653910_4i0p9vgob",
+    "type": "task_created",
+    "taskId": "task_20260126_wzj1d0",
+    "taskTitle": "US-701: Archive sidebar",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-26T11:24:13.910Z"
+  },
+  {
+    "id": "activity_1769426109397_ly0ytott4",
+    "type": "task_deleted",
+    "taskId": "task_20260126_RUfUa_",
+    "taskTitle": "Research competitor pricing",
+    "timestamp": "2026-01-26T11:15:09.397Z"
+  },
+  {
+    "id": "activity_1769426106655_ixe9eypey",
+    "type": "task_deleted",
+    "taskId": "task_20260126_ZnrflF",
+    "taskTitle": "Testing Code task",
+    "timestamp": "2026-01-26T11:15:06.655Z"
+  },
+  {
+    "id": "activity_1769426103592_0ffbky6lq",
+    "type": "task_deleted",
+    "taskId": "task_20260126_dXDEPj",
+    "taskTitle": "Write blog post on AI agents",
+    "timestamp": "2026-01-26T11:15:03.592Z"
+  },
+  {
+    "id": "activity_1769426100268_ha59nz9x5",
+    "type": "task_deleted",
+    "taskId": "task_20260126_z6KAvr",
+    "taskTitle": "Implement user authentication",
+    "timestamp": "2026-01-26T11:15:00.268Z"
+  }
+]
