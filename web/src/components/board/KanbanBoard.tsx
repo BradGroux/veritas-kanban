@@ -25,6 +25,7 @@ import {
 } from './FilterBar';
 import { BulkActionsBar } from './BulkActionsBar';
 import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
+import { DashboardSection } from '@/components/dashboard/DashboardSection';
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -230,6 +231,8 @@ export function KanbanBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      <DashboardSection />
 
       <TaskDetailPanel
         task={currentSelectedTask}
