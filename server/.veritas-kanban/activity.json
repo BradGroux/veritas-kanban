@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769589172887_jp4y9jj7c",
+    "type": "comment_added",
+    "taskId": "task_20260128_vYzfwx",
+    "taskTitle": "US-1104: Task behavior settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Task behavior settings wired in TaskDetailPanel: d..."
+    },
+    "timestamp": "2026-01-28T08:32:52.887Z"
+  },
+  {
+    "id": "activity_1769589172877_npxiqczo8",
+    "type": "comment_added",
+    "taskId": "task_20260128_DUyAbh",
+    "taskTitle": "US-1103: Board & display settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Board & display settings complete: sprint badges o..."
+    },
+    "timestamp": "2026-01-28T08:32:52.877Z"
+  },
+  {
+    "id": "activity_1769589167537_tukrzq1ly",
+    "type": "status_changed",
+    "taskId": "task_20260128_vYzfwx",
+    "taskTitle": "US-1104: Task behavior settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:32:47.537Z"
+  },
+  {
+    "id": "activity_1769589167510_sgfq2w68c",
+    "type": "status_changed",
+    "taskId": "task_20260128_DUyAbh",
+    "taskTitle": "US-1103: Board & display settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:32:47.510Z"
+  },
+  {
     "id": "activity_1769588643293_d36yhzq9l",
     "type": "status_changed",
     "taskId": "task_20260128_iG-ISb",

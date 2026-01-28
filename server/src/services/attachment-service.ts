@@ -61,6 +61,10 @@ export class AttachmentService {
   /**
    * Get attachment limits configuration
    */
+  setLimits(limits: AttachmentLimits): void {
+    this.limits = limits;
+  }
+
   getLimits(): AttachmentLimits {
     return this.limits;
   }

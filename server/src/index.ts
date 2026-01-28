@@ -21,8 +21,9 @@ import telemetryRoutes from './routes/telemetry.js';
 import metricsRoutes from './routes/metrics.js';
 import tracesRoutes from './routes/traces.js';
 import attachmentRoutes from './routes/attachments.js';
-import { settingsRoutes } from './routes/settings.js';
+import { settingsRoutes, syncSettingsToServices } from './routes/settings.js';
 import { getTelemetryService } from './services/telemetry-service.js';
+import { ConfigService } from './services/config-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import type { AgentOutput } from './services/agent-service.js';
 
@@ -60,10 +61,17 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/traces', tracesRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// Initialize telemetry service (runs retention cleanup)
-getTelemetryService().init().catch((err) => {
-  console.error('Failed to initialize telemetry service:', err);
-});
+// Initialize telemetry service and sync with feature settings
+(async () => {
+  try {
+    const configService = new ConfigService();
+    const featureSettings = await configService.getFeatureSettings();
+    syncSettingsToServices(featureSettings);
+    await getTelemetryService().init();
+  } catch (err) {
+    console.error('Failed to initialize telemetry service:', err);
+  }
+})();
 
 // Create HTTP server
 const server = createServer(app);
