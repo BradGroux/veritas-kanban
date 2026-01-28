@@ -112,7 +112,11 @@ function AgentToggleItem({ agent, onToggle }: { agent: AgentConfig; onToggle: ()
           </code>
         </div>
       </div>
-      <Switch checked={agent.enabled} onCheckedChange={onToggle} />
+      <Switch 
+        checked={agent.enabled} 
+        onCheckedChange={onToggle}
+        aria-label={`Enable ${agent.name}`}
+      />
     </div>
   );
 }

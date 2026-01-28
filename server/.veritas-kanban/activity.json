@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769594729028_e3u00fq38",
+    "type": "status_changed",
+    "taskId": "task_20260128_F-XLhL",
+    "taskTitle": "US-1156: Settings accessibility (WCAG 2.1 AA)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T10:05:29.028Z"
+  },
+  {
+    "id": "activity_1769594718437_r5xkcmuti",
+    "type": "comment_added",
+    "taskId": "task_20260128_8HU2XD",
+    "taskTitle": "US-1158: Replace alert() calls with toast notifications",
+    "details": {
+      "author": "Veritas",
+      "preview": "Replaced all 5 alert() calls with toast notificati..."
+    },
+    "timestamp": "2026-01-28T10:05:18.437Z"
+  },
+  {
+    "id": "activity_1769594718411_t76i5yv6c",
+    "type": "status_changed",
+    "taskId": "task_20260128_8HU2XD",
+    "taskTitle": "US-1158: Replace alert() calls with toast notifications",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T10:05:18.411Z"
+  },
+  {
     "id": "activity_1769594599726_5lp9h98h5",
     "type": "status_changed",
     "taskId": "task_20260128_8HU2XD",

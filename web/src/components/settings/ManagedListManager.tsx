@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
-import { Trash2, GripVertical } from 'lucide-react';
+import { Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -46,16 +46,24 @@ export interface ManagedListManagerProps<T extends ManagedListItem> {
 
 interface SortableItemProps<T extends ManagedListItem> {
   item: T;
+  index: number;
+  totalItems: number;
   onUpdate: (id: string, patch: any) => Promise<any>;
   onDelete: (id: string) => Promise<any>;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
   renderExtraFields?: (item: T, onChange: (patch: Partial<T>) => void) => React.ReactNode;
   canDeleteCheck?: (id: string) => Promise<{ allowed: boolean; referenceCount: number; isDefault: boolean }>;
 }
 
 const SortableItem = memo(function SortableItem<T extends ManagedListItem>({
   item,
+  index,
+  totalItems,
   onUpdate,
   onDelete,
+  onMoveUp,
+  onMoveDown,
   renderExtraFields,
   canDeleteCheck,
 }: SortableItemProps<T>) {
@@ -114,11 +122,37 @@ const SortableItem = memo(function SortableItem<T extends ManagedListItem>({
       >
         <button
           className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex-shrink-0"
+          aria-label="Drag to reorder"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
+
+        <div className="flex gap-0.5 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => onMoveUp(index)}
+            disabled={index === 0}
+            title="Move up"
+            aria-label="Move up"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => onMoveDown(index)}
+            disabled={index === totalItems - 1}
+            title="Move down"
+            aria-label="Move down"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </div>
 
         <div className="flex-1 min-w-0">
           {isEditing ? (
@@ -156,9 +190,10 @@ const SortableItem = memo(function SortableItem<T extends ManagedListItem>({
           size="sm"
           className="h-7 w-7 p-0 flex-shrink-0"
           onClick={handleDeleteClick}
-          title="Delete"
+          title={`Delete ${item.label}`}
+          aria-label={`Delete ${item.label}`}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </div>
 
@@ -261,6 +296,28 @@ export function ManagedListManager<T extends ManagedListItem>({
     }
   };
 
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const reordered = arrayMove(localItems, index, index - 1);
+    const orderedIds = reordered.map((item) => item.id);
+    setLocalItems(reordered);
+    onReorder(orderedIds).catch((error) => {
+      console.error('Failed to reorder items:', error);
+      setLocalItems(items);
+    });
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === localItems.length - 1) return;
+    const reordered = arrayMove(localItems, index, index + 1);
+    const orderedIds = reordered.map((item) => item.id);
+    setLocalItems(reordered);
+    onReorder(orderedIds).catch((error) => {
+      console.error('Failed to reorder items:', error);
+      setLocalItems(items);
+    });
+  };
+
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading {title.toLowerCase()}...</div>;
   }
@@ -278,12 +335,16 @@ export function ManagedListManager<T extends ManagedListItem>({
           items={localItems.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          {localItems.map((item) => (
+          {localItems.map((item, index) => (
             <SortableItem
               key={item.id}
               item={item}
+              index={index}
+              totalItems={localItems.length}
               onUpdate={onUpdate}
               onDelete={onDelete}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
               renderExtraFields={renderExtraFields}
               canDeleteCheck={canDeleteCheck}
             />

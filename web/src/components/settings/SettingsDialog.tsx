@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useRef, useCallback, lazy, Suspense, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -97,6 +97,23 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const contentAreaRef = useRef<HTMLDivElement>(null);
+  const firstTabButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus first tab when dialog opens
+  useEffect(() => {
+    if (open && firstTabButtonRef.current) {
+      // Small delay to ensure dialog is fully rendered
+      setTimeout(() => firstTabButtonRef.current?.focus(), 100);
+    }
+  }, [open]);
+
+  // Focus content area when switching tabs
+  useEffect(() => {
+    if (contentAreaRef.current) {
+      contentAreaRef.current.focus();
+    }
+  }, [activeTab]);
 
   const handleExportSettings = () => {
     const blob = new Blob([JSON.stringify(currentSettings, null, 2)], { type: 'application/json' });
@@ -229,13 +246,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               aria-orientation="vertical"
               onKeyDown={handleKeyDown}
             >
-              {TABS.map((tab) => {
+              {TABS.map((tab, index) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
+                    id={`tab-${tab.id}`}
+                    ref={index === 0 ? firstTabButtonRef : undefined}
                     role="tab"
                     aria-selected={activeTab === tab.id}
+                    aria-controls="settings-tab-content"
                     tabIndex={activeTab === tab.id ? 0 : -1}
                     onClick={() => setActiveTab(tab.id)}
                     className={cn(
@@ -322,7 +342,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
             <ScrollArea className="flex-1 min-h-0">
-              <div className="max-w-lg px-6 py-4">
+              <div 
+                id="settings-tab-content"
+                ref={contentAreaRef}
+                className="max-w-lg px-6 py-4"
+                role="tabpanel"
+                tabIndex={-1}
+                aria-labelledby={`tab-${activeTab}`}
+              >
                 {renderTab()}
               </div>
             </ScrollArea>
