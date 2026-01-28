@@ -1107,3 +1107,4 @@
 {"type":"task.created","taskId":"task_20260128_b2CW4g","project":"project-a","status":"todo","id":"evt_-g7kMhjBnCYG","timestamp":"2026-01-28T14:13:49.936Z"}
 {"type":"task.created","taskId":"task_20260128_NEm1K_","project":"project-b","status":"todo","id":"evt_aCXwbrsfHVkW","timestamp":"2026-01-28T14:13:49.937Z"}
 {"type":"task.created","taskId":"task_20260128_eCyXeF","status":"todo","id":"evt_qx8JflCKJ_1V","timestamp":"2026-01-28T14:13:49.944Z"}
+{"type":"task.status_changed","taskId":"task_20260128_d47DtQ","project":"platform","status":"blocked","previousStatus":"todo","id":"evt_dcyHNA6aIlp5","timestamp":"2026-01-28T14:13:59.205Z"}

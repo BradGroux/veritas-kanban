@@ -1,5 +1,34 @@
 [
   {
+    "id": "activity_1769609642656_9lea2p5ac",
+    "type": "comment_added",
+    "taskId": "task_20260128_V0MVwS",
+    "taskTitle": "US-1405: Dashboard metrics cards refresh",
+    "details": {
+      "author": "Veritas",
+      "preview": "Verified dashboard metrics cards are fully functio..."
+    },
+    "timestamp": "2026-01-28T14:14:02.656Z"
+  },
+  {
+    "id": "activity_1769609642614_cy9x653r2",
+    "type": "task_updated",
+    "taskId": "task_20260128_V0MVwS",
+    "taskTitle": "US-1405: Dashboard metrics cards refresh",
+    "timestamp": "2026-01-28T14:14:02.614Z"
+  },
+  {
+    "id": "activity_1769609639205_sn6jggief",
+    "type": "status_changed",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "details": {
+      "from": "todo",
+      "status": "blocked"
+    },
+    "timestamp": "2026-01-28T14:13:59.205Z"
+  },
+  {
     "id": "activity_1769609585007_vp6ouz8mc",
     "type": "comment_added",
     "taskId": "task_20260128_efQBVi",
