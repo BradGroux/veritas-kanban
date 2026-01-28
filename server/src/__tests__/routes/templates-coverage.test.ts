@@ -5,13 +5,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-const mockTemplateService = {
-  getTemplates: vi.fn(),
-  getTemplate: vi.fn(),
-  createTemplate: vi.fn(),
-  updateTemplate: vi.fn(),
-  deleteTemplate: vi.fn(),
-};
+const { mockTemplateService } = vi.hoisted(() => ({
+  mockTemplateService: {
+    getTemplates: vi.fn(),
+    getTemplate: vi.fn(),
+    createTemplate: vi.fn(),
+    updateTemplate: vi.fn(),
+    deleteTemplate: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/template-service.js', () => ({
   TemplateService: function () {

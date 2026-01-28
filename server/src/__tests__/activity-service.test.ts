@@ -7,11 +7,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
-// We need to mock the cwd and existsSync before importing
-const tmpRoot = path.join(os.tmpdir(), `veritas-activity-test-${Math.random().toString(36).substring(7)}`);
+// Hoist tmpRoot so it's available when vi.mock factory runs (before const declarations)
+const tmpRoot = vi.hoisted(() => {
+  const tmpdir = process.env.TMPDIR || process.env.TEMP || '/tmp';
+  return tmpdir + '/veritas-activity-test-' + Math.random().toString(36).substring(7);
+});
 
 vi.mock('fs', async (importOriginal) => {
-  const original = await importOriginal() as any;
+  const original = (await importOriginal()) as any;
   return {
     ...original,
     existsSync: (p: string) => {

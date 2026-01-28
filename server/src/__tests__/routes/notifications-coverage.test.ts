@@ -5,19 +5,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-const mockTaskService = {
-  getTask: vi.fn(),
-  listTasks: vi.fn(),
-};
-
-const mockNotificationService = {
-  createNotification: vi.fn(),
-  getNotifications: vi.fn(),
-  getPendingForTeams: vi.fn(),
-  markAsSent: vi.fn(),
-  checkTasksForNotifications: vi.fn(),
-  clearNotifications: vi.fn(),
-};
+const { mockTaskService, mockNotificationService } = vi.hoisted(() => ({
+  mockTaskService: {
+    getTask: vi.fn(),
+    listTasks: vi.fn(),
+  },
+  mockNotificationService: {
+    createNotification: vi.fn(),
+    getNotifications: vi.fn(),
+    getPendingForTeams: vi.fn(),
+    markAsSent: vi.fn(),
+    checkTasksForNotifications: vi.fn(),
+    clearNotifications: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/task-service.js', () => ({
   TaskService: function () {

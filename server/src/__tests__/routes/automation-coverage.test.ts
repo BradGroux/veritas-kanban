@@ -5,22 +5,23 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-const mockTaskService = {
-  getTask: vi.fn(),
-  updateTask: vi.fn(),
-  listTasks: vi.fn(),
-};
-
-const mockAutomationService = {
-  validateCanStart: vi.fn(),
-  validateCanComplete: vi.fn(),
-  getStartPayload: vi.fn(),
-  getCompletePayload: vi.fn(),
-  buildStartResult: vi.fn(),
-  buildCompleteResult: vi.fn(),
-  getPendingTasks: vi.fn(),
-  getRunningTasks: vi.fn(),
-};
+const { mockTaskService, mockAutomationService } = vi.hoisted(() => ({
+  mockTaskService: {
+    getTask: vi.fn(),
+    updateTask: vi.fn(),
+    listTasks: vi.fn(),
+  },
+  mockAutomationService: {
+    validateCanStart: vi.fn(),
+    validateCanComplete: vi.fn(),
+    getStartPayload: vi.fn(),
+    getCompletePayload: vi.fn(),
+    buildStartResult: vi.fn(),
+    buildCompleteResult: vi.fn(),
+    getPendingTasks: vi.fn(),
+    getRunningTasks: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/task-service.js', () => ({
   TaskService: function () {

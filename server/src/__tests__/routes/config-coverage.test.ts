@@ -5,16 +5,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-const mockConfigService = {
-  getConfig: vi.fn(),
-  addRepo: vi.fn(),
-  updateRepo: vi.fn(),
-  removeRepo: vi.fn(),
-  validateRepoPath: vi.fn(),
-  getRepoBranches: vi.fn(),
-  updateAgents: vi.fn(),
-  setDefaultAgent: vi.fn(),
-};
+const { mockConfigService } = vi.hoisted(() => ({
+  mockConfigService: {
+    getConfig: vi.fn(),
+    addRepo: vi.fn(),
+    updateRepo: vi.fn(),
+    removeRepo: vi.fn(),
+    validateRepoPath: vi.fn(),
+    getRepoBranches: vi.fn(),
+    updateAgents: vi.fn(),
+    setDefaultAgent: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/config-service.js', () => ({
   ConfigService: function () {

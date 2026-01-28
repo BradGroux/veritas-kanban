@@ -10,13 +10,48 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-// ===================== Activity Route =====================
+// ===================== Hoisted Mocks =====================
 
-const mockActivityService = {
-  getActivities: vi.fn(),
-  clearActivities: vi.fn(),
-  logActivity: vi.fn().mockResolvedValue(undefined),
-};
+const {
+  mockActivityService,
+  mockSummaryTaskService,
+  mockSummaryService,
+  mockStatusHistoryService,
+  mockConfigServiceForSettings,
+  mockDigestService,
+} = vi.hoisted(() => ({
+  mockActivityService: {
+    getActivities: vi.fn(),
+    clearActivities: vi.fn(),
+    logActivity: vi.fn().mockResolvedValue(undefined),
+  },
+  mockSummaryTaskService: {
+    listTasks: vi.fn(),
+  },
+  mockSummaryService: {
+    getOverallSummary: vi.fn(),
+    getRecentActivity: vi.fn(),
+    generateMemoryMarkdown: vi.fn(),
+  },
+  mockStatusHistoryService: {
+    getHistory: vi.fn(),
+    getDailySummary: vi.fn(),
+    getWeeklySummary: vi.fn(),
+    getHistoryByDateRange: vi.fn(),
+    clearHistory: vi.fn(),
+    logStatusChange: vi.fn().mockResolvedValue(undefined),
+  },
+  mockConfigServiceForSettings: {
+    getFeatureSettings: vi.fn(),
+    updateFeatureSettings: vi.fn(),
+  },
+  mockDigestService: {
+    generateDigest: vi.fn(),
+    formatForTeams: vi.fn(),
+  },
+}));
+
+// ===================== Activity Route =====================
 
 vi.mock('../../services/activity-service.js', () => ({
   activityService: mockActivityService,
@@ -24,41 +59,17 @@ vi.mock('../../services/activity-service.js', () => ({
 
 // ===================== Summary Route =====================
 
-const mockSummaryTaskService = {
-  listTasks: vi.fn(),
-};
-
-const mockSummaryService = {
-  getOverallSummary: vi.fn(),
-  getRecentActivity: vi.fn(),
-  generateMemoryMarkdown: vi.fn(),
-};
-
 vi.mock('../../services/summary-service.js', () => ({
   getSummaryService: () => mockSummaryService,
 }));
 
 // ===================== Status History Route =====================
 
-const mockStatusHistoryService = {
-  getHistory: vi.fn(),
-  getDailySummary: vi.fn(),
-  getWeeklySummary: vi.fn(),
-  getHistoryByDateRange: vi.fn(),
-  clearHistory: vi.fn(),
-  logStatusChange: vi.fn().mockResolvedValue(undefined),
-};
-
 vi.mock('../../services/status-history-service.js', () => ({
   statusHistoryService: mockStatusHistoryService,
 }));
 
 // ===================== Settings Route =====================
-
-const mockConfigServiceForSettings = {
-  getFeatureSettings: vi.fn(),
-  updateFeatureSettings: vi.fn(),
-};
 
 vi.mock('../../services/config-service.js', () => ({
   ConfigService: function () {
@@ -97,11 +108,6 @@ vi.mock('../../services/attachment-service.js', () => ({
 }));
 
 // ===================== Digest Route =====================
-
-const mockDigestService = {
-  generateDigest: vi.fn(),
-  formatForTeams: vi.fn(),
-};
 
 vi.mock('../../services/digest-service.js', () => ({
   getDigestService: () => mockDigestService,

@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769642302015_5164e54vt",
+    "type": "status_changed",
+    "taskId": "task_20260128_iFNFgD",
+    "taskTitle": "QUALITY: Audit and fix 39 silent catch blocks",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:18:22.015Z"
+  },
+  {
+    "id": "activity_1769642273943_r4y45jb0a",
+    "type": "comment_added",
+    "taskId": "task_20260128_4tLBja",
+    "taskTitle": "QUALITY: Add pre-commit hooks with husky + lint-staged",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added husky v9 + lint-staged v16. Pre-commit hook ..."
+    },
+    "timestamp": "2026-01-28T23:17:53.943Z"
+  },
+  {
+    "id": "activity_1769642273923_4yzn2ry9v",
+    "type": "status_changed",
+    "taskId": "task_20260128_4tLBja",
+    "taskTitle": "QUALITY: Add pre-commit hooks with husky + lint-staged",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:17:53.923Z"
+  },
+  {
     "id": "activity_1769642204211_s5wc25nfk",
     "type": "status_changed",
     "taskId": "task_20260128_4tLBja",
