@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769590643978_93tt215h7",
+    "type": "status_changed",
+    "taskId": "task_20260128_NrvUWe",
+    "taskTitle": "US-1153: Harden template import validation & security",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T08:57:23.978Z"
+  },
+  {
+    "id": "activity_1769590643942_0khfec0mn",
+    "type": "status_changed",
+    "taskId": "task_20260128_SFb0-u",
+    "taskTitle": "US-1152: Add error boundaries to Settings dialog",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T08:57:23.942Z"
+  },
+  {
+    "id": "activity_1769590629182_1ij2bbqck",
+    "type": "status_changed",
+    "taskId": "task_20260128_Q78_6y",
+    "taskTitle": "US-1151: Extract Settings tab components from monolith",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:57:09.182Z"
+  },
+  {
+    "id": "activity_1769590629157_abpevivbd",
+    "type": "comment_added",
+    "taskId": "task_20260128_Q78_6y",
+    "taskTitle": "US-1151: Extract Settings tab components from monolith",
+    "details": {
+      "author": "Veritas",
+      "preview": "Extracted monolithic SettingsDialog.tsx (1,481→279..."
+    },
+    "timestamp": "2026-01-28T08:57:09.157Z"
+  },
+  {
     "id": "activity_1769590226849_pj4gxcgf9",
     "type": "task_updated",
     "taskId": "task_20260128_Q78_6y",

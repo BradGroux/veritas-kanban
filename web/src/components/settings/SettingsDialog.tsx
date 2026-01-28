@@ -43,6 +43,7 @@ import {
   NotificationsTab,
   ManageTab,
 } from './tabs';
+import { SettingsErrorBoundary } from './shared';
 
 // ============ Tab Configuration ============
 
@@ -149,13 +150,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'general':       return <GeneralTab />;
-      case 'board':         return <BoardTab />;
-      case 'tasks':         return <TasksTab />;
-      case 'agents':        return <AgentsTab />;
-      case 'data':          return <DataTab />;
-      case 'notifications': return <NotificationsTab />;
-      case 'manage':        return <ManageTab />;
+      case 'general':
+        return <SettingsErrorBoundary tabName="General"><GeneralTab /></SettingsErrorBoundary>;
+      case 'board':
+        return <SettingsErrorBoundary tabName="Board"><BoardTab /></SettingsErrorBoundary>;
+      case 'tasks':
+        return <SettingsErrorBoundary tabName="Tasks"><TasksTab /></SettingsErrorBoundary>;
+      case 'agents':
+        return <SettingsErrorBoundary tabName="Agents"><AgentsTab /></SettingsErrorBoundary>;
+      case 'data':
+        return <SettingsErrorBoundary tabName="Data"><DataTab /></SettingsErrorBoundary>;
+      case 'notifications':
+        return <SettingsErrorBoundary tabName="Notifications"><NotificationsTab /></SettingsErrorBoundary>;
+      case 'manage':
+        return <SettingsErrorBoundary tabName="Manage"><ManageTab /></SettingsErrorBoundary>;
     }
   };
 
