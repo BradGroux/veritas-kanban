@@ -1,5 +1,50 @@
 [
   {
+    "id": "activity_1769590946523_ekw6m4yic",
+    "type": "task_created",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "details": {
+      "type": "model-EhHjEh",
+      "priority": "medium",
+      "project": "platform"
+    },
+    "timestamp": "2026-01-28T09:02:26.523Z"
+  },
+  {
+    "id": "activity_1769590855496_etxhp8xkm",
+    "type": "status_changed",
+    "taskId": "task_20260128_6SbOnv",
+    "taskTitle": "US-1154: Add test coverage for settings features",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T09:00:55.496Z"
+  },
+  {
+    "id": "activity_1769590817364_r5rm7bm00",
+    "type": "status_changed",
+    "taskId": "task_20260128_NrvUWe",
+    "taskTitle": "US-1153: Harden template import validation & security",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T09:00:17.364Z"
+  },
+  {
+    "id": "activity_1769590809751_ltmapn9s7",
+    "type": "comment_added",
+    "taskId": "task_20260128_NrvUWe",
+    "taskTitle": "US-1153: Harden template import validation & security",
+    "details": {
+      "author": "Veritas",
+      "preview": "Template import now validated via Zod schema with ..."
+    },
+    "timestamp": "2026-01-28T09:00:09.751Z"
+  },
+  {
     "id": "activity_1769590750284_v0gs7kh7q",
     "type": "status_changed",
     "taskId": "task_20260128_SFb0-u",

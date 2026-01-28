@@ -1,31 +1,38 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { AttachmentService } from '../services/attachment-service.js';
 import type { Attachment } from '@veritas-kanban/shared';
 
-// Use temp directories for tests
-const TEST_ROOT = path.join(process.cwd(), '..', '.test-attachments');
-const ATTACHMENTS_DIR = path.join(TEST_ROOT, 'attachments');
-const ARCHIVE_DIR = path.join(TEST_ROOT, 'archive-attachments');
-
 describe('AttachmentService', () => {
   let service: AttachmentService;
+  let testRoot: string;
+  let attachmentsDir: string;
+  let archiveDir: string;
   const testTaskId = 'task_test_123';
 
   beforeEach(async () => {
-    // Create fresh test directories
-    await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
-    await fs.mkdir(ARCHIVE_DIR, { recursive: true });
+    // Create fresh test directories with unique suffix
+    const uniqueSuffix = Math.random().toString(36).substring(7);
+    testRoot = path.join(os.tmpdir(), `veritas-test-attachments-${uniqueSuffix}`);
+    attachmentsDir = path.join(testRoot, 'attachments');
+    archiveDir = path.join(testRoot, 'archive-attachments');
+    
+    await fs.mkdir(attachmentsDir, { recursive: true });
+    await fs.mkdir(archiveDir, { recursive: true });
+    
     service = new AttachmentService({
-      attachmentsDir: ATTACHMENTS_DIR,
-      archiveAttachmentsDir: ARCHIVE_DIR,
+      attachmentsDir,
+      archiveAttachmentsDir: archiveDir,
     });
   });
 
   afterEach(async () => {
     // Clean up test directories
-    await fs.rm(TEST_ROOT, { recursive: true, force: true });
+    if (testRoot) {
+      await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});
+    }
   });
 
   describe('File upload', () => {
@@ -186,7 +193,7 @@ describe('AttachmentService', () => {
 
       // Verify moved
       await expect(fs.access(originalPath)).rejects.toThrow();
-      const archivePath = path.join(ARCHIVE_DIR, testTaskId, attachment.filename);
+      const archivePath = path.join(archiveDir, testTaskId, attachment.filename);
       await expect(fs.access(archivePath)).resolves.toBeUndefined();
     });
 
@@ -208,7 +215,7 @@ describe('AttachmentService', () => {
       // Verify restored
       const activePath = service.getAttachmentPath(testTaskId, attachment.filename);
       await expect(fs.access(activePath)).resolves.toBeUndefined();
-      const archivePath = path.join(ARCHIVE_DIR, testTaskId, attachment.filename);
+      const archivePath = path.join(archiveDir, testTaskId, attachment.filename);
       await expect(fs.access(archivePath)).rejects.toThrow();
     });
   });
@@ -226,7 +233,7 @@ describe('AttachmentService', () => {
       const attachment = await service.saveAttachment(testTaskId, mockFile);
       await service.saveExtractedText(testTaskId, attachment.id, 'Text');
 
-      const taskDir = path.join(ATTACHMENTS_DIR, testTaskId);
+      const taskDir = path.join(attachmentsDir, testTaskId);
       await expect(fs.access(taskDir)).resolves.toBeUndefined();
 
       // Delete all attachments
