@@ -13,6 +13,8 @@ export interface AuthConfig {
   enabled: boolean;
   /** Allow unauthenticated localhost connections when auth is enabled */
   allowLocalhostBypass: boolean;
+  /** Role assigned to localhost bypass connections (default: 'read-only') */
+  localhostRole: AuthRole;
   /** API keys for agents and services */
   apiKeys: ApiKeyConfig[];
   /** Admin API key (full access) */
@@ -41,10 +43,17 @@ export interface AuthenticatedRequest extends Request {
 // === Configuration ===
 
 // Load auth config from environment variables
+/** Valid values for VERITAS_AUTH_LOCALHOST_ROLE */
+const VALID_LOCALHOST_ROLES: AuthRole[] = ['admin', 'read-only', 'agent'];
+
 function loadAuthConfig(): AuthConfig {
   const enabled = process.env.VERITAS_AUTH_ENABLED !== 'false';
   const allowLocalhostBypass = process.env.VERITAS_AUTH_LOCALHOST_BYPASS === 'true';
   const adminKey = process.env.VERITAS_ADMIN_KEY;
+  
+  // Parse localhost role (default: read-only for security)
+  const rawLocalhostRole = (process.env.VERITAS_AUTH_LOCALHOST_ROLE?.trim() || 'read-only') as AuthRole;
+  const localhostRole = VALID_LOCALHOST_ROLES.includes(rawLocalhostRole) ? rawLocalhostRole : 'read-only';
   
   // Parse API keys from environment (format: name:key:role,name2:key2:role2)
   const apiKeysEnv = process.env.VERITAS_API_KEYS || '';
@@ -64,6 +73,7 @@ function loadAuthConfig(): AuthConfig {
   return {
     enabled,
     allowLocalhostBypass,
+    localhostRole,
     apiKeys,
     adminKey,
   };
@@ -234,9 +244,9 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     }
   }
   
-  // 3. Localhost bypass (dev mode)
+  // 3. Localhost bypass (dev mode) — role is configurable (default: read-only)
   if (config.allowLocalhostBypass && isLocalhost) {
-    req.auth = { role: 'admin', isLocalhost };
+    req.auth = { role: config.localhostRole, keyName: 'localhost-bypass', isLocalhost };
     return next();
   }
   

@@ -32,10 +32,10 @@ The veritas-kanban project has a **solid security foundation** with recent impro
 **Evidence:**
 ```
 auth_token
-4e2e9ef7ac67a9f2942ab2065219244081e0c2ac
+[REDACTED]
 
 ct0
-5d90bb73f3dcfa95aed2924db8f9cfaf86140a114045e0dea8b924035b0594c076b2af6196ccca...
+[REDACTED]
 ```
 
 **Mitigating factors:**

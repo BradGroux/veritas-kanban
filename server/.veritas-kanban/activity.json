@@ -1,5 +1,34 @@
 [
   {
+    "id": "activity_1769641568958_ls1eo4x7s",
+    "type": "task_updated",
+    "taskId": "task_20260128_Wfm3py",
+    "taskTitle": "Update Bird Credentials",
+    "timestamp": "2026-01-28T23:06:08.958Z"
+  },
+  {
+    "id": "activity_1769641557484_3pamw5ysp",
+    "type": "status_changed",
+    "taskId": "task_20260128_2H7USQ",
+    "taskTitle": "SECURITY: Restrict localhost bypass from full admin access",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:05:57.484Z"
+  },
+  {
+    "id": "activity_1769641556529_t7sig232k",
+    "type": "status_changed",
+    "taskId": "task_20260128_CvshRR",
+    "taskTitle": "SECURITY: Remove plaintext credentials from task data",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:05:56.529Z"
+  },
+  {
     "id": "activity_1769641144516_qwc7dctwg",
     "type": "task_created",
     "taskId": "task_20260128_iAxrNa",
