@@ -134,6 +134,15 @@ export const api = {
       const response = await fetch(`${API_BASE}/tasks/${taskId}/blocking-status`);
       return handleResponse(response);
     },
+
+    applyTemplate: async (taskId: string, templateId: string, templateName: string, fieldsChanged: string[]): Promise<void> => {
+      const response = await fetch(`${API_BASE}/tasks/${taskId}/apply-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, templateName, fieldsChanged }),
+      });
+      return handleResponse<void>(response);
+    },
   },
 
   config: {

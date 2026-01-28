@@ -509,6 +509,36 @@ router.get('/:id/worktree/open', async (req, res) => {
   }
 });
 
+// === Template Application Routes ===
+
+// POST /api/tasks/:id/apply-template - Apply template to existing task
+router.post('/:id/apply-template', async (req, res) => {
+  try {
+    const { templateId, templateName, fieldsChanged } = req.body;
+    
+    if (!templateId) {
+      return res.status(400).json({ error: 'Template ID is required' });
+    }
+
+    const task = await taskService.getTask(req.params.id);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Log activity for template application
+    await activityService.logActivity('template_applied', task.id, task.title, {
+      templateId,
+      templateName: templateName || 'Unknown',
+      fieldsChanged: fieldsChanged || [],
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error logging template application:', error);
+    res.status(500).json({ error: error.message || 'Failed to log template application' });
+  }
+});
+
 // === Time Tracking Routes ===
 
 // POST /api/tasks/:id/time/start - Start timer for a task

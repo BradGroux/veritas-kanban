@@ -1,5 +1,122 @@
 [
   {
+    "id": "activity_1769568075614_5u6dejgb9",
+    "type": "task_updated",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "timestamp": "2026-01-28T02:41:15.614Z"
+  },
+  {
+    "id": "activity_1769568028093_94k9mk402",
+    "type": "task_updated",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "timestamp": "2026-01-28T02:40:28.093Z"
+  },
+  {
+    "id": "activity_1769567987042_i1odnhqgj",
+    "type": "task_updated",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "timestamp": "2026-01-28T02:39:47.042Z"
+  },
+  {
+    "id": "activity_1769567916278_x73ysfm8g",
+    "type": "task_updated",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "timestamp": "2026-01-28T02:38:36.278Z"
+  },
+  {
+    "id": "activity_1769567791644_0ze9p6hxo",
+    "type": "status_changed",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T02:36:31.644Z"
+  },
+  {
+    "id": "activity_1769567696533_qfmr8x62s",
+    "type": "status_changed",
+    "taskId": "task_20260128_qcy3FJ",
+    "taskTitle": "US-907: Apply template to existing task",
+    "details": {
+      "from": "done",
+      "status": "todo"
+    },
+    "timestamp": "2026-01-28T02:34:56.533Z"
+  },
+  {
+    "id": "activity_1769567681146_fxg33ratb",
+    "type": "task_updated",
+    "taskId": "task_20260128_AaRWcX",
+    "taskTitle": "US-909: Enhanced template UI",
+    "timestamp": "2026-01-28T02:34:41.146Z"
+  },
+  {
+    "id": "activity_1769567681136_tobnbsg2u",
+    "type": "task_updated",
+    "taskId": "task_20260128_dKzctW",
+    "taskTitle": "US-908: Template import/export",
+    "timestamp": "2026-01-28T02:34:41.136Z"
+  },
+  {
+    "id": "activity_1769567681127_rt6kve88l",
+    "type": "task_updated",
+    "taskId": "task_20260128_9Jlp1m",
+    "taskTitle": "US-906: Agent & dependency defaults",
+    "timestamp": "2026-01-28T02:34:41.127Z"
+  },
+  {
+    "id": "activity_1769567681110_p30y0xvku",
+    "type": "task_updated",
+    "taskId": "task_20260128_8ro0pA",
+    "taskTitle": "US-905: Multi-task blueprints",
+    "timestamp": "2026-01-28T02:34:41.110Z"
+  },
+  {
+    "id": "activity_1769567681102_e8wwvvm0q",
+    "type": "task_updated",
+    "taskId": "task_20260128_dvaLco",
+    "taskTitle": "US-904: Template categories",
+    "timestamp": "2026-01-28T02:34:41.102Z"
+  },
+  {
+    "id": "activity_1769567681092_x1p500byz",
+    "type": "task_updated",
+    "taskId": "task_20260128_nyIFMc",
+    "taskTitle": "US-903: Variable interpolation",
+    "timestamp": "2026-01-28T02:34:41.092Z"
+  },
+  {
+    "id": "activity_1769567681083_7plxvn7o7",
+    "type": "task_updated",
+    "taskId": "task_20260128_z6OIb_",
+    "taskTitle": "US-902: Subtask templates",
+    "timestamp": "2026-01-28T02:34:41.083Z"
+  },
+  {
+    "id": "activity_1769567681073_70343o38y",
+    "type": "task_updated",
+    "taskId": "task_20260128_fL0JN1",
+    "taskTitle": "US-901: Enhanced template schema",
+    "timestamp": "2026-01-28T02:34:41.073Z"
+  },
+  {
+    "id": "activity_1769567653758_gip0r8h6y",
+    "type": "status_changed",
+    "taskId": "task_20260128_AaRWcX",
+    "taskTitle": "US-909: Enhanced template UI",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T02:34:13.758Z"
+  },
+  {
     "id": "activity_1769567573111_d3sd566d0",
     "type": "status_changed",
     "taskId": "task_20260128_dKzctW",
@@ -861,155 +978,5 @@
       "project": "Sprint 8"
     },
     "timestamp": "2026-01-26T17:57:55.365Z"
-  },
-  {
-    "id": "activity_1769450252743_xx89yq6ne",
-    "type": "task_created",
-    "taskId": "task_20260126_8SKJ8t",
-    "taskTitle": "US-804: Token Usage Tracking",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "Sprint 8"
-    },
-    "timestamp": "2026-01-26T17:57:32.743Z"
-  },
-  {
-    "id": "activity_1769450252689_dejjxuezs",
-    "type": "task_created",
-    "taskId": "task_20260126_aBQTa1",
-    "taskTitle": "US-803: Emit Run Events",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "Sprint 8"
-    },
-    "timestamp": "2026-01-26T17:57:32.689Z"
-  },
-  {
-    "id": "activity_1769450252634_w6utau64q",
-    "type": "task_created",
-    "taskId": "task_20260126_kgLjM8",
-    "taskTitle": "US-802: Emit Task Events",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "Sprint 8"
-    },
-    "timestamp": "2026-01-26T17:57:32.634Z"
-  },
-  {
-    "id": "activity_1769450237943_armw0090q",
-    "type": "task_created",
-    "taskId": "task_20260126_desyd5",
-    "taskTitle": "US-801: Telemetry Service",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "Sprint 8"
-    },
-    "timestamp": "2026-01-26T17:57:17.943Z"
-  },
-  {
-    "id": "activity_1769449288760_hzmmgfxfi",
-    "type": "task_deleted",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "timestamp": "2026-01-26T17:41:28.760Z"
-  },
-  {
-    "id": "activity_1769449185820_cctph1fac",
-    "type": "task_deleted",
-    "taskId": "task_20260126_tsDVOq",
-    "taskTitle": "Test feature branch",
-    "timestamp": "2026-01-26T17:39:45.820Z"
-  },
-  {
-    "id": "activity_1769449175512_6lvnf3bgl",
-    "type": "task_updated",
-    "taskId": "task_20260126_tsDVOq",
-    "taskTitle": "Test feature branch",
-    "timestamp": "2026-01-26T17:39:35.512Z"
-  },
-  {
-    "id": "activity_1769448961158_7hmywa016",
-    "type": "status_changed",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "details": {
-      "from": "archived",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T17:36:01.158Z"
-  },
-  {
-    "id": "activity_1769448955837_m815ex2dh",
-    "type": "task_archived",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "timestamp": "2026-01-26T17:35:55.837Z"
-  },
-  {
-    "id": "activity_1769448944900_dm04m4zyu",
-    "type": "status_changed",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "details": {
-      "from": "in-progress",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T17:35:44.900Z"
-  },
-  {
-    "id": "activity_1769448691266_xbovau2j5",
-    "type": "task_updated",
-    "taskId": "task_20260126_tsDVOq",
-    "taskTitle": "Test feature branch",
-    "timestamp": "2026-01-26T17:31:31.266Z"
-  },
-  {
-    "id": "activity_1769448671292_o56r391ij",
-    "type": "task_created",
-    "taskId": "task_20260126_tsDVOq",
-    "taskTitle": "Test feature branch",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "test"
-    },
-    "timestamp": "2026-01-26T17:31:11.292Z"
-  },
-  {
-    "id": "activity_1769448643552_50ghtkm2u",
-    "type": "status_changed",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "details": {
-      "from": "todo",
-      "status": "in-progress"
-    },
-    "timestamp": "2026-01-26T17:30:43.552Z"
-  },
-  {
-    "id": "activity_1769448480165_c8bcel8bk",
-    "type": "task_created",
-    "taskId": "task_20260126_9VIZY1",
-    "taskTitle": "Test task from CLI",
-    "details": {
-      "type": "code",
-      "priority": "high"
-    },
-    "timestamp": "2026-01-26T17:28:00.165Z"
-  },
-  {
-    "id": "activity_1769447559137_w5so806no",
-    "type": "status_changed",
-    "taskId": "task_20260126_PcoH5E",
-    "taskTitle": "US-711: Running indicator on task cards",
-    "details": {
-      "from": "todo",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T17:12:39.137Z"
   }
 ]

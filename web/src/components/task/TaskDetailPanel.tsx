@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
-import { Trash2, Code, Search, FileText, Zap, Calendar, Clock, GitBranch, Bot, FileDiff, ClipboardCheck, Monitor } from 'lucide-react';
+import { Trash2, Code, Search, FileText, Zap, Calendar, Clock, GitBranch, Bot, FileDiff, ClipboardCheck, Monitor, FileCode } from 'lucide-react';
 import type { Task, TaskType, TaskStatus, TaskPriority, ReviewComment, ReviewState } from '@veritas-kanban/shared';
 import { GitSection } from './GitSection';
 import { AgentPanel } from './AgentPanel';
@@ -44,6 +44,7 @@ import { SubtasksSection } from './SubtasksSection';
 import { DependenciesSection } from './DependenciesSection';
 import { PreviewPanel } from './PreviewPanel';
 import { TimeTrackingSection } from './TimeTrackingSection';
+import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -125,6 +126,7 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
   const { localTask, updateField, isDirty } = useDebouncedSave(task, updateTask);
   const [activeTab, setActiveTab] = useState('details');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -203,6 +205,15 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
                 </>
               )}
             </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setApplyTemplateOpen(true)}
+              className="flex items-center gap-1"
+            >
+              <FileCode className="h-3 w-3" />
+              Template
+            </Button>
             {isCodeTask && localTask.git?.repo && (
               <Button
                 variant="outline"
@@ -430,6 +441,15 @@ export function TaskDetailPanel({ task, open, onOpenChange }: TaskDetailPanelPro
           task={localTask}
           open={previewOpen}
           onOpenChange={setPreviewOpen}
+        />
+      )}
+
+      {/* Apply Template Dialog */}
+      {localTask && (
+        <ApplyTemplateDialog
+          task={localTask}
+          open={applyTemplateOpen}
+          onOpenChange={setApplyTemplateOpen}
         />
       )}
     </Sheet>
