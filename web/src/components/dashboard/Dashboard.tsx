@@ -21,7 +21,11 @@ import {
   ListTodo,
   Play,
   Ban,
-  RefreshCw
+  RefreshCw,
+  MessageSquare,
+  Wrench,
+  Link2,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -223,6 +227,45 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Blocked Reason Breakdown (only show if there are blocked tasks) */}
+      {metrics && metrics.tasks.byStatus['blocked'] > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">Blocked Tasks Breakdown</h3>
+          <div className="grid grid-cols-5 gap-3">
+            <MetricCard 
+              label="Waiting on Feedback" 
+              value={metrics.tasks.byBlockedReason['waiting-on-feedback'] || 0}
+              icon={<MessageSquare className="h-4 w-4" />}
+              color="yellow"
+            />
+            <MetricCard 
+              label="Technical Snag" 
+              value={metrics.tasks.byBlockedReason['technical-snag'] || 0}
+              icon={<Wrench className="h-4 w-4" />}
+              color="red"
+            />
+            <MetricCard 
+              label="Prerequisite" 
+              value={metrics.tasks.byBlockedReason['prerequisite'] || 0}
+              icon={<Link2 className="h-4 w-4" />}
+              color="blue"
+            />
+            <MetricCard 
+              label="Other" 
+              value={metrics.tasks.byBlockedReason['other'] || 0}
+              icon={<HelpCircle className="h-4 w-4" />}
+              color="muted"
+            />
+            <MetricCard 
+              label="Unspecified" 
+              value={metrics.tasks.byBlockedReason['unspecified'] || 0}
+              icon={<Ban className="h-4 w-4" />}
+              color="muted"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Agent Operations Row */}
       <div>

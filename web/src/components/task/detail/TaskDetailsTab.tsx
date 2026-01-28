@@ -17,10 +17,11 @@ import { SubtasksSection } from '../SubtasksSection';
 import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
+import { BlockedReasonSection } from '../BlockedReasonSection';
 import { useDeleteTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { Trash2, Calendar, Clock, RotateCcw } from 'lucide-react';
-import type { Task } from '@veritas-kanban/shared';
+import type { Task, BlockedReason } from '@veritas-kanban/shared';
 
 interface TaskDetailsTabProps {
   task: Task;
@@ -82,6 +83,17 @@ export function TaskDetailsTab({
         onUpdate={onUpdate} 
         readOnly={readOnly}
       />
+
+      {/* Blocked Reason (shown when status is blocked) */}
+      {task.status === 'blocked' && (
+        <div className="border-t pt-4">
+          <BlockedReasonSection
+            task={task}
+            onUpdate={(blockedReason: BlockedReason | undefined) => onUpdate('blockedReason', blockedReason)}
+            readOnly={readOnly}
+          />
+        </div>
+      )}
 
       {/* Subtasks */}
       <div className="border-t pt-4">

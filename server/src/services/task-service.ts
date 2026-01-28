@@ -122,6 +122,7 @@ export class TaskService {
       subtasks: data.subtasks,
       autoCompleteOnSubtasks: data.autoCompleteOnSubtasks,
       blockedBy: data.blockedBy,
+      blockedReason: data.blockedReason,
       automation: data.automation,
       timeTracking: data.timeTracking,
       comments: data.comments,
@@ -228,12 +229,14 @@ export class TaskService {
     const statusChanged = input.status !== undefined && input.status !== previousStatus;
 
     // Handle git field separately to merge properly
-    const { git: gitUpdate, ...restInput } = input;
+    const { git: gitUpdate, blockedReason: blockedReasonUpdate, ...restInput } = input;
     
     const updatedTask: Task = {
       ...task,
       ...restInput,
       git: gitUpdate ? { ...task.git, ...gitUpdate } as Task['git'] : task.git,
+      // Handle blockedReason: null means clear, undefined means keep existing
+      blockedReason: blockedReasonUpdate === null ? undefined : (blockedReasonUpdate ?? task.blockedReason),
       updated: new Date().toISOString(),
     };
 

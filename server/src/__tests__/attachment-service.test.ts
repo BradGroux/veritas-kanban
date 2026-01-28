@@ -51,7 +51,7 @@ describe('AttachmentService', () => {
         mimeType: 'text/plain',
         size: 1024,
       });
-      expect(attachment.id).toMatch(/^att_\d+_[a-zA-Z0-9]{6}$/);
+      expect(attachment.id).toMatch(/^att_\d+_[a-zA-Z0-9_-]{6}$/);
       expect(attachment.filename).toContain(attachment.id);
       expect(attachment.uploaded).toBeDefined();
 

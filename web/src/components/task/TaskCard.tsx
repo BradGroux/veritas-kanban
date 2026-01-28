@@ -8,8 +8,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Task, TaskPriority } from '@veritas-kanban/shared';
-import { Check, Ban, Clock, Timer, Loader2, Paperclip, ListChecks, Zap } from 'lucide-react';
+import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
+import { Check, Ban, Clock, Timer, Loader2, Paperclip, ListChecks, Zap, MessageSquare, Wrench, Link2, HelpCircle } from 'lucide-react';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { formatDuration } from '@/hooks/useTimeTracking';
 import { getTypeIcon, getTypeColor } from '@/hooks/useTaskTypes';
@@ -24,6 +24,13 @@ const agentNames: Record<string, string> = {
   'copilot': 'Copilot',
   'gemini': 'Gemini',
   'veritas': 'Veritas',
+};
+
+const blockedCategoryInfo: Record<BlockedCategory, { label: string; shortLabel: string; icon: React.ElementType }> = {
+  'waiting-on-feedback': { label: 'Waiting on Feedback', shortLabel: 'Feedback', icon: MessageSquare },
+  'technical-snag': { label: 'Technical Snag', shortLabel: 'Snag', icon: Wrench },
+  'prerequisite': { label: 'Prerequisite', shortLabel: 'Prereq', icon: Link2 },
+  'other': { label: 'Other', shortLabel: 'Other', icon: HelpCircle },
 };
 
 interface TaskCardProps {
@@ -199,6 +206,27 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                   </TooltipContent>
                 </Tooltip>
               )}
+              {/* Blocked reason badge (only shown in Blocked column) */}
+              {task.status === 'blocked' && task.blockedReason && (() => {
+                const info = blockedCategoryInfo[task.blockedReason.category];
+                const BlockedIcon = info.icon;
+                return (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 flex items-center gap-1">
+                        <BlockedIcon className="h-3 w-3" />
+                        {info.shortLabel}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">{info.label}</p>
+                      {task.blockedReason.note && (
+                        <p className="text-sm text-muted-foreground mt-1">{task.blockedReason.note}</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })()}
               {/* Left side: project, type label, priority — controlled by board settings */}
               {boardSettings.showProjectBadges && task.project && (
                 <span className={cn("text-xs px-1.5 py-0.5 rounded", projectColor)}>
