@@ -1,5 +1,201 @@
 [
   {
+    "id": "activity_1769594599726_5lp9h98h5",
+    "type": "status_changed",
+    "taskId": "task_20260128_8HU2XD",
+    "taskTitle": "US-1158: Replace alert() calls with toast notifications",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T10:03:19.726Z"
+  },
+  {
+    "id": "activity_1769592539931_twcrqcpt5",
+    "type": "sprint_archived",
+    "taskId": "US-1100",
+    "taskTitle": "US-1100",
+    "details": {
+      "taskCount": 10
+    },
+    "timestamp": "2026-01-28T09:28:59.931Z"
+  },
+  {
+    "id": "activity_1769592485058_6vdret7hw",
+    "type": "task_updated",
+    "taskId": "task_20260128_8KRThU",
+    "taskTitle": "FEATURE REQUEST: Change Review Column to Blocked",
+    "timestamp": "2026-01-28T09:28:05.058Z"
+  },
+  {
+    "id": "activity_1769592479575_p0swcv4xx",
+    "type": "status_changed",
+    "taskId": "task_20260128_8KRThU",
+    "taskTitle": "FEATURE REQUEST: Change Review Column to Blocked",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T09:27:59.575Z"
+  },
+  {
+    "id": "activity_1769592048834_lnlgvfmr9",
+    "type": "status_changed",
+    "taskId": "task_20260128_8KRThU",
+    "taskTitle": "FEATURE REQUEST: Change Review Column to Blocked",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T09:20:48.834Z"
+  },
+  {
+    "id": "activity_1769592048818_rv4n02og5",
+    "type": "comment_added",
+    "taskId": "task_20260128_8KRThU",
+    "taskTitle": "FEATURE REQUEST: Change Review Column to Blocked",
+    "details": {
+      "author": "Veritas",
+      "preview": "Sprint US-1500 created with 7 stories (US-1501–US-..."
+    },
+    "timestamp": "2026-01-28T09:20:48.818Z"
+  },
+  {
+    "id": "activity_1769592037043_5b23m5plu",
+    "type": "task_created",
+    "taskId": "task_20260128_g86sZV",
+    "taskTitle": "US-1507: Add blocked reason tracking",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:20:37.043Z"
+  },
+  {
+    "id": "activity_1769592022111_s9qvt78ma",
+    "type": "task_created",
+    "taskId": "task_20260128_KTgZMx",
+    "taskTitle": "US-1506: Update test suite — review → blocked references",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:20:22.111Z"
+  },
+  {
+    "id": "activity_1769592012261_e2g8dvk3m",
+    "type": "task_created",
+    "taskId": "task_20260128_0hOHmd",
+    "taskTitle": "US-1505: Data migration — convert existing review tasks to blocked",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:20:12.261Z"
+  },
+  {
+    "id": "activity_1769592001252_wkek4tpfs",
+    "type": "task_created",
+    "taskId": "task_20260128_62_v6g",
+    "taskTitle": "US-1504: Propagate review → blocked across all backend routes and services",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:20:01.252Z"
+  },
+  {
+    "id": "activity_1769591988668_y93p97rtf",
+    "type": "task_created",
+    "taskId": "task_20260128_hQpqum",
+    "taskTitle": "US-1503: Propagate review → blocked across all frontend components",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:19:48.668Z"
+  },
+  {
+    "id": "activity_1769591973480_ed1rh84tf",
+    "type": "task_created",
+    "taskId": "task_20260128_iFFyez",
+    "taskTitle": "US-1502: Update Kanban column display — Blocked title + red color",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:19:33.480Z"
+  },
+  {
+    "id": "activity_1769591960496_c9xm2ql3x",
+    "type": "task_created",
+    "taskId": "task_20260128_-WSaw3",
+    "taskTitle": "US-1501: Rename TaskStatus review → blocked in shared types",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T09:19:20.496Z"
+  },
+  {
+    "id": "activity_1769591477776_dv9jz0ymr",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T09:11:17.776Z"
+  },
+  {
+    "id": "activity_1769591429316_9kwem5ftu",
+    "type": "status_changed",
+    "taskId": "task_20260128_-KNOy3",
+    "taskTitle": "US-1155: Settings performance — memoization & lazy loading",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T09:10:29.316Z"
+  },
+  {
+    "id": "activity_1769591394306_t4h0ljnmv",
+    "type": "status_changed",
+    "taskId": "task_20260128_CnogQO",
+    "taskTitle": "US-1157: Sanitize settings import against prototype pollution",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T09:09:54.306Z"
+  },
+  {
+    "id": "activity_1769591389898_ue1r7w1pp",
+    "type": "comment_added",
+    "taskId": "task_20260128_CnogQO",
+    "taskTitle": "US-1157: Sanitize settings import against prototype pollution",
+    "details": {
+      "author": "Veritas",
+      "preview": "Already implemented in commit 3402051. Added Zod s..."
+    },
+    "timestamp": "2026-01-28T09:09:49.898Z"
+  },
+  {
+    "id": "activity_1769591349039_t0t1gp5dq",
+    "type": "comment_added",
+    "taskId": "task_20260128_-KNOy3",
+    "taskTitle": "US-1155: Settings performance — memoization & lazy loading",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added React.memo to shared row components, lazy-lo..."
+    },
+    "timestamp": "2026-01-28T09:09:09.039Z"
+  },
+  {
     "id": "activity_1769591243934_a59soco89",
     "type": "status_changed",
     "taskId": "task_20260128_CnogQO",

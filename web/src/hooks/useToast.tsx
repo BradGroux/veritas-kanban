@@ -9,6 +9,7 @@ type ToastProps = {
   action?: ToastActionElement;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  duration?: number;
 };
 
 const TOAST_LIMIT = 3;

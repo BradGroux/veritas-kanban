@@ -29,6 +29,7 @@ import {
   useFeatureSettings,
   useDebouncedFeatureUpdate,
 } from '@/hooks/useFeatureSettings';
+import { useToast } from '@/hooks/useToast';
 import {
   Settings2, Layout, ListTodo, Cpu, Database, Bell, Archive,
   Download, Upload, RotateCcw,
@@ -95,6 +96,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { settings: currentSettings } = useFeatureSettings();
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleExportSettings = () => {
     const blob = new Blob([JSON.stringify(currentSettings, null, 2)], { type: 'application/json' });
@@ -116,7 +118,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       const text = await file.text();
       const imported = JSON.parse(text);
       if (!imported || typeof imported !== 'object') {
-        alert('Invalid settings file: must be a JSON object');
+        toast({
+          title: 'Import failed',
+          description: 'Invalid settings file: must be a JSON object',
+          duration: Infinity,
+        });
         return;
       }
       // Validate expected top-level keys
@@ -124,7 +130,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       const importedKeys = Object.keys(imported);
       const unknownKeys = importedKeys.filter(k => !validSections.includes(k));
       if (unknownKeys.length > 0) {
-        alert(`Warning: Unknown sections will be ignored: ${unknownKeys.join(', ')}`);
+        toast({
+          title: 'Warning',
+          description: `Unknown sections will be ignored: ${unknownKeys.join(', ')}`,
+          duration: Infinity,
+        });
       }
       const validPatch: Record<string, any> = {};
       for (const key of importedKeys) {
@@ -133,15 +143,27 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         }
       }
       if (Object.keys(validPatch).length === 0) {
-        alert('No valid settings found in file');
+        toast({
+          title: 'Import failed',
+          description: 'No valid settings found in file',
+          duration: Infinity,
+        });
         return;
       }
       if (confirm(`Import ${Object.keys(validPatch).length} setting sections: ${Object.keys(validPatch).join(', ')}?\n\nThis will overwrite current values.`)) {
         debouncedUpdate(validPatch);
-        alert('Settings imported successfully!');
+        toast({
+          title: 'Import complete',
+          description: 'Settings imported successfully!',
+          duration: 3000,
+        });
       }
     } catch (err) {
-      alert(`Import failed: ${err instanceof Error ? err.message : 'Invalid JSON'}`);
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : 'Invalid JSON',
+        duration: Infinity,
+      });
     } finally {
       if (settingsFileInputRef.current) settingsFileInputRef.current.value = '';
     }
