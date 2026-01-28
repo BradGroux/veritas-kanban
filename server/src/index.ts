@@ -567,7 +567,7 @@ server.listen(PORT, () => {
       cors: corsLine,
       helmet: true,
       compression: true,
-      rateLimit: '100 req/min',
+      rateLimit: `${process.env.RATE_LIMIT_MAX || 300} req/min (localhost exempt)`,
       bodyLimit: '1MB',
     },
     'Veritas Kanban Server started'

@@ -1,5 +1,34 @@
 [
   {
+    "id": "activity_1769643139691_rckexf1qm",
+    "type": "task_updated",
+    "taskId": "task_20260128_LTxaqy",
+    "taskTitle": "PERF: Optimize telemetry storage growth and query performance",
+    "timestamp": "2026-01-28T23:32:19.691Z"
+  },
+  {
+    "id": "activity_1769643134733_e7mh49ljc",
+    "type": "comment_added",
+    "taskId": "task_20260128_LTxaqy",
+    "taskTitle": "PERF: Optimize telemetry storage growth and query performance",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added configurable telemetry retention (TELEMETRY_..."
+    },
+    "timestamp": "2026-01-28T23:32:14.733Z"
+  },
+  {
+    "id": "activity_1769643134721_cjoenz2u2",
+    "type": "status_changed",
+    "taskId": "task_20260128_LTxaqy",
+    "taskTitle": "PERF: Optimize telemetry storage growth and query performance",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:32:14.721Z"
+  },
+  {
     "id": "activity_1769643097284_xc5mss3zh",
     "type": "status_changed",
     "taskId": "task_20260128_YBVPjr",
