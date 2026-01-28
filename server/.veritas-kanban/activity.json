@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769641914696_o9slvvwd6",
+    "type": "status_changed",
+    "taskId": "task_20260128_nhfrcW",
+    "taskTitle": "QUALITY: Replace console.* with structured logging (pino)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:11:54.696Z"
+  },
+  {
+    "id": "activity_1769641890858_e8gdcbd17",
+    "type": "comment_added",
+    "taskId": "task_20260128_uUydZN",
+    "taskTitle": "QUALITY: Add request ID middleware for request tracing",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added request ID middleware (server/src/middleware..."
+    },
+    "timestamp": "2026-01-28T23:11:30.858Z"
+  },
+  {
+    "id": "activity_1769641881221_7pekufdyj",
+    "type": "status_changed",
+    "taskId": "task_20260128_uUydZN",
+    "taskTitle": "QUALITY: Add request ID middleware for request tracing",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:11:21.221Z"
+  },
+  {
+    "id": "activity_1769641876712_s5geq6135",
+    "type": "status_changed",
+    "taskId": "task_20260128_3X46QP",
+    "taskTitle": "QUALITY: Create CI pipeline (.github/workflows)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:11:16.712Z"
+  },
+  {
     "id": "activity_1769641852570_c0bqhisjh",
     "type": "comment_added",
     "taskId": "task_20260128_8DUobI",

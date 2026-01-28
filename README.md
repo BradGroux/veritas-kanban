@@ -1,5 +1,8 @@
 # Veritas Kanban
 
+[![CI](https://github.com/dm-bradgroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/dm-bradgroux/veritas-kanban/actions/workflows/ci.yml)
+[![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
+
 A local-first task management and AI agent orchestration platform. Built for developers who want a visual Kanban board that integrates with AI coding agents.
 
 ## Features
