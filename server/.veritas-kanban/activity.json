@@ -1,5 +1,16 @@
 [
   {
+    "id": "activity_1769609460386_6n876xgld",
+    "type": "status_changed",
+    "taskId": "task_20260128_hul7-q",
+    "taskTitle": "US-1305: Status history log",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:11:00.386Z"
+  },
+  {
     "id": "activity_1769609444392_cqzd626r4",
     "type": "status_changed",
     "taskId": "task_20260128_V0MVwS",
