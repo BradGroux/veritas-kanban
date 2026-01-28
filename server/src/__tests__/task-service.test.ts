@@ -1,29 +1,36 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { TaskService } from '../services/task-service.js';
-
-// Use temp directories for tests
-const TEST_ROOT = path.join(process.cwd(), '..', '.test-tasks');
-const TASKS_DIR = path.join(TEST_ROOT, 'active');
-const ARCHIVE_DIR = path.join(TEST_ROOT, 'archive');
 
 describe('TaskService', () => {
   let service: TaskService;
+  let testRoot: string;
+  let tasksDir: string;
+  let archiveDir: string;
 
   beforeEach(async () => {
-    // Create fresh test directories
-    await fs.mkdir(TASKS_DIR, { recursive: true });
-    await fs.mkdir(ARCHIVE_DIR, { recursive: true });
+    // Create fresh test directories with unique suffix
+    const uniqueSuffix = Math.random().toString(36).substring(7);
+    testRoot = path.join(os.tmpdir(), `veritas-test-tasks-${uniqueSuffix}`);
+    tasksDir = path.join(testRoot, 'active');
+    archiveDir = path.join(testRoot, 'archive');
+    
+    await fs.mkdir(tasksDir, { recursive: true });
+    await fs.mkdir(archiveDir, { recursive: true });
+    
     service = new TaskService({
-      tasksDir: TASKS_DIR,
-      archiveDir: ARCHIVE_DIR,
+      tasksDir,
+      archiveDir,
     });
   });
 
   afterEach(async () => {
     // Clean up test directories
-    await fs.rm(TEST_ROOT, { recursive: true, force: true });
+    if (testRoot) {
+      await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});
+    }
   });
 
   describe('Task file parsing', () => {
@@ -43,7 +50,7 @@ This is the task description.
 
 With multiple paragraphs.
 `;
-      await fs.writeFile(path.join(TASKS_DIR, 'task_20260126_abc123-test-task.md'), taskContent);
+      await fs.writeFile(path.join(tasksDir, 'task_20260126_abc123-test-task.md'), taskContent);
 
       const tasks = await service.listTasks();
       expect(tasks).toHaveLength(1);
@@ -76,7 +83,7 @@ git:
 ---
 Code task with git info.
 `;
-      await fs.writeFile(path.join(TASKS_DIR, 'task_20260126_git123-git-task.md'), taskContent);
+      await fs.writeFile(path.join(tasksDir, 'task_20260126_git123-git-task.md'), taskContent);
 
       const tasks = await service.listTasks();
       const task = tasks[0];
@@ -112,7 +119,7 @@ attempts:
 ---
 Task with agent attempt.
 `;
-      await fs.writeFile(path.join(TASKS_DIR, 'task_20260126_attempt123-agent-task.md'), taskContent);
+      await fs.writeFile(path.join(tasksDir, 'task_20260126_attempt123-agent-task.md'), taskContent);
 
       const tasks = await service.listTasks();
       const task = tasks[0];
@@ -134,7 +141,7 @@ created: '2026-01-26T10:00:00.000Z'
 updated: '2026-01-26T10:00:00.000Z'
 ---
 `;
-      await fs.writeFile(path.join(TASKS_DIR, 'task_minimal-minimal-task.md'), taskContent);
+      await fs.writeFile(path.join(tasksDir, 'task_minimal-minimal-task.md'), taskContent);
 
       const tasks = await service.listTasks();
       expect(tasks).toHaveLength(1);
@@ -168,7 +175,7 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(task.sprint).toBe('US-900');
 
       // Verify file was created
-      const files = await fs.readdir(TASKS_DIR);
+      const files = await fs.readdir(tasksDir);
       expect(files.some(f => f.includes('new-task'))).toBe(true);
     });
 
@@ -188,7 +195,7 @@ updated: '2026-01-26T10:00:00.000Z'
         title: 'Test: Special Characters! & More?',
       });
 
-      const files = await fs.readdir(TASKS_DIR);
+      const files = await fs.readdir(tasksDir);
       const taskFile = files.find(f => f.includes(task.id));
       expect(taskFile).toMatch(/test-special-characters-more/);
     });
@@ -220,10 +227,10 @@ updated: '2026-01-26T10:00:00.000Z'
 
     it('should rename file when title changes', async () => {
       const task = await service.createTask({ title: 'Original Name' });
-      const originalFiles = await fs.readdir(TASKS_DIR);
+      const originalFiles = await fs.readdir(tasksDir);
       
       await service.updateTask(task.id, { title: 'New Name' });
-      const newFiles = await fs.readdir(TASKS_DIR);
+      const newFiles = await fs.readdir(tasksDir);
 
       expect(originalFiles.some(f => f.includes('original-name'))).toBe(true);
       expect(newFiles.some(f => f.includes('new-name'))).toBe(true);
@@ -260,7 +267,7 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(activeTasks).toHaveLength(0);
 
       // Task should be in archive
-      const archiveFiles = await fs.readdir(ARCHIVE_DIR);
+      const archiveFiles = await fs.readdir(archiveDir);
       expect(archiveFiles.some(f => f.includes('to-archive'))).toBe(true);
     });
 
