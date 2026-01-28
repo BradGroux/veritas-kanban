@@ -1,5 +1,21 @@
 [
   {
+    "id": "status_1769621059009_mq2mkr5m1",
+    "timestamp": "2026-01-28T17:24:19.009Z",
+    "previousStatus": "working",
+    "newStatus": "idle",
+    "subAgentCount": 0,
+    "durationMs": 201498
+  },
+  {
+    "id": "status_1769620857511_yijbvm2yr",
+    "timestamp": "2026-01-28T17:20:57.511Z",
+    "previousStatus": "sub-agent",
+    "newStatus": "working",
+    "subAgentCount": 0,
+    "durationMs": 297622
+  },
+  {
     "id": "status_1769620559889_3ebp6aeg4",
     "timestamp": "2026-01-28T17:15:59.889Z",
     "previousStatus": "idle",

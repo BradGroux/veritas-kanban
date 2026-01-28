@@ -1,5 +1,331 @@
 [
   {
+    "id": "activity_1769622035872_xdoj9wnyj",
+    "type": "comment_added",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "details": {
+      "author": "Veritas",
+      "preview": "REDO: Populated token telemetry for ALL 192 closed..."
+    },
+    "timestamp": "2026-01-28T17:40:35.872Z"
+  },
+  {
+    "id": "activity_1769621087932_kwu71wxni",
+    "type": "comment_added",
+    "taskId": "task_20260128_QLdigC",
+    "taskTitle": "Perform a complete review of the code, architecture and deployment",
+    "details": {
+      "author": "Veritas",
+      "preview": "Completed full code review. Created 47 sprint task..."
+    },
+    "timestamp": "2026-01-28T17:24:47.932Z"
+  },
+  {
+    "id": "activity_1769621087892_qht98h3yh",
+    "type": "status_changed",
+    "taskId": "task_20260128_QLdigC",
+    "taskTitle": "Perform a complete review of the code, architecture and deployment",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T17:24:47.892Z"
+  },
+  {
+    "id": "activity_1769621059001_14e254a1y",
+    "type": "comment_added",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "details": {
+      "author": "Veritas",
+      "preview": "Populated token telemetry for all 5 completed task..."
+    },
+    "timestamp": "2026-01-28T17:24:19.001Z"
+  },
+  {
+    "id": "activity_1769621058968_raq6wbo79",
+    "type": "status_changed",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T17:24:18.968Z"
+  },
+  {
+    "id": "activity_1769620938778_d1wlqlu9s",
+    "type": "task_created",
+    "taskId": "task_20260128_07AFaA",
+    "taskTitle": "PERF: Cache config in memory and invalidate on write",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:18.778Z"
+  },
+  {
+    "id": "activity_1769620938670_jke8j6kjk",
+    "type": "task_created",
+    "taskId": "task_20260128_pz20DY",
+    "taskTitle": "PERF: Add Cache-Control headers for static resources and GET endpoints",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:18.670Z"
+  },
+  {
+    "id": "activity_1769620938576_iqrwib5i6",
+    "type": "task_created",
+    "taskId": "task_20260128_swwATe",
+    "taskTitle": "PERF: Add response compression middleware (gzip/brotli)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:18.576Z"
+  },
+  {
+    "id": "activity_1769620938508_g67hspnhs",
+    "type": "task_created",
+    "taskId": "task_20260128_45e5GC",
+    "taskTitle": "PERF: Reduce polling interval or disable when WebSocket connected",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:18.508Z"
+  },
+  {
+    "id": "activity_1769620937445_6apoqeaxf",
+    "type": "task_created",
+    "taskId": "task_20260128_vIi7cG",
+    "taskTitle": "PERF: Memoize TaskCard cardMetrics to prevent unnecessary re-renders",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.445Z"
+  },
+  {
+    "id": "activity_1769620937328_jekp6mqwe",
+    "type": "task_created",
+    "taskId": "task_20260128_HUc92E",
+    "taskTitle": "PERF: Implement in-memory caching for TaskService with file watchers",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.328Z"
+  },
+  {
+    "id": "activity_1769620937276_3dc5bdpy7",
+    "type": "task_created",
+    "taskId": "task_20260128_9t1KEa",
+    "taskTitle": "SECURITY: Add server-side MIME type validation for attachments",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.276Z"
+  },
+  {
+    "id": "activity_1769620937253_ua4ijw9i9",
+    "type": "task_created",
+    "taskId": "task_20260128_FWEVBg",
+    "taskTitle": "SECURITY: Sanitize Markdown content to prevent stored XSS",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.253Z"
+  },
+  {
+    "id": "activity_1769620937234_0mgy2aye4",
+    "type": "task_created",
+    "taskId": "task_20260128_yR0web",
+    "taskTitle": "SECURITY: Validate Origin header for WebSocket connections",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.234Z"
+  },
+  {
+    "id": "activity_1769620937221_qs2kdjo8k",
+    "type": "task_created",
+    "taskId": "task_20260128_lLNafd",
+    "taskTitle": "SECURITY: Add API versioning (/api/v1/...)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.221Z"
+  },
+  {
+    "id": "activity_1769620937205_obl36yez4",
+    "type": "task_created",
+    "taskId": "task_20260128_rDvrGE",
+    "taskTitle": "SECURITY: Replace in-memory rate limiter with Redis",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.205Z"
+  },
+  {
+    "id": "activity_1769620937175_rza53tk25",
+    "type": "task_created",
+    "taskId": "task_20260128_VVqEG1",
+    "taskTitle": "SECURITY: Add Content Security Policy (CSP) headers with Helmet",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:22:17.175Z"
+  },
+  {
+    "id": "activity_1769620857489_b7p833d28",
+    "type": "status_changed",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T17:20:57.489Z"
+  },
+  {
+    "id": "activity_1769620812616_ita2v7j50",
+    "type": "task_created",
+    "taskId": "task_20260128_VxOHXP",
+    "taskTitle": "DEPLOYMENT: Create production Dockerfile with multi-stage build",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.616Z"
+  },
+  {
+    "id": "activity_1769620812606_5jo2kivqr",
+    "type": "task_created",
+    "taskId": "task_20260128_AD2c2U",
+    "taskTitle": "TESTING: Add E2E tests for critical user flows",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.606Z"
+  },
+  {
+    "id": "activity_1769620812596_yf7hxaly8",
+    "type": "task_created",
+    "taskId": "task_20260128_PW0c25",
+    "taskTitle": "TESTING: Increase backend test coverage to 50%+",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.596Z"
+  },
+  {
+    "id": "activity_1769620812586_cieyqrgfs",
+    "type": "task_created",
+    "taskId": "task_20260128_CN-j0V",
+    "taskTitle": "SECURITY: Implement JWT secret rotation mechanism",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.586Z"
+  },
+  {
+    "id": "activity_1769620812575_47c7iaiiq",
+    "type": "task_created",
+    "taskId": "task_20260128_xu0DY5",
+    "taskTitle": "SECURITY: Encrypt security config file or move to env vars",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.575Z"
+  },
+  {
+    "id": "activity_1769620812564_k4pq7vhls",
+    "type": "task_created",
+    "taskId": "task_20260128_u73mT3",
+    "taskTitle": "SECURITY: Remove .env from git and create .env.example",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:20:12.564Z"
+  },
+  {
+    "id": "activity_1769620780496_wl9bd5vw9",
+    "type": "comment_added",
+    "taskId": "task_20260128_XP9oDM",
+    "taskTitle": "Document Claude Skills List",
+    "details": {
+      "author": "Veritas",
+      "preview": "Documented all Clawdbot skills from clawdhub.com. ..."
+    },
+    "timestamp": "2026-01-28T17:19:40.496Z"
+  },
+  {
+    "id": "activity_1769620780485_036pioetp",
+    "type": "status_changed",
+    "taskId": "task_20260128_XP9oDM",
+    "taskTitle": "Document Claude Skills List",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T17:19:40.485Z"
+  },
+  {
+    "id": "activity_1769620774405_2qno5jxw8",
+    "type": "comment_added",
+    "taskId": "task_20260128_wHZWCJ",
+    "taskTitle": "Metrics Tab in the Task Popout Does Not Have Any Data",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added task-level metrics section showing time trac..."
+    },
+    "timestamp": "2026-01-28T17:19:34.405Z"
+  },
+  {
+    "id": "activity_1769620774384_yp6zvf87m",
+    "type": "status_changed",
+    "taskId": "task_20260128_wHZWCJ",
+    "taskTitle": "Metrics Tab in the Task Popout Does Not Have Any Data",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T17:19:34.384Z"
+  },
+  {
     "id": "activity_1769620632218_ggk8no4ui",
     "type": "status_changed",
     "taskId": "task_20260128_XP9oDM",
