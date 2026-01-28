@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import jwt from 'jsonwebtoken';
-import { getSecurityConfig, getJwtSecret } from '../config/security.js';
+import { getSecurityConfig, getJwtSecret, getValidJwtSecrets } from '../config/security.js';
 
 // === Types ===
 
@@ -153,6 +153,34 @@ function validateApiKey(apiKey: string, config: AuthConfig): { valid: boolean; r
 
 // === JWT Verification ===
 
+/**
+ * Verify a JWT token against all valid secrets (supports secret rotation).
+ * Tries the current secret first, then falls back to previous secrets
+ * still within their grace period.
+ */
+function verifyJwtToken(token: string): { valid: boolean; error?: string } {
+  const secrets = getValidJwtSecrets();
+  let lastError: Error | null = null;
+
+  for (const secret of secrets) {
+    try {
+      jwt.verify(token, secret);
+      return { valid: true };
+    } catch (err) {
+      lastError = err as Error;
+      // If the token is expired, no point trying other secrets
+      if (err instanceof jwt.TokenExpiredError) {
+        return { valid: false, error: 'Session expired' };
+      }
+      // For other errors (invalid signature), try the next secret
+      continue;
+    }
+  }
+
+  // None of the secrets worked
+  return { valid: false, error: 'Invalid session' };
+}
+
 function verifyJwtCookie(req: Request): { valid: boolean; error?: string } {
   // Get cookie from request
   const token = req.cookies?.veritas_session;
@@ -160,15 +188,7 @@ function verifyJwtCookie(req: Request): { valid: boolean; error?: string } {
     return { valid: false };
   }
   
-  try {
-    jwt.verify(token, getJwtSecret());
-    return { valid: true };
-  } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      return { valid: false, error: 'Session expired' };
-    }
-    return { valid: false, error: 'Invalid session' };
-  }
+  return verifyJwtToken(token);
 }
 
 // === Express Middleware ===
@@ -334,16 +354,15 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     return { authenticated: true, role: 'admin', isLocalhost };
   }
   
-  // 1. Check JWT cookie
+  // 1. Check JWT cookie (supports rotated secrets)
   if (passwordAuthEnabled) {
     const token = extractJwtFromWebSocket(req);
     if (token) {
-      try {
-        jwt.verify(token, getJwtSecret());
+      const result = verifyJwtToken(token);
+      if (result.valid) {
         return { authenticated: true, role: 'admin', keyName: 'session', isLocalhost };
-      } catch {
-        // Token invalid or expired, continue to other auth methods
       }
+      // Token invalid or expired, continue to other auth methods
     }
   }
   

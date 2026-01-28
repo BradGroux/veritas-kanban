@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769623679587_4j15ts55x",
+    "type": "status_changed",
+    "taskId": "task_20260128_FWEVBg",
+    "taskTitle": "SECURITY: Sanitize Markdown content to prevent stored XSS",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T18:07:59.587Z"
+  },
+  {
+    "id": "activity_1769623643620_cyg04imbw",
+    "type": "comment_added",
+    "taskId": "task_20260128_xu0DY5",
+    "taskTitle": "SECURITY: Encrypt security config file or move to env vars",
+    "details": {
+      "author": "Veritas",
+      "preview": "Moved JWT secret to VERITAS_JWT_SECRET env var (Op..."
+    },
+    "timestamp": "2026-01-28T18:07:23.620Z"
+  },
+  {
+    "id": "activity_1769623638015_qvaeb62or",
+    "type": "status_changed",
+    "taskId": "task_20260128_xu0DY5",
+    "taskTitle": "SECURITY: Encrypt security config file or move to env vars",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T18:07:18.015Z"
+  },
+  {
     "id": "activity_1769623566772_krbp8jiyv",
     "type": "status_changed",
     "taskId": "task_20260128_CN-j0V",

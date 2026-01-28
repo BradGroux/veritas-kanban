@@ -10,7 +10,10 @@ import {
   SecurityConfig,
   generateRecoveryKey,
   hashRecoveryKey,
+  rotateJwtSecret,
+  getJwtRotationStatus,
 } from '../config/security.js';
+import { authenticate, authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router: IRouter = Router();
 
@@ -390,6 +393,62 @@ router.post('/change-password', asyncHandler(async (req: Request, res: Response)
     success: true,
     message: 'Password changed successfully',
   });
+}));
+
+// ============ JWT Secret Rotation (Admin-Only) ============
+
+/**
+ * POST /api/auth/rotate-secret
+ * Rotate the JWT signing secret. Requires admin authentication.
+ * Old secrets are kept for a configurable grace period (default 7 days)
+ * so existing sessions continue to work.
+ * 
+ * Body (optional):
+ *   gracePeriodDays: number — how many days to keep old secrets valid (default: 7)
+ */
+router.post('/rotate-secret', authenticate, authorize('admin'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { gracePeriodDays } = req.body || {};
+
+  // Validate grace period if provided
+  let gracePeriodMs: number | undefined;
+  if (gracePeriodDays !== undefined) {
+    const days = Number(gracePeriodDays);
+    if (isNaN(days) || days < 0 || days > 90) {
+      res.status(400).json({
+        error: 'gracePeriodDays must be a number between 0 and 90',
+        code: 'INVALID_GRACE_PERIOD',
+      });
+      return;
+    }
+    gracePeriodMs = days * 24 * 60 * 60 * 1000;
+  }
+
+  const result = rotateJwtSecret(gracePeriodMs);
+
+  if (!result.success) {
+    res.status(409).json({
+      error: result.message,
+      code: 'ROTATION_NOT_AVAILABLE',
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    newVersion: result.newVersion,
+    prunedExpiredSecrets: result.prunedCount,
+    gracePeriodDays: gracePeriodDays ?? 7,
+    message: `JWT secret rotated to version ${result.newVersion}. Previous secret(s) valid for ${gracePeriodDays ?? 7} more day(s).`,
+  });
+}));
+
+/**
+ * GET /api/auth/rotation-status
+ * Get current JWT secret rotation status. Requires admin authentication.
+ */
+router.get('/rotation-status', authenticate, authorize('admin'), asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+  const status = getJwtRotationStatus();
+  res.json(status);
 }));
 
 export default router;

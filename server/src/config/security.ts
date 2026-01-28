@@ -79,13 +79,14 @@ export function getSecurityConfig(): SecurityConfig {
   return cachedConfig;
 }
 
+/** Default grace period for old secrets after rotation (7 days) */
+const SECRET_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Get JWT signing secret.
- * Priority: VERITAS_JWT_SECRET env var > security.json > runtime-generated
+ * Get the current (latest) JWT signing secret.
+ * Used for **signing** new tokens.
  * 
- * If using env var, the secret is never written to disk.
- * If falling back to generated, it's stored in memory only (sessions
- * invalidate on restart unless env var or config file provides persistence).
+ * Priority: VERITAS_JWT_SECRET env var > jwtSecrets array (latest) > legacy jwtSecret > runtime-generated
  */
 export function getJwtSecret(): string {
   // 1. Environment variable (preferred — never touches disk)
@@ -94,13 +95,19 @@ export function getJwtSecret(): string {
     return envSecret;
   }
 
-  // 2. security.json (legacy / fallback for existing installs)
+  // 2. jwtSecrets array — use the highest-version (current) entry
   const config = getSecurityConfig();
+  if (config.jwtSecrets && config.jwtSecrets.length > 0) {
+    const sorted = [...config.jwtSecrets].sort((a, b) => b.version - a.version);
+    return sorted[0].secret;
+  }
+
+  // 3. Legacy single jwtSecret field (existing installs)
   if (config.jwtSecret) {
     return config.jwtSecret;
   }
 
-  // 3. Runtime-generated (ephemeral — sessions won't survive restart)
+  // 4. Runtime-generated (ephemeral — sessions won't survive restart)
   if (!runtimeJwtSecret) {
     runtimeJwtSecret = crypto.randomBytes(64).toString('hex');
     console.warn(
@@ -108,6 +115,168 @@ export function getJwtSecret(): string {
     );
   }
   return runtimeJwtSecret;
+}
+
+/**
+ * Get all currently valid JWT secrets for **verification**.
+ * Includes the current secret plus any previous secrets still within their grace period.
+ * Returns secrets ordered by version descending (current first).
+ */
+export function getValidJwtSecrets(): string[] {
+  // If env var is set, that's the only secret (no rotation support via env)
+  const envSecret = process.env.VERITAS_JWT_SECRET;
+  if (envSecret) {
+    return [envSecret];
+  }
+
+  const config = getSecurityConfig();
+  const now = Date.now();
+
+  // If we have the jwtSecrets array, filter out expired entries
+  if (config.jwtSecrets && config.jwtSecrets.length > 0) {
+    const validEntries = config.jwtSecrets
+      .filter(entry => {
+        // No expiresAt means it's the current secret — always valid
+        if (!entry.expiresAt) return true;
+        // Check grace period
+        return new Date(entry.expiresAt).getTime() > now;
+      })
+      .sort((a, b) => b.version - a.version);
+
+    if (validEntries.length > 0) {
+      return validEntries.map(e => e.secret);
+    }
+  }
+
+  // Fall back to legacy single secret or runtime secret
+  return [getJwtSecret()];
+}
+
+/**
+ * Rotate the JWT secret.
+ * - Generates a new secret and makes it the current signing key
+ * - Moves the previous current secret to a grace period (default 7 days)
+ * - Purges any secrets past their grace period
+ * - Returns the new version number
+ * 
+ * NOTE: Has no effect when VERITAS_JWT_SECRET env var is set (rotation
+ * must be done externally in that case).
+ */
+export function rotateJwtSecret(gracePeriodMs: number = SECRET_GRACE_PERIOD_MS): {
+  success: boolean;
+  newVersion: number;
+  prunedCount: number;
+  message?: string;
+} {
+  if (process.env.VERITAS_JWT_SECRET) {
+    return {
+      success: false,
+      newVersion: 0,
+      prunedCount: 0,
+      message: 'Cannot rotate: JWT secret is managed via VERITAS_JWT_SECRET environment variable. Rotate externally.',
+    };
+  }
+
+  const config = getSecurityConfig();
+  const now = new Date();
+  const nowISO = now.toISOString();
+
+  // Determine current version
+  let currentVersion = config.jwtSecretVersion || 0;
+
+  // Bootstrap: if we have a legacy jwtSecret but no jwtSecrets array, migrate it
+  let secrets: JwtSecretEntry[] = config.jwtSecrets ? [...config.jwtSecrets] : [];
+  if (secrets.length === 0 && config.jwtSecret) {
+    secrets.push({
+      secret: config.jwtSecret,
+      version: currentVersion || 1,
+      createdAt: config.setupCompletedAt || nowISO,
+    });
+    if (currentVersion === 0) currentVersion = 1;
+  }
+
+  // 1. Set grace period on the current (latest) secret
+  const latestEntry = secrets.find(s => !s.expiresAt);
+  if (latestEntry) {
+    latestEntry.expiresAt = new Date(now.getTime() + gracePeriodMs).toISOString();
+  }
+
+  // 2. Generate new secret
+  const newVersion = currentVersion + 1;
+  const newSecret: JwtSecretEntry = {
+    secret: crypto.randomBytes(64).toString('hex'),
+    version: newVersion,
+    createdAt: nowISO,
+    // No expiresAt — this is now the current secret
+  };
+  secrets.push(newSecret);
+
+  // 3. Prune expired secrets
+  const beforeCount = secrets.length;
+  secrets = secrets.filter(entry => {
+    if (!entry.expiresAt) return true;
+    return new Date(entry.expiresAt).getTime() > now.getTime();
+  });
+  const prunedCount = beforeCount - secrets.length;
+
+  // 4. Save updated config
+  const updatedConfig: SecurityConfig = {
+    ...config,
+    jwtSecrets: secrets,
+    jwtSecretVersion: newVersion,
+    // Keep legacy field synced with current secret for backward compat
+    jwtSecret: newSecret.secret,
+  };
+  saveSecurityConfig(updatedConfig);
+
+  console.log(`JWT secret rotated to version ${newVersion}. ${prunedCount} expired secret(s) pruned.`);
+
+  return {
+    success: true,
+    newVersion,
+    prunedCount,
+  };
+}
+
+/**
+ * Get JWT secret rotation status (for admin diagnostics)
+ */
+export function getJwtRotationStatus(): {
+  currentVersion: number;
+  totalSecrets: number;
+  validSecrets: number;
+  usingEnvVar: boolean;
+  secrets: Array<{ version: number; createdAt: string; expiresAt?: string; isCurrent: boolean }>;
+} {
+  const usingEnvVar = !!process.env.VERITAS_JWT_SECRET;
+  const config = getSecurityConfig();
+  const now = Date.now();
+
+  if (usingEnvVar || !config.jwtSecrets || config.jwtSecrets.length === 0) {
+    return {
+      currentVersion: config.jwtSecretVersion || 0,
+      totalSecrets: usingEnvVar ? 1 : (config.jwtSecret ? 1 : 0),
+      validSecrets: usingEnvVar ? 1 : (config.jwtSecret ? 1 : 0),
+      usingEnvVar,
+      secrets: [],
+    };
+  }
+
+  const sorted = [...config.jwtSecrets].sort((a, b) => b.version - a.version);
+  const currentVersion = sorted[0].version;
+
+  return {
+    currentVersion,
+    totalSecrets: sorted.length,
+    validSecrets: sorted.filter(s => !s.expiresAt || new Date(s.expiresAt).getTime() > now).length,
+    usingEnvVar,
+    secrets: sorted.map(s => ({
+      version: s.version,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      isCurrent: s.version === currentVersion && !s.expiresAt,
+    })),
+  };
 }
 
 /**

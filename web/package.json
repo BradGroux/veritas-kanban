@@ -32,6 +32,7 @@
     "@veritas-kanban/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.3.1",
     "lucide-react": "^0.468.0",
     "nanoid": "^5.0.9",
     "react": "^19.0.0",
@@ -42,6 +43,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.2.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
