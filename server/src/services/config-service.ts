@@ -274,3 +274,13 @@ export class ConfigService {
     return config;
   }
 }
+
+// Singleton instance
+let configInstance: ConfigService | null = null;
+
+export function getConfigService(): ConfigService {
+  if (!configInstance) {
+    configInstance = new ConfigService();
+  }
+  return configInstance;
+}

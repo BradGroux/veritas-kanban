@@ -1,5 +1,126 @@
 [
   {
+    "id": "activity_1769608536904_avd2nslq0",
+    "type": "status_changed",
+    "taskId": "task_20260128_bDBHgJ",
+    "taskTitle": "US-1004: Token & cost tracking integration",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:55:36.904Z"
+  },
+  {
+    "id": "activity_1769608374441_1knnr2tep",
+    "type": "status_changed",
+    "taskId": "task_20260128_jpuZZy",
+    "taskTitle": "US-1002: Task metrics panel",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:52:54.441Z"
+  },
+  {
+    "id": "activity_1769608373767_g12k5z7kd",
+    "type": "status_changed",
+    "taskId": "task_20260128_eib_Vw",
+    "taskTitle": "RF-04: Add Comprehensive Test Suite",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:52:53.767Z"
+  },
+  {
+    "id": "activity_1769608373416_m7vjzofwz",
+    "type": "status_changed",
+    "taskId": "task_20260128_bDBHgJ",
+    "taskTitle": "US-1004: Token & cost tracking integration",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:52:53.416Z"
+  },
+  {
+    "id": "activity_1769608372734_rax40es7u",
+    "type": "status_changed",
+    "taskId": "task_20260128_XGU2QA",
+    "taskTitle": "US-1009: Failure alerts to Teams",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:52:52.734Z"
+  },
+  {
+    "id": "activity_1769608328970_oexka31jc",
+    "type": "status_changed",
+    "taskId": "task_20260128_eib_Vw",
+    "taskTitle": "RF-04: Add Comprehensive Test Suite",
+    "details": {
+      "from": "in-progress",
+      "status": "todo"
+    },
+    "timestamp": "2026-01-28T13:52:08.970Z"
+  },
+  {
+    "id": "activity_1769608328957_b9o7rgjsi",
+    "type": "status_changed",
+    "taskId": "task_20260128_XGU2QA",
+    "taskTitle": "US-1009: Failure alerts to Teams",
+    "details": {
+      "from": "in-progress",
+      "status": "todo"
+    },
+    "timestamp": "2026-01-28T13:52:08.957Z"
+  },
+  {
+    "id": "activity_1769607739953_r3oilswro",
+    "type": "comment_added",
+    "taskId": "task_20260128_wZ3-Ix",
+    "taskTitle": "US-1402: Veritas telemetry reporter",
+    "details": {
+      "author": "Veritas",
+      "preview": "Created scripts/emit-telemetry.sh helper with supp..."
+    },
+    "timestamp": "2026-01-28T13:42:19.953Z"
+  },
+  {
+    "id": "activity_1769607739937_kuhjcv3wh",
+    "type": "status_changed",
+    "taskId": "task_20260128_wZ3-Ix",
+    "taskTitle": "US-1402: Veritas telemetry reporter",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:42:19.937Z"
+  },
+  {
+    "id": "activity_1769607727363_ax3okl4pi",
+    "type": "comment_added",
+    "taskId": "task_20260128_o0FPtg",
+    "taskTitle": "US-1303: Real-time status hook (useAgentStatus)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Created useRealtimeAgentStatus hook with WebSocket..."
+    },
+    "timestamp": "2026-01-28T13:42:07.363Z"
+  },
+  {
+    "id": "activity_1769607727347_z6crrtzeu",
+    "type": "status_changed",
+    "taskId": "task_20260128_o0FPtg",
+    "taskTitle": "US-1303: Real-time status hook (useAgentStatus)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:42:07.347Z"
+  },
+  {
     "id": "activity_1769607720210_eghhexv0t",
     "type": "status_changed",
     "taskId": "task_20260128_XGU2QA",

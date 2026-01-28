@@ -81,6 +81,7 @@ export interface NotificationSettings {
   onAgentFailure: boolean;
   onReviewNeeded: boolean;
   channel: string;                  // Teams channel ID
+  webhookUrl?: string;              // Optional: Teams webhook URL for immediate delivery
 }
 
 /** Archive settings */

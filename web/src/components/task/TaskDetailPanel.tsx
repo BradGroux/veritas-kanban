@@ -25,8 +25,9 @@ import { ReviewPanel } from './ReviewPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
+import { TaskMetricsPanel } from './TaskMetricsPanel';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
-import { GitBranch, Bot, FileDiff, ClipboardCheck, Monitor, FileCode, Paperclip, Archive } from 'lucide-react';
+import { GitBranch, Bot, FileDiff, ClipboardCheck, Monitor, FileCode, Paperclip, Archive, BarChart3 } from 'lucide-react';
 import type { Task, ReviewComment, ReviewState } from '@veritas-kanban/shared';
 
 interface TaskDetailPanelProps {
@@ -100,7 +101,7 @@ export function TaskDetailPanel({ task, open, onOpenChange, readOnly = false, on
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden mt-4">
           <div className="flex items-center gap-2">
-            <TabsList className={`grid flex-1 ${isCodeTask ? (taskSettings.enableAttachments ? 'grid-cols-6' : 'grid-cols-5') : (taskSettings.enableAttachments ? 'grid-cols-2' : 'grid-cols-1')}`}>
+            <TabsList className={`grid flex-1 ${isCodeTask ? (taskSettings.enableAttachments ? 'grid-cols-7' : 'grid-cols-6') : (taskSettings.enableAttachments ? 'grid-cols-3' : 'grid-cols-2')}`}>
               <TabsTrigger value="details">Details</TabsTrigger>
               {taskSettings.enableAttachments && (
                 <TabsTrigger value="attachments" className="flex items-center gap-1">
@@ -128,6 +129,10 @@ export function TaskDetailPanel({ task, open, onOpenChange, readOnly = false, on
                   </TabsTrigger>
                 </>
               )}
+              <TabsTrigger value="metrics" className="flex items-center gap-1">
+                <BarChart3 className="h-3 w-3" />
+                Metrics
+              </TabsTrigger>
             </TabsList>
             {!readOnly && (
               <Button
@@ -228,6 +233,13 @@ export function TaskDetailPanel({ task, open, onOpenChange, readOnly = false, on
                 </FeatureErrorBoundary>
               </TabsContent>
             )}
+
+            {/* Metrics Tab */}
+            <TabsContent value="metrics" className="mt-0">
+              <FeatureErrorBoundary fallbackTitle="Metrics panel failed to load">
+                <TaskMetricsPanel task={localTask} />
+              </FeatureErrorBoundary>
+            </TabsContent>
           </div>
         </Tabs>
       </SheetContent>

@@ -647,3 +647,13 @@ export class TaskService {
     return { byProject, total };
   }
 }
+
+// Singleton instance
+let taskServiceInstance: TaskService | null = null;
+
+export function getTaskService(): TaskService {
+  if (!taskServiceInstance) {
+    taskServiceInstance = new TaskService();
+  }
+  return taskServiceInstance;
+}

@@ -1,6 +1,8 @@
 import { Router, type Router as RouterType } from 'express';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { broadcastTelemetryEvent } from '../services/broadcast-service.js';
+import { getFailureAlertService } from '../services/failure-alert-service.js';
+import { getTaskService } from '../services/task-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
 import type { TelemetryQueryOptions, AnyTelemetryEvent } from '@veritas-kanban/shared';
@@ -45,6 +47,29 @@ router.post(
     
     // Broadcast to WebSocket clients
     broadcastTelemetryEvent(event as AnyTelemetryEvent);
+    
+    // Check for failure events and send alerts (non-blocking)
+    const failureAlertService = getFailureAlertService();
+    if (failureAlertService.isFailureEvent(eventInput)) {
+      // Look up task title asynchronously (don't block response)
+      (async () => {
+        try {
+          let taskTitle: string | undefined;
+          try {
+            const taskService = getTaskService();
+            const task = await taskService.getTask(eventInput.taskId);
+            taskTitle = task?.title;
+          } catch {
+            // Task not found is fine, we'll use taskId
+          }
+          
+          await failureAlertService.processEvent(eventInput, taskTitle);
+        } catch (err) {
+          // Graceful failure: log but don't crash
+          console.error('[Telemetry] Failure alert error:', err);
+        }
+      })();
+    }
     
     res.status(201).json(event);
   })
