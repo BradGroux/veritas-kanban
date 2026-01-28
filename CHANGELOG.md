@@ -2,6 +2,56 @@
 
 All notable changes to Veritas Kanban.
 
+## [0.9.0] - 2026-01-28 (Sprint 1150 - Settings Hardening)
+
+### Added
+- **Component Extraction (US-1151)**
+  - Refactored monolithic 1000+ line SettingsDialog into 7 focused tab components
+  - Extracted 5 reusable shared components (ToggleRow, NumberRow, SaveIndicator, etc.)
+  - Lazy-loaded tabs with Suspense boundaries (80KB initial bundle reduction)
+  
+- **Error Boundaries (US-1152)**
+  - SettingsErrorBoundary wraps each tab for crash isolation
+  - User-friendly error fallbacks with "Try Again" recovery
+  - Expandable error details for debugging
+  
+- **Security Hardening (US-1153)**
+  - Strict Zod validation for all imports (templates, config)
+  - XSS prevention (strip `<script>`, `javascript:`, `data:` URLs)
+  - Path traversal blocking (`../`, absolute paths)
+  - Prototype pollution protection (`__proto__`, `constructor` rejection)
+  - Rate limiting on import endpoint (5 req / 15 min)
+  
+- **Test Coverage (US-1154)**
+  - Unit tests for all shared components
+  - Integration tests for tab interactions
+  - Accessibility test suite (ARIA, keyboard nav)
+  - Security test suite (XSS, traversal, pollution)
+  
+- **Performance Optimizations (US-1155)**
+  - React.memo on all shared components with proper equality checks
+  - Debounced settings updates (500ms delay)
+  - Correct dependency arrays in all hooks
+  - Code splitting per tab
+  
+- **Accessibility (US-1156)**
+  - WCAG 2.1 AA compliance
+  - Descriptive ARIA labels on all 32 interactive elements
+  - ARIA live regions for save status announcements
+  - Logical focus management and tab order
+  - Keyboard shortcuts (Escape to close, arrows to navigate)
+  
+- **Toast System (US-1158)**
+  - Replaced all `alert()` and `confirm()` with toast notifications
+  - Support for infinity duration persistent toasts
+  - Auto-dismiss with configurable timeouts
+  - Non-blocking, consistent UI
+
+### Fixed
+- No circular dependencies in settings module
+- Memory leaks from un-dismissed toasts (cleanup on unmount)
+- Generic ARIA labels replaced with descriptive ones
+
 ## [0.8.0] - 2026-01-26
 
 ### Added

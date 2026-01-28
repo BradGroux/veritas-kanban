@@ -28,6 +28,14 @@ A local-first task management and AI agent orchestration platform. Built for dev
 - ⏱️ **Time Tracking** — Start/stop timer or manual entry
 - 📋 **Activity Log** — Full history of task events
 
+### Settings & Customization (Sprint 1150)
+- ⚙️ **Modular Settings** — 7 focused tabs (General, Board, Tasks, Agents, Data, Notifications, Manage)
+- 🔒 **Security Hardened** — XSS prevention, path traversal blocking, prototype pollution protection
+- ♿ **WCAG 2.1 AA** — Full accessibility with descriptive ARIA labels, keyboard navigation
+- 🛡️ **Error Boundaries** — Crash isolation per tab with recovery options
+- 🚀 **Performance** — Lazy-loaded tabs, memoized components, debounced saves
+- 📦 **Import/Export** — Backup and restore all settings with validation
+
 ### Integration
 - 🖥️ **CLI** — `vk` command for terminal workflows
 - 🔌 **MCP Server** — Model Context Protocol for AI assistants
