@@ -1,8 +1,52 @@
 /**
- * Template import/export utilities
+ * Template import/export utilities with enhanced validation and security
  */
 
 import type { TaskTemplate } from '@veritas-kanban/shared';
+import { TemplateImportSchema, type ValidatedTemplate } from './template-schema';
+import { ZodError } from 'zod';
+
+// Dangerous keys that could lead to prototype pollution
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+
+/**
+ * Recursively sanitize object keys to prevent prototype pollution
+ */
+function sanitizeKeys(obj: unknown): unknown {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeKeys);
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  
+  for (const [key, value] of Object.entries(obj)) {
+    // Reject dangerous keys
+    if (DANGEROUS_KEYS.some(dangerous => key.includes(dangerous))) {
+      throw new Error(`Forbidden key detected: ${key}`);
+    }
+    
+    // Recursively sanitize nested objects
+    sanitized[key] = sanitizeKeys(value);
+  }
+  
+  return sanitized;
+}
+
+/**
+ * Format Zod validation errors into human-readable messages
+ */
+function formatZodError(error: ZodError): string {
+  const firstError = error.errors[0];
+  if (firstError) {
+    const path = firstError.path.join('.');
+    return path ? `${path}: ${firstError.message}` : firstError.message;
+  }
+  return 'Validation failed';
+}
 
 /**
  * Export a single template as JSON file
@@ -39,34 +83,47 @@ export function exportAllTemplates(templates: TaskTemplate[]): void {
 }
 
 /**
- * Parse imported template JSON
+ * Parse and validate imported template JSON
+ * Throws errors for invalid templates (caller should handle with toast)
  */
-export async function parseTemplateFile(file: File): Promise<TaskTemplate | TaskTemplate[]> {
-  const text = await file.text();
-  const parsed = JSON.parse(text);
-  
-  // Validate that it's a template or array of templates
-  if (Array.isArray(parsed)) {
-    // Validate each template
-    parsed.forEach(validateTemplate);
-    return parsed;
-  } else {
-    validateTemplate(parsed);
-    return parsed;
+export async function parseTemplateFile(file: File): Promise<ValidatedTemplate | ValidatedTemplate[]> {
+  // Check file size (max 1MB)
+  if (file.size > 1024 * 1024) {
+    throw new Error('File size exceeds 1MB limit');
   }
-}
 
-/**
- * Validate template structure
- */
-function validateTemplate(template: any): void {
-  if (!template.name) {
-    throw new Error('Template must have a name');
+  let text: string;
+  try {
+    text = await file.text();
+  } catch (err) {
+    throw new Error('Failed to read file');
   }
-  if (!template.taskDefaults) {
-    throw new Error('Template must have taskDefaults');
+
+  // Parse JSON
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Invalid JSON format');
   }
-  // Basic validation - could be expanded
+
+  // Sanitize keys to prevent prototype pollution
+  try {
+    parsed = sanitizeKeys(parsed);
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : 'Security check failed');
+  }
+
+  // Validate with Zod schema
+  try {
+    const validated = TemplateImportSchema.parse(parsed);
+    return validated;
+  } catch (err) {
+    if (err instanceof ZodError) {
+      throw new Error(`Validation failed: ${formatZodError(err)}`);
+    }
+    throw new Error('Template validation failed');
+  }
 }
 
 /**

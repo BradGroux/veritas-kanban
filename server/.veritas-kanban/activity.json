@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769590750284_v0gs7kh7q",
+    "type": "status_changed",
+    "taskId": "task_20260128_SFb0-u",
+    "taskTitle": "US-1152: Add error boundaries to Settings dialog",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:59:10.284Z"
+  },
+  {
+    "id": "activity_1769590750269_ivtnnmt4z",
+    "type": "comment_added",
+    "taskId": "task_20260128_SFb0-u",
+    "taskTitle": "US-1152: Add error boundaries to Settings dialog",
+    "details": {
+      "author": "Veritas",
+      "preview": "Error boundaries added to all 7 settings tabs. Eac..."
+    },
+    "timestamp": "2026-01-28T08:59:10.269Z"
+  },
+  {
+    "id": "activity_1769590744864_d8axnsesd",
+    "type": "comment_added",
+    "taskId": "task_20260128_SFb0-u",
+    "taskTitle": "US-1152: Add error boundaries to Settings dialog",
+    "details": {
+      "author": "Veritas",
+      "preview": "Error boundaries added to all 7 settings tabs. Eac..."
+    },
+    "timestamp": "2026-01-28T08:59:04.864Z"
+  },
+  {
     "id": "activity_1769590643978_93tt215h7",
     "type": "status_changed",
     "taskId": "task_20260128_NrvUWe",

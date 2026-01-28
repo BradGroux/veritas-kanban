@@ -17,6 +17,7 @@ import {
 import { useTaskTypesManager, getTypeIcon, getAvailableIcons, AVAILABLE_COLORS } from '@/hooks/useTaskTypes';
 import { useProjectsManager, AVAILABLE_PROJECT_COLORS } from '@/hooks/useProjects';
 import { useSprintsManager } from '@/hooks/useSprints';
+import { useToast } from '@/hooks/useToast';
 import {
   Plus, Download, Upload, HelpCircle, Info,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ export function ManageTab() {
   const taskTypesManager = useTaskTypesManager();
   const projectsManager = useProjectsManager();
   const sprintsManager = useSprintsManager();
+  const { toast } = useToast();
   const [showAddTemplateForm, setShowAddTemplateForm] = useState(false);
   const [showTemplateHelp, setShowTemplateHelp] = useState(false);
   const createTemplate = useCreateTemplate();
@@ -38,10 +40,17 @@ export function ManageTab() {
 
   const handleExportTemplates = () => {
     if (!templates || templates.length === 0) {
-      alert('No templates to export.');
+      toast({
+        title: 'Export failed',
+        description: 'No templates to export.',
+      });
       return;
     }
     exportAllTemplates(templates);
+    toast({
+      title: 'Export complete',
+      description: `${templates.length} template${templates.length === 1 ? '' : 's'} exported successfully.`,
+    });
   };
 
   const handleImportClick = () => {
@@ -65,15 +74,21 @@ export function ManageTab() {
           name: template.name,
           description: template.description,
           category: template.category,
-          taskDefaults: template.taskDefaults,
-          subtaskTemplates: template.subtaskTemplates,
-          blueprint: template.blueprint,
+          taskDefaults: template.taskDefaults as any,
+          subtaskTemplates: template.subtaskTemplates as any,
+          blueprint: template.blueprint as any,
         });
         imported++;
       }
-      alert(`Import complete: ${imported} imported${skipped > 0 ? `, ${skipped} duplicates skipped` : ''}.`);
+      toast({
+        title: 'Import complete',
+        description: `${imported} template${imported === 1 ? '' : 's'} imported${skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''}.`,
+      });
     } catch (err) {
-      alert(`Import failed: ${err instanceof Error ? err.message : 'Invalid file'}`);
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : 'Invalid file',
+      });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
