@@ -4,7 +4,8 @@ import {
   formatTokens, 
   formatDuration, 
   formatPercent,
-  type MetricsPeriod 
+  type MetricsPeriod,
+  type TrendDirection,
 } from '@/hooks/useMetrics';
 import { useTasks } from '@/hooks/useTasks';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +27,9 @@ import {
   Wrench,
   Link2,
   HelpCircle,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DrillDownPanel, type DrillDownType } from './DrillDownPanel';
@@ -34,6 +38,40 @@ import { ErrorsDrillDown } from './ErrorsDrillDown';
 import { TokensDrillDown } from './TokensDrillDown';
 import { DurationDrillDown } from './DurationDrillDown';
 import { TrendsCharts } from './TrendsCharts';
+import { StatusTimeline } from './StatusTimeline';
+
+// Trend indicator component
+function TrendIndicator({ 
+  direction, 
+  change, 
+  positive = true // whether "up" is good
+}: { 
+  direction: TrendDirection; 
+  change: number;
+  positive?: boolean;
+}) {
+  if (direction === 'flat') {
+    return (
+      <span className="inline-flex items-center text-muted-foreground text-xs">
+        <Minus className="h-3 w-3 mr-0.5" />
+        <span>—</span>
+      </span>
+    );
+  }
+  
+  const isUp = direction === 'up';
+  const isGood = positive ? isUp : !isUp;
+  const colorClass = isGood ? 'text-green-500' : 'text-red-500';
+  const Icon = isUp ? TrendingUp : TrendingDown;
+  
+  return (
+    <span className={cn('inline-flex items-center text-xs', colorClass)}>
+      <Icon className="h-3 w-3 mr-0.5" />
+      <span>{Math.abs(change)}%</span>
+    </span>
+  );
+}
+import { BudgetCard } from './BudgetCard';
 
 interface MetricCardProps {
   label: string;
@@ -88,7 +126,7 @@ function MetricCard({ label, value, icon, color = 'default', subValue, onClick, 
 }
 
 interface StatCardProps {
-  title: string;
+  title: React.ReactNode;
   children: React.ReactNode;
   onClick?: () => void;
   clickable?: boolean;
@@ -163,8 +201,9 @@ export function Dashboard() {
     );
   }
 
+  // Color thresholds: green <10% error, yellow 10-25%, red >25%
   const getErrorRateColor = (rate: number): 'green' | 'yellow' | 'red' => {
-    if (rate > 0.2) return 'red';
+    if (rate > 0.25) return 'red';
     if (rate > 0.1) return 'yellow';
     return 'green';
   };
@@ -326,99 +365,150 @@ export function Dashboard() {
               <Skeleton key={i} className="h-32 rounded-lg" />
             ))}
           </div>
-        ) : metrics && (
-          <div className="grid grid-cols-3 gap-4">
-            {/* Error Rate Card */}
-            <StatCard 
-              title="Success / Errors" 
-              onClick={() => setDrillDown('errors')}
-              clickable
-            >
-              <StatRow 
-                label="Total Runs" 
-                value={metrics.runs.runs} 
-              />
-              <StatRow 
-                label="Successful" 
-                value={metrics.runs.successes}
-                subLabel={formatPercent(metrics.runs.successRate)}
-              />
-              <StatRow 
-                label="Failed" 
-                value={metrics.runs.failures + metrics.runs.errors}
-                highlight={metrics.runs.errorRate > 0.1}
-              />
-              <div className="pt-2 border-t mt-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Error Rate</span>
-                  <span className={cn(
-                    'text-lg font-bold',
-                    getErrorRateColor(metrics.runs.errorRate) === 'red' && 'text-red-500',
-                    getErrorRateColor(metrics.runs.errorRate) === 'yellow' && 'text-yellow-500',
-                    getErrorRateColor(metrics.runs.errorRate) === 'green' && 'text-green-500',
-                  )}>
-                    {formatPercent(metrics.runs.errorRate)}
-                  </span>
-                </div>
-              </div>
-            </StatCard>
-
-            {/* Tokens Card */}
-            <StatCard 
-              title="Token Usage"
-              onClick={() => setDrillDown('tokens')}
-              clickable
-            >
-              <StatRow 
-                label="Total" 
-                value={formatTokens(metrics.tokens.totalTokens)} 
-              />
-              <StatRow 
-                label="Input" 
-                value={formatTokens(metrics.tokens.inputTokens)} 
-              />
-              <StatRow 
-                label="Output" 
-                value={formatTokens(metrics.tokens.outputTokens)} 
-              />
-              <div className="pt-2 border-t mt-2">
-                <div className="text-xs text-muted-foreground mb-1">Per Run</div>
-                <div className="flex justify-between text-sm">
-                  <span>p50: {formatTokens(metrics.tokens.perSuccessfulRun.p50)}</span>
-                  <span>p95: {formatTokens(metrics.tokens.perSuccessfulRun.p95)}</span>
-                </div>
-              </div>
-            </StatCard>
-
-            {/* Duration Card */}
-            <StatCard 
-              title="Run Duration"
-              onClick={() => setDrillDown('duration')}
-              clickable
-            >
-              <StatRow 
-                label="Runs" 
-                value={metrics.duration.runs} 
-              />
-              <StatRow 
-                label="Average" 
-                value={formatDuration(metrics.duration.avgMs)} 
-              />
-              <div className="pt-2 border-t mt-2">
-                <div className="flex justify-between text-sm">
-                  <div>
-                    <span className="text-muted-foreground">p50: </span>
-                    <span className="font-medium">{formatDuration(metrics.duration.p50Ms)}</span>
+        ) : metrics ? (
+          metrics.runs.runs === 0 ? (
+            <div className="rounded-lg border bg-muted/20 p-8 text-center">
+              <p className="text-muted-foreground">No agent runs recorded in this period</p>
+              <p className="text-xs text-muted-foreground mt-1">Runs will appear here once telemetry data is collected</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {/* Error Rate Card */}
+              <StatCard 
+                title={
+                  <div className="flex items-center justify-between">
+                    <span>Success / Errors</span>
+                    <TrendIndicator 
+                      direction={metrics.trends.successRateTrend} 
+                      change={metrics.trends.successRateChange}
+                      positive={true}
+                    />
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">p95: </span>
-                    <span className="font-medium">{formatDuration(metrics.duration.p95Ms)}</span>
+                }
+                onClick={() => setDrillDown('errors')}
+                clickable
+              >
+                <StatRow 
+                  label="Total Runs" 
+                  value={metrics.runs.runs} 
+                />
+                <StatRow 
+                  label="Successful" 
+                  value={metrics.runs.successes}
+                  subLabel={formatPercent(metrics.runs.successRate)}
+                />
+                <StatRow 
+                  label="Failed" 
+                  value={metrics.runs.failures + metrics.runs.errors}
+                  highlight={metrics.runs.errorRate > 0.1}
+                />
+                <div className="pt-2 border-t mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Error Rate</span>
+                    <span className={cn(
+                      'text-lg font-bold',
+                      getErrorRateColor(metrics.runs.errorRate) === 'red' && 'text-red-500',
+                      getErrorRateColor(metrics.runs.errorRate) === 'yellow' && 'text-yellow-500',
+                      getErrorRateColor(metrics.runs.errorRate) === 'green' && 'text-green-500',
+                    )}>
+                      {formatPercent(metrics.runs.errorRate)}
+                    </span>
                   </div>
                 </div>
-              </div>
-            </StatCard>
-          </div>
-        )}
+              </StatCard>
+
+              {/* Tokens Card */}
+              <StatCard 
+                title={
+                  <div className="flex items-center justify-between">
+                    <span>Token Usage</span>
+                    <TrendIndicator 
+                      direction={metrics.trends.tokensTrend} 
+                      change={metrics.trends.tokensChange}
+                      positive={false}
+                    />
+                  </div>
+                }
+                onClick={() => setDrillDown('tokens')}
+                clickable
+              >
+                <StatRow 
+                  label="Total" 
+                  value={formatTokens(metrics.tokens.totalTokens)} 
+                />
+                <StatRow 
+                  label="Input" 
+                  value={formatTokens(metrics.tokens.inputTokens)} 
+                />
+                <StatRow 
+                  label="Output" 
+                  value={formatTokens(metrics.tokens.outputTokens)} 
+                />
+                {metrics.tokens.cacheTokens > 0 && (
+                  <StatRow 
+                    label="Cache" 
+                    value={formatTokens(metrics.tokens.cacheTokens)} 
+                  />
+                )}
+                <div className="pt-2 border-t mt-2">
+                  <div className="text-xs text-muted-foreground mb-1">Per Run</div>
+                  <div className="flex justify-between text-sm">
+                    <span>p50: {formatTokens(metrics.tokens.perSuccessfulRun.p50)}</span>
+                    <span>p95: {formatTokens(metrics.tokens.perSuccessfulRun.p95)}</span>
+                  </div>
+                </div>
+              </StatCard>
+
+              {/* Duration Card */}
+              <StatCard 
+                title={
+                  <div className="flex items-center justify-between">
+                    <span>Run Duration</span>
+                    <TrendIndicator 
+                      direction={metrics.trends.durationTrend} 
+                      change={metrics.trends.durationChange}
+                      positive={false}
+                    />
+                  </div>
+                }
+                onClick={() => setDrillDown('duration')}
+                clickable
+              >
+                <StatRow 
+                  label="Runs" 
+                  value={metrics.duration.runs} 
+                />
+                <StatRow 
+                  label="Average" 
+                  value={formatDuration(metrics.duration.avgMs)} 
+                />
+                <div className="pt-2 border-t mt-2">
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <span className="text-muted-foreground">p50: </span>
+                      <span className="font-medium">{formatDuration(metrics.duration.p50Ms)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">p95: </span>
+                      <span className="font-medium">{formatDuration(metrics.duration.p95Ms)}</span>
+                    </div>
+                  </div>
+                </div>
+              </StatCard>
+            </div>
+          )
+        ) : null}
+      </div>
+
+      {/* Budget Tracking Card */}
+      <BudgetCard project={project} />
+
+      {/* Agent Status Timeline */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">Agent Activity</h3>
+        <div className="rounded-lg border bg-card p-4">
+          <StatusTimeline />
+        </div>
       </div>
 
       {/* Historical Trends Charts */}

@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769609444392_cqzd626r4",
+    "type": "status_changed",
+    "taskId": "task_20260128_V0MVwS",
+    "taskTitle": "US-1405: Dashboard metrics cards refresh",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T14:10:44.392Z"
+  },
+  {
+    "id": "activity_1769609295767_mu79fnvvi",
+    "type": "comment_added",
+    "taskId": "task_20260128_PNPYo1",
+    "taskTitle": "US-1010: Daily digest",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented daily digest feature:\n- DigestService ..."
+    },
+    "timestamp": "2026-01-28T14:08:15.767Z"
+  },
+  {
+    "id": "activity_1769609290123_ur4jiin6x",
+    "type": "status_changed",
+    "taskId": "task_20260128_PNPYo1",
+    "taskTitle": "US-1010: Daily digest",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:08:10.123Z"
+  },
+  {
     "id": "activity_1769609159881_jlwpvycma",
     "type": "status_changed",
     "taskId": "task_20260128_hul7-q",

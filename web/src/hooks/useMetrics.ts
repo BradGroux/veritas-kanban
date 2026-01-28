@@ -25,6 +25,7 @@ export interface TokenMetrics {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  cacheTokens: number;
   runs: number;
   perSuccessfulRun: {
     avg: number;
@@ -41,11 +42,25 @@ export interface DurationMetrics {
   p95Ms: number;
 }
 
+export type TrendDirection = 'up' | 'down' | 'flat';
+
+export interface TrendComparison {
+  runsTrend: TrendDirection;
+  runsChange: number;
+  successRateTrend: TrendDirection;
+  successRateChange: number;
+  tokensTrend: TrendDirection;
+  tokensChange: number;
+  durationTrend: TrendDirection;
+  durationChange: number;
+}
+
 export interface AllMetrics {
   tasks: TaskMetrics;
   runs: RunMetrics;
   tokens: TokenMetrics;
   duration: DurationMetrics;
+  trends: TrendComparison;
 }
 
 const API_BASE = '/api';
@@ -123,6 +138,7 @@ export interface TokenAgentBreakdown {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  cacheTokens: number;
   runs: number;
 }
 

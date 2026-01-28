@@ -30,6 +30,7 @@ export * from './useGlobalAgentStatus';
 export * from './useKeyboard';
 export * from './useManagedList';
 export * from './useMetrics';
+export * from './useBudgetMetrics';
 export * from './usePreview';
 export * from './useProjects';
 export * from './useSprints';
@@ -52,3 +53,4 @@ export {
 export * from './useToast';
 export * from './useWebSocket';
 export * from './useWorktree';
+export * from './useStatusHistory';

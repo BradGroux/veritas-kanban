@@ -41,7 +41,7 @@ export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
         <h4 className="text-sm font-medium text-muted-foreground mb-3">
           Token Usage Summary ({periodLabel})
         </h4>
-        <div className="grid grid-cols-3 gap-4">
+        <div className={cn('grid gap-4', metrics.cacheTokens > 0 ? 'grid-cols-4' : 'grid-cols-3')}>
           <div>
             <div className="text-2xl font-bold text-primary">
               {formatTokens(metrics.totalTokens)}
@@ -60,6 +60,14 @@ export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
             </div>
             <div className="text-xs text-muted-foreground">Output</div>
           </div>
+          {metrics.cacheTokens > 0 && (
+            <div>
+              <div className="text-2xl font-bold text-amber-500">
+                {formatTokens(metrics.cacheTokens)}
+              </div>
+              <div className="text-xs text-muted-foreground">Cache Hits</div>
+            </div>
+          )}
         </div>
         
         <div className="mt-4 pt-3 border-t">
@@ -123,6 +131,7 @@ interface AgentTokenRowProps {
     totalTokens: number;
     inputTokens: number;
     outputTokens: number;
+    cacheTokens?: number;
     runs: number;
   };
   percentage: number;
@@ -160,7 +169,7 @@ function AgentTokenRow({ agent, percentage, isTop }: AgentTokenRowProps) {
       </div>
       
       <div className="flex justify-between text-sm">
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap">
           <span>
             <span className="text-muted-foreground">Total: </span>
             <span className="font-medium">{formatTokens(agent.totalTokens)}</span>
@@ -173,6 +182,12 @@ function AgentTokenRow({ agent, percentage, isTop }: AgentTokenRowProps) {
             <span className="text-muted-foreground">Out: </span>
             <span className="text-green-500">{formatTokens(agent.outputTokens)}</span>
           </span>
+          {agent.cacheTokens && agent.cacheTokens > 0 && (
+            <span>
+              <span className="text-muted-foreground">Cache: </span>
+              <span className="text-amber-500">{formatTokens(agent.cacheTokens)}</span>
+            </span>
+          )}
         </div>
         <span className="text-muted-foreground">
           {percentage.toFixed(1)}%

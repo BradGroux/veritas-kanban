@@ -601,6 +601,7 @@ export class MetricsService {
     runs: RunMetrics;
     tokens: TokenMetrics;
     duration: DurationMetrics;
+    trends: TrendComparison;
   }> {
     const since = this.getPeriodStart(period);
     const files = await this.getEventFiles(since);
@@ -801,7 +802,68 @@ export class MetricsService {
       byAgent: durationByAgent,
     };
 
-    return { tasks, runs, tokens, duration };
+    // Calculate trends by comparing with previous period
+    const previousRange = this.getPreviousPeriodRange(period);
+    const previousFiles = await this.getEventFiles(previousRange.since);
+    
+    // Quick accumulator for previous period (runs, tokens, duration only)
+    let prevRuns = 0, prevSuccesses = 0, prevTokens = 0, prevDurationSum = 0, prevDurationCount = 0;
+    
+    for (const filePath of previousFiles) {
+      try {
+        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
+        const rl = readline.createInterface({
+          input: fileStream,
+          crlfDelay: Infinity,
+        });
+
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line) as AnyTelemetryEvent;
+            if (event.timestamp < previousRange.since || event.timestamp >= previousRange.until) continue;
+            if (project && event.project !== project) continue;
+
+            if (event.type === 'run.completed') {
+              const runEvent = event as RunTelemetryEvent;
+              prevRuns++;
+              if (runEvent.success) prevSuccesses++;
+              if (runEvent.durationMs && runEvent.durationMs > 0) {
+                prevDurationSum += runEvent.durationMs;
+                prevDurationCount++;
+              }
+            } else if (event.type === 'run.error') {
+              prevRuns++;
+            } else if (event.type === 'run.tokens') {
+              const tokenEvent = event as TokenTelemetryEvent;
+              prevTokens += tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
+            }
+          } catch {
+            continue;
+          }
+        }
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+          console.error(`[Metrics] Error reading ${filePath}:`, error.message);
+        }
+      }
+    }
+
+    const prevSuccessRate = prevRuns > 0 ? prevSuccesses / prevRuns : 0;
+    const prevAvgDuration = prevDurationCount > 0 ? prevDurationSum / prevDurationCount : 0;
+    
+    const trends: TrendComparison = {
+      runsTrend: this.calculateTrend(runs.runs, prevRuns, true),
+      runsChange: this.calculateChange(runs.runs, prevRuns),
+      successRateTrend: this.calculateTrend(runs.successRate, prevSuccessRate, true),
+      successRateChange: this.calculateChange(runs.successRate * 100, prevSuccessRate * 100),
+      tokensTrend: this.calculateTrend(tokens.totalTokens, prevTokens, false), // Lower is better
+      tokensChange: this.calculateChange(tokens.totalTokens, prevTokens),
+      durationTrend: this.calculateTrend(duration.avgMs, prevAvgDuration, false), // Lower is better
+      durationChange: this.calculateChange(duration.avgMs, prevAvgDuration),
+    };
+
+    return { tasks, runs, tokens, duration, trends };
   }
 
   /**

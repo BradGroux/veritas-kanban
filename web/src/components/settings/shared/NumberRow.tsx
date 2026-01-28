@@ -2,13 +2,14 @@ import { memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { SettingRow } from './SettingRow';
 
-export const NumberRow = memo(function NumberRow({ label, description, value, onChange, min, max, unit }: {
+export const NumberRow = memo(function NumberRow({ label, description, value, onChange, min, max, step, unit }: {
   label: string;
   description?: string;
   value: number;
   onChange: (v: number) => void;
   min?: number;
   max?: number;
+  step?: number;
   unit?: string;
 }) {
   return (
@@ -18,7 +19,7 @@ export const NumberRow = memo(function NumberRow({ label, description, value, on
           type="number"
           value={value}
           onChange={(e) => {
-            const v = parseInt(e.target.value, 10);
+            const v = parseFloat(e.target.value);
             if (!isNaN(v)) {
               const clamped = Math.max(min ?? -Infinity, Math.min(max ?? Infinity, v));
               onChange(clamped);
@@ -26,7 +27,8 @@ export const NumberRow = memo(function NumberRow({ label, description, value, on
           }}
           min={min}
           max={max}
-          className="w-20 h-8 text-right"
+          step={step}
+          className="w-24 h-8 text-right"
         />
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
       </div>
