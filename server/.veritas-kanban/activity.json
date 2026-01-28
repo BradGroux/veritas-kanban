@@ -1,5 +1,170 @@
 [
   {
+    "id": "activity_1769620632218_ggk8no4ui",
+    "type": "status_changed",
+    "taskId": "task_20260128_XP9oDM",
+    "taskTitle": "Document Claude Skills List",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T17:17:12.218Z"
+  },
+  {
+    "id": "activity_1769620629947_4z5d5hlr0",
+    "type": "status_changed",
+    "taskId": "task_20260128_QLdigC",
+    "taskTitle": "Perform a complete review of the code, architecture and deployment",
+    "details": {
+      "from": "blocked",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T17:17:09.947Z"
+  },
+  {
+    "id": "activity_1769620627979_l831uz7qu",
+    "type": "status_changed",
+    "taskId": "task_20260128_wHZWCJ",
+    "taskTitle": "Metrics Tab in the Task Popout Does Not Have Any Data",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T17:17:07.979Z"
+  },
+  {
+    "id": "activity_1769620522079_fpeadcvpg",
+    "type": "status_changed",
+    "taskId": "task_20260128_QLdigC",
+    "taskTitle": "Perform a complete review of the code, architecture and deployment",
+    "details": {
+      "from": "todo",
+      "status": "blocked"
+    },
+    "timestamp": "2026-01-28T17:15:22.079Z"
+  },
+  {
+    "id": "activity_1769620366959_oonnq8xiy",
+    "type": "comment_added",
+    "taskId": "task_20260128_mak1kb",
+    "taskTitle": "Task Popout Saves on Every Keystroke",
+    "details": {
+      "author": "Veritas",
+      "preview": "Fixed useDebouncedSave to preserve dirty fields du..."
+    },
+    "timestamp": "2026-01-28T17:12:46.959Z"
+  },
+  {
+    "id": "activity_1769620366928_82ioncbka",
+    "type": "status_changed",
+    "taskId": "task_20260128_mak1kb",
+    "taskTitle": "Task Popout Saves on Every Keystroke",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T17:12:46.928Z"
+  },
+  {
+    "id": "activity_1769620262549_t5qazgnlp",
+    "type": "task_created",
+    "taskId": "task_20260128_QLdigC",
+    "taskTitle": "Perform a complete review of the code, architecture and deployment",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T17:11:02.549Z"
+  },
+  {
+    "id": "activity_1769620060354_11xt8r236",
+    "type": "task_updated",
+    "taskId": "task_20260128_mak1kb",
+    "taskTitle": "Task Popout Saves on Every Keystroke",
+    "timestamp": "2026-01-28T17:07:40.354Z"
+  },
+  {
+    "id": "activity_1769618214463_xzsxv9jm5",
+    "type": "status_changed",
+    "taskId": "task_20260128_mak1kb",
+    "taskTitle": "Task Popout Saves on Every Keystroke",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T16:36:54.463Z"
+  },
+  {
+    "id": "activity_1769618201898_brotrt23i",
+    "type": "comment_added",
+    "taskId": "task_20260128_Wfm3py",
+    "taskTitle": "Update Bird Credentials",
+    "details": {
+      "author": "Veritas",
+      "preview": "Credentials were already in ~/.config/bird/config...."
+    },
+    "timestamp": "2026-01-28T16:36:41.898Z"
+  },
+  {
+    "id": "activity_1769618201866_ajhsvfivl",
+    "type": "status_changed",
+    "taskId": "task_20260128_Wfm3py",
+    "taskTitle": "Update Bird Credentials",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T16:36:41.866Z"
+  },
+  {
+    "id": "activity_1769618148141_9xbepwi3c",
+    "type": "status_changed",
+    "taskId": "task_20260128_Wfm3py",
+    "taskTitle": "Update Bird Credentials",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T16:35:48.141Z"
+  },
+  {
+    "id": "activity_1769617948179_ytytayf69",
+    "type": "task_updated",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "timestamp": "2026-01-28T16:32:28.179Z"
+  },
+  {
+    "id": "activity_1769617943864_fgdutvkbq",
+    "type": "task_updated",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "timestamp": "2026-01-28T16:32:23.864Z"
+  },
+  {
+    "id": "activity_1769617874026_yhmm3us4r",
+    "type": "comment_added",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "details": {
+      "author": "Veritas",
+      "preview": "Fixed by adding dotenv package and importing doten..."
+    },
+    "timestamp": "2026-01-28T16:31:14.026Z"
+  },
+  {
+    "id": "activity_1769617874004_wy5o6bfxe",
+    "type": "status_changed",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T16:31:14.004Z"
+  },
+  {
     "id": "activity_1769617862682_eicyzczty",
     "type": "status_changed",
     "taskId": "task_20260128_P_Ljp-",

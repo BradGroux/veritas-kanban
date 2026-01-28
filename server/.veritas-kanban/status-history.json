@@ -1,5 +1,29 @@
 [
   {
+    "id": "status_1769620559889_3ebp6aeg4",
+    "timestamp": "2026-01-28T17:15:59.889Z",
+    "previousStatus": "idle",
+    "newStatus": "sub-agent",
+    "subAgentCount": 0,
+    "durationMs": 2411702
+  },
+  {
+    "id": "status_1769618148187_5zthfdn6g",
+    "timestamp": "2026-01-28T16:35:48.187Z",
+    "previousStatus": "idle",
+    "newStatus": "working",
+    "subAgentCount": 0,
+    "durationMs": 274153
+  },
+  {
+    "id": "status_1769617874034_51msbphkx",
+    "timestamp": "2026-01-28T16:31:14.034Z",
+    "previousStatus": "working",
+    "newStatus": "idle",
+    "subAgentCount": 0,
+    "durationMs": 11326
+  },
+  {
     "id": "status_1769617862708_ytrmaixur",
     "timestamp": "2026-01-28T16:31:02.708Z",
     "previousStatus": "idle",
