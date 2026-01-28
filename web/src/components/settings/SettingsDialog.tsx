@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -41,10 +41,11 @@ import {
   useDeleteTemplate,
   type TaskTemplate,
 } from '@/hooks/useTemplates';
-import { Plus, Trash2, Check, X, Loader2, FolderGit2, Bot, Star, FileText } from 'lucide-react';
+import { Plus, Trash2, Check, X, Loader2, FolderGit2, Bot, Star, FileText, Download, Upload } from 'lucide-react';
 import type { RepoConfig, AgentConfig, AgentType, TaskType, TaskPriority } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { TEMPLATE_CATEGORIES, getCategoryIcon, getCategoryLabel } from '@/lib/template-categories';
+import { exportAllTemplates, parseTemplateFile, checkDuplicateName } from '@/lib/template-io';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -502,6 +503,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [showAddTemplateForm, setShowAddTemplateForm] = useState(false);
   const updateAgents = useUpdateAgents();
   const setDefaultAgent = useSetDefaultAgent();
+  const createTemplate = useCreateTemplate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleToggleAgent = (agentType: AgentType) => {
     if (!config) return;
@@ -513,6 +516,59 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   const handleSetDefaultAgent = (agentType: AgentType) => {
     setDefaultAgent.mutate(agentType);
+  };
+
+  const handleExportTemplates = () => {
+    if (!templates || templates.length === 0) {
+      alert('No templates to export. Create some templates first.');
+      return;
+    }
+    exportAllTemplates(templates);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const parsed = await parseTemplateFile(file);
+      const templatesToImport = Array.isArray(parsed) ? parsed : [parsed];
+      
+      let imported = 0;
+      let skipped = 0;
+      
+      for (const template of templatesToImport) {
+        // Check for duplicate name
+        if (checkDuplicateName(template.name, templates || [])) {
+          skipped++;
+          continue;
+        }
+        
+        // Import template (create with the same data but new ID will be generated)
+        await createTemplate.mutateAsync({
+          name: template.name,
+          description: template.description,
+          category: template.category,
+          taskDefaults: template.taskDefaults,
+          subtaskTemplates: template.subtaskTemplates,
+          blueprint: template.blueprint,
+        });
+        imported++;
+      }
+      
+      alert(`Import complete: ${imported} templates imported${skipped > 0 ? `, ${skipped} duplicates skipped` : ''}.`);
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Invalid template file'}`);
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   return (
@@ -588,17 +644,46 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">Task Templates</h3>
-              {!showAddTemplateForm && (
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowAddTemplateForm(true)}
+                  onClick={handleImportClick}
                 >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Template
+                  <Upload className="h-4 w-4 mr-1" />
+                  Import
                 </Button>
-              )}
+                {templates && templates.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportTemplates}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Export
+                  </Button>
+                )}
+                {!showAddTemplateForm && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddTemplateForm(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                )}
+              </div>
             </div>
+            
+            {/* Hidden file input for import */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
 
             {showAddTemplateForm && (
               <AddTemplateForm onClose={() => setShowAddTemplateForm(false)} />

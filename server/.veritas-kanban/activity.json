@@ -1,5 +1,27 @@
 [
   {
+    "id": "activity_1769567442734_qku392zbw",
+    "type": "status_changed",
+    "taskId": "task_20260128_9Jlp1m",
+    "taskTitle": "US-906: Agent & dependency defaults",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T02:30:42.734Z"
+  },
+  {
+    "id": "activity_1769567442725_ltpmruu8i",
+    "type": "status_changed",
+    "taskId": "task_20260128_8ro0pA",
+    "taskTitle": "US-905: Multi-task blueprints",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T02:30:42.725Z"
+  },
+  {
     "id": "activity_1769567266383_ut80rcg2n",
     "type": "status_changed",
     "taskId": "task_20260128_8ro0pA",
@@ -985,27 +1007,5 @@
     "taskId": "task_20260126_yi65DL",
     "taskTitle": "Second test task",
     "timestamp": "2026-01-26T12:23:50.977Z"
-  },
-  {
-    "id": "activity_1769430224902_zy0xsfue6",
-    "type": "status_changed",
-    "taskId": "task_20260126_yi65DL",
-    "taskTitle": "Second test task",
-    "details": {
-      "from": "archived",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T12:23:44.902Z"
-  },
-  {
-    "id": "activity_1769430188393_1tv5il6mm",
-    "type": "status_changed",
-    "taskId": "task_20260126_FTRJ_R",
-    "taskTitle": "US-709: Merge conflict resolution",
-    "details": {
-      "from": "todo",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T12:23:08.393Z"
   }
 ]
