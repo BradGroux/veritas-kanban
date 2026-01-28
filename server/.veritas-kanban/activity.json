@@ -1,5 +1,148 @@
 [
   {
+    "id": "activity_1769617862682_eicyzczty",
+    "type": "status_changed",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T16:31:02.682Z"
+  },
+  {
+    "id": "activity_1769617856524_jt25qte4p",
+    "type": "task_created",
+    "taskId": "task_20260128_P_Ljp-",
+    "taskTitle": "Server not loading .env file - dotenv missing",
+    "details": {
+      "type": "bug",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-28T16:30:56.524Z"
+  },
+  {
+    "id": "activity_1769617245180_hqs7nhlau",
+    "type": "task_updated",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "timestamp": "2026-01-28T16:20:45.180Z"
+  },
+  {
+    "id": "activity_1769617183172_qk9n49jtg",
+    "type": "task_created",
+    "taskId": "task_20260128_frXVnb",
+    "taskTitle": "Populate Total Tokens Per Task",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T16:19:43.172Z"
+  },
+  {
+    "id": "activity_1769617007452_cyu5fc89e",
+    "type": "task_created",
+    "taskId": "task_20260128_wHZWCJ",
+    "taskTitle": "Metrics Tab in the Task Popout Does Not Have Any Data",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T16:16:47.452Z"
+  },
+  {
+    "id": "activity_1769616819333_g394smg0c",
+    "type": "task_created",
+    "taskId": "task_20260128_Wfm3py",
+    "taskTitle": "Update Bird Credentials",
+    "details": {
+      "type": "system-jJZQh0",
+      "priority": "high",
+      "project": "platform"
+    },
+    "timestamp": "2026-01-28T16:13:39.333Z"
+  },
+  {
+    "id": "activity_1769616742794_04wymo2u1",
+    "type": "task_created",
+    "taskId": "task_20260128_mak1kb",
+    "taskTitle": "Task Popout Saves on Every Keystroke",
+    "details": {
+      "type": "bug-GdN5rT",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T16:12:22.794Z"
+  },
+  {
+    "id": "activity_1769616090826_60gtn3vy3",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:01:30.826Z"
+  },
+  {
+    "id": "activity_1769616046321_fqcopv3mx",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:46.321Z"
+  },
+  {
+    "id": "activity_1769616042245_e9ydbuziv",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:42.245Z"
+  },
+  {
+    "id": "activity_1769616040295_cj2mjbcpk",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:40.295Z"
+  },
+  {
+    "id": "activity_1769616039111_ezfx1plh8",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:39.112Z"
+  },
+  {
+    "id": "activity_1769616036937_r0xxhf6no",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:36.937Z"
+  },
+  {
+    "id": "activity_1769616034810_259wvqc34",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:34.810Z"
+  },
+  {
+    "id": "activity_1769616029739_a1m1o7bw9",
+    "type": "task_updated",
+    "taskId": "task_20260128_d47DtQ",
+    "taskTitle": "FEATURE REQUEST: Host Kimi K2.5 Model In Azure",
+    "timestamp": "2026-01-28T16:00:29.739Z"
+  },
+  {
+    "id": "activity_1769615133693_u8ss8q63y",
+    "type": "sprint_archived",
+    "taskId": "authentication-security-k40K46",
+    "taskTitle": "authentication-security-k40K46",
+    "details": {
+      "taskCount": 8
+    },
+    "timestamp": "2026-01-28T15:45:33.693Z"
+  },
+  {
     "id": "activity_1769615050495_tu1w3vj5z",
     "type": "comment_added",
     "taskId": "task_20260128_fCAsJx",

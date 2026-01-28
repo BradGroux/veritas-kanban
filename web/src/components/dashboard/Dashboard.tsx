@@ -8,6 +8,7 @@ import {
   type TrendDirection,
 } from '@/hooks/useMetrics';
 import { useTasks } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -195,11 +196,13 @@ export function Dashboard() {
   
   const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project);
   const { data: tasks } = useTasks();
+  const { data: projectsList = [] } = useProjects();
   
-  // Get unique projects from tasks
-  const projects = tasks 
+  // Get unique project IDs from tasks, then map to project configs for labels
+  const projectIds = tasks 
     ? [...new Set(tasks.filter(t => t.project).map(t => t.project!))]
     : [];
+  const projects = projectsList.filter(p => projectIds.includes(p.id));
 
   if (error) {
     return (
@@ -245,7 +248,7 @@ export function Dashboard() {
             <SelectContent>
               <SelectItem value="all">All Projects</SelectItem>
               {projects.map((p) => (
-                <SelectItem key={p} value={p}>{p}</SelectItem>
+                <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

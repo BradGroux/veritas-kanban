@@ -22,6 +22,11 @@ import { Download, Loader2 } from 'lucide-react';
 export type ExportScope = 'full' | 'project' | 'task';
 export type ExportFormat = 'csv' | 'json';
 
+interface ProjectOption {
+  id: string;
+  label: string;
+}
+
 interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,7 +35,7 @@ interface ExportDialogProps {
   /** Pre-fill the project when exporting from project context */
   project?: string;
   /** Available projects for the dropdown */
-  projects?: string[];
+  projects?: ProjectOption[];
 }
 
 export function ExportDialog({
@@ -184,7 +189,7 @@ export function ExportDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

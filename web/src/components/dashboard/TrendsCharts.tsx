@@ -268,6 +268,41 @@ function DurationChart({ data }: { data: Array<{ date: string; avgDurationMs: nu
   );
 }
 
+// Custom tick for sprint names with background badge
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function SprintAxisTick(props: any) {
+  const { x, y, payload } = props;
+  if (!payload?.value) return null;
+  
+  const label = payload.value.length > 10 
+    ? payload.value.slice(0, 10) + '…' 
+    : payload.value;
+  
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <rect
+        x={-30}
+        y={4}
+        width={60}
+        height={18}
+        rx={4}
+        ry={4}
+        fill="hsl(var(--muted))"
+      />
+      <text
+        x={0}
+        y={16}
+        textAnchor="middle"
+        fill="hsl(var(--muted-foreground))"
+        fontSize={10}
+        fontWeight={500}
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
 // Sprint velocity chart with bar chart and rolling average line
 interface VelocityChartProps {
   data: Array<{
@@ -330,13 +365,11 @@ function VelocityChart({ data, trend: _trend, averageVelocity: _averageVelocity 
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
           <XAxis 
             dataKey="sprint" 
-            tick={{ fill: COLORS.text, fontSize: 10 }}
+            tick={SprintAxisTick}
             tickLine={false}
             axisLine={false}
             interval={0}
-            angle={-45}
-            textAnchor="end"
-            height={50}
+            height={35}
           />
           <YAxis 
             tick={{ fill: COLORS.text, fontSize: 11 }}

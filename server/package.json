@@ -20,6 +20,7 @@
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^4.21.0",
     "gray-matter": "^4.0.3",

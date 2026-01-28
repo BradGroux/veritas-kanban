@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useArchivedTasks, useRestoreTask } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
+import { useSprints } from '@/hooks/useSprints';
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
 import { cn } from '@/lib/utils';
 import type { Task, TaskType } from '@veritas-kanban/shared';
@@ -52,17 +54,38 @@ function formatDate(dateString: string): string {
   });
 }
 
+interface ProjectConfig {
+  id: string;
+  label: string;
+}
+
+interface SprintConfig {
+  id: string;
+  label: string;
+}
+
 function ArchivedTaskItem({ 
   task, 
   onClick,
   onRestore,
   isRestoring,
+  projects = [],
+  sprints = [],
 }: { 
   task: Task; 
   onClick?: () => void;
   onRestore?: () => void;
   isRestoring?: boolean;
+  projects?: ProjectConfig[];
+  sprints?: SprintConfig[];
 }) {
+  const projectLabel = task.project 
+    ? projects.find(p => p.id === task.project)?.label || task.project 
+    : null;
+  const sprintLabel = task.sprint 
+    ? sprints.find(s => s.id === task.sprint)?.label || task.sprint 
+    : null;
+
   return (
     <div 
       className={cn(
@@ -79,10 +102,10 @@ function ArchivedTaskItem({
           {task.title}
         </div>
         <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-          {task.project && (
+          {projectLabel && (
             <span className="flex items-center gap-1">
               <FolderOpen className="h-3 w-3" />
-              {task.project}
+              {projectLabel}
             </span>
           )}
           <span className="flex items-center gap-1">
@@ -90,10 +113,10 @@ function ArchivedTaskItem({
             {formatDate(task.updated)}
           </span>
         </div>
-        {task.sprint && (
+        {sprintLabel && (
           <div className="flex flex-wrap gap-1 mt-1">
             <Badge variant="secondary" className="text-xs px-1 py-0">
-              {task.sprint}
+              {sprintLabel}
             </Badge>
           </div>
         )}
@@ -128,6 +151,7 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
   
   const { data: archivedTasks, isLoading, refetch, isRefetching } = useArchivedTasks();
   const restoreTask = useRestoreTask();
+  const { data: sprintsList = [] } = useSprints();
 
   const handleRestore = async (task: Task) => {
     setRestoringId(task.id);
@@ -164,12 +188,17 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
     }
   };
 
-  // Get unique projects for filter dropdown
+  // Get projects list for labels
+  const { data: projectsList = [] } = useProjects();
+
+  // Get unique projects for filter dropdown, with labels
   const projects = useMemo(() => {
     if (!archivedTasks) return [];
-    const projectSet = new Set(archivedTasks.map(t => t.project).filter(Boolean) as string[]);
-    return Array.from(projectSet).sort();
-  }, [archivedTasks]);
+    const projectIds = new Set(archivedTasks.map(t => t.project).filter(Boolean) as string[]);
+    return projectsList
+      .filter(p => projectIds.has(p.id))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [archivedTasks, projectsList]);
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -266,8 +295,8 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
                   <SelectContent>
                     <SelectItem value="all">All Projects</SelectItem>
                     {projects.map(project => (
-                      <SelectItem key={project} value={project}>
-                        {project}
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -305,6 +334,8 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
                         onClick={() => handleTaskClick(task)}
                         onRestore={() => handleRestore(task)}
                         isRestoring={restoringId === task.id}
+                        projects={projectsList}
+                        sprints={sprintsList}
                       />
                     ))}
                   </div>

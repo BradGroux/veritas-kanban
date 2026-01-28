@@ -1353,6 +1353,19 @@ export class MetricsService {
       this.taskService.listArchivedTasks(),
     ]);
 
+    // Load sprint labels from sprints.json for display
+    const sprintLabels = new Map<string, string>();
+    try {
+      const sprintsFile = path.join(PROJECT_ROOT, '.veritas-kanban', 'sprints.json');
+      const sprintsData = await fs.readFile(sprintsFile, 'utf-8');
+      const sprints = JSON.parse(sprintsData) as Array<{ id: string; label: string }>;
+      for (const s of sprints) {
+        sprintLabels.set(s.id, s.label);
+      }
+    } catch {
+      // No sprints file or can't read it - will use IDs as labels
+    }
+
     // Filter by project if specified
     const allTasks = [...activeTasks, ...archivedTasks]
       .filter(t => !project || t.project === project);
@@ -1399,7 +1412,7 @@ export class MetricsService {
     const sprints: SprintVelocityPoint[] = [];
     const completedCounts: number[] = [];
 
-    for (const [sprint, data] of sortedSprints) {
+    for (const [sprintId, data] of sortedSprints) {
       completedCounts.push(data.completed);
       
       // Calculate rolling average (last 3 sprints)
@@ -1408,8 +1421,11 @@ export class MetricsService {
         ? Math.round((recentCompleted.reduce((a, b) => a + b, 0) / recentCompleted.length) * 10) / 10
         : 0;
 
+      // Use display label if available, otherwise fall back to ID
+      const sprintLabel = sprintLabels.get(sprintId) || sprintId;
+
       sprints.push({
-        sprint,
+        sprint: sprintLabel,
         completed: data.completed,
         total: data.total,
         rollingAverage,
@@ -1445,10 +1461,12 @@ export class MetricsService {
 
     // Get current sprint progress (find sprints with incomplete tasks)
     let currentSprint: CurrentSprintProgress | undefined;
-    for (const [sprint, data] of [...sprintData.entries()].reverse()) {
+    for (const [sprintId, data] of [...sprintData.entries()].reverse()) {
       if (data.completed < data.total) {
+        // Use display label if available
+        const sprintLabel = sprintLabels.get(sprintId) || sprintId;
         currentSprint = {
-          sprint,
+          sprint: sprintLabel,
           completed: data.completed,
           total: data.total,
           percentComplete: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,

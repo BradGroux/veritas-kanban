@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle, Play, Ban, ListTodo } from 'lucide-react';
@@ -41,6 +42,7 @@ const statusConfig: Record<TaskStatus, {
 
 export function TasksDrillDown({ project, statusFilter = 'all', onTaskClick }: TasksDrillDownProps) {
   const { data: tasks, isLoading } = useTasks();
+  const { data: projects = [] } = useProjects();
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -115,6 +117,7 @@ export function TasksDrillDown({ project, statusFilter = 'all', onTaskClick }: T
             <TaskRow 
               key={task.id} 
               task={task} 
+              projects={projects}
               onClick={() => onTaskClick?.(task.id)}
             />
           ))
@@ -124,8 +127,11 @@ export function TasksDrillDown({ project, statusFilter = 'all', onTaskClick }: T
   );
 }
 
-function TaskRow({ task, onClick }: { task: Task; onClick?: () => void }) {
+function TaskRow({ task, projects = [], onClick }: { task: Task; projects?: Array<{ id: string; label: string }>; onClick?: () => void }) {
   const config = statusConfig[task.status];
+  const projectLabel = task.project 
+    ? projects.find(p => p.id === task.project)?.label || task.project 
+    : null;
   
   return (
     <button
@@ -143,9 +149,9 @@ function TaskRow({ task, onClick }: { task: Task; onClick?: () => void }) {
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate">{task.title}</div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-            {task.project && (
+            {projectLabel && (
               <Badge variant="outline" className="text-xs">
-                {task.project}
+                {projectLabel}
               </Badge>
             )}
             <span>{new Date(task.updated).toLocaleDateString()}</span>

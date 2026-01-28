@@ -23,23 +23,5 @@
     "created": "2026-01-28T04:30:34.608Z",
     "updated": "2026-01-28T10:27:55.479Z",
     "description": ""
-  },
-  {
-    "label": "🏗️ Wildcat",
-    "description": "",
-    "color": "bg-purple-500/20",
-    "id": "wildcat-JqqRQ4",
-    "order": 4,
-    "created": "2026-01-28T04:41:29.073Z",
-    "updated": "2026-01-28T04:43:02.991Z"
-  },
-  {
-    "label": "🔬 Guide",
-    "description": "",
-    "color": "bg-blue-500/20",
-    "id": "guide-D0fTP-",
-    "order": 5,
-    "created": "2026-01-28T04:43:35.322Z",
-    "updated": "2026-01-28T04:44:00.039Z"
   }
 ]
