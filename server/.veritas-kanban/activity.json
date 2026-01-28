@@ -1,5 +1,55 @@
 [
   {
+    "id": "activity_1769609521972_4we6i0l5b",
+    "type": "sprint_archived",
+    "taskId": "US-1300",
+    "taskTitle": "US-1300",
+    "details": {
+      "taskCount": 7
+    },
+    "timestamp": "2026-01-28T14:12:01.972Z"
+  },
+  {
+    "id": "activity_1769609520394_qau8w4yac",
+    "type": "comment_added",
+    "taskId": "task_20260128_efQBVi",
+    "taskTitle": "US-1011: Cost budget tracking",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented monthly budget tracking with BudgetSet..."
+    },
+    "timestamp": "2026-01-28T14:12:00.394Z"
+  },
+  {
+    "id": "activity_1769609515059_7rtpx8l1u",
+    "type": "status_changed",
+    "taskId": "task_20260128_efQBVi",
+    "taskTitle": "US-1011: Cost budget tracking",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:11:55.059Z"
+  },
+  {
+    "id": "activity_1769609504481_iun13k3yr",
+    "type": "task_updated",
+    "taskId": "task_20260128_efQBVi",
+    "taskTitle": "US-1011: Cost budget tracking",
+    "timestamp": "2026-01-28T14:11:44.481Z"
+  },
+  {
+    "id": "activity_1769609465429_r3z2s8z71",
+    "type": "comment_added",
+    "taskId": "task_20260128_hul7-q",
+    "taskTitle": "US-1305: Status history log",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented status history log with backend servic..."
+    },
+    "timestamp": "2026-01-28T14:11:05.429Z"
+  },
+  {
     "id": "activity_1769609460386_6n876xgld",
     "type": "status_changed",
     "taskId": "task_20260128_hul7-q",
