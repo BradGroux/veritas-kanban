@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Router as RouterType } from 'express';
 import multer from 'multer';
+import contentDisposition from 'content-disposition';
 import { TaskService } from '../services/task-service.js';
 import { getAttachmentService } from '../services/attachment-service.js';
 import { getTextExtractionService } from '../services/text-extraction-service.js';
@@ -164,7 +165,7 @@ router.get('/:id/attachments/:attId/download', async (req: Request, res: Respons
     const filepath = attachmentService.getAttachmentPath(taskId, attachment.filename);
     
     res.setHeader('Content-Type', attachment.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    res.setHeader('Content-Disposition', contentDisposition(attachment.originalName, { type: 'attachment' }));
     res.sendFile(filepath);
   } catch (error) {
     console.error('Download error:', error);

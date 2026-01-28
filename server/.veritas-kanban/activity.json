@@ -1,5 +1,60 @@
 [
   {
+    "id": "activity_1769641756408_28h6sbmhl",
+    "type": "comment_added",
+    "taskId": "task_20260128_2H7USQ",
+    "taskTitle": "SECURITY: Restrict localhost bypass from full admin access",
+    "details": {
+      "author": "Veritas",
+      "preview": "Localhost auth bypass now defaults to read-only ro..."
+    },
+    "timestamp": "2026-01-28T23:09:16.408Z"
+  },
+  {
+    "id": "activity_1769641750815_imp7cdkym",
+    "type": "status_changed",
+    "taskId": "task_20260128_2H7USQ",
+    "taskTitle": "SECURITY: Restrict localhost bypass from full admin access",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:09:10.815Z"
+  },
+  {
+    "id": "activity_1769641741718_b1q5lr3v3",
+    "type": "status_changed",
+    "taskId": "task_20260128_eH_S3Q",
+    "taskTitle": "SECURITY: Sanitize Content-Disposition header in attachment downloads",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:09:01.718Z"
+  },
+  {
+    "id": "activity_1769641716892_eax3mtevs",
+    "type": "comment_added",
+    "taskId": "task_20260128_nK2-lo",
+    "taskTitle": "SECURITY: Fix timing-unsafe recovery key comparison",
+    "details": {
+      "author": "Veritas",
+      "preview": "Replaced `===` string comparison with `crypto.timi..."
+    },
+    "timestamp": "2026-01-28T23:08:36.892Z"
+  },
+  {
+    "id": "activity_1769641712549_gy1eygapl",
+    "type": "status_changed",
+    "taskId": "task_20260128_nK2-lo",
+    "taskTitle": "SECURITY: Fix timing-unsafe recovery key comparison",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:08:32.549Z"
+  },
+  {
     "id": "activity_1769641651256_pk0yk59x9",
     "type": "status_changed",
     "taskId": "task_20260128_nK2-lo",

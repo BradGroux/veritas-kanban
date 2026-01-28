@@ -103,6 +103,9 @@ importers:
       compression:
         specifier: ^1.8.1
         version: 1.8.1
+      content-disposition:
+        specifier: ^1.0.1
+        version: 1.0.1
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -164,6 +167,9 @@ importers:
       '@types/compression':
         specifier: ^1.8.1
         version: 1.8.1
+      '@types/content-disposition':
+        specifier: ^0.5.9
+        version: 0.5.9
       '@types/cookie-parser':
         specifier: ^1.4.10
         version: 1.4.10(@types/express@5.0.6)
@@ -1601,6 +1607,9 @@ packages:
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
+
+  '@types/content-disposition@0.5.9':
+    resolution: {integrity: sha512-8uYXI3Gw35MhiVYhG3s295oihrxRyytcRHjSjqnqZVDDy/xcGBRny7+Xj1Wgfhv5QzRtN2hB2dVRBUX9XW3UcQ==}
 
   '@types/cookie-parser@1.4.10':
     resolution: {integrity: sha512-B4xqkqfZ8Wek+rCOeRxsjMS9OgvzebEzzLYw7NHYuvzb7IdxOkI0ZHGgeEBX4PUM7QGVvNSK60T3OvWj3YfBRg==}
@@ -5477,6 +5486,8 @@ snapshots:
   '@types/connect@3.4.38':
     dependencies:
       '@types/node': 22.19.7
+
+  '@types/content-disposition@0.5.9': {}
 
   '@types/cookie-parser@1.4.10(@types/express@5.0.6)':
     dependencies:
