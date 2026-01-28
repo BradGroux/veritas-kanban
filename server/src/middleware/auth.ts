@@ -50,17 +50,20 @@ function loadAuthConfig(): AuthConfig {
   const enabled = process.env.VERITAS_AUTH_ENABLED !== 'false';
   const allowLocalhostBypass = process.env.VERITAS_AUTH_LOCALHOST_BYPASS === 'true';
   const adminKey = process.env.VERITAS_ADMIN_KEY;
-  
+
   // Parse localhost role (default: read-only for security)
-  const rawLocalhostRole = (process.env.VERITAS_AUTH_LOCALHOST_ROLE?.trim() || 'read-only') as AuthRole;
-  const localhostRole = VALID_LOCALHOST_ROLES.includes(rawLocalhostRole) ? rawLocalhostRole : 'read-only';
-  
+  const rawLocalhostRole = (process.env.VERITAS_AUTH_LOCALHOST_ROLE?.trim() ||
+    'read-only') as AuthRole;
+  const localhostRole = VALID_LOCALHOST_ROLES.includes(rawLocalhostRole)
+    ? rawLocalhostRole
+    : 'read-only';
+
   // Parse API keys from environment (format: name:key:role,name2:key2:role2)
   const apiKeysEnv = process.env.VERITAS_API_KEYS || '';
   const apiKeys: ApiKeyConfig[] = apiKeysEnv
     .split(',')
     .filter(Boolean)
-    .map(entry => {
+    .map((entry) => {
       const [name, key, role] = entry.split(':');
       return {
         name: name?.trim() || 'unnamed',
@@ -68,7 +71,7 @@ function loadAuthConfig(): AuthConfig {
         role: (role?.trim() as AuthRole) || 'read-only',
       };
     })
-    .filter(k => k.key);
+    .filter((k) => k.key);
 
   return {
     enabled,
@@ -77,6 +80,52 @@ function loadAuthConfig(): AuthConfig {
     apiKeys,
     adminKey,
   };
+}
+
+// === Weak Key Detection ===
+
+/** Known weak/default keys that should never be used in production */
+const WEAK_KEYS = new Set([
+  'dev-admin-key',
+  'your-secret-admin-key-here',
+  'changeme',
+  'admin',
+  'password',
+  'secret',
+]);
+
+const MIN_KEY_LENGTH = 32;
+
+export interface AdminKeyWarning {
+  level: 'critical' | 'warning';
+  message: string;
+}
+
+/**
+ * Check if the configured admin key is weak or insecure.
+ * Returns an array of warnings (empty if the key is strong).
+ */
+export function checkAdminKeyStrength(): AdminKeyWarning[] {
+  const adminKey = process.env.VERITAS_ADMIN_KEY;
+  const warnings: AdminKeyWarning[] = [];
+
+  if (!adminKey) {
+    return warnings; // No admin key configured — nothing to warn about
+  }
+
+  if (WEAK_KEYS.has(adminKey)) {
+    warnings.push({
+      level: 'critical',
+      message: `Admin key is a known weak default ("${adminKey}"). Generate a strong key: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
+    });
+  } else if (adminKey.length < MIN_KEY_LENGTH) {
+    warnings.push({
+      level: 'warning',
+      message: `Admin key is only ${adminKey.length} characters (minimum recommended: ${MIN_KEY_LENGTH}). Consider using a longer key.`,
+    });
+  }
+
+  return warnings;
 }
 
 // Singleton config instance (reloaded on each request for dev flexibility)
@@ -94,7 +143,7 @@ export function getAuthConfig(): AuthConfig {
 function isLocalhostRequest(req: Request | IncomingMessage): boolean {
   const forwarded = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim();
   let remoteAddr: string;
-  
+
   if ('socket' in req && req.socket) {
     remoteAddr = forwarded || req.socket.remoteAddress || '';
   } else if ('ip' in req) {
@@ -102,7 +151,7 @@ function isLocalhostRequest(req: Request | IncomingMessage): boolean {
   } else {
     remoteAddr = forwarded || '';
   }
-  
+
   return (
     remoteAddr === '127.0.0.1' ||
     remoteAddr === '::1' ||
@@ -117,13 +166,13 @@ function extractApiKey(req: Request | IncomingMessage): string | null {
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.slice(7);
   }
-  
+
   // Check X-API-Key header
   const apiKeyHeader = req.headers['x-api-key'];
   if (typeof apiKeyHeader === 'string') {
     return apiKeyHeader;
   }
-  
+
   // Check query parameter (for WebSocket connections)
   if ('query' in req && typeof req.query === 'object' && req.query !== null) {
     const query = req.query as Record<string, unknown>;
@@ -131,7 +180,7 @@ function extractApiKey(req: Request | IncomingMessage): string | null {
       return query.api_key;
     }
   }
-  
+
   // For IncomingMessage (WebSocket), parse URL
   if ('url' in req && typeof req.url === 'string') {
     try {
@@ -142,22 +191,25 @@ function extractApiKey(req: Request | IncomingMessage): string | null {
       // Ignore URL parsing errors
     }
   }
-  
+
   return null;
 }
 
-function validateApiKey(apiKey: string, config: AuthConfig): { valid: boolean; role?: AuthRole; name?: string } {
+function validateApiKey(
+  apiKey: string,
+  config: AuthConfig
+): { valid: boolean; role?: AuthRole; name?: string } {
   // Check admin key first
   if (config.adminKey && apiKey === config.adminKey) {
     return { valid: true, role: 'admin', name: 'admin' };
   }
-  
+
   // Check configured API keys
-  const keyConfig = config.apiKeys.find(k => k.key === apiKey);
+  const keyConfig = config.apiKeys.find((k) => k.key === apiKey);
   if (keyConfig) {
     return { valid: true, role: keyConfig.role, name: keyConfig.name };
   }
-  
+
   return { valid: false };
 }
 
@@ -197,7 +249,7 @@ function verifyJwtCookie(req: Request): { valid: boolean; error?: string } {
   if (!token) {
     return { valid: false };
   }
-  
+
   return verifyJwtToken(token);
 }
 
@@ -211,16 +263,16 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   const config = getAuthConfig();
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
-  
+
   // If password auth not set up yet, check API key auth
   const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
-  
+
   // Auth disabled via env var - allow all requests
   if (!config.enabled && !passwordAuthEnabled) {
     req.auth = { role: 'admin', isLocalhost };
     return next();
   }
-  
+
   // 1. Check JWT cookie (human users)
   if (passwordAuthEnabled) {
     const jwtResult = verifyJwtCookie(req);
@@ -229,7 +281,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       return next();
     }
   }
-  
+
   // 2. Check API key (agents/services)
   const apiKey = extractApiKey(req);
   if (apiKey) {
@@ -243,18 +295,18 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       return next();
     }
   }
-  
+
   // 3. Localhost bypass (dev mode) — role is configurable (default: read-only)
   if (config.allowLocalhostBypass && isLocalhost) {
     req.auth = { role: config.localhostRole, keyName: 'localhost-bypass', isLocalhost };
     return next();
   }
-  
+
   // No valid auth found
   res.status(401).json({
     error: 'Authentication required',
     code: 'AUTH_REQUIRED',
-    hint: passwordAuthEnabled 
+    hint: passwordAuthEnabled
       ? 'Please log in or provide an API key'
       : 'Provide API key via Authorization header (Bearer <key>), X-API-Key header, or api_key query parameter',
   });
@@ -272,12 +324,12 @@ export function authorize(...allowedRoles: AuthRole[]) {
       });
       return;
     }
-    
+
     // Admin can do everything
     if (req.auth.role === 'admin') {
       return next();
     }
-    
+
     if (!allowedRoles.includes(req.auth.role)) {
       res.status(403).json({
         error: 'Insufficient permissions',
@@ -287,7 +339,7 @@ export function authorize(...allowedRoles: AuthRole[]) {
       });
       return;
     }
-    
+
     next();
   };
 }
@@ -304,18 +356,18 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
     });
     return;
   }
-  
+
   // Admin and agent can write
   if (req.auth.role === 'admin' || req.auth.role === 'agent') {
     return next();
   }
-  
+
   // Read-only can only GET
   const readMethods = ['GET', 'HEAD', 'OPTIONS'];
   if (req.auth.role === 'read-only' && readMethods.includes(req.method)) {
     return next();
   }
-  
+
   res.status(403).json({
     error: 'Write access denied',
     code: 'WRITE_FORBIDDEN',
@@ -339,13 +391,16 @@ export interface WebSocketAuthResult {
 function extractJwtFromWebSocket(req: IncomingMessage): string | null {
   const cookieHeader = req.headers.cookie;
   if (!cookieHeader) return null;
-  
-  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-    const [key, value] = cookie.trim().split('=');
-    if (key && value) acc[key] = value;
-    return acc;
-  }, {} as Record<string, string>);
-  
+
+  const cookies = cookieHeader.split(';').reduce(
+    (acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      if (key && value) acc[key] = value;
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+
   return cookies['veritas_session'] || null;
 }
 
@@ -356,14 +411,14 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
   const config = getAuthConfig();
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
-  
+
   const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
-  
+
   // Auth disabled via env var
   if (!config.enabled && !passwordAuthEnabled) {
     return { authenticated: true, role: 'admin', isLocalhost };
   }
-  
+
   // 1. Check JWT cookie (supports rotated secrets)
   if (passwordAuthEnabled) {
     const token = extractJwtFromWebSocket(req);
@@ -375,7 +430,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
       // Token invalid or expired, continue to other auth methods
     }
   }
-  
+
   // 2. Check API key
   const apiKey = extractApiKey(req);
   if (apiKey) {
@@ -389,16 +444,21 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
       };
     }
   }
-  
+
   // 3. Localhost bypass — role is configurable (default: read-only)
   if (config.allowLocalhostBypass && isLocalhost) {
-    return { authenticated: true, role: config.localhostRole, keyName: 'localhost-bypass', isLocalhost };
+    return {
+      authenticated: true,
+      role: config.localhostRole,
+      keyName: 'localhost-bypass',
+      isLocalhost,
+    };
   }
-  
+
   return {
     authenticated: false,
     isLocalhost,
-    error: passwordAuthEnabled 
+    error: passwordAuthEnabled
       ? 'Authentication required. Please log in.'
       : 'Authentication required. Provide api_key query parameter.',
   };
@@ -429,7 +489,7 @@ export interface AuthenticatedWebSocket extends WebSocket {
  */
 export function validateWebSocketOrigin(
   origin: string | undefined,
-  allowedOrigins: string[],
+  allowedOrigins: string[]
 ): { allowed: boolean; reason: string } {
   // Non-browser clients don't send Origin — allow them through
   if (!origin) {

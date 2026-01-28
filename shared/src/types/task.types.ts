@@ -39,16 +39,16 @@ export interface Subtask {
 export interface TimeEntry {
   id: string;
   startTime: string;
-  endTime?: string;       // Undefined if timer is running
-  duration?: number;      // Duration in seconds (calculated when stopped)
-  description?: string;   // Optional note for the entry
-  manual?: boolean;       // True if manually entered
+  endTime?: string; // Undefined if timer is running
+  duration?: number; // Duration in seconds (calculated when stopped)
+  description?: string; // Optional note for the entry
+  manual?: boolean; // True if manually entered
 }
 
 export interface TimeTracking {
   entries: TimeEntry[];
-  totalSeconds: number;   // Total tracked time in seconds
-  isRunning: boolean;     // Is timer currently running
+  totalSeconds: number; // Total tracked time in seconds
+  isRunning: boolean; // Is timer currently running
   activeEntryId?: string; // ID of the currently running entry
 }
 
@@ -61,24 +61,24 @@ export interface Comment {
 
 export interface Attachment {
   id: string;
-  filename: string;          // Sanitized filename stored on disk
-  originalName: string;      // Original filename from upload
+  filename: string; // Sanitized filename stored on disk
+  originalName: string; // Original filename from upload
   mimeType: string;
-  size: number;              // File size in bytes
-  uploaded: string;          // ISO timestamp
+  size: number; // File size in bytes
+  uploaded: string; // ISO timestamp
 }
 
 export interface AttachmentLimits {
-  maxFileSize: number;       // Max size per file in bytes
-  maxFilesPerTask: number;   // Max number of attachments per task
-  maxTotalSize: number;      // Max total size for all attachments per task
+  maxFileSize: number; // Max size per file in bytes
+  maxFilesPerTask: number; // Max number of attachments per task
+  maxTotalSize: number; // Max total size for all attachments per task
 }
 
 // Default attachment limits
 export const DEFAULT_ATTACHMENT_LIMITS: AttachmentLimits = {
-  maxFileSize: 10 * 1024 * 1024,      // 10MB per file
-  maxFilesPerTask: 20,                 // 20 files per task
-  maxTotalSize: 50 * 1024 * 1024,     // 50MB total per task
+  maxFileSize: 10 * 1024 * 1024, // 10MB per file
+  maxFilesPerTask: 20, // 20 files per task
+  maxTotalSize: 50 * 1024 * 1024, // 50MB total per task
 };
 
 // Allowed MIME types for attachments
@@ -95,14 +95,14 @@ export const ALLOWED_MIME_TYPES = [
   'text/markdown',
   'text/html',
   'text/csv',
-  
+
   // Images
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
   'image/svg+xml',
-  
+
   // Code & Config
   'application/json',
   'application/xml',
@@ -150,10 +150,10 @@ export interface Task {
 
   // Automation task specific (for veritas sub-agent)
   automation?: {
-    sessionKey?: string;    // Clawdbot session key
-    spawnedAt?: string;     // When sub-agent was spawned
-    completedAt?: string;   // When sub-agent finished
-    result?: string;        // Result summary from sub-agent
+    sessionKey?: string; // Clawdbot session key
+    spawnedAt?: string; // When sub-agent was spawned
+    completedAt?: string; // When sub-agent finished
+    result?: string; // Result summary from sub-agent
   };
 
   // Time tracking
@@ -194,8 +194,8 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   project?: string;
   sprint?: string;
-  subtasks?: Subtask[];  // Can be provided when creating from a template
-  blockedBy?: string[];  // Can be provided when creating from a blueprint
+  subtasks?: Subtask[]; // Can be provided when creating from a template
+  blockedBy?: string[]; // Can be provided when creating from a blueprint
 }
 
 export interface UpdateTaskInput {
@@ -231,4 +231,43 @@ export interface TaskFilters {
   type?: TaskType | TaskType[];
   project?: string;
   search?: string;
+}
+
+/**
+ * Lightweight task representation for board/list views.
+ * Returned when `?view=summary` is used on GET /api/tasks.
+ */
+export interface TaskSummary {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  type: TaskType;
+  project?: string;
+  sprint?: string;
+  created: string;
+  updated: string;
+  subtasks?: Subtask[];
+  blockedBy?: string[];
+  blockedReason?: BlockedReason;
+  position?: number;
+  attachmentCount?: number;
+  timeTracking?: {
+    totalSeconds: number;
+    isRunning: boolean;
+  };
+  attempt?: TaskAttempt;
+}
+
+/**
+ * Paginated response envelope for GET /api/tasks.
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }

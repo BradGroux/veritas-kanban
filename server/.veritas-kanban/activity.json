@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769643424700_us0e8w6zd",
+    "type": "status_changed",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:37:04.700Z"
+  },
+  {
+    "id": "activity_1769643381585_1xz9ljeu9",
+    "type": "comment_added",
+    "taskId": "task_20260128_k3ei6P",
+    "taskTitle": "SECURITY: Require authentication for auth diagnostics endpoint",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added authenticate + authorize(admin) middleware t..."
+    },
+    "timestamp": "2026-01-28T23:36:21.585Z"
+  },
+  {
+    "id": "activity_1769643381571_gtiosvtsw",
+    "type": "status_changed",
+    "taskId": "task_20260128_k3ei6P",
+    "taskTitle": "SECURITY: Require authentication for auth diagnostics endpoint",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:36:21.571Z"
+  },
+  {
     "id": "activity_1769643190169_96cmq8zbc",
     "type": "status_changed",
     "taskId": "task_20260128_k3ei6P",
