@@ -22,6 +22,7 @@ import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import {
   authenticate,
+  authorize,
   authenticateWebSocket,
   validateWebSocketOrigin,
   getAuthStatus,
@@ -200,12 +201,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Auth diagnostic endpoint (separate from auth routes)
+// Auth diagnostic endpoint (admin-only, requires authentication)
 // Available at both /api/auth/diagnostics and /api/v1/auth/diagnostics
-app.get('/api/auth/diagnostics', (_req, res) => {
+app.get('/api/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
   res.json(getAuthStatus());
 });
-app.get('/api/v1/auth/diagnostics', (_req, res) => {
+app.get('/api/v1/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
   res.json(getAuthStatus());
 });
 

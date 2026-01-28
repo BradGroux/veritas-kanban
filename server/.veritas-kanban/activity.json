@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769643190169_96cmq8zbc",
+    "type": "status_changed",
+    "taskId": "task_20260128_k3ei6P",
+    "taskTitle": "SECURITY: Require authentication for auth diagnostics endpoint",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:33:10.169Z"
+  },
+  {
+    "id": "activity_1769643165968_0v68miifq",
+    "type": "status_changed",
+    "taskId": "task_20260128_x5JkTP",
+    "taskTitle": "PERF: Reduce API payload over-fetching with field selection",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:32:45.968Z"
+  },
+  {
+    "id": "activity_1769643163558_fw49r0nzx",
+    "type": "comment_added",
+    "taskId": "task_20260128_YBVPjr",
+    "taskTitle": "PERF: Review rate limit threshold for API consumers",
+    "details": {
+      "author": "Veritas",
+      "preview": "Adjusted rate limits for local dev tool: general A..."
+    },
+    "timestamp": "2026-01-28T23:32:43.558Z"
+  },
+  {
+    "id": "activity_1769643163547_xpeurh2ll",
+    "type": "status_changed",
+    "taskId": "task_20260128_YBVPjr",
+    "taskTitle": "PERF: Review rate limit threshold for API consumers",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:32:43.547Z"
+  },
+  {
     "id": "activity_1769643139691_rckexf1qm",
     "type": "task_updated",
     "taskId": "task_20260128_LTxaqy",
