@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769644076345_hjg8obc5o",
+    "type": "status_changed",
+    "taskId": "task_20260128_c_jMj5",
+    "taskTitle": "QUALITY: Split god files (metrics-service 1669 lines, api.ts 1038 lines)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:47:56.345Z"
+  },
+  {
+    "id": "activity_1769644048837_y4f9e5qdf",
+    "type": "comment_added",
+    "taskId": "task_20260128_N5mwaB",
+    "taskTitle": "SECURITY: Replace unsafe-inline/unsafe-eval CSP with nonces in dev mode",
+    "details": {
+      "author": "Veritas",
+      "preview": "Removed unsafe-eval from dev CSP (Vite HMR does no..."
+    },
+    "timestamp": "2026-01-28T23:47:28.837Z"
+  },
+  {
+    "id": "activity_1769644048826_k5ir4g3rv",
+    "type": "status_changed",
+    "taskId": "task_20260128_N5mwaB",
+    "taskTitle": "SECURITY: Replace unsafe-inline/unsafe-eval CSP with nonces in dev mode",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:47:28.826Z"
+  },
+  {
     "id": "activity_1769643912579_k1qyqf4pc",
     "type": "status_changed",
     "taskId": "task_20260128_iAxrNa",

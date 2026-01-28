@@ -279,15 +279,12 @@ app.get('/api-docs/swagger.json', (_req, res) => {
 });
 
 // Swagger UI needs inline scripts/styles, so override CSP for /api-docs only
+app.use('/api-docs', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.removeHeader('Content-Security-Policy');
+  next();
+});
 app.use(
   '/api-docs',
-  (_req: express.Request, res: express.Response, next: express.NextFunction) => {
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
-    );
-    next();
-  },
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
     customSiteTitle: 'Veritas Kanban API Docs',
