@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { X } from 'lucide-react';
 import type { ReviewComment } from '@veritas-kanban/shared';
+import { sanitizeText } from '@/lib/sanitize';
 
 interface CommentInputProps {
   onSubmit: (content: string) => void;
@@ -50,7 +51,7 @@ export function CommentDisplay({ comment, onRemove }: CommentDisplayProps) {
   return (
     <div className="p-2 bg-amber-500/10 border-l-2 border-amber-500 group">
       <div className="flex items-start justify-between">
-        <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
+        <p className="text-xs whitespace-pre-wrap">{sanitizeText(comment.content)}</p>
         <button
           onClick={onRemove}
           className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"

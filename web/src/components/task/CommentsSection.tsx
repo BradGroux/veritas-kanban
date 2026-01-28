@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useAddComment, useEditComment, useDeleteComment } from '@/hooks/useTasks';
 import type { Task, Comment } from '@veritas-kanban/shared';
+import { sanitizeText } from '@/lib/sanitize';
 
 interface CommentsSectionProps {
   task: Task;
@@ -144,7 +145,7 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
             </div>
           ) : (
             <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-              {comment.text}
+              {sanitizeText(comment.text)}
             </p>
           )}
         </div>

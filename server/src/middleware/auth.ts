@@ -405,6 +405,48 @@ export interface AuthenticatedWebSocket extends WebSocket {
   };
 }
 
+// === Origin Validation ===
+
+/**
+ * Validate the Origin header for WebSocket connections.
+ * Blocks cross-origin browser attacks (CSWSH) while allowing non-browser clients.
+ *
+ * Rules:
+ *   1. No origin header → ALLOW (non-browser clients: curl, Postman, agents)
+ *   2. Origin in allowed list → ALLOW
+ *   3. Development mode + localhost origin → ALLOW
+ *   4. Otherwise → REJECT
+ */
+export function validateWebSocketOrigin(
+  origin: string | undefined,
+  allowedOrigins: string[],
+): { allowed: boolean; reason: string } {
+  // Non-browser clients don't send Origin — allow them through
+  if (!origin) {
+    return { allowed: true, reason: 'No origin header (non-browser client)' };
+  }
+
+  // Check against the explicit allowed list
+  if (allowedOrigins.includes(origin)) {
+    return { allowed: true, reason: 'Origin in allowed list' };
+  }
+
+  // In development, allow any localhost/127.0.0.1 origin
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (isDev) {
+    try {
+      const url = new URL(origin);
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+        return { allowed: true, reason: 'Localhost origin (dev mode)' };
+      }
+    } catch {
+      // Invalid URL — fall through to rejection
+    }
+  }
+
+  return { allowed: false, reason: `Origin not allowed: ${origin}` };
+}
+
 // === Utility Functions ===
 
 /**

@@ -22,6 +22,7 @@ import { useDeleteTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { Trash2, Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { Task, BlockedReason } from '@veritas-kanban/shared';
+import { sanitizeText } from '@/lib/sanitize';
 
 interface TaskDetailsTabProps {
   task: Task;
@@ -64,7 +65,7 @@ export function TaskDetailsTab({
         <Label className="text-muted-foreground">Description</Label>
         {readOnly ? (
           <div className="text-sm whitespace-pre-wrap text-foreground/80 bg-muted/30 rounded-md p-3 min-h-[60px]">
-            {task.description || 'No description'}
+            {sanitizeText(task.description || '') || 'No description'}
           </div>
         ) : (
           <Textarea

@@ -1,5 +1,60 @@
 [
   {
+    "id": "activity_1769623785282_5ct7g0hqu",
+    "type": "comment_added",
+    "taskId": "task_20260128_swwATe",
+    "taskTitle": "PERF: Add response compression middleware (gzip/brotli)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added gzip response compression middleware using t..."
+    },
+    "timestamp": "2026-01-28T18:09:45.282Z"
+  },
+  {
+    "id": "activity_1769623780614_cocrgg5lj",
+    "type": "status_changed",
+    "taskId": "task_20260128_swwATe",
+    "taskTitle": "PERF: Add response compression middleware (gzip/brotli)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T18:09:40.614Z"
+  },
+  {
+    "id": "activity_1769623773684_uybg5070f",
+    "type": "comment_added",
+    "taskId": "task_20260128_CN-j0V",
+    "taskTitle": "SECURITY: Implement JWT secret rotation mechanism",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented JWT secret rotation: added JwtSecretEn..."
+    },
+    "timestamp": "2026-01-28T18:09:33.684Z"
+  },
+  {
+    "id": "activity_1769623767643_0n5qemlpt",
+    "type": "status_changed",
+    "taskId": "task_20260128_CN-j0V",
+    "taskTitle": "SECURITY: Implement JWT secret rotation mechanism",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T18:09:27.643Z"
+  },
+  {
+    "id": "activity_1769623760964_pkap6p5wr",
+    "type": "status_changed",
+    "taskId": "task_20260128_swwATe",
+    "taskTitle": "PERF: Add response compression middleware (gzip/brotli)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T18:09:20.964Z"
+  },
+  {
     "id": "activity_1769623711885_ibjorjxag",
     "type": "comment_added",
     "taskId": "task_20260128_VxOHXP",

@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import type { Task, AgentType, AttemptStatus } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
+import { sanitizeText } from '@/lib/sanitize';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 
 interface AgentPanelProps {
@@ -265,7 +266,7 @@ export function AgentPanel({ task }: AgentPanelProps) {
                 )}
               >
                 {output.type === 'stdin' && <span className="font-bold">You: </span>}
-                {output.content}
+                {sanitizeText(output.content)}
               </div>
             ))
           )}

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/select';
 import { Ban, MessageSquare, Wrench, Link2, HelpCircle } from 'lucide-react';
 import type { Task, BlockedCategory, BlockedReason } from '@veritas-kanban/shared';
+import { sanitizeText } from '@/lib/sanitize';
 
 interface BlockedReasonSectionProps {
   task: Task;
@@ -94,7 +95,7 @@ export function BlockedReasonSection({ task, onUpdate, readOnly = false }: Block
                 <span className="font-medium">{getCategoryInfo(currentCategory)?.label}</span>
               </div>
               {currentNote && (
-                <p className="text-sm text-muted-foreground">{currentNote}</p>
+                <p className="text-sm text-muted-foreground">{sanitizeText(currentNote)}</p>
               )}
             </>
           ) : (

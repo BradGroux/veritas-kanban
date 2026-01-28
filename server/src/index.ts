@@ -40,7 +40,7 @@ import { ConfigService } from './services/config-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { authenticate, authenticateWebSocket, getAuthStatus, type AuthenticatedWebSocket } from './middleware/auth.js';
+import { authenticate, authenticateWebSocket, validateWebSocketOrigin, getAuthStatus, type AuthenticatedWebSocket } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import { apiRateLimit } from './middleware/rate-limit.js';
 import type { AgentOutput } from './services/clawdbot-agent-service.js';
@@ -244,7 +244,24 @@ app.use(errorHandler);
 const server = createServer(app);
 
 // WebSocket server for real-time updates
-const wss = new WebSocketServer({ server, path: '/ws' });
+// verifyClient validates the Origin header BEFORE the upgrade handshake completes,
+// blocking cross-site WebSocket hijacking (CSWSH) from malicious pages.
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  verifyClient: (info, callback) => {
+    const origin = info.origin || info.req.headers.origin;
+    const result = validateWebSocketOrigin(origin, ALLOWED_ORIGINS);
+    
+    if (!result.allowed) {
+      console.warn(`WebSocket origin rejected: ${origin} — ${result.reason}`);
+      callback(false, 403, 'Forbidden: origin not allowed');
+      return;
+    }
+    
+    callback(true);
+  },
+});
 
 // Initialize broadcast service for task change notifications
 initBroadcast(wss);

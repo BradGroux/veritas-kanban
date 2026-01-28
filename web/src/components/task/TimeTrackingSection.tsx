@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import type { Task, TimeEntry } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
+import { sanitizeText } from '@/lib/sanitize';
 
 interface TimeTrackingSectionProps {
   task: Task;
@@ -250,7 +251,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground pl-5 truncate">
-                        {entry.description || formatEntryTime(entry)}
+                        {entry.description ? sanitizeText(entry.description) : formatEntryTime(entry)}
                       </div>
                     </div>
                     {entry.id !== task.timeTracking?.activeEntryId && (

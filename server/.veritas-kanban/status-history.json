@@ -1,5 +1,15 @@
 [
   {
+    "id": "status_1769623777416_gkqjv3llf",
+    "timestamp": "2026-01-28T18:09:37.416Z",
+    "previousStatus": "idle",
+    "newStatus": "sub-agent",
+    "taskId": "refactoring",
+    "taskTitle": "Codebase Refactoring Sprint",
+    "subAgentCount": 2,
+    "durationMs": 363371
+  },
+  {
     "id": "status_1769623414045_xz4xmeaz8",
     "timestamp": "2026-01-28T18:03:34.045Z",
     "previousStatus": "idle",

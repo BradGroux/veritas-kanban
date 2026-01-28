@@ -18,6 +18,7 @@ import { getSprintLabel } from '@/hooks/useSprints';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useTaskConfig } from '@/contexts/TaskConfigContext';
 import { type TaskCardMetrics, formatCompactDuration } from '@/hooks/useBulkTaskMetrics';
+import { sanitizeText } from '@/lib/sanitize';
 
 const agentNames: Record<string, string> = {
   'claude-code': 'Claude',
@@ -167,7 +168,7 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                 </h3>
                 {!isCompact && task.description && (
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {task.description}
+                    {sanitizeText(task.description)}
                   </p>
                 )}
               </div>
@@ -223,7 +224,7 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                     <TooltipContent>
                       <p className="font-medium">{info.label}</p>
                       {task.blockedReason.note && (
-                        <p className="text-sm text-muted-foreground mt-1">{task.blockedReason.note}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{sanitizeText(task.blockedReason.note)}</p>
                       )}
                     </TooltipContent>
                   </Tooltip>
@@ -362,7 +363,7 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
         <TooltipContent side="top" className="max-w-xs">
           <p className="font-medium">{task.title}</p>
           {task.description && (
-            <p className="text-muted-foreground text-sm mt-1">{task.description}</p>
+            <p className="text-muted-foreground text-sm mt-1">{sanitizeText(task.description)}</p>
           )}
         </TooltipContent>
       </Tooltip>
