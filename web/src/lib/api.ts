@@ -11,6 +11,7 @@ import type {
   UpdateTemplateInput,
   TaskTypeConfig,
   SprintConfig,
+  FeatureSettings,
 } from '@veritas-kanban/shared';
 
 const API_BASE = '/api';
@@ -178,6 +179,22 @@ export const api = {
         body: JSON.stringify({ templateId, templateName, fieldsChanged }),
       });
       return handleResponse<void>(response);
+    },
+  },
+
+  settings: {
+    getFeatures: async (): Promise<FeatureSettings> => {
+      const response = await fetch(`${API_BASE}/settings/features`);
+      return handleResponse<FeatureSettings>(response);
+    },
+
+    updateFeatures: async (patch: Partial<FeatureSettings>): Promise<FeatureSettings> => {
+      const response = await fetch(`${API_BASE}/settings/features`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      return handleResponse<FeatureSettings>(response);
     },
   },
 

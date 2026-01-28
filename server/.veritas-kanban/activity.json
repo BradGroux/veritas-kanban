@@ -1,394 +1,75 @@
 [
   {
-    "id": "activity_1769587558905_ycvn6yezn",
+    "id": "activity_1769588154981_unig8oz3f",
+    "type": "comment_added",
+    "taskId": "task_20260128_XvmMga",
+    "taskTitle": "Research Kimi K2.5",
+    "details": {
+      "author": "Veritas",
+      "preview": "Research complete. Files saved to research/kimi-k2..."
+    },
+    "timestamp": "2026-01-28T08:15:54.981Z"
+  },
+  {
+    "id": "activity_1769588154947_mp9tdjkky",
     "type": "status_changed",
-    "taskId": "task_20260128_-RJ73c",
-    "taskTitle": "FEATURE REQUEST: Metrics Refactoring",
+    "taskId": "task_20260128_XvmMga",
+    "taskTitle": "Research Kimi K2.5",
     "details": {
       "from": "in-progress",
       "status": "done"
     },
-    "timestamp": "2026-01-28T08:05:58.905Z"
+    "timestamp": "2026-01-28T08:15:54.947Z"
   },
   {
-    "id": "activity_1769587558843_g7kyticb6",
-    "type": "comment_added",
-    "taskId": "task_20260128_-RJ73c",
-    "taskTitle": "FEATURE REQUEST: Metrics Refactoring",
-    "details": {
-      "author": "Veritas",
-      "preview": "Sprint US-1400 planned: 7 stories (US-1401–US-1407..."
-    },
-    "timestamp": "2026-01-28T08:05:58.843Z"
-  },
-  {
-    "id": "activity_1769587558820_401erjjsh",
-    "type": "task_updated",
-    "taskId": "task_20260128_-RJ73c",
-    "taskTitle": "FEATURE REQUEST: Metrics Refactoring",
-    "timestamp": "2026-01-28T08:05:58.820Z"
-  },
-  {
-    "id": "activity_1769587558794_x0s5lueqk",
+    "id": "activity_1769588034705_calq30nad",
     "type": "status_changed",
-    "taskId": "task_20260128_eyx3Mw",
-    "taskTitle": "FEATURE REQUEST: Working indicator",
-    "details": {
-      "from": "in-progress",
-      "status": "done"
-    },
-    "timestamp": "2026-01-28T08:05:58.794Z"
-  },
-  {
-    "id": "activity_1769587558780_xjykrjk9g",
-    "type": "comment_added",
-    "taskId": "task_20260128_eyx3Mw",
-    "taskTitle": "FEATURE REQUEST: Working indicator",
-    "details": {
-      "author": "Veritas",
-      "preview": "Sprint US-1300 planned: 6 stories (US-1301–US-1306..."
-    },
-    "timestamp": "2026-01-28T08:05:58.780Z"
-  },
-  {
-    "id": "activity_1769587558758_1fqqjjqdd",
-    "type": "task_updated",
-    "taskId": "task_20260128_eyx3Mw",
-    "taskTitle": "FEATURE REQUEST: Working indicator",
-    "timestamp": "2026-01-28T08:05:58.758Z"
-  },
-  {
-    "id": "activity_1769587558747_o5s54v4pj",
-    "type": "status_changed",
-    "taskId": "task_20260128_Nvw1ZN",
-    "taskTitle": "FEATURE REQUEST: Make the UI available on LAN",
-    "details": {
-      "from": "in-progress",
-      "status": "done"
-    },
-    "timestamp": "2026-01-28T08:05:58.747Z"
-  },
-  {
-    "id": "activity_1769587558736_5xr8a5w8o",
-    "type": "comment_added",
-    "taskId": "task_20260128_Nvw1ZN",
-    "taskTitle": "FEATURE REQUEST: Make the UI available on LAN",
-    "details": {
-      "author": "Veritas",
-      "preview": "Sprint US-1200 planned: 6 stories (US-1201–US-1206..."
-    },
-    "timestamp": "2026-01-28T08:05:58.736Z"
-  },
-  {
-    "id": "activity_1769587558689_b8cm2ghdw",
-    "type": "task_updated",
-    "taskId": "task_20260128_Nvw1ZN",
-    "taskTitle": "FEATURE REQUEST: Make the UI available on LAN",
-    "timestamp": "2026-01-28T08:05:58.689Z"
-  },
-  {
-    "id": "activity_1769587543586_1ya6h4x7v",
-    "type": "task_created",
-    "taskId": "task_20260128_vGa5Gh",
-    "taskTitle": "US-1407: Cost tracking and budget monitoring",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.586Z"
-  },
-  {
-    "id": "activity_1769587543450_jbb0l1dmq",
-    "type": "task_created",
-    "taskId": "task_20260128_-ndA3j",
-    "taskTitle": "US-1406: Run badges on Done task cards",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.450Z"
-  },
-  {
-    "id": "activity_1769587543347_0fd0wfil8",
-    "type": "task_created",
-    "taskId": "task_20260128_V0MVwS",
-    "taskTitle": "US-1405: Dashboard metrics cards refresh",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.347Z"
-  },
-  {
-    "id": "activity_1769587543226_8de3a8ttp",
-    "type": "task_created",
-    "taskId": "task_20260128_2oKAgC",
-    "taskTitle": "US-1404: Task-level metrics panel",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.226Z"
-  },
-  {
-    "id": "activity_1769587543188_4t9qua4w3",
-    "type": "task_created",
-    "taskId": "task_20260128_P2pK3M",
-    "taskTitle": "US-1403: Metrics service refactor — use real telemetry data",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.188Z"
-  },
-  {
-    "id": "activity_1769587543131_tys2qjn93",
-    "type": "task_created",
-    "taskId": "task_20260128_wZ3-Ix",
-    "taskTitle": "US-1402: Veritas telemetry reporter",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.131Z"
-  },
-  {
-    "id": "activity_1769587543086_agdljsb28",
-    "type": "task_created",
-    "taskId": "task_20260128_ntcrK0",
-    "taskTitle": "US-1401: Telemetry event ingestion endpoint",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.086Z"
-  },
-  {
-    "id": "activity_1769587543016_3cfrne0h1",
-    "type": "task_created",
-    "taskId": "task_20260128_W-K6q8",
-    "taskTitle": "US-1306: Header integration and layout",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:43.016Z"
-  },
-  {
-    "id": "activity_1769587542988_79i19qi6j",
-    "type": "task_created",
-    "taskId": "task_20260128_hul7-q",
-    "taskTitle": "US-1305: Status history log",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.988Z"
-  },
-  {
-    "id": "activity_1769587542944_nzygmjsjq",
-    "type": "task_created",
-    "taskId": "task_20260128_hdcQAe",
-    "taskTitle": "US-1304: Veritas status reporting integration",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.944Z"
-  },
-  {
-    "id": "activity_1769587542905_2en7blayr",
-    "type": "task_created",
-    "taskId": "task_20260128_o0FPtg",
-    "taskTitle": "US-1303: Real-time status hook (useAgentStatus)",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.905Z"
-  },
-  {
-    "id": "activity_1769587542850_gy75vguuw",
-    "type": "task_created",
-    "taskId": "task_20260128_q38wnR",
-    "taskTitle": "US-1302: Animated status indicator component",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.850Z"
-  },
-  {
-    "id": "activity_1769587542777_dic905x7c",
-    "type": "task_created",
-    "taskId": "task_20260128_tD7fef",
-    "taskTitle": "US-1301: Agent status API endpoint",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.777Z"
-  },
-  {
-    "id": "activity_1769587542708_yfe12x4g4",
-    "type": "task_created",
-    "taskId": "task_20260128_2sIFHb",
-    "taskTitle": "US-1206: Responsive design audit for tablets/phones",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.708Z"
-  },
-  {
-    "id": "activity_1769587542665_yp8jpydxy",
-    "type": "task_created",
-    "taskId": "task_20260128_SAHMz6",
-    "taskTitle": "US-1205: Auto-detect and display LAN URL",
-    "details": {
-      "type": "code",
-      "priority": "low",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.665Z"
-  },
-  {
-    "id": "activity_1769587542630_115ehpml5",
-    "type": "task_created",
-    "taskId": "task_20260128_Q8rmjd",
-    "taskTitle": "US-1204: macOS firewall configuration guide",
-    "details": {
-      "type": "code",
-      "priority": "medium",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.630Z"
-  },
-  {
-    "id": "activity_1769587542548_u9f3crqta",
-    "type": "task_created",
-    "taskId": "task_20260128_2jWpyv",
-    "taskTitle": "US-1203: Configure CORS for LAN origins",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.548Z"
-  },
-  {
-    "id": "activity_1769587542478_pkge49u86",
-    "type": "task_created",
-    "taskId": "task_20260128_aTOv4t",
-    "taskTitle": "US-1202: Bind Express API server to LAN",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.478Z"
-  },
-  {
-    "id": "activity_1769587542437_0wq42d3jg",
-    "type": "task_created",
-    "taskId": "task_20260128_Z1vcc9",
-    "taskTitle": "US-1201: Bind Vite dev server to LAN",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:42.437Z"
-  },
-  {
-    "id": "activity_1769587542358_ks2rnizv9",
-    "type": "task_deleted",
-    "taskId": "task_20260128_mkekKZ",
-    "taskTitle": "TEST subtask",
-    "timestamp": "2026-01-28T08:05:42.358Z"
-  },
-  {
-    "id": "activity_1769587523805_pa91ny49s",
-    "type": "task_created",
-    "taskId": "task_20260128_mkekKZ",
-    "taskTitle": "TEST subtask",
-    "details": {
-      "type": "code",
-      "priority": "medium"
-    },
-    "timestamp": "2026-01-28T08:05:23.805Z"
-  },
-  {
-    "id": "activity_1769587512601_ysghlj5om",
-    "type": "task_created",
-    "taskId": "task_20260128_eUf_U7",
-    "taskTitle": "US-1201: Bind Vite dev server to LAN",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T08:05:12.601Z"
-  },
-  {
-    "id": "activity_1769587351650_61f3fsg16",
-    "type": "status_changed",
-    "taskId": "task_20260128_-RJ73c",
-    "taskTitle": "FEATURE REQUEST: Metrics Refactoring",
+    "taskId": "task_20260128_X6nifI",
+    "taskTitle": "US-1101: Settings infrastructure & config schema expansion",
     "details": {
       "from": "todo",
       "status": "in-progress"
     },
-    "timestamp": "2026-01-28T08:02:31.650Z"
+    "timestamp": "2026-01-28T08:13:54.705Z"
   },
   {
-    "id": "activity_1769587351628_j43hi6tju",
+    "id": "activity_1769588024542_4bcp6khaz",
+    "type": "comment_added",
+    "taskId": "task_20260128_iG-ISb",
+    "taskTitle": "Review the ByteRover Skill",
+    "details": {
+      "author": "Veritas",
+      "preview": "Reviewed ByteRover skill and sent analysis to Brad..."
+    },
+    "timestamp": "2026-01-28T08:13:44.542Z"
+  },
+  {
+    "id": "activity_1769588020507_qw0jiamvq",
     "type": "status_changed",
-    "taskId": "task_20260128_eyx3Mw",
-    "taskTitle": "FEATURE REQUEST: Working indicator",
+    "taskId": "task_20260128_iG-ISb",
+    "taskTitle": "Review the ByteRover Skill",
     "details": {
       "from": "todo",
       "status": "in-progress"
     },
-    "timestamp": "2026-01-28T08:02:31.628Z"
+    "timestamp": "2026-01-28T08:13:40.508Z"
   },
   {
-    "id": "activity_1769587351580_xfedq4iwn",
+    "id": "activity_1769587980296_eqnkbfpqk",
     "type": "status_changed",
-    "taskId": "task_20260128_Nvw1ZN",
-    "taskTitle": "FEATURE REQUEST: Make the UI available on LAN",
+    "taskId": "task_20260128_XvmMga",
+    "taskTitle": "Research Kimi K2.5",
     "details": {
       "from": "todo",
       "status": "in-progress"
     },
-    "timestamp": "2026-01-28T08:02:31.580Z"
+    "timestamp": "2026-01-28T08:13:00.296Z"
   },
   {
-    "id": "activity_1769586801581_flp7unen1",
+    "id": "activity_1769587926555_hnhvh3cvw",
     "type": "task_archived",
-    "taskId": "task_20260128_Foonyv",
-    "taskTitle": "FEATURE REQUEST: Settings Panel with Feaeture Toggles",
-    "timestamp": "2026-01-28T07:53:21.581Z"
-  },
-  {
-    "id": "activity_1769586801547_x125d5lu7",
-    "type": "task_archived",
-    "taskId": "task_20260128_RrQUWH",
-    "taskTitle": "BUG: stopTimer() crashes YAML serializer — activeEntryId: undefined",
-    "timestamp": "2026-01-28T07:53:21.547Z"
+    "taskId": "task_20260128_eyx3Mw",
+    "taskTitle": "FEATURE REQUEST: Working indicator",
+    "timestamp": "2026-01-28T08:12:06.555Z"
   }
 ]

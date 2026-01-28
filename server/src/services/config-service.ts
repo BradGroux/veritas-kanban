@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { simpleGit } from 'simple-git';
-import type { AppConfig, RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared';
+import type { AppConfig, RepoConfig, AgentConfig, AgentType, FeatureSettings } from '@veritas-kanban/shared';
+import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 
 // Default paths - resolve to project root
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
@@ -43,6 +44,30 @@ const DEFAULT_CONFIG: AppConfig = {
   defaultAgent: 'claude-code',
 };
 
+/**
+ * Deep merge source into target. For each key in source:
+ * - If both values are plain objects, recurse
+ * - Otherwise, target value wins if it exists; source fills missing keys
+ */
+function deepMergeDefaults<T extends Record<string, any>>(target: Partial<T>, defaults: T): T {
+  const result = { ...defaults };
+  for (const key of Object.keys(defaults) as Array<keyof T>) {
+    if (key in target) {
+      const targetVal = (target as any)[key];
+      const defaultVal = defaults[key];
+      if (
+        defaultVal !== null && typeof defaultVal === 'object' && !Array.isArray(defaultVal) &&
+        targetVal !== null && typeof targetVal === 'object' && !Array.isArray(targetVal)
+      ) {
+        (result as any)[key] = deepMergeDefaults(targetVal, defaultVal);
+      } else {
+        (result as any)[key] = targetVal;
+      }
+    }
+  }
+  return result;
+}
+
 export interface ConfigServiceOptions {
   configDir?: string;
   configFile?: string;
@@ -69,16 +94,41 @@ export class ConfigService {
 
     try {
       const content = await fs.readFile(this.configFile, 'utf-8');
-      this.config = JSON.parse(content);
-      return this.config!;
+      const raw = JSON.parse(content) as AppConfig;
+      // Auto-merge feature defaults for backward compatibility
+      raw.features = deepMergeDefaults(raw.features || {}, DEFAULT_FEATURE_SETTINGS);
+      this.config = raw;
+      return this.config;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        // Create default config
-        await this.saveConfig(DEFAULT_CONFIG);
-        return DEFAULT_CONFIG;
+        // Create default config with features
+        const config = { ...DEFAULT_CONFIG, features: DEFAULT_FEATURE_SETTINGS };
+        await this.saveConfig(config);
+        return config;
       }
       throw error;
     }
+  }
+
+  async getFeatureSettings(): Promise<FeatureSettings> {
+    const config = await this.getConfig();
+    return config.features || DEFAULT_FEATURE_SETTINGS;
+  }
+
+  async updateFeatureSettings(patch: Record<string, any>): Promise<FeatureSettings> {
+    const config = await this.getConfig();
+    const current = config.features || DEFAULT_FEATURE_SETTINGS;
+    // Deep merge the patch into current settings
+    const merged = deepMergeDefaults(patch as Partial<FeatureSettings>, current);
+    // Also merge any new keys from patch that aren't in defaults
+    for (const section of Object.keys(patch)) {
+      if (section in merged && typeof patch[section] === 'object' && !Array.isArray(patch[section])) {
+        (merged as any)[section] = { ...(merged as any)[section], ...patch[section] };
+      }
+    }
+    config.features = merged;
+    await this.saveConfig(config);
+    return merged;
   }
 
   async saveConfig(config: AppConfig): Promise<void> {

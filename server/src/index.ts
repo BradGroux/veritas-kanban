@@ -21,6 +21,7 @@ import telemetryRoutes from './routes/telemetry.js';
 import metricsRoutes from './routes/metrics.js';
 import tracesRoutes from './routes/traces.js';
 import attachmentRoutes from './routes/attachments.js';
+import { settingsRoutes } from './routes/settings.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import type { AgentOutput } from './services/agent-service.js';
@@ -57,6 +58,7 @@ app.use('/api/conflicts', conflictRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/traces', tracesRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Initialize telemetry service (runs retention cleanup)
 getTelemetryService().init().catch((err) => {

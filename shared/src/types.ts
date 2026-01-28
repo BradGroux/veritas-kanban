@@ -249,6 +249,7 @@ export interface AppConfig {
   agents: AgentConfig[];
   defaultAgent: AgentType;
   telemetry?: TelemetryConfig;
+  features?: FeatureSettings;
 }
 
 // WebSocket Message Types
@@ -346,6 +347,120 @@ export interface TelemetryConfig {
   retention: number; // Days to retain events
   traces?: boolean;  // Optional trace collection (future)
 }
+
+// ============ Feature Settings Types ============
+
+/** Board display settings */
+export interface BoardSettings {
+  showDashboard: boolean;
+  showArchiveSuggestions: boolean;
+  cardDensity: 'normal' | 'compact';
+  showPriorityIndicators: boolean;
+  showProjectBadges: boolean;
+  showSprintBadges: boolean;
+  enableDragAndDrop: boolean;
+}
+
+/** Task behavior settings */
+export interface TaskBehaviorSettings {
+  enableTimeTracking: boolean;
+  enableSubtaskAutoComplete: boolean;
+  enableDependencies: boolean;
+  enableAttachments: boolean;
+  attachmentMaxFileSize: number;    // bytes
+  attachmentMaxPerTask: number;
+  attachmentMaxTotalSize: number;   // bytes
+  enableComments: boolean;
+  defaultPriority: TaskPriority;
+}
+
+/** Agent & git settings */
+export interface AgentBehaviorSettings {
+  timeoutMinutes: number;           // 5-480
+  autoCommitOnComplete: boolean;
+  autoCleanupWorktrees: boolean;
+  enablePreview: boolean;
+}
+
+/** Telemetry & activity settings */
+export interface TelemetryFeatureSettings {
+  enabled: boolean;
+  retentionDays: number;            // 7-365
+  enableTraces: boolean;
+  enableActivityTracking: boolean;
+}
+
+/** Notification settings */
+export interface NotificationSettings {
+  enabled: boolean;
+  onTaskComplete: boolean;
+  onAgentFailure: boolean;
+  onReviewNeeded: boolean;
+  channel: string;                  // Teams channel ID
+}
+
+/** Archive settings */
+export interface ArchiveSettings {
+  autoArchiveEnabled: boolean;
+  autoArchiveAfterDays: number;
+}
+
+/** All feature settings combined */
+export interface FeatureSettings {
+  board: BoardSettings;
+  tasks: TaskBehaviorSettings;
+  agents: AgentBehaviorSettings;
+  telemetry: TelemetryFeatureSettings;
+  notifications: NotificationSettings;
+  archive: ArchiveSettings;
+}
+
+/** Default feature settings — matches current app behavior */
+export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
+  board: {
+    showDashboard: true,
+    showArchiveSuggestions: true,
+    cardDensity: 'normal',
+    showPriorityIndicators: true,
+    showProjectBadges: true,
+    showSprintBadges: true,
+    enableDragAndDrop: true,
+  },
+  tasks: {
+    enableTimeTracking: true,
+    enableSubtaskAutoComplete: true,
+    enableDependencies: true,
+    enableAttachments: true,
+    attachmentMaxFileSize: 10 * 1024 * 1024,    // 10MB
+    attachmentMaxPerTask: 20,
+    attachmentMaxTotalSize: 50 * 1024 * 1024,   // 50MB
+    enableComments: true,
+    defaultPriority: 'medium',
+  },
+  agents: {
+    timeoutMinutes: 30,
+    autoCommitOnComplete: false,
+    autoCleanupWorktrees: false,
+    enablePreview: true,
+  },
+  telemetry: {
+    enabled: true,
+    retentionDays: 90,
+    enableTraces: false,
+    enableActivityTracking: true,
+  },
+  notifications: {
+    enabled: false,
+    onTaskComplete: true,
+    onAgentFailure: true,
+    onReviewNeeded: true,
+    channel: '',
+  },
+  archive: {
+    autoArchiveEnabled: false,
+    autoArchiveAfterDays: 30,
+  },
+};
 
 /** Query options for fetching events */
 export interface TelemetryQueryOptions {
