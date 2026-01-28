@@ -100,7 +100,7 @@ Code task with git info.
 id: task_20260126_attempt123
 title: Agent Task
 type: code
-status: review
+status: blocked
 priority: high
 created: '2026-01-26T10:00:00.000Z'
 updated: '2026-01-26T12:00:00.000Z'

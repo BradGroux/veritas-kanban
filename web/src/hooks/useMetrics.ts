@@ -4,6 +4,7 @@ export type MetricsPeriod = '24h' | '7d';
 
 export interface TaskMetrics {
   byStatus: Record<string, number>;
+  byBlockedReason: Record<string, number>;
   total: number;
   completed: number;
   archived: number;

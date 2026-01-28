@@ -44,6 +44,11 @@ const automationSchema = z.object({
   result: z.string().optional(),
 }).optional();
 
+const blockedReasonSchema = z.object({
+  category: z.enum(['waiting-on-feedback', 'technical-snag', 'prerequisite', 'other']),
+  note: z.string().optional(),
+}).optional().nullable();
+
 const reviewCommentSchema = z.object({
   id: z.string(),
   file: z.string(),
@@ -80,6 +85,7 @@ const updateTaskSchema = z.object({
   subtasks: z.array(subtaskSchema).optional(),
   autoCompleteOnSubtasks: z.boolean().optional(),
   blockedBy: z.array(z.string()).optional(),
+  blockedReason: blockedReasonSchema,
   automation: automationSchema,
   position: z.number().optional(),
 });
@@ -213,6 +219,11 @@ router.patch('/:id', asyncHandler(async (req, res) => {
         blockedBy: incompleteBlockers.map(t => ({ id: t.id, title: t.title })),
       });
     }
+  }
+
+  // Auto-clear blockedReason when task moves out of blocked status
+  if (input.status && input.status !== 'blocked' && oldTask.status === 'blocked') {
+    input.blockedReason = null;
   }
 
   const task = await taskService.updateTask((req.params.id as string), input);

@@ -5,6 +5,12 @@ export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 export type AgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';
+export type BlockedCategory = 'waiting-on-feedback' | 'technical-snag' | 'prerequisite' | 'other';
+
+export interface BlockedReason {
+  category: BlockedCategory;
+  note?: string;
+}
 
 export interface TaskGit {
   repo: string;
@@ -137,6 +143,9 @@ export interface Task {
   // Dependencies
   blockedBy?: string[]; // Array of task IDs that block this task
 
+  // Blocked reason (why the task is in blocked status)
+  blockedReason?: BlockedReason;
+
   // Automation task specific (for veritas sub-agent)
   automation?: {
     sessionKey?: string;    // Clawdbot session key
@@ -202,6 +211,7 @@ export interface UpdateTaskInput {
   subtasks?: Subtask[];
   autoCompleteOnSubtasks?: boolean;
   blockedBy?: string[];
+  blockedReason?: BlockedReason | null; // null to clear
   automation?: {
     sessionKey?: string;
     spawnedAt?: string;

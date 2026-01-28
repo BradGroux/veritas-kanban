@@ -2,6 +2,45 @@
 
 All notable changes to Veritas Kanban.
 
+## [0.10.0] - 2026-01-28 (Sprint 1500 - Status Refactor)
+
+### Changed
+- **Status Rename: review → blocked (US-1501-1504)**
+  - Renamed `TaskStatus.review` to `TaskStatus.blocked` across entire codebase
+  - Updated column header from "Review" to "Blocked" with red color scheme
+  - Propagated changes through all frontend components and backend services
+  - Updated keyboard shortcuts, dashboard metrics, and automation rules
+
+### Added
+- **Data Migration (US-1505)**
+  - Automatic migration on server startup: converts any `review` tasks to `blocked`
+  - Handles both active and archived tasks
+  - Idempotent — safe to run multiple times
+  - Migration count logged on startup
+
+- **Migration Tests (US-1506)**
+  - 8 new tests for migration service
+  - Validates TaskStatus type (blocked valid, review invalid)
+  - Tests for idempotency, empty lists, multiple tasks, archived tasks
+
+- **Blocked Reason Tracking (US-1507)**
+  - New `BlockedCategory` type: waiting-on-feedback | technical-snag | prerequisite | other
+  - `blockedReason` field on Task interface with category + optional note
+  - UI: category dropdown + notes textarea in task detail panel
+  - Auto-prompt when task moves to Blocked status
+  - Blocked reason badges on Kanban cards (icons + labels)
+  - Auto-clear when task moves out of Blocked
+  - Dashboard breakdown showing count by blocked category
+
+- **Metrics Refactor (US-1403)**
+  - Added 30-day period support to all metrics endpoints
+  - Per-agent breakdown in run/token/duration metrics
+  - Streaming NDJSON reader for efficient file processing
+  - Performance: 24ms for 30-day queries (target was <500ms)
+
+### Fixed
+- Attachment service test regex now allows hyphens in generated IDs
+
 ## [0.9.0] - 2026-01-28 (Sprint 1150 - Settings Hardening)
 
 ### Added

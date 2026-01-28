@@ -25,6 +25,7 @@ import { settingsRoutes, syncSettingsToServices } from './routes/settings.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
+import { runStartupMigrations } from './services/migration-service.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { AgentOutput } from './services/clawdbot-agent-service.js';
 
@@ -65,15 +66,19 @@ app.use('/api/settings', settingsRoutes);
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Initialize telemetry service and sync with feature settings
+// Initialize services on startup
 (async () => {
   try {
+    // Run data migrations first (idempotent)
+    await runStartupMigrations();
+    
+    // Initialize telemetry service and sync with feature settings
     const configService = new ConfigService();
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
   } catch (err) {
-    console.error('Failed to initialize telemetry service:', err);
+    console.error('Failed to initialize services:', err);
   }
 })();
 

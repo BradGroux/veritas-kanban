@@ -1,5 +1,203 @@
 [
   {
+    "id": "activity_1769606100953_ohhdp3l90",
+    "type": "comment_added",
+    "taskId": "task_20260128_g86sZV",
+    "taskTitle": "US-1507: Add blocked reason tracking",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented blocked reason tracking: Added Blocked..."
+    },
+    "timestamp": "2026-01-28T13:15:00.953Z"
+  },
+  {
+    "id": "activity_1769606100920_30ktc5caa",
+    "type": "status_changed",
+    "taskId": "task_20260128_g86sZV",
+    "taskTitle": "US-1507: Add blocked reason tracking",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:15:00.920Z"
+  },
+  {
+    "id": "activity_1769605885365_yjev9zk54",
+    "type": "status_changed",
+    "taskId": "task_20260128_g86sZV",
+    "taskTitle": "US-1507: Add blocked reason tracking",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:11:25.365Z"
+  },
+  {
+    "id": "activity_1769605746107_q9p06yvp5",
+    "type": "comment_added",
+    "taskId": "task_20260128_KTgZMx",
+    "taskTitle": "US-1506: Update test suite — review → blocked references",
+    "details": {
+      "author": "Veritas",
+      "preview": "Updated task-service.test.ts to use blocked instea..."
+    },
+    "timestamp": "2026-01-28T13:09:06.107Z"
+  },
+  {
+    "id": "activity_1769605746068_gluu7513k",
+    "type": "status_changed",
+    "taskId": "task_20260128_KTgZMx",
+    "taskTitle": "US-1506: Update test suite — review → blocked references",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:09:06.068Z"
+  },
+  {
+    "id": "activity_1769605713708_ds38je2kb",
+    "type": "comment_added",
+    "taskId": "task_20260128_P2pK3M",
+    "taskTitle": "US-1403: Metrics service refactor — use real telemetry data",
+    "details": {
+      "author": "Veritas",
+      "preview": "Refactored MetricsService with: (1) 30d period sup..."
+    },
+    "timestamp": "2026-01-28T13:08:33.708Z"
+  },
+  {
+    "id": "activity_1769605713663_zoijajtn2",
+    "type": "status_changed",
+    "taskId": "task_20260128_P2pK3M",
+    "taskTitle": "US-1403: Metrics service refactor — use real telemetry data",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:08:33.663Z"
+  },
+  {
+    "id": "activity_1769605669865_qtxid2tx2",
+    "type": "status_changed",
+    "taskId": "task_20260128_KTgZMx",
+    "taskTitle": "US-1506: Update test suite — review → blocked references",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:07:49.865Z"
+  },
+  {
+    "id": "activity_1769605644012_b3n8cywmc",
+    "type": "comment_added",
+    "taskId": "task_20260128_0hOHmd",
+    "taskTitle": "US-1505: Data migration — convert existing review tasks to blocked",
+    "details": {
+      "author": "Veritas",
+      "preview": "Created migration-service.ts that runs on server s..."
+    },
+    "timestamp": "2026-01-28T13:07:24.012Z"
+  },
+  {
+    "id": "activity_1769605634343_gzcd0h7vq",
+    "type": "status_changed",
+    "taskId": "task_20260128_0hOHmd",
+    "taskTitle": "US-1505: Data migration — convert existing review tasks to blocked",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:07:14.343Z"
+  },
+  {
+    "id": "activity_1769605564277_rxtbekuto",
+    "type": "status_changed",
+    "taskId": "task_20260128_P2pK3M",
+    "taskTitle": "US-1403: Metrics service refactor — use real telemetry data",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:06:04.277Z"
+  },
+  {
+    "id": "activity_1769605563590_sgilqvjta",
+    "type": "status_changed",
+    "taskId": "task_20260128_0hOHmd",
+    "taskTitle": "US-1505: Data migration — convert existing review tasks to blocked",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:06:03.590Z"
+  },
+  {
+    "id": "activity_1769604701257_96rsvz2p1",
+    "type": "comment_added",
+    "taskId": "task_20260128_62_v6g",
+    "taskTitle": "US-1504: Propagate review → blocked across all backend routes and services",
+    "details": {
+      "author": "Veritas",
+      "preview": "All backend routes and services updated: automatio..."
+    },
+    "timestamp": "2026-01-28T12:51:41.257Z"
+  },
+  {
+    "id": "activity_1769604701193_tqs86303r",
+    "type": "status_changed",
+    "taskId": "task_20260128_62_v6g",
+    "taskTitle": "US-1504: Propagate review → blocked across all backend routes and services",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T12:51:41.193Z"
+  },
+  {
+    "id": "activity_1769604701153_tqvxwewsg",
+    "type": "comment_added",
+    "taskId": "task_20260128_hQpqum",
+    "taskTitle": "US-1503: Propagate review → blocked across all frontend components",
+    "details": {
+      "author": "Veritas",
+      "preview": "All frontend components updated: Dashboard, TaskMe..."
+    },
+    "timestamp": "2026-01-28T12:51:41.153Z"
+  },
+  {
+    "id": "activity_1769604701116_s7sxa7zws",
+    "type": "status_changed",
+    "taskId": "task_20260128_hQpqum",
+    "taskTitle": "US-1503: Propagate review → blocked across all frontend components",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T12:51:41.116Z"
+  },
+  {
+    "id": "activity_1769604694544_p54v6ejp9",
+    "type": "comment_added",
+    "taskId": "task_20260128_iFFyez",
+    "taskTitle": "US-1502: Update Kanban column display — Blocked title + red color",
+    "details": {
+      "author": "Veritas",
+      "preview": "Column display updated: title Blocked, color red-5..."
+    },
+    "timestamp": "2026-01-28T12:51:34.544Z"
+  },
+  {
+    "id": "activity_1769604694488_3qvsn8wqt",
+    "type": "status_changed",
+    "taskId": "task_20260128_iFFyez",
+    "taskTitle": "US-1502: Update Kanban column display — Blocked title + red color",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T12:51:34.488Z"
+  },
+  {
     "id": "activity_1769604505548_u0nvgi0nq",
     "type": "status_changed",
     "taskId": "task_20260128_iFFyez",
