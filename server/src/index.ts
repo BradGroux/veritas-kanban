@@ -30,6 +30,7 @@ import {
   type AuthenticatedWebSocket,
 } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
+import { checkJwtSecretConfig } from './config/security.js';
 import { apiRateLimit } from './middleware/rate-limit.js';
 import { apiVersionMiddleware } from './middleware/api-version.js';
 import { apiCacheHeaders } from './middleware/cache-control.js';
@@ -597,6 +598,18 @@ server.listen(PORT, () => {
       log.warn({ security: 'admin-key' }, `⚠️  SECURITY: ${warning.message}`);
     } else {
       log.warn({ security: 'admin-key' }, warning.message);
+    }
+  }
+
+  // Security warnings for JWT secret configuration
+  const jwtWarnings = checkJwtSecretConfig();
+  for (const warning of jwtWarnings) {
+    if (warning.level === 'critical') {
+      log.warn({ security: 'jwt-secret' }, `⚠️  SECURITY: ${warning.message}`);
+    } else if (warning.level === 'warning') {
+      log.warn({ security: 'jwt-secret' }, warning.message);
+    } else {
+      log.info({ security: 'jwt-secret' }, warning.message);
     }
   }
 });

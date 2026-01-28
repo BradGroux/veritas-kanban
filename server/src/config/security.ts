@@ -54,12 +54,15 @@ let runtimeJwtSecret: string | null = null;
  */
 export function getSecurityConfig(): SecurityConfig {
   const now = Date.now();
-  
+
   // Use cache in production, refresh in dev
-  if (cachedConfig && (process.env.NODE_ENV === 'production' || now - lastLoadTime < CACHE_TTL_MS)) {
+  if (
+    cachedConfig &&
+    (process.env.NODE_ENV === 'production' || now - lastLoadTime < CACHE_TTL_MS)
+  ) {
     return cachedConfig;
   }
-  
+
   try {
     if (fs.existsSync(SECURITY_CONFIG_PATH)) {
       const data = fs.readFileSync(SECURITY_CONFIG_PATH, 'utf-8');
@@ -70,7 +73,7 @@ export function getSecurityConfig(): SecurityConfig {
   } catch (err) {
     console.error('Error loading security config:', err);
   }
-  
+
   // Default config
   cachedConfig = {
     authEnabled: false, // Disabled until setup
@@ -85,7 +88,7 @@ const SECRET_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Get the current (latest) JWT signing secret.
  * Used for **signing** new tokens.
- * 
+ *
  * Priority: VERITAS_JWT_SECRET env var > jwtSecrets array (latest) > legacy jwtSecret > runtime-generated
  */
 export function getJwtSecret(): string {
@@ -135,7 +138,7 @@ export function getValidJwtSecrets(): string[] {
   // If we have the jwtSecrets array, filter out expired entries
   if (config.jwtSecrets && config.jwtSecrets.length > 0) {
     const validEntries = config.jwtSecrets
-      .filter(entry => {
+      .filter((entry) => {
         // No expiresAt means it's the current secret — always valid
         if (!entry.expiresAt) return true;
         // Check grace period
@@ -144,7 +147,7 @@ export function getValidJwtSecrets(): string[] {
       .sort((a, b) => b.version - a.version);
 
     if (validEntries.length > 0) {
-      return validEntries.map(e => e.secret);
+      return validEntries.map((e) => e.secret);
     }
   }
 
@@ -158,7 +161,7 @@ export function getValidJwtSecrets(): string[] {
  * - Moves the previous current secret to a grace period (default 7 days)
  * - Purges any secrets past their grace period
  * - Returns the new version number
- * 
+ *
  * NOTE: Has no effect when VERITAS_JWT_SECRET env var is set (rotation
  * must be done externally in that case).
  */
@@ -173,7 +176,8 @@ export function rotateJwtSecret(gracePeriodMs: number = SECRET_GRACE_PERIOD_MS):
       success: false,
       newVersion: 0,
       prunedCount: 0,
-      message: 'Cannot rotate: JWT secret is managed via VERITAS_JWT_SECRET environment variable. Rotate externally.',
+      message:
+        'Cannot rotate: JWT secret is managed via VERITAS_JWT_SECRET environment variable. Rotate externally.',
     };
   }
 
@@ -196,7 +200,7 @@ export function rotateJwtSecret(gracePeriodMs: number = SECRET_GRACE_PERIOD_MS):
   }
 
   // 1. Set grace period on the current (latest) secret
-  const latestEntry = secrets.find(s => !s.expiresAt);
+  const latestEntry = secrets.find((s) => !s.expiresAt);
   if (latestEntry) {
     latestEntry.expiresAt = new Date(now.getTime() + gracePeriodMs).toISOString();
   }
@@ -213,7 +217,7 @@ export function rotateJwtSecret(gracePeriodMs: number = SECRET_GRACE_PERIOD_MS):
 
   // 3. Prune expired secrets
   const beforeCount = secrets.length;
-  secrets = secrets.filter(entry => {
+  secrets = secrets.filter((entry) => {
     if (!entry.expiresAt) return true;
     return new Date(entry.expiresAt).getTime() > now.getTime();
   });
@@ -229,7 +233,9 @@ export function rotateJwtSecret(gracePeriodMs: number = SECRET_GRACE_PERIOD_MS):
   };
   saveSecurityConfig(updatedConfig);
 
-  console.log(`JWT secret rotated to version ${newVersion}. ${prunedCount} expired secret(s) pruned.`);
+  console.log(
+    `JWT secret rotated to version ${newVersion}. ${prunedCount} expired secret(s) pruned.`
+  );
 
   return {
     success: true,
@@ -255,8 +261,8 @@ export function getJwtRotationStatus(): {
   if (usingEnvVar || !config.jwtSecrets || config.jwtSecrets.length === 0) {
     return {
       currentVersion: config.jwtSecretVersion || 0,
-      totalSecrets: usingEnvVar ? 1 : (config.jwtSecret ? 1 : 0),
-      validSecrets: usingEnvVar ? 1 : (config.jwtSecret ? 1 : 0),
+      totalSecrets: usingEnvVar ? 1 : config.jwtSecret ? 1 : 0,
+      validSecrets: usingEnvVar ? 1 : config.jwtSecret ? 1 : 0,
       usingEnvVar,
       secrets: [],
     };
@@ -268,9 +274,10 @@ export function getJwtRotationStatus(): {
   return {
     currentVersion,
     totalSecrets: sorted.length,
-    validSecrets: sorted.filter(s => !s.expiresAt || new Date(s.expiresAt).getTime() > now).length,
+    validSecrets: sorted.filter((s) => !s.expiresAt || new Date(s.expiresAt).getTime() > now)
+      .length,
     usingEnvVar,
-    secrets: sorted.map(s => ({
+    secrets: sorted.map((s) => ({
       version: s.version,
       createdAt: s.createdAt,
       expiresAt: s.expiresAt,
@@ -288,16 +295,16 @@ export function saveSecurityConfig(config: SecurityConfig): void {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    
+
     // Write atomically (write to temp, then rename)
     const tempPath = SECURITY_CONFIG_PATH + '.tmp';
     fs.writeFileSync(tempPath, JSON.stringify(config, null, 2), 'utf-8');
     fs.renameSync(tempPath, SECURITY_CONFIG_PATH);
-    
+
     // Update cache
     cachedConfig = config;
     lastLoadTime = Date.now();
-    
+
     console.log('Security config saved');
   } catch (err) {
     console.error('Error saving security config:', err);
@@ -313,14 +320,14 @@ export function generateRecoveryKey(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Omit confusing chars (0/O, 1/I/L)
   let key = '';
   const bytes = crypto.randomBytes(16);
-  
+
   for (let i = 0; i < 16; i++) {
     key += chars[bytes[i] % chars.length];
     if (i === 3 || i === 7 || i === 11) {
       key += '-';
     }
   }
-  
+
   return key;
 }
 
@@ -347,6 +354,60 @@ export function resetSecurityConfig(): void {
   saveSecurityConfig(newConfig);
   runtimeJwtSecret = null;
   console.log('Security config reset. Next load will show setup screen.');
+}
+
+/** Warning about JWT secret configuration */
+export interface JwtSecretWarning {
+  level: 'critical' | 'warning' | 'info';
+  message: string;
+}
+
+/**
+ * Check JWT secret configuration and return startup warnings.
+ * Returns an array of warnings (empty if the secret is properly configured).
+ */
+export function checkJwtSecretConfig(): JwtSecretWarning[] {
+  const warnings: JwtSecretWarning[] = [];
+  const envSecret = process.env.VERITAS_JWT_SECRET;
+
+  if (envSecret) {
+    // Env var set — best practice
+    if (envSecret.length < 64) {
+      warnings.push({
+        level: 'warning',
+        message: `VERITAS_JWT_SECRET is only ${envSecret.length} characters. Recommend at least 64 characters (use: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")`,
+      });
+    }
+    return warnings;
+  }
+
+  // Check if security.json has a persisted secret
+  const config = getSecurityConfig();
+  if (config.jwtSecrets && config.jwtSecrets.length > 0) {
+    warnings.push({
+      level: 'info',
+      message:
+        'JWT secret loaded from security.json. Consider setting VERITAS_JWT_SECRET env var for explicit configuration.',
+    });
+    return warnings;
+  }
+  if (config.jwtSecret) {
+    warnings.push({
+      level: 'info',
+      message:
+        'JWT secret loaded from security.json (legacy format). Consider setting VERITAS_JWT_SECRET env var.',
+    });
+    return warnings;
+  }
+
+  // No env var, no persisted config — will be ephemeral
+  warnings.push({
+    level: 'critical',
+    message:
+      'No VERITAS_JWT_SECRET env var set and no persisted secret found. JWT secret will be generated at runtime (ephemeral) — all sessions will be invalidated on server restart. Set VERITAS_JWT_SECRET in .env for persistence.',
+  });
+
+  return warnings;
 }
 
 /**

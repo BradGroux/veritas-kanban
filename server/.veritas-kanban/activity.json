@@ -1,5 +1,78 @@
 [
   {
+    "id": "activity_1769643822234_p72ucq50f",
+    "type": "status_changed",
+    "taskId": "task_20260128_N5mwaB",
+    "taskTitle": "SECURITY: Replace unsafe-inline/unsafe-eval CSP with nonces in dev mode",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:43:42.234Z"
+  },
+  {
+    "id": "activity_1769643804595_uw3xbec7l",
+    "type": "task_deleted",
+    "taskId": "task_20260128_DnZzn9",
+    "taskTitle": "<script>alert(1)</script>Test Task",
+    "timestamp": "2026-01-28T23:43:24.595Z"
+  },
+  {
+    "id": "activity_1769643795220_e1itoqlgf",
+    "type": "status_changed",
+    "taskId": "task_20260128_MIuR31",
+    "taskTitle": "SECURITY: Configure production API keys and persistent JWT secret",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:43:15.220Z"
+  },
+  {
+    "id": "activity_1769643787217_keetuu934",
+    "type": "comment_added",
+    "taskId": "task_20260128_HRYh0i",
+    "taskTitle": "SECURITY: Add server-side HTML sanitization for XSS payloads",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added server-side HTML sanitization using sanitize..."
+    },
+    "timestamp": "2026-01-28T23:43:07.217Z"
+  },
+  {
+    "id": "activity_1769643787199_lmnmclef9",
+    "type": "status_changed",
+    "taskId": "task_20260128_HRYh0i",
+    "taskTitle": "SECURITY: Add server-side HTML sanitization for XSS payloads",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:43:07.199Z"
+  },
+  {
+    "id": "activity_1769643755232_1bm32yfuf",
+    "type": "comment_added",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "details": {
+      "author": "Veritas",
+      "preview": "Replaced weak dev-admin-key with a cryptographical..."
+    },
+    "timestamp": "2026-01-28T23:42:35.232Z"
+  },
+  {
+    "id": "activity_1769643755221_5h1l14vqu",
+    "type": "status_changed",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:42:35.221Z"
+  },
+  {
     "id": "activity_1769643722992_qgjkxc0xc",
     "type": "task_deleted",
     "taskId": "task_20260128_EKURfN",
