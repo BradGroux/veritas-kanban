@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from 'express';
-import { getMetricsService } from '../services/metrics-service.js';
+import { getMetricsService } from '../services/metrics/index.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
 import {
@@ -118,13 +118,13 @@ router.get(
     const metrics = getMetricsService();
     const period = (req.query.period as '7d' | '30d') || '7d';
     const project = req.query.project as string | undefined;
-    
+
     // Validate period
     if (period !== '7d' && period !== '30d') {
       res.status(400).json({ error: 'Period must be 7d or 30d' });
       return;
     }
-    
+
     const result = await metrics.getTrends(period, project);
     res.json(result);
   })
@@ -140,7 +140,12 @@ router.get(
   asyncHandler(async (req: ValidatedRequest<unknown, BudgetMetricsQuery>, res) => {
     const metrics = getMetricsService();
     const { project, tokenBudget, costBudget, warningThreshold } = req.validated.query!;
-    const result = await metrics.getBudgetMetrics(tokenBudget, costBudget, warningThreshold, project);
+    const result = await metrics.getBudgetMetrics(
+      tokenBudget,
+      costBudget,
+      warningThreshold,
+      project
+    );
     res.json(result);
   })
 );

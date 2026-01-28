@@ -1,5 +1,27 @@
 [
   {
+    "id": "activity_1769644316506_acjekqrgc",
+    "type": "comment_added",
+    "taskId": "task_20260128_iAxrNa",
+    "taskTitle": "QUALITY: Add API documentation (OpenAPI/Swagger)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added OpenAPI/Swagger documentation. Installed swa..."
+    },
+    "timestamp": "2026-01-28T23:51:56.506Z"
+  },
+  {
+    "id": "activity_1769644316492_21euvqh9m",
+    "type": "status_changed",
+    "taskId": "task_20260128_iAxrNa",
+    "taskTitle": "QUALITY: Add API documentation (OpenAPI/Swagger)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:51:56.492Z"
+  },
+  {
     "id": "activity_1769644076345_hjg8obc5o",
     "type": "status_changed",
     "taskId": "task_20260128_c_jMj5",

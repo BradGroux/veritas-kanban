@@ -1,4 +1,10 @@
-import { getMetricsService, type MetricsService, type TaskMetrics, type RunMetrics, type TokenMetrics } from './metrics-service.js';
+import {
+  getMetricsService,
+  type MetricsService,
+  type TaskMetrics,
+  type RunMetrics,
+  type TokenMetrics,
+} from './metrics/index.js';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
 import type { Task, TaskTelemetryEvent } from '@veritas-kanban/shared';
@@ -9,7 +15,7 @@ export interface DailyDigest {
     end: string;
   };
   hasActivity: boolean;
-  
+
   // Task stats
   tasks: {
     completed: number;
@@ -17,10 +23,10 @@ export interface DailyDigest {
     inProgress: number;
     blocked: number;
     total: number;
-    completedTitles: string[];  // Top accomplishments
-    blockedTitles: string[];    // Blocked items
+    completedTitles: string[]; // Top accomplishments
+    blockedTitles: string[]; // Blocked items
   };
-  
+
   // Agent run stats
   runs: {
     total: number;
@@ -34,7 +40,7 @@ export interface DailyDigest {
       successRate: number;
     }>;
   };
-  
+
   // Token usage stats
   tokens: {
     total: number;
@@ -45,7 +51,7 @@ export interface DailyDigest {
       total: number;
     }>;
   };
-  
+
   // Failures and issues
   issues: {
     failedRuns: Array<{
@@ -100,34 +106,32 @@ export class DigestService {
     ]);
 
     // Get task events from last 24h
-    const taskEvents = events.filter(e => 
-      e.type === 'task.created' || 
-      e.type === 'task.status_changed'
+    const taskEvents = events.filter(
+      (e) => e.type === 'task.created' || e.type === 'task.status_changed'
     ) as TaskTelemetryEvent[];
 
     // Count task changes
-    const createdCount = taskEvents.filter(e => e.type === 'task.created').length;
-    const completedCount = taskEvents.filter(e => 
-      e.type === 'task.status_changed' && e.status === 'done'
+    const createdCount = taskEvents.filter((e) => e.type === 'task.created').length;
+    const completedCount = taskEvents.filter(
+      (e) => e.type === 'task.status_changed' && e.status === 'done'
     ).length;
 
     // Get current task list for titles
     const allTasks = await this.taskService.listTasks();
-    
+
     // Get recently completed tasks (status is done and updated in last 24h)
-    const recentlyCompleted = allTasks.filter(t => 
-      t.status === 'done' && 
-      new Date(t.updated).toISOString() >= since
+    const recentlyCompleted = allTasks.filter(
+      (t) => t.status === 'done' && new Date(t.updated).toISOString() >= since
     );
-    
+
     // Get blocked tasks
-    const blockedTasks = allTasks.filter(t => t.status === 'blocked');
-    
+    const blockedTasks = allTasks.filter((t) => t.status === 'blocked');
+
     // Get in-progress tasks
-    const inProgressTasks = allTasks.filter(t => t.status === 'in-progress');
+    const inProgressTasks = allTasks.filter((t) => t.status === 'in-progress');
 
     // Determine if there's any activity
-    const hasActivity = 
+    const hasActivity =
       createdCount > 0 ||
       completedCount > 0 ||
       metricsData.runs.runs > 0 ||
@@ -145,8 +149,8 @@ export class DigestService {
         inProgress: inProgressTasks.length,
         blocked: blockedTasks.length,
         total: allTasks.length,
-        completedTitles: recentlyCompleted.slice(0, 5).map(t => t.title),
-        blockedTitles: blockedTasks.slice(0, 5).map(t => t.title),
+        completedTitles: recentlyCompleted.slice(0, 5).map((t) => t.title),
+        blockedTitles: blockedTasks.slice(0, 5).map((t) => t.title),
       },
       runs: {
         total: metricsData.runs.runs,
@@ -154,7 +158,7 @@ export class DigestService {
         failures: metricsData.runs.failures,
         errors: metricsData.runs.errors,
         successRate: metricsData.runs.successRate,
-        byAgent: metricsData.runs.byAgent.map(a => ({
+        byAgent: metricsData.runs.byAgent.map((a) => ({
           agent: a.agent,
           runs: a.runs,
           successRate: a.successRate,
@@ -164,13 +168,13 @@ export class DigestService {
         total: metricsData.tokens.totalTokens,
         input: metricsData.tokens.inputTokens,
         output: metricsData.tokens.outputTokens,
-        byAgent: metricsData.tokens.byAgent.map(a => ({
+        byAgent: metricsData.tokens.byAgent.map((a) => ({
           agent: a.agent,
           total: a.totalTokens,
         })),
       },
       issues: {
-        failedRuns: failedRuns.slice(0, 5).map(r => ({
+        failedRuns: failedRuns.slice(0, 5).map((r) => ({
           agent: r.agent,
           taskId: r.taskId,
           error: r.errorMessage,
@@ -192,7 +196,7 @@ export class DigestService {
     }
 
     const lines: string[] = [];
-    
+
     // Header
     const startDate = new Date(digest.period.start).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -215,7 +219,7 @@ export class DigestService {
     // Top Accomplishments
     if (digest.tasks.completedTitles.length > 0) {
       lines.push('### 🏆 Accomplishments');
-      digest.tasks.completedTitles.forEach(title => {
+      digest.tasks.completedTitles.forEach((title) => {
         lines.push(`- ${title}`);
       });
       lines.push('');
@@ -227,10 +231,10 @@ export class DigestService {
       const successPct = (digest.runs.successRate * 100).toFixed(0);
       lines.push(`- **Total:** ${digest.runs.total} runs`);
       lines.push(`- **Success Rate:** ${successPct}%`);
-      
+
       if (digest.runs.byAgent.length > 0) {
         lines.push('- **By Agent:**');
-        digest.runs.byAgent.forEach(a => {
+        digest.runs.byAgent.forEach((a) => {
           const pct = (a.successRate * 100).toFixed(0);
           lines.push(`  - ${a.agent}: ${a.runs} runs (${pct}% success)`);
         });
@@ -246,10 +250,10 @@ export class DigestService {
       const outputFormatted = this.formatNumber(digest.tokens.output);
       lines.push(`- **Total:** ${totalFormatted} tokens`);
       lines.push(`- **Input:** ${inputFormatted} | **Output:** ${outputFormatted}`);
-      
+
       if (digest.tokens.byAgent.length > 0) {
         lines.push('- **By Agent:**');
-        digest.tokens.byAgent.forEach(a => {
+        digest.tokens.byAgent.forEach((a) => {
           const formatted = this.formatNumber(a.total);
           lines.push(`  - ${a.agent}: ${formatted}`);
         });
@@ -260,7 +264,7 @@ export class DigestService {
     // Blocked Items
     if (digest.tasks.blockedTitles.length > 0) {
       lines.push('## 🚫 Blocked Items');
-      digest.tasks.blockedTitles.forEach(title => {
+      digest.tasks.blockedTitles.forEach((title) => {
         lines.push(`- ${title}`);
       });
       lines.push('');
@@ -269,7 +273,7 @@ export class DigestService {
     // Failed Runs
     if (digest.issues.failedRuns.length > 0) {
       lines.push('## ⚠️ Failed Runs');
-      digest.issues.failedRuns.forEach(run => {
+      digest.issues.failedRuns.forEach((run) => {
         const time = new Date(run.timestamp).toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
