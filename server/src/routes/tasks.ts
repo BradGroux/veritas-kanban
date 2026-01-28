@@ -9,6 +9,7 @@ import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { setLastModified } from '../middleware/cache-control.js';
+import { sanitizeTaskFields } from '../utils/sanitize.js';
 
 const router: RouterType = Router();
 const taskService = new TaskService();
@@ -327,6 +328,8 @@ router.post(
       }
       throw error;
     }
+    // Sanitize user-provided text fields to prevent stored XSS
+    sanitizeTaskFields(input);
     const task = await taskService.createTask(input);
     broadcastTaskChange('created', task.id);
 
@@ -354,6 +357,8 @@ router.patch(
       }
       throw error;
     }
+    // Sanitize user-provided text fields to prevent stored XSS
+    sanitizeTaskFields(input);
 
     const oldTask = await taskService.getTask(req.params.id as string);
     if (!oldTask) {

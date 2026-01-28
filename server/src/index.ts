@@ -26,6 +26,7 @@ import {
   authenticateWebSocket,
   validateWebSocketOrigin,
   getAuthStatus,
+  checkAdminKeyStrength,
   type AuthenticatedWebSocket,
 } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
@@ -586,6 +587,16 @@ server.listen(PORT, () => {
         { localhostRole: authStatus.localhostRole },
         'Localhost bypass active — local connections can read data without authentication'
       );
+    }
+  }
+
+  // Security warnings for weak admin keys
+  const keyWarnings = checkAdminKeyStrength();
+  for (const warning of keyWarnings) {
+    if (warning.level === 'critical') {
+      log.warn({ security: 'admin-key' }, `⚠️  SECURITY: ${warning.message}`);
+    } else {
+      log.warn({ security: 'admin-key' }, warning.message);
     }
   }
 });

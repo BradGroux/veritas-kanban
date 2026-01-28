@@ -1,6 +1,13 @@
 import { type Page, type Route } from '@playwright/test';
 
 /**
+ * Admin API key for E2E tests.
+ * Read from VERITAS_ADMIN_KEY env var (set by playwright.config.ts via dotenv).
+ * Falls back to 'dev-admin-key' only for backwards compatibility.
+ */
+const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY || 'dev-admin-key';
+
+/**
  * Bypass authentication for E2E tests.
  *
  * Strategy: intercept the /api/auth/status call and return a response
@@ -22,7 +29,7 @@ export async function bypassAuth(page: Page): Promise<void> {
         sessionExpiry: new Date(Date.now() + 86400000).toISOString(),
         authEnabled: true,
       }),
-    }),
+    })
   );
 
   // Add 429 retry interceptor for all API calls from the browser.
@@ -58,11 +65,7 @@ function sleep(ms: number): Promise<void> {
 /**
  * Retry a page.request call with exponential backoff on 429 responses.
  */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3,
-  baseDelay = 1000,
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const result = await fn();
     // Check if it's a Playwright APIResponse with a status method
@@ -86,7 +89,7 @@ async function withRetry<T>(
  */
 export async function seedTestTask(
   page: Page,
-  overrides: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {}
 ): Promise<Record<string, unknown>> {
   const taskData = {
     title: `E2E Test Task ${Date.now()}`,
@@ -99,9 +102,9 @@ export async function seedTestTask(
 
   const response = await withRetry(() =>
     page.request.post('/api/tasks', {
-      headers: { 'X-API-Key': 'dev-admin-key' },
+      headers: { 'X-API-Key': ADMIN_KEY },
       data: taskData,
-    }),
+    })
   );
 
   if (!response.ok()) {
@@ -118,7 +121,7 @@ export async function seedTestTask(
 export async function deleteTask(page: Page, taskId: string): Promise<void> {
   await withRetry(() =>
     page.request.delete(`/api/tasks/${taskId}`, {
-      headers: { 'X-API-Key': 'dev-admin-key' },
-    }),
+      headers: { 'X-API-Key': ADMIN_KEY },
+    })
   );
 }

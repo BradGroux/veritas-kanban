@@ -1,5 +1,139 @@
 [
   {
+    "id": "activity_1769643722992_qgjkxc0xc",
+    "type": "task_deleted",
+    "taskId": "task_20260128_EKURfN",
+    "taskTitle": "Implement feature X",
+    "timestamp": "2026-01-28T23:42:02.992Z"
+  },
+  {
+    "id": "activity_1769643722984_kkv9222kt",
+    "type": "task_deleted",
+    "taskId": "task_20260128_SN_PU_",
+    "taskTitle": "hover me",
+    "timestamp": "2026-01-28T23:42:02.984Z"
+  },
+  {
+    "id": "activity_1769643722976_zodrla6ps",
+    "type": "task_deleted",
+    "taskId": "task_20260128_DitDSJ",
+    "taskTitle": "Updated Title",
+    "timestamp": "2026-01-28T23:42:02.976Z"
+  },
+  {
+    "id": "activity_1769643722961_w31463dd5",
+    "type": "task_updated",
+    "taskId": "task_20260128_DitDSJ",
+    "taskTitle": "Updated Title",
+    "timestamp": "2026-01-28T23:42:02.961Z"
+  },
+  {
+    "id": "activity_1769643715088_rp3zx6xsn",
+    "type": "comment_added",
+    "taskId": "task_20260128_HRYh0i",
+    "taskTitle": "SECURITY: Add server-side HTML sanitization for XSS payloads",
+    "details": {
+      "author": "Hacker",
+      "preview": "Nice work!"
+    },
+    "timestamp": "2026-01-28T23:41:55.088Z"
+  },
+  {
+    "id": "activity_1769643715068_tkux5teuf",
+    "type": "task_created",
+    "taskId": "task_20260128_EKURfN",
+    "taskTitle": "Implement feature X",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T23:41:55.068Z"
+  },
+  {
+    "id": "activity_1769643715050_x4pqlkzjc",
+    "type": "task_created",
+    "taskId": "task_20260128_SN_PU_",
+    "taskTitle": "hover me",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T23:41:55.050Z"
+  },
+  {
+    "id": "activity_1769643715037_3uuo9vrge",
+    "type": "task_created",
+    "taskId": "task_20260128_DitDSJ",
+    "taskTitle": "Test Task",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T23:41:55.037Z"
+  },
+  {
+    "id": "activity_1769643665560_i2n8qxuvm",
+    "type": "task_created",
+    "taskId": "task_20260128_DnZzn9",
+    "taskTitle": "<script>alert(1)</script>Test Task",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T23:41:05.560Z"
+  },
+  {
+    "id": "activity_1769643644732_hfd6pevpo",
+    "type": "comment_added",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "details": {
+      "author": "Veritas",
+      "preview": "Testing new admin key - API access confirmed"
+    },
+    "timestamp": "2026-01-28T23:40:44.732Z"
+  },
+  {
+    "id": "activity_1769643618177_2cp2qp9d9",
+    "type": "task_updated",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "timestamp": "2026-01-28T23:40:18.177Z"
+  },
+  {
+    "id": "activity_1769643531978_kjsjbrdd0",
+    "type": "status_changed",
+    "taskId": "task_20260128_HRYh0i",
+    "taskTitle": "SECURITY: Add server-side HTML sanitization for XSS payloads",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:38:51.978Z"
+  },
+  {
+    "id": "activity_1769643503225_uownetmeh",
+    "type": "comment_added",
+    "taskId": "task_20260128_x5JkTP",
+    "taskTitle": "PERF: Reduce API payload over-fetching with field selection",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added pagination (?page=N&limit=N with RFC 5988 Li..."
+    },
+    "timestamp": "2026-01-28T23:38:23.225Z"
+  },
+  {
+    "id": "activity_1769643503209_ka1qh8gh7",
+    "type": "status_changed",
+    "taskId": "task_20260128_x5JkTP",
+    "taskTitle": "PERF: Reduce API payload over-fetching with field selection",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:38:23.209Z"
+  },
+  {
     "id": "activity_1769643424700_us0e8w6zd",
     "type": "status_changed",
     "taskId": "task_20260128_ilLJ0m",

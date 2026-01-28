@@ -1,4 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Load VERITAS_ADMIN_KEY from server/.env so E2E tests use the same key as the server
+if (!process.env.VERITAS_ADMIN_KEY) {
+  try {
+    const envContent = readFileSync(resolve(__dirname, 'server', '.env'), 'utf-8');
+    const match = envContent.match(/^VERITAS_ADMIN_KEY=(.+)$/m);
+    if (match) {
+      process.env.VERITAS_ADMIN_KEY = match[1].trim();
+    }
+  } catch {
+    // server/.env not found — fall through to default
+  }
+}
 
 /**
  * Playwright E2E test configuration for Veritas Kanban.
@@ -22,9 +37,9 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    // Auth bypass — tests run against the dev server with localhost bypass enabled
+    // Auth — read admin key from server/.env (loaded via dotenv above)
     extraHTTPHeaders: {
-      'X-API-Key': 'dev-admin-key',
+      'X-API-Key': process.env.VERITAS_ADMIN_KEY || 'dev-admin-key',
     },
   },
 
