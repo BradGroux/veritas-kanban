@@ -1277,6 +1277,64 @@ function TemplateItem({ template }: { template: TaskTemplate }) {
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const { settings: currentSettings } = useFeatureSettings();
+  const { debouncedUpdate } = useDebouncedFeatureUpdate();
+  const settingsFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportSettings = () => {
+    const blob = new Blob([JSON.stringify(currentSettings, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `veritas-kanban-settings-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSettings = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const imported = JSON.parse(text);
+      if (!imported || typeof imported !== 'object') {
+        alert('Invalid settings file: must be a JSON object');
+        return;
+      }
+      // Validate expected top-level keys
+      const validSections = ['board', 'tasks', 'agents', 'telemetry', 'notifications', 'archive'];
+      const importedKeys = Object.keys(imported);
+      const unknownKeys = importedKeys.filter(k => !validSections.includes(k));
+      if (unknownKeys.length > 0) {
+        alert(`Warning: Unknown sections will be ignored: ${unknownKeys.join(', ')}`);
+      }
+      const validPatch: Record<string, any> = {};
+      for (const key of importedKeys) {
+        if (validSections.includes(key)) {
+          validPatch[key] = imported[key];
+        }
+      }
+      if (Object.keys(validPatch).length === 0) {
+        alert('No valid settings found in file');
+        return;
+      }
+      if (confirm(`Import ${Object.keys(validPatch).length} setting sections: ${Object.keys(validPatch).join(', ')}?\n\nThis will overwrite current values.`)) {
+        debouncedUpdate(validPatch);
+        alert('Settings imported successfully!');
+      }
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Invalid JSON'}`);
+    } finally {
+      if (settingsFileInputRef.current) settingsFileInputRef.current.value = '';
+    }
+  };
+
+  const handleResetAll = () => {
+    debouncedUpdate({ ...DEFAULT_FEATURE_SETTINGS });
+  };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const currentIndex = TABS.findIndex(t => t.id === activeTab);
@@ -1340,6 +1398,55 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 );
               })}
             </nav>
+
+            {/* Import/Export/Reset */}
+            <div className="px-2 pt-3 mt-auto border-t space-y-1">
+              <input
+                ref={settingsFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImportSettings}
+                className="hidden"
+              />
+              <button
+                onClick={handleExportSettings}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors text-left"
+              >
+                <Download className="h-3.5 w-3.5 flex-shrink-0" />
+                Export Settings
+              </button>
+              <button
+                onClick={() => settingsFileInputRef.current?.click()}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors text-left"
+              >
+                <Upload className="h-3.5 w-3.5 flex-shrink-0" />
+                Import Settings
+              </button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />
+                    Reset All
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will reset ALL feature settings across every section back to their default values. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleResetAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Reset Everything
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
 
           {/* Mobile Tab Selector */}

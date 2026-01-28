@@ -1,5 +1,104 @@
 [
   {
+    "id": "activity_1769589334140_qw71wwjrf",
+    "type": "status_changed",
+    "taskId": "task_20260128_njhuR8",
+    "taskTitle": "US-1110: Settings import/export & reset",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T08:35:34.140Z"
+  },
+  {
+    "id": "activity_1769589320546_cy8qlf98x",
+    "type": "comment_added",
+    "taskId": "task_20260128_Kbjd3t",
+    "taskTitle": "US-1108: Auto-archive settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Auto-archive settings complete: auto-archive toggl..."
+    },
+    "timestamp": "2026-01-28T08:35:20.546Z"
+  },
+  {
+    "id": "activity_1769589320537_qxwtl297n",
+    "type": "comment_added",
+    "taskId": "task_20260128_itHuxN",
+    "taskTitle": "US-1107: Notification settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Notification settings tab complete: master toggle,..."
+    },
+    "timestamp": "2026-01-28T08:35:20.537Z"
+  },
+  {
+    "id": "activity_1769589320524_bmt32f2uc",
+    "type": "comment_added",
+    "taskId": "task_20260128_ndyIRl",
+    "taskTitle": "US-1106: Telemetry & activity settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Telemetry & activity settings wired server-side: e..."
+    },
+    "timestamp": "2026-01-28T08:35:20.524Z"
+  },
+  {
+    "id": "activity_1769589320510_zs326om90",
+    "type": "comment_added",
+    "taskId": "task_20260128_HaNM-g",
+    "taskTitle": "US-1105: Agent & git settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Agent & git settings tab complete: timeout, auto-c..."
+    },
+    "timestamp": "2026-01-28T08:35:20.510Z"
+  },
+  {
+    "id": "activity_1769589312604_8nhvt8qs7",
+    "type": "status_changed",
+    "taskId": "task_20260128_Kbjd3t",
+    "taskTitle": "US-1108: Auto-archive settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:35:12.604Z"
+  },
+  {
+    "id": "activity_1769589312589_i4j1dr456",
+    "type": "status_changed",
+    "taskId": "task_20260128_itHuxN",
+    "taskTitle": "US-1107: Notification settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:35:12.589Z"
+  },
+  {
+    "id": "activity_1769589312571_sp30si9h8",
+    "type": "status_changed",
+    "taskId": "task_20260128_ndyIRl",
+    "taskTitle": "US-1106: Telemetry & activity settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:35:12.571Z"
+  },
+  {
+    "id": "activity_1769589312540_ii0ufqkn4",
+    "type": "status_changed",
+    "taskId": "task_20260128_HaNM-g",
+    "taskTitle": "US-1105: Agent & git settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:35:12.540Z"
+  },
+  {
     "id": "activity_1769589172887_jp4y9jj7c",
     "type": "comment_added",
     "taskId": "task_20260128_vYzfwx",
