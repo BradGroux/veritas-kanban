@@ -1,5 +1,16 @@
 [
   {
+    "id": "activity_1769583799062_q8zwukzj2",
+    "type": "status_changed",
+    "taskId": "task_20260128_4qCzGr",
+    "taskTitle": "BUG: Can't re-arrange tasks in the columns",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T07:03:19.062Z"
+  },
+  {
     "id": "activity_1769583656790_sodxngoqt",
     "type": "comment_added",
     "taskId": "task_20260128_RrQUWH",
@@ -1101,17 +1112,5 @@
       "project": "veritas-kanban"
     },
     "timestamp": "2026-01-28T06:52:34.370Z"
-  },
-  {
-    "id": "activity_1769583154358_6js96qaqo",
-    "type": "task_created",
-    "taskId": "task_20260128_sDOpsM",
-    "taskTitle": "US-301: Agent configuration",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-28T06:52:34.358Z"
   }
 ]

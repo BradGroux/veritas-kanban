@@ -1,4 +1,5 @@
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -39,17 +40,23 @@ const priorityColors: Record<TaskPriority, string> = {
 };
 
 export function TaskCard({ task, isDragging, onClick, isSelected, isBlocked, blockerTitles, taskTypes = [], projects = [] }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging: isCurrentlyDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isCurrentlyDragging,
+  } = useSortable({
     id: task.id,
   });
   const { isSelecting, toggleSelect, isSelected: isBulkSelected } = useBulkActions();
   const isChecked = isBulkSelected(task.id);
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
-    : undefined;
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const handleClick = () => {
     if (isCurrentlyDragging || isDragging) return;

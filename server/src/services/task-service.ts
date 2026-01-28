@@ -126,6 +126,7 @@ export class TaskService {
       timeTracking: data.timeTracking,
       comments: data.comments,
       attachments: data.attachments,
+      position: data.position,
     };
   }
 
@@ -531,6 +532,25 @@ export class TaskService {
     };
 
     return this.updateTask(taskId, { timeTracking }) as Promise<Task>;
+  }
+
+  /**
+   * Reorder tasks within a status column.
+   * Accepts an ordered array of task IDs and assigns sequential position values.
+   */
+  async reorderTasks(orderedIds: string[]): Promise<Task[]> {
+    const tasks = await this.listTasks();
+    const updated: Task[] = [];
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      const task = tasks.find(t => t.id === orderedIds[i]);
+      if (task && task.position !== i) {
+        const result = await this.updateTask(task.id, { position: i });
+        if (result) updated.push(result);
+      }
+    }
+
+    return updated;
   }
 
   /**

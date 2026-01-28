@@ -153,6 +153,9 @@ export interface Task {
 
   // Attachments
   attachments?: Attachment[];
+
+  // Position within column (for drag-and-drop ordering)
+  position?: number;
 }
 
 export interface ReviewComment {
@@ -208,6 +211,7 @@ export interface UpdateTaskInput {
   timeTracking?: TimeTracking;
   comments?: Comment[];
   attachments?: Attachment[];
+  position?: number;
 }
 
 export interface TaskFilters {

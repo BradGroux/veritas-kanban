@@ -78,6 +78,7 @@ const updateTaskSchema = z.object({
   autoCompleteOnSubtasks: z.boolean().optional(),
   blockedBy: z.array(z.string()).optional(),
   automation: automationSchema,
+  position: z.number().optional(),
 });
 
 // GET /api/tasks - List all tasks
@@ -127,6 +128,21 @@ router.post('/archive/sprint/:sprint', async (req, res) => {
   } catch (error: any) {
     console.error('Error archiving sprint:', error);
     res.status(400).json({ error: error.message || 'Failed to archive sprint' });
+  }
+});
+
+// POST /api/tasks/reorder - Reorder tasks within a column
+router.post('/reorder', async (req, res) => {
+  try {
+    const { orderedIds } = req.body as { orderedIds: string[] };
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array of task IDs' });
+    }
+    const updated = await taskService.reorderTasks(orderedIds);
+    res.json({ updated: updated.length });
+  } catch (error) {
+    console.error('Error reordering tasks:', error);
+    res.status(500).json({ error: 'Failed to reorder tasks' });
   }
 });
 

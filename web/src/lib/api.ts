@@ -162,6 +162,15 @@ export const api = {
       return handleResponse(response);
     },
 
+    reorder: async (orderedIds: string[]): Promise<{ updated: number }> => {
+      const response = await fetch(`${API_BASE}/tasks/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+      return handleResponse<{ updated: number }>(response);
+    },
+
     applyTemplate: async (taskId: string, templateId: string, templateName: string, fieldsChanged: string[]): Promise<void> => {
       const response = await fetch(`${API_BASE}/tasks/${taskId}/apply-template`, {
         method: 'POST',

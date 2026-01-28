@@ -324,3 +324,4 @@
 {"type":"task.status_changed","taskId":"task_20260128_RrQUWH","project":"veritas-kanban","status":"in-progress","previousStatus":"todo","id":"evt_fACf200LynFc","timestamp":"2026-01-28T06:59:40.854Z"}
 {"type":"task.created","taskId":"task_20260128_2KlsnC","project":"veritas-kanban","status":"todo","id":"evt_VBQu2RueIP9e","timestamp":"2026-01-28T07:00:44.124Z"}
 {"type":"task.status_changed","taskId":"task_20260128_RrQUWH","project":"veritas-kanban","status":"done","previousStatus":"in-progress","id":"evt_ivWzJDm23uUA","timestamp":"2026-01-28T07:00:56.780Z"}
+{"type":"task.status_changed","taskId":"task_20260128_4qCzGr","project":"veritas-kanban","status":"in-progress","previousStatus":"todo","id":"evt_QwVFXfSlJrBW","timestamp":"2026-01-28T07:03:19.062Z"}

@@ -176,6 +176,27 @@ export function useDeleteComment() {
   });
 }
 
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => api.tasks.reorder(orderedIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+function sortByPosition(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const posA = a.position ?? Number.MAX_SAFE_INTEGER;
+    const posB = b.position ?? Number.MAX_SAFE_INTEGER;
+    if (posA !== posB) return posA - posB;
+    // Fallback: newer tasks first (preserve existing behavior for un-positioned tasks)
+    return new Date(b.updated).getTime() - new Date(a.updated).getTime();
+  });
+}
+
 export function useTasksByStatus(tasks: Task[] | undefined) {
   if (!tasks) {
     return {
@@ -187,10 +208,10 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
   }
 
   return {
-    todo: tasks.filter(t => t.status === 'todo'),
-    'in-progress': tasks.filter(t => t.status === 'in-progress'),
-    review: tasks.filter(t => t.status === 'review'),
-    done: tasks.filter(t => t.status === 'done'),
+    todo: sortByPosition(tasks.filter(t => t.status === 'todo')),
+    'in-progress': sortByPosition(tasks.filter(t => t.status === 'in-progress')),
+    review: sortByPosition(tasks.filter(t => t.status === 'review')),
+    done: sortByPosition(tasks.filter(t => t.status === 'done')),
   };
 }
 
