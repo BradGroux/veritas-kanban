@@ -195,7 +195,7 @@ describe('JWT Secret Rotation', () => {
       expect(config.jwtSecrets!.find(s => s.version === 1)).toBeUndefined();
     });
 
-    it('should support custom grace period', () => {
+    it('should support custom grace period (short)', () => {
       const secret1 = crypto.randomBytes(32).toString('hex');
       setConfig({
         jwtSecrets: [
@@ -204,16 +204,39 @@ describe('JWT Secret Rotation', () => {
         jwtSecretVersion: 1,
       });
 
-      // 0ms grace period
-      const result = rotateJwtSecret(0);
+      // 1 hour grace period
+      const oneHourMs = 60 * 60 * 1000;
+      const result = rotateJwtSecret(oneHourMs);
       expect(result.success).toBe(true);
 
       const config = getSecurityConfig();
       const oldEntry = config.jwtSecrets!.find(s => s.version === 1);
+      expect(oldEntry).toBeDefined();
       expect(oldEntry!.expiresAt).toBeDefined();
-      // With 0 grace, the expiresAt should be approximately now
+      // expiresAt should be approximately 1 hour from now
       const expiresAt = new Date(oldEntry!.expiresAt!).getTime();
-      expect(Math.abs(expiresAt - Date.now())).toBeLessThan(5000); // within 5 seconds
+      const expectedExpiry = Date.now() + oneHourMs;
+      expect(Math.abs(expiresAt - expectedExpiry)).toBeLessThan(5000); // within 5 seconds
+    });
+
+    it('should immediately prune with 0ms grace period', () => {
+      const secret1 = crypto.randomBytes(32).toString('hex');
+      setConfig({
+        jwtSecrets: [
+          { secret: secret1, version: 1, createdAt: '2026-01-01T00:00:00Z' },
+        ],
+        jwtSecretVersion: 1,
+      });
+
+      // 0ms grace period — old secret should be immediately pruned
+      const result = rotateJwtSecret(0);
+      expect(result.success).toBe(true);
+      expect(result.prunedCount).toBe(1);
+
+      const config = getSecurityConfig();
+      // Only the new current secret should remain
+      expect(config.jwtSecrets).toHaveLength(1);
+      expect(config.jwtSecrets![0].version).toBe(2);
     });
   });
 

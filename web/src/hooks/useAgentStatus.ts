@@ -11,7 +11,7 @@ const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 /** How often to check for staleness (ms) */
 const STALE_CHECK_INTERVAL_MS = 30_000;
 
-export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'error';
+export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
 
 export interface SubAgent {
   id: string;

@@ -229,9 +229,10 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
     if (error) return 'error';
     if (!data) return 'idle';
     if (data.status === 'error') return 'error';
-    if (data.subAgentCount > 0 || data.status === 'sub-agent') return 'subagents';
-    if (data.status === 'sub-agent') return 'subagents';
-    return data.status as AgentState;
+    if (data.subAgentCount > 0 || data.status === ('sub-agent' as string)) return 'subagents';
+    const s = data.status as string;
+    if (s === 'idle' || s === 'working' || s === 'thinking' || s === 'error') return s as AgentState;
+    return 'idle';
   }, [data, error]);
 
   const config = STATE_CONFIG[state];
