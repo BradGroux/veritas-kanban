@@ -201,4 +201,59 @@ describe('ConfigService', () => {
       expect(results[1]).toEqual(results[2]);
     });
   });
+
+  describe('Cache Behavior', () => {
+    it('should return cached config within TTL', async () => {
+      // First read populates cache
+      const config1 = await service.getConfig();
+      
+      // Modify file on disk behind the service's back
+      const raw = JSON.parse(await fs.readFile(configFile, 'utf-8'));
+      raw.defaultAgent = 'amp';
+      // Mark as our own write so the file watcher ignores it,
+      // simulating a read within the TTL window
+      (service as any).lastWriteTime = Date.now();
+      await fs.writeFile(configFile, JSON.stringify(raw, null, 2));
+      
+      // Should still return the cached version (TTL hasn't expired)
+      const config2 = await service.getConfig();
+      expect(config2.defaultAgent).toBe(config1.defaultAgent);
+    });
+
+    it('should re-read from disk after invalidateCache()', async () => {
+      const config1 = await service.getConfig();
+      expect(config1.defaultAgent).toBe('claude-code');
+
+      // Modify file on disk
+      const raw = JSON.parse(await fs.readFile(configFile, 'utf-8'));
+      raw.defaultAgent = 'amp';
+      // Suppress watcher for this manual write
+      (service as any).lastWriteTime = Date.now();
+      await fs.writeFile(configFile, JSON.stringify(raw, null, 2));
+
+      // Explicitly invalidate
+      service.invalidateCache();
+
+      const config2 = await service.getConfig();
+      expect(config2.defaultAgent).toBe('amp');
+    });
+
+    it('should update cache on saveConfig without re-reading disk', async () => {
+      const config = await service.getConfig();
+      config.defaultAgent = 'gemini';
+      await service.saveConfig(config);
+
+      // Should return updated value from cache, not disk
+      const config2 = await service.getConfig();
+      expect(config2.defaultAgent).toBe('gemini');
+    });
+
+    it('should clean up watcher on dispose()', async () => {
+      await service.getConfig(); // triggers watcher setup
+      service.dispose();
+      // After dispose, cache should be cleared
+      expect((service as any).config).toBeNull();
+      expect((service as any).watcher).toBeNull();
+    });
+  });
 });

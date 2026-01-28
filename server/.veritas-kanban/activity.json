@@ -1,5 +1,16 @@
 [
   {
+    "id": "activity_1769624079642_g7c232tud",
+    "type": "status_changed",
+    "taskId": "task_20260128_9t1KEa",
+    "taskTitle": "SECURITY: Add server-side MIME type validation for attachments",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T18:14:39.642Z"
+  },
+  {
     "id": "activity_1769623785282_5ct7g0hqu",
     "type": "comment_added",
     "taskId": "task_20260128_swwATe",
