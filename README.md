@@ -97,6 +97,38 @@ veritas-kanban/
     └── agent-requests/
 ```
 
+## API Versioning
+
+All API endpoints support versioned paths. The current (and default) version is **v1**.
+
+### URL Patterns
+
+| Path | Description |
+|------|-------------|
+| `/api/v1/tasks` | Canonical versioned endpoint |
+| `/api/tasks` | Backwards-compatible alias (same as v1) |
+
+Both paths return identical responses. Existing clients using `/api/...` will continue to work without changes.
+
+### Version Header
+
+Every API response includes an `X-API-Version: v1` header. Clients may optionally send an `X-API-Version` request header to explicitly request a version:
+
+```bash
+# Explicit version request
+curl -H "X-API-Version: v1" http://localhost:3001/api/tasks
+
+# Requesting an unsupported version returns 400
+curl -H "X-API-Version: v99" http://localhost:3001/api/tasks
+# → {"error":"Unsupported API version","supported":["v1"]}
+```
+
+### Versioning Strategy
+
+- **Non-breaking changes** (new fields, new endpoints) are added to the current version.
+- **Breaking changes** will introduce a new version (`v2`). The previous version will remain available during a deprecation period.
+- The unversioned `/api/...` alias always points to the latest stable version.
+
 ## CLI
 
 ```bash

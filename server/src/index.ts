@@ -23,6 +23,14 @@ import { apiRateLimit } from './middleware/rate-limit.js';
 import { apiVersionMiddleware } from './middleware/api-version.js';
 import { apiCacheHeaders } from './middleware/cache-control.js';
 import type { AgentOutput } from './services/clawdbot-agent-service.js';
+import { taskArchiveRoutes } from './routes/task-archive.js';
+import { taskTimeRoutes } from './routes/task-time.js';
+import { taskRoutes } from './routes/tasks.js';
+import { taskCommentRoutes } from './routes/task-comments.js';
+import { taskSubtaskRoutes } from './routes/task-subtasks.js';
+import attachmentRoutes from './routes/attachments.js';
+import { configRoutes } from './routes/config.js';
+import { agentRoutes } from './routes/agents.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;

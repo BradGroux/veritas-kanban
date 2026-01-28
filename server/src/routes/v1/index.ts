@@ -8,7 +8,7 @@
  *   - Archive and time routes MUST come before main taskRoutes so that
  *     /archived and /time/summary are matched before the /:id param.
  */
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 
 // Task routes (order-sensitive — see note above)
 import { taskArchiveRoutes } from '../task-archive.js';
@@ -41,7 +41,7 @@ import { agentStatusRoutes } from '../agent-status.js';
 import { statusHistoryRoutes } from '../status-history.js';
 import digestRoutes from '../digest.js';
 
-const v1Router = Router();
+const v1Router: IRouter = Router();
 
 // ── Task routes (order-sensitive) ────────────────────────────
 v1Router.use('/tasks', taskArchiveRoutes);

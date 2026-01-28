@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769624362117_qqkovb929",
+    "type": "task_created",
+    "taskId": "task_20260128_Mobksx",
+    "taskTitle": "test-cache-check",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T18:19:22.117Z"
+  },
+  {
+    "id": "activity_1769624358520_c3xljtn9p",
+    "type": "status_changed",
+    "taskId": "task_20260128_vIi7cG",
+    "taskTitle": "PERF: Memoize TaskCard cardMetrics to prevent unnecessary re-renders",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T18:19:18.520Z"
+  },
+  {
+    "id": "activity_1769624333283_mrcee6a4t",
+    "type": "comment_added",
+    "taskId": "task_20260128_HUc92E",
+    "taskTitle": "PERF: Implement in-memory caching for TaskService with file watchers",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added in-memory Map<taskId, Task> cache with lazy ..."
+    },
+    "timestamp": "2026-01-28T18:18:53.283Z"
+  },
+  {
+    "id": "activity_1769624328434_x39kzrrt3",
+    "type": "status_changed",
+    "taskId": "task_20260128_HUc92E",
+    "taskTitle": "PERF: Implement in-memory caching for TaskService with file watchers",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T18:18:48.434Z"
+  },
+  {
     "id": "activity_1769624199491_2nk1070ar",
     "type": "status_changed",
     "taskId": "task_20260128_pz20DY",
