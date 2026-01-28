@@ -21,13 +21,21 @@ import { Switch } from '@/components/ui/switch';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useUpdateTask } from '@/hooks/useTasks';
 import type { Task, Subtask } from '@veritas-kanban/shared';
-import { FileCode, AlertCircle, Plus, Minus, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  FileCode,
+  AlertCircle,
+  Plus,
+  Minus,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { api } from '@/lib/api';
-import { 
-  interpolateVariables, 
+import {
+  interpolateVariables,
   extractCustomVariables,
-  type VariableContext 
+  type VariableContext,
 } from '@/lib/template-variables';
 import { getCategoryIcon } from '@/lib/template-categories';
 
@@ -52,7 +60,12 @@ interface MergePreview {
   existingSubtasks: number;
 }
 
-export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: ApplyTemplateDialogProps) {
+export function ApplyTemplateDialog({
+  task,
+  open,
+  onOpenChange,
+  onApplied,
+}: ApplyTemplateDialogProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [customVars, setCustomVars] = useState<Record<string, string>>({});
@@ -67,13 +80,13 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
   const filteredTemplates = useMemo(() => {
     if (!templates) return [];
     if (categoryFilter === 'all') return templates;
-    return templates.filter(t => (t.category || 'custom') === categoryFilter);
+    return templates.filter((t) => (t.category || 'custom') === categoryFilter);
   }, [templates, categoryFilter]);
 
   // Get the selected template
   const template = useMemo(() => {
     if (!selectedTemplate || !templates) return null;
-    return templates.find(t => t.id === selectedTemplate) || null;
+    return templates.find((t) => t.id === selectedTemplate) || null;
   }, [selectedTemplate, templates]);
 
   // Calculate merge preview
@@ -88,7 +101,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
     };
 
     const fields: MergedField[] = [];
-    
+
     // Title
     if (template.taskDefaults.descriptionTemplate) {
       const interpolatedTitle = task.title;
@@ -159,7 +172,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
     const existingSubtasks = task.subtasks?.length || 0;
 
     return {
-      fields: fields.filter(f => f.willChange),
+      fields: fields.filter((f) => f.willChange),
       subtasksAdded,
       existingSubtasks,
     };
@@ -168,22 +181,22 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
-    
-    const selected = templates?.find(t => t.id === templateId);
+
+    const selected = templates?.find((t) => t.id === templateId);
     if (!selected) return;
 
     // Extract custom variables from description template and subtasks
     const allTemplateText = [
       selected.taskDefaults.descriptionTemplate || '',
-      ...(selected.subtaskTemplates?.map(st => st.title) || [])
+      ...(selected.subtaskTemplates?.map((st) => st.title) || []),
     ].join(' ');
-    
+
     const customVarNames = extractCustomVariables(allTemplateText);
     setRequiredCustomVars(customVarNames);
-    
+
     // Initialize custom vars
     const initialCustomVars: Record<string, string> = {};
-    customVarNames.forEach(name => {
+    customVarNames.forEach((name) => {
       initialCustomVars[name] = '';
     });
     setCustomVars(initialCustomVars);
@@ -205,10 +218,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
 
     // Description
     if (template.taskDefaults.descriptionTemplate) {
-      const interpolated = interpolateVariables(
-        template.taskDefaults.descriptionTemplate,
-        context
-      );
+      const interpolated = interpolateVariables(template.taskDefaults.descriptionTemplate, context);
       if (forceOverwrite || !task.description) {
         updates.description = interpolated;
       }
@@ -234,13 +244,13 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
       const now = new Date().toISOString();
       const newSubtasks: Subtask[] = template.subtaskTemplates
         .sort((a, b) => a.order - b.order)
-        .map(st => ({
+        .map((st) => ({
           id: nanoid(),
           title: interpolateVariables(st.title, context),
           completed: false,
           created: now,
         }));
-      
+
       // Append to existing subtasks
       const existingSubtasks = task.subtasks || [];
       updates.subtasks = [...existingSubtasks, ...newSubtasks];
@@ -254,20 +264,15 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
 
     // Track which fields were changed for activity logging
     const changedFields = Object.keys(updates);
-    
+
     // Log activity
     try {
-      await api.tasks.applyTemplate(
-        task.id,
-        template.id,
-        template.name,
-        changedFields
-      );
+      await api.tasks.applyTemplate(task.id, template.id, template.name, changedFields);
     } catch (error) {
+      // Intentionally non-fatal: don't fail the whole operation if activity logging fails
       console.error('Failed to log template application:', error);
-      // Don't fail the whole operation if logging fails
     }
-    
+
     // Close dialog and notify parent
     onOpenChange(false);
     onApplied?.();
@@ -304,31 +309,48 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                 <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                 <div className="space-y-2">
                   <p className="font-medium text-sm">Apply Template Guide</p>
-                  
+
                   <div className="text-xs text-muted-foreground space-y-1.5">
                     <div>
                       <strong className="text-foreground">Safe by Default:</strong>
-                      <p className="mt-0.5">Templates only fill in empty fields — your existing task data is never overwritten unless you choose to.</p>
+                      <p className="mt-0.5">
+                        Templates only fill in empty fields — your existing task data is never
+                        overwritten unless you choose to.
+                      </p>
                     </div>
-                    
+
                     <div>
                       <strong className="text-foreground">Force Overwrite:</strong>
-                      <p className="mt-0.5">Toggle this on to replace existing values with template values. The changes preview shows exactly what will be modified before you apply.</p>
+                      <p className="mt-0.5">
+                        Toggle this on to replace existing values with template values. The changes
+                        preview shows exactly what will be modified before you apply.
+                      </p>
                     </div>
-                    
+
                     <div>
                       <strong className="text-foreground">Subtasks:</strong>
-                      <p className="mt-0.5">Template subtasks are <em>added</em> to your existing subtasks, never replaced. You'll see a count of how many will be appended.</p>
+                      <p className="mt-0.5">
+                        Template subtasks are <em>added</em> to your existing subtasks, never
+                        replaced. You'll see a count of how many will be appended.
+                      </p>
                     </div>
-                    
+
                     <div>
                       <strong className="text-foreground">Variables:</strong>
-                      <p className="mt-0.5">Templates with <code className="px-1 py-0.5 rounded bg-muted">{'{{date}}'}</code> or <code className="px-1 py-0.5 rounded bg-muted">{'{{custom:name}}'}</code> will prompt you for values before applying.</p>
+                      <p className="mt-0.5">
+                        Templates with{' '}
+                        <code className="px-1 py-0.5 rounded bg-muted">{'{{date}}'}</code> or{' '}
+                        <code className="px-1 py-0.5 rounded bg-muted">{'{{custom:name}}'}</code>{' '}
+                        will prompt you for values before applying.
+                      </p>
                     </div>
-                    
+
                     <div>
                       <strong className="text-foreground">Changes Preview:</strong>
-                      <p className="mt-0.5">A before/after diff appears below showing exactly what will change. Green lines are additions, red lines are removals.</p>
+                      <p className="mt-0.5">
+                        A before/after diff appears below showing exactly what will change. Green
+                        lines are additions, red lines are removals.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -345,10 +367,18 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
             </div>
             <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-                <TabsTrigger value="bug" className="text-xs">🐛</TabsTrigger>
-                <TabsTrigger value="feature" className="text-xs">✨</TabsTrigger>
-                <TabsTrigger value="sprint" className="text-xs">🔄</TabsTrigger>
+                <TabsTrigger value="all" className="text-xs">
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="bug" className="text-xs">
+                  🐛
+                </TabsTrigger>
+                <TabsTrigger value="feature" className="text-xs">
+                  ✨
+                </TabsTrigger>
+                <TabsTrigger value="sprint" className="text-xs">
+                  🔄
+                </TabsTrigger>
               </TabsList>
             </Tabs>
             <Select
@@ -367,15 +397,13 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
               <SelectContent>
                 <SelectItem value="none">No template selected</SelectItem>
                 {filteredTemplates
-                  .filter(t => !t.blueprint) // Exclude blueprint templates
+                  .filter((t) => !t.blueprint) // Exclude blueprint templates
                   .map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.category && `${getCategoryIcon(template.category)} `}
                       {template.name}
                       {template.description && (
-                        <span className="text-muted-foreground ml-2">
-                          — {template.description}
-                        </span>
+                        <span className="text-muted-foreground ml-2">— {template.description}</span>
                       )}
                     </SelectItem>
                   ))}
@@ -398,7 +426,9 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                   <Input
                     id={`var-${varName}`}
                     value={customVars[varName] || ''}
-                    onChange={(e) => setCustomVars(prev => ({ ...prev, [varName]: e.target.value }))}
+                    onChange={(e) =>
+                      setCustomVars((prev) => ({ ...prev, [varName]: e.target.value }))
+                    }
                     placeholder={`Enter ${varName}...`}
                     className="h-8"
                   />
@@ -416,10 +446,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                   Replace existing values with template values
                 </p>
               </div>
-              <Switch
-                checked={forceOverwrite}
-                onCheckedChange={setForceOverwrite}
-              />
+              <Switch checked={forceOverwrite} onCheckedChange={setForceOverwrite} />
             </div>
           )}
 
@@ -430,7 +457,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                 <AlertCircle className="h-4 w-4 text-blue-500" />
                 <Label className="text-sm font-medium">Changes Preview</Label>
               </div>
-              
+
               {mergePreview.fields.map((field) => (
                 <div key={field.field} className="text-sm border-l-2 border-primary/50 pl-3 py-1">
                   <div className="font-medium text-xs text-muted-foreground uppercase">
@@ -444,9 +471,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                   </div>
                   <div className="flex items-start gap-2">
                     <Plus className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-green-500/80 flex-1">
-                      {field.after}
-                    </span>
+                    <span className="text-green-500/80 flex-1">{field.after}</span>
                   </div>
                 </div>
               ))}
@@ -459,7 +484,8 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
                   <div className="flex items-center gap-2 mt-1">
                     <Plus className="h-3 w-3 text-blue-500" />
                     <span className="text-sm">
-                      Will add {mergePreview.subtasksAdded} subtasks to existing {mergePreview.existingSubtasks}
+                      Will add {mergePreview.subtasksAdded} subtasks to existing{' '}
+                      {mergePreview.existingSubtasks}
                     </span>
                   </div>
                 </div>
@@ -478,11 +504,7 @@ export function ApplyTemplateDialog({ task, open, onOpenChange, onApplied }: App
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            type="button"
-            onClick={handleApply}
-            disabled={!template || updateTask.isPending}
-          >
+          <Button type="button" onClick={handleApply} disabled={!template || updateTask.isPending}>
             {updateTask.isPending ? 'Applying...' : 'Apply Template'}
           </Button>
         </DialogFooter>

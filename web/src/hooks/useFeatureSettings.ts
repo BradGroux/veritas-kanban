@@ -51,8 +51,7 @@ export function useUpdateFeatureSettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (patch: Record<string, any>) =>
-      api.settings.updateFeatures(patch),
+    mutationFn: (patch: Partial<FeatureSettings>) => api.settings.updateFeatures(patch),
     onMutate: async (patch) => {
       // Cancel in-flight fetches
       await queryClient.cancelQueries({ queryKey: QUERY_KEY });
@@ -62,16 +61,17 @@ export function useUpdateFeatureSettings() {
 
       // Optimistically update
       if (previous) {
-        const optimistic = { ...previous };
-        for (const section of Object.keys(patch) as Array<keyof FeatureSettings>) {
-          if (section in optimistic && typeof patch[section] === 'object') {
-            (optimistic as any)[section] = {
-              ...(optimistic as any)[section],
-              ...patch[section],
+        const optimistic: Record<string, Record<string, unknown>> = { ...previous };
+        const patchRecord = patch as Record<string, Record<string, unknown>>;
+        for (const section of Object.keys(patchRecord)) {
+          if (section in optimistic && typeof patchRecord[section] === 'object') {
+            optimistic[section] = {
+              ...optimistic[section],
+              ...patchRecord[section],
             };
           }
         }
-        queryClient.setQueryData(QUERY_KEY, optimistic);
+        queryClient.setQueryData(QUERY_KEY, optimistic as unknown as FeatureSettings);
       }
 
       return { previous };
@@ -96,22 +96,23 @@ export function useUpdateFeatureSettings() {
 export function useDebouncedFeatureUpdate(delayMs = 500) {
   const update = useUpdateFeatureSettings();
   const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
-  const pendingRef = { current: {} as Record<string, any> };
+  const pendingRef = { current: {} as Record<string, Record<string, unknown>> };
 
   const flush = useCallback(() => {
     if (Object.keys(pendingRef.current).length > 0) {
-      update.mutate({ ...pendingRef.current });
+      update.mutate({ ...pendingRef.current } as Partial<FeatureSettings>);
       pendingRef.current = {};
     }
   }, [update]);
 
   const debouncedUpdate = useCallback(
-    (patch: Record<string, any>) => {
+    (patch: Partial<FeatureSettings>) => {
       // Merge into pending batch
-      for (const section of Object.keys(patch)) {
+      const patchRecord = patch as Record<string, Record<string, unknown>>;
+      for (const section of Object.keys(patchRecord)) {
         pendingRef.current[section] = {
           ...(pendingRef.current[section] || {}),
-          ...patch[section],
+          ...patchRecord[section],
         };
       }
 
@@ -121,7 +122,7 @@ export function useDebouncedFeatureUpdate(delayMs = 500) {
       }
       timeoutRef.current = setTimeout(flush, delayMs);
     },
-    [flush, delayMs],
+    [flush, delayMs]
   );
 
   return { debouncedUpdate, isPending: update.isPending };

@@ -17,7 +17,7 @@ export interface TraceStep {
 }
 
 export interface Trace {
-  traceId: string;       // Same as attemptId
+  traceId: string; // Same as attemptId
   taskId: string;
   agent: AgentType;
   project?: string;
@@ -64,6 +64,7 @@ export class TraceService {
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (enabled) {
+      // Intentionally silent: best-effort directory creation
       fs.mkdir(this.tracesDir, { recursive: true }).catch(() => {});
     }
   }
@@ -71,12 +72,7 @@ export class TraceService {
   /**
    * Start a new trace for an agent run
    */
-  startTrace(
-    attemptId: string,
-    taskId: string,
-    agent: AgentType,
-    project?: string
-  ): Trace | null {
+  startTrace(attemptId: string, taskId: string, agent: AgentType, project?: string): Trace | null {
     if (!this.enabled) return null;
 
     const trace: Trace = {
@@ -126,9 +122,7 @@ export class TraceService {
     if (!trace) return;
 
     // Find the last step of this type that hasn't ended
-    const step = [...trace.steps]
-      .reverse()
-      .find(s => s.type === stepType && !s.endedAt);
+    const step = [...trace.steps].reverse().find((s) => s.type === stepType && !s.endedAt);
 
     if (step) {
       step.endedAt = new Date().toISOString();
@@ -190,6 +184,7 @@ export class TraceService {
       const content = await fs.readFile(filepath, 'utf-8');
       return JSON.parse(content) as Trace;
     } catch {
+      // Intentionally silent: trace file may not exist on disk
       return null;
     }
   }

@@ -26,7 +26,7 @@ export function PRDialog({ task, open, onOpenChange }: PRDialogProps) {
   const [prTitle, setPrTitle] = useState(task.title);
   const [prBody, setPrBody] = useState(task.description || '');
   const [prDraft, setPrDraft] = useState(false);
-  
+
   const createPR = useCreatePR();
 
   const handleCreatePR = async () => {
@@ -40,8 +40,8 @@ export function PRDialog({ task, open, onOpenChange }: PRDialogProps) {
       onOpenChange(false);
       // Open the new PR in browser
       window.open(result.url, '_blank');
-    } catch (error) {
-      // Error is handled by mutation
+    } catch {
+      // Intentionally silent: error is handled by the mutation's onError callback
     }
   };
 
@@ -85,9 +85,7 @@ export function PRDialog({ task, open, onOpenChange }: PRDialogProps) {
             </Label>
           </div>
           {createPR.error && (
-            <p className="text-sm text-red-500">
-              {(createPR.error as Error).message}
-            </p>
+            <p className="text-sm text-red-500">{(createPR.error as Error).message}</p>
           )}
         </div>
         <DialogFooter>

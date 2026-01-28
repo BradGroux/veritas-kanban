@@ -9,7 +9,11 @@ import { validateMimeType, getAllowedTypesDescription } from './mime-validation.
 // Default paths - resolve to project root (one level up from server/)
 const DEFAULT_PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const DEFAULT_ATTACHMENTS_DIR = path.join(DEFAULT_PROJECT_ROOT, 'tasks', 'attachments');
-const DEFAULT_ARCHIVE_ATTACHMENTS_DIR = path.join(DEFAULT_PROJECT_ROOT, 'tasks', 'archive-attachments');
+const DEFAULT_ARCHIVE_ATTACHMENTS_DIR = path.join(
+  DEFAULT_PROJECT_ROOT,
+  'tasks',
+  'archive-attachments'
+);
 
 export interface AttachmentServiceOptions {
   attachmentsDir?: string;
@@ -58,8 +62,11 @@ export class AttachmentService {
   private validatePathWithinBase(resolvedPath: string, baseDir: string, context: string): void {
     const normalizedPath = path.normalize(resolvedPath);
     const normalizedBase = path.normalize(baseDir);
-    
-    if (!normalizedPath.startsWith(normalizedBase + path.sep) && normalizedPath !== normalizedBase) {
+
+    if (
+      !normalizedPath.startsWith(normalizedBase + path.sep) &&
+      normalizedPath !== normalizedBase
+    ) {
       console.error(`Path traversal attempt blocked: ${context}`, { resolvedPath, baseDir });
       throw new Error('Invalid path: access denied');
     }
@@ -148,12 +155,7 @@ export class AttachmentService {
     this.validateFile(file, currentAttachments);
 
     // Run magic-byte MIME validation
-    const result = await validateMimeType(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-      file.size,
-    );
+    const result = await validateMimeType(file.buffer, file.originalname, file.mimetype, file.size);
 
     if (!result.valid) {
       throw new Error(result.error || 'File type validation failed');
@@ -208,7 +210,11 @@ export class AttachmentService {
     await fs.mkdir(extractedDir, { recursive: true });
 
     const filepath = path.join(extractedDir, `${attachmentId}.json`);
-    await fs.writeFile(filepath, JSON.stringify({ text, extracted: new Date().toISOString() }), 'utf-8');
+    await fs.writeFile(
+      filepath,
+      JSON.stringify({ text, extracted: new Date().toISOString() }),
+      'utf-8'
+    );
   }
 
   /**
@@ -216,12 +222,13 @@ export class AttachmentService {
    */
   async getExtractedText(taskId: string, attachmentId: string): Promise<string | null> {
     const filepath = path.join(this.getExtractedTextDir(taskId), `${attachmentId}.json`);
-    
+
     try {
       const content = await fs.readFile(filepath, 'utf-8');
       const data = JSON.parse(content);
       return data.text || null;
     } catch {
+      // Intentionally silent: extracted text file may not exist
       return null;
     }
   }
@@ -234,10 +241,10 @@ export class AttachmentService {
     // Sanitize filename to prevent traversal
     const sanitizedFilename = this.sanitizeFilename(filename);
     const filePath = path.join(taskDir, sanitizedFilename);
-    
+
     // Double-check the resolved path stays within task directory
     this.validatePathWithinBase(filePath, taskDir, 'getAttachmentPath');
-    
+
     return filePath;
   }
 
@@ -302,10 +309,10 @@ export class AttachmentService {
     try {
       // Check if source directory exists
       await fs.access(sourceDir);
-      
+
       // Ensure parent directory exists
       await fs.mkdir(this.archiveAttachmentsDir, { recursive: true });
-      
+
       // Move directory
       await fs.rename(sourceDir, destDir);
     } catch (err) {
@@ -326,10 +333,10 @@ export class AttachmentService {
     try {
       // Check if source directory exists
       await fs.access(sourceDir);
-      
+
       // Ensure parent directory exists
       await fs.mkdir(this.attachmentsDir, { recursive: true });
-      
+
       // Move directory
       await fs.rename(sourceDir, destDir);
     } catch (err) {
@@ -345,7 +352,7 @@ export class AttachmentService {
    */
   async deleteAllAttachments(taskId: string): Promise<void> {
     const taskDir = this.getTaskAttachmentDir(taskId);
-    
+
     try {
       await fs.rm(taskDir, { recursive: true, force: true });
     } catch (err) {
@@ -358,12 +365,13 @@ export class AttachmentService {
    */
   async listFiles(taskId: string): Promise<string[]> {
     const taskDir = this.getTaskAttachmentDir(taskId);
-    
+
     try {
       const files = await fs.readdir(taskDir);
       // Filter out .extracted directory
-      return files.filter(f => f !== '.extracted');
+      return files.filter((f) => f !== '.extracted');
     } catch {
+      // Intentionally silent: directory may not exist — return empty list
       return [];
     }
   }

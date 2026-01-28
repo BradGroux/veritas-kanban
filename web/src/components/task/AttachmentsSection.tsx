@@ -1,5 +1,18 @@
 import { useState, useRef } from 'react';
-import { Paperclip, Upload, Trash2, Download, File, FileText, FileImage, FileCode, FileSpreadsheet, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import {
+  Paperclip,
+  Upload,
+  Trash2,
+  Download,
+  File,
+  FileText,
+  FileImage,
+  FileCode,
+  FileSpreadsheet,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
@@ -54,10 +67,13 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
     if (!expanded && extractedText === null && isDocument) {
       setLoadingText(true);
       try {
-        const response = await fetch(`http://localhost:3001/api/tasks/${taskId}/attachments/${attachment.id}/text`);
+        const response = await fetch(
+          `http://localhost:3001/api/tasks/${taskId}/attachments/${attachment.id}/text`
+        );
         const data = await response.json();
         setExtractedText(data.text || '(No text extracted)');
       } catch (error) {
+        console.error('[Attachments] Failed to load extracted text:', error);
         setExtractedText('(Failed to load text)');
       } finally {
         setLoadingText(false);
@@ -71,9 +87,7 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
   return (
     <div className="border rounded-md p-3 space-y-2">
       <div className="flex items-start gap-2">
-        <div className="text-muted-foreground mt-0.5">
-          {getFileIcon(attachment.mimeType)}
-        </div>
+        <div className="text-muted-foreground mt-0.5">{getFileIcon(attachment.mimeType)}</div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{attachment.originalName}</div>
           <div className="text-xs text-muted-foreground">
@@ -92,12 +106,7 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            asChild
-            className="h-7 w-7 p-0"
-          >
+          <Button size="sm" variant="ghost" asChild className="h-7 w-7 p-0">
             <a href={downloadUrl} download={attachment.originalName}>
               <Download className="h-3 w-3" />
             </a>
@@ -117,8 +126,8 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
       {/* Image thumbnail */}
       {isImage && (
         <div className="mt-2">
-          <img 
-            src={downloadUrl} 
+          <img
+            src={downloadUrl}
             alt={attachment.originalName}
             className="max-w-full h-auto rounded border"
             style={{ maxHeight: '300px' }}
@@ -186,9 +195,7 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         <Paperclip className="h-4 w-4 text-muted-foreground" />
         <Label className="text-muted-foreground">Attachments</Label>
         {attachments.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            ({attachments.length})
-          </span>
+          <span className="text-xs text-muted-foreground">({attachments.length})</span>
         )}
       </div>
 
@@ -197,7 +204,8 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         <div className="flex items-start gap-3 p-3 rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-950/20">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-amber-900 dark:text-amber-200">
-            ⚠️ Each attachment adds to agent token costs. Only include files essential for task context.
+            ⚠️ Each attachment adds to agent token costs. Only include files essential for task
+            context.
           </p>
         </div>
       )}
@@ -209,10 +217,10 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         onDrop={handleDrop}
         onClick={handleClick}
         className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-          isDragging && "border-primary bg-primary/5",
-          !isDragging && "border-muted-foreground/25 hover:border-muted-foreground/50",
-          uploadAttachment.isPending && "opacity-50 pointer-events-none"
+          'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+          isDragging && 'border-primary bg-primary/5',
+          !isDragging && 'border-muted-foreground/25 hover:border-muted-foreground/50',
+          uploadAttachment.isPending && 'opacity-50 pointer-events-none'
         )}
       >
         <input
@@ -226,9 +234,7 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         <p className="text-sm text-muted-foreground mb-1">
           {uploadAttachment.isPending ? 'Uploading...' : 'Drop files here or click to browse'}
         </p>
-        <p className="text-xs text-muted-foreground">
-          Max 10MB per file, 20 files total
-        </p>
+        <p className="text-xs text-muted-foreground">Max 10MB per file, 20 files total</p>
       </div>
 
       {/* Attachments list */}

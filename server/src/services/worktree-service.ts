@@ -42,10 +42,7 @@ export class WorktreeService {
   /**
    * Execute a git command with timeout
    */
-  private async execGitWithTimeout(
-    repoPath: string,
-    args: string[]
-  ): Promise<string> {
+  private async execGitWithTimeout(repoPath: string, args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn('git', args, {
         cwd: repoPath,
@@ -99,15 +96,15 @@ export class WorktreeService {
 
   private async getRepoGit(repoName: string): Promise<{ git: SimpleGit; repoPath: string }> {
     const config = await this.configService.getConfig();
-    const repo = config.repos.find(r => r.name === repoName);
-    
+    const repo = config.repos.find((r) => r.name === repoName);
+
     if (!repo) {
       throw new Error(`Repository "${repoName}" not found in config`);
     }
 
     const repoPath = this.expandPath(repo.path);
     const git = simpleGit(repoPath);
-    
+
     return { git, repoPath };
   }
 
@@ -132,7 +129,11 @@ export class WorktreeService {
     const worktreePath = path.join(this.worktreesDir, taskId);
 
     // Check if worktree already exists
-    const worktreeExists = await fs.access(worktreePath).then(() => true).catch(() => false);
+    // Intentionally silent: fs.access throws if path doesn't exist — false means no worktree
+    const worktreeExists = await fs
+      .access(worktreePath)
+      .then(() => true)
+      .catch(() => false);
     if (worktreeExists) {
       throw new Error('Worktree already exists for this task');
     }
@@ -155,7 +156,12 @@ export class WorktreeService {
     } else {
       // Create new branch from base with timeout
       await this.execGitWithTimeout(repoPath, [
-        'worktree', 'add', '-b', task.git.branch, worktreePath, task.git.baseBranch
+        'worktree',
+        'add',
+        '-b',
+        task.git.branch,
+        worktreePath,
+        task.git.baseBranch,
       ]);
     }
 
@@ -182,21 +188,21 @@ export class WorktreeService {
 
     // Get branch info
     const status = await worktreeGit.status();
-    
+
     // Get ahead/behind info
     let aheadBehind = { ahead: 0, behind: 0 };
     try {
       const { git: repoGit, repoPath: mainRepoPath } = await this.getRepoGit(task.git.repo);
-      
-      // Fetch to get latest with timeout
+
+      // Fetch to get latest with timeout (intentionally silent: may be offline)
       await this.execGitWithTimeout(mainRepoPath, ['fetch']).catch(() => {});
-      
+
       // Compare with base branch with timeout
       const log = await this.execGitWithTimeout(worktreePath, [
         'rev-list',
         '--left-right',
         '--count',
-        `${task.git.baseBranch}...HEAD`
+        `${task.git.baseBranch}...HEAD`,
       ]);
       const [behind, ahead] = log.trim().split('\t').map(Number);
       aheadBehind = { ahead: ahead || 0, behind: behind || 0 };
@@ -221,12 +227,12 @@ export class WorktreeService {
     }
 
     const worktreePath = task.git.worktreePath;
-    
+
     // Check for uncommitted changes
     if (!force) {
       const worktreeGit = simpleGit(worktreePath);
       const status = await worktreeGit.status();
-      
+
       if (!status.isClean()) {
         throw new Error('Worktree has uncommitted changes. Use force=true to delete anyway.');
       }
@@ -234,7 +240,7 @@ export class WorktreeService {
 
     // Get main repo git
     const { git: repoGit, repoPath } = await this.getRepoGit(task.git.repo);
-    
+
     // Remove worktree with timeout
     const args = ['worktree', 'remove', worktreePath];
     if (force) args.push('--force');
@@ -256,10 +262,10 @@ export class WorktreeService {
     }
 
     const worktreePath = task.git.worktreePath;
-    
+
     // Fetch latest with timeout
     await this.execGitWithTimeout(worktreePath, ['fetch']);
-    
+
     // Rebase onto base branch with timeout
     await this.execGitWithTimeout(worktreePath, ['rebase', `origin/${task.git.baseBranch}`]);
 
@@ -273,16 +279,16 @@ export class WorktreeService {
     }
 
     const { git: repoGit, repoPath } = await this.getRepoGit(task.git.repo);
-    
+
     // Checkout base branch in main repo with timeout
     await this.execGitWithTimeout(repoPath, ['checkout', task.git.baseBranch]);
-    
+
     // Pull latest with timeout
     await this.execGitWithTimeout(repoPath, ['pull']);
-    
+
     // Merge feature branch with timeout
     await this.execGitWithTimeout(repoPath, ['merge', task.git.branch]);
-    
+
     // Push with timeout
     await this.execGitWithTimeout(repoPath, ['push']);
 

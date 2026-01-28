@@ -58,13 +58,14 @@ export class StatusHistoryService {
         this.lastEntry = entries[0];
       }
     } catch {
+      // Intentionally silent: history file may not exist on first run
       this.lastEntry = null;
     }
   }
 
   async getHistory(limit: number = 100, offset: number = 0): Promise<StatusHistoryEntry[]> {
     await this.ensureDir();
-    
+
     if (!existsSync(this.historyFile)) {
       return [];
     }
@@ -74,6 +75,7 @@ export class StatusHistoryService {
       const entries: StatusHistoryEntry[] = JSON.parse(content);
       return entries.slice(offset, offset + limit);
     } catch {
+      // Intentionally silent: corrupted file — return empty list
       return [];
     }
   }
@@ -109,25 +111,28 @@ export class StatusHistoryService {
     };
 
     let entries: StatusHistoryEntry[] = [];
-    
+
     if (existsSync(this.historyFile)) {
       try {
         const content = await readFile(this.historyFile, 'utf-8');
         entries = JSON.parse(content);
       } catch {
+        // Intentionally silent: corrupted history file — start fresh
         entries = [];
       }
     }
 
     // Prepend new entry and limit to MAX_ENTRIES
     entries = [entry, ...entries].slice(0, this.MAX_ENTRIES);
-    
+
     await writeFile(this.historyFile, JSON.stringify(entries, null, 2), 'utf-8');
-    
+
     this.lastEntry = entry;
-    
-    console.log(`[StatusHistory] ${previousStatus} → ${newStatus}${taskId ? ` (task: ${taskId})` : ''}`);
-    
+
+    console.log(
+      `[StatusHistory] ${previousStatus} → ${newStatus}${taskId ? ` (task: ${taskId})` : ''}`
+    );
+
     return entry;
   }
 
@@ -135,8 +140,8 @@ export class StatusHistoryService {
     const entries = await this.getHistory(this.MAX_ENTRIES);
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
-    
-    return entries.filter(entry => {
+
+    return entries.filter((entry) => {
       const entryTime = new Date(entry.timestamp).getTime();
       return entryTime >= start && entryTime <= end;
     });
@@ -146,7 +151,7 @@ export class StatusHistoryService {
     const targetDate = date || new Date().toISOString().split('T')[0];
     const startOfDay = new Date(`${targetDate}T00:00:00.000Z`);
     const endOfDay = new Date(`${targetDate}T23:59:59.999Z`);
-    
+
     const entries = await this.getHistoryByDateRange(
       startOfDay.toISOString(),
       endOfDay.toISOString()
@@ -164,7 +169,7 @@ export class StatusHistoryService {
     for (let i = 0; i < chronological.length; i++) {
       const entry = chronological[i];
       const nextEntry = chronological[i + 1];
-      
+
       // Calculate how long this status lasted
       let endTime: Date;
       if (nextEntry) {
@@ -174,7 +179,7 @@ export class StatusHistoryService {
         const now = new Date();
         endTime = now < endOfDay ? now : endOfDay;
       }
-      
+
       const startTime = new Date(entry.timestamp);
       const durationMs = endTime.getTime() - startTime.getTime();
 
@@ -204,17 +209,17 @@ export class StatusHistoryService {
     // If no entries for the day, check the last status from before this day
     if (chronological.length === 0) {
       const allEntries = await this.getHistory(this.MAX_ENTRIES);
-      const beforeDay = allEntries.filter(e => 
-        new Date(e.timestamp).getTime() < startOfDay.getTime()
+      const beforeDay = allEntries.filter(
+        (e) => new Date(e.timestamp).getTime() < startOfDay.getTime()
       );
-      
+
       if (beforeDay.length > 0) {
         // The most recent entry before this day determines the starting status
         const lastBeforeDay = beforeDay[0];
         const now = new Date();
         const effectiveEnd = now < endOfDay ? now : endOfDay;
         const durationMs = effectiveEnd.getTime() - startOfDay.getTime();
-        
+
         if (durationMs > 0) {
           if (lastBeforeDay.newStatus === 'idle') {
             idleMs = durationMs;
@@ -249,14 +254,14 @@ export class StatusHistoryService {
   async getWeeklySummary(): Promise<DailySummary[]> {
     const summaries: DailySummary[] = [];
     const today = new Date();
-    
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       summaries.push(await this.getDailySummary(dateStr));
     }
-    
+
     return summaries;
   }
 

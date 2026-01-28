@@ -25,7 +25,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
   if (/\d/.test(password)) score++;
   if (/[^a-zA-Z0-9]/.test(password)) score++;
-  
+
   if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
   if (score <= 2) return { score, label: 'Fair', color: 'bg-orange-500' };
   if (score <= 3) return { score, label: 'Good', color: 'bg-yellow-500' };
@@ -36,7 +36,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
 export function SecurityTab() {
   const { changePassword } = useAuth();
   const { toast } = useToast();
-  
+
   // Change password form state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -51,11 +51,11 @@ export function SecurityTab() {
 
   const handleChangePassword = async () => {
     if (!canChange || isChanging) return;
-    
+
     setIsChanging(true);
     const result = await changePassword(currentPassword, newPassword);
     setIsChanging(false);
-    
+
     if (result.success) {
       setChangeSuccess(true);
       setCurrentPassword('');
@@ -80,9 +80,7 @@ export function SecurityTab() {
     <div className="space-y-8">
       <div>
         <h3 className="text-lg font-semibold mb-1">Security</h3>
-        <p className="text-sm text-muted-foreground">
-          Manage your password and security settings.
-        </p>
+        <p className="text-sm text-muted-foreground">Manage your password and security settings.</p>
       </div>
 
       {/* Change Password Section */}
@@ -91,7 +89,7 @@ export function SecurityTab() {
           <Key className="h-5 w-5 text-muted-foreground" />
           <h4 className="font-medium">Change Password</h4>
         </div>
-        
+
         <div className="space-y-4 max-w-md">
           <div className="space-y-2">
             <Label htmlFor="current-password">Current Password</Label>
@@ -181,16 +179,17 @@ export function SecurityTab() {
           <AlertTriangle className="h-5 w-5" />
           <h4 className="font-medium">Danger Zone</h4>
         </div>
-        
+
         <div className="p-4 border border-destructive/20 rounded-lg bg-destructive/5 space-y-3">
           <div>
             <p className="font-medium text-sm">Reset Security Settings</p>
             <p className="text-xs text-muted-foreground mt-1">
               This will clear your password and recovery key. You'll need to set up a new password.
-              Use the CLI command instead: <code className="bg-muted px-1 rounded">pnpm run reset-password</code>
+              Use the CLI command instead:{' '}
+              <code className="bg-muted px-1 rounded">pnpm run reset-password</code>
             </p>
           </div>
-          
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">
@@ -222,7 +221,8 @@ export function SecurityTab() {
                           duration: 5000,
                         });
                       }
-                    } catch {
+                    } catch (err) {
+                      console.error('[Security] Auth reset failed:', err);
                       toast({
                         title: 'Reset failed',
                         description: 'Please use the CLI command instead.',

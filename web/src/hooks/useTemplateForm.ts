@@ -1,43 +1,45 @@
 import { useState } from 'react';
 import { useTemplates, type TaskTemplate } from './useTemplates';
 import { useCreateTask } from './useTasks';
-import { 
-  interpolateVariables, 
+import {
+  interpolateVariables,
   extractCustomVariables,
-  type VariableContext 
+  type VariableContext,
 } from '@/lib/template-variables';
 import { nanoid } from 'nanoid';
-import type { Subtask } from '@veritas-kanban/shared';
+import type { Subtask, TaskPriority } from '@veritas-kanban/shared';
 
 export function useTemplateForm() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [customVars, setCustomVars] = useState<Record<string, string>>({});
   const [requiredCustomVars, setRequiredCustomVars] = useState<string[]>([]);
-  
+
   const { data: templates } = useTemplates();
   const createTask = useCreateTask();
 
   const applyTemplate = (template: TaskTemplate) => {
     setSelectedTemplate(template.id);
-    
+
     // If this is a blueprint template, extract variables from all blueprint tasks
     if (template.blueprint && template.blueprint.length > 0) {
-      const allBlueprintText = template.blueprint.flatMap(bt => [
-        bt.title,
-        bt.taskDefaults.descriptionTemplate || '',
-        ...(bt.subtaskTemplates?.map(st => st.title) || [])
-      ]).join(' ');
-      
+      const allBlueprintText = template.blueprint
+        .flatMap((bt) => [
+          bt.title,
+          bt.taskDefaults.descriptionTemplate || '',
+          ...(bt.subtaskTemplates?.map((st) => st.title) || []),
+        ])
+        .join(' ');
+
       const customVarNames = extractCustomVariables(allBlueprintText);
       setRequiredCustomVars(customVarNames);
-      
+
       const initialCustomVars: Record<string, string> = {};
-      customVarNames.forEach(name => {
+      customVarNames.forEach((name) => {
         initialCustomVars[name] = '';
       });
       setCustomVars(initialCustomVars);
-      
+
       return {
         type: template.taskDefaults.type,
         priority: template.taskDefaults.priority,
@@ -45,30 +47,30 @@ export function useTemplateForm() {
         description: '',
       };
     }
-    
+
     // Single-task template
     // Extract custom variables from description template and subtasks
     const allTemplateText = [
       template.taskDefaults.descriptionTemplate || '',
-      ...(template.subtaskTemplates?.map(st => st.title) || [])
+      ...(template.subtaskTemplates?.map((st) => st.title) || []),
     ].join(' ');
-    
+
     const customVarNames = extractCustomVariables(allTemplateText);
     setRequiredCustomVars(customVarNames);
-    
+
     // Initialize custom vars
     const initialCustomVars: Record<string, string> = {};
-    customVarNames.forEach(name => {
+    customVarNames.forEach((name) => {
       initialCustomVars[name] = '';
     });
     setCustomVars(initialCustomVars);
-    
+
     // Convert subtask templates to actual subtasks
     if (template.subtaskTemplates && template.subtaskTemplates.length > 0) {
       const now = new Date().toISOString();
       const templateSubtasks: Subtask[] = template.subtaskTemplates
         .sort((a, b) => a.order - b.order)
-        .map(st => ({
+        .map((st) => ({
           id: nanoid(),
           title: st.title,
           completed: false,
@@ -78,7 +80,7 @@ export function useTemplateForm() {
     } else {
       setSubtasks([]);
     }
-    
+
     return {
       type: template.taskDefaults.type,
       priority: template.taskDefaults.priority,
@@ -95,7 +97,7 @@ export function useTemplateForm() {
   };
 
   const removeSubtask = (id: string) => {
-    setSubtasks(prev => prev.filter(st => st.id !== id));
+    setSubtasks((prev) => prev.filter((st) => st.id !== id));
   };
 
   const createTasks = async (
@@ -104,7 +106,7 @@ export function useTemplateForm() {
     project: string,
     sprint: string,
     type: string,
-    priority: string,
+    priority: string
   ) => {
     // Build variable context
     const context: VariableContext = {
@@ -114,8 +116,8 @@ export function useTemplateForm() {
     };
 
     // Check if this is a blueprint template
-    const template = selectedTemplate ? templates?.find(t => t.id === selectedTemplate) : null;
-    
+    const template = selectedTemplate ? templates?.find((t) => t.id === selectedTemplate) : null;
+
     if (template?.blueprint && template.blueprint.length > 0) {
       // Blueprint: create multiple tasks
       await handleBlueprintCreation(template, context, project);
@@ -125,7 +127,7 @@ export function useTemplateForm() {
       const interpolatedDescription = interpolateVariables(description, context);
 
       // Interpolate variables in subtask titles
-      const interpolatedSubtasks = subtasks.map(st => ({
+      const interpolatedSubtasks = subtasks.map((st) => ({
         ...st,
         title: interpolateVariables(st.title, context),
       }));
@@ -134,7 +136,7 @@ export function useTemplateForm() {
         title: title.trim(),
         description: interpolatedDescription.trim(),
         type,
-        priority: priority as any,
+        priority: priority as TaskPriority,
         project: project.trim() || undefined,
         sprint: sprint.trim() || undefined,
         subtasks: interpolatedSubtasks.length > 0 ? interpolatedSubtasks : undefined,
@@ -143,9 +145,9 @@ export function useTemplateForm() {
   };
 
   const handleBlueprintCreation = async (
-    template: TaskTemplate, 
+    template: TaskTemplate,
     context: VariableContext,
-    project: string,
+    project: string
   ) => {
     if (!template.blueprint) return;
 
@@ -156,7 +158,7 @@ export function useTemplateForm() {
     for (const blueprintTask of template.blueprint) {
       // Interpolate title
       const taskTitle = interpolateVariables(blueprintTask.title, context);
-      
+
       // Interpolate description
       const taskDescription = interpolateVariables(
         blueprintTask.taskDefaults.descriptionTemplate || '',
@@ -164,7 +166,7 @@ export function useTemplateForm() {
       );
 
       // Create subtasks
-      const taskSubtasks = blueprintTask.subtaskTemplates?.map(st => {
+      const taskSubtasks = blueprintTask.subtaskTemplates?.map((st) => {
         const now = new Date().toISOString();
         return {
           id: nanoid(),
@@ -175,7 +177,9 @@ export function useTemplateForm() {
       });
 
       // Resolve dependencies
-      const blockedBy = blueprintTask.blockedByRefs?.map(refId => refIdToTaskId[refId]).filter(Boolean);
+      const blockedBy = blueprintTask.blockedByRefs
+        ?.map((refId) => refIdToTaskId[refId])
+        .filter(Boolean);
 
       // Create the task
       const createdTask = await createTask.mutateAsync({

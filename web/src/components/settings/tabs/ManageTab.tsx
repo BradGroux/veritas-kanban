@@ -10,18 +10,23 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useConfig } from '@/hooks/useConfig';
+import { useTemplates, useCreateTemplate } from '@/hooks/useTemplates';
 import {
-  useTemplates,
-  useCreateTemplate,
-} from '@/hooks/useTemplates';
-import { useTaskTypesManager, getTypeIcon, getAvailableIcons, AVAILABLE_COLORS } from '@/hooks/useTaskTypes';
+  useTaskTypesManager,
+  getTypeIcon,
+  getAvailableIcons,
+  AVAILABLE_COLORS,
+} from '@/hooks/useTaskTypes';
 import { useProjectsManager, AVAILABLE_PROJECT_COLORS } from '@/hooks/useProjects';
 import { useSprintsManager } from '@/hooks/useSprints';
 import { useToast } from '@/hooks/useToast';
-import {
-  Plus, Download, Upload, HelpCircle, Info,
-} from 'lucide-react';
-import type { TaskTypeConfig, SprintConfig, ProjectConfig } from '@veritas-kanban/shared';
+import { Plus, Download, Upload, HelpCircle, Info } from 'lucide-react';
+import type {
+  TaskTypeConfig,
+  SprintConfig,
+  ProjectConfig,
+  CreateTemplateInput,
+} from '@veritas-kanban/shared';
 import { exportAllTemplates, parseTemplateFile, checkDuplicateName } from '@/lib/template-io';
 import { ManagedListManager } from '../ManagedListManager';
 import { AddTemplateForm, TemplateItem } from './TemplateComponents';
@@ -74,9 +79,9 @@ export function ManageTab() {
           name: template.name,
           description: template.description,
           category: template.category,
-          taskDefaults: template.taskDefaults as any,
-          subtaskTemplates: template.subtaskTemplates as any,
-          blueprint: template.blueprint as any,
+          taskDefaults: template.taskDefaults as CreateTemplateInput['taskDefaults'],
+          subtaskTemplates: template.subtaskTemplates as CreateTemplateInput['subtaskTemplates'],
+          blueprint: template.blueprint as CreateTemplateInput['blueprint'],
         });
         imported++;
       }
@@ -85,6 +90,7 @@ export function ManageTab() {
         description: `${imported} template${imported === 1 ? '' : 's'} imported${skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''}.`,
       });
     } catch (err) {
+      console.error('[Templates] Import failed:', err);
       toast({
         title: 'Import failed',
         description: err instanceof Error ? err.message : 'Invalid file',
@@ -114,7 +120,9 @@ export function ManageTab() {
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground whitespace-nowrap">Icon</Label>
                   <Select value={item.icon} onValueChange={(icon) => onChange({ icon })}>
-                    <SelectTrigger className="h-7 w-[120px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-7 w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {getAvailableIcons().map((iconName) => {
                         const IconComponent = getTypeIcon(iconName);
@@ -132,8 +140,13 @@ export function ManageTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground whitespace-nowrap">Color</Label>
-                  <Select value={item.color || 'border-l-gray-500'} onValueChange={(color) => onChange({ color })}>
-                    <SelectTrigger className="h-7 w-[120px]"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={item.color || 'border-l-gray-500'}
+                    onValueChange={(color) => onChange({ color })}
+                  >
+                    <SelectTrigger className="h-7 w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {AVAILABLE_COLORS.map((color) => (
                         <SelectItem key={color.value} value={color.value}>
@@ -179,8 +192,13 @@ export function ManageTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground whitespace-nowrap">Color</Label>
-                  <Select value={item.color || 'bg-muted'} onValueChange={(color) => onChange({ color })}>
-                    <SelectTrigger className="h-7 w-[120px]"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={item.color || 'bg-muted'}
+                    onValueChange={(color) => onChange({ color })}
+                  >
+                    <SelectTrigger className="h-7 w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {AVAILABLE_PROJECT_COLORS.map((color) => (
                         <SelectItem key={color.value} value={color.value}>
@@ -267,10 +285,22 @@ export function ManageTab() {
               <div className="space-y-2">
                 <p className="font-medium text-sm">Template Guide</p>
                 <div className="text-xs text-muted-foreground space-y-1.5">
-                  <div><strong className="text-foreground">Simple:</strong> Pre-fill fields + subtask lists</div>
-                  <div><strong className="text-foreground">Categories:</strong> Bug 🐛, Feature ✨, Sprint 🔄</div>
-                  <div><strong className="text-foreground">Variables:</strong> {'{{date}}'}, {'{{project}}'}, {'{{custom}}'}</div>
-                  <div><strong className="text-foreground">Blueprints:</strong> Multi-task with dependencies</div>
+                  <div>
+                    <strong className="text-foreground">Simple:</strong> Pre-fill fields + subtask
+                    lists
+                  </div>
+                  <div>
+                    <strong className="text-foreground">Categories:</strong> Bug 🐛, Feature ✨,
+                    Sprint 🔄
+                  </div>
+                  <div>
+                    <strong className="text-foreground">Variables:</strong> {'{{date}}'},{' '}
+                    {'{{project}}'}, {'{{custom}}'}
+                  </div>
+                  <div>
+                    <strong className="text-foreground">Blueprints:</strong> Multi-task with
+                    dependencies
+                  </div>
                 </div>
               </div>
             </div>
@@ -285,9 +315,7 @@ export function ManageTab() {
           className="hidden"
         />
 
-        {showAddTemplateForm && (
-          <AddTemplateForm onClose={() => setShowAddTemplateForm(false)} />
-        )}
+        {showAddTemplateForm && <AddTemplateForm onClose={() => setShowAddTemplateForm(false)} />}
 
         {templatesLoading ? (
           <div className="text-sm text-muted-foreground">Loading...</div>

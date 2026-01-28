@@ -24,9 +24,15 @@ export interface AuthContextValue {
   /** Logout */
   logout: () => Promise<void>;
   /** Recover password with recovery key */
-  recover: (recoveryKey: string, newPassword: string) => Promise<{ success: boolean; recoveryKey?: string; error?: string }>;
+  recover: (
+    recoveryKey: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; recoveryKey?: string; error?: string }>;
   /** Change password */
-  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -41,13 +47,13 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
       ...options?.headers,
     },
   });
-  
+
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.error || `HTTP ${response.status}`);
   }
-  
+
   return data;
 }
 
@@ -63,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await fetchApi<AuthStatus>('/api/auth/status');
       setStatus(data);
     } catch (err) {
+      console.error('[Auth] Failed to check auth status:', err);
       setError(err instanceof Error ? err.message : 'Failed to check auth status');
     } finally {
       setIsLoading(false);
@@ -84,22 +91,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The user will trigger a refresh when they click "Continue to App"
       return { success: true, recoveryKey: data.recoveryKey };
     } catch (err) {
+      console.error('[Auth] Setup failed:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Setup failed' };
     }
   }, []);
 
-  const login = useCallback(async (password: string, rememberMe = false) => {
-    try {
-      await fetchApi('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ password, rememberMe }),
-      });
-      await refreshStatus();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Login failed' };
-    }
-  }, [refreshStatus]);
+  const login = useCallback(
+    async (password: string, rememberMe = false) => {
+      try {
+        await fetchApi('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ password, rememberMe }),
+        });
+        await refreshStatus();
+        return { success: true };
+      } catch (err) {
+        console.error('[Auth] Login failed:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Login failed' };
+      }
+    },
+    [refreshStatus]
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -109,18 +121,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshStatus]);
 
-  const recover = useCallback(async (recoveryKey: string, newPassword: string) => {
-    try {
-      const data = await fetchApi<{ success: boolean; recoveryKey: string }>('/api/auth/recover', {
-        method: 'POST',
-        body: JSON.stringify({ recoveryKey, newPassword }),
-      });
-      await refreshStatus();
-      return { success: true, recoveryKey: data.recoveryKey };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Recovery failed' };
-    }
-  }, [refreshStatus]);
+  const recover = useCallback(
+    async (recoveryKey: string, newPassword: string) => {
+      try {
+        const data = await fetchApi<{ success: boolean; recoveryKey: string }>(
+          '/api/auth/recover',
+          {
+            method: 'POST',
+            body: JSON.stringify({ recoveryKey, newPassword }),
+          }
+        );
+        await refreshStatus();
+        return { success: true, recoveryKey: data.recoveryKey };
+      } catch (err) {
+        console.error('[Auth] Recovery failed:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Recovery failed' };
+      }
+    },
+    [refreshStatus]
+  );
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     try {
@@ -130,7 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Password change failed' };
+      console.error('[Auth] Password change failed:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Password change failed',
+      };
     }
   }, []);
 

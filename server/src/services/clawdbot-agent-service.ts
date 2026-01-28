@@ -1,12 +1,12 @@
 /**
  * ClawdbotAgentService - Delegates agent work to Clawdbot's sessions_spawn
- * 
+ *
  * Instead of managing PTY processes directly, this service:
  * 1. Sends a task request to the main Veritas session
  * 2. Veritas spawns a sub-agent with proper PTY handling
  * 3. Sub-agent works in the task's worktree
  * 4. On completion, Veritas calls back to update the task
- * 
+ *
  * This keeps agent management simple and leverages Clawdbot's existing infrastructure.
  */
 
@@ -38,13 +38,16 @@ export interface AgentOutput {
 }
 
 // Track pending agent requests
-const pendingAgents = new Map<string, {
-  taskId: string;
-  attemptId: string;
-  agent: AgentType;
-  startedAt: string;
-  emitter: EventEmitter;
-}>();
+const pendingAgents = new Map<
+  string,
+  {
+    taskId: string;
+    attemptId: string;
+    agent: AgentType;
+    startedAt: string;
+    emitter: EventEmitter;
+  }
+>();
 
 export class ClawdbotAgentService {
   private configService: ConfigService;
@@ -160,27 +163,41 @@ export class ClawdbotAgentService {
   private async sendToClawdbot(prompt: string, taskId: string, attemptId: string): Promise<void> {
     // Write the task request to a well-known location that Veritas monitors
     // This is simpler than trying to hit the WebSocket API
-    const requestFile = path.join(PROJECT_ROOT, '.veritas-kanban', 'agent-requests', `${taskId}.json`);
-    
+    const requestFile = path.join(
+      PROJECT_ROOT,
+      '.veritas-kanban',
+      'agent-requests',
+      `${taskId}.json`
+    );
+
     await fs.mkdir(path.dirname(requestFile), { recursive: true });
-    
-    await fs.writeFile(requestFile, JSON.stringify({
-      taskId,
-      attemptId,
-      prompt,
-      requestedAt: new Date().toISOString(),
-      callbackUrl: `http://localhost:3001/api/agents/${taskId}/complete`,
-    }, null, 2));
+
+    await fs.writeFile(
+      requestFile,
+      JSON.stringify(
+        {
+          taskId,
+          attemptId,
+          prompt,
+          requestedAt: new Date().toISOString(),
+          callbackUrl: `http://localhost:3001/api/agents/${taskId}/complete`,
+        },
+        null,
+        2
+      )
+    );
 
     console.log(`[ClawdbotAgent] Wrote agent request for task ${taskId} to ${requestFile}`);
-    console.log(`[ClawdbotAgent] Veritas should pick this up on next heartbeat or you can trigger manually`);
+    console.log(
+      `[ClawdbotAgent] Veritas should pick this up on next heartbeat or you can trigger manually`
+    );
   }
 
   /**
    * Handle completion callback from Clawdbot sub-agent
    */
   async completeAgent(
-    taskId: string, 
+    taskId: string,
     result: { success: boolean; summary?: string; error?: string }
   ): Promise<void> {
     const pending = pendingAgents.get(taskId);
@@ -217,7 +234,12 @@ export class ClawdbotAgentService {
     pendingAgents.delete(taskId);
 
     // Remove request file
-    const requestFile = path.join(PROJECT_ROOT, '.veritas-kanban', 'agent-requests', `${taskId}.json`);
+    const requestFile = path.join(
+      PROJECT_ROOT,
+      '.veritas-kanban',
+      'agent-requests',
+      `${taskId}.json`
+    );
     try {
       await fs.unlink(requestFile);
     } catch {
@@ -271,27 +293,30 @@ export class ClawdbotAgentService {
   /**
    * List all pending agent requests (for Veritas to poll)
    */
-  async listPendingRequests(): Promise<Array<{
-    taskId: string;
-    attemptId: string;
-    prompt: string;
-    requestedAt: string;
-    callbackUrl: string;
-  }>> {
+  async listPendingRequests(): Promise<
+    Array<{
+      taskId: string;
+      attemptId: string;
+      prompt: string;
+      requestedAt: string;
+      callbackUrl: string;
+    }>
+  > {
     const requestsDir = path.join(PROJECT_ROOT, '.veritas-kanban', 'agent-requests');
-    
+
     try {
       const files = await fs.readdir(requestsDir);
       const requests = await Promise.all(
         files
-          .filter(f => f.endsWith('.json'))
-          .map(async f => {
+          .filter((f) => f.endsWith('.json'))
+          .map(async (f) => {
             const content = await fs.readFile(path.join(requestsDir, f), 'utf-8');
             return JSON.parse(content);
           })
       );
       return requests;
     } catch {
+      // Intentionally silent: requests directory may not exist — return empty list
       return [];
     }
   }
@@ -308,8 +333,8 @@ export class ClawdbotAgentService {
   async listAttempts(taskId: string): Promise<string[]> {
     const files = await fs.readdir(this.logsDir);
     return files
-      .filter(f => f.startsWith(`${taskId}_`) && f.endsWith('.md'))
-      .map(f => f.replace(`${taskId}_`, '').replace('.md', ''));
+      .filter((f) => f.startsWith(`${taskId}_`) && f.endsWith('.md'))
+      .map((f) => f.replace(`${taskId}_`, '').replace('.md', ''));
   }
 
   private buildTaskPrompt(task: Task, worktreePath: string, attemptId: string): string {
@@ -339,7 +364,12 @@ If you encounter errors, call with \`success: false\` and include the error mess
 `;
   }
 
-  private async initLogFile(logPath: string, task: Task, agent: AgentType, prompt: string): Promise<void> {
+  private async initLogFile(
+    logPath: string,
+    task: Task,
+    agent: AgentType,
+    prompt: string
+  ): Promise<void> {
     const header = `# Agent Log: ${task.title}
 
 **Task ID:** ${task.id}

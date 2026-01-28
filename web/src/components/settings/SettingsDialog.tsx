@@ -1,10 +1,5 @@
 import { useState, useRef, useCallback, lazy, Suspense, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -25,28 +20,44 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  useFeatureSettings,
-  useDebouncedFeatureUpdate,
-} from '@/hooks/useFeatureSettings';
+import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useToast } from '@/hooks/useToast';
 import {
-  Settings2, Layout, ListTodo, Cpu, Database, Bell, Archive,
-  Download, Upload, RotateCcw, Shield,
+  Settings2,
+  Layout,
+  ListTodo,
+  Cpu,
+  Database,
+  Bell,
+  Archive,
+  Download,
+  Upload,
+  RotateCcw,
+  Shield,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { SettingsErrorBoundary } from './shared';
 
 // Lazy-load tab components
-const LazyGeneralTab = lazy(() => import('./tabs/GeneralTab').then(m => ({ default: m.GeneralTab })));
-const LazyBoardTab = lazy(() => import('./tabs/BoardTab').then(m => ({ default: m.BoardTab })));
-const LazyTasksTab = lazy(() => import('./tabs/TasksTab').then(m => ({ default: m.TasksTab })));
-const LazyAgentsTab = lazy(() => import('./tabs/AgentsTab').then(m => ({ default: m.AgentsTab })));
-const LazyDataTab = lazy(() => import('./tabs/DataTab').then(m => ({ default: m.DataTab })));
-const LazyNotificationsTab = lazy(() => import('./tabs/NotificationsTab').then(m => ({ default: m.NotificationsTab })));
-const LazyManageTab = lazy(() => import('./tabs/ManageTab').then(m => ({ default: m.ManageTab })));
-const LazySecurityTab = lazy(() => import('./tabs/SecurityTab').then(m => ({ default: m.SecurityTab })));
+const LazyGeneralTab = lazy(() =>
+  import('./tabs/GeneralTab').then((m) => ({ default: m.GeneralTab }))
+);
+const LazyBoardTab = lazy(() => import('./tabs/BoardTab').then((m) => ({ default: m.BoardTab })));
+const LazyTasksTab = lazy(() => import('./tabs/TasksTab').then((m) => ({ default: m.TasksTab })));
+const LazyAgentsTab = lazy(() =>
+  import('./tabs/AgentsTab').then((m) => ({ default: m.AgentsTab }))
+);
+const LazyDataTab = lazy(() => import('./tabs/DataTab').then((m) => ({ default: m.DataTab })));
+const LazyNotificationsTab = lazy(() =>
+  import('./tabs/NotificationsTab').then((m) => ({ default: m.NotificationsTab }))
+);
+const LazyManageTab = lazy(() =>
+  import('./tabs/ManageTab').then((m) => ({ default: m.ManageTab }))
+);
+const LazySecurityTab = lazy(() =>
+  import('./tabs/SecurityTab').then((m) => ({ default: m.SecurityTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -65,7 +76,15 @@ function TabSkeleton() {
 
 // ============ Tab Configuration ============
 
-type TabId = 'general' | 'board' | 'tasks' | 'agents' | 'data' | 'notifications' | 'security' | 'manage';
+type TabId =
+  | 'general'
+  | 'board'
+  | 'tasks'
+  | 'agents'
+  | 'data'
+  | 'notifications'
+  | 'security'
+  | 'manage';
 
 interface TabDef {
   id: TabId;
@@ -74,14 +93,14 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: 'general',       label: 'General',       icon: Settings2 },
-  { id: 'board',         label: 'Board',         icon: Layout },
-  { id: 'tasks',         label: 'Tasks',         icon: ListTodo },
-  { id: 'agents',        label: 'Agents',        icon: Cpu },
-  { id: 'data',          label: 'Data',          icon: Database },
+  { id: 'general', label: 'General', icon: Settings2 },
+  { id: 'board', label: 'Board', icon: Layout },
+  { id: 'tasks', label: 'Tasks', icon: ListTodo },
+  { id: 'agents', label: 'Agents', icon: Cpu },
+  { id: 'data', label: 'Data', icon: Database },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'security',      label: 'Security',      icon: Shield },
-  { id: 'manage',        label: 'Manage',        icon: Archive },
+  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'manage', label: 'Manage', icon: Archive },
 ];
 
 // ============ Settings Dialog Props ============
@@ -96,10 +115,10 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
-  
+
   // Set active tab when defaultTab changes
   useEffect(() => {
-    if (defaultTab && TABS.some(t => t.id === defaultTab)) {
+    if (defaultTab && TABS.some((t) => t.id === defaultTab)) {
       setActiveTab(defaultTab as TabId);
     }
   }, [defaultTab]);
@@ -155,7 +174,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       // Validate expected top-level keys
       const validSections = ['board', 'tasks', 'agents', 'telemetry', 'notifications', 'archive'];
       const importedKeys = Object.keys(imported);
-      const unknownKeys = importedKeys.filter(k => !validSections.includes(k));
+      const unknownKeys = importedKeys.filter((k) => !validSections.includes(k));
       if (unknownKeys.length > 0) {
         toast({
           title: 'Warning',
@@ -177,7 +196,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         });
         return;
       }
-      if (confirm(`Import ${Object.keys(validPatch).length} setting sections: ${Object.keys(validPatch).join(', ')}?\n\nThis will overwrite current values.`)) {
+      if (
+        confirm(
+          `Import ${Object.keys(validPatch).length} setting sections: ${Object.keys(validPatch).join(', ')}?\n\nThis will overwrite current values.`
+        )
+      ) {
         debouncedUpdate(validPatch);
         toast({
           title: 'Import complete',
@@ -186,6 +209,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         });
       }
     } catch (err) {
+      console.error('[Settings] Import failed:', err);
       toast({
         title: 'Import failed',
         description: err instanceof Error ? err.message : 'Invalid JSON',
@@ -200,45 +224,64 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     debouncedUpdate({ ...DEFAULT_FEATURE_SETTINGS });
   };
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const currentIndex = TABS.findIndex(t => t.id === activeTab);
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-      e.preventDefault();
-      const next = (currentIndex + 1) % TABS.length;
-      setActiveTab(TABS[next].id);
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const prev = (currentIndex - 1 + TABS.length) % TABS.length;
-      setActiveTab(TABS[prev].id);
-    }
-  }, [activeTab]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const currentIndex = TABS.findIndex((t) => t.id === activeTab);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const next = (currentIndex + 1) % TABS.length;
+        setActiveTab(TABS[next].id);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prev = (currentIndex - 1 + TABS.length) % TABS.length;
+        setActiveTab(TABS[prev].id);
+      }
+    },
+    [activeTab]
+  );
 
   const renderTab = () => {
     return (
       <Suspense fallback={<TabSkeleton />}>
         {activeTab === 'general' && (
-          <SettingsErrorBoundary tabName="General"><LazyGeneralTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="General">
+            <LazyGeneralTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'board' && (
-          <SettingsErrorBoundary tabName="Board"><LazyBoardTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Board">
+            <LazyBoardTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'tasks' && (
-          <SettingsErrorBoundary tabName="Tasks"><LazyTasksTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Tasks">
+            <LazyTasksTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'agents' && (
-          <SettingsErrorBoundary tabName="Agents"><LazyAgentsTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Agents">
+            <LazyAgentsTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'data' && (
-          <SettingsErrorBoundary tabName="Data"><LazyDataTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Data">
+            <LazyDataTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'notifications' && (
-          <SettingsErrorBoundary tabName="Notifications"><LazyNotificationsTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Notifications">
+            <LazyNotificationsTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'security' && (
-          <SettingsErrorBoundary tabName="Security"><LazySecurityTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Security">
+            <LazySecurityTab />
+          </SettingsErrorBoundary>
         )}
         {activeTab === 'manage' && (
-          <SettingsErrorBoundary tabName="Manage"><LazyManageTab /></SettingsErrorBoundary>
+          <SettingsErrorBoundary tabName="Manage">
+            <LazyManageTab />
+          </SettingsErrorBoundary>
         )}
       </Suspense>
     );
@@ -310,9 +353,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               </button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <button
-                    className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 transition-colors text-left"
-                  >
+                  <button className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 transition-colors text-left">
                     <RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />
                     Reset All
                   </button>
@@ -321,12 +362,16 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                   <AlertDialogHeader>
                     <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will reset ALL feature settings across every section back to their default values. This cannot be undone.
+                      This will reset ALL feature settings across every section back to their
+                      default values. This cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogAction
+                      onClick={handleResetAll}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                       Reset Everything
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -343,7 +388,9 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               </SelectTrigger>
               <SelectContent>
                 {TABS.map((tab) => (
-                  <SelectItem key={tab.id} value={tab.id}>{tab.label}</SelectItem>
+                  <SelectItem key={tab.id} value={tab.id}>
+                    {tab.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -355,7 +402,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
             <ScrollArea className="flex-1 min-h-0">
-              <div 
+              <div
                 id="settings-tab-content"
                 ref={contentAreaRef}
                 className="px-6 py-4"

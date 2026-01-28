@@ -129,7 +129,7 @@ function formatDuration(startTime: string): string {
   const start = new Date(startTime);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - start.getTime()) / 1000);
-  
+
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
@@ -139,7 +139,7 @@ function formatTimeAgo(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (seconds < 60) return 'just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -174,13 +174,16 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
     queryKey: ['activity', 'agent-status'],
     queryFn: () => api.activity.list(20),
     refetchInterval: 10000,
-    select: (data: Activity[]) => 
-      data.filter(a => 
-        a.type === 'agent_started' || 
-        a.type === 'agent_stopped' || 
-        a.type === 'agent_completed' ||
-        a.type === 'status_changed'
-      ).slice(0, 5),
+    select: (data: Activity[]) =>
+      data
+        .filter(
+          (a) =>
+            a.type === 'agent_started' ||
+            a.type === 'agent_stopped' ||
+            a.type === 'agent_completed' ||
+            a.type === 'status_changed'
+        )
+        .slice(0, 5),
   });
 
   // Inject styles once
@@ -206,7 +209,7 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
   // Update status history when status changes
   useEffect(() => {
     if (data && data.status !== lastStatus) {
-      setStatusHistory(prev => [
+      setStatusHistory((prev) => [
         {
           status: data.status,
           taskTitle: data.activeTaskTitle,
@@ -220,7 +223,7 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
 
   // Force update every second for uptime display
   useEffect(() => {
-    const interval = setInterval(() => forceUpdate(n => n + 1), 1000);
+    const interval = setInterval(() => forceUpdate((n) => n + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -231,7 +234,8 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
     if (data.status === 'error') return 'error';
     if (data.subAgentCount > 0 || data.status === ('sub-agent' as string)) return 'subagents';
     const s = data.status as string;
-    if (s === 'idle' || s === 'working' || s === 'thinking' || s === 'error') return s as AgentState;
+    if (s === 'idle' || s === 'working' || s === 'thinking' || s === 'error')
+      return s as AgentState;
     return 'idle';
   }, [data, error]);
 
@@ -292,7 +296,7 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
   if (isLoading && !data) {
     return (
       <div className={`flex items-center gap-2 min-w-[140px] md:min-w-[180px] ${className}`}>
-        <div 
+        <div
           className="w-2.5 h-2.5 rounded-full bg-gray-400 opacity-50 shrink-0"
           aria-hidden="true"
         />
@@ -315,21 +319,21 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
           {/* The pulsing dot */}
           <div
             className={`agent-status-dot w-2.5 h-2.5 rounded-full shrink-0 ${animationClass}`}
-            style={{ 
+            style={{
               backgroundColor: config.color,
               color: config.color,
             }}
             aria-hidden="true"
           />
-          
+
           {/* Status label - hidden on mobile */}
-          <span 
+          <span
             className="text-sm font-medium hidden sm:inline shrink-0"
             style={{ color: config.color }}
           >
             {shortLabel}
           </span>
-          
+
           {/* Task name - truncated, hidden on small screens */}
           {data?.activeTaskTitle && state !== 'idle' && (
             <span className="text-sm text-muted-foreground truncate hidden md:inline max-w-[100px] lg:max-w-[150px]">
@@ -338,7 +342,7 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
           )}
         </button>
       </PopoverTrigger>
-      
+
       <PopoverContent className="w-80" align="start">
         <div className="space-y-4">
           {/* Current Status Header */}
@@ -368,20 +372,19 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Current Task
               </div>
-              <div className="text-sm font-medium">
-                {data.activeTaskTitle}
-              </div>
+              <div className="text-sm font-medium">{data.activeTaskTitle}</div>
               {data.activeTask && (
-                <div className="text-xs text-muted-foreground">
-                  ID: {data.activeTask}
-                </div>
+                <div className="text-xs text-muted-foreground">ID: {data.activeTask}</div>
               )}
             </div>
           )}
 
           {/* Sub-agents */}
           {data?.subAgentCount && data.subAgentCount > 0 && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ backgroundColor: config.bgColor }}>
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-md"
+              style={{ backgroundColor: config.bgColor }}
+            >
               <Users className="w-4 h-4" style={{ color: config.color }} />
               <span className="text-sm font-medium">
                 {data.subAgentCount} sub-agent{data.subAgentCount > 1 ? 's' : ''} active
@@ -405,48 +408,49 @@ export function AgentStatusIndicator({ className = '' }: AgentStatusIndicatorPro
               </div>
               <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
                 {/* Use activities if available, otherwise use local status history */}
-                {activities && activities.length > 0 ? (
-                  activities.map((activity) => (
-                    <div key={activity.id} className="flex items-center gap-2 text-xs">
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ 
-                          backgroundColor: activity.type === 'agent_started' 
-                            ? '#22c55e' 
-                            : activity.type === 'agent_stopped' || activity.type === 'agent_completed'
-                            ? '#6b7280'
-                            : '#3b82f6'
-                        }}
-                      />
-                      <span className="text-muted-foreground truncate flex-1">
-                        {activity.type === 'agent_started' && 'Agent started'}
-                        {activity.type === 'agent_stopped' && 'Agent stopped'}
-                        {activity.type === 'agent_completed' && 'Agent completed'}
-                        {activity.type === 'status_changed' && `Status → ${(activity.details as any)?.status}`}
-                        {activity.taskTitle && `: ${truncateText(activity.taskTitle, 20)}`}
-                      </span>
-                      <span className="text-muted-foreground/60 shrink-0">
-                        {formatTimeAgo(activity.timestamp)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  statusHistory.map((entry, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: getStatusColor(entry.status) }}
-                      />
-                      <span className="text-muted-foreground truncate flex-1">
-                        {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
-                        {entry.taskTitle && `: ${truncateText(entry.taskTitle, 20)}`}
-                      </span>
-                      <span className="text-muted-foreground/60 shrink-0">
-                        {formatTimeAgo(entry.timestamp)}
-                      </span>
-                    </div>
-                  ))
-                )}
+                {activities && activities.length > 0
+                  ? activities.map((activity) => (
+                      <div key={activity.id} className="flex items-center gap-2 text-xs">
+                        <div
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{
+                            backgroundColor:
+                              activity.type === 'agent_started'
+                                ? '#22c55e'
+                                : activity.type === 'agent_stopped' ||
+                                    activity.type === 'agent_completed'
+                                  ? '#6b7280'
+                                  : '#3b82f6',
+                          }}
+                        />
+                        <span className="text-muted-foreground truncate flex-1">
+                          {activity.type === 'agent_started' && 'Agent started'}
+                          {activity.type === 'agent_stopped' && 'Agent stopped'}
+                          {activity.type === 'agent_completed' && 'Agent completed'}
+                          {activity.type === 'status_changed' &&
+                            `Status → ${String(activity.details?.status ?? '')}`}
+                          {activity.taskTitle && `: ${truncateText(activity.taskTitle, 20)}`}
+                        </span>
+                        <span className="text-muted-foreground/60 shrink-0">
+                          {formatTimeAgo(activity.timestamp)}
+                        </span>
+                      </div>
+                    ))
+                  : statusHistory.map((entry, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <div
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: getStatusColor(entry.status) }}
+                        />
+                        <span className="text-muted-foreground truncate flex-1">
+                          {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                          {entry.taskTitle && `: ${truncateText(entry.taskTitle, 20)}`}
+                        </span>
+                        <span className="text-muted-foreground/60 shrink-0">
+                          {formatTimeAgo(entry.timestamp)}
+                        </span>
+                      </div>
+                    ))}
               </div>
             </div>
           )}

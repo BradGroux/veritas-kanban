@@ -56,7 +56,7 @@ export class ConflictService {
     }
 
     const config = await this.configService.getConfig();
-    const repoConfig = config.repos.find(r => r.name === task.git!.repo);
+    const repoConfig = config.repos.find((r) => r.name === task.git!.repo);
     if (!repoConfig) {
       throw new Error(`Repository "${task.git.repo}" not found`);
     }
@@ -76,12 +76,23 @@ export class ConflictService {
     // Check for rebase in progress
     const rebaseDir = path.join(workDir, '.git', 'rebase-merge');
     const rebaseApplyDir = path.join(workDir, '.git', 'rebase-apply');
-    const rebaseInProgress = await fs.access(rebaseDir).then(() => true).catch(() => false) ||
-                             await fs.access(rebaseApplyDir).then(() => true).catch(() => false);
+    // Intentionally silent catches: fs.access throws if path doesn't exist — false means not present
+    const rebaseInProgress =
+      (await fs
+        .access(rebaseDir)
+        .then(() => true)
+        .catch(() => false)) ||
+      (await fs
+        .access(rebaseApplyDir)
+        .then(() => true)
+        .catch(() => false));
 
-    // Check for merge in progress
+    // Check for merge in progress (intentionally silent: false means no MERGE_HEAD)
     const mergeHead = path.join(workDir, '.git', 'MERGE_HEAD');
-    const mergeInProgress = await fs.access(mergeHead).then(() => true).catch(() => false);
+    const mergeInProgress = await fs
+      .access(mergeHead)
+      .then(() => true)
+      .catch(() => false);
 
     // Get status to find conflicted files
     const status = await git.status();
@@ -149,32 +160,32 @@ export class ConflictService {
   private parseConflictMarkers(content: string): ConflictMarker[] {
     const lines = content.split('\n');
     const markers: ConflictMarker[] = [];
-    
+
     let i = 0;
     while (i < lines.length) {
       if (lines[i].startsWith('<<<<<<<')) {
         const startLine = i;
         const oursLines: string[] = [];
         const theirsLines: string[] = [];
-        
+
         // Collect "ours" lines
         i++;
         while (i < lines.length && !lines[i].startsWith('=======')) {
           oursLines.push(lines[i]);
           i++;
         }
-        
+
         const separatorLine = i;
-        
+
         // Collect "theirs" lines
         i++;
         while (i < lines.length && !lines[i].startsWith('>>>>>>>')) {
           theirsLines.push(lines[i]);
           i++;
         }
-        
+
         const endLine = i;
-        
+
         markers.push({
           startLine,
           separatorLine,
@@ -185,7 +196,7 @@ export class ConflictService {
       }
       i++;
     }
-    
+
     return markers;
   }
 
@@ -193,8 +204,8 @@ export class ConflictService {
    * Resolve a file conflict by choosing a side
    */
   async resolveFile(
-    taskId: string, 
-    filePath: string, 
+    taskId: string,
+    filePath: string,
     resolution: 'ours' | 'theirs' | 'manual',
     manualContent?: string
   ): Promise<ResolveResult> {
@@ -219,7 +230,7 @@ export class ConflictService {
 
     // Check remaining conflicts
     const status = await this.getConflictStatus(taskId);
-    
+
     return {
       success: true,
       remainingConflicts: status.conflictingFiles,
@@ -239,7 +250,7 @@ export class ConflictService {
    */
   async continueRebase(taskId: string): Promise<{ success: boolean; error?: string }> {
     const { git } = await this.getWorkingDir(taskId);
-    
+
     try {
       await git.rebase(['--continue']);
       return { success: true };
@@ -247,9 +258,9 @@ export class ConflictService {
       // Check if there are still conflicts
       const status = await this.getConflictStatus(taskId);
       if (status.hasConflicts) {
-        return { 
-          success: false, 
-          error: `Still have ${status.conflictingFiles.length} conflicting file(s)` 
+        return {
+          success: false,
+          error: `Still have ${status.conflictingFiles.length} conflicting file(s)`,
         };
       }
       return { success: false, error: error.message };
@@ -267,9 +278,12 @@ export class ConflictService {
   /**
    * Continue/finish merge after conflicts are resolved
    */
-  async continueMerge(taskId: string, commitMessage?: string): Promise<{ success: boolean; error?: string }> {
+  async continueMerge(
+    taskId: string,
+    commitMessage?: string
+  ): Promise<{ success: boolean; error?: string }> {
     const { git } = await this.getWorkingDir(taskId);
-    
+
     try {
       // Commit the merge
       await git.commit(commitMessage || 'Merge conflict resolution');
@@ -277,9 +291,9 @@ export class ConflictService {
     } catch (error: any) {
       const status = await this.getConflictStatus(taskId);
       if (status.hasConflicts) {
-        return { 
-          success: false, 
-          error: `Still have ${status.conflictingFiles.length} conflicting file(s)` 
+        return {
+          success: false,
+          error: `Still have ${status.conflictingFiles.length} conflicting file(s)`,
         };
       }
       return { success: false, error: error.message };

@@ -26,7 +26,7 @@ export interface TelemetryServiceOptions {
 
 /**
  * Lightweight telemetry service for event logging.
- * 
+ *
  * Events are stored as newline-delimited JSON (NDJSON) in date-partitioned files.
  * This allows for easy querying, tailing, and cleanup.
  */
@@ -77,13 +77,11 @@ export class TelemetryService {
 
   /**
    * Emit a telemetry event
-   * 
+   *
    * Events are written asynchronously to avoid blocking the caller.
    * Writes are queued to prevent file corruption from concurrent writes.
    */
-  async emit<T extends TelemetryEvent>(
-    event: Omit<T, 'id' | 'timestamp'>
-  ): Promise<T> {
+  async emit<T extends TelemetryEvent>(event: Omit<T, 'id' | 'timestamp'>): Promise<T> {
     if (!this.config.enabled) {
       // Return a fake event when disabled
       return {
@@ -105,7 +103,10 @@ export class TelemetryService {
     this.pendingWrites.push(fullEvent);
     if (this.pendingWrites.length > this.MAX_QUEUE_SIZE) {
       const dropped = this.pendingWrites.shift();
-      console.warn(`[Telemetry] Queue size exceeded (${this.MAX_QUEUE_SIZE}), dropped event:`, dropped?.type);
+      console.warn(
+        `[Telemetry] Queue size exceeded (${this.MAX_QUEUE_SIZE}), dropped event:`,
+        dropped?.type
+      );
     }
 
     // Queue the write to prevent concurrent file access issues
@@ -119,15 +120,15 @@ export class TelemetryService {
       .catch((err) => {
         console.error('[Telemetry] Failed to write event:', err);
       });
-    
+
     this.writeQueue = writePromise;
-    
+
     // Wait for the write to complete
     await writePromise;
 
     return fullEvent;
   }
-  
+
   /**
    * Wait for any pending writes to complete
    */
@@ -145,7 +146,7 @@ export class TelemetryService {
 
     // Determine which files to read based on date range
     const files = await this.getEventFiles(since, until);
-    
+
     let events: AnyTelemetryEvent[] = [];
 
     for (const file of files) {
@@ -202,10 +203,10 @@ export class TelemetryService {
     }
 
     await this.init();
-    
+
     // Get all recent event files (last 90 days should cover most use cases)
     const files = await this.getEventFiles();
-    
+
     // Read all events
     let allEvents: AnyTelemetryEvent[] = [];
     for (const file of files) {
@@ -215,13 +216,13 @@ export class TelemetryService {
 
     // Create a Set for O(1) lookup
     const taskIdSet = new Set(taskIds);
-    
+
     // Group events by taskId
     const result = new Map<string, AnyTelemetryEvent[]>();
     for (const taskId of taskIds) {
       result.set(taskId, []);
     }
-    
+
     for (const event of allEvents) {
       if (event.taskId && taskIdSet.has(event.taskId)) {
         result.get(event.taskId)!.push(event);
@@ -261,7 +262,7 @@ export class TelemetryService {
   async clear(): Promise<void> {
     await this.init();
     const files = await fs.readdir(this.telemetryDir);
-    
+
     for (const file of files) {
       if (file.endsWith('.ndjson')) {
         await fs.unlink(path.join(this.telemetryDir, file));
@@ -282,7 +283,7 @@ export class TelemetryService {
    */
   async exportAsCsv(options: TelemetryQueryOptions = {}): Promise<string> {
     const events = await this.getEvents(options);
-    
+
     if (events.length === 0) {
       return 'id,type,timestamp,taskId,project,agent,success,durationMs,inputTokens,outputTokens,cacheTokens,cost,error\n';
     }
@@ -303,22 +304,26 @@ export class TelemetryService {
       'cost',
       'error',
     ];
-    
+
     const rows = events.map((event) => {
+      // Access optional union fields via Record — events are a discriminated union
+      // and CSV export needs all possible fields regardless of event type
+      // SAFETY: AnyTelemetryEvent subtypes have string-keyed fields we need to access generically
+      const fields = event as unknown as Record<string, unknown>;
       const row: Record<string, string> = {
         id: event.id,
         type: event.type,
         timestamp: event.timestamp,
         taskId: event.taskId || '',
         project: event.project || '',
-        agent: (event as any).agent || '',
-        success: String((event as any).success ?? ''),
-        durationMs: String((event as any).durationMs ?? ''),
-        inputTokens: String((event as any).inputTokens ?? ''),
-        outputTokens: String((event as any).outputTokens ?? ''),
-        cacheTokens: String((event as any).cacheTokens ?? ''),
-        cost: String((event as any).cost ?? ''),
-        error: this.escapeCsvField((event as any).error || ''),
+        agent: String(fields.agent ?? ''),
+        success: String(fields.success ?? ''),
+        durationMs: String(fields.durationMs ?? ''),
+        inputTokens: String(fields.inputTokens ?? ''),
+        outputTokens: String(fields.outputTokens ?? ''),
+        cacheTokens: String(fields.cacheTokens ?? ''),
+        cost: String(fields.cost ?? ''),
+        error: this.escapeCsvField(String(fields.error ?? '')),
       };
       return headers.map((h) => row[h]).join(',');
     });
@@ -362,19 +367,21 @@ export class TelemetryService {
    */
   private async readEventFile(filename: string): Promise<AnyTelemetryEvent[]> {
     const filepath = path.join(this.telemetryDir, filename);
-    
+
     try {
       const content = await fs.readFile(filepath, 'utf-8');
       const lines = content.trim().split('\n').filter(Boolean);
-      
-      return lines.map((line) => {
-        try {
-          return JSON.parse(line) as AnyTelemetryEvent;
-        } catch {
-          console.error('[Telemetry] Failed to parse line:', line);
-          return null;
-        }
-      }).filter((e): e is AnyTelemetryEvent => e !== null);
+
+      return lines
+        .map((line) => {
+          try {
+            return JSON.parse(line) as AnyTelemetryEvent;
+          } catch {
+            console.error('[Telemetry] Failed to parse line:', line);
+            return null;
+          }
+        })
+        .filter((e): e is AnyTelemetryEvent => e !== null);
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         return [];
@@ -400,12 +407,12 @@ export class TelemetryService {
       if (!match) return false;
 
       const fileDate = match[1];
-      
+
       if (since) {
         const sinceDate = since.slice(0, 10);
         if (fileDate < sinceDate) return false;
       }
-      
+
       if (until) {
         const untilDate = until.slice(0, 10);
         if (fileDate > untilDate) return false;
@@ -424,7 +431,7 @@ export class TelemetryService {
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
     const files = await fs.readdir(this.telemetryDir);
-    
+
     for (const filename of files) {
       const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson/);
       if (!match) continue;

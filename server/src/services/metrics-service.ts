@@ -4,10 +4,10 @@ import path from 'path';
 import readline from 'readline';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
-import type { 
-  TaskStatus, 
+import type {
+  TaskStatus,
   BlockedCategory,
-  RunTelemetryEvent, 
+  RunTelemetryEvent,
   TokenTelemetryEvent,
   AnyTelemetryEvent,
   TelemetryEventType,
@@ -19,7 +19,7 @@ export interface TaskMetrics {
   byStatus: Record<TaskStatus, number>;
   byBlockedReason: Record<BlockedCategory | 'unspecified', number>;
   total: number;
-  completed: number;  // done + archived
+  completed: number; // done + archived
   archived: number;
 }
 
@@ -40,7 +40,7 @@ export interface RunMetrics {
   successes: number;
   failures: number;
   errors: number;
-  errorRate: number;   // (failures + errors) / runs
+  errorRate: number; // (failures + errors) / runs
   successRate: number; // successes / runs
   byAgent: AgentBreakdown[];
 }
@@ -102,12 +102,15 @@ interface RunAccumulator {
   failures: number;
   errors: number;
   durations: number[];
-  byAgent: Map<string, {
-    successes: number;
-    failures: number;
-    errors: number;
-    durations: number[];
-  }>;
+  byAgent: Map<
+    string,
+    {
+      successes: number;
+      failures: number;
+      errors: number;
+      durations: number[];
+    }
+  >;
 }
 
 interface TokenAccumulator {
@@ -116,13 +119,16 @@ interface TokenAccumulator {
   outputTokens: number;
   cacheTokens: number;
   tokensPerRun: number[];
-  byAgent: Map<string, {
-    totalTokens: number;
-    inputTokens: number;
-    outputTokens: number;
-    cacheTokens: number;
-    runs: number;
-  }>;
+  byAgent: Map<
+    string,
+    {
+      totalTokens: number;
+      inputTokens: number;
+      outputTokens: number;
+      cacheTokens: number;
+      runs: number;
+    }
+  >;
 }
 
 // Default paths - resolve to project root
@@ -174,13 +180,16 @@ export class MetricsService {
    */
   private getPreviousPeriodRange(period: MetricsPeriod): { since: string; until: string } {
     const now = new Date();
-    const periodMs = period === '24h' ? 24 * 60 * 60 * 1000 
-      : period === '7d' ? 7 * 24 * 60 * 60 * 1000 
-      : 30 * 24 * 60 * 60 * 1000;
-    
+    const periodMs =
+      period === '24h'
+        ? 24 * 60 * 60 * 1000
+        : period === '7d'
+          ? 7 * 24 * 60 * 60 * 1000
+          : 30 * 24 * 60 * 60 * 1000;
+
     const currentPeriodStart = new Date(now.getTime() - periodMs);
     const previousPeriodStart = new Date(currentPeriodStart.getTime() - periodMs);
-    
+
     return {
       since: previousPeriodStart.toISOString(),
       until: currentPeriodStart.toISOString(),
@@ -196,7 +205,7 @@ export class MetricsService {
     if (Math.abs(changePercent) < 5) return 'flat'; // Less than 5% change is flat
     const isUp = current > previous;
     // For metrics where lower is better (like duration), invert the logic
-    return higherIsBetter ? (isUp ? 'up' : 'down') : (isUp ? 'down' : 'up');
+    return higherIsBetter ? (isUp ? 'up' : 'down') : isUp ? 'down' : 'up';
   }
 
   /**
@@ -297,33 +306,31 @@ export class MetricsService {
     ]);
 
     // Filter by project if specified
-    const filteredActive = project 
-      ? activeTasks.filter(t => t.project === project)
-      : activeTasks;
+    const filteredActive = project ? activeTasks.filter((t) => t.project === project) : activeTasks;
     const filteredArchived = project
-      ? archivedTasks.filter(t => t.project === project)
+      ? archivedTasks.filter((t) => t.project === project)
       : archivedTasks;
 
     // Count by status
     const byStatus: Record<TaskStatus, number> = {
-      'todo': 0,
+      todo: 0,
       'in-progress': 0,
-      'blocked': 0,
-      'done': 0,
+      blocked: 0,
+      done: 0,
     };
 
     // Count by blocked reason
     const byBlockedReason: Record<BlockedCategory | 'unspecified', number> = {
       'waiting-on-feedback': 0,
       'technical-snag': 0,
-      'prerequisite': 0,
-      'other': 0,
-      'unspecified': 0,
+      prerequisite: 0,
+      other: 0,
+      unspecified: 0,
     };
 
     for (const task of filteredActive) {
       byStatus[task.status]++;
-      
+
       // Count blocked reasons for blocked tasks
       if (task.status === 'blocked') {
         if (task.blockedReason?.category) {
@@ -370,7 +377,7 @@ export class MetricsService {
       accumulator,
       (event, acc) => {
         const agent = (event as RunTelemetryEvent).agent || 'veritas';
-        
+
         if (!acc.byAgent.has(agent)) {
           acc.byAgent.set(agent, { successes: 0, failures: 0, errors: 0, durations: [] });
         }
@@ -404,9 +411,10 @@ export class MetricsService {
     const byAgent: AgentBreakdown[] = [];
     for (const [agent, data] of accumulator.byAgent.entries()) {
       const agentRuns = data.successes + data.failures + data.errors;
-      const avgDuration = data.durations.length > 0
-        ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
-        : 0;
+      const avgDuration =
+        data.durations.length > 0
+          ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+          : 0;
 
       byAgent.push({
         agent,
@@ -451,36 +459,36 @@ export class MetricsService {
       byAgent: new Map(),
     };
 
-    await this.streamEvents(
-      files,
-      ['run.tokens'],
-      since,
-      project,
-      accumulator,
-      (event, acc) => {
-        const tokenEvent = event as TokenTelemetryEvent;
-        const agent = tokenEvent.agent || 'veritas';
-        // Calculate totalTokens if not provided
-        const totalTokens = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
-        const cacheTokens = tokenEvent.cacheTokens ?? 0;
+    await this.streamEvents(files, ['run.tokens'], since, project, accumulator, (event, acc) => {
+      const tokenEvent = event as TokenTelemetryEvent;
+      const agent = tokenEvent.agent || 'veritas';
+      // Calculate totalTokens if not provided
+      const totalTokens =
+        tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+      const cacheTokens = tokenEvent.cacheTokens ?? 0;
 
-        acc.totalTokens += totalTokens;
-        acc.inputTokens += tokenEvent.inputTokens;
-        acc.outputTokens += tokenEvent.outputTokens;
-        acc.cacheTokens += cacheTokens;
-        acc.tokensPerRun.push(totalTokens);
+      acc.totalTokens += totalTokens;
+      acc.inputTokens += tokenEvent.inputTokens;
+      acc.outputTokens += tokenEvent.outputTokens;
+      acc.cacheTokens += cacheTokens;
+      acc.tokensPerRun.push(totalTokens);
 
-        if (!acc.byAgent.has(agent)) {
-          acc.byAgent.set(agent, { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, runs: 0 });
-        }
-        const agentAcc = acc.byAgent.get(agent)!;
-        agentAcc.totalTokens += totalTokens;
-        agentAcc.inputTokens += tokenEvent.inputTokens;
-        agentAcc.outputTokens += tokenEvent.outputTokens;
-        agentAcc.cacheTokens += cacheTokens;
-        agentAcc.runs++;
+      if (!acc.byAgent.has(agent)) {
+        acc.byAgent.set(agent, {
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheTokens: 0,
+          runs: 0,
+        });
       }
-    );
+      const agentAcc = acc.byAgent.get(agent)!;
+      agentAcc.totalTokens += totalTokens;
+      agentAcc.inputTokens += tokenEvent.inputTokens;
+      agentAcc.outputTokens += tokenEvent.outputTokens;
+      agentAcc.cacheTokens += cacheTokens;
+      agentAcc.runs++;
+    });
 
     // Sort for percentile calculations
     accumulator.tokensPerRun.sort((a, b) => a - b);
@@ -534,26 +542,19 @@ export class MetricsService {
       byAgent: new Map<string, number[]>(),
     };
 
-    await this.streamEvents(
-      files,
-      ['run.completed'],
-      since,
-      project,
-      accumulator,
-      (event, acc) => {
-        const runEvent = event as RunTelemetryEvent;
-        if (runEvent.durationMs !== undefined && runEvent.durationMs > 0) {
-          const agent = runEvent.agent || 'veritas';
+    await this.streamEvents(files, ['run.completed'], since, project, accumulator, (event, acc) => {
+      const runEvent = event as RunTelemetryEvent;
+      if (runEvent.durationMs !== undefined && runEvent.durationMs > 0) {
+        const agent = runEvent.agent || 'veritas';
 
-          acc.durations.push(runEvent.durationMs);
+        acc.durations.push(runEvent.durationMs);
 
-          if (!acc.byAgent.has(agent)) {
-            acc.byAgent.set(agent, []);
-          }
-          acc.byAgent.get(agent)!.push(runEvent.durationMs);
+        if (!acc.byAgent.has(agent)) {
+          acc.byAgent.set(agent, []);
         }
+        acc.byAgent.get(agent)!.push(runEvent.durationMs);
       }
-    );
+    });
 
     // Sort for percentile calculations
     accumulator.durations.sort((a, b) => a - b);
@@ -569,7 +570,7 @@ export class MetricsService {
     for (const [agent, durations] of accumulator.byAgent.entries()) {
       durations.sort((a, b) => a - b);
       const agentSum = durations.reduce((a, b) => a + b, 0);
-      
+
       byAgent.push({
         agent,
         runs: durations.length,
@@ -596,7 +597,10 @@ export class MetricsService {
    * Get all metrics in one call (for dashboard)
    * Optimized: streams files once and extracts all metrics in single pass
    */
-  async getAllMetrics(period: MetricsPeriod = '24h', project?: string): Promise<{
+  async getAllMetrics(
+    period: MetricsPeriod = '24h',
+    project?: string
+  ): Promise<{
     tasks: TaskMetrics;
     runs: RunMetrics;
     tokens: TokenMetrics;
@@ -678,7 +682,8 @@ export class MetricsService {
               const tokenEvent = event as TokenTelemetryEvent;
               const agent = tokenEvent.agent || 'veritas';
               // Calculate totalTokens if not provided
-              const totalTokens = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
+              const totalTokens =
+                tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
               const cacheTokens = tokenEvent.cacheTokens ?? 0;
 
               tokenAcc.totalTokens += totalTokens;
@@ -688,7 +693,13 @@ export class MetricsService {
               tokenAcc.tokensPerRun.push(totalTokens);
 
               if (!tokenAcc.byAgent.has(agent)) {
-                tokenAcc.byAgent.set(agent, { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, runs: 0 });
+                tokenAcc.byAgent.set(agent, {
+                  totalTokens: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  cacheTokens: 0,
+                  runs: 0,
+                });
               }
               const agentTokenAcc = tokenAcc.byAgent.get(agent)!;
               agentTokenAcc.totalTokens += totalTokens;
@@ -717,9 +728,10 @@ export class MetricsService {
     const runByAgent: AgentBreakdown[] = [];
     for (const [agent, data] of runAcc.byAgent.entries()) {
       const agentRuns = data.successes + data.failures + data.errors;
-      const avgDuration = data.durations.length > 0
-        ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
-        : 0;
+      const avgDuration =
+        data.durations.length > 0
+          ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+          : 0;
 
       runByAgent.push({
         agent,
@@ -805,10 +817,14 @@ export class MetricsService {
     // Calculate trends by comparing with previous period
     const previousRange = this.getPreviousPeriodRange(period);
     const previousFiles = await this.getEventFiles(previousRange.since);
-    
+
     // Quick accumulator for previous period (runs, tokens, duration only)
-    let prevRuns = 0, prevSuccesses = 0, prevTokens = 0, prevDurationSum = 0, prevDurationCount = 0;
-    
+    let prevRuns = 0,
+      prevSuccesses = 0,
+      prevTokens = 0,
+      prevDurationSum = 0,
+      prevDurationCount = 0;
+
     for (const filePath of previousFiles) {
       try {
         const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
@@ -821,7 +837,8 @@ export class MetricsService {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line) as AnyTelemetryEvent;
-            if (event.timestamp < previousRange.since || event.timestamp >= previousRange.until) continue;
+            if (event.timestamp < previousRange.since || event.timestamp >= previousRange.until)
+              continue;
             if (project && event.project !== project) continue;
 
             if (event.type === 'run.completed') {
@@ -836,9 +853,11 @@ export class MetricsService {
               prevRuns++;
             } else if (event.type === 'run.tokens') {
               const tokenEvent = event as TokenTelemetryEvent;
-              prevTokens += tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
+              prevTokens +=
+                tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
             }
           } catch {
+            // Intentionally silent: skip malformed NDJSON line
             continue;
           }
         }
@@ -851,7 +870,7 @@ export class MetricsService {
 
     const prevSuccessRate = prevRuns > 0 ? prevSuccesses / prevRuns : 0;
     const prevAvgDuration = prevDurationCount > 0 ? prevDurationSum / prevDurationCount : 0;
-    
+
     const trends: TrendComparison = {
       runsTrend: this.calculateTrend(runs.runs, prevRuns, true),
       runsChange: this.calculateChange(runs.runs, prevRuns),
@@ -874,16 +893,19 @@ export class MetricsService {
     const files = await this.getEventFiles(since);
 
     // Accumulator per day
-    const dailyData = new Map<string, {
-      runs: number;
-      successes: number;
-      failures: number;
-      errors: number;
-      totalTokens: number;
-      inputTokens: number;
-      outputTokens: number;
-      durations: number[];
-    }>();
+    const dailyData = new Map<
+      string,
+      {
+        runs: number;
+        successes: number;
+        failures: number;
+        errors: number;
+        totalTokens: number;
+        inputTokens: number;
+        outputTokens: number;
+        durations: number[];
+      }
+    >();
 
     // Initialize all days in the period
     const startDate = new Date(since);
@@ -952,12 +974,14 @@ export class MetricsService {
               dayAcc.errors++;
             } else if (event.type === 'run.tokens') {
               const tokenEvent = event as TokenTelemetryEvent;
-              const totalTokens = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
+              const totalTokens =
+                tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
               dayAcc.totalTokens += totalTokens;
               dayAcc.inputTokens += tokenEvent.inputTokens;
               dayAcc.outputTokens += tokenEvent.outputTokens;
             }
           } catch {
+            // Intentionally silent: skip malformed NDJSON line
             continue;
           }
         }
@@ -974,9 +998,10 @@ export class MetricsService {
 
     for (const date of sortedDates) {
       const data = dailyData.get(date)!;
-      const avgDurationMs = data.durations.length > 0
-        ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
-        : 0;
+      const avgDurationMs =
+        data.durations.length > 0
+          ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+          : 0;
 
       daily.push({
         date,
@@ -998,18 +1023,23 @@ export class MetricsService {
   /**
    * Get monthly budget metrics for the current month
    */
-  async getBudgetMetrics(tokenBudget: number, costBudget: number, warningThreshold: number, project?: string): Promise<BudgetMetrics> {
+  async getBudgetMetrics(
+    tokenBudget: number,
+    costBudget: number,
+    warningThreshold: number,
+    project?: string
+  ): Promise<BudgetMetrics> {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    
+
     // Calculate period boundaries
     const periodStart = new Date(year, month, 1);
     const periodEnd = new Date(year, month + 1, 0); // Last day of month
     const daysInMonth = periodEnd.getDate();
     const daysElapsed = now.getDate();
     const daysRemaining = daysInMonth - daysElapsed;
-    
+
     const since = periodStart.toISOString();
     const files = await this.getEventFiles(since);
 
@@ -1039,12 +1069,14 @@ export class MetricsService {
             if (project && event.project !== project) continue;
 
             const tokenEvent = event as TokenTelemetryEvent;
-            const eventTotal = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
-            
+            const eventTotal =
+              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+
             totalTokens += eventTotal;
             inputTokens += tokenEvent.inputTokens;
             outputTokens += tokenEvent.outputTokens;
           } catch {
+            // Intentionally silent: skip malformed NDJSON line
             continue;
           }
         }
@@ -1057,22 +1089,23 @@ export class MetricsService {
 
     // Cost estimation (simplified pricing model)
     // Input: $0.01 per 1K tokens, Output: $0.03 per 1K tokens
-    const estimatedCost = (inputTokens / 1000 * 0.01) + (outputTokens / 1000 * 0.03);
-    
+    const estimatedCost = (inputTokens / 1000) * 0.01 + (outputTokens / 1000) * 0.03;
+
     // Burn rate calculations
     const tokensPerDay = daysElapsed > 0 ? totalTokens / daysElapsed : 0;
     const costPerDay = daysElapsed > 0 ? estimatedCost / daysElapsed : 0;
-    
+
     // Projections
     const projectedMonthlyTokens = Math.round(tokensPerDay * daysInMonth);
     const projectedMonthlyCost = costPerDay * daysInMonth;
-    
+
     // Budget percentages
     const tokenBudgetUsed = tokenBudget > 0 ? (totalTokens / tokenBudget) * 100 : 0;
     const costBudgetUsed = costBudget > 0 ? (estimatedCost / costBudget) * 100 : 0;
-    const projectedTokenOverage = tokenBudget > 0 ? (projectedMonthlyTokens / tokenBudget) * 100 : 0;
+    const projectedTokenOverage =
+      tokenBudget > 0 ? (projectedMonthlyTokens / tokenBudget) * 100 : 0;
     const projectedCostOverage = costBudget > 0 ? (projectedMonthlyCost / costBudget) * 100 : 0;
-    
+
     // Determine status based on highest usage percentage
     let status: 'ok' | 'warning' | 'danger' = 'ok';
     const maxUsage = Math.max(
@@ -1081,7 +1114,7 @@ export class MetricsService {
       tokenBudget > 0 ? projectedTokenOverage : 0,
       costBudget > 0 ? projectedCostOverage : 0
     );
-    
+
     if (maxUsage >= 100) {
       status = 'danger';
     } else if (maxUsage >= warningThreshold) {
@@ -1116,22 +1149,29 @@ export class MetricsService {
    * Get agent comparison metrics for recommendations
    * Aggregates performance data per agent with minimum run threshold
    */
-  async getAgentComparison(period: MetricsPeriod, project?: string, minRuns = 3): Promise<AgentComparisonResult> {
+  async getAgentComparison(
+    period: MetricsPeriod,
+    project?: string,
+    minRuns = 3
+  ): Promise<AgentComparisonResult> {
     const since = this.getPeriodStart(period);
     const files = await this.getEventFiles(since);
 
     // Per-agent accumulator
-    const agentData = new Map<string, {
-      runs: number;
-      successes: number;
-      failures: number;
-      errors: number;
-      durations: number[];
-      totalTokens: number;
-      inputTokens: number;
-      outputTokens: number;
-      costEstimate: number;
-    }>();
+    const agentData = new Map<
+      string,
+      {
+        runs: number;
+        successes: number;
+        failures: number;
+        errors: number;
+        durations: number[];
+        totalTokens: number;
+        inputTokens: number;
+        outputTokens: number;
+        costEstimate: number;
+      }
+    >();
 
     // Process all files
     for (const filePath of files) {
@@ -1208,15 +1248,18 @@ export class MetricsService {
                 });
               }
               const acc = agentData.get(agent)!;
-              const totalTokens = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
-              
+              const totalTokens =
+                tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+
               acc.totalTokens += totalTokens;
               acc.inputTokens += tokenEvent.inputTokens;
               acc.outputTokens += tokenEvent.outputTokens;
               // Cost estimate: $0.01/1K input, $0.03/1K output
-              acc.costEstimate += (tokenEvent.inputTokens / 1000 * 0.01) + (tokenEvent.outputTokens / 1000 * 0.03);
+              acc.costEstimate +=
+                (tokenEvent.inputTokens / 1000) * 0.01 + (tokenEvent.outputTokens / 1000) * 0.03;
             }
           } catch {
+            // Intentionally silent: skip malformed NDJSON line
             continue;
           }
         }
@@ -1229,16 +1272,18 @@ export class MetricsService {
 
     // Build comparison data for agents meeting minimum runs threshold
     const agents: AgentComparisonData[] = [];
-    
+
     for (const [agent, data] of agentData.entries()) {
       if (data.runs < minRuns) continue;
 
-      const avgDurationMs = data.durations.length > 0
-        ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
-        : 0;
+      const avgDurationMs =
+        data.durations.length > 0
+          ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+          : 0;
       const successRate = data.runs > 0 ? data.successes / data.runs : 0;
       const avgTokensPerRun = data.runs > 0 ? Math.round(data.totalTokens / data.runs) : 0;
-      const avgCostPerRun = data.runs > 0 ? Math.round((data.costEstimate / data.runs) * 100) / 100 : 0;
+      const avgCostPerRun =
+        data.runs > 0 ? Math.round((data.costEstimate / data.runs) * 100) / 100 : 0;
 
       agents.push({
         agent,
@@ -1259,7 +1304,7 @@ export class MetricsService {
 
     // Generate recommendations
     const recommendations: AgentRecommendation[] = [];
-    
+
     if (agents.length > 0) {
       // Most reliable (highest success rate)
       const mostReliable = [...agents].sort((a, b) => b.successRate - a.successRate)[0];
@@ -1273,7 +1318,9 @@ export class MetricsService {
       }
 
       // Fastest (lowest avg duration)
-      const fastest = [...agents].filter(a => a.avgDurationMs > 0).sort((a, b) => a.avgDurationMs - b.avgDurationMs)[0];
+      const fastest = [...agents]
+        .filter((a) => a.avgDurationMs > 0)
+        .sort((a, b) => a.avgDurationMs - b.avgDurationMs)[0];
       if (fastest) {
         recommendations.push({
           category: 'speed',
@@ -1284,7 +1331,9 @@ export class MetricsService {
       }
 
       // Cheapest (lowest avg cost)
-      const cheapest = [...agents].filter(a => a.avgCostPerRun > 0).sort((a, b) => a.avgCostPerRun - b.avgCostPerRun)[0];
+      const cheapest = [...agents]
+        .filter((a) => a.avgCostPerRun > 0)
+        .sort((a, b) => a.avgCostPerRun - b.avgCostPerRun)[0];
       if (cheapest) {
         recommendations.push({
           category: 'cost',
@@ -1296,13 +1345,13 @@ export class MetricsService {
 
       // Most efficient (tokens per successful run)
       const efficientAgents = agents
-        .filter(a => a.successes > 0)
-        .map(a => ({
+        .filter((a) => a.successes > 0)
+        .map((a) => ({
           ...a,
           tokensPerSuccess: Math.round(a.totalTokens / a.successes),
         }))
         .sort((a, b) => a.tokensPerSuccess - b.tokensPerSuccess);
-      
+
       if (efficientAgents.length > 0) {
         const mostEfficient = efficientAgents[0];
         recommendations.push({
@@ -1367,15 +1416,19 @@ export class MetricsService {
     }
 
     // Filter by project if specified
-    const allTasks = [...activeTasks, ...archivedTasks]
-      .filter(t => !project || t.project === project);
+    const allTasks = [...activeTasks, ...archivedTasks].filter(
+      (t) => !project || t.project === project
+    );
 
     // Group tasks by sprint
-    const sprintData = new Map<string, {
-      completed: number;
-      total: number;
-      byType: Record<string, number>;
-    }>();
+    const sprintData = new Map<
+      string,
+      {
+        completed: number;
+        total: number;
+        byType: Record<string, number>;
+      }
+    >();
 
     for (const task of allTasks) {
       if (!task.sprint) continue;
@@ -1386,12 +1439,12 @@ export class MetricsService {
 
       const data = sprintData.get(task.sprint)!;
       data.total++;
-      
+
       // Count completed tasks (done or archived)
-      const isCompleted = task.status === 'done' || archivedTasks.some(a => a.id === task.id);
+      const isCompleted = task.status === 'done' || archivedTasks.some((a) => a.id === task.id);
       if (isCompleted) {
         data.completed++;
-        
+
         // Track by type
         const taskType = task.type || 'other';
         data.byType[taskType] = (data.byType[taskType] || 0) + 1;
@@ -1414,12 +1467,14 @@ export class MetricsService {
 
     for (const [sprintId, data] of sortedSprints) {
       completedCounts.push(data.completed);
-      
+
       // Calculate rolling average (last 3 sprints)
       const recentCompleted = completedCounts.slice(-3);
-      const rollingAverage = recentCompleted.length > 0
-        ? Math.round((recentCompleted.reduce((a, b) => a + b, 0) / recentCompleted.length) * 10) / 10
-        : 0;
+      const rollingAverage =
+        recentCompleted.length > 0
+          ? Math.round((recentCompleted.reduce((a, b) => a + b, 0) / recentCompleted.length) * 10) /
+            10
+          : 0;
 
       // Use display label if available, otherwise fall back to ID
       const sprintLabel = sprintLabels.get(sprintId) || sprintId;
@@ -1435,22 +1490,22 @@ export class MetricsService {
 
     // Calculate overall metrics
     const totalCompleted = completedCounts.reduce((a, b) => a + b, 0);
-    const averageVelocity = sprints.length > 0
-      ? Math.round((totalCompleted / sprints.length) * 10) / 10
-      : 0;
+    const averageVelocity =
+      sprints.length > 0 ? Math.round((totalCompleted / sprints.length) * 10) / 10 : 0;
 
     // Determine trend (comparing last 3 vs previous 3)
     let trend: VelocityTrend = 'steady';
     if (sprints.length >= 4) {
       const recentSprints = sprints.slice(-3);
       const previousSprints = sprints.slice(-6, -3);
-      
+
       if (previousSprints.length >= 2) {
         const recentAvg = recentSprints.reduce((a, b) => a + b.completed, 0) / recentSprints.length;
-        const previousAvg = previousSprints.reduce((a, b) => a + b.completed, 0) / previousSprints.length;
-        
+        const previousAvg =
+          previousSprints.reduce((a, b) => a + b.completed, 0) / previousSprints.length;
+
         const changePercent = previousAvg > 0 ? ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
-        
+
         if (changePercent > 10) {
           trend = 'accelerating';
         } else if (changePercent < -10) {
@@ -1470,9 +1525,10 @@ export class MetricsService {
           completed: data.completed,
           total: data.total,
           percentComplete: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
-          vsAverage: averageVelocity > 0
-            ? Math.round(((data.completed - averageVelocity) / averageVelocity) * 100)
-            : 0,
+          vsAverage:
+            averageVelocity > 0
+              ? Math.round(((data.completed - averageVelocity) / averageVelocity) * 100)
+              : 0,
         };
         break;
       }
@@ -1489,7 +1545,11 @@ export class MetricsService {
   /**
    * Get list of failed runs with details
    */
-  async getFailedRuns(period: MetricsPeriod, project?: string, limit = 50): Promise<FailedRunDetails[]> {
+  async getFailedRuns(
+    period: MetricsPeriod,
+    project?: string,
+    limit = 50
+  ): Promise<FailedRunDetails[]> {
     const since = this.getPeriodStart(period);
     const files = await this.getEventFiles(since);
 
@@ -1515,9 +1575,12 @@ export class MetricsService {
             if (project && event.project !== project) continue;
 
             const runEvent = event as RunTelemetryEvent;
-            
+
             // Only include failed runs
-            if (event.type === 'run.error' || (event.type === 'run.completed' && !runEvent.success)) {
+            if (
+              event.type === 'run.error' ||
+              (event.type === 'run.completed' && !runEvent.success)
+            ) {
               failedRuns.push({
                 timestamp: event.timestamp,
                 taskId: runEvent.taskId,
@@ -1566,38 +1629,38 @@ export interface TrendsData {
 }
 
 export interface BudgetMetrics {
-  periodStart: string;           // Start of current month (YYYY-MM-DD)
-  periodEnd: string;             // End of current month (YYYY-MM-DD)
+  periodStart: string; // Start of current month (YYYY-MM-DD)
+  periodEnd: string; // End of current month (YYYY-MM-DD)
   daysInMonth: number;
   daysElapsed: number;
   daysRemaining: number;
-  
+
   // Token usage
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
-  
+
   // Cost estimation (simplified: $0.01 per 1K tokens input, $0.03 per 1K output)
   estimatedCost: number;
-  
+
   // Burn rate calculations
-  tokensPerDay: number;          // Average tokens per day so far
-  costPerDay: number;            // Average cost per day
-  
+  tokensPerDay: number; // Average tokens per day so far
+  costPerDay: number; // Average cost per day
+
   // Projections
   projectedMonthlyTokens: number;
   projectedMonthlyCost: number;
-  
+
   // Budget status
-  tokenBudget: number;           // From settings (0 = no limit)
-  costBudget: number;            // From settings (0 = no limit)
-  tokenBudgetUsed: number;       // Percentage used (0-100+)
-  costBudgetUsed: number;        // Percentage used (0-100+)
+  tokenBudget: number; // From settings (0 = no limit)
+  costBudget: number; // From settings (0 = no limit)
+  tokenBudgetUsed: number; // Percentage used (0-100+)
+  costBudgetUsed: number; // Percentage used (0-100+)
   projectedTokenOverage: number; // Percentage of projected vs budget (0-100+)
-  projectedCostOverage: number;  // Percentage of projected vs budget (0-100+)
-  
+  projectedCostOverage: number; // Percentage of projected vs budget (0-100+)
+
   // Status indicator
-  status: 'ok' | 'warning' | 'danger';  // Based on warningThreshold
+  status: 'ok' | 'warning' | 'danger'; // Based on warningThreshold
 }
 
 /** Agent comparison data for a single agent */
@@ -1606,20 +1669,20 @@ export interface AgentComparisonData {
   runs: number;
   successes: number;
   failures: number;
-  successRate: number;           // Percentage (0-100)
+  successRate: number; // Percentage (0-100)
   avgDurationMs: number;
   avgTokensPerRun: number;
   totalTokens: number;
-  avgCostPerRun: number;         // Estimated cost per run
-  totalCost: number;             // Total estimated cost
+  avgCostPerRun: number; // Estimated cost per run
+  totalCost: number; // Total estimated cost
 }
 
 /** Recommendation for best agent in a category */
 export interface AgentRecommendation {
   category: 'reliability' | 'speed' | 'cost' | 'efficiency';
   agent: string;
-  value: string;                 // Human-readable value (e.g., "95.5%", "2.3m")
-  reason: string;                // Explanation
+  value: string; // Human-readable value (e.g., "95.5%", "2.3m")
+  reason: string; // Explanation
 }
 
 /** Full agent comparison result */
@@ -1628,33 +1691,33 @@ export interface AgentComparisonResult {
   minRuns: number;
   agents: AgentComparisonData[];
   recommendations: AgentRecommendation[];
-  totalAgents: number;           // Total agents found (before minRuns filter)
-  qualifyingAgents: number;      // Agents meeting minRuns threshold
+  totalAgents: number; // Total agents found (before minRuns filter)
+  qualifyingAgents: number; // Agents meeting minRuns threshold
 }
 
 // Sprint velocity types
 export type VelocityTrend = 'accelerating' | 'steady' | 'slowing';
 
 export interface SprintVelocityPoint {
-  sprint: string;                    // Sprint identifier (e.g., "US-100")
-  completed: number;                 // Tasks completed in this sprint
-  total: number;                     // Total tasks in this sprint
-  rollingAverage: number;            // 3-sprint rolling average at this point
-  byType: Record<string, number>;    // Breakdown by task type
+  sprint: string; // Sprint identifier (e.g., "US-100")
+  completed: number; // Tasks completed in this sprint
+  total: number; // Total tasks in this sprint
+  rollingAverage: number; // 3-sprint rolling average at this point
+  byType: Record<string, number>; // Breakdown by task type
 }
 
 export interface CurrentSprintProgress {
   sprint: string;
   completed: number;
   total: number;
-  percentComplete: number;           // 0-100
-  vsAverage: number;                 // Percentage vs historical average (-100 to +100+)
+  percentComplete: number; // 0-100
+  vsAverage: number; // Percentage vs historical average (-100 to +100+)
 }
 
 export interface VelocityMetrics {
-  sprints: SprintVelocityPoint[];    // Sprint data (oldest to newest)
-  averageVelocity: number;           // Overall average tasks per sprint
-  trend: VelocityTrend;              // Current trend indicator
+  sprints: SprintVelocityPoint[]; // Sprint data (oldest to newest)
+  averageVelocity: number; // Overall average tasks per sprint
+  trend: VelocityTrend; // Current trend indicator
   currentSprint?: CurrentSprintProgress; // Progress on current/active sprint
 }
 

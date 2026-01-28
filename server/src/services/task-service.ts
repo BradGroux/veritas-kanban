@@ -3,13 +3,21 @@ import { watch, type FSWatcher } from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
-import type { Task, CreateTaskInput, UpdateTaskInput, ReviewComment, Subtask, TaskTelemetryEvent, TimeTracking } from '@veritas-kanban/shared';
+import type {
+  Task,
+  CreateTaskInput,
+  UpdateTaskInput,
+  ReviewComment,
+  Subtask,
+  TaskTelemetryEvent,
+  TimeTracking,
+} from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('task-cache');
 
-/** 
+/**
  * Task ID format validation
  * Production format: task_YYYYMMDD_XXXXXX (date + 6-char nanoid)
  * Legacy/test formats also accepted: task_YYYYMMDD_X{1,20} or task_WORD
@@ -91,7 +99,7 @@ export class TaskService {
   private async loadCacheFromDisk(): Promise<void> {
     await this.ensureDirectories();
     const files = await fs.readdir(this.tasksDir);
-    const mdFiles = files.filter(f => f.endsWith('.md'));
+    const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     this.cache.clear();
     await Promise.all(
@@ -102,7 +110,7 @@ export class TaskService {
         if (task) {
           this.cache.set(task.id, task);
         }
-      }),
+      })
     );
   }
 
@@ -159,9 +167,7 @@ export class TaskService {
   /** Get all cached tasks sorted by updated date descending */
   private cacheList(): Task[] {
     const tasks = Array.from(this.cache.values());
-    return tasks.sort(
-      (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime(),
-    );
+    return tasks.sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
   }
 
   /** Record that we are about to write — suppresses watcher for WRITE_DEBOUNCE_MS */
@@ -180,8 +186,8 @@ export class TaskService {
 
         log.debug({ eventType, filename }, 'File change detected');
         // Re-read the changed file (or remove from cache if deleted)
-        this.reloadFile(filename).catch(err =>
-          log.error({ err, filename }, 'Error reloading file'),
+        this.reloadFile(filename).catch((err) =>
+          log.error({ err, filename }, 'Error reloading file')
         );
       });
     } catch (err) {
@@ -223,7 +229,7 @@ export class TaskService {
     for (const [key, value] of Object.entries(obj)) {
       if (value === undefined) continue;
       if (Array.isArray(value)) {
-        clean[key] = value.map(item =>
+        clean[key] = value.map((item) =>
           item && typeof item === 'object' && !Array.isArray(item)
             ? this.deepCleanUndefined(item)
             : item
@@ -239,12 +245,12 @@ export class TaskService {
 
   private taskToMarkdown(task: Task): string {
     const { description, reviewComments, ...rest } = task;
-    
+
     // Filter out undefined values (gray-matter can't serialize them)
     const frontmatter = this.deepCleanUndefined(rest);
-    
+
     const content = matter.stringify(description || '', frontmatter);
-    
+
     // Add review comments section if present
     if (reviewComments && reviewComments.length > 0) {
       const commentsSection = reviewComments
@@ -252,18 +258,18 @@ export class TaskService {
         .join('\n');
       return content + '\n\n## Review Comments\n\n' + commentsSection;
     }
-    
+
     return content;
   }
 
   private parseTaskFile(content: string, filename: string): Task | null {
     try {
       const { data, content: description } = matter(content);
-      
+
       // Extract review comments from description if present
       let cleanDescription = description;
       const reviewComments: Task['reviewComments'] = [];
-      
+
       const reviewSection = description.indexOf('## Review Comments');
       if (reviewSection !== -1) {
         cleanDescription = description.slice(0, reviewSection).trim();
@@ -319,22 +325,20 @@ export class TaskService {
    */
   async getTasksWithDependencies(taskIds?: string[]): Promise<Task[]> {
     const allTasks = await this.listTasks();
-    const taskMap = new Map(allTasks.map(t => [t.id, t]));
-    
-    const tasksToResolve = taskIds 
-      ? allTasks.filter(t => taskIds.includes(t.id))
-      : allTasks;
-    
-    return tasksToResolve.map(task => {
+    const taskMap = new Map(allTasks.map((t) => [t.id, t]));
+
+    const tasksToResolve = taskIds ? allTasks.filter((t) => taskIds.includes(t.id)) : allTasks;
+
+    return tasksToResolve.map((task) => {
       if (!task.blockedBy || task.blockedBy.length === 0) {
         return task;
       }
-      
+
       // Resolve dependencies from the in-memory map
       const resolvedDependencies = task.blockedBy
-        .map(depId => taskMap.get(depId))
+        .map((depId) => taskMap.get(depId))
         .filter((t): t is Task => t !== undefined);
-      
+
       return {
         ...task,
         _dependencies: resolvedDependencies, // Add resolved deps without modifying schema
@@ -349,7 +353,7 @@ export class TaskService {
 
   async createTask(input: CreateTaskInput): Promise<Task> {
     const now = new Date().toISOString();
-    
+
     const task: Task = {
       id: this.generateId(),
       title: input.title,
@@ -368,13 +372,13 @@ export class TaskService {
     const filename = this.taskToFilename(task);
     const filepath = path.join(this.tasksDir, filename);
     const content = this.taskToMarkdown(task);
-    
+
     this.markWrite();
     await fs.writeFile(filepath, content, 'utf-8');
-    
+
     // Write-through: update cache immediately
     this.cache.set(task.id, task);
-    
+
     // Emit telemetry event
     await this.telemetry.emit<TaskTelemetryEvent>({
       type: 'task.created',
@@ -382,7 +386,7 @@ export class TaskService {
       project: task.project,
       status: task.status,
     });
-    
+
     return task;
   }
 
@@ -396,33 +400,35 @@ export class TaskService {
 
     // Handle git field separately to merge properly
     const { git: gitUpdate, blockedReason: blockedReasonUpdate, ...restInput } = input;
-    
+
     const updatedTask: Task = {
       ...task,
       ...restInput,
-      git: gitUpdate ? { ...task.git, ...gitUpdate } as Task['git'] : task.git,
+      git: gitUpdate ? ({ ...task.git, ...gitUpdate } as Task['git']) : task.git,
       // Handle blockedReason: null means clear, undefined means keep existing
-      blockedReason: blockedReasonUpdate === null ? undefined : (blockedReasonUpdate ?? task.blockedReason),
+      blockedReason:
+        blockedReasonUpdate === null ? undefined : (blockedReasonUpdate ?? task.blockedReason),
       updated: new Date().toISOString(),
     };
 
     // Remove old file if title changed (filename changes)
     const oldFilename = this.taskToFilename(task);
     const newFilename = this.taskToFilename(updatedTask);
-    
+
     this.markWrite();
     if (oldFilename !== newFilename) {
+      // Intentionally silent: old file may already be gone after rename
       await fs.unlink(path.join(this.tasksDir, oldFilename)).catch(() => {});
     }
 
     const filepath = path.join(this.tasksDir, newFilename);
     const content = this.taskToMarkdown(updatedTask);
-    
+
     await fs.writeFile(filepath, content, 'utf-8');
-    
+
     // Write-through: update cache immediately
     this.cache.set(updatedTask.id, updatedTask);
-    
+
     // Emit telemetry event if status changed
     if (statusChanged) {
       await this.telemetry.emit<TaskTelemetryEvent>({
@@ -433,7 +439,7 @@ export class TaskService {
         previousStatus,
       });
     }
-    
+
     return updatedTask;
   }
 
@@ -444,15 +450,15 @@ export class TaskService {
     const filename = this.taskToFilename(task);
     this.markWrite();
     await fs.unlink(path.join(this.tasksDir, filename));
-    
+
     // Remove from cache
     this.cacheInvalidate(id);
-    
+
     // Delete attachments
     const { getAttachmentService } = await import('./attachment-service.js');
     const attachmentService = getAttachmentService();
     await attachmentService.deleteAllAttachments(id);
-    
+
     return true;
   }
 
@@ -463,18 +469,18 @@ export class TaskService {
     const filename = this.taskToFilename(task);
     const sourcePath = path.join(this.tasksDir, filename);
     const destPath = path.join(this.archiveDir, filename);
-    
+
     this.markWrite();
     await fs.rename(sourcePath, destPath);
-    
+
     // Remove from active cache (archived tasks are not cached)
     this.cacheInvalidate(id);
-    
+
     // Move attachments to archive
     const { getAttachmentService } = await import('./attachment-service.js');
     const attachmentService = getAttachmentService();
     await attachmentService.archiveAttachments(id);
-    
+
     // Emit telemetry event
     await this.telemetry.emit<TaskTelemetryEvent>({
       type: 'task.archived',
@@ -482,16 +488,16 @@ export class TaskService {
       project: task.project,
       status: task.status,
     });
-    
+
     return true;
   }
 
   async listArchivedTasks(): Promise<Task[]> {
     await this.ensureDirectories();
-    
+
     const files = await fs.readdir(this.archiveDir);
-    const mdFiles = files.filter(f => f.endsWith('.md'));
-    
+    const mdFiles = files.filter((f) => f.endsWith('.md'));
+
     const results = await Promise.all(
       mdFiles.map(async (filename) => {
         const filepath = path.join(this.archiveDir, filename);
@@ -499,19 +505,19 @@ export class TaskService {
         return this.parseTaskFile(content, filename);
       })
     );
-    
+
     // Filter out null values from failed parses
     const tasks = results.filter((t): t is Task => t !== null);
 
     // Sort by updated date, newest first
-    return tasks.sort((a: Task, b: Task) => 
-      new Date(b.updated).getTime() - new Date(a.updated).getTime()
+    return tasks.sort(
+      (a: Task, b: Task) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
     );
   }
 
   async getArchivedTask(id: string): Promise<Task | null> {
     const tasks = await this.listArchivedTasks();
-    return tasks.find(t => t.id === id) || null;
+    return tasks.find((t) => t.id === id) || null;
   }
 
   async restoreTask(id: string): Promise<Task | null> {
@@ -521,29 +527,29 @@ export class TaskService {
     const filename = this.taskToFilename(task);
     const sourcePath = path.join(this.archiveDir, filename);
     const destPath = path.join(this.tasksDir, filename);
-    
+
     // Move back to active and set status to done
     await fs.rename(sourcePath, destPath);
-    
+
     // Restore attachments from archive
     const { getAttachmentService } = await import('./attachment-service.js');
     const attachmentService = getAttachmentService();
     await attachmentService.restoreAttachments(id);
-    
+
     // Update status to done
     const restoredTask: Task = {
       ...task,
       status: 'done',
       updated: new Date().toISOString(),
     };
-    
+
     const content = this.taskToMarkdown(restoredTask);
     this.markWrite();
     await fs.writeFile(destPath, content, 'utf-8');
-    
+
     // Write-through: add restored task to active cache
     this.cache.set(restoredTask.id, restoredTask);
-    
+
     // Emit telemetry event
     await this.telemetry.emit<TaskTelemetryEvent>({
       type: 'task.restored',
@@ -551,7 +557,7 @@ export class TaskService {
       project: restoredTask.project,
       status: restoredTask.status,
     });
-    
+
     return restoredTask;
   }
 
@@ -560,10 +566,10 @@ export class TaskService {
    */
   async getArchiveSuggestions(): Promise<{ sprint: string; taskCount: number; tasks: Task[] }[]> {
     const tasks = await this.listTasks();
-    
+
     // Group tasks by sprint
     const sprintTasks = new Map<string, Task[]>();
-    
+
     for (const task of tasks) {
       if (task.sprint) {
         const existing = sprintTasks.get(task.sprint) || [];
@@ -571,12 +577,12 @@ export class TaskService {
         sprintTasks.set(task.sprint, existing);
       }
     }
-    
+
     // Find sprints where ALL tasks are done
     const suggestions: { sprint: string; taskCount: number; tasks: Task[] }[] = [];
-    
+
     for (const [sprint, sprintTaskList] of Array.from(sprintTasks.entries())) {
-      const allDone = sprintTaskList.every(t => t.status === 'done');
+      const allDone = sprintTaskList.every((t) => t.status === 'done');
       if (allDone && sprintTaskList.length > 0) {
         suggestions.push({
           sprint,
@@ -585,7 +591,7 @@ export class TaskService {
         });
       }
     }
-    
+
     return suggestions;
   }
 
@@ -594,25 +600,25 @@ export class TaskService {
    */
   async archiveSprint(sprint: string): Promise<{ archived: number; taskIds: string[] }> {
     const tasks = await this.listTasks();
-    const sprintTasks = tasks.filter(t => t.sprint === sprint);
-    
+    const sprintTasks = tasks.filter((t) => t.sprint === sprint);
+
     if (sprintTasks.length === 0) {
       throw new Error(`No tasks found for sprint "${sprint}"`);
     }
-    
+
     // Check all tasks are done
-    const notDone = sprintTasks.filter(t => t.status !== 'done');
+    const notDone = sprintTasks.filter((t) => t.status !== 'done');
     if (notDone.length > 0) {
       throw new Error(`Cannot archive sprint: ${notDone.length} task(s) are not done`);
     }
-    
+
     // Archive all tasks
     const archivedIds: string[] = [];
     for (const task of sprintTasks) {
       await this.archiveTask(task.id);
       archivedIds.push(task.id);
     }
-    
+
     return {
       archived: archivedIds.length,
       taskIds: archivedIds,
@@ -667,7 +673,7 @@ export class TaskService {
     }
 
     const now = new Date();
-    const entries = task.timeTracking.entries.map(entry => {
+    const entries = task.timeTracking.entries.map((entry) => {
       if (entry.id === task.timeTracking!.activeEntryId) {
         const startTime = new Date(entry.startTime);
         const duration = Math.floor((now.getTime() - startTime.getTime()) / 1000);
@@ -735,7 +741,7 @@ export class TaskService {
       throw new Error('Task not found');
     }
 
-    const entries = (task.timeTracking?.entries || []).filter(e => e.id !== entryId);
+    const entries = (task.timeTracking?.entries || []).filter((e) => e.id !== entryId);
     const totalSeconds = entries.reduce((sum, e) => sum + (e.duration || 0), 0);
 
     // If we deleted the active entry, stop the timer
@@ -744,7 +750,7 @@ export class TaskService {
     const timeTracking = {
       entries,
       totalSeconds,
-      isRunning: wasActive ? false : (task.timeTracking?.isRunning || false),
+      isRunning: wasActive ? false : task.timeTracking?.isRunning || false,
       ...(wasActive ? {} : { activeEntryId: task.timeTracking?.activeEntryId }),
     };
 
@@ -760,7 +766,7 @@ export class TaskService {
     const updated: Task[] = [];
 
     for (let i = 0; i < orderedIds.length; i++) {
-      const task = tasks.find(t => t.id === orderedIds[i]);
+      const task = tasks.find((t) => t.id === orderedIds[i]);
       if (task && task.position !== i) {
         const result = await this.updateTask(task.id, { position: i });
         if (result) updated.push(result);
@@ -773,12 +779,12 @@ export class TaskService {
   /**
    * Get time summary by project
    */
-  async getTimeSummary(): Promise<{ 
+  async getTimeSummary(): Promise<{
     byProject: { project: string; totalSeconds: number; taskCount: number }[];
     total: number;
   }> {
     const tasks = await this.listTasks();
-    
+
     const projectMap = new Map<string, { totalSeconds: number; taskCount: number }>();
     let total = 0;
 

@@ -28,7 +28,7 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async init(): Promise<void> {
     const configDir = this.filePath.substring(0, this.filePath.lastIndexOf('/'));
-    
+
     if (!existsSync(configDir)) {
       await mkdir(configDir, { recursive: true });
     }
@@ -77,13 +77,13 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async list(includeHidden = false): Promise<T[]> {
     await this.init();
-    
+
     let result = [...this.items];
-    
+
     if (!includeHidden) {
-      result = result.filter(item => !item.isHidden);
+      result = result.filter((item) => !item.isHidden);
     }
-    
+
     return result.sort((a, b) => a.order - b.order);
   }
 
@@ -92,7 +92,7 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async get(id: string): Promise<T | null> {
     await this.init();
-    return this.items.find(item => item.id === id) || null;
+    return this.items.find((item) => item.id === id) || null;
   }
 
   /**
@@ -100,17 +100,16 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async create(input: Omit<T, 'id' | 'order' | 'created' | 'updated'>): Promise<T> {
     await this.init();
-    
+
     const now = new Date().toISOString();
-    const slug = this.slugify((input as any).label);
+    // T extends ManagedListItem which has 'label'; Omit preserves it
+    const slug = this.slugify((input as Pick<ManagedListItem, 'label'>).label);
     const shortId = nanoid(6);
     const id = `${slug}-${shortId}`;
-    
+
     // Calculate order as max + 1
-    const maxOrder = this.items.length > 0 
-      ? Math.max(...this.items.map(item => item.order))
-      : -1;
-    
+    const maxOrder = this.items.length > 0 ? Math.max(...this.items.map((item) => item.order)) : -1;
+
     const newItem: T = {
       ...input,
       id,
@@ -118,10 +117,10 @@ export class ManagedListService<T extends ManagedListItem> {
       created: now,
       updated: now,
     } as T;
-    
+
     this.items.push(newItem);
     await this.save();
-    
+
     return newItem;
   }
 
@@ -140,37 +139,39 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async update(id: string, patch: Partial<T>): Promise<T | null> {
     await this.init();
-    
-    const index = this.items.findIndex(item => item.id === id);
+
+    const index = this.items.findIndex((item) => item.id === id);
     if (index === -1) return null;
-    
+
     const updated: T = {
       ...this.items[index],
       ...patch,
       id, // Preserve ID
       updated: new Date().toISOString(),
     };
-    
+
     this.items[index] = updated;
     await this.save();
-    
+
     return updated;
   }
 
   /**
    * Check if an item can be deleted
    */
-  async canDelete(id: string): Promise<{ allowed: boolean; referenceCount: number; isDefault: boolean }> {
+  async canDelete(
+    id: string
+  ): Promise<{ allowed: boolean; referenceCount: number; isDefault: boolean }> {
     await this.init();
-    
-    const item = this.items.find(item => item.id === id);
+
+    const item = this.items.find((item) => item.id === id);
     if (!item) {
       return { allowed: false, referenceCount: 0, isDefault: false };
     }
-    
+
     const isDefault = item.isDefault || false;
     const referenceCount = this.referenceCounter ? await this.referenceCounter(id) : 0;
-    
+
     return {
       allowed: referenceCount === 0,
       referenceCount,
@@ -183,12 +184,12 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async delete(id: string, force = false): Promise<{ deleted: boolean; referenceCount?: number }> {
     await this.init();
-    
-    const item = this.items.find(item => item.id === id);
+
+    const item = this.items.find((item) => item.id === id);
     if (!item) {
       return { deleted: false };
     }
-    
+
     // Check references if not forced
     if (!force && this.referenceCounter) {
       const referenceCount = await this.referenceCounter(id);
@@ -196,10 +197,10 @@ export class ManagedListService<T extends ManagedListItem> {
         return { deleted: false, referenceCount };
       }
     }
-    
-    this.items = this.items.filter(item => item.id !== id);
+
+    this.items = this.items.filter((item) => item.id !== id);
     await this.save();
-    
+
     return { deleted: true };
   }
 
@@ -208,24 +209,24 @@ export class ManagedListService<T extends ManagedListItem> {
    */
   async reorder(orderedIds: string[]): Promise<T[]> {
     await this.init();
-    
+
     // Create a map of id -> new order
     const orderMap = new Map<string, number>();
     orderedIds.forEach((id, index) => {
       orderMap.set(id, index);
     });
-    
+
     // Update order for items in the list
-    this.items.forEach(item => {
+    this.items.forEach((item) => {
       const newOrder = orderMap.get(item.id);
       if (newOrder !== undefined) {
         item.order = newOrder;
         item.updated = new Date().toISOString();
       }
     });
-    
+
     await this.save();
-    
+
     return this.items.sort((a, b) => a.order - b.order);
   }
 }

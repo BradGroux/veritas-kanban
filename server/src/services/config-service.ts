@@ -2,7 +2,13 @@ import fs from 'fs/promises';
 import { watch, type FSWatcher } from 'fs';
 import path from 'path';
 import { simpleGit } from 'simple-git';
-import type { AppConfig, RepoConfig, AgentConfig, AgentType, FeatureSettings } from '@veritas-kanban/shared';
+import type {
+  AppConfig,
+  RepoConfig,
+  AgentConfig,
+  AgentType,
+  FeatureSettings,
+} from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 
 /** How long cached config stays valid before re-reading from disk */
@@ -62,7 +68,7 @@ const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function hasDangerousKeys(obj: unknown): boolean {
   if (obj === null || typeof obj !== 'object') return false;
   if (Array.isArray(obj)) return obj.some(hasDangerousKeys);
-  
+
   for (const key of Object.keys(obj)) {
     if (DANGEROUS_KEYS.has(key)) return true;
     if (hasDangerousKeys((obj as Record<string, unknown>)[key])) return true;
@@ -74,35 +80,45 @@ function hasDangerousKeys(obj: unknown): boolean {
  * Deep merge source into target. For each key in source:
  * - If both values are plain objects, recurse
  * - Otherwise, target value wins if it exists; source fills missing keys
- * 
+ *
  * Security: Rejects objects containing __proto__, constructor, or prototype keys
  * to prevent prototype pollution attacks.
  */
-function deepMergeDefaults<T extends Record<string, any>>(target: Partial<T>, defaults: T): T {
+function deepMergeDefaults<T extends object>(target: Partial<T>, defaults: T): T {
   // Security: Check for prototype pollution attempts
   if (hasDangerousKeys(target)) {
     throw new Error('Invalid input: dangerous keys detected');
   }
-  
-  const result = { ...defaults };
-  for (const key of Object.keys(defaults) as Array<keyof T>) {
+
+  // Use Record views for safe dynamic key access within the merge
+  // SAFETY: T is an object with string keys; spread produces a plain object
+  const result = { ...defaults } as Record<string, unknown>;
+  const src = { ...target } as Record<string, unknown>;
+  for (const key of Object.keys(defaults)) {
     // Skip dangerous keys (defense in depth)
-    if (DANGEROUS_KEYS.has(key as string)) continue;
-    
-    if (key in target) {
-      const targetVal = (target as any)[key];
-      const defaultVal = defaults[key];
+    if (DANGEROUS_KEYS.has(key)) continue;
+
+    if (key in src) {
+      const targetVal = src[key];
+      const defaultVal = result[key];
       if (
-        defaultVal !== null && typeof defaultVal === 'object' && !Array.isArray(defaultVal) &&
-        targetVal !== null && typeof targetVal === 'object' && !Array.isArray(targetVal)
+        defaultVal !== null &&
+        typeof defaultVal === 'object' &&
+        !Array.isArray(defaultVal) &&
+        targetVal !== null &&
+        typeof targetVal === 'object' &&
+        !Array.isArray(targetVal)
       ) {
-        (result as any)[key] = deepMergeDefaults(targetVal, defaultVal);
+        result[key] = deepMergeDefaults(
+          targetVal as Record<string, unknown>,
+          defaultVal as Record<string, unknown>
+        );
       } else {
-        (result as any)[key] = targetVal;
+        result[key] = targetVal;
       }
     }
   }
-  return result;
+  return result as T;
 }
 
 export interface ConfigServiceOptions {
@@ -125,7 +141,7 @@ export class ConfigService {
 
   /** Check whether the in-memory cache is still usable */
   private isCacheValid(): boolean {
-    return this.config !== null && (Date.now() - this.cacheTimestamp) < CACHE_TTL_MS;
+    return this.config !== null && Date.now() - this.cacheTimestamp < CACHE_TTL_MS;
   }
 
   /** Force the next getConfig() to re-read from disk */
@@ -201,15 +217,26 @@ export class ConfigService {
     return config.features || DEFAULT_FEATURE_SETTINGS;
   }
 
-  async updateFeatureSettings(patch: Record<string, any>): Promise<FeatureSettings> {
+  async updateFeatureSettings(patch: Record<string, unknown>): Promise<FeatureSettings> {
     const config = await this.getConfig();
     const current = config.features || DEFAULT_FEATURE_SETTINGS;
     // Deep merge the patch into current settings
     const merged = deepMergeDefaults(patch as Partial<FeatureSettings>, current);
     // Also merge any new keys from patch that aren't in defaults
+    // SAFETY: FeatureSettings sections are all objects with string keys
+    const mergedRecord = merged as unknown as Record<string, Record<string, unknown>>;
     for (const section of Object.keys(patch)) {
-      if (section in merged && typeof patch[section] === 'object' && !Array.isArray(patch[section])) {
-        (merged as any)[section] = { ...(merged as any)[section], ...patch[section] };
+      const patchSection = patch[section];
+      if (
+        section in mergedRecord &&
+        typeof patchSection === 'object' &&
+        patchSection !== null &&
+        !Array.isArray(patchSection)
+      ) {
+        mergedRecord[section] = {
+          ...mergedRecord[section],
+          ...(patchSection as Record<string, unknown>),
+        };
       }
     }
     config.features = merged;
@@ -228,9 +255,9 @@ export class ConfigService {
 
   async addRepo(repo: RepoConfig): Promise<AppConfig> {
     const config = await this.getConfig();
-    
+
     // Validate repo doesn't already exist
-    if (config.repos.some(r => r.name === repo.name)) {
+    if (config.repos.some((r) => r.name === repo.name)) {
       throw new Error(`Repo "${repo.name}" already exists`);
     }
 
@@ -244,8 +271,8 @@ export class ConfigService {
 
   async updateRepo(name: string, updates: Partial<RepoConfig>): Promise<AppConfig> {
     const config = await this.getConfig();
-    const index = config.repos.findIndex(r => r.name === name);
-    
+    const index = config.repos.findIndex((r) => r.name === name);
+
     if (index === -1) {
       throw new Error(`Repo "${name}" not found`);
     }
@@ -262,8 +289,8 @@ export class ConfigService {
 
   async removeRepo(name: string): Promise<AppConfig> {
     const config = await this.getConfig();
-    const index = config.repos.findIndex(r => r.name === name);
-    
+    const index = config.repos.findIndex((r) => r.name === name);
+
     if (index === -1) {
       throw new Error(`Repo "${name}" not found`);
     }
@@ -276,7 +303,7 @@ export class ConfigService {
   async validateRepoPath(repoPath: string): Promise<{ valid: boolean; branches: string[] }> {
     // Expand ~ to home directory
     const expandedPath = repoPath.replace(/^~/, process.env.HOME || '');
-    
+
     try {
       await fs.access(expandedPath);
     } catch {
@@ -286,7 +313,7 @@ export class ConfigService {
     try {
       const git = simpleGit(expandedPath);
       const isRepo = await git.checkIsRepo();
-      
+
       if (!isRepo) {
         throw new Error(`Path is not a git repository: ${repoPath}`);
       }
@@ -306,8 +333,8 @@ export class ConfigService {
 
   async getRepoBranches(repoName: string): Promise<string[]> {
     const config = await this.getConfig();
-    const repo = config.repos.find(r => r.name === repoName);
-    
+    const repo = config.repos.find((r) => r.name === repoName);
+
     if (!repo) {
       throw new Error(`Repo "${repoName}" not found`);
     }
@@ -315,7 +342,7 @@ export class ConfigService {
     const expandedPath = repo.path.replace(/^~/, process.env.HOME || '');
     const git = simpleGit(expandedPath);
     const branchSummary = await git.branchLocal();
-    
+
     return branchSummary.all;
   }
 

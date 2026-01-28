@@ -43,11 +43,11 @@ export class GitHubService {
     try {
       // Check if gh is installed
       await execAsync('which gh');
-      
+
       // Check if authenticated
       const { stdout } = await execAsync('gh auth status 2>&1');
       const userMatch = stdout.match(/Logged in to github\.com account (\S+)/);
-      
+
       return {
         installed: true,
         authenticated: true,
@@ -70,6 +70,7 @@ export class GitHubService {
       const { stdout } = await execAsync('git remote get-url origin', { cwd: repoPath });
       return stdout.trim();
     } catch {
+      // Intentionally silent: repo may not have an origin remote
       return null;
     }
   }
@@ -83,7 +84,7 @@ export class GitHubService {
         `gh pr view ${branch} --json url,number,title,state,isDraft,headRefName,baseRefName 2>/dev/null`,
         { cwd: repoPath }
       );
-      
+
       const data = JSON.parse(stdout);
       return {
         url: data.url,
@@ -95,6 +96,7 @@ export class GitHubService {
         baseBranch: data.baseRefName,
       };
     } catch {
+      // Intentionally silent: no PR exists for this branch
       return null;
     }
   }
@@ -114,7 +116,7 @@ export class GitHubService {
 
     // Get repo config
     const config = await this.configService.getConfig();
-    const repoConfig = config.repos.find(r => r.name === task.git!.repo);
+    const repoConfig = config.repos.find((r) => r.name === task.git!.repo);
     if (!repoConfig) {
       throw new Error(`Repository "${task.git.repo}" not found in config`);
     }
@@ -162,11 +164,17 @@ export class GitHubService {
 
     // Create the PR
     const args = [
-      'gh', 'pr', 'create',
-      '--title', JSON.stringify(prTitle),
-      '--body', JSON.stringify(prBody),
-      '--base', targetBranch,
-      '--head', task.git.branch,
+      'gh',
+      'pr',
+      'create',
+      '--title',
+      JSON.stringify(prTitle),
+      '--body',
+      JSON.stringify(prBody),
+      '--base',
+      targetBranch,
+      '--head',
+      task.git.branch,
     ];
 
     if (input.draft) {
@@ -191,15 +199,17 @@ export class GitHubService {
       });
 
       // Fetch full PR info
-      return await this.getPRForBranch(repoPath, task.git.branch) || {
-        url: prUrl,
-        number: prNumber,
-        title: prTitle,
-        state: 'OPEN',
-        draft: input.draft || false,
-        headBranch: task.git.branch,
-        baseBranch: targetBranch,
-      };
+      return (
+        (await this.getPRForBranch(repoPath, task.git.branch)) || {
+          url: prUrl,
+          number: prNumber,
+          title: prTitle,
+          state: 'OPEN',
+          draft: input.draft || false,
+          headBranch: task.git.branch,
+          baseBranch: targetBranch,
+        }
+      );
     } catch (error: any) {
       throw new Error(`Failed to create PR: ${error.message}`);
     }

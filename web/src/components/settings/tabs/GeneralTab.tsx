@@ -56,7 +56,9 @@ export function GeneralTab() {
           </div>
         ) : (
           <div className="space-y-2">
-            {config?.repos.map((repo) => <RepoItem key={repo.name} repo={repo} />)}
+            {config?.repos.map((repo) => (
+              <RepoItem key={repo.name} repo={repo} />
+            ))}
           </div>
         )}
       </div>
@@ -68,13 +70,15 @@ export function GeneralTab() {
           <div className="text-sm text-muted-foreground">Loading...</div>
         ) : (
           <div className="space-y-2">
-            {config?.agents.filter(a => a.enabled).map((agent) => (
-              <AgentDefaultItem
-                key={agent.type}
-                agent={agent}
-                isDefault={config.defaultAgent === agent.type}
-              />
-            ))}
+            {config?.agents
+              .filter((a) => a.enabled)
+              .map((agent) => (
+                <AgentDefaultItem
+                  key={agent.type}
+                  agent={agent}
+                  isDefault={config.defaultAgent === agent.type}
+                />
+              ))}
           </div>
         )}
       </div>
@@ -122,7 +126,8 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
       if (result.branches.includes('main')) setDefaultBranch('main');
       else if (result.branches.includes('master')) setDefaultBranch('master');
       else if (result.branches.length > 0) setDefaultBranch(result.branches[0]);
-    } catch {
+    } catch (err) {
+      console.error('[Settings] Repo path validation failed:', err);
       setPathValid(false);
       setBranches([]);
     }
@@ -143,7 +148,12 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
       <div className="grid gap-3">
         <div className="grid gap-2">
           <Label htmlFor="repo-name">Name</Label>
-          <Input id="repo-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., rubicon" />
+          <Input
+            id="repo-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., rubicon"
+          />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="repo-path">Path</Label>
@@ -151,30 +161,60 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
             <Input
               id="repo-path"
               value={path}
-              onChange={(e) => { setPath(e.target.value); setPathValid(null); setBranches([]); }}
+              onChange={(e) => {
+                setPath(e.target.value);
+                setPathValid(null);
+                setBranches([]);
+              }}
               placeholder="e.g., ~/Projects/rubicon"
-              className={cn(pathValid === true && 'border-green-500', pathValid === false && 'border-red-500')}
+              className={cn(
+                pathValid === true && 'border-green-500',
+                pathValid === false && 'border-red-500'
+              )}
             />
-            <Button type="button" variant="outline" onClick={handleValidatePath} disabled={!path || validatePath.isPending}>
-              {validatePath.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : pathValid === true ? <Check className="h-4 w-4 text-green-500" /> : pathValid === false ? <X className="h-4 w-4 text-red-500" /> : 'Validate'}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleValidatePath}
+              disabled={!path || validatePath.isPending}
+            >
+              {validatePath.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : pathValid === true ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : pathValid === false ? (
+                <X className="h-4 w-4 text-red-500" />
+              ) : (
+                'Validate'
+              )}
             </Button>
           </div>
-          {pathValid === false && <p className="text-xs text-red-500">{validatePath.error?.message || 'Invalid path'}</p>}
+          {pathValid === false && (
+            <p className="text-xs text-red-500">{validatePath.error?.message || 'Invalid path'}</p>
+          )}
         </div>
         {branches.length > 0 && (
           <div className="grid gap-2">
             <Label htmlFor="default-branch">Default Branch</Label>
             <Select value={defaultBranch} onValueChange={setDefaultBranch}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {branches.map((branch) => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
+                {branches.map((branch) => (
+                  <SelectItem key={branch} value={branch}>
+                    {branch}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         )}
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
         <Button type="submit" disabled={!name || !path || !pathValid || addRepo.isPending}>
           {addRepo.isPending ? 'Adding...' : 'Add Repository'}
         </Button>
@@ -205,11 +245,18 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Remove repository?</AlertDialogTitle>
-              <AlertDialogDescription>This will remove "{repo.name}" from your configuration.</AlertDialogDescription>
+              <AlertDialogDescription>
+                This will remove "{repo.name}" from your configuration.
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => removeRepo.mutate(repo.name)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove</AlertDialogAction>
+              <AlertDialogAction
+                onClick={() => removeRepo.mutate(repo.name)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Remove
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

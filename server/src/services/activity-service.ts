@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
-export type ActivityType = 
+export type ActivityType =
   | 'task_created'
   | 'task_updated'
   | 'status_changed'
@@ -46,7 +46,7 @@ export class ActivityService {
 
   async getActivities(limit: number = 50): Promise<Activity[]> {
     await this.ensureDir();
-    
+
     if (!existsSync(this.activityFile)) {
       return [];
     }
@@ -56,6 +56,7 @@ export class ActivityService {
       const activities: Activity[] = JSON.parse(content);
       return activities.slice(0, limit);
     } catch {
+      // Intentionally silent: file may not exist or contain invalid JSON — return empty list
       return [];
     }
   }
@@ -67,7 +68,7 @@ export class ActivityService {
     details?: Record<string, unknown>
   ): Promise<Activity> {
     await this.ensureDir();
-    
+
     const activity: Activity = {
       id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -78,25 +79,28 @@ export class ActivityService {
     };
 
     let activities: Activity[] = [];
-    
+
     if (existsSync(this.activityFile)) {
       try {
         const content = await readFile(this.activityFile, 'utf-8');
         activities = JSON.parse(content);
       } catch {
+        // Intentionally silent: corrupted file — reset to empty list
         activities = [];
       }
     }
 
     // Prepend new activity and limit to MAX_ACTIVITIES
     activities = [activity, ...activities].slice(0, this.MAX_ACTIVITIES);
-    
+
     if (activities.length >= this.MAX_ACTIVITIES) {
-      console.warn(`[Activity] Activity limit reached (${this.MAX_ACTIVITIES}), trimming oldest entries`);
+      console.warn(
+        `[Activity] Activity limit reached (${this.MAX_ACTIVITIES}), trimming oldest entries`
+      );
     }
-    
+
     await writeFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
-    
+
     return activity;
   }
 
