@@ -13,7 +13,9 @@ const { mockTaskService } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 import { taskSubtaskRoutes } from '../../routes/task-subtasks.js';
@@ -34,7 +36,10 @@ describe('Task Subtask Routes (actual module)', () => {
     it('should add a subtask', async () => {
       const task = { id: 't1', title: 'Task', subtasks: [] };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({ ...task, subtasks: [{ id: 's1', title: 'Sub', completed: false }] });
+      mockTaskService.updateTask.mockResolvedValue({
+        ...task,
+        subtasks: [{ id: 's1', title: 'Sub', completed: false }],
+      });
 
       const res = await request(app).post('/api/tasks/t1/subtasks').send({ title: 'Sub' });
       expect(res.status).toBe(201);
@@ -72,13 +77,17 @@ describe('Task Subtask Routes (actual module)', () => {
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app).patch('/api/tasks/missing/subtasks/s1').send({ completed: true });
+      const res = await request(app)
+        .patch('/api/tasks/missing/subtasks/s1')
+        .send({ completed: true });
       expect(res.status).toBe(404);
     });
 
     it('should return 404 for missing subtask', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1', subtasks: [] });
-      const res = await request(app).patch('/api/tasks/t1/subtasks/missing').send({ completed: true });
+      const res = await request(app)
+        .patch('/api/tasks/t1/subtasks/missing')
+        .send({ completed: true });
       expect(res.status).toBe(404);
     });
 
@@ -96,7 +105,10 @@ describe('Task Subtask Routes (actual module)', () => {
 
       const res = await request(app).patch('/api/tasks/t1/subtasks/s2').send({ completed: true });
       expect(res.status).toBe(200);
-      expect(mockTaskService.updateTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'done' }));
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ status: 'done' })
+      );
     });
 
     it('should reject invalid update body', async () => {

@@ -7,38 +7,43 @@ import request from 'supertest';
 import express from 'express';
 
 // Use vi.hoisted to declare mocks that vi.mock factories can reference
-const { mockTaskService, mockWorktreeService, mockBlockingService, mockActivityService } = vi.hoisted(() => ({
-  mockTaskService: {
-    listTasks: vi.fn(),
-    getTask: vi.fn(),
-    createTask: vi.fn(),
-    updateTask: vi.fn(),
-    deleteTask: vi.fn(),
-    reorderTasks: vi.fn(),
-  },
-  mockWorktreeService: {
-    createWorktree: vi.fn(),
-    getWorktreeStatus: vi.fn(),
-    deleteWorktree: vi.fn(),
-    rebaseWorktree: vi.fn(),
-    mergeWorktree: vi.fn(),
-    openInVSCode: vi.fn(),
-  },
-  mockBlockingService: {
-    getBlockingStatus: vi.fn(),
-    canMoveToInProgress: vi.fn(),
-  },
-  mockActivityService: {
-    logActivity: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+const { mockTaskService, mockWorktreeService, mockBlockingService, mockActivityService } =
+  vi.hoisted(() => ({
+    mockTaskService: {
+      listTasks: vi.fn(),
+      getTask: vi.fn(),
+      createTask: vi.fn(),
+      updateTask: vi.fn(),
+      deleteTask: vi.fn(),
+      reorderTasks: vi.fn(),
+    },
+    mockWorktreeService: {
+      createWorktree: vi.fn(),
+      getWorktreeStatus: vi.fn(),
+      deleteWorktree: vi.fn(),
+      rebaseWorktree: vi.fn(),
+      mergeWorktree: vi.fn(),
+      openInVSCode: vi.fn(),
+    },
+    mockBlockingService: {
+      getBlockingStatus: vi.fn(),
+      canMoveToInProgress: vi.fn(),
+    },
+    mockActivityService: {
+      logActivity: vi.fn().mockResolvedValue(undefined),
+    },
+  }));
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 vi.mock('../../services/worktree-service.js', () => ({
-  WorktreeService: vi.fn().mockImplementation(() => mockWorktreeService),
+  WorktreeService: function () {
+    return mockWorktreeService;
+  },
 }));
 
 vi.mock('../../services/blocking-service.js', () => ({
@@ -113,16 +118,12 @@ describe('Tasks Routes (actual module)', () => {
     });
 
     it('should reject empty orderedIds', async () => {
-      const res = await request(app)
-        .post('/api/tasks/reorder')
-        .send({ orderedIds: [] });
+      const res = await request(app).post('/api/tasks/reorder').send({ orderedIds: [] });
       expect(res.status).toBe(400);
     });
 
     it('should reject missing orderedIds', async () => {
-      const res = await request(app)
-        .post('/api/tasks/reorder')
-        .send({});
+      const res = await request(app).post('/api/tasks/reorder').send({});
       expect(res.status).toBe(400);
     });
   });
@@ -164,27 +165,27 @@ describe('Tasks Routes (actual module)', () => {
 
   describe('POST /api/tasks', () => {
     it('should create a task', async () => {
-      const newTask = { id: 't1', title: 'New Task', type: 'code', priority: 'medium', created: '2025-01-01' };
+      const newTask = {
+        id: 't1',
+        title: 'New Task',
+        type: 'code',
+        priority: 'medium',
+        created: '2025-01-01',
+      };
       mockTaskService.createTask.mockResolvedValue(newTask);
 
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({ title: 'New Task' });
+      const res = await request(app).post('/api/tasks').send({ title: 'New Task' });
       expect(res.status).toBe(201);
       expect(res.body.id).toBe('t1');
     });
 
     it('should reject missing title', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({});
+      const res = await request(app).post('/api/tasks').send({});
       expect(res.status).toBe(400);
     });
 
     it('should reject empty title', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({ title: '' });
+      const res = await request(app).post('/api/tasks').send({ title: '' });
       expect(res.status).toBe(400);
     });
   });
@@ -196,26 +197,20 @@ describe('Tasks Routes (actual module)', () => {
       mockTaskService.getTask.mockResolvedValue(oldTask);
       mockTaskService.updateTask.mockResolvedValue(updatedTask);
 
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ title: 'Updated' });
+      const res = await request(app).patch('/api/tasks/t1').send({ title: 'Updated' });
       expect(res.status).toBe(200);
     });
 
     it('should return 404 for missing task on getTask', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app)
-        .patch('/api/tasks/nonexistent')
-        .send({ title: 'Updated' });
+      const res = await request(app).patch('/api/tasks/nonexistent').send({ title: 'Updated' });
       expect(res.status).toBe(404);
     });
 
     it('should return 404 when updateTask returns null', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1', status: 'todo' });
       mockTaskService.updateTask.mockResolvedValue(null);
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ title: 'Updated' });
+      const res = await request(app).patch('/api/tasks/t1').send({ title: 'Updated' });
       expect(res.status).toBe(404);
     });
 
@@ -225,11 +220,12 @@ describe('Tasks Routes (actual module)', () => {
       mockTaskService.getTask.mockResolvedValue(oldTask);
       mockTaskService.updateTask.mockResolvedValue(updatedTask);
 
-      await request(app)
-        .patch('/api/tasks/t1')
-        .send({ status: 'done' });
+      await request(app).patch('/api/tasks/t1').send({ status: 'done' });
       expect(mockActivityService.logActivity).toHaveBeenCalledWith(
-        'status_changed', 't1', 'Task', expect.objectContaining({ from: 'todo', status: 'done' })
+        'status_changed',
+        't1',
+        'Task',
+        expect.objectContaining({ from: 'todo', status: 'done' })
       );
     });
 
@@ -240,9 +236,7 @@ describe('Tasks Routes (actual module)', () => {
       mockBlockingService.canMoveToInProgress.mockReturnValue({ allowed: true, blockers: [] });
       mockTaskService.updateTask.mockResolvedValue({ ...oldTask, status: 'in-progress' });
 
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ status: 'in-progress' });
+      const res = await request(app).patch('/api/tasks/t1').send({ status: 'in-progress' });
       expect(res.status).toBe(200);
     });
 
@@ -255,29 +249,31 @@ describe('Tasks Routes (actual module)', () => {
         blockers: [{ id: 't2', title: 'Blocker' }],
       });
 
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ status: 'in-progress' });
+      const res = await request(app).patch('/api/tasks/t1').send({ status: 'in-progress' });
       expect(res.status).toBe(400);
     });
 
     it('should auto-clear blockedReason when moving out of blocked', async () => {
-      const oldTask = { id: 't1', status: 'blocked', title: 'Task', blockedReason: { category: 'technical-snag', note: 'x' } };
+      const oldTask = {
+        id: 't1',
+        status: 'blocked',
+        title: 'Task',
+        blockedReason: { category: 'technical-snag', note: 'x' },
+      };
       const updatedTask = { ...oldTask, status: 'in-progress', blockedReason: null };
       mockTaskService.getTask.mockResolvedValue(oldTask);
       mockTaskService.updateTask.mockResolvedValue(updatedTask);
 
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ status: 'in-progress' });
+      const res = await request(app).patch('/api/tasks/t1').send({ status: 'in-progress' });
       expect(res.status).toBe(200);
-      expect(mockTaskService.updateTask).toHaveBeenCalledWith('t1', expect.objectContaining({ blockedReason: null }));
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ blockedReason: null })
+      );
     });
 
     it('should reject invalid validation input', async () => {
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ priority: 'invalid-priority' });
+      const res = await request(app).patch('/api/tasks/t1').send({ priority: 'invalid-priority' });
       expect(res.status).toBe(400);
     });
   });
@@ -358,9 +354,7 @@ describe('Tasks Routes (actual module)', () => {
     });
 
     it('should reject missing templateId', async () => {
-      const res = await request(app)
-        .post('/api/tasks/t1/apply-template')
-        .send({});
+      const res = await request(app).post('/api/tasks/t1/apply-template').send({});
       expect(res.status).toBe(400);
     });
 
@@ -376,8 +370,14 @@ describe('Tasks Routes (actual module)', () => {
   describe('GET /api/tasks/:id/context', () => {
     it('should get task context', async () => {
       mockTaskService.getTask.mockResolvedValue({
-        id: 't1', title: 'Task', description: 'Desc', type: 'code',
-        status: 'todo', priority: 'medium', attachments: [], created: '2025-01-01',
+        id: 't1',
+        title: 'Task',
+        description: 'Desc',
+        type: 'code',
+        status: 'todo',
+        priority: 'medium',
+        attachments: [],
+        created: '2025-01-01',
       });
       const res = await request(app).get('/api/tasks/t1/context');
       expect(res.status).toBe(200);
@@ -392,7 +392,11 @@ describe('Tasks Routes (actual module)', () => {
 
     it('should include attachment context', async () => {
       mockTaskService.getTask.mockResolvedValue({
-        id: 't1', title: 'Task', type: 'code', status: 'todo', priority: 'medium',
+        id: 't1',
+        title: 'Task',
+        type: 'code',
+        status: 'todo',
+        priority: 'medium',
         attachments: [
           { id: 'a1', originalName: 'doc.pdf', mimeType: 'application/pdf', filename: 'a1.pdf' },
           { id: 'a2', originalName: 'img.png', mimeType: 'image/png', filename: 'a2.png' },

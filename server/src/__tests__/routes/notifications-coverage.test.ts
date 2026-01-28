@@ -20,7 +20,9 @@ const mockNotificationService = {
 };
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 vi.mock('../../services/notification-service.js', () => ({
@@ -67,9 +69,7 @@ describe('Notification Routes (actual module)', () => {
     });
 
     it('should reject missing fields', async () => {
-      const res = await request(app)
-        .post('/api/notifications')
-        .send({});
+      const res = await request(app).post('/api/notifications').send({});
       expect(res.status).toBe(400);
     });
   });
@@ -108,9 +108,7 @@ describe('Notification Routes (actual module)', () => {
     });
 
     it('should reject invalid body', async () => {
-      const res = await request(app)
-        .post('/api/notifications/mark-sent')
-        .send({});
+      const res = await request(app).post('/api/notifications/mark-sent').send({});
       expect(res.status).toBe(400);
     });
   });

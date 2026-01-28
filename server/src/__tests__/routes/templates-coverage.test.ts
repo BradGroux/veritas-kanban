@@ -14,7 +14,9 @@ const mockTemplateService = {
 };
 
 vi.mock('../../services/template-service.js', () => ({
-  TemplateService: vi.fn().mockImplementation(() => mockTemplateService),
+  TemplateService: function () {
+    return mockTemplateService;
+  },
 }));
 
 import templatesRouter from '../../routes/templates.js';
@@ -68,16 +70,12 @@ describe('Templates Routes (actual module)', () => {
     it('should create a template', async () => {
       const template = { name: 'Bug Fix', taskDefaults: { type: 'bug' } };
       mockTemplateService.createTemplate.mockResolvedValue({ id: 't1', ...template });
-      const res = await request(app)
-        .post('/api/templates')
-        .send(template);
+      const res = await request(app).post('/api/templates').send(template);
       expect(res.status).toBe(201);
     });
 
     it('should reject invalid data', async () => {
-      const res = await request(app)
-        .post('/api/templates')
-        .send({ taskDefaults: {} });
+      const res = await request(app).post('/api/templates').send({ taskDefaults: {} });
       expect(res.status).toBe(400);
     });
 
@@ -93,32 +91,24 @@ describe('Templates Routes (actual module)', () => {
   describe('PATCH /api/templates/:id', () => {
     it('should update a template', async () => {
       mockTemplateService.updateTemplate.mockResolvedValue({ id: 't1', name: 'Updated' });
-      const res = await request(app)
-        .patch('/api/templates/t1')
-        .send({ name: 'Updated' });
+      const res = await request(app).patch('/api/templates/t1').send({ name: 'Updated' });
       expect(res.status).toBe(200);
     });
 
     it('should return 404 for missing template', async () => {
       mockTemplateService.updateTemplate.mockResolvedValue(null);
-      const res = await request(app)
-        .patch('/api/templates/missing')
-        .send({ name: 'Updated' });
+      const res = await request(app).patch('/api/templates/missing').send({ name: 'Updated' });
       expect(res.status).toBe(404);
     });
 
     it('should reject invalid data', async () => {
-      const res = await request(app)
-        .patch('/api/templates/t1')
-        .send({ name: '' });
+      const res = await request(app).patch('/api/templates/t1').send({ name: '' });
       expect(res.status).toBe(400);
     });
 
     it('should handle service error', async () => {
       mockTemplateService.updateTemplate.mockRejectedValue(new Error('fail'));
-      const res = await request(app)
-        .patch('/api/templates/t1')
-        .send({ name: 'Updated' });
+      const res = await request(app).patch('/api/templates/t1').send({ name: 'Updated' });
       expect(res.status).toBe(500);
     });
   });

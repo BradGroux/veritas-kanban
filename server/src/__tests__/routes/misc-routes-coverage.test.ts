@@ -1,7 +1,7 @@
 /**
  * Coverage tests for smaller route files:
  * - activity.ts
- * - summary.ts  
+ * - summary.ts
  * - status-history.ts
  * - settings.ts
  * - digest.ts
@@ -61,7 +61,9 @@ const mockConfigServiceForSettings = {
 };
 
 vi.mock('../../services/config-service.js', () => ({
-  ConfigService: vi.fn().mockImplementation(() => mockConfigServiceForSettings),
+  ConfigService: function () {
+    return mockConfigServiceForSettings;
+  },
 }));
 
 vi.mock('../../services/telemetry-service.js', () => ({
@@ -83,7 +85,9 @@ vi.mock('../../services/telemetry-service.js', () => ({
 vi.mock('../../services/attachment-service.js', () => ({
   getAttachmentService: () => ({
     setLimits: vi.fn(),
-    getLimits: vi.fn().mockReturnValue({ maxFileSize: 10000000, maxFilesPerTask: 20, maxTotalSize: 50000000 }),
+    getLimits: vi
+      .fn()
+      .mockReturnValue({ maxFileSize: 10000000, maxFilesPerTask: 20, maxTotalSize: 50000000 }),
     saveAttachment: vi.fn(),
     getAttachmentPath: vi.fn(),
     getExtractedText: vi.fn(),
@@ -105,7 +109,9 @@ vi.mock('../../services/digest-service.js', () => ({
 
 // Mock task service for multiple routes
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockSummaryTaskService),
+  TaskService: function () {
+    return mockSummaryTaskService;
+  },
   getTaskService: () => mockSummaryTaskService,
 }));
 
@@ -232,7 +238,9 @@ describe('Status History Routes', () => {
 
   it('GET /range should return history by range', async () => {
     mockStatusHistoryService.getHistoryByDateRange.mockResolvedValue([]);
-    const res = await request(app).get('/api/status-history/range?startDate=2025-01-01&endDate=2025-01-31');
+    const res = await request(app).get(
+      '/api/status-history/range?startDate=2025-01-01&endDate=2025-01-31'
+    );
     expect(res.status).toBe(200);
   });
 
@@ -258,7 +266,9 @@ describe('Settings Routes', () => {
   });
 
   it('GET /features should return settings', async () => {
-    mockConfigServiceForSettings.getFeatureSettings.mockResolvedValue({ telemetry: { enabled: true } });
+    mockConfigServiceForSettings.getFeatureSettings.mockResolvedValue({
+      telemetry: { enabled: true },
+    });
     const res = await request(app).get('/api/settings/features');
     expect(res.status).toBe(200);
   });
@@ -270,7 +280,14 @@ describe('Settings Routes', () => {
   });
 
   it('PATCH /features should update settings', async () => {
-    const settings = { telemetry: { enabled: false, retentionDays: 30, enableTraces: false }, tasks: { attachmentMaxFileSize: 10000000, attachmentMaxPerTask: 20, attachmentMaxTotalSize: 50000000 } };
+    const settings = {
+      telemetry: { enabled: false, retentionDays: 30, enableTraces: false },
+      tasks: {
+        attachmentMaxFileSize: 10000000,
+        attachmentMaxPerTask: 20,
+        attachmentMaxTotalSize: 50000000,
+      },
+    };
     mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(settings);
     const res = await request(app)
       .patch('/api/settings/features')

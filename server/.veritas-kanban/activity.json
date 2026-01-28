@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769642204211_s5wc25nfk",
+    "type": "status_changed",
+    "taskId": "task_20260128_4tLBja",
+    "taskTitle": "QUALITY: Add pre-commit hooks with husky + lint-staged",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:16:44.211Z"
+  },
+  {
+    "id": "activity_1769642177416_09atmenow",
+    "type": "comment_added",
+    "taskId": "task_20260128_tJyjRS",
+    "taskTitle": "QUALITY: Add unhandledRejection and uncaughtException handlers",
+    "details": {
+      "author": "Veritas",
+      "preview": "Added process.on(\"unhandledRejection\") and process..."
+    },
+    "timestamp": "2026-01-28T23:16:17.416Z"
+  },
+  {
+    "id": "activity_1769642173069_itaj4fdeu",
+    "type": "status_changed",
+    "taskId": "task_20260128_tJyjRS",
+    "taskTitle": "QUALITY: Add unhandledRejection and uncaughtException handlers",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:16:13.069Z"
+  },
+  {
     "id": "activity_1769642143773_9uqzvizmj",
     "type": "status_changed",
     "taskId": "task_20260128_tJyjRS",

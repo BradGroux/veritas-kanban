@@ -16,7 +16,9 @@ const { mockTaskService } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 import { taskTimeRoutes } from '../../routes/task-time.js';
@@ -53,7 +55,9 @@ describe('Task Time Routes (actual module)', () => {
 
   it('POST /:id/time/entry should add entry', async () => {
     mockTaskService.addTimeEntry.mockResolvedValue({ id: 't1' });
-    const res = await request(app).post('/api/tasks/t1/time/entry').send({ duration: 3600, description: 'Work' });
+    const res = await request(app)
+      .post('/api/tasks/t1/time/entry')
+      .send({ duration: 3600, description: 'Work' });
     expect(res.status).toBe(200);
   });
 

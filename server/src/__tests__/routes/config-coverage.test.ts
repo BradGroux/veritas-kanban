@@ -17,7 +17,9 @@ const mockConfigService = {
 };
 
 vi.mock('../../services/config-service.js', () => ({
-  ConfigService: vi.fn().mockImplementation(() => mockConfigService),
+  ConfigService: function () {
+    return mockConfigService;
+  },
 }));
 
 import { configRoutes } from '../../routes/config.js';
@@ -63,7 +65,9 @@ describe('Config Routes (actual module)', () => {
 
   describe('POST /api/config/repos', () => {
     it('should add a repo', async () => {
-      mockConfigService.addRepo.mockResolvedValue({ repos: [{ name: 'new', path: '/new', defaultBranch: 'main' }] });
+      mockConfigService.addRepo.mockResolvedValue({
+        repos: [{ name: 'new', path: '/new', defaultBranch: 'main' }],
+      });
       const res = await request(app)
         .post('/api/config/repos')
         .send({ name: 'new', path: '/new', defaultBranch: 'main' });
@@ -71,17 +75,13 @@ describe('Config Routes (actual module)', () => {
     });
 
     it('should reject invalid repo data', async () => {
-      const res = await request(app)
-        .post('/api/config/repos')
-        .send({ name: '' });
+      const res = await request(app).post('/api/config/repos').send({ name: '' });
       expect(res.status).toBe(400);
     });
 
     it('should handle service error', async () => {
       mockConfigService.addRepo.mockRejectedValue(new Error('duplicate'));
-      const res = await request(app)
-        .post('/api/config/repos')
-        .send({ name: 'dup', path: '/dup' });
+      const res = await request(app).post('/api/config/repos').send({ name: 'dup', path: '/dup' });
       expect(res.status).toBe(400);
     });
   });
@@ -89,17 +89,13 @@ describe('Config Routes (actual module)', () => {
   describe('PATCH /api/config/repos/:name', () => {
     it('should update a repo', async () => {
       mockConfigService.updateRepo.mockResolvedValue({ repos: [] });
-      const res = await request(app)
-        .patch('/api/config/repos/test')
-        .send({ path: '/updated' });
+      const res = await request(app).patch('/api/config/repos/test').send({ path: '/updated' });
       expect(res.status).toBe(200);
     });
 
     it('should handle service error', async () => {
       mockConfigService.updateRepo.mockRejectedValue(new Error('not found'));
-      const res = await request(app)
-        .patch('/api/config/repos/test')
-        .send({ path: '/x' });
+      const res = await request(app).patch('/api/config/repos/test').send({ path: '/x' });
       expect(res.status).toBe(400);
     });
   });
@@ -128,17 +124,13 @@ describe('Config Routes (actual module)', () => {
     });
 
     it('should reject missing path', async () => {
-      const res = await request(app)
-        .post('/api/config/repos/validate')
-        .send({});
+      const res = await request(app).post('/api/config/repos/validate').send({});
       expect(res.status).toBe(400);
     });
 
     it('should handle validation error', async () => {
       mockConfigService.validateRepoPath.mockRejectedValue(new Error('invalid'));
-      const res = await request(app)
-        .post('/api/config/repos/validate')
-        .send({ path: '/bad' });
+      const res = await request(app).post('/api/config/repos/validate').send({ path: '/bad' });
       expect(res.status).toBe(400);
     });
   });
@@ -159,7 +151,9 @@ describe('Config Routes (actual module)', () => {
 
   describe('GET /api/config/agents', () => {
     it('should list agents', async () => {
-      mockConfigService.getConfig.mockResolvedValue({ agents: [{ type: 'claude-code', name: 'Claude' }] });
+      mockConfigService.getConfig.mockResolvedValue({
+        agents: [{ type: 'claude-code', name: 'Claude' }],
+      });
       const res = await request(app).get('/api/config/agents');
       expect(res.status).toBe(200);
     });
@@ -173,11 +167,11 @@ describe('Config Routes (actual module)', () => {
 
   describe('PUT /api/config/agents', () => {
     it('should update agents', async () => {
-      const agents = [{ type: 'claude-code', name: 'Claude', command: 'cc', args: [], enabled: true }];
+      const agents = [
+        { type: 'claude-code', name: 'Claude', command: 'cc', args: [], enabled: true },
+      ];
       mockConfigService.updateAgents.mockResolvedValue({ agents });
-      const res = await request(app)
-        .put('/api/config/agents')
-        .send(agents);
+      const res = await request(app).put('/api/config/agents').send(agents);
       expect(res.status).toBe(200);
     });
 
@@ -190,10 +184,10 @@ describe('Config Routes (actual module)', () => {
 
     it('should handle service error', async () => {
       mockConfigService.updateAgents.mockRejectedValue(new Error('fail'));
-      const agents = [{ type: 'claude-code', name: 'Claude', command: 'cc', args: [], enabled: true }];
-      const res = await request(app)
-        .put('/api/config/agents')
-        .send(agents);
+      const agents = [
+        { type: 'claude-code', name: 'Claude', command: 'cc', args: [], enabled: true },
+      ];
+      const res = await request(app).put('/api/config/agents').send(agents);
       expect(res.status).toBe(500);
     });
   });
@@ -208,9 +202,7 @@ describe('Config Routes (actual module)', () => {
     });
 
     it('should reject missing agent', async () => {
-      const res = await request(app)
-        .put('/api/config/default-agent')
-        .send({});
+      const res = await request(app).put('/api/config/default-agent').send({});
       expect(res.status).toBe(400);
     });
 

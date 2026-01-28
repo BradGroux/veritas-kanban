@@ -16,7 +16,9 @@ const { mockTaskService, mockActivityService } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 vi.mock('../../services/activity-service.js', () => ({
@@ -41,15 +43,22 @@ describe('Task Comment Routes (actual module)', () => {
     it('should add a comment', async () => {
       const task = { id: 't1', title: 'Task', comments: [] };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({ ...task, comments: [{ id: 'c1', author: 'Test', text: 'Hello' }] });
+      mockTaskService.updateTask.mockResolvedValue({
+        ...task,
+        comments: [{ id: 'c1', author: 'Test', text: 'Hello' }],
+      });
 
-      const res = await request(app).post('/api/tasks/t1/comments').send({ author: 'Test', text: 'Hello' });
+      const res = await request(app)
+        .post('/api/tasks/t1/comments')
+        .send({ author: 'Test', text: 'Hello' });
       expect(res.status).toBe(201);
     });
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app).post('/api/tasks/missing/comments').send({ author: 'Test', text: 'Hello' });
+      const res = await request(app)
+        .post('/api/tasks/missing/comments')
+        .send({ author: 'Test', text: 'Hello' });
       expect(res.status).toBe(404);
     });
 
@@ -59,7 +68,9 @@ describe('Task Comment Routes (actual module)', () => {
     });
 
     it('should reject empty text', async () => {
-      const res = await request(app).post('/api/tasks/t1/comments').send({ author: 'Test', text: '' });
+      const res = await request(app)
+        .post('/api/tasks/t1/comments')
+        .send({ author: 'Test', text: '' });
       expect(res.status).toBe(400);
     });
   });
@@ -79,13 +90,17 @@ describe('Task Comment Routes (actual module)', () => {
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app).patch('/api/tasks/missing/comments/c1').send({ text: 'Updated' });
+      const res = await request(app)
+        .patch('/api/tasks/missing/comments/c1')
+        .send({ text: 'Updated' });
       expect(res.status).toBe(404);
     });
 
     it('should return 404 for missing comment', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1', comments: [] });
-      const res = await request(app).patch('/api/tasks/t1/comments/missing').send({ text: 'Updated' });
+      const res = await request(app)
+        .patch('/api/tasks/t1/comments/missing')
+        .send({ text: 'Updated' });
       expect(res.status).toBe(404);
     });
 
@@ -97,7 +112,11 @@ describe('Task Comment Routes (actual module)', () => {
 
   describe('DELETE /:id/comments/:commentId', () => {
     it('should delete a comment', async () => {
-      const task = { id: 't1', title: 'Task', comments: [{ id: 'c1', author: 'Test', text: 'Hello' }] };
+      const task = {
+        id: 't1',
+        title: 'Task',
+        comments: [{ id: 'c1', author: 'Test', text: 'Hello' }],
+      };
       mockTaskService.getTask.mockResolvedValue(task);
       mockTaskService.updateTask.mockResolvedValue({ ...task, comments: [] });
 

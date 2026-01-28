@@ -23,7 +23,9 @@ const mockAutomationService = {
 };
 
 vi.mock('../../services/task-service.js', () => ({
-  TaskService: vi.fn().mockImplementation(() => mockTaskService),
+  TaskService: function () {
+    return mockTaskService;
+  },
 }));
 
 vi.mock('../../services/automation-service.js', () => ({
@@ -48,31 +50,31 @@ describe('Automation Routes (actual module)', () => {
     it('should start automation', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1', status: 'todo' });
       mockAutomationService.validateCanStart.mockReturnValue({ valid: true });
-      mockAutomationService.getStartPayload.mockReturnValue({ attempt: { id: 'a1' }, status: 'in-progress' });
+      mockAutomationService.getStartPayload.mockReturnValue({
+        attempt: { id: 'a1' },
+        status: 'in-progress',
+      });
       mockTaskService.updateTask.mockResolvedValue({ id: 't1', status: 'in-progress' });
       mockAutomationService.buildStartResult.mockReturnValue({ taskId: 't1', attemptId: 'a1' });
 
-      const res = await request(app)
-        .post('/api/automation/t1/start')
-        .send({});
+      const res = await request(app).post('/api/automation/t1/start').send({});
       expect(res.status).toBe(200);
       expect(res.body.taskId).toBe('t1');
     });
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app)
-        .post('/api/automation/missing/start')
-        .send({});
+      const res = await request(app).post('/api/automation/missing/start').send({});
       expect(res.status).toBe(404);
     });
 
     it('should reject invalid task state', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1' });
-      mockAutomationService.validateCanStart.mockReturnValue({ valid: false, error: 'Task already running' });
-      const res = await request(app)
-        .post('/api/automation/t1/start')
-        .send({});
+      mockAutomationService.validateCanStart.mockReturnValue({
+        valid: false,
+        error: 'Task already running',
+      });
+      const res = await request(app).post('/api/automation/t1/start').send({});
       expect(res.status).toBe(400);
     });
 
@@ -92,7 +94,11 @@ describe('Automation Routes (actual module)', () => {
 
   describe('POST /:taskId/complete', () => {
     it('should complete automation', async () => {
-      mockTaskService.getTask.mockResolvedValue({ id: 't1', attempt: { id: 'a1' }, automation: {} });
+      mockTaskService.getTask.mockResolvedValue({
+        id: 't1',
+        attempt: { id: 'a1' },
+        automation: {},
+      });
       mockAutomationService.validateCanComplete.mockReturnValue({ valid: true });
       mockAutomationService.getCompletePayload.mockReturnValue({ status: 'done' });
       mockTaskService.updateTask.mockResolvedValue({ id: 't1', status: 'done' });
@@ -106,18 +112,17 @@ describe('Automation Routes (actual module)', () => {
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      const res = await request(app)
-        .post('/api/automation/missing/complete')
-        .send({});
+      const res = await request(app).post('/api/automation/missing/complete').send({});
       expect(res.status).toBe(404);
     });
 
     it('should reject invalid task state', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1' });
-      mockAutomationService.validateCanComplete.mockReturnValue({ valid: false, error: 'Not running' });
-      const res = await request(app)
-        .post('/api/automation/t1/complete')
-        .send({});
+      mockAutomationService.validateCanComplete.mockReturnValue({
+        valid: false,
+        error: 'Not running',
+      });
+      const res = await request(app).post('/api/automation/t1/complete').send({});
       expect(res.status).toBe(400);
     });
   });
