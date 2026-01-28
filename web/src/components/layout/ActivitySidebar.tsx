@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Trash2, RefreshCw } from 'lucide-react';
+import { Activity, Trash2, RefreshCw, Clock, Coffee, ArrowRight, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -15,7 +15,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import { useActivities, useClearActivities, type Activity as ActivityItem, type ActivityType } from '@/hooks/useActivity';
+import { 
+  useDailySummary, 
+  useStatusHistory, 
+  formatDurationMs,
+  getStatusColor,
+  type StatusHistoryEntry,
+} from '@/hooks/useStatusHistory';
 import { cn } from '@/lib/utils';
 
 interface ActivitySidebarProps {

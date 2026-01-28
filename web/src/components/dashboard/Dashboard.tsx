@@ -188,7 +188,7 @@ export function Dashboard() {
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   
-  const { data: metrics, isLoading, error, dataUpdatedAt } = useMetrics(period, project);
+  const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project);
   const { data: tasks } = useTasks();
   
   // Get unique projects from tasks
@@ -257,8 +257,8 @@ export function Dashboard() {
         </div>
         
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <RefreshCw className="h-3 w-3" />
-          Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
+          <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+          {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
         </div>
       </div>
 

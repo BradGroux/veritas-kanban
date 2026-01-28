@@ -1,5 +1,45 @@
 [
   {
+    "id": "activity_1769609585007_vp6ouz8mc",
+    "type": "comment_added",
+    "taskId": "task_20260128_efQBVi",
+    "taskTitle": "US-1011: Cost budget tracking",
+    "details": {
+      "author": "Veritas",
+      "preview": "Verified complete implementation: Budget settings ..."
+    },
+    "timestamp": "2026-01-28T14:13:05.007Z"
+  },
+  {
+    "id": "activity_1769609584757_n6s7jq73m",
+    "type": "task_updated",
+    "taskId": "task_20260128_efQBVi",
+    "taskTitle": "US-1011: Cost budget tracking",
+    "timestamp": "2026-01-28T14:13:04.757Z"
+  },
+  {
+    "id": "activity_1769609584571_l6zlkl6ou",
+    "type": "comment_added",
+    "taskId": "task_20260128_V0MVwS",
+    "taskTitle": "US-1405: Dashboard metrics cards refresh",
+    "details": {
+      "author": "Veritas",
+      "preview": "Dashboard metrics cards now display real telemetry..."
+    },
+    "timestamp": "2026-01-28T14:13:04.571Z"
+  },
+  {
+    "id": "activity_1769609576406_awrw3g8pe",
+    "type": "status_changed",
+    "taskId": "task_20260128_V0MVwS",
+    "taskTitle": "US-1405: Dashboard metrics cards refresh",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:12:56.406Z"
+  },
+  {
     "id": "activity_1769609521972_4we6i0l5b",
     "type": "sprint_archived",
     "taskId": "US-1300",
