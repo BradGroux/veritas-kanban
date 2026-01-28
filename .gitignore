@@ -39,6 +39,12 @@ tasks/archive/*.md
 # Test
 coverage/
 .nyc_output/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 .veritas-kanban/worktrees/
 
 # TypeScript build info
