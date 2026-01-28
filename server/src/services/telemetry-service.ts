@@ -36,6 +36,7 @@ export interface TelemetryServiceOptions {
 export class TelemetryService {
   private telemetryDir: string;
   private config: TelemetryConfig;
+  private compressAfterDays: number;
   private initialized: boolean = false;
   private writeQueue: Promise<void> = Promise.resolve();
   private pendingWrites: Array<TelemetryEvent> = [];
@@ -43,7 +44,25 @@ export class TelemetryService {
 
   constructor(options: TelemetryServiceOptions = {}) {
     this.telemetryDir = options.telemetryDir || TELEMETRY_DIR;
-    this.config = { ...DEFAULT_CONFIG, ...options.config };
+
+    // Read retention from env var, falling back to options, then default
+    const envRetention = process.env.TELEMETRY_RETENTION_DAYS;
+    const envRetentionParsed = envRetention ? parseInt(envRetention, 10) : NaN;
+
+    // Read compression threshold from env var (default: 7 days, 0 = disabled)
+    const envCompress = process.env.TELEMETRY_COMPRESS_DAYS;
+    this.compressAfterDays = envCompress ? parseInt(envCompress, 10) : 7;
+    if (isNaN(this.compressAfterDays) || this.compressAfterDays < 0) {
+      this.compressAfterDays = 7;
+    }
+
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...options.config,
+      ...(!isNaN(envRetentionParsed) && envRetentionParsed > 0
+        ? { retention: envRetentionParsed }
+        : {}),
+    };
   }
 
   /**
@@ -267,7 +286,7 @@ export class TelemetryService {
     const files = await fs.readdir(this.telemetryDir);
 
     for (const file of files) {
-      if (file.endsWith('.ndjson')) {
+      if (file.endsWith('.ndjson') || file.endsWith('.ndjson.gz')) {
         await fs.unlink(path.join(this.telemetryDir, file));
       }
     }
@@ -366,13 +385,21 @@ export class TelemetryService {
   }
 
   /**
-   * Read events from a single file
+   * Read events from a single file (supports .ndjson and .ndjson.gz)
    */
   private async readEventFile(filename: string): Promise<AnyTelemetryEvent[]> {
     const filepath = path.join(this.telemetryDir, filename);
+    const isGzipped = filename.endsWith('.gz');
 
     try {
-      const content = await fs.readFile(filepath, 'utf-8');
+      let content: string;
+      if (isGzipped) {
+        const buffer = await fs.readFile(filepath);
+        content = gunzipSync(buffer).toString('utf-8');
+      } else {
+        content = await fs.readFile(filepath, 'utf-8');
+      }
+
       const lines = content.trim().split('\n').filter(Boolean);
 
       return lines
@@ -394,11 +421,13 @@ export class TelemetryService {
   }
 
   /**
-   * Get list of event files within a date range
+   * Get list of event files within a date range (includes both .ndjson and .ndjson.gz)
    */
   private async getEventFiles(since?: string, until?: string): Promise<string[]> {
     const files = await fs.readdir(this.telemetryDir);
-    const eventFiles = files.filter((f) => f.startsWith('events-') && f.endsWith('.ndjson'));
+    const eventFiles = files.filter(
+      (f) => f.startsWith('events-') && (f.endsWith('.ndjson') || f.endsWith('.ndjson.gz'))
+    );
 
     if (!since && !until) {
       return eventFiles;
@@ -406,7 +435,7 @@ export class TelemetryService {
 
     // Extract date from filename and filter by range
     return eventFiles.filter((filename) => {
-      const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson/);
+      const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
       if (!match) return false;
 
       const fileDate = match[1];
@@ -426,26 +455,68 @@ export class TelemetryService {
   }
 
   /**
-   * Clean up events older than retention period
+   * Clean up events older than retention period and compress aging files.
+   *
+   * - Files older than `retention` days are deleted (both .ndjson and .ndjson.gz).
+   * - Files older than `compressAfterDays` (but within retention) are gzip-compressed.
+   * - Today's file and recent files are left untouched.
    */
   private async cleanupOldEvents(): Promise<void> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - this.config.retention);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const now = new Date();
+
+    const retentionCutoff = new Date(now);
+    retentionCutoff.setDate(retentionCutoff.getDate() - this.config.retention);
+    const retentionCutoffStr = retentionCutoff.toISOString().slice(0, 10);
+
+    const compressCutoff = new Date(now);
+    compressCutoff.setDate(compressCutoff.getDate() - this.compressAfterDays);
+    const compressCutoffStr = compressCutoff.toISOString().slice(0, 10);
 
     const files = await fs.readdir(this.telemetryDir);
+    let deleted = 0;
+    let compressed = 0;
 
     for (const filename of files) {
-      const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson/);
+      const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
       if (!match) continue;
 
       const fileDate = match[1];
-      if (fileDate < cutoffStr) {
-        const filepath = path.join(this.telemetryDir, filename);
+      const isCompressed = !!match[2];
+      const filepath = path.join(this.telemetryDir, filename);
+
+      // Delete files older than retention period
+      if (fileDate < retentionCutoffStr) {
         await fs.unlink(filepath);
-        console.log(`[Telemetry] Cleaned up old event file: ${filename}`);
+        deleted++;
+        continue;
+      }
+
+      // Compress uncompressed files older than compress threshold
+      if (this.compressAfterDays > 0 && !isCompressed && fileDate < compressCutoffStr) {
+        try {
+          await this.compressFile(filepath);
+          compressed++;
+        } catch (err) {
+          console.error(`[Telemetry] Failed to compress ${filename}:`, err);
+        }
       }
     }
+
+    if (deleted > 0 || compressed > 0) {
+      console.log(
+        `[Telemetry] Cleanup: deleted ${deleted} expired file(s), compressed ${compressed} file(s) ` +
+          `(retention=${this.config.retention}d, compress=${this.compressAfterDays}d)`
+      );
+    }
+  }
+
+  /**
+   * Compress an NDJSON file to gzip and remove the original.
+   */
+  private async compressFile(filepath: string): Promise<void> {
+    const gzPath = filepath + '.gz';
+    await pipeline(createReadStream(filepath), createGzip(), createWriteStream(gzPath));
+    await fs.unlink(filepath);
   }
 }
 

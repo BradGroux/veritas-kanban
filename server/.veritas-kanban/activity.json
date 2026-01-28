@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769642994841_u33o1366y",
+    "type": "status_changed",
+    "taskId": "task_20260128__Lw2Vb",
+    "taskTitle": "SECURITY: Fix CORS rejection to return 403 instead of 500",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T23:29:54.841Z"
+  },
+  {
+    "id": "activity_1769642965146_fs0gu3ncl",
+    "type": "comment_added",
+    "taskId": "task_20260128_fTudfN",
+    "taskTitle": "QUALITY: Replace 16 'as any' type casts with proper type narrowing",
+    "details": {
+      "author": "Veritas",
+      "preview": "Replaced all 22 `as any` casts across 8 files (ser..."
+    },
+    "timestamp": "2026-01-28T23:29:25.146Z"
+  },
+  {
+    "id": "activity_1769642958632_s7rv06t59",
+    "type": "status_changed",
+    "taskId": "task_20260128_fTudfN",
+    "taskTitle": "QUALITY: Replace 16 'as any' type casts with proper type narrowing",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T23:29:18.632Z"
+  },
+  {
     "id": "activity_1769642837550_cmukzh57h",
     "type": "status_changed",
     "taskId": "task_20260128_LTxaqy",

@@ -18,9 +18,15 @@ import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
-import { errorHandler } from './middleware/error-handler.js';
+import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
-import { authenticate, authenticateWebSocket, validateWebSocketOrigin, getAuthStatus, type AuthenticatedWebSocket } from './middleware/auth.js';
+import {
+  authenticate,
+  authenticateWebSocket,
+  validateWebSocketOrigin,
+  getAuthStatus,
+  type AuthenticatedWebSocket,
+} from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import { apiRateLimit } from './middleware/rate-limit.js';
 import { apiVersionMiddleware } from './middleware/api-version.js';
@@ -144,8 +150,13 @@ app.use(compression({ level: 6, threshold: 1024 }));
 // ============================================
 // Allowed origins from environment (comma-separated) or defaults for dev
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'];
+  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+  : [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000',
+    ];
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
@@ -154,12 +165,12 @@ const corsOptions: cors.CorsOptions = {
       callback(null, true);
       return;
     }
-    
+
     if (ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
       log.warn({ origin }, 'CORS blocked request from disallowed origin');
-      callback(new Error('Not allowed by CORS'));
+      callback(new AppError(403, 'Origin not allowed by CORS', 'CORS_REJECTED'));
     }
   },
   credentials: true,
@@ -247,25 +258,30 @@ if (process.env.NODE_ENV === 'production') {
   const webDistPath = path.resolve(__dirname, '../../web/dist');
 
   // Hashed assets (JS/CSS/images in /assets/) — immutable, 1 year cache
-  app.use('/assets', express.static(path.join(webDistPath, 'assets'), {
-    maxAge: '365d',
-    immutable: true,
-    etag: true,
-    lastModified: true,
-  }));
+  app.use(
+    '/assets',
+    express.static(path.join(webDistPath, 'assets'), {
+      maxAge: '365d',
+      immutable: true,
+      etag: true,
+      lastModified: true,
+    })
+  );
 
   // All other static files (index.html, favicon, manifest) — always revalidate
-  app.use(express.static(webDistPath, {
-    maxAge: 0,
-    etag: true,
-    lastModified: true,
-    setHeaders(res, filePath) {
-      // index.html must never be cached stale — it references hashed bundles
-      if (filePath.endsWith('.html')) {
-        res.set('Cache-Control', 'no-cache');
-      }
-    },
-  }));
+  app.use(
+    express.static(webDistPath, {
+      maxAge: 0,
+      etag: true,
+      lastModified: true,
+      setHeaders(res, filePath) {
+        // index.html must never be cached stale — it references hashed bundles
+        if (filePath.endsWith('.html')) {
+          res.set('Cache-Control', 'no-cache');
+        }
+      },
+    })
+  );
 
   // SPA fallback: serve index.html for any non-API route
   app.get('*', (_req, res, next) => {
@@ -289,7 +305,7 @@ let configService: ConfigService | null = null;
   try {
     // Run data migrations first (idempotent)
     await runStartupMigrations();
-    
+
     // Initialize telemetry service and sync with feature settings
     configService = new ConfigService();
     const featureSettings = await configService.getFeatureSettings();
@@ -312,13 +328,13 @@ const wss = new WebSocketServer({
   verifyClient: (info, callback) => {
     const origin = info.origin || info.req.headers.origin;
     const result = validateWebSocketOrigin(origin, ALLOWED_ORIGINS);
-    
+
     if (!result.allowed) {
       log.warn({ origin, reason: result.reason }, 'WebSocket origin rejected');
       callback(false, 403, 'Forbidden: origin not allowed');
       return;
     }
-    
+
     callback(true);
   },
 });
@@ -335,28 +351,31 @@ const agentSubscriptions = new Map<string, Set<WebSocket>>();
 wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
   // Authenticate WebSocket connection
   const authResult = authenticateWebSocket(req);
-  
+
   if (!authResult.authenticated) {
     log.warn({ error: authResult.error }, 'WebSocket connection rejected');
     ws.close(4001, authResult.error || 'Authentication required');
     return;
   }
-  
+
   // Attach auth info to WebSocket for later use
   ws.auth = {
     role: authResult.role!,
     keyName: authResult.keyName,
     isLocalhost: authResult.isLocalhost,
   };
-  
-  log.info({ role: authResult.role, localhost: authResult.isLocalhost }, 'WebSocket client connected');
-  
+
+  log.info(
+    { role: authResult.role, localhost: authResult.isLocalhost },
+    'WebSocket client connected'
+  );
+
   let subscribedTaskId: string | null = null;
 
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
-      
+
       // Handle subscription to agent output
       if (message.type === 'subscribe' && message.taskId) {
         // Unsubscribe from previous task
@@ -382,36 +401,46 @@ wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
         const emitter = agentService.getAgentEmitter(newTaskId);
         if (emitter) {
           const currentTaskId = newTaskId;
-          
+
           const outputHandler = (output: AgentOutput) => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'agent:output',
-                taskId: currentTaskId,
-                outputType: output.type,
-                content: output.content,
-                timestamp: output.timestamp,
-              }));
+              ws.send(
+                JSON.stringify({
+                  type: 'agent:output',
+                  taskId: currentTaskId,
+                  outputType: output.type,
+                  content: output.content,
+                  timestamp: output.timestamp,
+                })
+              );
             }
           };
 
-          const completeHandler = (result: { code: number; signal: string | null; status: string }) => {
+          const completeHandler = (result: {
+            code: number;
+            signal: string | null;
+            status: string;
+          }) => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'agent:complete',
-                taskId: currentTaskId,
-                ...result,
-              }));
+              ws.send(
+                JSON.stringify({
+                  type: 'agent:complete',
+                  taskId: currentTaskId,
+                  ...result,
+                })
+              );
             }
           };
 
           const errorHandler = (error: Error) => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'agent:error',
-                taskId: currentTaskId,
-                error: error.message,
-              }));
+              ws.send(
+                JSON.stringify({
+                  type: 'agent:error',
+                  taskId: currentTaskId,
+                  error: error.message,
+                })
+              );
             }
           };
 
@@ -428,11 +457,13 @@ wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
         }
 
         // Send confirmation
-        ws.send(JSON.stringify({
-          type: 'subscribed',
-          taskId: subscribedTaskId,
-          running: !!emitter,
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'subscribed',
+            taskId: subscribedTaskId,
+            running: !!emitter,
+          })
+        );
       }
     } catch (error) {
       log.error({ err: error }, 'WebSocket message error');
@@ -441,7 +472,7 @@ wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
 
   ws.on('close', () => {
     log.info('WebSocket client disconnected');
-    
+
     // Clean up subscriptions
     if (subscribedTaskId) {
       const subs = agentSubscriptions.get(subscribedTaskId);
@@ -461,13 +492,13 @@ export { wss };
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
   log.info({ signal }, 'Shutting down gracefully');
-  
+
   // 1. Close WebSocket connections first (stop accepting new messages)
   log.info({ clients: wss.clients.size }, 'Closing WebSocket connections');
   wss.clients.forEach((client) => {
     client.close(1000, 'Server shutting down');
   });
-  
+
   // Close the WebSocket server itself (stop accepting new connections)
   await new Promise<void>((resolve) => {
     wss.close((err) => {
@@ -476,19 +507,19 @@ async function gracefulShutdown(signal: string) {
       resolve();
     });
   });
-  
+
   // 2. Dispose services (release file watchers, flush buffers)
   try {
     log.info('Disposing services');
-    
+
     // Flush pending telemetry writes
     await getTelemetryService().flush();
     log.info('Telemetry flushed');
-    
+
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
     log.info('Task service disposed');
-    
+
     // Dispose config service (closes file watcher, clears cache)
     if (configService) {
       configService.dispose();
@@ -498,13 +529,13 @@ async function gracefulShutdown(signal: string) {
   } catch (err) {
     log.error({ err }, 'Error during service disposal');
   }
-  
+
   // 3. Close HTTP server last
   server.close(() => {
     log.info('HTTP server closed');
     process.exit(0);
   });
-  
+
   // Force exit after 10 seconds
   setTimeout(() => {
     log.fatal('Forced shutdown after timeout');
@@ -519,26 +550,29 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Start server
 server.listen(PORT, () => {
   const authStatus = getAuthStatus();
-  const localhostInfo = authStatus.localhostBypass 
-    ? `, localhost bypass [${authStatus.localhostRole}]` 
+  const localhostInfo = authStatus.localhostBypass
+    ? `, localhost bypass [${authStatus.localhostRole}]`
     : '';
-  const authLine = authStatus.enabled 
+  const authLine = authStatus.enabled
     ? `Auth: ON (${authStatus.configuredKeys} keys${localhostInfo})`
     : 'Auth: OFF (dev mode)';
   const corsLine = `CORS: ${ALLOWED_ORIGINS.length} origins`;
-  
-  log.info({
-    port: PORT,
-    api: `http://localhost:${PORT}`,
-    ws: `ws://localhost:${PORT}/ws`,
-    auth: authLine,
-    cors: corsLine,
-    helmet: true,
-    compression: true,
-    rateLimit: '100 req/min',
-    bodyLimit: '1MB',
-  }, 'Veritas Kanban Server started');
-  
+
+  log.info(
+    {
+      port: PORT,
+      api: `http://localhost:${PORT}`,
+      ws: `ws://localhost:${PORT}/ws`,
+      auth: authLine,
+      cors: corsLine,
+      helmet: true,
+      compression: true,
+      rateLimit: '100 req/min',
+      bodyLimit: '1MB',
+    },
+    'Veritas Kanban Server started'
+  );
+
   // Security warnings for localhost bypass
   if (authStatus.localhostBypass) {
     if (authStatus.localhostRole === 'admin') {

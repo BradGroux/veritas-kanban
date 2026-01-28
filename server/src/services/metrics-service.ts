@@ -2,6 +2,7 @@ import { createReadStream } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import readline from 'readline';
+import { createGunzip } from 'zlib';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
 import type {
@@ -226,17 +227,19 @@ export class MetricsService {
   }
 
   /**
-   * Get list of event files within a date range
+   * Get list of event files within a date range (includes .ndjson and .ndjson.gz)
    */
   private async getEventFiles(since: string): Promise<string[]> {
     try {
       const files = await fs.readdir(this.telemetryDir);
-      const eventFiles = files.filter((f) => f.startsWith('events-') && f.endsWith('.ndjson'));
+      const eventFiles = files.filter(
+        (f) => f.startsWith('events-') && (f.endsWith('.ndjson') || f.endsWith('.ndjson.gz'))
+      );
       const sinceDate = since.slice(0, 10);
 
       return eventFiles
         .filter((filename) => {
-          const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson/);
+          const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
           if (!match) return false;
           return match[1] >= sinceDate;
         })
@@ -247,6 +250,26 @@ export class MetricsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Create a readline interface for an event file (handles both .ndjson and .ndjson.gz)
+   */
+  private createLineReader(filePath: string): readline.Interface {
+    if (filePath.endsWith('.gz')) {
+      const fileStream = createReadStream(filePath);
+      const gunzip = createGunzip();
+      const decompressed = fileStream.pipe(gunzip);
+      return readline.createInterface({
+        input: decompressed,
+        crlfDelay: Infinity,
+      });
+    }
+    const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
+    return readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
   }
 
   /**
@@ -263,11 +286,7 @@ export class MetricsService {
   ): Promise<T> {
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -631,11 +650,7 @@ export class MetricsService {
     // Single pass through all files
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -827,11 +842,7 @@ export class MetricsService {
 
     for (const filePath of previousFiles) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -927,11 +938,7 @@ export class MetricsService {
     // Process all files
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -1051,11 +1058,7 @@ export class MetricsService {
     // Stream through files for current month only
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -1176,11 +1179,7 @@ export class MetricsService {
     // Process all files
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
@@ -1557,11 +1556,7 @@ export class MetricsService {
 
     for (const filePath of files) {
       try {
-        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity,
-        });
+        const rl = this.createLineReader(filePath);
 
         for await (const line of rl) {
           if (!line.trim()) continue;
