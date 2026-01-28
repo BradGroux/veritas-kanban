@@ -14,14 +14,20 @@
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter server build && pnpm --filter web build",
-    "lint": "pnpm -r lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "clean": "pnpm -r clean && rm -rf node_modules"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"

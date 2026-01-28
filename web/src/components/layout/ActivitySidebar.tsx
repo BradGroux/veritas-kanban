@@ -65,7 +65,7 @@ function formatTimestamp(timestamp: string): string {
   return date.toLocaleDateString();
 }
 
-function ActivityItem({ activity }: { activity: ActivityItem }) {
+function ActivityRow({ activity }: { activity: ActivityItem }) {
   return (
     <div className="flex items-start gap-3 py-3 px-2 hover:bg-muted/50 rounded-md transition-colors">
       <span className="text-lg flex-shrink-0">
@@ -164,7 +164,7 @@ export function ActivitySidebar({ open, onOpenChange }: ActivitySidebarProps) {
             ) : (
               <div className="divide-y divide-border">
                 {filteredActivities.map(activity => (
-                  <ActivityItem key={activity.id} activity={activity} />
+                  <ActivityRow key={activity.id} activity={activity} />
                 ))}
               </div>
             )}

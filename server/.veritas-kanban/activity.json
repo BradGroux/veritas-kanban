@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769603388688_4hoz7af0m",
+    "type": "status_changed",
+    "taskId": "task_20260128_Qh60Ao",
+    "taskTitle": "RF-22: TypeScript Strictness & Linting",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T12:29:48.688Z"
+  },
+  {
+    "id": "activity_1769603372344_dcxca8chn",
+    "type": "comment_added",
+    "taskId": "task_20260128_oeprdJ",
+    "taskTitle": "RF-25: Code Cleanup & Organization",
+    "details": {
+      "author": "Veritas",
+      "preview": "Removed dead agent-service.ts (436 lines), added h..."
+    },
+    "timestamp": "2026-01-28T12:29:32.344Z"
+  },
+  {
+    "id": "activity_1769603364872_vcvxl6wsz",
+    "type": "status_changed",
+    "taskId": "task_20260128_oeprdJ",
+    "taskTitle": "RF-25: Code Cleanup & Organization",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T12:29:24.872Z"
+  },
+  {
     "id": "activity_1769603150649_gbh68ockj",
     "type": "status_changed",
     "taskId": "task_20260128_oeprdJ",
