@@ -45,13 +45,43 @@ const DEFAULT_CONFIG: AppConfig = {
 };
 
 /**
+ * Keys that could lead to prototype pollution and must be rejected
+ */
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Check if an object has any dangerous keys (including nested)
+ */
+function hasDangerousKeys(obj: unknown): boolean {
+  if (obj === null || typeof obj !== 'object') return false;
+  if (Array.isArray(obj)) return obj.some(hasDangerousKeys);
+  
+  for (const key of Object.keys(obj)) {
+    if (DANGEROUS_KEYS.has(key)) return true;
+    if (hasDangerousKeys((obj as Record<string, unknown>)[key])) return true;
+  }
+  return false;
+}
+
+/**
  * Deep merge source into target. For each key in source:
  * - If both values are plain objects, recurse
  * - Otherwise, target value wins if it exists; source fills missing keys
+ * 
+ * Security: Rejects objects containing __proto__, constructor, or prototype keys
+ * to prevent prototype pollution attacks.
  */
 function deepMergeDefaults<T extends Record<string, any>>(target: Partial<T>, defaults: T): T {
+  // Security: Check for prototype pollution attempts
+  if (hasDangerousKeys(target)) {
+    throw new Error('Invalid input: dangerous keys detected');
+  }
+  
   const result = { ...defaults };
   for (const key of Object.keys(defaults) as Array<keyof T>) {
+    // Skip dangerous keys (defense in depth)
+    if (DANGEROUS_KEYS.has(key as string)) continue;
+    
     if (key in target) {
       const targetVal = (target as any)[key];
       const defaultVal = defaults[key];

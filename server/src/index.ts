@@ -33,14 +33,47 @@ import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authenticate, authenticateWebSocket, getAuthStatus, type AuthenticatedWebSocket } from './middleware/auth.js';
+import { apiRateLimit } from './middleware/rate-limit.js';
 import type { AgentOutput } from './services/clawdbot-agent-service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ============================================
+// Security: CORS Configuration
+// ============================================
+// Allowed origins from environment (comma-separated) or defaults for dev
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, curl, server-to-server)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+};
+
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions));
+
+// ============================================
+// Security: Request Size Limit (1MB)
+// ============================================
+app.use(express.json({ limit: '1mb' }));
 
 // Health check (unauthenticated)
 app.get('/health', (_req, res) => {
@@ -51,6 +84,11 @@ app.get('/health', (_req, res) => {
 app.get('/api/auth/status', (_req, res) => {
   res.json(getAuthStatus());
 });
+
+// ============================================
+// Security: Rate Limiting (100 req/min)
+// ============================================
+app.use('/api', apiRateLimit);
 
 // Apply authentication to all API routes
 app.use('/api', authenticate);
@@ -276,6 +314,7 @@ server.listen(PORT, () => {
   const authLine = authStatus.enabled 
     ? `Auth: ON (${authStatus.configuredKeys} keys${authStatus.localhostBypass ? ', localhost bypass' : ''})`
     : 'Auth: OFF (dev mode)';
+  const corsLine = `CORS: ${ALLOWED_ORIGINS.length} origins`;
   
   console.log(`
 ╔═══════════════════════════════════════════════╗
@@ -285,6 +324,9 @@ server.listen(PORT, () => {
 ║  WebSocket:  ws://localhost:${PORT}/ws           ║
 ║  Health:     http://localhost:${PORT}/health     ║
 ║  ${authLine.padEnd(42)}║
+║  ${corsLine.padEnd(42)}║
+║  Rate Limit: 100 req/min                      ║
+║  Body Limit: 1MB                              ║
 ╚═══════════════════════════════════════════════╝
   `);
 });

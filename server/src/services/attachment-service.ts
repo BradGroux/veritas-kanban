@@ -42,12 +42,40 @@ export class AttachmentService {
       .slice(0, 200); // Limit length
   }
 
+  /**
+   * Sanitize task ID to prevent path traversal
+   * Only allow alphanumeric, underscore, and hyphen
+   */
+  private sanitizeTaskId(taskId: string): string {
+    return taskId.replace(/[^a-zA-Z0-9_-]/g, '');
+  }
+
+  /**
+   * Validate that a resolved path stays within the allowed base directory
+   * Throws if path traversal is detected
+   */
+  private validatePathWithinBase(resolvedPath: string, baseDir: string, context: string): void {
+    const normalizedPath = path.normalize(resolvedPath);
+    const normalizedBase = path.normalize(baseDir);
+    
+    if (!normalizedPath.startsWith(normalizedBase + path.sep) && normalizedPath !== normalizedBase) {
+      console.error(`Path traversal attempt blocked: ${context}`, { resolvedPath, baseDir });
+      throw new Error('Invalid path: access denied');
+    }
+  }
+
   private getTaskAttachmentDir(taskId: string): string {
-    return path.join(this.attachmentsDir, taskId);
+    const sanitizedId = this.sanitizeTaskId(taskId);
+    const dir = path.join(this.attachmentsDir, sanitizedId);
+    this.validatePathWithinBase(dir, this.attachmentsDir, 'getTaskAttachmentDir');
+    return dir;
   }
 
   private getArchiveTaskAttachmentDir(taskId: string): string {
-    return path.join(this.archiveAttachmentsDir, taskId);
+    const sanitizedId = this.sanitizeTaskId(taskId);
+    const dir = path.join(this.archiveAttachmentsDir, sanitizedId);
+    this.validatePathWithinBase(dir, this.archiveAttachmentsDir, 'getArchiveTaskAttachmentDir');
+    return dir;
   }
 
   private getExtractedTextDir(taskId: string): string {
@@ -165,10 +193,18 @@ export class AttachmentService {
   }
 
   /**
-   * Get file path for an attachment
+   * Get file path for an attachment (with path traversal protection)
    */
   getAttachmentPath(taskId: string, filename: string): string {
-    return path.join(this.getTaskAttachmentDir(taskId), filename);
+    const taskDir = this.getTaskAttachmentDir(taskId);
+    // Sanitize filename to prevent traversal
+    const sanitizedFilename = this.sanitizeFilename(filename);
+    const filePath = path.join(taskDir, sanitizedFilename);
+    
+    // Double-check the resolved path stays within task directory
+    this.validatePathWithinBase(filePath, taskDir, 'getAttachmentPath');
+    
+    return filePath;
   }
 
   /**
