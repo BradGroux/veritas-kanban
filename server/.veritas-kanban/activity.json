@@ -1,5 +1,72 @@
 [
   {
+    "id": "activity_1769588199653_whhfki2dz",
+    "type": "task_created",
+    "taskId": "task_20260128_8KRThU",
+    "taskTitle": "FEATURE REQUEST: Change Review Column to Blocked",
+    "details": {
+      "type": "feature-request-n30mhV",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T08:16:39.653Z"
+  },
+  {
+    "id": "activity_1769588192436_i9tzea6mk",
+    "type": "status_changed",
+    "taskId": "task_20260128_KbDn0E",
+    "taskTitle": "US-1109: Settings UI — Tabbed panel redesign",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T08:16:32.436Z"
+  },
+  {
+    "id": "activity_1769588192387_wjoormah7",
+    "type": "comment_added",
+    "taskId": "task_20260128_gUHeIV",
+    "taskTitle": "US-1102: Feature toggle React context & hooks",
+    "details": {
+      "author": "Veritas",
+      "preview": "useFeatureSettings, useFeatureSetting, useUpdateFe..."
+    },
+    "timestamp": "2026-01-28T08:16:32.387Z"
+  },
+  {
+    "id": "activity_1769588192375_z068olrt4",
+    "type": "status_changed",
+    "taskId": "task_20260128_gUHeIV",
+    "taskTitle": "US-1102: Feature toggle React context & hooks",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:16:32.375Z"
+  },
+  {
+    "id": "activity_1769588192354_kmcif9395",
+    "type": "comment_added",
+    "taskId": "task_20260128_X6nifI",
+    "taskTitle": "US-1101: Settings infrastructure & config schema expansion",
+    "details": {
+      "author": "Veritas",
+      "preview": "FeatureSettings types + defaults, deep merge in Co..."
+    },
+    "timestamp": "2026-01-28T08:16:32.354Z"
+  },
+  {
+    "id": "activity_1769588192286_615p4w08r",
+    "type": "status_changed",
+    "taskId": "task_20260128_X6nifI",
+    "taskTitle": "US-1101: Settings infrastructure & config schema expansion",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T08:16:32.286Z"
+  },
+  {
     "id": "activity_1769588154981_unig8oz3f",
     "type": "comment_added",
     "taskId": "task_20260128_XvmMga",
