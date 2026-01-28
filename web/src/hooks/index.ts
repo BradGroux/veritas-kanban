@@ -13,7 +13,15 @@ export * from './useDebouncedSave';
 export * from './useDiff';
 export * from './useFeatureSettings';
 export * from './useGitHub';
-export * from './useAgentStatus';
+// Real-time WebSocket-based global agent status
+export {
+  useRealtimeAgentStatus,
+  useGlobalAgentStatusRT,
+  type AgentStatusData,
+  type AgentStatusState,
+  type SubAgent,
+} from './useAgentStatus';
+// Polling-based global agent status (legacy, prefer useRealtimeAgentStatus)
 export * from './useGlobalAgentStatus';
 export * from './useKeyboard';
 export * from './useManagedList';

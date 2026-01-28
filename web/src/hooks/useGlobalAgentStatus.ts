@@ -28,6 +28,3 @@ export function useGlobalAgentStatus() {
 }
 
 export type { GlobalAgentStatus };
-
-// Re-export the new WebSocket-based hook for easy migration
-export { useAgentStatus, type AgentStatusData, type SubAgent } from './useAgentStatus';

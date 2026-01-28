@@ -35,8 +35,10 @@
     "@types/express": "^5.0.0",
     "@types/mime-types": "^3.0.1",
     "@types/multer": "^2.0.0",
+    "@types/supertest": "^6.0.3",
     "@types/ws": "^8.5.13",
     "eslint": "^9.17.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

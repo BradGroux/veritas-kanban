@@ -1,5 +1,71 @@
 [
   {
+    "id": "activity_1769607720210_eghhexv0t",
+    "type": "status_changed",
+    "taskId": "task_20260128_XGU2QA",
+    "taskTitle": "US-1009: Failure alerts to Teams",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:42:00.210Z"
+  },
+  {
+    "id": "activity_1769607696059_dq0mwq3o8",
+    "type": "status_changed",
+    "taskId": "task_20260128_wZ3-Ix",
+    "taskTitle": "US-1402: Veritas telemetry reporter",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T13:41:36.059Z"
+  },
+  {
+    "id": "activity_1769607682784_npcof1bpe",
+    "type": "comment_added",
+    "taskId": "task_20260128_wgJpvX",
+    "taskTitle": "RF-09: Move Business Logic from Routes to Services",
+    "details": {
+      "author": "Veritas",
+      "preview": "Extracted business logic from routes into 4 new se..."
+    },
+    "timestamp": "2026-01-28T13:41:22.784Z"
+  },
+  {
+    "id": "activity_1769607682770_ofremm7kq",
+    "type": "status_changed",
+    "taskId": "task_20260128_wgJpvX",
+    "taskTitle": "RF-09: Move Business Logic from Routes to Services",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:41:22.770Z"
+  },
+  {
+    "id": "activity_1769607677791_25db308wa",
+    "type": "comment_added",
+    "taskId": "task_20260128_XIY4cW",
+    "taskTitle": "RF-03: Server Security Hardening",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented 5 security hardening measures: CORS or..."
+    },
+    "timestamp": "2026-01-28T13:41:17.791Z"
+  },
+  {
+    "id": "activity_1769607677776_3kzlkip66",
+    "type": "status_changed",
+    "taskId": "task_20260128_XIY4cW",
+    "taskTitle": "RF-03: Server Security Hardening",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:41:17.776Z"
+  },
+  {
     "id": "activity_1769607668847_8x4uf7m8o",
     "type": "status_changed",
     "taskId": "task_20260128_eib_Vw",

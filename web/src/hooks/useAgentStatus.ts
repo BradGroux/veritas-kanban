@@ -57,14 +57,16 @@ function isAgentStatusMessage(msg: WebSocketMessage): msg is AgentStatusWebSocke
 }
 
 /**
- * Hook to subscribe to real-time agent status updates.
+ * Hook to subscribe to real-time global agent status updates.
  * 
  * Uses WebSocket as primary transport with automatic fallback to polling
  * when WebSocket is disconnected. Detects stale status (no update in 5+ min).
  * 
+ * Note: For per-task agent status, use `useAgentStatus(taskId)` from `useAgent.ts`.
+ * 
  * @example
  * ```tsx
- * const { status, activeTask, subAgents, lastUpdated, isStale } = useAgentStatus();
+ * const { status, activeTask, subAgents, lastUpdated, isStale } = useRealtimeAgentStatus();
  * 
  * if (isStale) {
  *   return <span>Agent idle</span>;
@@ -73,7 +75,7 @@ function isAgentStatusMessage(msg: WebSocketMessage): msg is AgentStatusWebSocke
  * return <span>{status}</span>;
  * ```
  */
-export function useAgentStatus(): AgentStatusData {
+export function useRealtimeAgentStatus(): AgentStatusData {
   const [statusData, setStatusData] = useState<Omit<AgentStatusData, 'isConnected' | 'isStale'>>({
     status: 'idle',
     subAgentCount: 0,
@@ -209,7 +211,5 @@ export function useAgentStatus(): AgentStatusData {
   return result;
 }
 
-/**
- * @deprecated Use useAgentStatus instead. This is kept for backwards compatibility.
- */
-export { useGlobalAgentStatus } from './useGlobalAgentStatus';
+// Alias for backwards compatibility with the task requirements
+export { useRealtimeAgentStatus as useGlobalAgentStatusRT };
