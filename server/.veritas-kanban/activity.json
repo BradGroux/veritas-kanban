@@ -1,5 +1,43 @@
 [
   {
+    "id": "activity_1769566473695_jne5hxkae",
+    "type": "task_updated",
+    "taskId": "task_20260128_nYPgZw",
+    "taskTitle": "FEATURE REQUEST: Add Task Templates to Veritas Kanban",
+    "timestamp": "2026-01-28T02:14:33.699Z"
+  },
+  {
+    "id": "activity_1769566468400_nj65zjnpq",
+    "type": "task_updated",
+    "taskId": "task_20260128_nYPgZw",
+    "taskTitle": "FEATURE REQUEST: Add Task Templates to Veritas Kanban",
+    "timestamp": "2026-01-28T02:14:28.400Z"
+  },
+  {
+    "id": "activity_1769566348773_9nhccbcp6",
+    "type": "task_created",
+    "taskId": "task_20260128_nYPgZw",
+    "taskTitle": "FEATURE REQUEST: Add Task Templates to Veritas Kanban",
+    "details": {
+      "type": "code",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T02:12:28.773Z"
+  },
+  {
+    "id": "activity_1769566160400_mih59ku8y",
+    "type": "task_created",
+    "taskId": "task_20260128_iG-ISb",
+    "taskTitle": "Review the ByteRover Skill",
+    "details": {
+      "type": "automation",
+      "priority": "medium",
+      "project": "platform"
+    },
+    "timestamp": "2026-01-28T02:09:20.400Z"
+  },
+  {
     "id": "activity_1769462946873_y8th7hcyf",
     "type": "project_archived",
     "taskId": "Sprint 8",
@@ -946,46 +984,5 @@
       "status": "done"
     },
     "timestamp": "2026-01-26T11:52:07.832Z"
-  },
-  {
-    "id": "activity_1769428177269_vz4eo3biw",
-    "type": "status_changed",
-    "taskId": "task_20260126_leQOQ5",
-    "taskTitle": "US-704: Task dependencies",
-    "details": {
-      "from": "todo",
-      "status": "in-progress"
-    },
-    "timestamp": "2026-01-26T11:49:37.269Z"
-  },
-  {
-    "id": "activity_1769428174259_o8hv7liod",
-    "type": "task_created",
-    "taskId": "task_20260126_leQOQ5",
-    "taskTitle": "US-704: Task dependencies",
-    "details": {
-      "type": "code",
-      "priority": "high",
-      "project": "veritas-kanban"
-    },
-    "timestamp": "2026-01-26T11:49:34.259Z"
-  },
-  {
-    "id": "activity_1769428163170_hctvks08n",
-    "type": "status_changed",
-    "taskId": "task_20260126_tFaKR6",
-    "taskTitle": "US-703: Subtasks",
-    "details": {
-      "from": "in-progress",
-      "status": "done"
-    },
-    "timestamp": "2026-01-26T11:49:23.170Z"
-  },
-  {
-    "id": "activity_1769428005464_gpzpkjrn8",
-    "type": "task_archived",
-    "taskId": "task_20260126_yi65DL",
-    "taskTitle": "Second test task",
-    "timestamp": "2026-01-26T11:46:45.464Z"
   }
 ]
