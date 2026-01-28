@@ -18,6 +18,9 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
     "clean": "pnpm -r clean && rm -rf node_modules"
   },
   "devDependencies": {

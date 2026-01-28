@@ -1,5 +1,482 @@
 [
   {
+    "id": "activity_1769641144516_qwc7dctwg",
+    "type": "task_created",
+    "taskId": "task_20260128_iAxrNa",
+    "taskTitle": "QUALITY: Add API documentation (OpenAPI/Swagger)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.516Z"
+  },
+  {
+    "id": "activity_1769641144449_icm2nhgnj",
+    "type": "task_created",
+    "taskId": "task_20260128_4tLBja",
+    "taskTitle": "QUALITY: Add pre-commit hooks with husky + lint-staged",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.449Z"
+  },
+  {
+    "id": "activity_1769641144385_mq4dav8t8",
+    "type": "task_created",
+    "taskId": "task_20260128_c_jMj5",
+    "taskTitle": "QUALITY: Split god files (metrics-service 1669 lines, api.ts 1038 lines)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.385Z"
+  },
+  {
+    "id": "activity_1769641144320_6sapw4g89",
+    "type": "task_created",
+    "taskId": "task_20260128_tJyjRS",
+    "taskTitle": "QUALITY: Add unhandledRejection and uncaughtException handlers",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.320Z"
+  },
+  {
+    "id": "activity_1769641144255_ppvmzd4en",
+    "type": "task_created",
+    "taskId": "task_20260128_iFNFgD",
+    "taskTitle": "QUALITY: Audit and fix 39 silent catch blocks",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.255Z"
+  },
+  {
+    "id": "activity_1769641144190_hj5qq1s3i",
+    "type": "task_created",
+    "taskId": "task_20260128_fTudfN",
+    "taskTitle": "QUALITY: Replace 16 'as any' type casts with proper type narrowing",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.190Z"
+  },
+  {
+    "id": "activity_1769641144122_7fu4ttf5q",
+    "type": "task_created",
+    "taskId": "task_20260128_RcHzcp",
+    "taskTitle": "QUALITY: Improve frontend accessibility to WCAG 2.1 AA",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.122Z"
+  },
+  {
+    "id": "activity_1769641144057_z96h6aw6f",
+    "type": "task_created",
+    "taskId": "task_20260128_znWaEu",
+    "taskTitle": "QUALITY: Add frontend unit tests (1 test for 152 source files)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:04.057Z"
+  },
+  {
+    "id": "activity_1769641143993_bsw17znuj",
+    "type": "task_created",
+    "taskId": "task_20260128_nhfrcW",
+    "taskTitle": "QUALITY: Replace console.* with structured logging (pino)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.993Z"
+  },
+  {
+    "id": "activity_1769641143927_awrrik3qt",
+    "type": "task_created",
+    "taskId": "task_20260128_uUydZN",
+    "taskTitle": "QUALITY: Add request ID middleware for request tracing",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.927Z"
+  },
+  {
+    "id": "activity_1769641143862_mztvp7k5r",
+    "type": "task_created",
+    "taskId": "task_20260128_3X46QP",
+    "taskTitle": "QUALITY: Create CI pipeline (.github/workflows)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.862Z"
+  },
+  {
+    "id": "activity_1769641143796_3o48ttlnu",
+    "type": "task_created",
+    "taskId": "task_20260128_KXgXs-",
+    "taskTitle": "QUALITY: Fix 10 broken test files (dependency injection refactor)",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.796Z"
+  },
+  {
+    "id": "activity_1769641143725_jd1miq72w",
+    "type": "task_created",
+    "taskId": "task_20260128_LTxaqy",
+    "taskTitle": "PERF: Optimize telemetry storage growth and query performance",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.725Z"
+  },
+  {
+    "id": "activity_1769641143661_3mbbtotb9",
+    "type": "task_created",
+    "taskId": "task_20260128_YBVPjr",
+    "taskTitle": "PERF: Review rate limit threshold for API consumers",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.661Z"
+  },
+  {
+    "id": "activity_1769641143597_pk7qeyo7a",
+    "type": "task_created",
+    "taskId": "task_20260128_x5JkTP",
+    "taskTitle": "PERF: Reduce API payload over-fetching with field selection",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.597Z"
+  },
+  {
+    "id": "activity_1769641143531_4ebnpje38",
+    "type": "task_created",
+    "taskId": "task_20260128_gYodue",
+    "taskTitle": "PERF: Add service disposal to graceful shutdown",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.531Z"
+  },
+  {
+    "id": "activity_1769641143465_53f4y2k0h",
+    "type": "task_created",
+    "taskId": "task_20260128_UPGQip",
+    "taskTitle": "PERF: Lazy-load DashboardSection to remove recharts from main bundle",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.465Z"
+  },
+  {
+    "id": "activity_1769641143401_bfqn99kec",
+    "type": "task_created",
+    "taskId": "task_20260128_8DUobI",
+    "taskTitle": "PERF: Reduce frontend bundle size from 1.2MB main chunk",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.401Z"
+  },
+  {
+    "id": "activity_1769641143335_cdkc4m2g0",
+    "type": "task_created",
+    "taskId": "task_20260128_ilLJ0m",
+    "taskTitle": "SECURITY: Replace weak development admin key",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.335Z"
+  },
+  {
+    "id": "activity_1769641143270_285kwi66l",
+    "type": "task_created",
+    "taskId": "task_20260128_MIuR31",
+    "taskTitle": "SECURITY: Configure production API keys and persistent JWT secret",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.270Z"
+  },
+  {
+    "id": "activity_1769641143201_hm74cabki",
+    "type": "task_created",
+    "taskId": "task_20260128__Lw2Vb",
+    "taskTitle": "SECURITY: Fix CORS rejection to return 403 instead of 500",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.201Z"
+  },
+  {
+    "id": "activity_1769641143136_rasd31wfv",
+    "type": "task_created",
+    "taskId": "task_20260128_k3ei6P",
+    "taskTitle": "SECURITY: Require authentication for auth diagnostics endpoint",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.136Z"
+  },
+  {
+    "id": "activity_1769641143070_64l7zh956",
+    "type": "task_created",
+    "taskId": "task_20260128_N5mwaB",
+    "taskTitle": "SECURITY: Replace unsafe-inline/unsafe-eval CSP with nonces in dev mode",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.070Z"
+  },
+  {
+    "id": "activity_1769641143004_hpv32n9l0",
+    "type": "task_created",
+    "taskId": "task_20260128_HRYh0i",
+    "taskTitle": "SECURITY: Add server-side HTML sanitization for XSS payloads",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:03.004Z"
+  },
+  {
+    "id": "activity_1769641142937_vqslpkx0h",
+    "type": "task_created",
+    "taskId": "task_20260128_eH_S3Q",
+    "taskTitle": "SECURITY: Sanitize Content-Disposition header in attachment downloads",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:02.937Z"
+  },
+  {
+    "id": "activity_1769641142866_xqdjsihgp",
+    "type": "task_created",
+    "taskId": "task_20260128_nK2-lo",
+    "taskTitle": "SECURITY: Fix timing-unsafe recovery key comparison",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:02.866Z"
+  },
+  {
+    "id": "activity_1769641142768_a73d3h1bz",
+    "type": "task_created",
+    "taskId": "task_20260128_2H7USQ",
+    "taskTitle": "SECURITY: Restrict localhost bypass from full admin access",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:02.768Z"
+  },
+  {
+    "id": "activity_1769641142694_523vqg2cm",
+    "type": "task_created",
+    "taskId": "task_20260128_CvshRR",
+    "taskTitle": "SECURITY: Remove plaintext credentials from task data",
+    "details": {
+      "type": "refactor-saXoty",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T22:59:02.694Z"
+  },
+  {
+    "id": "activity_1769640670956_x8i55f2d4",
+    "type": "task_deleted",
+    "taskId": "task_20260128_9s1KtO",
+    "taskTitle": "<script>alert(1)</script>",
+    "timestamp": "2026-01-28T22:51:10.956Z"
+  },
+  {
+    "id": "activity_1769640665644_h5etlhnu3",
+    "type": "task_created",
+    "taskId": "task_20260128_9s1KtO",
+    "taskTitle": "<script>alert(1)</script>",
+    "details": {
+      "type": "code",
+      "priority": "low"
+    },
+    "timestamp": "2026-01-28T22:51:05.644Z"
+  },
+  {
+    "id": "activity_1769635960576_aj0i68c7f",
+    "type": "comment_added",
+    "taskId": "task_20260128_lLNafd",
+    "taskTitle": "SECURITY: Add API versioning (/api/v1/...)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Verified API versioning fully implemented. v1 Rout..."
+    },
+    "timestamp": "2026-01-28T21:32:40.576Z"
+  },
+  {
+    "id": "activity_1769635866671_14wneipke",
+    "type": "status_changed",
+    "taskId": "task_20260128_lLNafd",
+    "taskTitle": "SECURITY: Add API versioning (/api/v1/...)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T21:31:06.671Z"
+  },
+  {
+    "id": "activity_1769635843604_qqdgjc2nx",
+    "type": "status_changed",
+    "taskId": "task_20260128_lLNafd",
+    "taskTitle": "SECURITY: Add API versioning (/api/v1/...)",
+    "details": {
+      "from": "blocked",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T21:30:43.604Z"
+  },
+  {
+    "id": "activity_1769635804147_18s38kus7",
+    "type": "task_deleted",
+    "taskId": "task_20260128_nvc1bf",
+    "taskTitle": "E2E Created Task",
+    "timestamp": "2026-01-28T21:30:04.147Z"
+  },
+  {
+    "id": "activity_1769635803762_0och71v75",
+    "type": "task_created",
+    "taskId": "task_20260128_nvc1bf",
+    "taskTitle": "E2E Created Task",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T21:30:03.762Z"
+  },
+  {
+    "id": "activity_1769635750177_w4sklz1uu",
+    "type": "task_updated",
+    "taskId": "task_20260128_AD2c2U",
+    "taskTitle": "TESTING: Add E2E tests for critical user flows",
+    "timestamp": "2026-01-28T21:29:10.177Z"
+  },
+  {
+    "id": "activity_1769625015161_gtb0fto9n",
+    "type": "task_deleted",
+    "taskId": "task_20260128_KcUawJ",
+    "taskTitle": "E2E Column Check Task",
+    "timestamp": "2026-01-28T18:30:15.161Z"
+  },
+  {
+    "id": "activity_1769625004755_kj3gepn25",
+    "type": "task_created",
+    "taskId": "task_20260128_KcUawJ",
+    "taskTitle": "E2E Column Check Task",
+    "details": {
+      "type": "task",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-28T18:30:04.755Z"
+  },
+  {
+    "id": "activity_1769625004612_v6h9p8or4",
+    "type": "task_deleted",
+    "taskId": "task_20260128_RfjSne",
+    "taskTitle": "E2E Visible Task",
+    "timestamp": "2026-01-28T18:30:04.612Z"
+  },
+  {
+    "id": "activity_1769625004197_1uauoenlw",
+    "type": "task_created",
+    "taskId": "task_20260128_RfjSne",
+    "taskTitle": "E2E Visible Task",
+    "details": {
+      "type": "task",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-28T18:30:04.197Z"
+  },
+  {
+    "id": "activity_1769624860099_e5uinno14",
+    "type": "task_updated",
+    "taskId": "task_20260128_PW0c25",
+    "taskTitle": "TESTING: Increase backend test coverage to 50%+",
+    "timestamp": "2026-01-28T18:27:40.099Z"
+  },
+  {
+    "id": "activity_1769624565618_4ip3b865i",
+    "type": "comment_added",
+    "taskId": "task_20260128_rDvrGE",
+    "taskTitle": "SECURITY: Replace in-memory rate limiter with Redis",
+    "details": {
+      "author": "Veritas",
+      "preview": "Replaced custom Map-based rate limiter with expres..."
+    },
+    "timestamp": "2026-01-28T18:22:45.618Z"
+  },
+  {
+    "id": "activity_1769624560934_nnpc1c03g",
+    "type": "status_changed",
+    "taskId": "task_20260128_rDvrGE",
+    "taskTitle": "SECURITY: Replace in-memory rate limiter with Redis",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T18:22:40.934Z"
+  },
+  {
     "id": "activity_1769624510791_0lodoau54",
     "type": "status_changed",
     "taskId": "task_20260128_lLNafd",
