@@ -117,3 +117,24 @@ export const TelemetryEventIngestionSchema = z.discriminatedUnion('type', [
 ]);
 
 export type TelemetryEventIngestion = z.infer<typeof TelemetryEventIngestionSchema>;
+
+// ============ GET /api/telemetry/export - Export Schemas ============
+
+/**
+ * Valid export formats
+ */
+export const ExportFormatSchema = z.enum(['csv', 'json']);
+
+/**
+ * GET /api/telemetry/export - query params
+ */
+export const TelemetryExportQuerySchema = z.object({
+  format: ExportFormatSchema.default('json'),
+  taskId: TaskIdSchema.optional(),
+  project: z.string().optional(),
+  from: optionalIsoDate,
+  to: optionalIsoDate,
+});
+
+export type ExportFormat = z.infer<typeof ExportFormatSchema>;
+export type TelemetryExportQuery = z.infer<typeof TelemetryExportQuerySchema>;

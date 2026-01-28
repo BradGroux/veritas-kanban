@@ -12,11 +12,13 @@ import {
   TelemetryCountQuerySchema,
   TelemetryEventIngestionSchema,
   TelemetryBulkQuerySchema,
+  TelemetryExportQuerySchema,
   type TelemetryEventsQuery,
   type TelemetryTaskParams,
   type TelemetryCountQuery,
   type TelemetryEventIngestion,
   type TelemetryBulkQuery,
+  type TelemetryExportQuery,
 } from '../schemas/telemetry-schemas.js';
 
 const router: RouterType = Router();
@@ -179,6 +181,56 @@ router.get(
     );
     
     res.json({ count });
+  })
+);
+
+/**
+ * GET /api/telemetry/export
+ * Export telemetry events as CSV or JSON file download
+ * 
+ * Query params:
+ *   - format: 'csv' | 'json' (default: 'json')
+ *   - taskId: Filter by specific task
+ *   - project: Filter by project name
+ *   - from: Start date (ISO timestamp)
+ *   - to: End date (ISO timestamp)
+ * 
+ * Response: File download with appropriate Content-Disposition header
+ */
+router.get(
+  '/export',
+  validate({ query: TelemetryExportQuerySchema }),
+  asyncHandler(async (req: ValidatedRequest<unknown, TelemetryExportQuery>, res) => {
+    const telemetry = getTelemetryService();
+    const { format, taskId, project, from, to } = req.validated.query!;
+    
+    // Build query options
+    const options: TelemetryQueryOptions = {};
+    if (taskId) options.taskId = taskId;
+    if (project) options.project = project;
+    if (from) options.since = from;
+    if (to) options.until = to;
+    
+    // Generate filename with scope and date info
+    const scopeParts: string[] = ['telemetry'];
+    if (taskId) scopeParts.push(`task-${taskId}`);
+    else if (project) scopeParts.push(`project-${project.replace(/[^a-zA-Z0-9-_]/g, '_')}`);
+    else scopeParts.push('full');
+    
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `${scopeParts.join('-')}-${dateStr}.${format}`;
+    
+    if (format === 'csv') {
+      const csvData = await telemetry.exportAsCsv(options);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csvData);
+    } else {
+      const jsonData = await telemetry.exportAsJson(options);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(jsonData);
+    }
   })
 );
 

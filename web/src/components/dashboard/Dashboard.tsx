@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useMetrics';
 import { useTasks } from '@/hooks/useTasks';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -30,7 +31,9 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Download,
 } from 'lucide-react';
+import { ExportDialog } from './ExportDialog';
 import { cn } from '@/lib/utils';
 import { DrillDownPanel, type DrillDownType } from './DrillDownPanel';
 import { TasksDrillDown } from './TasksDrillDown';
@@ -39,6 +42,7 @@ import { TokensDrillDown } from './TokensDrillDown';
 import { DurationDrillDown } from './DurationDrillDown';
 import { TrendsCharts } from './TrendsCharts';
 import { StatusTimeline } from './StatusTimeline';
+import { AgentComparison } from './AgentComparison';
 
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
@@ -187,6 +191,7 @@ export function Dashboard() {
   const [period, setPeriod] = useState<MetricsPeriod>('24h');
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
   const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project);
   const { data: tasks } = useTasks();
@@ -256,11 +261,29 @@ export function Dashboard() {
           </Select>
         </div>
         
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
-          {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setExportDialogOpen(true)}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+            {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+          </div>
         </div>
       </div>
+      
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        project={project}
+        projects={projects}
+      />
 
       {/* Task Counts Row */}
       <div>
@@ -502,6 +525,9 @@ export function Dashboard() {
 
       {/* Budget Tracking Card */}
       <BudgetCard project={project} />
+
+      {/* Agent Comparison */}
+      <AgentComparison project={project} />
 
       {/* Agent Status Timeline */}
       <div>

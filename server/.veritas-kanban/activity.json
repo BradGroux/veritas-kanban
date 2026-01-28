@@ -1,5 +1,158 @@
 [
   {
+    "id": "activity_1769610006115_v6cqb35tq",
+    "type": "status_changed",
+    "taskId": "task_20260128_rQvOgG",
+    "taskTitle": "US-1008: Agent comparison",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T14:20:06.115Z"
+  },
+  {
+    "id": "activity_1769610005692_7to6o94a5",
+    "type": "status_changed",
+    "taskId": "task_20260128_Zz5vOl",
+    "taskTitle": "US-1012: Sprint velocity",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T14:20:05.692Z"
+  },
+  {
+    "id": "activity_1769610004598_796tn6tyo",
+    "type": "status_changed",
+    "taskId": "task_20260128_XLZgpo",
+    "taskTitle": "US-1006: Metrics export",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T14:20:04.598Z"
+  },
+  {
+    "id": "activity_1769609994246_0cviffl98",
+    "type": "sprint_archived",
+    "taskId": "US-1400",
+    "taskTitle": "US-1400",
+    "details": {
+      "taskCount": 7
+    },
+    "timestamp": "2026-01-28T14:19:54.246Z"
+  },
+  {
+    "id": "activity_1769609971495_gozycdkbm",
+    "type": "comment_added",
+    "taskId": "task_20260128_vGa5Gh",
+    "taskTitle": "US-1407: Cost tracking and budget monitoring",
+    "details": {
+      "author": "Veritas",
+      "preview": "Duplicate of US-1011 (Cost budget tracking) which ..."
+    },
+    "timestamp": "2026-01-28T14:19:31.495Z"
+  },
+  {
+    "id": "activity_1769609971466_7czj4iv6y",
+    "type": "status_changed",
+    "taskId": "task_20260128_vGa5Gh",
+    "taskTitle": "US-1407: Cost tracking and budget monitoring",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:19:31.466Z"
+  },
+  {
+    "id": "activity_1769609971420_hw5wpp9vf",
+    "type": "comment_added",
+    "taskId": "task_20260128_-ndA3j",
+    "taskTitle": "US-1406: Run badges on Done task cards",
+    "details": {
+      "author": "Veritas",
+      "preview": "Duplicate of US-1003 (Agent run summary on task ca..."
+    },
+    "timestamp": "2026-01-28T14:19:31.420Z"
+  },
+  {
+    "id": "activity_1769609971408_924496os3",
+    "type": "status_changed",
+    "taskId": "task_20260128_-ndA3j",
+    "taskTitle": "US-1406: Run badges on Done task cards",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:19:31.408Z"
+  },
+  {
+    "id": "activity_1769609971378_qjse6yw8l",
+    "type": "comment_added",
+    "taskId": "task_20260128_2oKAgC",
+    "taskTitle": "US-1404: Task-level metrics panel",
+    "details": {
+      "author": "Veritas",
+      "preview": "Duplicate of US-1002 (Task metrics panel) which is..."
+    },
+    "timestamp": "2026-01-28T14:19:31.378Z"
+  },
+  {
+    "id": "activity_1769609971319_vqi5lx8wf",
+    "type": "status_changed",
+    "taskId": "task_20260128_2oKAgC",
+    "taskTitle": "US-1404: Task-level metrics panel",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:19:31.319Z"
+  },
+  {
+    "id": "activity_1769609715309_h2cwvyv4l",
+    "type": "sprint_archived",
+    "taskId": "US-1300",
+    "taskTitle": "US-1300",
+    "details": {
+      "taskCount": 1
+    },
+    "timestamp": "2026-01-28T14:15:15.309Z"
+  },
+  {
+    "id": "activity_1769609707922_hbtxbzc9j",
+    "type": "comment_added",
+    "taskId": "task_20260128_oTzJyh",
+    "taskTitle": "US-1305: Status History Log",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented status history in ActivitySidebar: dai..."
+    },
+    "timestamp": "2026-01-28T14:15:07.922Z"
+  },
+  {
+    "id": "activity_1769609707851_hc4xj9eki",
+    "type": "status_changed",
+    "taskId": "task_20260128_oTzJyh",
+    "taskTitle": "US-1305: Status History Log",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T14:15:07.851Z"
+  },
+  {
+    "id": "activity_1769609702321_64zcblxoh",
+    "type": "task_created",
+    "taskId": "task_20260128_oTzJyh",
+    "taskTitle": "US-1305: Status History Log",
+    "details": {
+      "type": "code",
+      "priority": "medium",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-28T14:15:02.321Z"
+  },
+  {
     "id": "activity_1769609642656_9lea2p5ac",
     "type": "comment_added",
     "taskId": "task_20260128_V0MVwS",

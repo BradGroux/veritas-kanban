@@ -1113,6 +1113,362 @@ export class MetricsService {
   }
 
   /**
+   * Get agent comparison metrics for recommendations
+   * Aggregates performance data per agent with minimum run threshold
+   */
+  async getAgentComparison(period: MetricsPeriod, project?: string, minRuns = 3): Promise<AgentComparisonResult> {
+    const since = this.getPeriodStart(period);
+    const files = await this.getEventFiles(since);
+
+    // Per-agent accumulator
+    const agentData = new Map<string, {
+      runs: number;
+      successes: number;
+      failures: number;
+      errors: number;
+      durations: number[];
+      totalTokens: number;
+      inputTokens: number;
+      outputTokens: number;
+      costEstimate: number;
+    }>();
+
+    // Process all files
+    for (const filePath of files) {
+      try {
+        const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
+        const rl = readline.createInterface({
+          input: fileStream,
+          crlfDelay: Infinity,
+        });
+
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+
+          try {
+            const event = JSON.parse(line) as AnyTelemetryEvent;
+
+            if (event.timestamp < since) continue;
+            if (project && event.project !== project) continue;
+
+            const eventType = event.type;
+
+            // Process run events
+            if (eventType === 'run.completed' || eventType === 'run.error') {
+              const runEvent = event as RunTelemetryEvent;
+              const agent = runEvent.agent || 'veritas';
+
+              if (!agentData.has(agent)) {
+                agentData.set(agent, {
+                  runs: 0,
+                  successes: 0,
+                  failures: 0,
+                  errors: 0,
+                  durations: [],
+                  totalTokens: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  costEstimate: 0,
+                });
+              }
+              const acc = agentData.get(agent)!;
+
+              if (eventType === 'run.error') {
+                acc.runs++;
+                acc.errors++;
+              } else {
+                acc.runs++;
+                if (runEvent.success) {
+                  acc.successes++;
+                } else {
+                  acc.failures++;
+                }
+                if (runEvent.durationMs && runEvent.durationMs > 0) {
+                  acc.durations.push(runEvent.durationMs);
+                }
+              }
+            }
+
+            // Process token events
+            if (eventType === 'run.tokens') {
+              const tokenEvent = event as TokenTelemetryEvent;
+              const agent = tokenEvent.agent || 'veritas';
+
+              if (!agentData.has(agent)) {
+                agentData.set(agent, {
+                  runs: 0,
+                  successes: 0,
+                  failures: 0,
+                  errors: 0,
+                  durations: [],
+                  totalTokens: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  costEstimate: 0,
+                });
+              }
+              const acc = agentData.get(agent)!;
+              const totalTokens = tokenEvent.totalTokens ?? (tokenEvent.inputTokens + tokenEvent.outputTokens);
+              
+              acc.totalTokens += totalTokens;
+              acc.inputTokens += tokenEvent.inputTokens;
+              acc.outputTokens += tokenEvent.outputTokens;
+              // Cost estimate: $0.01/1K input, $0.03/1K output
+              acc.costEstimate += (tokenEvent.inputTokens / 1000 * 0.01) + (tokenEvent.outputTokens / 1000 * 0.03);
+            }
+          } catch {
+            continue;
+          }
+        }
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+          console.error(`[Metrics] Error reading ${filePath}:`, error.message);
+        }
+      }
+    }
+
+    // Build comparison data for agents meeting minimum runs threshold
+    const agents: AgentComparisonData[] = [];
+    
+    for (const [agent, data] of agentData.entries()) {
+      if (data.runs < minRuns) continue;
+
+      const avgDurationMs = data.durations.length > 0
+        ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+        : 0;
+      const successRate = data.runs > 0 ? data.successes / data.runs : 0;
+      const avgTokensPerRun = data.runs > 0 ? Math.round(data.totalTokens / data.runs) : 0;
+      const avgCostPerRun = data.runs > 0 ? Math.round((data.costEstimate / data.runs) * 100) / 100 : 0;
+
+      agents.push({
+        agent,
+        runs: data.runs,
+        successes: data.successes,
+        failures: data.failures + data.errors,
+        successRate: Math.round(successRate * 1000) / 10, // e.g., 95.5%
+        avgDurationMs,
+        avgTokensPerRun,
+        totalTokens: data.totalTokens,
+        avgCostPerRun,
+        totalCost: Math.round(data.costEstimate * 100) / 100,
+      });
+    }
+
+    // Sort by runs descending by default
+    agents.sort((a, b) => b.runs - a.runs);
+
+    // Generate recommendations
+    const recommendations: AgentRecommendation[] = [];
+    
+    if (agents.length > 0) {
+      // Most reliable (highest success rate)
+      const mostReliable = [...agents].sort((a, b) => b.successRate - a.successRate)[0];
+      if (mostReliable.successRate >= 80) {
+        recommendations.push({
+          category: 'reliability',
+          agent: mostReliable.agent,
+          value: `${mostReliable.successRate}% success rate`,
+          reason: `Highest success rate among agents with ${minRuns}+ runs`,
+        });
+      }
+
+      // Fastest (lowest avg duration)
+      const fastest = [...agents].filter(a => a.avgDurationMs > 0).sort((a, b) => a.avgDurationMs - b.avgDurationMs)[0];
+      if (fastest) {
+        recommendations.push({
+          category: 'speed',
+          agent: fastest.agent,
+          value: this.formatDurationForRecommendation(fastest.avgDurationMs),
+          reason: 'Shortest average run duration',
+        });
+      }
+
+      // Cheapest (lowest avg cost)
+      const cheapest = [...agents].filter(a => a.avgCostPerRun > 0).sort((a, b) => a.avgCostPerRun - b.avgCostPerRun)[0];
+      if (cheapest) {
+        recommendations.push({
+          category: 'cost',
+          agent: cheapest.agent,
+          value: `$${cheapest.avgCostPerRun.toFixed(2)}/run`,
+          reason: 'Lowest average cost per run',
+        });
+      }
+
+      // Most efficient (tokens per successful run)
+      const efficientAgents = agents
+        .filter(a => a.successes > 0)
+        .map(a => ({
+          ...a,
+          tokensPerSuccess: Math.round(a.totalTokens / a.successes),
+        }))
+        .sort((a, b) => a.tokensPerSuccess - b.tokensPerSuccess);
+      
+      if (efficientAgents.length > 0) {
+        const mostEfficient = efficientAgents[0];
+        recommendations.push({
+          category: 'efficiency',
+          agent: mostEfficient.agent,
+          value: `${this.formatTokensForRecommendation(mostEfficient.tokensPerSuccess)}/success`,
+          reason: 'Fewest tokens per successful run',
+        });
+      }
+    }
+
+    return {
+      period,
+      minRuns,
+      agents,
+      recommendations,
+      totalAgents: agentData.size,
+      qualifyingAgents: agents.length,
+    };
+  }
+
+  /**
+   * Format duration for recommendation display
+   */
+  private formatDurationForRecommendation(ms: number): string {
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    if (ms < 3600000) return `${Math.round(ms / 60000)}m`;
+    return `${(ms / 3600000).toFixed(1)}h`;
+  }
+
+  /**
+   * Format tokens for recommendation display
+   */
+  private formatTokensForRecommendation(tokens: number): string {
+    if (tokens < 1000) return `${tokens}`;
+    if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}K`;
+    return `${(tokens / 1000000).toFixed(2)}M`;
+  }
+
+  /**
+   * Get sprint velocity metrics
+   * Calculates tasks completed per sprint with rolling average and trend
+   */
+  async getVelocityMetrics(project?: string, limit = 10): Promise<VelocityMetrics> {
+    // Get all tasks (active + archived) to calculate velocity
+    const [activeTasks, archivedTasks] = await Promise.all([
+      this.taskService.listTasks(),
+      this.taskService.listArchivedTasks(),
+    ]);
+
+    // Filter by project if specified
+    const allTasks = [...activeTasks, ...archivedTasks]
+      .filter(t => !project || t.project === project);
+
+    // Group tasks by sprint
+    const sprintData = new Map<string, {
+      completed: number;
+      total: number;
+      byType: Record<string, number>;
+    }>();
+
+    for (const task of allTasks) {
+      if (!task.sprint) continue;
+
+      if (!sprintData.has(task.sprint)) {
+        sprintData.set(task.sprint, { completed: 0, total: 0, byType: {} });
+      }
+
+      const data = sprintData.get(task.sprint)!;
+      data.total++;
+      
+      // Count completed tasks (done or archived)
+      const isCompleted = task.status === 'done' || archivedTasks.some(a => a.id === task.id);
+      if (isCompleted) {
+        data.completed++;
+        
+        // Track by type
+        const taskType = task.type || 'other';
+        data.byType[taskType] = (data.byType[taskType] || 0) + 1;
+      }
+    }
+
+    // Sort sprints by label (assumes sprint labels are sortable like "US-100", "US-200", etc.)
+    const sortedSprints = [...sprintData.entries()]
+      .sort((a, b) => {
+        // Extract numeric part for better sorting
+        const numA = parseInt(a[0].replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b[0].replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      })
+      .slice(-limit); // Keep only the most recent sprints
+
+    // Calculate velocity for each sprint
+    const sprints: SprintVelocityPoint[] = [];
+    const completedCounts: number[] = [];
+
+    for (const [sprint, data] of sortedSprints) {
+      completedCounts.push(data.completed);
+      
+      // Calculate rolling average (last 3 sprints)
+      const recentCompleted = completedCounts.slice(-3);
+      const rollingAverage = recentCompleted.length > 0
+        ? Math.round((recentCompleted.reduce((a, b) => a + b, 0) / recentCompleted.length) * 10) / 10
+        : 0;
+
+      sprints.push({
+        sprint,
+        completed: data.completed,
+        total: data.total,
+        rollingAverage,
+        byType: data.byType,
+      });
+    }
+
+    // Calculate overall metrics
+    const totalCompleted = completedCounts.reduce((a, b) => a + b, 0);
+    const averageVelocity = sprints.length > 0
+      ? Math.round((totalCompleted / sprints.length) * 10) / 10
+      : 0;
+
+    // Determine trend (comparing last 3 vs previous 3)
+    let trend: VelocityTrend = 'steady';
+    if (sprints.length >= 4) {
+      const recentSprints = sprints.slice(-3);
+      const previousSprints = sprints.slice(-6, -3);
+      
+      if (previousSprints.length >= 2) {
+        const recentAvg = recentSprints.reduce((a, b) => a + b.completed, 0) / recentSprints.length;
+        const previousAvg = previousSprints.reduce((a, b) => a + b.completed, 0) / previousSprints.length;
+        
+        const changePercent = previousAvg > 0 ? ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
+        
+        if (changePercent > 10) {
+          trend = 'accelerating';
+        } else if (changePercent < -10) {
+          trend = 'slowing';
+        }
+      }
+    }
+
+    // Get current sprint progress (find sprints with incomplete tasks)
+    let currentSprint: CurrentSprintProgress | undefined;
+    for (const [sprint, data] of [...sprintData.entries()].reverse()) {
+      if (data.completed < data.total) {
+        currentSprint = {
+          sprint,
+          completed: data.completed,
+          total: data.total,
+          percentComplete: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
+          vsAverage: averageVelocity > 0
+            ? Math.round(((data.completed - averageVelocity) / averageVelocity) * 100)
+            : 0,
+        };
+        break;
+      }
+    }
+
+    return {
+      sprints,
+      averageVelocity,
+      trend,
+      currentSprint,
+    };
+  }
+
+  /**
    * Get list of failed runs with details
    */
   async getFailedRuns(period: MetricsPeriod, project?: string, limit = 50): Promise<FailedRunDetails[]> {
@@ -1224,6 +1580,64 @@ export interface BudgetMetrics {
   
   // Status indicator
   status: 'ok' | 'warning' | 'danger';  // Based on warningThreshold
+}
+
+/** Agent comparison data for a single agent */
+export interface AgentComparisonData {
+  agent: string;
+  runs: number;
+  successes: number;
+  failures: number;
+  successRate: number;           // Percentage (0-100)
+  avgDurationMs: number;
+  avgTokensPerRun: number;
+  totalTokens: number;
+  avgCostPerRun: number;         // Estimated cost per run
+  totalCost: number;             // Total estimated cost
+}
+
+/** Recommendation for best agent in a category */
+export interface AgentRecommendation {
+  category: 'reliability' | 'speed' | 'cost' | 'efficiency';
+  agent: string;
+  value: string;                 // Human-readable value (e.g., "95.5%", "2.3m")
+  reason: string;                // Explanation
+}
+
+/** Full agent comparison result */
+export interface AgentComparisonResult {
+  period: MetricsPeriod;
+  minRuns: number;
+  agents: AgentComparisonData[];
+  recommendations: AgentRecommendation[];
+  totalAgents: number;           // Total agents found (before minRuns filter)
+  qualifyingAgents: number;      // Agents meeting minRuns threshold
+}
+
+// Sprint velocity types
+export type VelocityTrend = 'accelerating' | 'steady' | 'slowing';
+
+export interface SprintVelocityPoint {
+  sprint: string;                    // Sprint identifier (e.g., "US-100")
+  completed: number;                 // Tasks completed in this sprint
+  total: number;                     // Total tasks in this sprint
+  rollingAverage: number;            // 3-sprint rolling average at this point
+  byType: Record<string, number>;    // Breakdown by task type
+}
+
+export interface CurrentSprintProgress {
+  sprint: string;
+  completed: number;
+  total: number;
+  percentComplete: number;           // 0-100
+  vsAverage: number;                 // Percentage vs historical average (-100 to +100+)
+}
+
+export interface VelocityMetrics {
+  sprints: SprintVelocityPoint[];    // Sprint data (oldest to newest)
+  averageVelocity: number;           // Overall average tasks per sprint
+  trend: VelocityTrend;              // Current trend indicator
+  currentSprint?: CurrentSprintProgress; // Progress on current/active sprint
 }
 
 // Singleton instance

@@ -16,7 +16,9 @@ import {
   Bot,
   AlertTriangle,
   TrendingUp,
+  Download,
 } from 'lucide-react';
+import { ExportDialog } from '@/components/dashboard/ExportDialog';
 import type { Task } from '@veritas-kanban/shared';
 
 interface TaskMetricsPanelProps {
@@ -186,6 +188,7 @@ function AttemptRow({ attempt, isExpanded, onToggle }: {
 export function TaskMetricsPanel({ task }: TaskMetricsPanelProps) {
   const { data: metrics, isLoading, error } = useTaskMetrics(task.id);
   const [expandedAttempts, setExpandedAttempts] = useState<Set<string>>(new Set());
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const toggleAttempt = (attemptId: string) => {
     setExpandedAttempts(prev => {
@@ -245,6 +248,26 @@ export function TaskMetricsPanel({ task }: TaskMetricsPanelProps) {
 
   return (
     <div className="space-y-6">
+      {/* Export Button */}
+      <div className="flex justify-end">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setExportDialogOpen(true)}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Export Task Metrics
+        </Button>
+      </div>
+      
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        taskId={task.id}
+        project={task.project}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <MetricCard

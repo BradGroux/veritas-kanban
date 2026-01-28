@@ -7,7 +7,7 @@
     "order": 2,
     "isDefault": true,
     "created": "2026-01-28T04:03:21.782Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "id": "research",
@@ -17,7 +17,7 @@
     "order": 6,
     "isDefault": true,
     "created": "2026-01-28T04:03:21.782Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "id": "content",
@@ -27,7 +27,7 @@
     "order": 3,
     "isDefault": true,
     "created": "2026-01-28T04:03:21.782Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "id": "automation",
@@ -37,7 +37,7 @@
     "order": 0,
     "isDefault": true,
     "created": "2026-01-28T04:03:21.782Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "label": "Bug",
@@ -46,7 +46,7 @@
     "id": "bug-GdN5rT",
     "order": 1,
     "created": "2026-01-28T04:31:31.690Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "label": "Feature Request",
@@ -55,7 +55,7 @@
     "id": "feature-request-n30mhV",
     "order": 4,
     "created": "2026-01-28T04:38:26.956Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "label": "Model",
@@ -64,7 +64,7 @@
     "id": "model-EhHjEh",
     "order": 5,
     "created": "2026-01-28T08:30:20.794Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "label": "System",
@@ -73,7 +73,7 @@
     "id": "system-jJZQh0",
     "order": 7,
     "created": "2026-01-28T08:31:13.845Z",
-    "updated": "2026-01-28T08:31:41.818Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   },
   {
     "label": "Refactor",
@@ -82,6 +82,6 @@
     "id": "refactor-saXoty",
     "order": 8,
     "created": "2026-01-28T10:27:13.983Z",
-    "updated": "2026-01-28T10:27:33.257Z"
+    "updated": "2026-01-28T14:15:48.605Z"
   }
 ]

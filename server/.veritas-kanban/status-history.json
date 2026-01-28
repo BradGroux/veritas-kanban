@@ -1,5 +1,13 @@
 [
   {
+    "id": "status_1769610006199_ss6ncpo5q",
+    "timestamp": "2026-01-28T14:20:06.199Z",
+    "previousStatus": "idle",
+    "newStatus": "sub-agent",
+    "subAgentCount": 3,
+    "durationMs": 404781
+  },
+  {
     "id": "status_1769609601418_kzwyjd0u0",
     "timestamp": "2026-01-28T14:13:21.418Z",
     "previousStatus": "sub-agent",

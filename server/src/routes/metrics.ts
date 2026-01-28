@@ -6,9 +6,13 @@ import {
   MetricsQuerySchema,
   TaskMetricsQuerySchema,
   BudgetMetricsQuerySchema,
+  AgentComparisonQuerySchema,
+  VelocityQuerySchema,
   type MetricsQuery,
   type TaskMetricsQuery,
   type BudgetMetricsQuery,
+  type AgentComparisonQuery,
+  type VelocityQuery,
 } from '../schemas/metrics-schemas.js';
 
 const router: RouterType = Router();
@@ -137,6 +141,36 @@ router.get(
     const metrics = getMetricsService();
     const { project, tokenBudget, costBudget, warningThreshold } = req.validated.query!;
     const result = await metrics.getBudgetMetrics(tokenBudget, costBudget, warningThreshold, project);
+    res.json(result);
+  })
+);
+
+/**
+ * GET /api/metrics/agents/comparison
+ * Get agent performance comparison with recommendations
+ */
+router.get(
+  '/agents/comparison',
+  validate({ query: AgentComparisonQuerySchema }),
+  asyncHandler(async (req: ValidatedRequest<unknown, AgentComparisonQuery>, res) => {
+    const metrics = getMetricsService();
+    const { period, project, minRuns } = req.validated.query!;
+    const result = await metrics.getAgentComparison(period, project, minRuns);
+    res.json(result);
+  })
+);
+
+/**
+ * GET /api/metrics/velocity
+ * Get sprint velocity metrics (tasks completed per sprint with trends)
+ */
+router.get(
+  '/velocity',
+  validate({ query: VelocityQuerySchema }),
+  asyncHandler(async (req: ValidatedRequest<unknown, VelocityQuery>, res) => {
+    const metrics = getMetricsService();
+    const { project, limit } = req.validated.query!;
+    const result = await metrics.getVelocityMetrics(project, limit);
     res.json(result);
   })
 );

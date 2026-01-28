@@ -8,3 +8,5 @@ export { DurationDrillDown } from './DurationDrillDown';
 export { TrendsCharts } from './TrendsCharts';
 export { BudgetCard } from './BudgetCard';
 export { StatusTimeline } from './StatusTimeline';
+export { AgentComparison } from './AgentComparison';
+export { ExportDialog, type ExportScope, type ExportFormat } from './ExportDialog';

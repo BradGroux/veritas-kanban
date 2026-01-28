@@ -26,6 +26,25 @@ export const BudgetMetricsQuerySchema = z.object({
   warningThreshold: z.coerce.number().min(0).max(100).default(80),
 });
 
+/**
+ * GET /api/metrics/agents/comparison - query params for agent comparison
+ */
+export const AgentComparisonQuerySchema = z.object({
+  period: MetricsPeriodSchema.default('7d'),
+  project: z.string().optional(),
+  minRuns: z.coerce.number().int().min(1).default(3), // Minimum runs required for comparison
+});
+
+/**
+ * GET /api/metrics/velocity - query params for sprint velocity
+ */
+export const VelocityQuerySchema = z.object({
+  project: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(20).default(10), // Number of sprints to return
+});
+
 export type MetricsQuery = z.infer<typeof MetricsQuerySchema>;
 export type TaskMetricsQuery = z.infer<typeof TaskMetricsQuerySchema>;
 export type BudgetMetricsQuery = z.infer<typeof BudgetMetricsQuerySchema>;
+export type AgentComparisonQuery = z.infer<typeof AgentComparisonQuerySchema>;
+export type VelocityQuery = z.infer<typeof VelocityQuerySchema>;

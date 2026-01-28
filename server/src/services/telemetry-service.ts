@@ -269,6 +269,73 @@ export class TelemetryService {
     }
   }
 
+  /**
+   * Export events as JSON
+   */
+  async exportAsJson(options: TelemetryQueryOptions = {}): Promise<string> {
+    const events = await this.getEvents(options);
+    return JSON.stringify(events, null, 2);
+  }
+
+  /**
+   * Export events as CSV
+   */
+  async exportAsCsv(options: TelemetryQueryOptions = {}): Promise<string> {
+    const events = await this.getEvents(options);
+    
+    if (events.length === 0) {
+      return 'id,type,timestamp,taskId,project,agent,success,durationMs,inputTokens,outputTokens,cacheTokens,cost,error\n';
+    }
+
+    // CSV header
+    const headers = [
+      'id',
+      'type',
+      'timestamp',
+      'taskId',
+      'project',
+      'agent',
+      'success',
+      'durationMs',
+      'inputTokens',
+      'outputTokens',
+      'cacheTokens',
+      'cost',
+      'error',
+    ];
+    
+    const rows = events.map((event) => {
+      const row: Record<string, string> = {
+        id: event.id,
+        type: event.type,
+        timestamp: event.timestamp,
+        taskId: event.taskId || '',
+        project: event.project || '',
+        agent: (event as any).agent || '',
+        success: String((event as any).success ?? ''),
+        durationMs: String((event as any).durationMs ?? ''),
+        inputTokens: String((event as any).inputTokens ?? ''),
+        outputTokens: String((event as any).outputTokens ?? ''),
+        cacheTokens: String((event as any).cacheTokens ?? ''),
+        cost: String((event as any).cost ?? ''),
+        error: this.escapeCsvField((event as any).error || ''),
+      };
+      return headers.map((h) => row[h]).join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  /**
+   * Escape a field for CSV (handles commas, quotes, newlines)
+   */
+  private escapeCsvField(field: string): string {
+    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+      return `"${field.replace(/"/g, '""')}"`;
+    }
+    return field;
+  }
+
   // ============ Private Methods ============
 
   /**
