@@ -114,10 +114,57 @@ export class ConfigService {
   private configDir: string;
   private configFile: string;
   private config: AppConfig | null = null;
+  private cacheTimestamp: number = 0;
+  private lastWriteTime: number = 0;
+  private watcher: FSWatcher | null = null;
 
   constructor(options: ConfigServiceOptions = {}) {
     this.configDir = options.configDir || CONFIG_DIR;
     this.configFile = options.configFile || CONFIG_FILE;
+  }
+
+  /** Check whether the in-memory cache is still usable */
+  private isCacheValid(): boolean {
+    return this.config !== null && (Date.now() - this.cacheTimestamp) < CACHE_TTL_MS;
+  }
+
+  /** Force the next getConfig() to re-read from disk */
+  invalidateCache(): void {
+    this.config = null;
+    this.cacheTimestamp = 0;
+  }
+
+  /**
+   * Watch the config file for external changes and invalidate cache.
+   * Self-writes are debounced so we don't needlessly throw away
+   * the value we just wrote.
+   */
+  private setupWatcher(): void {
+    if (this.watcher) return;
+    try {
+      this.watcher = watch(this.configFile, () => {
+        if (Date.now() - this.lastWriteTime < WRITE_DEBOUNCE_MS) return;
+        this.invalidateCache();
+      });
+      this.watcher.on('error', () => {
+        this.closeWatcher();
+      });
+    } catch {
+      // Config file may not exist yet; watcher will retry on next read
+    }
+  }
+
+  private closeWatcher(): void {
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+    }
+  }
+
+  /** Release file-watcher and clear cache (call on shutdown) */
+  dispose(): void {
+    this.closeWatcher();
+    this.invalidateCache();
   }
 
   private async ensureConfigDir(): Promise<void> {
@@ -125,7 +172,7 @@ export class ConfigService {
   }
 
   async getConfig(): Promise<AppConfig> {
-    if (this.config) return this.config;
+    if (this.isCacheValid()) return this.config!;
 
     await this.ensureConfigDir();
 
@@ -135,6 +182,8 @@ export class ConfigService {
       // Auto-merge feature defaults for backward compatibility
       raw.features = deepMergeDefaults(raw.features || {}, DEFAULT_FEATURE_SETTINGS);
       this.config = raw;
+      this.cacheTimestamp = Date.now();
+      this.setupWatcher();
       return this.config;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
@@ -170,8 +219,11 @@ export class ConfigService {
 
   async saveConfig(config: AppConfig): Promise<void> {
     await this.ensureConfigDir();
+    this.lastWriteTime = Date.now();
     await fs.writeFile(this.configFile, JSON.stringify(config, null, 2), 'utf-8');
     this.config = config;
+    this.cacheTimestamp = Date.now();
+    this.setupWatcher();
   }
 
   async addRepo(repo: RepoConfig): Promise<AppConfig> {
