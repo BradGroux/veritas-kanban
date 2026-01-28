@@ -86,4 +86,20 @@ router.get(
   })
 );
 
+/**
+ * GET /api/metrics/failed-runs
+ * Get list of failed runs with details
+ */
+router.get(
+  '/failed-runs',
+  validate({ query: MetricsQuerySchema }),
+  asyncHandler(async (req: ValidatedRequest<unknown, MetricsQuery>, res) => {
+    const metrics = getMetricsService();
+    const { period, project } = req.validated.query!;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const result = await metrics.getFailedRuns(period, project, limit);
+    res.json(result);
+  })
+);
+
 export default router;

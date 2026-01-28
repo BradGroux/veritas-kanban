@@ -81,6 +81,12 @@ export function BoardTab() {
           checked={settings.board.enableDragAndDrop}
           onCheckedChange={(v) => update('enableDragAndDrop', v)}
         />
+        <ToggleRow
+          label="Done Column Metrics"
+          description="Show agent run count, success status, and duration on completed tasks"
+          checked={settings.board.showDoneMetrics}
+          onCheckedChange={(v) => update('showDoneMetrics', v)}
+        />
       </div>
     </div>
   );

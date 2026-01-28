@@ -91,22 +91,30 @@ export function useUpdateTask() {
       const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
       const previousTask = queryClient.getQueryData<Task>(['tasks', id]);
       
-      // Optimistically update the task in the list
+      // Optimistically update the task in the list (merge only defined fields)
       queryClient.setQueryData<Task[]>(['tasks'], (old) => 
-        old?.map(task => 
-          task.id === id 
-            ? { ...task, ...input, updated: new Date().toISOString() }
-            : task
-        )
+        old?.map(task => {
+          if (task.id !== id) return task;
+          // Only apply defined fields from input
+          const updates: Partial<Task> = { updated: new Date().toISOString() };
+          Object.entries(input).forEach(([key, value]) => {
+            if (value !== undefined) {
+              (updates as Record<string, unknown>)[key] = value;
+            }
+          });
+          return { ...task, ...updates } as Task;
+        })
       );
       
       // Also update the individual task query
       if (previousTask) {
-        queryClient.setQueryData<Task>(['tasks', id], {
-          ...previousTask,
-          ...input,
-          updated: new Date().toISOString(),
+        const updates: Partial<Task> = { updated: new Date().toISOString() };
+        Object.entries(input).forEach(([key, value]) => {
+          if (value !== undefined) {
+            (updates as Record<string, unknown>)[key] = value;
+          }
         });
+        queryClient.setQueryData<Task>(['tasks', id], { ...previousTask, ...updates } as Task);
       }
       
       return { previousTasks, previousTask };

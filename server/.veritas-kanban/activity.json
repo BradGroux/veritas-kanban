@@ -1,5 +1,38 @@
 [
   {
+    "id": "activity_1769608839412_a8t8vs45w",
+    "type": "status_changed",
+    "taskId": "task_20260128_MwGpPe",
+    "taskTitle": "US-1007: Historical trends",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-28T14:00:39.412Z"
+  },
+  {
+    "id": "activity_1769608779324_up52q5nz2",
+    "type": "comment_added",
+    "taskId": "task_20260128_1yHkWF",
+    "taskTitle": "RF-15: Split God Components — Board & Settings",
+    "details": {
+      "author": "Veritas",
+      "preview": "Split god components: Extracted useBoardDragDrop h..."
+    },
+    "timestamp": "2026-01-28T13:59:39.324Z"
+  },
+  {
+    "id": "activity_1769608779243_n9skzfx6e",
+    "type": "status_changed",
+    "taskId": "task_20260128_1yHkWF",
+    "taskTitle": "RF-15: Split God Components — Board & Settings",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-28T13:59:39.243Z"
+  },
+  {
     "id": "activity_1769608657699_l9zfko6ei",
     "type": "status_changed",
     "taskId": "task_20260128_2-0mLV",

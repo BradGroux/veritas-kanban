@@ -47,7 +47,8 @@ function aggregateTaskMetrics(events: AnyTelemetryEvent[]): TaskCardMetrics {
       attemptKey = e.attemptId || `${e.timestamp}_${e.agent}`;
       // Try to find matching started event
       let found = false;
-      for (const [, attempt] of attemptMap.entries()) {
+      const entries = Array.from(attemptMap.entries());
+      for (const [, attempt] of entries) {
         if (attempt.started?.agent === e.agent && !attempt.completed) {
           attempt.completed = e;
           found = true;
@@ -61,7 +62,8 @@ function aggregateTaskMetrics(events: AnyTelemetryEvent[]): TaskCardMetrics {
       }
     } else if (event.type === 'run.error') {
       const e = event as RunErrorEvent;
-      for (const [, attempt] of attemptMap.entries()) {
+      const entries = Array.from(attemptMap.entries());
+      for (const [, attempt] of entries) {
         if (attempt.started?.agent === e.agent && !attempt.error) {
           attempt.error = e;
           break;
@@ -78,7 +80,8 @@ function aggregateTaskMetrics(events: AnyTelemetryEvent[]): TaskCardMetrics {
   let lastRunSuccess: boolean | undefined;
   let latestTimestamp = '';
 
-  for (const [, data] of attemptMap.entries()) {
+  const allEntries = Array.from(attemptMap.entries());
+  for (const [, data] of allEntries) {
     if (data.completed?.success !== undefined || data.error) {
       totalRuns++;
       const success = data.completed?.success === true && !data.error;

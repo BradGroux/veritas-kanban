@@ -10,6 +10,8 @@ export * from './useSortableList';
 export * from './useAttachments';
 export * from './useBulkActions';
 export * from './useConfig';
+export * from './useCreateTaskForm';
+export * from './usePolling';
 export * from './useConflicts';
 export * from './useDebouncedSave';
 export * from './useDiff';

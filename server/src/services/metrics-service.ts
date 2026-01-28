@@ -111,6 +111,17 @@ interface TokenAccumulator {
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const TELEMETRY_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'telemetry');
 
+export interface FailedRunDetails {
+  timestamp: string;
+  taskId?: string;
+  taskTitle?: string;
+  project?: string;
+  agent: string;
+  success: boolean;
+  errorMessage?: string;
+  durationMs?: number;
+}
+
 export class MetricsService {
   private telemetry: TelemetryService;
   private taskService: TaskService;
@@ -725,21 +736,6 @@ export class MetricsService {
 
     return { tasks, runs, tokens, duration };
   }
-}
-
-export interface FailedRunDetails {
-  timestamp: string;
-  taskId?: string;
-  taskTitle?: string;
-  project?: string;
-  agent: string;
-  success: boolean;
-  errorMessage?: string;
-  durationMs?: number;
-}
-
-export class MetricsService {
-  // ... existing methods ...
 
   /**
    * Get list of failed runs with details

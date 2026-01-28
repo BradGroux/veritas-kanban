@@ -25,6 +25,7 @@ import { useTemplateForm } from '@/hooks/useTemplateForm';
 import { useCreateTaskForm } from '@/hooks/useCreateTaskForm';
 import { BlueprintPreview } from './create/BlueprintPreview';
 import { TemplateVariableInputs } from './create/TemplateVariableInputs';
+import type { TaskPriority } from '@veritas-kanban/shared';
 import { FileText, X, Check, HelpCircle, Info } from 'lucide-react';
 import { getCategoryIcon } from '@/lib/template-categories';
 
@@ -110,6 +111,9 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     });
   };
 
+  const currentTemplate = selectedTemplate ? templates?.find(t => t.id === selectedTemplate) : null;
+  const isBlueprint = Boolean(currentTemplate?.blueprint && currentTemplate.blueprint.length > 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -125,9 +129,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     clearTemplate();
     onOpenChange(false);
   };
-
-  const currentTemplate = selectedTemplate ? templates?.find(t => t.id === selectedTemplate) : null;
-  const isBlueprint = currentTemplate?.blueprint && currentTemplate.blueprint.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -321,11 +322,9 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                           if (e.key === 'Enter' && newProjectName.trim()) {
                             e.preventDefault();
                             setProject(newProjectName.trim());
-                            setShowNewProject(false);
                           }
                           if (e.key === 'Escape') {
-                            setShowNewProject(false);
-                            setNewProjectName('');
+                            hideNewProject();
                           }
                         }}
                       />
@@ -335,7 +334,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         onClick={() => {
                           if (newProjectName.trim()) {
                             setProject(newProjectName.trim());
-                            setShowNewProject(false);
                           }
                         }}
                       >
@@ -345,10 +343,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setShowNewProject(false);
-                          setNewProjectName('');
-                        }}
+                        onClick={hideNewProject}
                       >
                         Cancel
                       </Button>
@@ -415,7 +410,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             </Button>
             <Button 
               type="submit" 
-              disabled={(isBlueprint ? false : !title.trim()) || isCreating}
+              disabled={!canSubmit(isBlueprint) || isCreating}
             >
               {isCreating ? 'Creating...' : isBlueprint ? 'Create Tasks' : 'Create Task'}
             </Button>

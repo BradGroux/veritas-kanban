@@ -50,7 +50,7 @@ const priorityColors: Record<TaskPriority, string> = {
   low: 'bg-slate-500/20 text-slate-400',
 };
 
-export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSelected, isBlocked, blockerTitles }: TaskCardProps) {
+export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSelected, isBlocked, blockerTitles, cardMetrics }: TaskCardProps) {
   const { taskTypes, projects, sprints } = useTaskConfig();
   const {
     attributes,
@@ -283,7 +283,7 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
               {(task.timeTracking?.totalSeconds || task.timeTracking?.isRunning) && (
                 <span className={cn(
                   "text-xs px-1.5 py-0.5 rounded flex items-center gap-1",
-                  !subtaskTotal && "ml-auto",
+                  !subtaskTotal && !cardMetrics && "ml-auto",
                   task.timeTracking?.isRunning 
                     ? "bg-green-500/20 text-green-500" 
                     : "bg-muted text-muted-foreground"
@@ -295,6 +295,66 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                   )}
                   {formatDuration(task.timeTracking?.totalSeconds || 0)}
                 </span>
+              )}
+              {/* Agent run metrics (for done tasks only) */}
+              {cardMetrics && cardMetrics.totalRuns > 0 && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn(
+                        "text-xs px-1.5 py-0.5 rounded flex items-center gap-1",
+                        !subtaskTotal && !task.timeTracking?.totalSeconds && "ml-auto",
+                        "bg-muted text-muted-foreground"
+                      )}>
+                        <Play className="h-3 w-3" />
+                        {cardMetrics.totalRuns}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">{cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {cardMetrics.successfulRuns} successful, {cardMetrics.failedRuns} failed
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                  {cardMetrics.lastRunSuccess !== undefined && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn(
+                          "text-xs px-1 py-0.5 rounded flex items-center",
+                          cardMetrics.lastRunSuccess 
+                            ? "bg-green-500/20 text-green-500"
+                            : "bg-red-500/20 text-red-500"
+                        )}>
+                          {cardMetrics.lastRunSuccess ? (
+                            <CheckCircle className="h-3 w-3" />
+                          ) : (
+                            <XCircle className="h-3 w-3" />
+                          )}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">Last run: {cardMetrics.lastRunSuccess ? 'Success' : 'Failed'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {cardMetrics.totalDurationMs > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1 bg-muted text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {formatCompactDuration(cardMetrics.totalDurationMs)}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">Total agent time</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatCompactDuration(cardMetrics.totalDurationMs)} across {cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </>
               )}
             </div>
           </div>

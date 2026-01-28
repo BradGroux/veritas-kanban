@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useMemo } from 'react';
-import type { TaskPriority, TaskType } from '@veritas-kanban/shared';
+import type { TaskPriority } from '@veritas-kanban/shared';
 
 // ====== State Types ======
 
