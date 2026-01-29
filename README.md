@@ -412,6 +412,19 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ---
 
+## 🗺️ Roadmap
+
+See the [v1.1 milestone](https://github.com/BradGroux/veritas-kanban/milestone/1) for planned improvements. Community contributions welcome!
+
+- [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1)
+- [Standardized API response envelope](https://github.com/BradGroux/veritas-kanban/issues/2) · `good first issue`
+- [Circuit breaker pattern](https://github.com/BradGroux/veritas-kanban/issues/3)
+- [Load testing suite (k6)](https://github.com/BradGroux/veritas-kanban/issues/4) · `good first issue`
+- [Prometheus/OpenTelemetry metrics](https://github.com/BradGroux/veritas-kanban/issues/5)
+- [Abstract file storage interface](https://github.com/BradGroux/veritas-kanban/issues/6)
+
+---
+
 ## 💬 Support
 
 All support and feature requests go through GitHub:
