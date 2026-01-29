@@ -99,7 +99,7 @@ function RunsChart({ data }: { data: Array<{ date: string; runs: number }> }) {
             axisLine={false}
             width={40}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.3)' }} />
           <Bar dataKey="runs" fill={COLORS.runs} radius={[4, 4, 0, 0]} name="Runs" />
         </BarChart>
       </ResponsiveContainer>
@@ -362,7 +362,7 @@ function VelocityChart({
             axisLine={false}
             width={35}
           />
-          <Tooltip content={<VelocityTooltip />} />
+          <Tooltip content={<VelocityTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.3)' }} />
           <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
           <Bar dataKey="completed" fill={COLORS.velocity} radius={[4, 4, 0, 0]} name="Completed" />
           <Line
