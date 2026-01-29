@@ -1,5 +1,111 @@
 [
   {
+    "id": "activity_1769672406939_9zqexuw9f",
+    "type": "comment_added",
+    "taskId": "task_20260129_ShiEfl",
+    "taskTitle": "LAUNCH: Write deployment guide (Docker, bare metal, environment config)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Deployment guide complete: Docker, bare metal, env..."
+    },
+    "timestamp": "2026-01-29T07:40:06.939Z"
+  },
+  {
+    "id": "activity_1769672406921_neli0lplo",
+    "type": "status_changed",
+    "taskId": "task_20260129_ShiEfl",
+    "taskTitle": "LAUNCH: Write deployment guide (Docker, bare metal, environment config)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T07:40:06.921Z"
+  },
+  {
+    "id": "activity_1769672377201_ezb4m4pyg",
+    "type": "comment_added",
+    "taskId": "task_20260129_iBH1_A",
+    "taskTitle": "LAUNCH: Polish README with screenshots, GIFs, quickstart guide, and badges",
+    "details": {
+      "author": "Veritas",
+      "preview": "README polished: badges, quickstart, tech stack, a..."
+    },
+    "timestamp": "2026-01-29T07:39:37.201Z"
+  },
+  {
+    "id": "activity_1769672377155_0qc1sgobg",
+    "type": "status_changed",
+    "taskId": "task_20260129_iBH1_A",
+    "taskTitle": "LAUNCH: Polish README with screenshots, GIFs, quickstart guide, and badges",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T07:39:37.155Z"
+  },
+  {
+    "id": "activity_1769672301133_4yjrfxf6x",
+    "type": "status_changed",
+    "taskId": "task_20260129_iBH1_A",
+    "taskTitle": "LAUNCH: Polish README with screenshots, GIFs, quickstart guide, and badges",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T07:38:21.133Z"
+  },
+  {
+    "id": "activity_1769672299511_gdgbog3b2",
+    "type": "status_changed",
+    "taskId": "task_20260129_ShiEfl",
+    "taskTitle": "LAUNCH: Write deployment guide (Docker, bare metal, environment config)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T07:38:19.511Z"
+  },
+  {
+    "id": "activity_1769672244351_va5nsy2cm",
+    "type": "comment_added",
+    "taskId": "task_20260129_8Ni5O-",
+    "taskTitle": "LAUNCH: Scan git history for secrets and scrub if needed",
+    "details": {
+      "author": "Veritas",
+      "preview": "Gitleaks scan complete. 10 findings: 8 false posit..."
+    },
+    "timestamp": "2026-01-29T07:37:24.351Z"
+  },
+  {
+    "id": "activity_1769672244304_w04gbuuxe",
+    "type": "task_updated",
+    "taskId": "task_20260129_8Ni5O-",
+    "taskTitle": "LAUNCH: Scan git history for secrets and scrub if needed",
+    "timestamp": "2026-01-29T07:37:24.304Z"
+  },
+  {
+    "id": "activity_1769672217063_hlnnaxbbp",
+    "type": "comment_added",
+    "taskId": "task_20260129_8Ni5O-",
+    "taskTitle": "LAUNCH: Scan git history for secrets and scrub if needed",
+    "details": {
+      "author": "Veritas",
+      "preview": "Gitleaks scan complete. 10 findings total: 8 false..."
+    },
+    "timestamp": "2026-01-29T07:36:57.063Z"
+  },
+  {
+    "id": "activity_1769672217042_kxfbwbk79",
+    "type": "status_changed",
+    "taskId": "task_20260129_8Ni5O-",
+    "taskTitle": "LAUNCH: Scan git history for secrets and scrub if needed",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T07:36:57.042Z"
+  },
+  {
     "id": "activity_1769672179829_v7ntbwdk4",
     "type": "task_updated",
     "taskId": "task_20260129_W_3zSZ",
