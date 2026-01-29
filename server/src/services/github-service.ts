@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
+import { getBreaker } from './circuit-registry.js';
 
 const execAsync = promisify(exec);
 
@@ -79,10 +80,13 @@ export class GitHubService {
    * Check if a PR already exists for the branch
    */
   async getPRForBranch(repoPath: string, branch: string): Promise<PRInfo | null> {
+    const ghBreaker = getBreaker('github');
     try {
-      const { stdout } = await execAsync(
-        `gh pr view ${branch} --json url,number,title,state,isDraft,headRefName,baseRefName 2>/dev/null`,
-        { cwd: repoPath }
+      const { stdout } = await ghBreaker.execute(() =>
+        execAsync(
+          `gh pr view ${branch} --json url,number,title,state,isDraft,headRefName,baseRefName 2>/dev/null`,
+          { cwd: repoPath }
+        )
       );
 
       const data = JSON.parse(stdout);
@@ -181,8 +185,11 @@ export class GitHubService {
       args.push('--draft');
     }
 
+    const ghBreaker = getBreaker('github');
     try {
-      const { stdout } = await execAsync(args.join(' '), { cwd: repoPath });
+      const { stdout } = await ghBreaker.execute(() =>
+        execAsync(args.join(' '), { cwd: repoPath })
+      );
       const prUrl = stdout.trim();
 
       // Extract PR number from URL

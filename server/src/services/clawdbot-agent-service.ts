@@ -16,6 +16,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
+import { getBreaker } from './circuit-registry.js';
 import type { Task, AgentType, TaskAttempt, AttemptStatus } from '@veritas-kanban/shared';
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
@@ -133,10 +134,11 @@ export class ClawdbotAgentService {
       attempt,
     });
 
-    // Send request to Clawdbot main session
+    // Send request to Clawdbot main session (wrapped in circuit breaker)
     // This will be picked up by Veritas who will spawn the actual sub-agent
+    const agentBreaker = getBreaker('agent');
     try {
-      await this.sendToClawdbot(taskPrompt, taskId, attemptId);
+      await agentBreaker.execute(() => this.sendToClawdbot(taskPrompt, taskId, attemptId));
     } catch (error: any) {
       // Clean up on failure
       pendingAgents.delete(taskId);

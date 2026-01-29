@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769684429997_a0gnv72cw",
+    "type": "comment_added",
+    "taskId": "task_20260129_OhJVTe",
+    "taskTitle": "[v1.1] SCALABILITY: Abstract file storage behind a repository interface",
+    "details": {
+      "author": "Veritas",
+      "preview": "Created storage abstraction layer: interfaces.ts (..."
+    },
+    "timestamp": "2026-01-29T11:00:29.997Z"
+  },
+  {
+    "id": "activity_1769684422085_dm43wog28",
+    "type": "status_changed",
+    "taskId": "task_20260129_OhJVTe",
+    "taskTitle": "[v1.1] SCALABILITY: Abstract file storage behind a repository interface",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T11:00:22.085Z"
+  },
+  {
+    "id": "activity_1769684280538_rmye0l3ay",
+    "type": "status_changed",
+    "taskId": "task_20260129_g7GLeb",
+    "taskTitle": "[v1.1] STABILITY: Add circuit breaker pattern for external service calls",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T10:58:00.538Z"
+  },
+  {
+    "id": "activity_1769684280529_0lt6jfz6k",
+    "type": "status_changed",
+    "taskId": "task_20260129_OhJVTe",
+    "taskTitle": "[v1.1] SCALABILITY: Abstract file storage behind a repository interface",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T10:58:00.529Z"
+  },
+  {
     "id": "activity_1769684226912_skkw9ycbo",
     "type": "comment_added",
     "taskId": "task_20260129_6BLzwk",

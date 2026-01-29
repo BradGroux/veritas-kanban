@@ -11,6 +11,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
 import type { WebSocketServer } from 'ws';
 
 const log = createLogger('health');
@@ -244,6 +245,9 @@ healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) =>
   // Get WebSocket connection count from the injected reference
   const wsConnections = _wss?.clients?.size;
 
+  // Get circuit breaker status for all registered services
+  const circuitBreakers = getCircuitBreakerStatus();
+
   res.json({
     status: storageStatus === 'fail' || disk === 'fail' ? 'degraded' : 'ok',
     checks: {
@@ -260,6 +264,7 @@ healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) =>
       external: memUsage.external,
     },
     wsConnections,
+    circuitBreakers,
     node: {
       version: process.version,
       platform: process.platform,
