@@ -89,7 +89,7 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 #### Testing
 
-- Backend unit tests (53.5% coverage)
+- 61 test files, 1,143 unit tests (server + frontend) with Vitest
 - End-to-end tests with Playwright (19/19 passing)
 - Gitleaks pre-commit hook for secret scanning
 

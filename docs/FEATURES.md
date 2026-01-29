@@ -459,15 +459,21 @@ Multi-layer testing strategy.
 
 ### Unit Tests (Vitest)
 
-- **51 test files** covering services, middleware, and routes
-- **53.5% code coverage** on the server package
-- **Key areas tested:**
-  - All middleware (auth, rate limiting, request ID, API versioning, cache control, validation)
-  - Core services (task, template, telemetry, notification, activity, sprint, diff, conflict, summary, status history, digest, attachment, text extraction, migration, managed list, broadcast, automation, blocking, failure alert, metrics, settings, JWT rotation, MIME validation)
-  - Route handlers (tasks, task archive, task comments, task subtasks, task time, auth, agent status, automation, config, notifications, templates, misc routes)
-  - Schema validation
+- **61 test files** · **1,143 tests passing** across server and frontend
+- **Server (51 files, 1,033 tests):**
+  - All middleware (auth, rate limiting, request ID, API versioning, cache control, validation, response envelope, request timeout)
+  - Core services (task, template, telemetry, notification, activity, sprint, diff, conflict, summary, status history, digest, attachment, text extraction, migration, managed list, broadcast, automation, blocking, failure alert, metrics, settings, JWT rotation, MIME validation, preview, trace, circuit breaker)
+  - Route handlers (tasks, task archive, task comments, task subtasks, task time, auth, agent status, automation, config, notifications, templates, health, misc routes)
+  - Schema validation (common, task mutation, auth, config, telemetry, metrics, time, archive, agent, feature settings, conflict, diff, preview)
   - WebSocket origin validation
-- **Frontend tests** — Sanitization utility tests
+  - Prometheus metrics (counters, gauges, histograms, registry, collector middleware)
+  - Environment variable validation
+- **Frontend (10 files, 110 tests):**
+  - API client helpers and task operations
+  - Custom hooks: useWebSocket, useKeyboard (keyboard shortcuts)
+  - Components: KanbanBoard, TaskCard, ErrorBoundary, AgentStatusIndicator, WebSocketIndicator
+  - Shared test utilities with mock factories and providers
+  - HTML/XSS sanitization (sanitizeHtml, sanitizeText)
 
 ### End-to-End Tests (Playwright)
 
@@ -501,4 +507,4 @@ Working toward WCAG 2.1 AA compliance.
 
 ---
 
-_Last updated: 2025-07-13 · [Back to README](../README.md)_
+_Last updated: 2026-01-29 · [Back to README](../README.md)_
