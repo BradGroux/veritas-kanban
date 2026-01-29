@@ -8,7 +8,7 @@ _Veritas in actis — Truth in action._
 
 Built for developers who want a visual Kanban board that works with autonomous coding agents.
 
-[![CI](https://github.com/dm-bradgroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/dm-bradgroux/veritas-kanban/actions/workflows/ci.yml)
+[![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -31,7 +31,7 @@ Created by **Brad Groux** — CEO of [Digital Meld](https://digitalmeld.io), and
 Get up and running in under 5 minutes:
 
 ```bash
-git clone https://github.com/dm-bradgroux/veritas-kanban.git
+git clone https://github.com/BradGroux/veritas-kanban.git
 cd veritas-kanban
 pnpm install
 cp server/.env.example server/.env   # Edit to change VERITAS_ADMIN_KEY
@@ -365,9 +365,9 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 All support and feature requests go through GitHub:
 
-- **🐛 Bug reports** — [Open an issue](https://github.com/dm-bradgroux/veritas-kanban/issues/new?template=bug_report.md)
-- **💡 Feature requests** — [Open an issue](https://github.com/dm-bradgroux/veritas-kanban/issues/new?template=feature_request.md)
-- **❓ Questions & discussion** — [GitHub Discussions](https://github.com/dm-bradgroux/veritas-kanban/discussions)
+- **🐛 Bug reports** — [Open an issue](https://github.com/BradGroux/veritas-kanban/issues/new?template=bug_report.md)
+- **💡 Feature requests** — [Open an issue](https://github.com/BradGroux/veritas-kanban/issues/new?template=feature_request.md)
+- **❓ Questions & discussion** — [GitHub Discussions](https://github.com/BradGroux/veritas-kanban/discussions)
 
 > **Note:** Support is not provided via email or social media. GitHub is the single source of truth for all project communication.
 

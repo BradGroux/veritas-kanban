@@ -147,6 +147,6 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/dm-bradgroux/veritas-kanban/discussions) or reach out to the maintainers.
+Open a [GitHub Discussion](https://github.com/BradGroux/veritas-kanban/discussions) or reach out to the maintainers.
 
 Thanks for contributing! 🎉

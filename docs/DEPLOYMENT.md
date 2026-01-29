@@ -29,7 +29,7 @@ The fastest way to get Veritas Kanban running in production:
 
 ```bash
 # Clone the repository
-git clone https://github.com/dm-bradgroux/veritas-kanban.git
+git clone https://github.com/BradGroux/veritas-kanban.git
 cd veritas-kanban
 
 # Copy and configure environment
@@ -144,7 +144,7 @@ corepack prepare pnpm@9.15.4 --activate
 
 ```bash
 # Clone
-git clone https://github.com/dm-bradgroux/veritas-kanban.git
+git clone https://github.com/BradGroux/veritas-kanban.git
 cd veritas-kanban
 
 # Install dependencies
@@ -255,7 +255,7 @@ Create `/etc/systemd/system/veritas-kanban.service`:
 ```ini
 [Unit]
 Description=Veritas Kanban
-Documentation=https://github.com/dm-bradgroux/veritas-kanban
+Documentation=https://github.com/BradGroux/veritas-kanban
 After=network.target
 
 [Service]
