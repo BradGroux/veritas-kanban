@@ -83,5 +83,14 @@
     "order": 8,
     "created": "2026-01-28T10:27:13.983Z",
     "updated": "2026-01-28T14:15:48.605Z"
+  },
+  {
+    "label": "Social",
+    "icon": "📣",
+    "color": "#8B5CF6",
+    "id": "social-FYd2Ah",
+    "order": 9,
+    "created": "2026-01-29T09:49:37.604Z",
+    "updated": "2026-01-29T09:49:37.604Z"
   }
 ]

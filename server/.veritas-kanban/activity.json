@@ -1,5 +1,265 @@
 [
   {
+    "id": "activity_1769681144523_yod68p5bg",
+    "type": "status_changed",
+    "taskId": "task_20260129_e492Yn",
+    "taskTitle": "QUALITY: Implement semantic versioning with automated CHANGELOG",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:05:44.523Z"
+  },
+  {
+    "id": "activity_1769681144478_k17p5p3fw",
+    "type": "status_changed",
+    "taskId": "task_20260129_dwEAZn",
+    "taskTitle": "SECURITY: Add secrets scanning to pre-commit hooks and CI",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:05:44.478Z"
+  },
+  {
+    "id": "activity_1769680979355_4rd36ut4p",
+    "type": "status_changed",
+    "taskId": "task_20260129_JsloAU",
+    "taskTitle": "LAUNCH: Add GitHub issue templates, PR template, and discussion categories",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:02:59.355Z"
+  },
+  {
+    "id": "activity_1769680979330_43leseaaz",
+    "type": "status_changed",
+    "taskId": "task_20260129_8Ni5O-",
+    "taskTitle": "LAUNCH: Scan git history for secrets and scrub if needed",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:02:59.330Z"
+  },
+  {
+    "id": "activity_1769680979310_pyij84j68",
+    "type": "status_changed",
+    "taskId": "task_20260129_iBH1_A",
+    "taskTitle": "LAUNCH: Polish README with screenshots, GIFs, quickstart guide, and badges",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:02:59.310Z"
+  },
+  {
+    "id": "activity_1769680979291_mgcjaitwu",
+    "type": "status_changed",
+    "taskId": "task_20260129_ShiEfl",
+    "taskTitle": "LAUNCH: Write deployment guide (Docker, bare metal, environment config)",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:02:59.291Z"
+  },
+  {
+    "id": "activity_1769680979238_8vcdoj603",
+    "type": "status_changed",
+    "taskId": "task_20260129_dbCQKb",
+    "taskTitle": "LAUNCH: Bump version to 1.0.0, create CHANGELOG, and tag release",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:02:59.238Z"
+  },
+  {
+    "id": "activity_1769680829630_5n44lb3jz",
+    "type": "status_changed",
+    "taskId": "task_20260128_c_jMj5",
+    "taskTitle": "QUALITY: Split god files (metrics-service 1669 lines, api.ts 1038 lines)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T10:00:29.630Z"
+  },
+  {
+    "id": "activity_1769680340284_h06hcat9f",
+    "type": "task_updated",
+    "taskId": "task_20260129_U6P7Hv",
+    "taskTitle": "LAUNCH: Additional launch ideas and strategy",
+    "timestamp": "2026-01-29T09:52:20.284Z"
+  },
+  {
+    "id": "activity_1769680340280_5jj4cxlqw",
+    "type": "task_updated",
+    "taskId": "task_20260129_Xm7SWF",
+    "taskTitle": "LAUNCH: Post LinkedIn announcement",
+    "timestamp": "2026-01-29T09:52:20.280Z"
+  },
+  {
+    "id": "activity_1769680340277_vf4bcvmkx",
+    "type": "task_updated",
+    "taskId": "task_20260129_8BoFsW",
+    "taskTitle": "LAUNCH: Post Twitter/X announcement thread",
+    "timestamp": "2026-01-29T09:52:20.277Z"
+  },
+  {
+    "id": "activity_1769680340274_ixoi1xiaq",
+    "type": "task_updated",
+    "taskId": "task_20260129_qw_9dE",
+    "taskTitle": "LAUNCH: Record installation walkthrough video",
+    "timestamp": "2026-01-29T09:52:20.274Z"
+  },
+  {
+    "id": "activity_1769680340271_k649rzy0r",
+    "type": "task_updated",
+    "taskId": "task_20260129_mwX0ZH",
+    "taskTitle": "LAUNCH: Record in-depth walkthrough video",
+    "timestamp": "2026-01-29T09:52:20.271Z"
+  },
+  {
+    "id": "activity_1769680340254_2jqru7042",
+    "type": "task_updated",
+    "taskId": "task_20260129_nAexnL",
+    "taskTitle": "LAUNCH: Record 5-minute demo video",
+    "timestamp": "2026-01-29T09:52:20.254Z"
+  },
+  {
+    "id": "activity_1769680340242_fqv1051py",
+    "type": "task_updated",
+    "taskId": "task_20260129_kIM2ma",
+    "taskTitle": "LAUNCH: Capture screenshots and GIFs for README",
+    "timestamp": "2026-01-29T09:52:20.242Z"
+  },
+  {
+    "id": "activity_1769680254955_u3yjjy38f",
+    "type": "status_changed",
+    "taskId": "task_20260129_rdpYN5",
+    "taskTitle": "LAUNCH: Draft LinkedIn announcement post",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T09:50:54.955Z"
+  },
+  {
+    "id": "activity_1769680254927_qsgh9yyrv",
+    "type": "status_changed",
+    "taskId": "task_20260129_UK86-o",
+    "taskTitle": "LAUNCH: Draft Twitter/X announcement post",
+    "details": {
+      "from": "todo",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T09:50:54.927Z"
+  },
+  {
+    "id": "activity_1769680248132_38sguhbsj",
+    "type": "task_created",
+    "taskId": "task_20260129_Xm7SWF",
+    "taskTitle": "LAUNCH: Post LinkedIn announcement",
+    "details": {
+      "type": "social-FYd2Ah",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-29T09:50:48.132Z"
+  },
+  {
+    "id": "activity_1769680248089_657s6t00i",
+    "type": "task_created",
+    "taskId": "task_20260129_8BoFsW",
+    "taskTitle": "LAUNCH: Post Twitter/X announcement thread",
+    "details": {
+      "type": "social-FYd2Ah",
+      "priority": "high",
+      "project": "veritas-kanban"
+    },
+    "timestamp": "2026-01-29T09:50:48.089Z"
+  },
+  {
+    "id": "activity_1769680050962_lpovkf28a",
+    "type": "task_created",
+    "taskId": "task_20260129_U6P7Hv",
+    "taskTitle": "LAUNCH: Additional launch ideas and strategy",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-29T09:47:30.962Z"
+  },
+  {
+    "id": "activity_1769680050945_l5cvvma1i",
+    "type": "task_created",
+    "taskId": "task_20260129_rdpYN5",
+    "taskTitle": "LAUNCH: Draft LinkedIn announcement post",
+    "details": {
+      "type": "code",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-29T09:47:30.945Z"
+  },
+  {
+    "id": "activity_1769680050922_osxtm0vud",
+    "type": "task_created",
+    "taskId": "task_20260129_UK86-o",
+    "taskTitle": "LAUNCH: Draft Twitter/X announcement post",
+    "details": {
+      "type": "code",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-29T09:47:30.922Z"
+  },
+  {
+    "id": "activity_1769680036249_r0qhc77a8",
+    "type": "task_created",
+    "taskId": "task_20260129_qw_9dE",
+    "taskTitle": "LAUNCH: Record installation walkthrough video",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-29T09:47:16.249Z"
+  },
+  {
+    "id": "activity_1769680014775_kljh36v9m",
+    "type": "task_created",
+    "taskId": "task_20260129_mwX0ZH",
+    "taskTitle": "LAUNCH: Record in-depth walkthrough video",
+    "details": {
+      "type": "code",
+      "priority": "medium"
+    },
+    "timestamp": "2026-01-29T09:46:54.775Z"
+  },
+  {
+    "id": "activity_1769679983680_0g09oevve",
+    "type": "task_created",
+    "taskId": "task_20260129_nAexnL",
+    "taskTitle": "LAUNCH: Record 5-minute demo video",
+    "details": {
+      "type": "code",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-29T09:46:23.680Z"
+  },
+  {
+    "id": "activity_1769679960698_cfstyhk4e",
+    "type": "task_created",
+    "taskId": "task_20260129_kIM2ma",
+    "taskTitle": "LAUNCH: Capture screenshots and GIFs for README",
+    "details": {
+      "type": "code",
+      "priority": "high"
+    },
+    "timestamp": "2026-01-29T09:46:00.698Z"
+  },
+  {
     "id": "activity_1769672571937_gnev4tzs2",
     "type": "comment_added",
     "taskId": "task_20260129_dbCQKb",
