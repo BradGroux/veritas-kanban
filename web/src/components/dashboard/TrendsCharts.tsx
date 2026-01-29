@@ -40,15 +40,15 @@ const COLORS = {
   output: 'hsl(280, 65%, 60%)', // Purple
   duration: 'hsl(38, 92%, 50%)', // Orange/Yellow
   velocity: 'hsl(var(--primary))',
-  rollingAvg: 'hsl(280, 65%, 60%)', // Purple for the rolling average line
+  rollingAvg: 'hsl(175, 90%, 45%)', // Vibrant cyan-teal to contrast violet
   grid: 'hsl(var(--border))',
   text: 'hsl(var(--muted-foreground))',
 };
 
 // Custom tooltip component for consistent styling
-function CustomTooltip({ 
-  active, 
-  payload, 
+function CustomTooltip({
+  active,
+  payload,
   label,
   formatter,
 }: {
@@ -64,10 +64,7 @@ function CustomTooltip({
       <p className="font-medium mb-2">{label}</p>
       {payload.map((entry, index) => (
         <div key={index} className="flex items-center gap-2 text-sm">
-          <div 
-            className="w-3 h-3 rounded-full" 
-            style={{ backgroundColor: entry.color }}
-          />
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="text-muted-foreground">{entry.name}:</span>
           <span className="font-medium">
             {formatter ? formatter(entry.value, entry.name) : entry.value}
@@ -80,7 +77,7 @@ function CustomTooltip({
 
 // Runs per day bar chart
 function RunsChart({ data }: { data: Array<{ date: string; runs: number }> }) {
-  const chartData = data.map(d => ({
+  const chartData = data.map((d) => ({
     ...d,
     label: formatShortDate(d.date),
   }));
@@ -90,27 +87,20 @@ function RunsChart({ data }: { data: Array<{ date: string; runs: number }> }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-          <XAxis 
-            dataKey="label" 
+          <XAxis
+            dataKey="label"
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis 
+          <YAxis
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={40}
           />
-          <Tooltip 
-            content={<CustomTooltip />}
-          />
-          <Bar 
-            dataKey="runs" 
-            fill={COLORS.runs}
-            radius={[4, 4, 0, 0]}
-            name="Runs"
-          />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar dataKey="runs" fill={COLORS.runs} radius={[4, 4, 0, 0]} name="Runs" />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -119,7 +109,7 @@ function RunsChart({ data }: { data: Array<{ date: string; runs: number }> }) {
 
 // Success rate line chart
 function SuccessRateChart({ data }: { data: Array<{ date: string; successRate: number }> }) {
-  const chartData = data.map(d => ({
+  const chartData = data.map((d) => ({
     ...d,
     label: formatShortDate(d.date),
     successPercent: Math.round(d.successRate * 100),
@@ -130,13 +120,13 @@ function SuccessRateChart({ data }: { data: Array<{ date: string; successRate: n
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-          <XAxis 
-            dataKey="label" 
+          <XAxis
+            dataKey="label"
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis 
+          <YAxis
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
@@ -144,12 +134,10 @@ function SuccessRateChart({ data }: { data: Array<{ date: string; successRate: n
             domain={[0, 100]}
             tickFormatter={(v) => `${v}%`}
           />
-          <Tooltip 
-            content={<CustomTooltip formatter={(v) => `${v}%`} />}
-          />
-          <Line 
+          <Tooltip content={<CustomTooltip formatter={(v) => `${v}%`} />} />
+          <Line
             type="monotone"
-            dataKey="successPercent" 
+            dataKey="successPercent"
             stroke={COLORS.successRate}
             strokeWidth={2}
             dot={{ fill: COLORS.successRate, strokeWidth: 0, r: 3 }}
@@ -163,8 +151,12 @@ function SuccessRateChart({ data }: { data: Array<{ date: string; successRate: n
 }
 
 // Token usage stacked area chart
-function TokensChart({ data }: { data: Array<{ date: string; inputTokens: number; outputTokens: number }> }) {
-  const chartData = data.map(d => ({
+function TokensChart({
+  data,
+}: {
+  data: Array<{ date: string; inputTokens: number; outputTokens: number }>;
+}) {
+  const chartData = data.map((d) => ({
     ...d,
     label: formatShortDate(d.date),
     inputK: Math.round(d.inputTokens / 1000),
@@ -176,38 +168,33 @@ function TokensChart({ data }: { data: Array<{ date: string; inputTokens: number
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-          <XAxis 
-            dataKey="label" 
+          <XAxis
+            dataKey="label"
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis 
+          <YAxis
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={45}
             tickFormatter={(v) => `${v}K`}
           />
-          <Tooltip 
-            content={<CustomTooltip formatter={(v) => `${v}K tokens`} />}
-          />
-          <Legend 
-            wrapperStyle={{ fontSize: 11 }}
-            iconType="circle"
-          />
-          <Area 
+          <Tooltip content={<CustomTooltip formatter={(v) => `${v}K tokens`} />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+          <Area
             type="monotone"
-            dataKey="inputK" 
+            dataKey="inputK"
             stackId="1"
             stroke={COLORS.input}
             fill={COLORS.input}
             fillOpacity={0.6}
             name="Input"
           />
-          <Area 
+          <Area
             type="monotone"
-            dataKey="outputK" 
+            dataKey="outputK"
             stackId="1"
             stroke={COLORS.output}
             fill={COLORS.output}
@@ -222,27 +209,27 @@ function TokensChart({ data }: { data: Array<{ date: string; inputTokens: number
 
 // Average duration trend line chart
 function DurationChart({ data }: { data: Array<{ date: string; avgDurationMs: number }> }) {
-  const chartData = data.map(d => ({
+  const chartData = data.map((d) => ({
     ...d,
     label: formatShortDate(d.date),
     durationSec: Math.round(d.avgDurationMs / 1000),
   }));
 
   // Calculate max for Y axis domain
-  const maxDuration = Math.max(...chartData.map(d => d.durationSec), 1);
+  const maxDuration = Math.max(...chartData.map((d) => d.durationSec), 1);
 
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-          <XAxis 
-            dataKey="label" 
+          <XAxis
+            dataKey="label"
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis 
+          <YAxis
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
@@ -250,12 +237,10 @@ function DurationChart({ data }: { data: Array<{ date: string; avgDurationMs: nu
             domain={[0, Math.ceil(maxDuration * 1.1)]}
             tickFormatter={(v) => `${v}s`}
           />
-          <Tooltip 
-            content={<CustomTooltip formatter={(v) => formatDuration(v * 1000)} />}
-          />
-          <Line 
+          <Tooltip content={<CustomTooltip formatter={(v) => formatDuration(v * 1000)} />} />
+          <Line
             type="monotone"
-            dataKey="durationSec" 
+            dataKey="durationSec"
             stroke={COLORS.duration}
             strokeWidth={2}
             dot={{ fill: COLORS.duration, strokeWidth: 0, r: 3 }}
@@ -273,22 +258,12 @@ function DurationChart({ data }: { data: Array<{ date: string; avgDurationMs: nu
 function SprintAxisTick(props: any) {
   const { x, y, payload } = props;
   if (!payload?.value) return null;
-  
-  const label = payload.value.length > 10 
-    ? payload.value.slice(0, 10) + '…' 
-    : payload.value;
-  
+
+  const label = payload.value.length > 10 ? payload.value.slice(0, 10) + '…' : payload.value;
+
   return (
     <g transform={`translate(${x},${y})`}>
-      <rect
-        x={-30}
-        y={4}
-        width={60}
-        height={18}
-        rx={4}
-        ry={4}
-        fill="hsl(var(--muted))"
-      />
+      <rect x={-30} y={4} width={60} height={18} rx={4} ry={4} fill="hsl(var(--muted))" />
       <text
         x={0}
         y={16}
@@ -316,11 +291,24 @@ interface VelocityChartProps {
   averageVelocity: number;
 }
 
-function VelocityChart({ data, trend: _trend, averageVelocity: _averageVelocity }: VelocityChartProps) {
+function VelocityChart({
+  data,
+  trend: _trend,
+  averageVelocity: _averageVelocity,
+}: VelocityChartProps) {
   // Custom tooltip for velocity chart with type breakdown
-  const VelocityTooltip = ({ active, payload, label }: {
+  const VelocityTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
     active?: boolean;
-    payload?: Array<{ name: string; value: number; color: string; payload?: { byType?: Record<string, number> } }>;
+    payload?: Array<{
+      name: string;
+      value: number;
+      color: string;
+      payload?: { byType?: Record<string, number> };
+    }>;
     label?: string;
   }) => {
     if (!active || !payload?.length) return null;
@@ -333,10 +321,7 @@ function VelocityChart({ data, trend: _trend, averageVelocity: _averageVelocity 
         <p className="font-medium mb-2">{label}</p>
         {payload.map((entry, index) => (
           <div key={index} className="flex items-center gap-2 text-sm">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: entry.color }}
-            />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-muted-foreground">{entry.name}:</span>
             <span className="font-medium">{entry.value}</span>
           </div>
@@ -363,34 +348,26 @@ function VelocityChart({ data, trend: _trend, averageVelocity: _averageVelocity 
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-          <XAxis 
-            dataKey="sprint" 
+          <XAxis
+            dataKey="sprint"
             tick={SprintAxisTick}
             tickLine={false}
             axisLine={false}
             interval={0}
             height={35}
           />
-          <YAxis 
+          <YAxis
             tick={{ fill: COLORS.text, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={35}
           />
           <Tooltip content={<VelocityTooltip />} />
-          <Legend 
-            wrapperStyle={{ fontSize: 11 }}
-            iconType="circle"
-          />
-          <Bar 
-            dataKey="completed" 
-            fill={COLORS.velocity}
-            radius={[4, 4, 0, 0]}
-            name="Completed"
-          />
-          <Line 
+          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+          <Bar dataKey="completed" fill={COLORS.velocity} radius={[4, 4, 0, 0]} name="Completed" />
+          <Line
             type="monotone"
-            dataKey="rollingAverage" 
+            dataKey="rollingAverage"
             stroke={COLORS.rollingAvg}
             strokeWidth={2}
             dot={{ fill: COLORS.rollingAvg, strokeWidth: 0, r: 3 }}
@@ -403,25 +380,38 @@ function VelocityChart({ data, trend: _trend, averageVelocity: _averageVelocity 
 }
 
 // Velocity trend indicator
-function VelocityTrendIndicator({ trend, averageVelocity }: { trend: VelocityTrend; averageVelocity: number }) {
-  const TrendIcon = trend === 'accelerating' ? TrendingUp : trend === 'slowing' ? TrendingDown : Minus;
+function VelocityTrendIndicator({
+  trend,
+  averageVelocity,
+}: {
+  trend: VelocityTrend;
+  averageVelocity: number;
+}) {
+  const TrendIcon =
+    trend === 'accelerating' ? TrendingUp : trend === 'slowing' ? TrendingDown : Minus;
   const colorClass = getTrendColor(trend);
-  
+
   return (
     <div className="flex items-center gap-3 text-sm">
       <div className={`flex items-center gap-1 ${colorClass}`}>
         <TrendIcon className="h-4 w-4" />
         <span className="font-medium">{getTrendLabel(trend)}</span>
       </div>
-      <span className="text-muted-foreground">
-        Avg: {averageVelocity} tasks/sprint
-      </span>
+      <span className="text-muted-foreground">Avg: {averageVelocity} tasks/sprint</span>
     </div>
   );
 }
 
 // Chart card wrapper
-function ChartCard({ title, children, extra }: { title: string; children: React.ReactNode; extra?: React.ReactNode }) {
+function ChartCard({
+  title,
+  children,
+  extra,
+}: {
+  title: string;
+  children: React.ReactNode;
+  extra?: React.ReactNode;
+}) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
@@ -439,15 +429,11 @@ export function TrendsCharts({ project }: TrendsChartsProps) {
   const { data: velocityData, isLoading: velocityLoading } = useVelocity(project, 10);
 
   if (error) {
-    return (
-      <div className="p-4 text-center text-destructive">
-        Failed to load trends data
-      </div>
-    );
+    return <div className="p-4 text-center text-destructive">Failed to load trends data</div>;
   }
 
   // Check if we have any data with runs
-  const hasData = data?.daily.some(d => d.runs > 0);
+  const hasData = data?.daily.some((d) => d.runs > 0);
   const hasVelocityData = velocityData && velocityData.sprints.length > 0;
 
   return (
@@ -470,16 +456,16 @@ export function TrendsCharts({ project }: TrendsChartsProps) {
       {velocityLoading ? (
         <Skeleton className="h-[280px] rounded-lg" />
       ) : hasVelocityData ? (
-        <ChartCard 
+        <ChartCard
           title="Sprint Velocity"
           extra={
-            <VelocityTrendIndicator 
-              trend={velocityData!.trend} 
-              averageVelocity={velocityData!.averageVelocity} 
+            <VelocityTrendIndicator
+              trend={velocityData!.trend}
+              averageVelocity={velocityData!.averageVelocity}
             />
           }
         >
-          <VelocityChart 
+          <VelocityChart
             data={velocityData!.sprints}
             trend={velocityData!.trend}
             averageVelocity={velocityData!.averageVelocity}
@@ -496,8 +482,15 @@ export function TrendsCharts({ project }: TrendsChartsProps) {
                     ({velocityData!.currentSprint.percentComplete}%)
                   </span>
                   {velocityData!.currentSprint.vsAverage !== 0 && (
-                    <span className={velocityData!.currentSprint.vsAverage > 0 ? 'text-green-500 ml-2' : 'text-red-500 ml-2'}>
-                      {velocityData!.currentSprint.vsAverage > 0 ? '+' : ''}{velocityData!.currentSprint.vsAverage}% vs avg
+                    <span
+                      className={
+                        velocityData!.currentSprint.vsAverage > 0
+                          ? 'text-green-500 ml-2'
+                          : 'text-red-500 ml-2'
+                      }
+                    >
+                      {velocityData!.currentSprint.vsAverage > 0 ? '+' : ''}
+                      {velocityData!.currentSprint.vsAverage}% vs avg
                     </span>
                   )}
                 </span>
@@ -529,15 +522,15 @@ export function TrendsCharts({ project }: TrendsChartsProps) {
           <ChartCard title="Runs per Day">
             <RunsChart data={data!.daily} />
           </ChartCard>
-          
+
           <ChartCard title="Success Rate">
             <SuccessRateChart data={data!.daily} />
           </ChartCard>
-          
+
           <ChartCard title="Token Usage">
             <TokensChart data={data!.daily} />
           </ChartCard>
-          
+
           <ChartCard title="Average Run Duration">
             <DurationChart data={data!.daily} />
           </ChartCard>
