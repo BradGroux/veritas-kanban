@@ -19,10 +19,11 @@ import {
 import { BulkActionsBar } from './BulkActionsBar';
 import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
+import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 
 // Lazy-load DashboardSection to split recharts + d3 (~800KB) out of main bundle
 const DashboardSection = lazy(() =>
-  import('@/components/dashboard/DashboardSection').then(mod => ({
+  import('@/components/dashboard/DashboardSection').then((mod) => ({
     default: mod.DashboardSection,
   }))
 );
@@ -37,9 +38,10 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const { settings: featureSettings } = useFeatureSettings();
+  const { announce } = useLiveAnnouncer();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  
+
   // Initialize filters from URL
   const [filters, setFilters] = useState<FilterState>(() => {
     if (typeof window !== 'undefined') {
@@ -47,13 +49,8 @@ export function KanbanBoard() {
     }
     return { search: '', project: null, type: null };
   });
-  
-  const {
-    selectedTaskId,
-    setTasks,
-    setOnOpenTask,
-    setOnMoveTask,
-  } = useKeyboard();
+
+  const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
 
   // Sync filters to URL
   useEffect(() => {
@@ -86,23 +83,23 @@ export function KanbanBoard() {
   const updateTask = useUpdateTask();
   const reorderTasks = useReorderTasks();
 
-  // Handler for moving a task
-  const handleMoveTask = useCallback((taskId: string, status: TaskStatus) => {
-    updateTask.mutate({ id: taskId, input: { status } });
-  }, [updateTask]);
+  // Handler for moving a task (with screen reader announcement)
+  const handleMoveTask = useCallback(
+    (taskId: string, status: TaskStatus) => {
+      const task = filteredTasks.find((t) => t.id === taskId);
+      const columnName = COLUMNS.find((c) => c.id === status)?.title || status;
+      updateTask.mutate({ id: taskId, input: { status } });
+      announce(`Task ${task?.title || taskId} moved to ${columnName}`);
+    },
+    [updateTask, filteredTasks, announce]
+  );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
   setOnOpenTask(handleTaskClick);
   setOnMoveTask(handleMoveTask);
 
   // Drag and drop logic
-  const {
-    activeTask,
-    sensors,
-    handleDragStart,
-    handleDragOver,
-    handleDragEnd,
-  } = useBoardDragDrop({
+  const { activeTask, sensors, handleDragStart, handleDragOver, handleDragEnd } = useBoardDragDrop({
     tasks: filteredTasks,
     tasksByStatus,
     columns: COLUMNS,
@@ -123,8 +120,8 @@ export function KanbanBoard() {
   };
 
   // Keep selected task in sync with updated data
-  const currentSelectedTask = selectedTask 
-    ? tasks?.find(t => t.id === selectedTask.id) || selectedTask
+  const currentSelectedTask = selectedTask
+    ? tasks?.find((t) => t.id === selectedTask.id) || selectedTask
     : null;
 
   if (isLoading) {
@@ -133,14 +130,10 @@ export function KanbanBoard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-96" role="alert">
         <div className="text-center space-y-2">
-          <div className="text-destructive font-medium">
-            Error loading tasks
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {error.message}
-          </div>
+          <div className="text-destructive font-medium">Error loading tasks</div>
+          <div className="text-sm text-muted-foreground">{error.message}</div>
         </div>
       </div>
     );
@@ -148,27 +141,43 @@ export function KanbanBoard() {
 
   return (
     <>
-      <FilterBar
-        tasks={tasks || []}
-        filters={filters}
-        onFiltersChange={setFilters}
-      />
-      
-      <BulkActionsBar allTaskIds={filteredTasks.map(t => t.id)} />
-      
+      <FilterBar tasks={tasks || []} filters={filters} onFiltersChange={setFilters} />
+
+      <BulkActionsBar allTaskIds={filteredTasks.map((t) => t.id)} />
+
       {featureSettings.board.showArchiveSuggestions && <ArchiveSuggestionBanner />}
-      
+
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
-        {featureSettings.board.enableDragAndDrop ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="grid grid-cols-4 gap-4">
-              {COLUMNS.map(column => (
+        <section aria-label={`Kanban board, ${filteredTasks.length} tasks`}>
+          {featureSettings.board.enableDragAndDrop ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
+                {COLUMNS.map((column) => (
+                  <KanbanColumn
+                    key={column.id}
+                    id={column.id}
+                    title={column.title}
+                    tasks={tasksByStatus[column.id]}
+                    allTasks={filteredTasks}
+                    onTaskClick={handleTaskClick}
+                    selectedTaskId={selectedTaskId}
+                  />
+                ))}
+              </div>
+
+              <DragOverlay>
+                {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+              </DragOverlay>
+            </DndContext>
+          ) : (
+            <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
+              {COLUMNS.map((column) => (
                 <KanbanColumn
                   key={column.id}
                   id={column.id}
@@ -180,35 +189,20 @@ export function KanbanBoard() {
                 />
               ))}
             </div>
-            
-            <DragOverlay>
-              {activeTask ? (
-                <TaskCard task={activeTask} isDragging />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        ) : (
-          <div className="grid grid-cols-4 gap-4">
-            {COLUMNS.map(column => (
-              <KanbanColumn
-                key={column.id}
-                id={column.id}
-                title={column.title}
-                tasks={tasksByStatus[column.id]}
-                allTasks={filteredTasks}
-                onTaskClick={handleTaskClick}
-                selectedTaskId={selectedTaskId}
-              />
-            ))}
-          </div>
-        )}
+          )}
+        </section>
 
         {featureSettings.board.showDashboard && (
-          <Suspense fallback={
-            <div className="mt-6 border-t pt-4 flex items-center justify-center py-8 text-muted-foreground">
-              Loading dashboard…
-            </div>
-          }>
+          <Suspense
+            fallback={
+              <div
+                className="mt-6 border-t pt-4 flex items-center justify-center py-8 text-muted-foreground"
+                role="status"
+              >
+                Loading dashboard…
+              </div>
+            }
+          >
             <DashboardSection />
           </Suspense>
         )}

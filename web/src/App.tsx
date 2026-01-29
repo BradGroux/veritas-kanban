@@ -10,6 +10,8 @@ import { WebSocketStatusProvider } from './contexts/WebSocketContext';
 import { AuthProvider } from './hooks/useAuth';
 import { AuthGuard } from './components/auth';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
+import { SkipToContent } from './components/shared/SkipToContent';
+import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 
 // Main app content (only rendered when authenticated)
 function AppContent() {
@@ -22,22 +24,25 @@ function AppContent() {
       connectionState={connectionState}
       reconnectAttempt={reconnectAttempt}
     >
-      <KeyboardProvider>
-        <BulkActionsProvider>
-          <TaskConfigProvider>
-            <div className="min-h-screen bg-background">
-              <Header />
-              <main className="container mx-auto px-4 py-6">
-                <ErrorBoundary level="section">
-                  <KanbanBoard />
-                </ErrorBoundary>
-              </main>
-              <Toaster />
-              <KeyboardShortcutsDialog />
-            </div>
-          </TaskConfigProvider>
-        </BulkActionsProvider>
-      </KeyboardProvider>
+      <LiveAnnouncerProvider>
+        <KeyboardProvider>
+          <BulkActionsProvider>
+            <TaskConfigProvider>
+              <div className="min-h-screen bg-background">
+                <SkipToContent />
+                <Header />
+                <main id="main-content" className="container mx-auto px-4 py-6" tabIndex={-1}>
+                  <ErrorBoundary level="section">
+                    <KanbanBoard />
+                  </ErrorBoundary>
+                </main>
+                <Toaster />
+                <KeyboardShortcutsDialog />
+              </div>
+            </TaskConfigProvider>
+          </BulkActionsProvider>
+        </KeyboardProvider>
+      </LiveAnnouncerProvider>
     </WebSocketStatusProvider>
   );
 }

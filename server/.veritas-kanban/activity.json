@@ -1,5 +1,49 @@
 [
   {
+    "id": "activity_1769684715336_1898uz1j7",
+    "type": "comment_added",
+    "taskId": "task_20260129_yAgwCQ",
+    "taskTitle": "[v1.1] SCALABILITY: Add structured metrics export (Prometheus/OpenTelemetry)",
+    "details": {
+      "author": "Veritas",
+      "preview": "Implemented lightweight Prometheus metrics collect..."
+    },
+    "timestamp": "2026-01-29T11:05:15.336Z"
+  },
+  {
+    "id": "activity_1769684708280_0q5sxd0vr",
+    "type": "status_changed",
+    "taskId": "task_20260129_yAgwCQ",
+    "taskTitle": "[v1.1] SCALABILITY: Add structured metrics export (Prometheus/OpenTelemetry)",
+    "details": {
+      "from": "in-progress",
+      "status": "done"
+    },
+    "timestamp": "2026-01-29T11:05:08.280Z"
+  },
+  {
+    "id": "activity_1769684504707_o4ipzutar",
+    "type": "status_changed",
+    "taskId": "task_20260128_RcHzcp",
+    "taskTitle": "[v1.1] QUALITY: Improve frontend accessibility to WCAG 2.1 AA",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T11:01:44.707Z"
+  },
+  {
+    "id": "activity_1769684504698_oqv0haol6",
+    "type": "status_changed",
+    "taskId": "task_20260129_yAgwCQ",
+    "taskTitle": "[v1.1] SCALABILITY: Add structured metrics export (Prometheus/OpenTelemetry)",
+    "details": {
+      "from": "todo",
+      "status": "in-progress"
+    },
+    "timestamp": "2026-01-29T11:01:44.698Z"
+  },
+  {
     "id": "activity_1769684471958_wz7v725l5",
     "type": "comment_added",
     "taskId": "task_20260129_g7GLeb",

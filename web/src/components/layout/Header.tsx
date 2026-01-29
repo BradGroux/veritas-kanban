@@ -27,12 +27,14 @@ export function Header() {
   setOpenCreateDialog(() => setCreateOpen(true));
 
   return (
-    <header className="border-b border-border bg-card">
-      <div className="container mx-auto px-4">
+    <header className="border-b border-border bg-card" role="banner">
+      <nav aria-label="Main navigation" className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-xl">⚖️</span>
+              <span className="text-xl" aria-hidden="true">
+                ⚖️
+              </span>
               <h1 className="text-lg font-semibold">Veritas Kanban</h1>
             </div>
             <div className="h-4 w-px bg-border" aria-hidden="true" />
@@ -41,42 +43,51 @@ export function Header() {
             <AgentStatusIndicator onOpenActivityLog={() => setActivityOpen(true)} />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" role="toolbar" aria-label="Board actions">
             <Button variant="default" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
+              <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
               New Task
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={openHelpDialog}
+              aria-label="Keyboard shortcuts"
               title="Keyboard shortcuts (?)"
             >
-              <Keyboard className="h-4 w-4" />
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setActivityOpen(true)}
+              aria-label="Activity log"
               title="Activity log"
             >
-              <Activity className="h-4 w-4" />
+              <Activity className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setArchiveOpen(true)}
+              aria-label="Archive"
               title="Archive"
             >
-              <Archive className="h-4 w-4" />
+              <Archive className="h-4 w-4" aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
-              <Settings className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" aria-hidden="true" />
             </Button>
             <UserMenu onOpenSecuritySettings={openSecuritySettings} />
           </div>
         </div>
-      </div>
+      </nav>
 
       <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
       <SettingsDialog

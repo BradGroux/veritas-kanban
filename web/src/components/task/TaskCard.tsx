@@ -2,14 +2,25 @@ import { memo, useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
-import { Check, Ban, Clock, Timer, Loader2, Paperclip, ListChecks, Zap, MessageSquare, Wrench, Link2, HelpCircle, Play, CheckCircle, XCircle } from 'lucide-react';
+import {
+  Check,
+  Ban,
+  Clock,
+  Timer,
+  Loader2,
+  Paperclip,
+  ListChecks,
+  Zap,
+  MessageSquare,
+  Wrench,
+  Link2,
+  HelpCircle,
+  Play,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { formatDuration } from '@/hooks/useTimeTracking';
 import { getTypeIcon, getTypeColor } from '@/hooks/useTaskTypes';
@@ -22,17 +33,24 @@ import { sanitizeText } from '@/lib/sanitize';
 
 const agentNames: Record<string, string> = {
   'claude-code': 'Claude',
-  'amp': 'Amp',
-  'copilot': 'Copilot',
-  'gemini': 'Gemini',
-  'veritas': 'Veritas',
+  amp: 'Amp',
+  copilot: 'Copilot',
+  gemini: 'Gemini',
+  veritas: 'Veritas',
 };
 
-const blockedCategoryInfo: Record<BlockedCategory, { label: string; shortLabel: string; icon: React.ElementType }> = {
-  'waiting-on-feedback': { label: 'Waiting on Feedback', shortLabel: 'Feedback', icon: MessageSquare },
+const blockedCategoryInfo: Record<
+  BlockedCategory,
+  { label: string; shortLabel: string; icon: React.ElementType }
+> = {
+  'waiting-on-feedback': {
+    label: 'Waiting on Feedback',
+    shortLabel: 'Feedback',
+    icon: MessageSquare,
+  },
   'technical-snag': { label: 'Technical Snag', shortLabel: 'Snag', icon: Wrench },
-  'prerequisite': { label: 'Prerequisite', shortLabel: 'Prereq', icon: Link2 },
-  'other': { label: 'Other', shortLabel: 'Other', icon: HelpCircle },
+  prerequisite: { label: 'Prerequisite', shortLabel: 'Prereq', icon: Link2 },
+  other: { label: 'Other', shortLabel: 'Other', icon: HelpCircle },
 };
 
 interface TaskCardProps {
@@ -119,7 +137,15 @@ const priorityColors: Record<TaskPriority, string> = {
   low: 'bg-slate-500/20 text-slate-400',
 };
 
-export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSelected, isBlocked, blockerTitles, cardMetrics }: TaskCardProps) {
+export const TaskCard = memo(function TaskCard({
+  task,
+  isDragging,
+  onClick,
+  isSelected,
+  isBlocked,
+  blockerTitles,
+  cardMetrics,
+}: TaskCardProps) {
   const { taskTypes, projects, sprints } = useTaskConfig();
   const {
     attributes,
@@ -151,16 +177,23 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
     onClick?.();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleSelect(task.id);
   };
 
   const isAgentRunning = task.attempt?.status === 'running';
-  
+
   // Memoize type info
   const { typeLabel, TypeIconComponent, typeColor } = useMemo(() => {
-    const typeConfig = taskTypes.find(t => t.id === task.type);
+    const typeConfig = taskTypes.find((t) => t.id === task.type);
     const iconName = typeConfig?.icon || 'Code';
     return {
       typeLabel: typeConfig?.label || task.type,
@@ -168,18 +201,21 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
       typeColor: getTypeColor(taskTypes, task.type),
     };
   }, [taskTypes, task.type]);
-  
+
   // Memoize project info
-  const { projectColor, projectLabel } = useMemo(() => ({
-    projectColor: task.project ? getProjectColor(projects, task.project) : 'bg-muted',
-    projectLabel: task.project ? getProjectLabel(projects, task.project) : '',
-  }), [projects, task.project]);
+  const { projectColor, projectLabel } = useMemo(
+    () => ({
+      projectColor: task.project ? getProjectColor(projects, task.project) : 'bg-muted',
+      projectLabel: task.project ? getProjectLabel(projects, task.project) : '',
+    }),
+    [projects, task.project]
+  );
 
   // Memoize subtask progress
   const { subtaskTotal, subtaskCompleted, allSubtasksDone } = useMemo(() => {
     const subtasks = task.subtasks || [];
     const total = subtasks.length;
-    const completed = subtasks.filter(s => s.completed).length;
+    const completed = subtasks.filter((s) => s.completed).length;
     return {
       subtaskTotal: total,
       subtaskCompleted: completed,
@@ -197,8 +233,10 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
             {...listeners}
             {...attributes}
             onClick={handleClick}
+            onKeyDown={handleKeyDown}
             role="article"
-            aria-label={`Task: ${task.title}, Status: ${task.status}, Priority: ${task.priority}`}
+            tabIndex={0}
+            aria-label={`Task: ${task.title}, Priority: ${task.priority}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
             className={cn(
               'group bg-card border border-border rounded-md cursor-grab active:cursor-grabbing',
               isCompact ? 'p-2' : 'p-3',
@@ -208,7 +246,8 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
               isDragging && 'opacity-50 shadow-lg rotate-2 scale-105',
               isCurrentlyDragging && 'opacity-50',
               isSelected && 'ring-2 ring-primary border-primary',
-              isAgentRunning && 'ring-2 ring-blue-500/50 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+              isAgentRunning &&
+                'ring-2 ring-blue-500/50 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
             )}
           >
             <span className="sr-only">Status: {task.status}</span>
@@ -227,13 +266,11 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                   {isChecked && <Check className="h-3 w-3" />}
                 </button>
               )}
-              <span className="text-muted-foreground mt-0.5 flex-shrink-0">
+              <span className="text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true">
                 {TypeIconComponent && <TypeIconComponent className="h-3.5 w-3.5" />}
               </span>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium leading-tight truncate">
-                  {task.title}
-                </h3>
+                <h3 className="text-sm font-medium leading-tight truncate">{task.title}</h3>
                 {!isCompact && task.description && (
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     {sanitizeText(task.description)}
@@ -241,21 +278,27 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {/* Agent running indicator */}
               {isAgentRunning && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1 animate-pulse">
-                      <span className="sr-only">Agent {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is actively running on this task</span>
+                      <span className="sr-only">
+                        Agent {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is
+                        actively running on this task
+                      </span>
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {agentNames[task.attempt?.agent || ''] || 'Agent'} running
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="font-medium">Agent Active</p>
-                    <p className="text-sm">{agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is working on this task</p>
+                    <p className="text-sm">
+                      {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is working on
+                      this task
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -278,29 +321,33 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                 </Tooltip>
               )}
               {/* Blocked reason badge (only shown in Blocked column) */}
-              {task.status === 'blocked' && task.blockedReason && (() => {
-                const info = blockedCategoryInfo[task.blockedReason.category];
-                const BlockedIcon = info.icon;
-                return (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 flex items-center gap-1">
-                        <BlockedIcon className="h-3 w-3" />
-                        {info.shortLabel}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="font-medium">{info.label}</p>
-                      {task.blockedReason.note && (
-                        <p className="text-sm text-muted-foreground mt-1">{sanitizeText(task.blockedReason.note)}</p>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })()}
+              {task.status === 'blocked' &&
+                task.blockedReason &&
+                (() => {
+                  const info = blockedCategoryInfo[task.blockedReason.category];
+                  const BlockedIcon = info.icon;
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 flex items-center gap-1">
+                          <BlockedIcon className="h-3 w-3" />
+                          {info.shortLabel}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">{info.label}</p>
+                        {task.blockedReason.note && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {sanitizeText(task.blockedReason.note)}
+                          </p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
               {/* Left side: project, type label, priority — controlled by board settings */}
               {boardSettings.showProjectBadges && task.project && (
-                <span className={cn("text-xs px-1.5 py-0.5 rounded", projectColor)}>
+                <span className={cn('text-xs px-1.5 py-0.5 rounded', projectColor)}>
                   {projectLabel}
                 </span>
               )}
@@ -314,10 +361,12 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                 {typeLabel}
               </span>
               {boardSettings.showPriorityIndicators && (
-                <span className={cn(
-                  'text-xs px-1.5 py-0.5 rounded capitalize',
-                  priorityColors[task.priority]
-                )}>
+                <span
+                  className={cn(
+                    'text-xs px-1.5 py-0.5 rounded capitalize',
+                    priorityColors[task.priority]
+                  )}
+                >
                   {task.priority}
                 </span>
               )}
@@ -332,31 +381,37 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
               {subtaskTotal > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className={cn(
-                      "text-xs px-1.5 py-0.5 rounded flex items-center gap-1 ml-auto",
-                      allSubtasksDone
-                        ? "bg-green-500/20 text-green-500"
-                        : "bg-muted text-muted-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        'text-xs px-1.5 py-0.5 rounded flex items-center gap-1 ml-auto',
+                        allSubtasksDone
+                          ? 'bg-green-500/20 text-green-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
                       <ListChecks className="h-3 w-3" />
                       {subtaskCompleted}/{subtaskTotal}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="font-medium">Subtasks</p>
-                    <p className="text-sm">{subtaskCompleted} of {subtaskTotal} completed</p>
+                    <p className="text-sm">
+                      {subtaskCompleted} of {subtaskTotal} completed
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               )}
               {/* Time tracking indicator */}
               {(task.timeTracking?.totalSeconds || task.timeTracking?.isRunning) && (
-                <span className={cn(
-                  "text-xs px-1.5 py-0.5 rounded flex items-center gap-1",
-                  !subtaskTotal && !cardMetrics && "ml-auto",
-                  task.timeTracking?.isRunning 
-                    ? "bg-green-500/20 text-green-500" 
-                    : "bg-muted text-muted-foreground"
-                )}>
+                <span
+                  className={cn(
+                    'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
+                    !subtaskTotal && !cardMetrics && 'ml-auto',
+                    task.timeTracking?.isRunning
+                      ? 'bg-green-500/20 text-green-500'
+                      : 'bg-muted text-muted-foreground'
+                  )}
+                >
                   {task.timeTracking?.isRunning ? (
                     <Timer className="h-3 w-3 animate-pulse" />
                   ) : (
@@ -370,17 +425,21 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                 <>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={cn(
-                        "text-xs px-1.5 py-0.5 rounded flex items-center gap-1",
-                        !subtaskTotal && !task.timeTracking?.totalSeconds && "ml-auto",
-                        "bg-muted text-muted-foreground"
-                      )}>
+                      <span
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
+                          !subtaskTotal && !task.timeTracking?.totalSeconds && 'ml-auto',
+                          'bg-muted text-muted-foreground'
+                        )}
+                      >
                         <Play className="h-3 w-3" />
                         {cardMetrics.totalRuns}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="font-medium">{cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}</p>
+                      <p className="font-medium">
+                        {cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {cardMetrics.successfulRuns} successful, {cardMetrics.failedRuns} failed
                       </p>
@@ -389,12 +448,14 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                   {cardMetrics.lastRunSuccess !== undefined && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={cn(
-                          "text-xs px-1 py-0.5 rounded flex items-center",
-                          cardMetrics.lastRunSuccess 
-                            ? "bg-green-500/20 text-green-500"
-                            : "bg-red-500/20 text-red-500"
-                        )}>
+                        <span
+                          className={cn(
+                            'text-xs px-1 py-0.5 rounded flex items-center',
+                            cardMetrics.lastRunSuccess
+                              ? 'bg-green-500/20 text-green-500'
+                              : 'bg-red-500/20 text-red-500'
+                          )}
+                        >
                           {cardMetrics.lastRunSuccess ? (
                             <CheckCircle className="h-3 w-3" />
                           ) : (
@@ -403,7 +464,9 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="font-medium">Last run: {cardMetrics.lastRunSuccess ? 'Success' : 'Failed'}</p>
+                        <p className="font-medium">
+                          Last run: {cardMetrics.lastRunSuccess ? 'Success' : 'Failed'}
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   )}
@@ -418,7 +481,8 @@ export const TaskCard = memo(function TaskCard({ task, isDragging, onClick, isSe
                       <TooltipContent>
                         <p className="font-medium">Total agent time</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatCompactDuration(cardMetrics.totalDurationMs)} across {cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}
+                          {formatCompactDuration(cardMetrics.totalDurationMs)} across{' '}
+                          {cardMetrics.totalRuns} run{cardMetrics.totalRuns !== 1 ? 's' : ''}
                         </p>
                       </TooltipContent>
                     </Tooltip>

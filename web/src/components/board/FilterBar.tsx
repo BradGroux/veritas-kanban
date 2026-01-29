@@ -30,11 +30,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
 
   // Count active filters
-  const activeFilterCount = [
-    filters.search,
-    filters.project,
-    filters.type,
-  ].filter(Boolean).length;
+  const activeFilterCount = [filters.search, filters.project, filters.type].filter(Boolean).length;
 
   const clearAllFilters = () => {
     onFiltersChange({ search: '', project: null, type: null });
@@ -45,22 +41,31 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3 mb-4" role="search" aria-label="Filter tasks">
       {/* Search */}
       <div className="relative flex-1 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <label htmlFor="task-search" className="sr-only">
+          Search tasks
+        </label>
         <Input
+          id="task-search"
           placeholder="Search tasks..."
           value={filters.search}
           onChange={(e) => updateSearch(e.target.value)}
           className="pl-9 pr-9"
+          aria-describedby={activeFilterCount > 0 ? 'active-filter-count' : undefined}
         />
         {filters.search && (
           <button
             onClick={() => updateSearch('')}
+            aria-label="Clear search"
             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -73,7 +78,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         }
         disabled={projectsLoading}
       >
-        <SelectTrigger className="w-[160px]">
+        <SelectTrigger className="w-[160px]" aria-label="Filter by project">
           <SelectValue placeholder="All Projects" />
         </SelectTrigger>
         <SelectContent>
@@ -94,7 +99,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         }
         disabled={typesLoading}
       >
-        <SelectTrigger className="w-[160px]">
+        <SelectTrigger className="w-[160px]" aria-label="Filter by type">
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
         <SelectContent>
@@ -116,14 +121,15 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
       {/* Active filter indicator & clear */}
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="gap-1">
-            <Filter className="h-3 w-3" />
-            {activeFilterCount} active
+          <Badge id="active-filter-count" variant="secondary" className="gap-1" aria-live="polite">
+            <Filter className="h-3 w-3" aria-hidden="true" />
+            {activeFilterCount} active {activeFilterCount === 1 ? 'filter' : 'filters'}
           </Badge>
           <Button
             variant="ghost"
             size="sm"
             onClick={clearAllFilters}
+            aria-label="Clear all filters"
             className="text-muted-foreground hover:text-foreground"
           >
             Clear all

@@ -60,6 +60,8 @@ import { configRoutes } from './routes/config.js';
 import { agentRoutes } from './routes/agents.js';
 import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js';
 import { healthRouter, setHealthWss } from './routes/health.js';
+import { getPrometheusCollector } from './services/metrics/prometheus.js';
+import { metricsCollector } from './middleware/metrics-collector.js';
 
 const log = createLogger('server');
 
@@ -288,6 +290,22 @@ app.use(express.json({ limit: '1mb' }));
 
 // Health checks (liveness, readiness, deep diagnostics)
 app.use('/health', healthRouter);
+
+// ============================================
+// Prometheus Metrics (unauthenticated, for scraping)
+// ============================================
+// Returns metrics in Prometheus exposition text format.
+// Placed before authentication so Prometheus can scrape without credentials.
+app.get('/metrics', (_req, res) => {
+  const collector = getPrometheusCollector();
+  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.send(collector.scrape());
+});
+
+// Metrics collection middleware — records per-request HTTP metrics.
+// Placed after health/metrics endpoints so those aren't self-instrumented
+// (avoids metric noise from scraping itself).
+app.use(metricsCollector());
 
 // ============================================
 // API Documentation (Swagger UI) — unauthenticated
