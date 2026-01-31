@@ -30,7 +30,7 @@ export function Header() {
   setOpenChatPanel(() => setChatOpen(true));
 
   return (
-    <header className="border-b border-border bg-card" role="banner">
+    <header className="sticky top-0 z-50 border-b border-border bg-card" role="banner">
       <nav aria-label="Main navigation" className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-4">

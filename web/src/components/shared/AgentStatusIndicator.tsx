@@ -309,10 +309,7 @@ export function AgentStatusIndicator({
   if (isLoading && !data) {
     return (
       <div className={`flex items-center gap-2 min-w-[140px] md:min-w-[180px] ${className}`}>
-        <div
-          className="w-2.5 h-2.5 rounded-full bg-gray-400 opacity-50 shrink-0"
-          aria-hidden="true"
-        />
+        <div className="w-2 h-2 rounded-full bg-gray-400 opacity-50 shrink-0" aria-hidden="true" />
         <span className="text-sm text-muted-foreground hidden sm:inline">Loading...</span>
       </div>
     );
@@ -331,7 +328,7 @@ export function AgentStatusIndicator({
         >
           {/* The pulsing dot */}
           <div
-            className={`agent-status-dot w-2.5 h-2.5 rounded-full shrink-0 ${animationClass}`}
+            className={`agent-status-dot w-2 h-2 rounded-full shrink-0 ${animationClass}`}
             style={{
               backgroundColor: config.color,
               color: config.color,
