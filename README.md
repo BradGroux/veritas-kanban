@@ -32,7 +32,13 @@ Created by **Brad Groux** — CEO of [Digital Meld](https://digitalmeld.io), and
 
 ## ⚡ Quickstart
 
-Get up and running in under 5 minutes:
+Want to take the easy way out? Ask your agent (like [OpenClaw](https://github.com/openclaw/openclaw)):
+
+```
+Clone and set up veritas-kanban locally. Install dependencies with pnpm, copy the .env.example, and start the dev server. Verify it's running at localhost:3000.
+```
+
+Want to do it yourself? Get up and running in under 5 minutes:
 
 ```bash
 git clone https://github.com/BradGroux/veritas-kanban.git
