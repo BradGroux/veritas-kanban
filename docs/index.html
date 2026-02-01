@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veritas Kanban — Task Management Built for AI Agents</title>
+  <meta name="description" content="The open-source kanban board that speaks your agent's language. CLI-first, API-native, built for the age of agentic development. 190+ stars in 72 hours.">
+  <meta name="keywords" content="kanban, AI agents, task management, CLI, MCP, open source, developer tools, agentic development">
+  <meta name="author" content="Digital Meld">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Veritas Kanban — Task Management Built for AI Agents">
+  <meta property="og:description" content="The open-source kanban board that speaks your agent's language. CLI-first, API-native, built for the age of agentic development.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://github.com/BradGroux/veritas-kanban">
+  <meta property="og:image" content="https://raw.githubusercontent.com/BradGroux/veritas-kanban/main/assets/scr-main_overview_1.png">
+  <meta property="og:site_name" content="Veritas Kanban">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Veritas Kanban — Task Management Built for AI Agents">
+  <meta name="twitter:description" content="The open-source kanban board that speaks your agent's language. CLI-first, API-native, built for the age of agentic development.">
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/BradGroux/veritas-kanban/main/assets/scr-main_overview_1.png">
+  <meta name="twitter:creator" content="@BradGroux">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ========================================
+       CSS Reset & Base
+       ======================================== */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #06060b;
+      --bg-secondary: #0d0d14;
+      --bg-tertiary: #13131d;
+      --bg-card: #16161f;
+      --bg-card-hover: #1c1c28;
+      --bg-code: #0f0f18;
+      --border: #1e1e2e;
+      --border-subtle: #16161f;
+      --text-primary: #e8e8ed;
+      --text-secondary: #8888a0;
+      --text-tertiary: #5c5c72;
+      --accent: #8b5cf6;
+      --accent-hover: #a78bfa;
+      --accent-glow: rgba(139, 92, 246, 0.15);
+      --accent-glow-strong: rgba(139, 92, 246, 0.3);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.1);
+      --yellow: #eab308;
+      --cyan: #06b6d4;
+      --gradient-accent: linear-gradient(135deg, #8b5cf6, #06b6d4);
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --max-width: 1200px;
+      --section-padding: 120px 24px;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    a:hover {
+      color: var(--accent-hover);
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* ========================================
+       Layout
+       ======================================== */
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: var(--section-padding);
+    }
+
+    /* ========================================
+       Scroll Animations
+       ======================================== */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .fade-in-delay-1 { transition-delay: 0.1s; }
+    .fade-in-delay-2 { transition-delay: 0.2s; }
+    .fade-in-delay-3 { transition-delay: 0.3s; }
+    .fade-in-delay-4 { transition-delay: 0.4s; }
+
+    /* ========================================
+       Navigation
+       ======================================== */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 24px;
+      background: rgba(6, 6, 11, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background 0.3s ease;
+    }
+
+    nav .nav-inner {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    nav .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+
+    nav .nav-brand span {
+      font-size: 1.3rem;
+    }
+
+    nav .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    nav .nav-links a {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    nav .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      background: var(--accent);
+      color: #fff !important;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent-hover);
+      color: #fff !important;
+      transform: translateY(-1px);
+    }
+
+    .nav-mobile-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    /* ========================================
+       Hero Section
+       ======================================== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 140px 24px 100px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 200px;
+      background: linear-gradient(to top, var(--bg-primary), transparent);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--accent-hover);
+      margin-bottom: 32px;
+    }
+
+    .hero-badge .pulse {
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    .hero h1 {
+      font-size: clamp(3rem, 7vw, 5rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #fff 0%, #c4b5fd 50%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero .tagline {
+      font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .hero .subtitle {
+      font-size: clamp(0.95rem, 1.8vw, 1.125rem);
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 40px;
+      line-height: 1.6;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius-sm);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 30px var(--accent-glow-strong);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 0 40px var(--accent-glow-strong);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+      transform: translateY(-2px);
+    }
+
+    .hero-stars {
+      margin-bottom: 40px;
+    }
+
+    .hero-stars img {
+      height: 28px;
+    }
+
+    /* Terminal Mockup */
+    .terminal {
+      max-width: 580px;
+      margin: 0 auto;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      text-align: left;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(139, 92, 246, 0.1);
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff5f57; }
+    .terminal-dot.yellow { background: #febc2e; }
+    .terminal-dot.green { background: #28c840; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+    }
+
+    .terminal-body {
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.8;
+    }
+
+    .terminal-line {
+      display: block;
+      white-space: pre;
+    }
+
+    .terminal-prompt {
+      color: var(--green);
+    }
+
+    .terminal-command {
+      color: var(--text-primary);
+    }
+
+    .terminal-flag {
+      color: var(--cyan);
+    }
+
+    .terminal-string {
+      color: var(--yellow);
+    }
+
+    .terminal-output {
+      color: var(--text-tertiary);
+    }
+
+    .terminal-success {
+      color: var(--green);
+    }
+
+    .terminal-accent {
+      color: var(--accent-hover);
+    }
+
+    /* ========================================
+       Section Headings
+       ======================================== */
+    .section-label {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+
+    .section-subtitle {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      max-width: 640px;
+      line-height: 1.6;
+    }
+
+    .section-center {
+      text-align: center;
+    }
+
+    .section-center .section-subtitle {
+      margin: 0 auto;
+    }
+
+    /* ========================================
+       Problem Section
+       ======================================== */
+    .problem {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .problem-quote {
+      font-size: clamp(1.3rem, 3vw, 2rem);
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 24px;
+      color: var(--text-primary);
+      max-width: 700px;
+    }
+
+    .problem-quote em {
+      color: var(--accent-hover);
+      font-style: normal;
+    }
+
+    .problem-description {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 56px;
+      line-height: 1.7;
+    }
+
+    .pain-points {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .pain-point {
+      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.3s ease, transform 0.3s ease;
+    }
+
+    .pain-point:hover {
+      border-color: rgba(239, 68, 68, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .pain-icon {
+      font-size: 2rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .pain-point h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .pain-point p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ========================================
+       Solution Section
+       ======================================== */
+    .solution {
+      position: relative;
+    }
+
+    .solution-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 60px;
+      align-items: start;
+    }
+
+    .solution-card {
+      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .solution-card.before {
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .solution-card.before::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--red);
+      opacity: 0.6;
+    }
+
+    .solution-card.after {
+      border-color: rgba(34, 197, 94, 0.2);
+    }
+
+    .solution-card.after::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--green);
+      opacity: 0.6;
+    }
+
+    .solution-card-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+
+    .solution-card.before .solution-card-label { color: var(--red); }
+    .solution-card.after .solution-card-label { color: var(--green); }
+
+    .solution-card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+
+    .solution-card pre {
+      background: var(--bg-code);
+      padding: 20px;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .solution-card.after pre {
+      font-size: 0.9rem;
+      line-height: 2;
+    }
+
+    .solution-quote {
+      text-align: center;
+      margin-top: 48px;
+      padding: 32px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: var(--radius);
+    }
+
+    .solution-quote blockquote {
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-style: italic;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .solution-quote cite {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-style: normal;
+    }
+
+    /* ========================================
+       Feature Grid
+       ======================================== */
+    .features {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-top: 60px;
+    }
+
+    .feature-card {
+      padding: 28px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(139, 92, 246, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .feature-card p {
+      font-size: 0.825rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .feature-card code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: var(--bg-code);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-hover);
+    }
+
+    /* ========================================
+       Comparison Table
+       ======================================== */
+    .comparison {
+      overflow: hidden;
+    }
+
+    .comparison-table-wrapper {
+      overflow-x: auto;
+      margin-top: 60px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      min-width: 700px;
+    }
+
+    .comparison-table thead {
+      background: var(--bg-tertiary);
+    }
+
+    .comparison-table th {
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-table th:first-child {
+      color: var(--text-primary);
+    }
+
+    .comparison-table th.vk-col {
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .comparison-table td {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+
+    .comparison-table td:first-child {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .comparison-table td.vk-col {
+      background: rgba(139, 92, 246, 0.04);
+    }
+
+    .comparison-table tbody tr:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .check { color: var(--green); font-weight: 700; }
+    .cross { color: var(--text-tertiary); }
+    .partial { color: var(--yellow); }
+
+    /* ========================================
+       Version Highlight
+       ======================================== */
+    .version {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .version-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .version-item {
+      display: flex;
+      gap: 16px;
+      padding: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .version-item-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .version-item h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .version-item p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .version-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: var(--green-dim);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--green);
+      margin-bottom: 16px;
+    }
+
+    /* ========================================
+       Tech Stack
+       ======================================== */
+    .stack-items {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 60px;
+    }
+
+    .stack-item {
+      text-align: center;
+      padding: 32px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: all 0.3s ease;
+    }
+
+    .stack-item:hover {
+      border-color: rgba(139, 92, 246, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .stack-icon {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .stack-item h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .stack-item p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ========================================
+       Quick Start
+       ======================================== */
+    .quickstart {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .quickstart-terminal {
+      max-width: 680px;
+      margin: 48px auto 0;
+    }
+
+    .quickstart-terminal .terminal {
+      max-width: 100%;
+    }
+
+    .quickstart-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    /* ========================================
+       Social Proof
+       ======================================== */
+    .social-proof {
+      text-align: center;
+    }
+
+    .proof-stats {
+      display: flex;
+      justify-content: center;
+      gap: 64px;
+      margin: 48px 0;
+      flex-wrap: wrap;
+    }
+
+    .proof-stat {
+      text-align: center;
+    }
+
+    .proof-stat-number {
+      font-size: 3rem;
+      font-weight: 900;
+      background: var(--gradient-accent);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+
+    .proof-stat-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .proof-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+
+    .proof-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .proof-link:hover {
+      color: var(--accent-hover);
+    }
+
+    .proof-link svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ========================================
+       CTA Banner
+       ======================================== */
+    .cta-banner {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+      padding: 100px 24px;
+    }
+
+    .cta-banner h2 {
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .cta-banner p {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-banner .hero-ctas {
+      margin-bottom: 0;
+    }
+
+    /* ========================================
+       Footer
+       ======================================== */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 24px;
+      text-align: center;
+    }
+
+    .footer-inner {
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    .footer-brand {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .footer-meta {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+      line-height: 1.8;
+    }
+
+    .footer-motto {
+      font-style: italic;
+      color: var(--accent);
+      margin-top: 12px;
+      font-size: 0.85rem;
+    }
+
+    /* ========================================
+       Responsive
+       ======================================== */
+    @media (max-width: 1024px) {
+      .feature-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .stack-items {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --section-padding: 80px 20px;
+      }
+
+      nav .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: rgba(6, 6, 11, 0.97);
+        backdrop-filter: blur(20px);
+        padding: 20px 24px;
+        gap: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      nav .nav-links.open {
+        display: flex;
+      }
+
+      .nav-mobile-toggle {
+        display: block;
+      }
+
+      .hero {
+        padding: 120px 20px 80px;
+        min-height: auto;
+      }
+
+      .pain-points {
+        grid-template-columns: 1fr;
+      }
+
+      .solution-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .feature-card {
+        padding: 20px;
+      }
+
+      .version-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stack-items {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .proof-stats {
+        gap: 40px;
+      }
+
+      .terminal-body {
+        font-size: 0.75rem;
+        padding: 16px;
+      }
+
+      .btn {
+        padding: 12px 24px;
+        font-size: 0.9rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stack-items {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-ctas {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .proof-stats {
+        flex-direction: column;
+        gap: 24px;
+      }
+    }
+
+    /* ========================================
+       Print Styles
+       ======================================== */
+    @media print {
+      nav, .hero::before, .hero::after {
+        display: none;
+      }
+
+      body {
+        background: #fff;
+        color: #000;
+      }
+
+      section {
+        padding: 40px 0;
+      }
+
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+
+      a {
+        color: #000;
+        text-decoration: underline;
+      }
+
+      .terminal, .solution-card, .feature-card, .version-item, .stack-item, .pain-point {
+        border: 1px solid #ccc;
+        background: #f9f9f9;
+      }
+
+      .btn-primary, .btn-secondary {
+        border: 1px solid #000;
+        background: #fff;
+        color: #000;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============ Navigation ============ -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-brand" aria-label="Veritas Kanban home">
+        <span>⚖️</span> Veritas Kanban
+      </a>
+      <button class="nav-mobile-toggle" aria-label="Toggle navigation menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+      <ul class="nav-links">
+        <li><a href="#problem">Why</a></li>
+        <li><a href="#solution">Solution</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#comparison">Compare</a></li>
+        <li><a href="#quickstart">Quick Start</a></li>
+        <li><a href="https://github.com/BradGroux/veritas-kanban" target="_blank" rel="noopener" class="nav-cta">⭐ GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ============ Hero ============ -->
+  <section class="hero" id="hero">
+    <div class="hero-content">
+      <div class="hero-badge fade-in">
+        <span class="pulse"></span>
+        v1.4 just shipped — CLI workflow commands
+      </div>
+      <h1 class="fade-in fade-in-delay-1">Veritas Kanban</h1>
+      <p class="tagline fade-in fade-in-delay-2">Task management built for AI agents — not against them</p>
+      <p class="subtitle fade-in fade-in-delay-2">The open-source kanban board that speaks your agent's language. CLI-first, API-native, built for the age of agentic development.</p>
+      <div class="hero-ctas fade-in fade-in-delay-3">
+        <a href="https://github.com/BradGroux/veritas-kanban" target="_blank" rel="noopener" class="btn btn-primary">⭐ Star on GitHub</a>
+        <a href="https://github.com/BradGroux/veritas-kanban#-quickstart" target="_blank" rel="noopener" class="btn btn-secondary">Get Started →</a>
+      </div>
+      <div class="hero-stars fade-in fade-in-delay-3">
+        <a href="https://github.com/BradGroux/veritas-kanban/stargazers" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/github/stars/BradGroux/veritas-kanban?style=social" alt="GitHub stars" loading="lazy">
+        </a>
+      </div>
+      <div class="terminal fade-in fade-in-delay-4">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">~/my-project — vk</span>
+        </div>
+        <div class="terminal-body">
+          <span class="terminal-line"><span class="terminal-prompt">❯ </span><span class="terminal-command">vk begin</span> <span class="terminal-flag">US-42</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Status → in-progress</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Timer started</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Agent status → working</span></span>
+          <span class="terminal-line"></span>
+          <span class="terminal-line"><span class="terminal-output">  ⋯ work happens ⋯</span></span>
+          <span class="terminal-line"></span>
+          <span class="terminal-line"><span class="terminal-prompt">❯ </span><span class="terminal-command">vk done</span> <span class="terminal-flag">US-42</span> <span class="terminal-string">"Added OAuth2 with PKCE flow"</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Timer stopped (47m 23s)</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Status → done</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Comment added</span></span>
+          <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Agent status → idle</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Problem ============ -->
+  <section class="problem" id="problem">
+    <div class="container">
+      <div class="fade-in">
+        <span class="section-label">The Problem</span>
+        <p class="problem-quote">Your AI agent can write code in seconds.<br>But managing tasks? That's still <em>6 API calls and a prayer.</em></p>
+        <p class="problem-description">Every project management tool was built for humans clicking buttons. Your agent needs an API-native system that treats task management as code — not an afterthought.</p>
+      </div>
+      <div class="pain-points">
+        <div class="pain-point fade-in fade-in-delay-1">
+          <span class="pain-icon">🔗</span>
+          <h3>API Gymnastics</h3>
+          <p>6+ curl commands to move a task through its lifecycle. Status update, timer start, agent status, timer stop, completion comment, status done. Every. Single. Time.</p>
+        </div>
+        <div class="pain-point fade-in fade-in-delay-2">
+          <span class="pain-icon">🖱️</span>
+          <h3>Built for Clicks</h3>
+          <p>Jira, Linear, Notion — beautiful UIs for humans. Hostile APIs for agents. Your AI shouldn't need a browser to update a task.</p>
+        </div>
+        <div class="pain-point fade-in fade-in-delay-3">
+          <span class="pain-icon">🔒</span>
+          <h3>Vendor Lock-in</h3>
+          <p>Cloud-only, proprietary formats, pay-per-seat. Your task data locked behind someone else's API. No local dev, no file access, no control.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Solution ============ -->
+  <section class="solution" id="solution">
+    <div class="container">
+      <div class="section-center fade-in">
+        <span class="section-label">The Solution</span>
+        <h2 class="section-title">Two commands. Full lifecycle.</h2>
+        <p class="section-subtitle"><code style="font-family: var(--font-mono); background: var(--bg-code); padding: 2px 8px; border-radius: 4px; color: var(--accent-hover);">vk begin</code> and <code style="font-family: var(--font-mono); background: var(--bg-code); padding: 2px 8px; border-radius: 4px; color: var(--accent-hover);">vk done</code> replace 6 API calls with 2 commands.</p>
+      </div>
+      <div class="solution-grid">
+        <div class="solution-card before fade-in">
+          <div class="solution-card-label">Before — 6 separate curl calls</div>
+          <div class="solution-card-title">The old way</div>
+          <pre><code><span style="color:var(--text-tertiary)"># Start working</span>
+curl -X PATCH .../tasks/&lt;id&gt; \
+  -d '{"status":"in-progress"}'
+curl -X POST .../tasks/&lt;id&gt;/time/start
+curl -X POST .../agent/status \
+  -d '{"status":"working"}'
+
+<span style="color:var(--text-tertiary)"># Finish up</span>
+curl -X POST .../tasks/&lt;id&gt;/time/stop
+curl -X PATCH .../tasks/&lt;id&gt; \
+  -d '{"status":"done"}'
+curl -X POST .../tasks/&lt;id&gt;/comments \
+  -d '{"text":"summary"}'</code></pre>
+        </div>
+        <div class="solution-card after fade-in fade-in-delay-1">
+          <div class="solution-card-label">After — 2 commands</div>
+          <div class="solution-card-title">The Veritas way</div>
+          <pre><code><span style="color:var(--green)">❯</span> <span style="color:var(--text-primary)">vk begin</span> <span style="color:var(--cyan)">US-42</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Status → in-progress</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Timer started</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Agent status → working</span>
+
+
+<span style="color:var(--green)">❯</span> <span style="color:var(--text-primary)">vk done</span> <span style="color:var(--cyan)">US-42</span> <span style="color:var(--yellow)">"Added OAuth2"</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Timer stopped (47m 23s)</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Status → done</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Comment added</span>
+<span style="color:var(--green)">✓</span> <span style="color:var(--text-tertiary)">Agent status → idle</span></code></pre>
+        </div>
+      </div>
+      <div class="solution-quote fade-in">
+        <blockquote>"Automate everything you do twice."</blockquote>
+        <cite>— Boris Cherny, creator of Claude Code</cite>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Features ============ -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-center fade-in">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything your agent needs.</h2>
+        <p class="section-subtitle">18 CLI subcommands, full REST API, MCP integration, and a beautiful UI for when you want to look at the board yourself.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card fade-in">
+          <span class="feature-icon">🤖</span>
+          <h3>Agent-First Design</h3>
+          <p>Built for AI agents from day one — not retrofitted onto a human tool.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-1">
+          <span class="feature-icon">⌨️</span>
+          <h3>CLI Workflow</h3>
+          <p><code>vk begin</code>, <code>vk done</code>, and 18 subcommands for full lifecycle control.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-2">
+          <span class="feature-icon">⏱️</span>
+          <h3>Time Tracking</h3>
+          <p>Automatic timer management. Start, stop, manual entries — all from CLI or API.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-3">
+          <span class="feature-icon">📋</span>
+          <h3>Planning Phase</h3>
+          <p>Plan before you execute. Subtasks, dependencies, and verification checklists.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <span class="feature-icon">✅</span>
+          <h3>Verification Checklists</h3>
+          <p>Done criteria that enforce quality. Every task has a definition of done.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-1">
+          <span class="feature-icon">🔄</span>
+          <h3>GitHub Issues Sync</h3>
+          <p>Bidirectional, label-based. Import issues, push status changes back.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-2">
+          <span class="feature-icon">📊</span>
+          <h3>Activity Feed</h3>
+          <p>Real-time, filterable chronological feed. Know what every agent is doing.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-3">
+          <span class="feature-icon">🧩</span>
+          <h3>MCP Server</h3>
+          <p>Model Context Protocol for Claude Desktop and any MCP-compatible assistant.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <span class="feature-icon">🔌</span>
+          <h3>REST API</h3>
+          <p>Full lifecycle management. If it can make HTTP calls, it can drive the board.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-1">
+          <span class="feature-icon">📈</span>
+          <h3>Daily Standups</h3>
+          <p>Auto-generated standup reports. Completed, in-progress, blocked, upcoming.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-2">
+          <span class="feature-icon">🏷️</span>
+          <h3>Sprint Management</h3>
+          <p>Time-boxed iterations with auto-archive, velocity tracking, and sprint filtering.</p>
+        </div>
+        <div class="feature-card fade-in fade-in-delay-3">
+          <span class="feature-icon">🔒</span>
+          <h3>Security</h3>
+          <p>API key auth, JWT, CORS, rate limiting, CSP headers, XSS prevention. Production-ready.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Comparison ============ -->
+  <section class="comparison" id="comparison">
+    <div class="container">
+      <div class="section-center fade-in">
+        <span class="section-label">Compare</span>
+        <h2 class="section-title">Built for agents. Loved by humans.</h2>
+        <p class="section-subtitle">Veritas Kanban is the only task board built from the ground up for AI agent workflows.</p>
+      </div>
+      <div class="comparison-table-wrapper fade-in">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="vk-col">Veritas Kanban</th>
+              <th>Jira</th>
+              <th>Linear</th>
+              <th>Plane</th>
+              <th>Planka</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Open source</td>
+              <td class="vk-col"><span class="check">✅ MIT</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="partial">⚠️ AGPL</span></td>
+              <td><span class="partial">⚠️ Fair Use</span></td>
+            </tr>
+            <tr>
+              <td>Local-first</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="partial">⚠️ Self-host</span></td>
+              <td><span class="partial">⚠️ Self-host</span></td>
+            </tr>
+            <tr>
+              <td>AI agent orchestration</td>
+              <td class="vk-col"><span class="check">✅ Native</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>MCP server</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>CLI</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>Git worktree integration</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>Code review built-in</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>Markdown file storage</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>No database required</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>Time tracking</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="partial">⚠️ Addon</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td>REST API</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="check">✅</span></td>
+            </tr>
+            <tr>
+              <td>Free forever</td>
+              <td class="vk-col"><span class="check">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="partial">⚠️ Limits</span></td>
+              <td><span class="check">✅</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Version Highlight ============ -->
+  <section class="version" id="version">
+    <div class="container">
+      <div class="fade-in">
+        <span class="section-label">What's New</span>
+        <h2 class="section-title">v1.4 — Just Shipped</h2>
+        <span class="version-tag">🚀 Latest Release</span>
+      </div>
+      <div class="version-grid">
+        <div class="version-item fade-in">
+          <span class="version-item-icon">⚡</span>
+          <div>
+            <h3>CLI Workflow Commands</h3>
+            <p><code style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-code); padding: 2px 6px; border-radius: 4px; color: var(--accent-hover);">vk begin</code> and <code style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-code); padding: 2px 6px; border-radius: 4px; color: var(--accent-hover);">vk done</code> replace 6 API calls with 2 commands. Plus <code style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-code); padding: 2px 6px; border-radius: 4px; color: var(--accent-hover);">vk block</code> and <code style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-code); padding: 2px 6px; border-radius: 4px; color: var(--accent-hover);">vk unblock</code>.</p>
+          </div>
+        </div>
+        <div class="version-item fade-in fade-in-delay-1">
+          <span class="version-item-icon">⏱️</span>
+          <div>
+            <h3>Time Tracking CLI</h3>
+            <p>Full time management from the terminal. Start, stop, manual entries, and summaries with <code style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--bg-code); padding: 2px 6px; border-radius: 4px; color: var(--accent-hover);">vk time</code>.</p>
+          </div>
+        </div>
+        <div class="version-item fade-in fade-in-delay-2">
+          <span class="version-item-icon">💬</span>
+          <div>
+            <h3>Comments & Agent Status CLI</h3>
+            <p>Add comments and manage agent presence from the terminal. Full lifecycle without touching a browser.</p>
+          </div>
+        </div>
+        <div class="version-item fade-in fade-in-delay-3">
+          <span class="version-item-icon">📦</span>
+          <div>
+            <h3>18 Subcommands, 651 Lines</h3>
+            <p>5 new command modules covering workflows, time tracking, comments, agent status, and project management.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Tech Stack ============ -->
+  <section class="stack" id="stack">
+    <div class="container">
+      <div class="section-center fade-in">
+        <span class="section-label">Tech Stack</span>
+        <h2 class="section-title">Modern. Minimal. Fast.</h2>
+        <p class="section-subtitle">No database required. File-based storage means your tasks are plain markdown you can grep, diff, and version control.</p>
+      </div>
+      <div class="stack-items">
+        <div class="stack-item fade-in">
+          <span class="stack-icon">⚛️</span>
+          <h3>Frontend</h3>
+          <p>React 19 + TypeScript<br>Vite 6 + Tailwind CSS<br>shadcn/ui components</p>
+        </div>
+        <div class="stack-item fade-in fade-in-delay-1">
+          <span class="stack-icon">🟢</span>
+          <h3>Backend</h3>
+          <p>Node.js + Express<br>WebSocket real-time<br>TypeScript strict mode</p>
+        </div>
+        <div class="stack-item fade-in fade-in-delay-2">
+          <span class="stack-icon">📄</span>
+          <h3>Storage</h3>
+          <p>Markdown + YAML frontmatter<br>No database required<br>Human-readable files</p>
+        </div>
+        <div class="stack-item fade-in fade-in-delay-3">
+          <span class="stack-icon">🧪</span>
+          <h3>Testing</h3>
+          <p>1,143+ unit tests (Vitest)<br>19 E2E tests (Playwright)<br>CI/CD with GitHub Actions</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Quick Start ============ -->
+  <section class="quickstart" id="quickstart">
+    <div class="container">
+      <div class="section-center fade-in">
+        <span class="section-label">Quick Start</span>
+        <h2 class="section-title">Up and running in 60 seconds.</h2>
+        <p class="section-subtitle">Clone, install, run. The board auto-seeds with example tasks so you can explore immediately.</p>
+      </div>
+      <div class="quickstart-terminal fade-in">
+        <div class="terminal">
+          <div class="terminal-header">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <span class="terminal-title">Terminal</span>
+          </div>
+          <div class="terminal-body">
+            <span class="terminal-line"><span class="terminal-prompt">❯ </span><span class="terminal-command">git clone</span> <span class="terminal-string">https://github.com/BradGroux/veritas-kanban.git</span></span>
+            <span class="terminal-line"><span class="terminal-prompt">❯ </span><span class="terminal-command">cd</span> <span class="terminal-flag">veritas-kanban</span></span>
+            <span class="terminal-line"><span class="terminal-prompt">❯ </span><span class="terminal-command">pnpm install</span> <span class="terminal-flag">&&</span> <span class="terminal-command">pnpm dev</span></span>
+            <span class="terminal-line"></span>
+            <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">Board running at </span><span class="terminal-accent">http://localhost:3000</span></span>
+            <span class="terminal-line"><span class="terminal-success">✓</span> <span class="terminal-output">API running at  </span><span class="terminal-accent">http://localhost:3001</span></span>
+          </div>
+        </div>
+      </div>
+      <p class="quickstart-note fade-in">Or ask your AI agent: <em>"Clone and set up veritas-kanban locally."</em></p>
+    </div>
+  </section>
+
+  <!-- ============ Social Proof ============ -->
+  <section class="social-proof" id="community">
+    <div class="container">
+      <div class="fade-in">
+        <span class="section-label">Community</span>
+        <h2 class="section-title">Growing fast.</h2>
+      </div>
+      <div class="proof-stats fade-in">
+        <div class="proof-stat">
+          <div class="proof-stat-number">190+</div>
+          <div class="proof-stat-label">GitHub stars in 72 hours</div>
+        </div>
+        <div class="proof-stat">
+          <div class="proof-stat-number">1,143</div>
+          <div class="proof-stat-label">Unit tests passing</div>
+        </div>
+        <div class="proof-stat">
+          <div class="proof-stat-number">4</div>
+          <div class="proof-stat-label">Major releases shipped</div>
+        </div>
+      </div>
+      <div class="hero-stars fade-in">
+        <a href="https://github.com/BradGroux/veritas-kanban/stargazers" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/github/stars/BradGroux/veritas-kanban?style=for-the-badge&logo=github&label=Stars&color=8b5cf6" alt="GitHub stars" loading="lazy">
+        </a>
+      </div>
+      <div class="proof-links fade-in">
+        <a href="https://github.com/BradGroux/veritas-kanban" target="_blank" rel="noopener" class="proof-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHub Repository
+        </a>
+        <a href="https://github.com/BradGroux/veritas-kanban/discussions" target="_blank" rel="noopener" class="proof-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v9.5A1.75 1.75 0 0 1 14.25 14H8.061l-2.574 2.573A1.458 1.458 0 0 1 3 15.543V14H1.75A1.75 1.75 0 0 1 0 12.25v-9.5C0 1.784.784 1 1.75 1ZM1.5 2.75v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Z"/><path d="M22.5 8.75a.25.25 0 0 0-.25-.25h-3.5a.75.75 0 0 1 0-1.5h3.5c.966 0 1.75.784 1.75 1.75v9.5A1.75 1.75 0 0 1 22.25 20H21v1.543a1.457 1.457 0 0 1-2.487 1.03L15.939 20H10.75A1.75 1.75 0 0 1 9 18.25v-1.465a.75.75 0 0 1 1.5 0v1.465c0 .138.112.25.25.25h5.5a.749.749 0 0 1 .53.22l2.72 2.72v-2.19a.75.75 0 0 1 .75-.75h2a.25.25 0 0 0 .25-.25v-9.5Z"/></svg>
+          Discussions
+        </a>
+        <a href="https://github.com/BradGroux/veritas-kanban/issues" target="_blank" rel="noopener" class="proof-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 7Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/><path d="M12 1c6.075 0 11 4.925 11 11s-4.925 11-11 11S1 18.075 1 12 5.925 1 12 1ZM2.5 12a9.5 9.5 0 0 0 9.5 9.5 9.5 9.5 0 0 0 9.5-9.5A9.5 9.5 0 0 0 12 2.5 9.5 9.5 0 0 0 2.5 12Z"/></svg>
+          Report Issues
+        </a>
+        <a href="https://digitalmeld.io" target="_blank" rel="noopener" class="proof-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          Built by Digital Meld
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA Banner ============ -->
+  <section class="cta-banner">
+    <div class="container">
+      <div class="fade-in">
+        <h2>Ready to build with agents?</h2>
+        <p>Star the repo, clone it, and ship your first agent-managed task in under a minute.</p>
+      </div>
+      <div class="hero-ctas fade-in">
+        <a href="https://github.com/BradGroux/veritas-kanban" target="_blank" rel="noopener" class="btn btn-primary">⭐ Star on GitHub</a>
+        <a href="https://github.com/BradGroux/veritas-kanban#-quickstart" target="_blank" rel="noopener" class="btn btn-secondary">Get Started →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Footer ============ -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span>⚖️</span> Veritas Kanban
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/BradGroux/veritas-kanban" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/BradGroux/veritas-kanban/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+        <a href="https://github.com/BradGroux/veritas-kanban/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/BradGroux/veritas-kanban/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+        <a href="https://digitalmeld.io" target="_blank" rel="noopener">Digital Meld</a>
+      </div>
+      <div class="footer-meta">
+        Prepared by <strong>Digital Meld</strong> · <a href="https://digitalmeld.io" target="_blank" rel="noopener" style="color: var(--text-tertiary);">digitalmeld.io</a>
+      </div>
+      <div class="footer-motto">Veritas in actis — Truth in action</div>
+    </div>
+  </footer>
+
+  <!-- ============ Scroll Animation JS ============ -->
+  <script>
+    // IntersectionObserver for fade-in animations
+    (function() {
+      const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      });
+
+      document.querySelectorAll('.fade-in').forEach(function(el) {
+        observer.observe(el);
+      });
+
+      // Close mobile nav on link click
+      document.querySelectorAll('.nav-links a').forEach(function(link) {
+        link.addEventListener('click', function() {
+          document.querySelector('.nav-links').classList.remove('open');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
