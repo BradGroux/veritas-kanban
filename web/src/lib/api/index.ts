@@ -11,6 +11,7 @@ import { diffApi, conflictsApi, githubApi } from './diff';
 import { templatesApi, taskTypesApi, sprintsApi, activityApi, attachmentsApi } from './entities';
 import { timeApi, statusHistoryApi } from './time';
 import { chatApi } from './chat';
+import { integrationsApi } from './integrations';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -31,6 +32,7 @@ export const api = {
   time: timeApi,
   statusHistory: statusHistoryApi,
   chat: chatApi,
+  integrations: integrationsApi,
 };
 
 // Re-export managed list helper

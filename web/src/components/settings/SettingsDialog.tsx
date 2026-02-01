@@ -34,6 +34,7 @@ import {
   Upload,
   RotateCcw,
   Shield,
+  Plug,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,9 @@ const LazyManageTab = lazy(() =>
 const LazySecurityTab = lazy(() =>
   import('./tabs/SecurityTab').then((m) => ({ default: m.SecurityTab }))
 );
+const LazyIntegrationsTab = lazy(() =>
+  import('./tabs/IntegrationsTab').then((m) => ({ default: m.IntegrationsTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -82,6 +86,7 @@ type TabId =
   | 'board'
   | 'tasks'
   | 'agents'
+  | 'integrations'
   | 'data'
   | 'notifications'
   | 'security'
@@ -98,6 +103,7 @@ const TABS: TabDef[] = [
   { id: 'board', label: 'Board', icon: Layout },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
   { id: 'agents', label: 'Agents', icon: Cpu },
+  { id: 'integrations', label: 'Integrations', icon: Plug },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
@@ -262,6 +268,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'agents' && (
           <SettingsErrorBoundary tabName="Agents">
             <LazyAgentsTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'integrations' && (
+          <SettingsErrorBoundary tabName="Integrations">
+            <LazyIntegrationsTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'data' && (

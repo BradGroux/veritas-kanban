@@ -5,3 +5,4 @@ export { AgentsTab } from './AgentsTab';
 export { DataTab } from './DataTab';
 export { NotificationsTab } from './NotificationsTab';
 export { ManageTab } from './ManageTab';
+export { IntegrationsTab } from './IntegrationsTab';
