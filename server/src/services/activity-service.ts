@@ -26,13 +26,22 @@ export interface Activity {
   type: ActivityType;
   taskId: string;
   taskTitle: string;
+  agent?: string;
   details?: Record<string, unknown>;
   timestamp: string;
 }
 
+export interface ActivityFilters {
+  agent?: string;
+  type?: ActivityType;
+  taskId?: string;
+  since?: string;
+  until?: string;
+}
+
 export class ActivityService {
   private activityFile: string;
-  private readonly MAX_ACTIVITIES = 1000; // Limit to prevent unbounded memory growth
+  private readonly MAX_ACTIVITIES = 5000; // Increased from 1000 for longer history
 
   constructor() {
     this.activityFile = join(process.cwd(), '.veritas-kanban', 'activity.json');
@@ -44,7 +53,10 @@ export class ActivityService {
     await mkdir(dir, { recursive: true });
   }
 
-  async getActivities(limit: number = 50): Promise<Activity[]> {
+  /**
+   * Load all activities from disk (already sorted newest-first).
+   */
+  private async loadAll(): Promise<Activity[]> {
     await this.ensureDir();
 
     if (!(await fileExists(this.activityFile))) {
@@ -53,19 +65,80 @@ export class ActivityService {
 
     try {
       const content = await readFile(this.activityFile, 'utf-8');
-      const activities: Activity[] = JSON.parse(content);
-      return activities.slice(0, limit);
+      return JSON.parse(content) as Activity[];
     } catch {
       // Intentionally silent: file may not exist or contain invalid JSON — return empty list
       return [];
     }
   }
 
+  async getActivities(limit: number = 50, filters?: ActivityFilters): Promise<Activity[]> {
+    let activities = await this.loadAll();
+
+    // Apply filters
+    if (filters) {
+      if (filters.agent) {
+        const agentLower = filters.agent.toLowerCase();
+        activities = activities.filter((a) => a.agent?.toLowerCase() === agentLower);
+      }
+      if (filters.type) {
+        activities = activities.filter((a) => a.type === filters.type);
+      }
+      if (filters.taskId) {
+        activities = activities.filter((a) => a.taskId === filters.taskId);
+      }
+      if (filters.since) {
+        const sinceDate = new Date(filters.since).getTime();
+        activities = activities.filter((a) => new Date(a.timestamp).getTime() >= sinceDate);
+      }
+      if (filters.until) {
+        const untilDate = new Date(filters.until).getTime();
+        activities = activities.filter((a) => new Date(a.timestamp).getTime() <= untilDate);
+      }
+    }
+
+    return activities.slice(0, limit);
+  }
+
+  /**
+   * Return total count of activities matching the given filters (for pagination).
+   */
+  async countActivities(filters?: ActivityFilters): Promise<number> {
+    // Re-use getActivities with a high limit to count — simpler than duplicating filter logic
+    const all = await this.getActivities(this.MAX_ACTIVITIES, filters);
+    return all.length;
+  }
+
+  /**
+   * Return distinct agent names found in the activity log.
+   */
+  async getDistinctAgents(): Promise<string[]> {
+    const activities = await this.loadAll();
+    const agents = new Set<string>();
+    for (const a of activities) {
+      if (a.agent) agents.add(a.agent);
+    }
+    return [...agents].sort();
+  }
+
+  /**
+   * Return distinct activity types found in the activity log.
+   */
+  async getDistinctTypes(): Promise<ActivityType[]> {
+    const activities = await this.loadAll();
+    const types = new Set<ActivityType>();
+    for (const a of activities) {
+      types.add(a.type);
+    }
+    return [...types].sort();
+  }
+
   async logActivity(
     type: ActivityType,
     taskId: string,
     taskTitle: string,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    agent?: string
   ): Promise<Activity> {
     await this.ensureDir();
 
@@ -74,6 +147,7 @@ export class ActivityService {
       type,
       taskId,
       taskTitle,
+      ...(agent && { agent }),
       details,
       timestamp: new Date().toISOString(),
     };

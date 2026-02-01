@@ -153,7 +153,7 @@ describe('Activity Routes', () => {
     mockActivityService.getActivities.mockResolvedValue([]);
     const res = await request(app).get('/api/activity?limit=10');
     expect(res.status).toBe(200);
-    expect(mockActivityService.getActivities).toHaveBeenCalledWith(10);
+    expect(mockActivityService.getActivities).toHaveBeenCalledWith(10, undefined);
   });
 
   it('DELETE / should clear activities', async () => {

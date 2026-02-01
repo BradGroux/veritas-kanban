@@ -172,9 +172,25 @@ export const sprintsApi = {
 };
 
 export const activityApi = {
-  list: async (limit: number = 50): Promise<Activity[]> => {
-    const response = await fetch(`${API_BASE}/activity?limit=${limit}`);
+  list: async (
+    limit: number = 50,
+    filters?: ActivityFilters,
+    page?: number
+  ): Promise<Activity[]> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (page && page > 0) params.set('page', String(page));
+    if (filters?.agent) params.set('agent', filters.agent);
+    if (filters?.type) params.set('type', filters.type);
+    if (filters?.taskId) params.set('taskId', filters.taskId);
+    if (filters?.since) params.set('since', filters.since);
+    if (filters?.until) params.set('until', filters.until);
+    const response = await fetch(`${API_BASE}/activity?${params.toString()}`);
     return handleResponse<Activity[]>(response);
+  },
+
+  filters: async (): Promise<ActivityFilterOptions> => {
+    const response = await fetch(`${API_BASE}/activity/filters`);
+    return handleResponse<ActivityFilterOptions>(response);
   },
 
   clear: async (): Promise<void> => {
@@ -226,15 +242,34 @@ export type ActivityType =
   | 'task_archived'
   | 'task_deleted'
   | 'worktree_created'
-  | 'worktree_merged';
+  | 'worktree_merged'
+  | 'project_archived'
+  | 'sprint_archived'
+  | 'template_applied'
+  | 'comment_added'
+  | 'comment_deleted';
 
 export interface Activity {
   id: string;
   type: ActivityType;
   taskId: string;
   taskTitle: string;
+  agent?: string;
   details?: Record<string, unknown>;
   timestamp: string;
+}
+
+export interface ActivityFilters {
+  agent?: string;
+  type?: ActivityType;
+  taskId?: string;
+  since?: string;
+  until?: string;
+}
+
+export interface ActivityFilterOptions {
+  agents: string[];
+  types: ActivityType[];
 }
 
 // Attachment types

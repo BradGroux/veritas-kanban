@@ -323,6 +323,7 @@ export class TaskService {
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
+        github: data.github,
         attempt: data.attempt,
         attempts: data.attempts,
         reviewComments,
@@ -430,7 +431,12 @@ export class TaskService {
     if (!task) return null;
 
     // Handle git field separately to merge properly
-    const { git: gitUpdate, blockedReason: blockedReasonUpdate, ...restInput } = input;
+    const {
+      git: gitUpdate,
+      github: githubUpdate,
+      blockedReason: blockedReasonUpdate,
+      ...restInput
+    } = input;
 
     // Compute filenames for locking. We use the tentative updated task
     // to determine the new filename (title may have changed).
@@ -454,6 +460,7 @@ export class TaskService {
         ...freshTask,
         ...restInput,
         git: gitUpdate ? ({ ...freshTask.git, ...gitUpdate } as Task['git']) : freshTask.git,
+        github: githubUpdate ?? freshTask.github,
         // Handle blockedReason: null means clear, undefined means keep existing
         blockedReason:
           blockedReasonUpdate === null

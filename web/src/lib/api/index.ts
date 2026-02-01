@@ -63,7 +63,14 @@ export type {
   CreatePRInput,
 } from './diff';
 
-export type { ActivityType, Activity, AttachmentUploadResponse, TaskContext } from './entities';
+export type {
+  ActivityType,
+  Activity,
+  ActivityFilters,
+  ActivityFilterOptions,
+  AttachmentUploadResponse,
+  TaskContext,
+} from './entities';
 
 export type {
   TimeSummary,

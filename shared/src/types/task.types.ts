@@ -113,6 +113,12 @@ export const ALLOWED_MIME_TYPES = [
   'text/yaml',
 ];
 
+/** Cross-reference linking a kanban task to a GitHub Issue */
+export interface TaskGitHub {
+  issueNumber: number;
+  repo: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -130,6 +136,9 @@ export interface Task {
 
   // Code task specific
   git?: TaskGit;
+
+  // GitHub Issue cross-reference
+  github?: TaskGitHub;
 
   // Current attempt
   attempt?: TaskAttempt;
@@ -214,6 +223,7 @@ export interface UpdateTaskInput {
   sprint?: string;
   agent?: AgentType | 'auto';
   git?: Partial<TaskGit>;
+  github?: TaskGitHub;
   attempt?: TaskAttempt;
   reviewComments?: ReviewComment[];
   review?: ReviewState;
@@ -260,6 +270,7 @@ export interface TaskSummary {
   blockedReason?: BlockedReason;
   position?: number;
   attachmentCount?: number;
+  github?: TaskGitHub;
   timeTracking?: {
     totalSeconds: number;
     isRunning: boolean;

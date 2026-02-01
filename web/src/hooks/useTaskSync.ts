@@ -47,6 +47,10 @@ export function useTaskSync(): {
           queryClient.invalidateQueries({ queryKey: ['tasks', 'archived'] });
           queryClient.invalidateQueries({ queryKey: ['tasks', 'archive-suggestions'] });
         }
+
+        // Invalidate activity feed so new events appear in real-time
+        queryClient.invalidateQueries({ queryKey: ['activities'] });
+        queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
       }
     },
     [queryClient]

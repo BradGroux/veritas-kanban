@@ -2,6 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getTaskService } from '../services/task-service.js';
 import { activityService } from '../services/activity-service.js';
+import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText, sanitizeAuthor } from '../utils/sanitize.js';
@@ -48,10 +49,25 @@ router.post(
     const updatedTask = await taskService.updateTask(req.params.id as string, { comments });
 
     // Log activity
-    await activityService.logActivity('comment_added', task.id, task.title, {
-      author,
-      preview: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-    });
+    await activityService.logActivity(
+      'comment_added',
+      task.id,
+      task.title,
+      {
+        author,
+        preview: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+      },
+      task.agent
+    );
+
+    // Outbound sync: post comment to linked GitHub issue (fire-and-forget)
+    if (task.github) {
+      getGitHubSyncService()
+        .syncCommentToGitHub(task, `**${author}:** ${text}`)
+        .catch(() => {
+          /* intentionally silent — don't fail the API call */
+        });
+    }
 
     res.status(201).json(updatedTask);
   })
@@ -114,9 +130,15 @@ router.delete(
       comments: filtered,
     });
 
-    await activityService.logActivity('comment_deleted', task.id, task.title, {
-      commentId: req.params.commentId as string,
-    });
+    await activityService.logActivity(
+      'comment_deleted',
+      task.id,
+      task.title,
+      {
+        commentId: req.params.commentId as string,
+      },
+      task.agent
+    );
 
     res.json(updatedTask);
   })

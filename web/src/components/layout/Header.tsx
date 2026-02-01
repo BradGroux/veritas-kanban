@@ -1,4 +1,12 @@
-import { Plus, Settings, Keyboard, Activity, Archive, MessageSquare } from 'lucide-react';
+import {
+  Plus,
+  Settings,
+  Keyboard,
+  Activity,
+  ListOrdered,
+  Archive,
+  MessageSquare,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
@@ -10,6 +18,7 @@ import { AgentStatusIndicator } from '@/components/shared/AgentStatusIndicator';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
 import { useState, useCallback } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
+import { useView } from '@/contexts/ViewContext';
 
 export function Header() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -19,6 +28,7 @@ export function Header() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const { setOpenCreateDialog, setOpenChatPanel, openHelpDialog } = useKeyboard();
+  const { view, setView } = useView();
 
   const openSecuritySettings = useCallback(() => {
     setSettingsTab('security');
@@ -68,6 +78,15 @@ export function Header() {
               title="Activity log"
             >
               <Activity className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'activity' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'activity' ? 'board' : 'activity')}
+              aria-label="Activity feed"
+              title="Activity feed"
+            >
+              <ListOrdered className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"

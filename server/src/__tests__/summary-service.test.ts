@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SummaryService } from '../services/summary-service.js';
 import type { Task } from '@veritas-kanban/shared';
+import type { Activity } from '../services/activity-service.js';
 
 // Helper to create a minimal task for testing
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -252,6 +253,276 @@ describe('SummaryService', () => {
       const result = service.generateMemoryMarkdown(tasks);
       expect(result).toContain('### Project Progress');
       expect(result).toContain('**alpha**');
+    });
+  });
+
+  describe('getStandupData', () => {
+    const targetDate = new Date('2026-02-01T12:00:00');
+
+    function makeActivity(overrides: Partial<Activity> = {}): Activity {
+      return {
+        id: `activity_${Math.random().toString(36).substring(7)}`,
+        type: 'task_updated',
+        taskId: 'task_123',
+        taskTitle: 'Test Task',
+        timestamp: '2026-02-01T10:00:00.000Z',
+        ...overrides,
+      };
+    }
+
+    it('should return empty standup for no tasks', () => {
+      const result = service.getStandupData([], [], targetDate);
+      expect(result.date).toBe('2026-02-01');
+      expect(result.completed).toHaveLength(0);
+      expect(result.inProgress).toHaveLength(0);
+      expect(result.blocked).toHaveLength(0);
+      expect(result.upcoming).toHaveLength(0);
+      expect(result.activity).toHaveLength(0);
+      expect(result.stats.tasksCompleted).toBe(0);
+    });
+
+    it('should find tasks completed on target date', () => {
+      const tasks = [
+        makeTask({
+          status: 'done',
+          updated: '2026-02-01T15:00:00.000Z',
+          title: 'Done Today',
+          agent: 'Veritas',
+          timeTracking: {
+            entries: [
+              {
+                id: 'time_1',
+                startTime: '2026-02-01T14:00:00.000Z',
+                endTime: '2026-02-01T15:00:00.000Z',
+                duration: 3600,
+              },
+            ],
+            totalSeconds: 3600,
+            isRunning: false,
+          },
+        }),
+        makeTask({
+          status: 'done',
+          updated: '2026-01-30T10:00:00.000Z',
+          title: 'Done Earlier',
+        }),
+      ];
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.completed).toHaveLength(1);
+      expect(result.completed[0].title).toBe('Done Today');
+      expect(result.completed[0].agent).toBe('Veritas');
+      expect(result.completed[0].timeSpent).toBeGreaterThan(0);
+    });
+
+    it('should find in-progress tasks', () => {
+      const tasks = [
+        makeTask({ status: 'in-progress', title: 'Working on it', agent: 'Veritas' }),
+        makeTask({ status: 'todo', title: 'Not started' }),
+      ];
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.inProgress).toHaveLength(1);
+      expect(result.inProgress[0].title).toBe('Working on it');
+    });
+
+    it('should find blocked tasks with reasons', () => {
+      const tasks = [
+        makeTask({
+          status: 'blocked',
+          title: 'Stuck',
+          blockedReason: { category: 'waiting-on-feedback', note: 'Waiting for API access' },
+        }),
+      ];
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.blocked).toHaveLength(1);
+      expect(result.blocked[0].reason).toBe('Waiting for API access');
+    });
+
+    it('should sort upcoming tasks by priority', () => {
+      const tasks = [
+        makeTask({ status: 'todo', priority: 'low', title: 'Low' }),
+        makeTask({ status: 'todo', priority: 'high', title: 'High' }),
+        makeTask({ status: 'todo', priority: 'medium', title: 'Medium' }),
+      ];
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.upcoming).toHaveLength(3);
+      expect(result.upcoming[0].title).toBe('High');
+      expect(result.upcoming[1].title).toBe('Medium');
+      expect(result.upcoming[2].title).toBe('Low');
+    });
+
+    it('should limit upcoming to 10 tasks', () => {
+      const tasks = Array.from({ length: 15 }, (_, i) =>
+        makeTask({ status: 'todo', title: `Todo ${i}` })
+      );
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.upcoming).toHaveLength(10);
+    });
+
+    it('should filter activities by target date', () => {
+      const activities = [
+        makeActivity({
+          type: 'status_changed',
+          taskTitle: 'Task A',
+          timestamp: '2026-02-01T10:00:00.000Z',
+        }),
+        makeActivity({
+          type: 'comment_added',
+          taskTitle: 'Task B',
+          timestamp: '2026-01-31T10:00:00.000Z',
+        }),
+      ];
+
+      const result = service.getStandupData([], activities, targetDate);
+      expect(result.activity).toHaveLength(1);
+      expect(result.activity[0].summary).toContain('Task A');
+    });
+
+    it('should calculate stats correctly', () => {
+      const tasks = [
+        makeTask({
+          status: 'done',
+          updated: '2026-02-01T15:00:00.000Z',
+          agent: 'Veritas',
+          comments: [
+            { id: 'c1', author: 'Veritas', text: 'Done', timestamp: '2026-02-01T15:00:00.000Z' },
+            { id: 'c2', author: 'Veritas', text: 'Note', timestamp: '2026-02-01T14:00:00.000Z' },
+          ],
+        }),
+        makeTask({
+          status: 'in-progress',
+          agent: 'Veritas',
+          comments: [
+            { id: 'c3', author: 'Brad', text: 'Check', timestamp: '2026-01-31T10:00:00.000Z' },
+          ],
+        }),
+      ];
+
+      const result = service.getStandupData(tasks, [], targetDate);
+      expect(result.stats.tasksCompleted).toBe(1);
+      expect(result.stats.agentsActive).toContain('Veritas');
+      expect(result.stats.commentsAdded).toBe(2); // Only Feb 1 comments
+    });
+  });
+
+  describe('generateStandupMarkdown', () => {
+    it('should generate valid markdown report', () => {
+      const standupData = {
+        date: '2026-02-01',
+        completed: [
+          {
+            id: 'task_123',
+            title: 'Finished task',
+            agent: 'Veritas',
+            completedAt: '2026-02-01T15:00:00.000Z',
+            timeSpent: 2700,
+          },
+        ],
+        inProgress: [
+          {
+            id: 'task_456',
+            title: 'Working task',
+            agent: 'Veritas',
+            started: '2026-02-01T10:00:00.000Z',
+          },
+        ],
+        blocked: [
+          {
+            id: 'task_789',
+            title: 'Stuck task',
+            agent: 'Veritas',
+            reason: 'waiting on API access',
+          },
+        ],
+        upcoming: [{ id: 'task_000', title: 'Next task', priority: 'high' }],
+        activity: [],
+        stats: {
+          tasksCompleted: 1,
+          totalTimeTracked: '45m',
+          agentsActive: ['Veritas'],
+          commentsAdded: 2,
+        },
+      };
+
+      const markdown = service.generateStandupMarkdown(standupData);
+      expect(markdown).toContain('# Daily Standup — February 1, 2026');
+      expect(markdown).toContain('## ✅ Completed');
+      expect(markdown).toContain('task_123: Finished task');
+      expect(markdown).toContain('Veritas');
+      expect(markdown).toContain('45m');
+      expect(markdown).toContain('## 🔄 In Progress');
+      expect(markdown).toContain('task_456: Working task');
+      expect(markdown).toContain('## 🚫 Blocked');
+      expect(markdown).toContain('waiting on API access');
+      expect(markdown).toContain('## 📋 Up Next');
+      expect(markdown).toContain('🔴');
+      expect(markdown).toContain('## 📊 Stats');
+      expect(markdown).toContain('Tasks completed: 1');
+      expect(markdown).toContain('Comments added: 2');
+    });
+
+    it('should omit empty sections', () => {
+      const standupData = {
+        date: '2026-02-01',
+        completed: [],
+        inProgress: [],
+        blocked: [],
+        upcoming: [],
+        activity: [],
+        stats: {
+          tasksCompleted: 0,
+          totalTimeTracked: '0s',
+          agentsActive: [],
+          commentsAdded: 0,
+        },
+      };
+
+      const markdown = service.generateStandupMarkdown(standupData);
+      expect(markdown).toContain('# Daily Standup');
+      expect(markdown).not.toContain('## ✅ Completed');
+      expect(markdown).not.toContain('## 🔄 In Progress');
+      expect(markdown).not.toContain('## 🚫 Blocked');
+      expect(markdown).not.toContain('## 📋 Up Next');
+      expect(markdown).toContain('## 📊 Stats');
+    });
+  });
+
+  describe('generateStandupText', () => {
+    it('should generate plain text report', () => {
+      const standupData = {
+        date: '2026-02-01',
+        completed: [
+          {
+            id: 'task_123',
+            title: 'Finished task',
+            agent: 'Veritas',
+            completedAt: '2026-02-01T15:00:00.000Z',
+            timeSpent: 2700,
+          },
+        ],
+        inProgress: [],
+        blocked: [],
+        upcoming: [],
+        activity: [],
+        stats: {
+          tasksCompleted: 1,
+          totalTimeTracked: '45m',
+          agentsActive: ['Veritas'],
+          commentsAdded: 0,
+        },
+      };
+
+      const text = service.generateStandupText(standupData);
+      expect(text).toContain('DAILY STANDUP');
+      expect(text).toContain('COMPLETED:');
+      expect(text).toContain('task_123: Finished task (Veritas) [45m]');
+      expect(text).toContain('STATS:');
+      expect(text).not.toContain('#');
+      expect(text).not.toContain('**');
     });
   });
 });

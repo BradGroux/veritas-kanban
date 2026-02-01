@@ -80,7 +80,13 @@ router.post(
       const success = await taskService.archiveTask(task.id);
       if (success) {
         archived.push(task.id);
-        await activityService.logActivity('task_archived', task.id, task.title);
+        await activityService.logActivity(
+          'task_archived',
+          task.id,
+          task.title,
+          undefined,
+          task.agent
+        );
       }
     }
 
@@ -101,7 +107,13 @@ router.post(
 
     // Log activity
     if (task) {
-      await activityService.logActivity('task_archived', task.id, task.title);
+      await activityService.logActivity(
+        'task_archived',
+        task.id,
+        task.title,
+        undefined,
+        task.agent
+      );
     }
 
     // Audit log
@@ -128,10 +140,16 @@ router.post(
     broadcastTaskChange('restored', task.id);
 
     // Log activity
-    await activityService.logActivity('status_changed', task.id, task.title, {
-      from: 'archived',
-      status: 'done',
-    });
+    await activityService.logActivity(
+      'status_changed',
+      task.id,
+      task.title,
+      {
+        from: 'archived',
+        status: 'done',
+      },
+      task.agent
+    );
 
     res.json(task);
   })

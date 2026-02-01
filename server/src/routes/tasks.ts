@@ -4,6 +4,7 @@ import { getTaskService } from '../services/task-service.js';
 import { WorktreeService } from '../services/worktree-service.js';
 import { activityService } from '../services/activity-service.js';
 import { getBlockingService } from '../services/blocking-service.js';
+import { getGitHubSyncService } from '../services/github-sync-service.js';
 import type { CreateTaskInput, UpdateTaskInput, Task, TaskSummary } from '@veritas-kanban/shared';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -97,6 +98,13 @@ const subtaskSchema = z.object({
   created: z.string(),
 });
 
+const githubSchema = z
+  .object({
+    issueNumber: z.number().int().positive(),
+    repo: z.string().min(1),
+  })
+  .optional();
+
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
@@ -107,6 +115,7 @@ const updateTaskSchema = z.object({
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(),
   git: gitSchema,
+  github: githubSchema,
   attempt: attemptSchema,
   reviewComments: z.array(reviewCommentSchema).optional(),
   review: reviewStateSchema.optional(),
@@ -267,6 +276,7 @@ router.get(
           blockedReason: task.blockedReason,
           position: task.position,
           attachmentCount: task.attachments?.length ?? 0,
+          github: task.github,
           timeTracking: task.timeTracking
             ? {
                 totalSeconds: task.timeTracking.totalSeconds,
@@ -440,11 +450,17 @@ router.post(
     broadcastTaskChange('created', task.id);
 
     // Log activity
-    await activityService.logActivity('task_created', task.id, task.title, {
-      type: task.type,
-      priority: task.priority,
-      project: task.project,
-    });
+    await activityService.logActivity(
+      'task_created',
+      task.id,
+      task.title,
+      {
+        type: task.type,
+        priority: task.priority,
+        project: task.project,
+      },
+      task.agent
+    );
 
     // Audit log
     const authReq = req as AuthenticatedRequest;
@@ -544,12 +560,27 @@ router.patch(
 
     // Log activity for status changes
     if (input.status && oldTask.status !== input.status) {
-      await activityService.logActivity('status_changed', task.id, task.title, {
-        from: oldTask.status,
-        status: input.status,
-      });
+      await activityService.logActivity(
+        'status_changed',
+        task.id,
+        task.title,
+        {
+          from: oldTask.status,
+          status: input.status,
+        },
+        task.agent
+      );
+
+      // Outbound sync: push status change to linked GitHub issue (fire-and-forget)
+      if (task.github) {
+        getGitHubSyncService()
+          .syncTaskStatusToGitHub(task)
+          .catch(() => {
+            /* intentionally silent — don't fail the API call */
+          });
+      }
     } else {
-      await activityService.logActivity('task_updated', task.id, task.title);
+      await activityService.logActivity('task_updated', task.id, task.title, undefined, task.agent);
     }
 
     res.json(task);
@@ -591,7 +622,7 @@ router.delete(
 
     // Log activity
     if (task) {
-      await activityService.logActivity('task_deleted', task.id, task.title);
+      await activityService.logActivity('task_deleted', task.id, task.title, undefined, task.agent);
     }
 
     // Audit log
@@ -688,11 +719,17 @@ router.post(
     }
 
     // Log activity for template application
-    await activityService.logActivity('template_applied', task.id, task.title, {
-      templateId,
-      templateName: templateName || 'Unknown',
-      fieldsChanged: fieldsChanged || [],
-    });
+    await activityService.logActivity(
+      'template_applied',
+      task.id,
+      task.title,
+      {
+        templateId,
+        templateName: templateName || 'Unknown',
+        fieldsChanged: fieldsChanged || [],
+      },
+      task.agent
+    );
 
     res.json({ success: true });
   })

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { KanbanBoard } from './components/board/KanbanBoard';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
@@ -7,12 +8,44 @@ import { BulkActionsProvider } from './hooks/useBulkActions';
 import { useTaskSync } from './hooks/useTaskSync';
 import { TaskConfigProvider } from './contexts/TaskConfigContext';
 import { WebSocketStatusProvider } from './contexts/WebSocketContext';
+import { ViewProvider, useView } from './contexts/ViewContext';
 import { AuthProvider } from './hooks/useAuth';
 import { AuthGuard } from './components/auth';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { FloatingChat } from './components/chat/FloatingChat';
+
+// Lazy-load ActivityFeed to keep initial bundle small
+const ActivityFeed = lazy(() =>
+  import('./components/activity/ActivityFeed').then((mod) => ({
+    default: mod.ActivityFeed,
+  }))
+);
+
+/** Renders the current view (board or activity feed). */
+function MainContent() {
+  const { view, setView, navigateToTask } = useView();
+
+  if (view === 'activity') {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <span className="text-muted-foreground">Loading activity feed…</span>
+          </div>
+        }
+      >
+        <ActivityFeed
+          onBack={() => setView('board')}
+          onTaskClick={(taskId) => navigateToTask(taskId)}
+        />
+      </Suspense>
+    );
+  }
+
+  return <KanbanBoard />;
+}
 
 // Main app content (only rendered when authenticated)
 function AppContent() {
@@ -29,18 +62,20 @@ function AppContent() {
         <KeyboardProvider>
           <BulkActionsProvider>
             <TaskConfigProvider>
-              <div className="min-h-screen bg-background">
-                <SkipToContent />
-                <Header />
-                <main id="main-content" className="container mx-auto px-4 py-6" tabIndex={-1}>
-                  <ErrorBoundary level="section">
-                    <KanbanBoard />
-                  </ErrorBoundary>
-                </main>
-                <Toaster />
-                <KeyboardShortcutsDialog />
-                <FloatingChat />
-              </div>
+              <ViewProvider>
+                <div className="min-h-screen bg-background">
+                  <SkipToContent />
+                  <Header />
+                  <main id="main-content" className="container mx-auto px-4 py-6" tabIndex={-1}>
+                    <ErrorBoundary level="section">
+                      <MainContent />
+                    </ErrorBoundary>
+                  </main>
+                  <Toaster />
+                  <KeyboardShortcutsDialog />
+                  <FloatingChat />
+                </div>
+              </ViewProvider>
             </TaskConfigProvider>
           </BulkActionsProvider>
         </KeyboardProvider>
