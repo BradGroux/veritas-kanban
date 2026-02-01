@@ -44,12 +44,17 @@ export function Header() {
       <nav aria-label="Main navigation" className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+            <button
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+              onClick={() => window.location.reload()}
+              aria-label="Refresh page"
+              title="Refresh page"
+            >
               <span className="text-xl" aria-hidden="true">
                 ⚖️
               </span>
               <h1 className="text-lg font-semibold">Veritas Kanban</h1>
-            </div>
+            </button>
             <div className="h-4 w-px bg-border" aria-hidden="true" />
             <WebSocketIndicator />
             <div className="h-4 w-px bg-border" aria-hidden="true" />
