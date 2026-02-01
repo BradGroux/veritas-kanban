@@ -514,14 +514,30 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 🗺️ Roadmap
 
-See the [v1.1 milestone](https://github.com/BradGroux/veritas-kanban/milestone/1) for planned improvements. Community contributions welcome!
+### v1.4.0 — Multi-Agent Ready
+
+See the [v1.4.0 milestone](https://github.com/BradGroux/veritas-kanban/milestone/7) for what's next. Community contributions welcome!
+
+- [Multi-agent dashboard sidebar](https://github.com/BradGroux/veritas-kanban/issues/28) — See all active agents at a glance
+- [Multi-agent task assignment](https://github.com/BradGroux/veritas-kanban/issues/29) — Multiple agents on a single task
+- [@Mention notifications in task comments](https://github.com/BradGroux/veritas-kanban/issues/30) — Directed agent communication
+- [Agent permission levels](https://github.com/BradGroux/veritas-kanban/issues/31) — Intern / Specialist / Lead autonomy tiers
+
+### Backlog
 
 - [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1)
-- [Standardized API response envelope](https://github.com/BradGroux/veritas-kanban/issues/2) · `good first issue`
-- [Circuit breaker pattern](https://github.com/BradGroux/veritas-kanban/issues/3)
-- [Load testing suite (k6)](https://github.com/BradGroux/veritas-kanban/issues/4) · `good first issue`
-- [Prometheus/OpenTelemetry metrics](https://github.com/BradGroux/veritas-kanban/issues/5)
-- [Abstract file storage interface](https://github.com/BradGroux/veritas-kanban/issues/6)
+- [Todo app integrations](https://github.com/BradGroux/veritas-kanban/issues/20) — Todoist, Planner, Google Tasks, Apple Reminders, Notion
+
+### Completed
+
+- ~~[Standardized API response envelope](https://github.com/BradGroux/veritas-kanban/issues/2)~~ — shipped in v1.2.0
+- ~~[Circuit breaker pattern](https://github.com/BradGroux/veritas-kanban/issues/3)~~ — shipped in v1.1.0
+- ~~[Load testing suite (k6)](https://github.com/BradGroux/veritas-kanban/issues/4)~~ — shipped in v1.1.0
+- ~~[Prometheus/OpenTelemetry metrics](https://github.com/BradGroux/veritas-kanban/issues/5)~~ — shipped in v1.1.0
+- ~~[Abstract file storage interface](https://github.com/BradGroux/veritas-kanban/issues/6)~~ — shipped in v1.2.0
+- ~~[GitHub Issues sync](https://github.com/BradGroux/veritas-kanban/issues/21)~~ — shipped in v1.3.0
+- ~~[Activity feed view](https://github.com/BradGroux/veritas-kanban/issues/33)~~ — shipped in v1.3.0
+- ~~[Daily standup summary](https://github.com/BradGroux/veritas-kanban/issues/34)~~ — shipped in v1.3.0
 
 ---
 
