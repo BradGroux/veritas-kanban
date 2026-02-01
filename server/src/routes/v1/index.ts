@@ -23,6 +23,7 @@ import { taskTimeRoutes } from '../task-time.js';
 import { taskRoutes } from '../tasks.js';
 import { taskCommentRoutes } from '../task-comments.js';
 import { taskSubtaskRoutes } from '../task-subtasks.js';
+import { taskVerificationRoutes } from '../task-verification.js';
 import attachmentRoutes from '../attachments.js';
 
 // Feature routes
@@ -70,6 +71,7 @@ v1Router.use('/tasks', taskTimeRoutes);
 v1Router.use('/tasks', taskRoutes);
 v1Router.use('/tasks', taskCommentRoutes);
 v1Router.use('/tasks', taskSubtaskRoutes);
+v1Router.use('/tasks', taskVerificationRoutes);
 
 // Attachment routes get the stricter upload rate limit (20 req/min)
 // applied BEFORE the route handler for upload (POST) requests.

@@ -25,6 +25,12 @@ const STATUS_BUTTONS: { id: TaskStatus; label: string; color: string; activeColo
     activeColor: 'bg-slate-500 text-white border-slate-500',
   },
   {
+    id: 'planning',
+    label: 'Planning',
+    color: 'border-violet-400 text-violet-600',
+    activeColor: 'bg-violet-500 text-white border-violet-500',
+  },
+  {
     id: 'in-progress',
     label: 'In Progress',
     color: 'border-blue-400 text-blue-600',
@@ -63,6 +69,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
   const taskIdsByStatus = useMemo(() => {
     const map: Record<TaskStatus, string[]> = {
       todo: [],
+      planning: [],
       'in-progress': [],
       blocked: [],
       done: [],
@@ -217,6 +224,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todo">To Do</SelectItem>
+                <SelectItem value="planning">Planning</SelectItem>
                 <SelectItem value="in-progress">In Progress</SelectItem>
                 <SelectItem value="review">Review</SelectItem>
                 <SelectItem value="done">Done</SelectItem>

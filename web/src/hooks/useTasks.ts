@@ -217,6 +217,52 @@ export function useDeleteSubtask() {
   });
 }
 
+export function useAddVerificationStep() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, description }: { taskId: string; description: string }) =>
+      api.tasks.addVerificationStep(taskId, description),
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.setQueryData(['tasks', task.id], task);
+    },
+  });
+}
+
+export function useUpdateVerificationStep() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      stepId,
+      updates,
+    }: {
+      taskId: string;
+      stepId: string;
+      updates: { description?: string; checked?: boolean };
+    }) => api.tasks.updateVerificationStep(taskId, stepId, updates),
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.setQueryData(['tasks', task.id], task);
+    },
+  });
+}
+
+export function useDeleteVerificationStep() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, stepId }: { taskId: string; stepId: string }) =>
+      api.tasks.deleteVerificationStep(taskId, stepId),
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.setQueryData(['tasks', task.id], task);
+    },
+  });
+}
+
 export function useAddComment() {
   const queryClient = useQueryClient();
 
@@ -288,6 +334,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
   if (!tasks) {
     return {
       todo: [],
+      planning: [],
       'in-progress': [],
       blocked: [],
       done: [],
@@ -296,6 +343,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
 
   return {
     todo: sortByPosition(tasks.filter((t) => t.status === 'todo')),
+    planning: sortByPosition(tasks.filter((t) => t.status === 'planning')),
     'in-progress': sortByPosition(tasks.filter((t) => t.status === 'in-progress')),
     blocked: sortByPosition(tasks.filter((t) => t.status === 'blocked')),
     done: sortByPosition(tasks.filter((t) => t.status === 'done')),

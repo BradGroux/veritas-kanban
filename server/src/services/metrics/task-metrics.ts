@@ -36,6 +36,7 @@ export async function computeTaskMetrics(
   // Count by status
   const byStatus: Record<TaskStatus, number> = {
     todo: 0,
+    planning: 0,
     'in-progress': 0,
     blocked: 0,
     done: 0,

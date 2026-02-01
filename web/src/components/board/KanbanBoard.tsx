@@ -30,6 +30,7 @@ const DashboardSection = lazy(() =>
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
+  { id: 'planning', title: 'Planning' },
   { id: 'in-progress', title: 'In Progress' },
   { id: 'blocked', title: 'Blocked' },
   { id: 'done', title: 'Done' },
@@ -196,7 +197,7 @@ export function KanbanBoard() {
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >
-              <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
+              <div className="grid grid-cols-5 gap-4" role="group" aria-label="Kanban columns">
                 {COLUMNS.map((column) => (
                   <KanbanColumn
                     key={column.id}
@@ -216,7 +217,7 @@ export function KanbanBoard() {
               </DragOverlay>
             </DndContext>
           ) : (
-            <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
+            <div className="grid grid-cols-5 gap-4" role="group" aria-label="Kanban columns">
               {COLUMNS.map((column) => (
                 <KanbanColumn
                   key={column.id}

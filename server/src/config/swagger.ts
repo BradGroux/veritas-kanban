@@ -46,7 +46,7 @@ const options: swaggerJsdoc.Options = {
             type: { type: 'string', example: 'feature' },
             status: {
               type: 'string',
-              enum: ['todo', 'in-progress', 'blocked', 'done'],
+              enum: ['todo', 'planning', 'in-progress', 'blocked', 'done'],
               example: 'todo',
             },
             priority: {
@@ -85,7 +85,10 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: 'string' },
             title: { type: 'string' },
-            status: { type: 'string', enum: ['todo', 'in-progress', 'blocked', 'done'] },
+            status: {
+              type: 'string',
+              enum: ['todo', 'planning', 'in-progress', 'blocked', 'done'],
+            },
             priority: { type: 'string', enum: ['low', 'medium', 'high'] },
             type: { type: 'string' },
             project: { type: 'string' },
@@ -118,7 +121,10 @@ const options: swaggerJsdoc.Options = {
             title: { type: 'string', minLength: 1, maxLength: 200 },
             description: { type: 'string' },
             type: { type: 'string' },
-            status: { type: 'string', enum: ['todo', 'in-progress', 'blocked', 'done'] },
+            status: {
+              type: 'string',
+              enum: ['todo', 'planning', 'in-progress', 'blocked', 'done'],
+            },
             priority: { type: 'string', enum: ['low', 'medium', 'high'] },
             project: { type: 'string' },
             sprint: { type: 'string' },

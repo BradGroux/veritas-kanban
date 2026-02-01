@@ -22,9 +22,10 @@ const shortcuts: { category: string; items: Shortcut[] }[] = [
       { keys: ['c'], description: 'Create new task' },
       { keys: ['⌘⇧C'], description: 'Open agent chat' },
       { keys: ['1'], description: 'Move to To Do' },
-      { keys: ['2'], description: 'Move to In Progress' },
-      { keys: ['3'], description: 'Move to Review' },
-      { keys: ['4'], description: 'Move to Done' },
+      { keys: ['2'], description: 'Move to Planning' },
+      { keys: ['3'], description: 'Move to In Progress' },
+      { keys: ['4'], description: 'Move to Blocked' },
+      { keys: ['5'], description: 'Move to Done' },
     ],
   },
   {

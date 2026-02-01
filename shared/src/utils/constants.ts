@@ -9,19 +9,20 @@ export const PRIORITY_LABELS: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
-  critical: 'Critical'
+  critical: 'Critical',
 };
 
 /**
  * Task status labels
  */
 export const STATUS_LABELS: Record<string, string> = {
-  'todo': 'To Do',
+  todo: 'To Do',
+  planning: 'Planning',
   'in-progress': 'In Progress',
-  'review': 'Review',
-  'done': 'Done',
-  'blocked': 'Blocked',
-  'cancelled': 'Cancelled'
+  review: 'Review',
+  done: 'Done',
+  blocked: 'Blocked',
+  cancelled: 'Cancelled',
 };
 
 /**
@@ -33,5 +34,5 @@ export const TYPE_LABELS: Record<string, string> = {
   refactor: 'Refactor',
   docs: 'Documentation',
   test: 'Test',
-  chore: 'Chore'
+  chore: 'Chore',
 };

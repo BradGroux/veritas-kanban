@@ -1,7 +1,7 @@
 // Task Types
 
 export type TaskType = string;
-export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done';
+export type TaskStatus = 'todo' | 'planning' | 'in-progress' | 'blocked' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 /** Built-in agent types. Custom agents use any string slug. */
 export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
@@ -36,6 +36,13 @@ export interface Subtask {
   title: string;
   completed: boolean;
   created: string;
+}
+
+export interface VerificationStep {
+  id: string;
+  description: string;
+  checked: boolean;
+  checkedAt?: string; // ISO timestamp when checked
 }
 
 export interface TimeEntry {
@@ -156,6 +163,9 @@ export interface Task {
   subtasks?: Subtask[];
   autoCompleteOnSubtasks?: boolean; // Auto-complete parent when all subtasks done
 
+  // Verification checklist (done criteria)
+  verificationSteps?: VerificationStep[];
+
   // Dependencies
   blockedBy?: string[]; // Array of task IDs that block this task
 
@@ -169,6 +179,9 @@ export interface Task {
     completedAt?: string; // When sub-agent finished
     result?: string; // Result summary from sub-agent
   };
+
+  // Planning phase
+  plan?: string; // Markdown content for the execution plan
 
   // Time tracking
   timeTracking?: TimeTracking;
@@ -229,8 +242,10 @@ export interface UpdateTaskInput {
   review?: ReviewState;
   subtasks?: Subtask[];
   autoCompleteOnSubtasks?: boolean;
+  verificationSteps?: VerificationStep[];
   blockedBy?: string[];
   blockedReason?: BlockedReason | null; // null to clear
+  plan?: string;
   automation?: {
     sessionKey?: string;
     spawnedAt?: string;
@@ -266,6 +281,7 @@ export interface TaskSummary {
   created: string;
   updated: string;
   subtasks?: Subtask[];
+  verificationSteps?: VerificationStep[];
   blockedBy?: string[];
   blockedReason?: BlockedReason;
   position?: number;

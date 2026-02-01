@@ -12,6 +12,7 @@ import {
   Loader2,
   Paperclip,
   ListChecks,
+  ShieldCheck,
   Zap,
   MessageSquare,
   Wrench,
@@ -20,6 +21,7 @@ import {
   Play,
   CheckCircle,
   XCircle,
+  FileEdit,
 } from 'lucide-react';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { formatDuration } from '@/hooks/useTimeTracking';
@@ -102,6 +104,15 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     if (pSubs.length !== nSubs.length) return false;
     for (let i = 0; i < pSubs.length; i++) {
       if (pSubs[i].completed !== nSubs[i].completed) return false;
+    }
+    // Plan field — presence matters for the indicator
+    if ((pt.plan || '') !== (nt.plan || '')) return false;
+    // Verification steps — compare count and checked state
+    const pVSteps = pt.verificationSteps || [];
+    const nVSteps = nt.verificationSteps || [];
+    if (pVSteps.length !== nVSteps.length) return false;
+    for (let i = 0; i < pVSteps.length; i++) {
+      if (pVSteps[i].checked !== nVSteps[i].checked) return false;
     }
     // Attachments — only count matters for the badge
     if ((pt.attachments?.length || 0) !== (nt.attachments?.length || 0)) return false;
@@ -225,6 +236,18 @@ export const TaskCard = memo(function TaskCard({
       allSubtasksDone: total > 0 && completed === total,
     };
   }, [task.subtasks]);
+
+  // Memoize verification progress
+  const { verificationTotal, verificationChecked, allVerificationDone } = useMemo(() => {
+    const steps = task.verificationSteps || [];
+    const total = steps.length;
+    const checked = steps.filter((s) => s.checked).length;
+    return {
+      verificationTotal: total,
+      verificationChecked: checked,
+      allVerificationDone: total > 0 && checked === total,
+    };
+  }, [task.verificationSteps]);
 
   // Suppress the outer card tooltip entirely during any drag operation
   const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging;
@@ -383,6 +406,19 @@ export const TaskCard = memo(function TaskCard({
                   {task.attachments.length}
                 </span>
               )}
+              {/* Plan indicator */}
+              {task.plan && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 flex items-center gap-1">
+                      <FileEdit className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="font-medium">Has execution plan</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               {/* Right side: subtask count + time tracking */}
               {subtaskTotal > 0 && (
                 <Tooltip>
@@ -407,12 +443,37 @@ export const TaskCard = memo(function TaskCard({
                   </TooltipContent>
                 </Tooltip>
               )}
+              {/* Verification progress indicator */}
+              {verificationTotal > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={cn(
+                        'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
+                        !subtaskTotal && 'ml-auto',
+                        allVerificationDone
+                          ? 'bg-green-500/20 text-green-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      <ShieldCheck className="h-3 w-3" />
+                      {verificationChecked}/{verificationTotal}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="font-medium">Done Criteria</p>
+                    <p className="text-sm">
+                      {verificationChecked} of {verificationTotal} verified
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               {/* Time tracking indicator */}
               {(task.timeTracking?.totalSeconds || task.timeTracking?.isRunning) && (
                 <span
                   className={cn(
                     'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
-                    !subtaskTotal && !cardMetrics && 'ml-auto',
+                    !subtaskTotal && !verificationTotal && !cardMetrics && 'ml-auto',
                     task.timeTracking?.isRunning
                       ? 'bg-green-500/20 text-green-500'
                       : 'bg-muted text-muted-foreground'

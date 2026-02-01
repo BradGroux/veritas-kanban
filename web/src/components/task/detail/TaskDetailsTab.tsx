@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { TaskMetadataSection } from './TaskMetadataSection';
 import { SubtasksSection } from '../SubtasksSection';
+import { VerificationSection } from '../VerificationSection';
 import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
@@ -32,10 +33,10 @@ interface TaskDetailsTabProps {
   onRestore?: (taskId: string) => void;
 }
 
-export function TaskDetailsTab({ 
-  task, 
-  onUpdate, 
-  onClose, 
+export function TaskDetailsTab({
+  task,
+  onUpdate,
+  onClose,
   readOnly = false,
   onRestore,
 }: TaskDetailsTabProps) {
@@ -78,19 +79,39 @@ export function TaskDetailsTab({
         )}
       </div>
 
+      {/* Execution Plan (visible when status is planning or plan has content) */}
+      {(task.status === 'planning' || task.plan) && (
+        <div className="space-y-2">
+          <Label className="text-muted-foreground flex items-center gap-1.5">
+            📋 Execution Plan
+          </Label>
+          {readOnly ? (
+            <div className="text-sm whitespace-pre-wrap text-foreground/80 bg-violet-500/5 border border-violet-500/20 rounded-md p-3 min-h-[60px]">
+              {sanitizeText(task.plan || '') || 'No plan defined'}
+            </div>
+          ) : (
+            <Textarea
+              value={task.plan || ''}
+              onChange={(e) => onUpdate('plan', e.target.value)}
+              placeholder="Define the approach, steps, and considerations..."
+              rows={6}
+              className="resize-none bg-violet-500/5 border-violet-500/20 focus:border-violet-500/40"
+            />
+          )}
+        </div>
+      )}
+
       {/* Metadata Section */}
-      <TaskMetadataSection 
-        task={task} 
-        onUpdate={onUpdate} 
-        readOnly={readOnly}
-      />
+      <TaskMetadataSection task={task} onUpdate={onUpdate} readOnly={readOnly} />
 
       {/* Blocked Reason (shown when status is blocked) */}
       {task.status === 'blocked' && (
         <div className="border-t pt-4">
           <BlockedReasonSection
             task={task}
-            onUpdate={(blockedReason: BlockedReason | undefined) => onUpdate('blockedReason', blockedReason)}
+            onUpdate={(blockedReason: BlockedReason | undefined) =>
+              onUpdate('blockedReason', blockedReason)
+            }
             readOnly={readOnly}
           />
         </div>
@@ -102,6 +123,11 @@ export function TaskDetailsTab({
           task={task}
           onAutoCompleteChange={(value) => onUpdate('autoCompleteOnSubtasks', value || undefined)}
         />
+      </div>
+
+      {/* Verification / Done Criteria */}
+      <div className="border-t pt-4">
+        <VerificationSection task={task} />
       </div>
 
       {/* Dependencies */}
@@ -144,40 +170,38 @@ export function TaskDetailsTab({
       {/* Delete/Restore Button */}
       <div className="border-t pt-4">
         {readOnly && onRestore ? (
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={() => onRestore(task.id)}
-          >
+          <Button variant="default" className="w-full" onClick={() => onRestore(task.id)}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Restore to Board
           </Button>
-        ) : !readOnly && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Task
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this task?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete "{task.title}".
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+        ) : (
+          !readOnly && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Task
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete "{task.title}".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )
         )}
       </div>
     </div>

@@ -119,6 +119,38 @@ export const tasksApi = {
     return handleResponse<Task>(response);
   },
 
+  addVerificationStep: async (taskId: string, description: string): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+    });
+    return handleResponse<Task>(response);
+  },
+
+  updateVerificationStep: async (
+    taskId: string,
+    stepId: string,
+    updates: { description?: string; checked?: boolean }
+  ): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
+      credentials: 'include',
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return handleResponse<Task>(response);
+  },
+
+  deleteVerificationStep: async (taskId: string, stepId: string): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
+      credentials: 'include',
+      method: 'DELETE',
+    });
+    return handleResponse<Task>(response);
+  },
+
   addComment: async (taskId: string, author: string, text: string): Promise<Task> => {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/comments`, {
       credentials: 'include',
