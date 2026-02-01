@@ -4,6 +4,7 @@
  * Implements OAuth2 authentication and task sync via Todoist REST API v2.
  * @see https://developer.todoist.com/rest/v2
  */
+import { z } from 'zod';
 import { IntegrationProvider } from './base.js';
 import type {
   IntegrationConfig,
@@ -61,9 +62,17 @@ export class TodoistProvider extends IntegrationProvider {
   };
 
   async connect(params: Record<string, string>): Promise<OAuthResult> {
-    const { code, clientId, clientSecret } = params;
-    if (!code || !clientId || !clientSecret) {
-      throw new Error('Missing required OAuth parameters: code, clientId, clientSecret');
+    const { code } = params;
+    if (!code) {
+      throw new Error('Missing required OAuth parameter: code');
+    }
+
+    const clientId = process.env.TODOIST_CLIENT_ID;
+    const clientSecret = process.env.TODOIST_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        'TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET must be set in server environment'
+      );
     }
 
     const response = await fetch(TODOIST_TOKEN_URL, {
@@ -86,11 +95,10 @@ export class TodoistProvider extends IntegrationProvider {
     return { accessToken: data.access_token };
   }
 
-  async disconnect(secrets: IntegrationSecrets): Promise<void> {
+  async disconnect(_secrets: IntegrationSecrets): Promise<void> {
     // Todoist OAuth tokens don't support revocation via API.
     // The user can revoke via Todoist settings.
     log.info('Todoist disconnected (token cleared locally)');
-    void secrets; // consumed by caller who deletes the secrets file
   }
 
   async pullTasks(secrets: IntegrationSecrets, config: IntegrationConfig): Promise<ExternalTask[]> {
@@ -165,7 +173,10 @@ export class TodoistProvider extends IntegrationProvider {
     return created.id;
   }
 
-  async syncStatus(secrets: IntegrationSecrets, config: IntegrationConfig): Promise<SyncResult> {
+  async checkConnection(
+    secrets: IntegrationSecrets,
+    config: IntegrationConfig
+  ): Promise<SyncResult> {
     const tasks = await this.pullTasks(secrets, config);
     return {
       pulled: tasks.length,
@@ -174,14 +185,27 @@ export class TodoistProvider extends IntegrationProvider {
     };
   }
 
+  private static readonly webhookSchema = z.object({
+    event_name: z.string().optional(),
+    event_data: z
+      .object({
+        id: z.string(),
+      })
+      .optional(),
+  });
+
   async handleWebhook(
     payload: unknown,
     _headers: Record<string, string | string[] | undefined>
   ): Promise<string[]> {
-    // Todoist webhooks send event_data with the affected item
-    const data = payload as { event_data?: { id?: string } };
-    if (data.event_data?.id) {
-      return [data.event_data.id];
+    const parsed = TodoistProvider.webhookSchema.safeParse(payload);
+    if (!parsed.success) {
+      log.warn({ errors: parsed.error.issues }, 'Invalid Todoist webhook payload');
+      return [];
+    }
+
+    if (parsed.data.event_data?.id) {
+      return [parsed.data.event_data.id];
     }
     return [];
   }

@@ -48,9 +48,13 @@ export abstract class IntegrationProvider {
   ): Promise<string>;
 
   /**
-   * Sync status: pull tasks and report what changed.
+   * Check connection by pulling tasks and reporting counts.
+   * Does not perform a full bidirectional sync.
    */
-  abstract syncStatus(secrets: IntegrationSecrets, config: IntegrationConfig): Promise<SyncResult>;
+  abstract checkConnection(
+    secrets: IntegrationSecrets,
+    config: IntegrationConfig
+  ): Promise<SyncResult>;
 
   /**
    * Handle an incoming webhook from the external service.

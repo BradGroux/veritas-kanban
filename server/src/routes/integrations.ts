@@ -4,12 +4,14 @@
  * Endpoints:
  *   GET    /integrations/providers       — list available providers
  *   GET    /integrations                 — list configured integrations
+ *   GET    /integrations/oauth-config/:providerId — get public OAuth config
  *   POST   /integrations/:providerId     — connect a provider
  *   DELETE /integrations/:providerId     — disconnect a provider
  *   POST   /integrations/:providerId/sync — trigger sync
  *   POST   /integrations/webhooks/:providerId — incoming webhooks
  */
 import { Router, type Router as RouterType } from 'express';
+import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { getProvider, listProviders, isValidProvider } from '../integrations/index.js';
@@ -29,12 +31,31 @@ import { createLogger } from '../lib/logger.js';
 const log = createLogger('routes:integrations');
 const router: RouterType = Router();
 
-/** Validate providerId param. */
+/** Regex for valid provider IDs (defense-in-depth for file path usage). */
+const PROVIDER_ID_REGEX = /^[a-z0-9-]+$/;
+
+/** Zod schema for providerId path param. */
+const providerIdSchema = z
+  .string()
+  .min(1)
+  .regex(PROVIDER_ID_REGEX, 'Provider ID must be lowercase alphanumeric with hyphens');
+
+/** Zod schema for connect request body. */
+const connectBodySchema = z.object({
+  code: z.string().min(1, 'OAuth authorization code is required'),
+  projectId: z.string().optional(),
+});
+
+/** Validate and sanitize providerId param. */
 function validateProviderId(id: string): IntegrationProviderId {
-  if (!isValidProvider(id)) {
-    throw new NotFoundError(`Unknown integration provider: ${id}`);
+  const parsed = providerIdSchema.safeParse(id);
+  if (!parsed.success) {
+    throw new ValidationError(`Invalid provider ID: ${parsed.error.issues[0].message}`);
   }
-  return id;
+  if (!isValidProvider(parsed.data)) {
+    throw new NotFoundError(`Unknown integration provider: ${parsed.data}`);
+  }
+  return parsed.data;
 }
 
 // GET /integrations/providers — list all available providers
@@ -43,6 +64,30 @@ router.get(
   asyncHandler(async (_req, res) => {
     const providers = listProviders();
     res.json(providers);
+  })
+);
+
+// GET /integrations/oauth-config/:providerId — get public OAuth config (client_id, scopes)
+router.get(
+  '/oauth-config/:providerId',
+  asyncHandler(async (req, res) => {
+    const providerId = validateProviderId(req.params.providerId);
+    const provider = getProvider(providerId);
+
+    // Only expose non-secret OAuth config
+    const oauthConfig: Record<string, string> = {};
+
+    if (providerId === 'todoist') {
+      const clientId = process.env.TODOIST_CLIENT_ID;
+      if (!clientId) {
+        throw new ValidationError('TODOIST_CLIENT_ID not configured on server');
+      }
+      oauthConfig.clientId = clientId;
+      oauthConfig.scope = 'data:read_write';
+      oauthConfig.oauthUrl = provider.info.oauthUrl || '';
+    }
+
+    res.json(oauthConfig);
   })
 );
 
@@ -62,12 +107,13 @@ router.post(
     const providerId = validateProviderId(req.params.providerId);
     const provider = getProvider(providerId);
 
-    const params = req.body as Record<string, string>;
-    if (!params || typeof params !== 'object') {
-      throw new ValidationError('Request body must be an object with connection parameters');
+    const parsed = connectBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues.map((i) => i.message).join('; '));
     }
 
-    const result = await provider.connect(params);
+    const { code, projectId } = parsed.data;
+    const result = await provider.connect({ code });
 
     // Save secrets
     await saveSecrets(providerId, {
@@ -85,9 +131,8 @@ router.post(
     config.connectedAt = new Date().toISOString();
     config.enabled = true;
 
-    // Merge any providerConfig from request body
-    if (params.projectId) {
-      config.providerConfig.projectId = params.projectId;
+    if (projectId) {
+      config.providerConfig.projectId = projectId;
     }
 
     await saveIntegrationConfig(config);
@@ -132,7 +177,7 @@ router.post(
       throw new ValidationError(`Integration ${providerId} is not connected`);
     }
 
-    const result = await provider.syncStatus(secrets, config);
+    const result = await provider.checkConnection(secrets, config);
 
     // Update last sync time
     config.lastSyncAt = new Date().toISOString();

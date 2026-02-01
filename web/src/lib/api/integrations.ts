@@ -22,6 +22,12 @@ export interface IntegrationConfig {
   providerConfig: Record<string, unknown>;
 }
 
+export interface OAuthConfig {
+  clientId: string;
+  scope: string;
+  oauthUrl: string;
+}
+
 export interface SyncResult {
   pulled: number;
   pushed: number;
@@ -32,6 +38,10 @@ export const integrationsApi = {
   /** List available integration providers. */
   listProviders: (): Promise<ProviderInfo[]> =>
     apiFetch<ProviderInfo[]>(`${API_BASE}/integrations/providers`),
+
+  /** Get public OAuth config for a provider (client_id, scope, etc.). */
+  getOAuthConfig: (providerId: string): Promise<OAuthConfig> =>
+    apiFetch<OAuthConfig>(`${API_BASE}/integrations/oauth-config/${providerId}`),
 
   /** List configured integrations. */
   list: (): Promise<IntegrationConfig[]> =>

@@ -3,13 +3,10 @@
  *
  * Tests the provider registry, base class contract, and Todoist provider logic.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { getProvider, listProviders, isValidProvider } from '../integrations/index.js';
 import { TodoistProvider } from '../integrations/todoist.js';
-import type { IntegrationConfig, IntegrationSecrets, FieldMapping } from '../integrations/types.js';
+import type { IntegrationConfig, IntegrationSecrets } from '../integrations/types.js';
 
 describe('Integration Registry', () => {
   it('lists registered providers', () => {
@@ -50,10 +47,7 @@ describe('TodoistProvider', () => {
   });
 
   it('rejects connect without required params', async () => {
-    await expect(provider.connect({})).rejects.toThrow('Missing required OAuth parameters');
-    await expect(provider.connect({ code: 'test' })).rejects.toThrow(
-      'Missing required OAuth parameters'
-    );
+    await expect(provider.connect({})).rejects.toThrow('Missing required OAuth parameter');
   });
 
   it('rejects pullTasks without access token', async () => {
@@ -109,23 +103,7 @@ describe('TodoistProvider', () => {
   });
 });
 
-describe('Integration Service (storage)', () => {
-  let tmpDir: string;
-  let origCwd: string;
-
-  beforeEach(async () => {
-    const uniqueSuffix = Math.random().toString(36).substring(7);
-    tmpDir = path.join(os.tmpdir(), `veritas-test-integrations-${uniqueSuffix}`);
-    await fs.mkdir(path.join(tmpDir, '.veritas-kanban'), { recursive: true });
-    // The integration service resolves paths from process.cwd()/..
-    // We can't easily override that without refactoring, so we test the
-    // types and provider logic here instead.
-  });
-
-  afterEach(async () => {
-    await fs.rm(tmpDir, { recursive: true, force: true });
-  });
-
+describe('IntegrationConfig type contract', () => {
   it('IntegrationConfig type is well-formed', () => {
     const config: IntegrationConfig = {
       providerId: 'todoist',

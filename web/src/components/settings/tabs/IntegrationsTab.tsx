@@ -19,6 +19,7 @@ import {
   useConnectIntegration,
   useDisconnectIntegration,
   useSyncIntegration,
+  useOAuthConfig,
 } from '@/hooks/useIntegrations';
 import { Loader2, Plug, Unplug, RefreshCw, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,17 +34,22 @@ function ProviderCard({
 }) {
   const [showConnect, setShowConnect] = useState(false);
   const [code, setCode] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
   const [projectId, setProjectId] = useState('');
 
   const connectMutation = useConnectIntegration();
   const disconnectMutation = useDisconnectIntegration();
   const syncMutation = useSyncIntegration();
+  const { data: oauthConfig } = useOAuthConfig(
+    showConnect && provider.authType === 'oauth2' ? provider.id : undefined
+  );
 
   const isConnected = config?.status === 'connected';
   const isLoading =
     connectMutation.isPending || disconnectMutation.isPending || syncMutation.isPending;
+
+  const oauthUrl = oauthConfig
+    ? `${oauthConfig.oauthUrl}?client_id=${encodeURIComponent(oauthConfig.clientId)}&scope=${encodeURIComponent(oauthConfig.scope)}&state=veritas`
+    : undefined;
 
   const handleConnect = () => {
     connectMutation.mutate(
@@ -51,8 +57,6 @@ function ProviderCard({
         providerId: provider.id,
         params: {
           code,
-          clientId,
-          clientSecret,
           ...(projectId ? { projectId } : {}),
         },
       },
@@ -60,8 +64,6 @@ function ProviderCard({
         onSuccess: () => {
           setShowConnect(false);
           setCode('');
-          setClientId('');
-          setClientSecret('');
         },
       }
     );
@@ -163,10 +165,10 @@ function ProviderCard({
       {/* Connect form */}
       {showConnect && (
         <div className="space-y-3 pt-2 border-t">
-          {provider.authType === 'oauth2' && provider.oauthUrl && (
+          {provider.authType === 'oauth2' && oauthUrl && (
             <div className="text-xs text-muted-foreground">
               <a
-                href={provider.oauthUrl}
+                href={oauthUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-blue-400 hover:underline"
@@ -176,31 +178,6 @@ function ProviderCard({
             </div>
           )}
           <div className="grid gap-2">
-            <div>
-              <Label htmlFor={`${provider.id}-client-id`} className="text-xs">
-                Client ID
-              </Label>
-              <Input
-                id={`${provider.id}-client-id`}
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="OAuth Client ID"
-                className="h-8 text-sm"
-              />
-            </div>
-            <div>
-              <Label htmlFor={`${provider.id}-client-secret`} className="text-xs">
-                Client Secret
-              </Label>
-              <Input
-                id={`${provider.id}-client-secret`}
-                type="password"
-                value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
-                placeholder="OAuth Client Secret"
-                className="h-8 text-sm"
-              />
-            </div>
             <div>
               <Label htmlFor={`${provider.id}-code`} className="text-xs">
                 Authorization Code
@@ -227,11 +204,7 @@ function ProviderCard({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={handleConnect}
-              disabled={!code || !clientId || !clientSecret || isLoading}
-            >
+            <Button size="sm" onClick={handleConnect} disabled={!code || isLoading}>
               {connectMutation.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
               Connect
             </Button>

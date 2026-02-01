@@ -20,6 +20,15 @@ export function useIntegrations() {
   });
 }
 
+export function useOAuthConfig(providerId: string | undefined) {
+  return useQuery({
+    queryKey: ['integrations', 'oauth-config', providerId],
+    queryFn: () => api.integrations.getOAuthConfig(providerId!),
+    enabled: !!providerId,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useConnectIntegration() {
   const queryClient = useQueryClient();
   return useMutation({
