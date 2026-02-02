@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 // ActivitySidebar removed — merged into ActivityFeed (GH-66)
-import { ArchiveSidebar } from './ArchiveSidebar';
+// ArchiveSidebar removed — replaced with full-page ArchivePage
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { UserMenu } from './UserMenu';
 import { AgentStatusIndicator } from '@/components/shared/AgentStatusIndicator';
@@ -19,7 +19,7 @@ export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
   // activityOpen removed — sidebar merged into feed (GH-66)
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  // archiveOpen removed — archive is now a full page view
   const [chatOpen, setChatOpen] = useState(false);
   const { setOpenCreateDialog, setOpenChatPanel, openHelpDialog } = useKeyboard();
   const { view, setView } = useView();
@@ -98,9 +98,9 @@ export function Header() {
               )}
             </Button>
             <Button
-              variant="ghost"
+              variant={view === 'archive' ? 'secondary' : 'ghost'}
               size="icon"
-              onClick={() => setArchiveOpen(true)}
+              onClick={() => setView(view === 'archive' ? 'board' : 'archive')}
               aria-label="Archive"
               title="Archive"
             >
@@ -138,7 +138,6 @@ export function Header() {
         }}
         defaultTab={settingsTab}
       />
-      <ArchiveSidebar open={archiveOpen} onOpenChange={setArchiveOpen} />
       <ChatPanel open={chatOpen} onOpenChange={setChatOpen} />
     </header>
   );

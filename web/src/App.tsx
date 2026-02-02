@@ -29,6 +29,12 @@ const BacklogPage = lazy(() =>
   }))
 );
 
+const ArchivePage = lazy(() =>
+  import('./components/archive/ArchivePage').then((mod) => ({
+    default: mod.ArchivePage,
+  }))
+);
+
 /** Renders the current view (board, activity feed, or backlog). */
 function MainContent() {
   const { view, setView, navigateToTask } = useView();
@@ -64,6 +70,20 @@ function MainContent() {
     );
   }
 
+  if (view === 'archive') {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <span className="text-muted-foreground">Loading archive…</span>
+          </div>
+        }
+      >
+        <ArchivePage onBack={() => setView('board')} />
+      </Suspense>
+    );
+  }
+
   return <KanbanBoard />;
 }
 
@@ -86,7 +106,7 @@ function AppContent() {
                 <div className="min-h-screen bg-background">
                   <SkipToContent />
                   <Header />
-                  <main id="main-content" className="container mx-auto px-4 py-6" tabIndex={-1}>
+                  <main id="main-content" className="mx-auto px-4 py-6" tabIndex={-1}>
                     <ErrorBoundary level="section">
                       <MainContent />
                     </ErrorBoundary>
