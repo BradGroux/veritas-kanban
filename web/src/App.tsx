@@ -16,14 +16,20 @@ import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { FloatingChat } from './components/chat/FloatingChat';
 
-// Lazy-load ActivityFeed to keep initial bundle small
+// Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
 const ActivityFeed = lazy(() =>
   import('./components/activity/ActivityFeed').then((mod) => ({
     default: mod.ActivityFeed,
   }))
 );
 
-/** Renders the current view (board or activity feed). */
+const BacklogPage = lazy(() =>
+  import('./components/backlog/BacklogPage').then((mod) => ({
+    default: mod.BacklogPage,
+  }))
+);
+
+/** Renders the current view (board, activity feed, or backlog). */
 function MainContent() {
   const { view, setView, navigateToTask } = useView();
 
@@ -37,6 +43,23 @@ function MainContent() {
         }
       >
         <ActivityFeed
+          onBack={() => setView('board')}
+          onTaskClick={(taskId) => navigateToTask(taskId)}
+        />
+      </Suspense>
+    );
+  }
+
+  if (view === 'backlog') {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <span className="text-muted-foreground">Loading backlog…</span>
+          </div>
+        }
+      >
+        <BacklogPage
           onBack={() => setView('board')}
           onTaskClick={(taskId) => navigateToTask(taskId)}
         />

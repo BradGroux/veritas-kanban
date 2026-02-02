@@ -6,6 +6,7 @@ import {
   ListOrdered,
   Archive,
   MessageSquare,
+  Inbox,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
@@ -19,6 +20,8 @@ import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
 import { useState, useCallback } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
+import { useBacklogCount } from '@/hooks/useBacklog';
+import { Badge } from '@/components/ui/badge';
 
 export function Header() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -29,6 +32,7 @@ export function Header() {
   const [chatOpen, setChatOpen] = useState(false);
   const { setOpenCreateDialog, setOpenChatPanel, openHelpDialog } = useKeyboard();
   const { view, setView } = useView();
+  const { data: backlogCount = 0 } = useBacklogCount();
 
   const openSecuritySettings = useCallback(() => {
     setSettingsTab('security');
@@ -92,6 +96,24 @@ export function Header() {
               title="Activity feed"
             >
               <ListOrdered className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'backlog' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'backlog' ? 'board' : 'backlog')}
+              aria-label="Backlog"
+              title="Backlog"
+              className="relative"
+            >
+              <Inbox className="h-4 w-4" aria-hidden="true" />
+              {backlogCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
+                >
+                  {backlogCount > 99 ? '99+' : backlogCount}
+                </Badge>
+              )}
             </Button>
             <Button
               variant="ghost"

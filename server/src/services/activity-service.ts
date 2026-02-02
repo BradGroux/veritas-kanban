@@ -13,6 +13,8 @@ export type ActivityType =
   | 'agent_completed'
   | 'task_archived'
   | 'task_deleted'
+  | 'task_promoted'
+  | 'task_demoted'
   | 'worktree_created'
   | 'worktree_merged'
   | 'project_archived'

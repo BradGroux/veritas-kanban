@@ -25,6 +25,7 @@ import { taskCommentRoutes } from '../task-comments.js';
 import { taskSubtaskRoutes } from '../task-subtasks.js';
 import { taskVerificationRoutes } from '../task-verification.js';
 import attachmentRoutes from '../attachments.js';
+import { backlogRoutes } from '../backlog.js';
 
 // Feature routes
 import { configRoutes } from '../config.js';
@@ -86,6 +87,9 @@ v1Router.use(
   },
   attachmentRoutes
 );
+
+// ── Backlog routes ───────────────────────────────────────────
+v1Router.use('/backlog', backlogRoutes);
 
 // ── Feature routes ───────────────────────────────────────────
 v1Router.use('/config', configRoutes);
