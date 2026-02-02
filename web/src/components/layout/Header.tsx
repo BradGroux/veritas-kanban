@@ -1,17 +1,8 @@
-import {
-  Plus,
-  Settings,
-  Keyboard,
-  Activity,
-  ListOrdered,
-  Archive,
-  MessageSquare,
-  Inbox,
-} from 'lucide-react';
+import { Plus, Settings, Keyboard, ListOrdered, Archive, MessageSquare, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
-import { ActivitySidebar } from './ActivitySidebar';
+// ActivitySidebar removed — merged into ActivityFeed (GH-66)
 import { ArchiveSidebar } from './ArchiveSidebar';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { UserMenu } from './UserMenu';
@@ -27,7 +18,7 @@ export function Header() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
-  const [activityOpen, setActivityOpen] = useState(false);
+  // activityOpen removed — sidebar merged into feed (GH-66)
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const { setOpenCreateDialog, setOpenChatPanel, openHelpDialog } = useKeyboard();
@@ -62,7 +53,7 @@ export function Header() {
             <div className="h-4 w-px bg-border" aria-hidden="true" />
             <WebSocketIndicator />
             <div className="h-4 w-px bg-border" aria-hidden="true" />
-            <AgentStatusIndicator onOpenActivityLog={() => setActivityOpen(true)} />
+            <AgentStatusIndicator onOpenActivityLog={() => setView('activity')} />
           </div>
 
           <div className="flex items-center gap-2" role="toolbar" aria-label="Board actions">
@@ -80,20 +71,11 @@ export function Header() {
               <Keyboard className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setActivityOpen(true)}
-              aria-label="Activity log"
-              title="Activity log"
-            >
-              <Activity className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button
               variant={view === 'activity' ? 'secondary' : 'ghost'}
               size="icon"
               onClick={() => setView(view === 'activity' ? 'board' : 'activity')}
-              aria-label="Activity feed"
-              title="Activity feed"
+              aria-label="Activity"
+              title="Activity"
             >
               <ListOrdered className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -156,7 +138,6 @@ export function Header() {
         }}
         defaultTab={settingsTab}
       />
-      <ActivitySidebar open={activityOpen} onOpenChange={setActivityOpen} />
       <ArchiveSidebar open={archiveOpen} onOpenChange={setArchiveOpen} />
       <ChatPanel open={chatOpen} onOpenChange={setChatOpen} />
     </header>

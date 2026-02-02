@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Activity as ActivityIcon,
   ArrowLeft,
+  ArrowRight,
   List,
   LayoutList,
   RefreshCw,
@@ -23,6 +24,8 @@ import {
   MessageSquareOff,
   Filter,
   X,
+  Zap,
+  Coffee,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   useActivityFeed,
   useActivityFilterOptions,
@@ -42,6 +46,13 @@ import {
   type ActivityType,
   type ActivityFilters,
 } from '@/hooks/useActivity';
+import {
+  useDailySummary,
+  useStatusHistory,
+  formatDurationMs,
+  getStatusColor,
+  type StatusHistoryEntry,
+} from '@/hooks/useStatusHistory';
 import { cn } from '@/lib/utils';
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -399,6 +410,190 @@ function DayHeader({ date }: { date: string }) {
   );
 }
 
+// ─── Daily Summary ───────────────────────────────────────────────────────────
+
+function DailySummaryPanel() {
+  const { data: summary, isLoading } = useDailySummary();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <span className="text-muted-foreground">Loading daily summary…</span>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="text-center py-16">
+        <Coffee className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+        <p className="text-lg font-medium text-muted-foreground">No data for today</p>
+      </div>
+    );
+  }
+
+  const total = summary.activeMs + summary.idleMs + summary.errorMs;
+  const activePercent = total > 0 ? Math.round((summary.activeMs / total) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="p-4 rounded-lg border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="h-5 w-5 text-green-500" />
+            <span className="text-sm text-muted-foreground">Active Time</span>
+          </div>
+          <div className="text-2xl font-bold text-green-500">
+            {formatDurationMs(summary.activeMs)}
+          </div>
+        </div>
+        <div className="p-4 rounded-lg border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Coffee className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Idle Time</span>
+          </div>
+          <div className="text-2xl font-bold text-muted-foreground">
+            {formatDurationMs(summary.idleMs)}
+          </div>
+        </div>
+        <div className="p-4 rounded-lg border bg-card">
+          <div className="flex items-center gap-2 mb-2">
+            <ActivityIcon className="h-5 w-5 text-primary" />
+            <span className="text-sm text-muted-foreground">Utilization</span>
+          </div>
+          <div className="text-2xl font-bold">{activePercent}%</div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {total > 0 && (
+        <div className="h-3 rounded-full overflow-hidden flex bg-muted">
+          <div
+            className="bg-green-500 transition-all"
+            style={{ width: `${(summary.activeMs / total) * 100}%` }}
+          />
+          <div
+            className="bg-gray-400 transition-all"
+            style={{ width: `${(summary.idleMs / total) * 100}%` }}
+          />
+          {summary.errorMs > 0 && (
+            <div
+              className="bg-red-500 transition-all"
+              style={{ width: `${(summary.errorMs / total) * 100}%` }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Status History ──────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const colorClass = getStatusColor(status);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white',
+        colorClass
+      )}
+    >
+      {status}
+    </span>
+  );
+}
+
+function StatusHistoryPanel() {
+  const { data: history, isLoading } = useStatusHistory(100);
+
+  // Group by day
+  const grouped = (history || []).reduce<Record<string, StatusHistoryEntry[]>>((acc, entry) => {
+    const day = entry.timestamp.slice(0, 10);
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(entry);
+    return acc;
+  }, {});
+
+  const days = Object.keys(grouped).sort().reverse();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <span className="text-muted-foreground">Loading status history…</span>
+      </div>
+    );
+  }
+
+  if (days.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <ArrowRightLeft className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+        <p className="text-lg font-medium text-muted-foreground">No status changes recorded</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {days.map((day) => {
+        const d = new Date(day);
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        let label: string;
+        if (d.toDateString() === today.toDateString()) label = 'Today';
+        else if (d.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+        else
+          label = d.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          });
+
+        return (
+          <div key={day}>
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-muted-foreground">{label}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              {grouped[day].map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center gap-3 py-2.5 px-3 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <span className="text-xs text-muted-foreground w-16 shrink-0 font-mono">
+                    {new Date(entry.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  <StatusBadge status={entry.previousStatus} />
+                  <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <StatusBadge status={entry.newStatus} />
+                  <span className="text-sm truncate flex-1" title={entry.taskTitle}>
+                    {entry.taskTitle}
+                  </span>
+                  {entry.durationMs && (
+                    <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                      {formatDurationMs(entry.durationMs)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 interface ActivityFeedProps {
@@ -471,6 +666,8 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
     return groups;
   }, [allActivities])();
 
+  const [activeTab, setActiveTab] = useState('feed');
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
@@ -481,131 +678,149 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
           </Button>
           <div className="flex items-center gap-2">
             <ActivityIcon className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold">Activity Feed</h2>
+            <h2 className="text-2xl font-bold">Activity</h2>
           </div>
-          <Badge variant="secondary" className="text-xs">
-            {allActivities.length} events
-          </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowFilters((v) => !v)}
-          >
-            <Filter className="h-4 w-4" />
-            {showFilters ? 'Hide' : 'Filters'}
-          </Button>
-          <Button
-            variant={compact ? 'default' : 'outline'}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCompact(true)}
-            title="Compact view"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={!compact ? 'default' : 'outline'}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCompact(false)}
-            title="Detailed view"
-          >
-            <LayoutList className="h-4 w-4" />
-          </Button>
-          <div className="w-px h-6 bg-border" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-            title="Refresh"
-          >
-            <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => clearActivities.mutate()}
-            disabled={clearActivities.isPending || allActivities.length === 0}
-            title="Clear all activities"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        {activeTab === 'feed' && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setShowFilters((v) => !v)}
+            >
+              <Filter className="h-4 w-4" />
+              {showFilters ? 'Hide' : 'Filters'}
+            </Button>
+            <Button
+              variant={compact ? 'default' : 'outline'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCompact(true)}
+              title="Compact view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={!compact ? 'default' : 'outline'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCompact(false)}
+              title="Detailed view"
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-6 bg-border" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              title="Refresh"
+            >
+              <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={() => clearActivities.mutate()}
+              disabled={clearActivities.isPending || allActivities.length === 0}
+              title="Clear all activities"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Filter bar */}
-      {showFilters && (
-        <div className="mb-4 p-3 rounded-lg border border-border bg-card">
-          <ActivityFilterBar filters={filters} onFiltersChange={setFilters} />
-        </div>
-      )}
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        <TabsList>
+          <TabsTrigger value="feed">Activity Feed</TabsTrigger>
+          <TabsTrigger value="status">Status History</TabsTrigger>
+          <TabsTrigger value="summary">Daily Summary</TabsTrigger>
+        </TabsList>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="animate-pulse flex gap-4 p-4 rounded-lg border border-border/50"
-            >
-              <div className="h-9 w-9 rounded-lg bg-muted" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-2/3 bg-muted rounded" />
-                <div className="h-3 w-1/3 bg-muted rounded" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : allActivities.length === 0 ? (
-        <div className="text-center py-16">
-          <ActivityIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-lg font-medium text-muted-foreground">No activity yet</p>
-          <p className="text-sm text-muted-foreground/60 mt-1">
-            Events will appear here as tasks are created and updated
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {groupedByDay.map((group) => (
-            <div key={group.date}>
-              <DayHeader date={group.date} />
-              <div className={cn(compact ? 'space-y-0.5' : 'space-y-2', 'pb-4')}>
-                {group.activities.map((activity) => (
-                  <ActivityCard
-                    key={activity.id}
-                    activity={activity}
-                    compact={compact}
-                    onTaskClick={onTaskClick}
-                    isNew={newIds.has(activity.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+        <TabsContent value="status" className="mt-4">
+          <StatusHistoryPanel />
+        </TabsContent>
 
-          {/* Infinite scroll sentinel */}
-          <div ref={sentinelRef} className="h-1" />
+        <TabsContent value="summary" className="mt-4">
+          <DailySummaryPanel />
+        </TabsContent>
 
-          {isFetchingNextPage && (
-            <div className="flex items-center justify-center py-4 gap-2">
-              <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Loading more…</span>
+        <TabsContent value="feed" className="mt-4">
+          {/* Filter bar */}
+          {showFilters && (
+            <div className="mb-4 p-3 rounded-lg border border-border bg-card">
+              <ActivityFilterBar filters={filters} onFiltersChange={setFilters} />
             </div>
           )}
 
-          {!hasNextPage && allActivities.length > 0 && (
-            <div className="flex items-center justify-center py-4">
-              <span className="text-xs text-muted-foreground">End of activity log</span>
+          {/* Content */}
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse flex gap-4 p-4 rounded-lg border border-border/50"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-2/3 bg-muted rounded" />
+                    <div className="h-3 w-1/3 bg-muted rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : allActivities.length === 0 ? (
+            <div className="text-center py-16">
+              <ActivityIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-lg font-medium text-muted-foreground">No activity yet</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                Events will appear here as tasks are created and updated
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {groupedByDay.map((group) => (
+                <div key={group.date}>
+                  <DayHeader date={group.date} />
+                  <div className={cn(compact ? 'space-y-0.5' : 'space-y-2', 'pb-4')}>
+                    {group.activities.map((activity) => (
+                      <ActivityCard
+                        key={activity.id}
+                        activity={activity}
+                        compact={compact}
+                        onTaskClick={onTaskClick}
+                        isNew={newIds.has(activity.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Infinite scroll sentinel */}
+              <div ref={sentinelRef} className="h-1" />
+
+              {isFetchingNextPage && (
+                <div className="flex items-center justify-center py-4 gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Loading more…</span>
+                </div>
+              )}
+
+              {!hasNextPage && allActivities.length > 0 && (
+                <div className="flex items-center justify-center py-4">
+                  <span className="text-xs text-muted-foreground">End of activity log</span>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
