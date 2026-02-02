@@ -84,7 +84,11 @@ export class BacklogRepository {
    */
   private taskToMarkdown(task: Task): string {
     const { description, ...frontmatter } = task;
-    return matter.stringify(description, frontmatter);
+    // Strip undefined values — YAML.dump can't serialize them
+    const clean = Object.fromEntries(
+      Object.entries(frontmatter).filter(([, v]) => v !== undefined)
+    );
+    return matter.stringify(description || '', clean);
   }
 
   /**
