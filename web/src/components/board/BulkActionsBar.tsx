@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Trash2, Archive, ArrowRight, CheckSquare } from 'lucide-react';
+import { X, Trash2, Archive, ArrowRight, CheckSquare, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useUpdateTask, useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
+import { useDemoteTask } from '@/hooks/useBacklog';
 import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '@veritas-kanban/shared';
 
@@ -61,6 +62,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const archiveTask = useArchiveTask();
+  const demoteTask = useDemoteTask();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -130,6 +132,16 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
     setIsProcessing(true);
     try {
       await Promise.all(Array.from(selectedIds).map((id) => archiveTask.mutateAsync(id)));
+      clearSelection();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleMoveToBacklog = async () => {
+    setIsProcessing(true);
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => demoteTask.mutateAsync(id)));
       clearSelection();
     } finally {
       setIsProcessing(false);
@@ -251,6 +263,17 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
                 {isProcessing ? 'Moving...' : 'Move'}
               </Button>
             )}
+
+            {/* Move to Backlog */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMoveToBacklog}
+              disabled={isProcessing}
+            >
+              <Inbox className="h-4 w-4 mr-1" />
+              To Backlog
+            </Button>
 
             {/* Archive */}
             <Button

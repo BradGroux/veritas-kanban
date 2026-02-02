@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { registerTaskCommands } from './commands/tasks.js';
+import { registerBacklogCommands } from './commands/backlog.js';
 import { registerAgentCommands } from './commands/agents.js';
 import { registerAutomationCommands } from './commands/automation.js';
 import { registerNotificationCommands } from './commands/notifications.js';
@@ -21,6 +22,7 @@ program
 
 // Register all command groups
 registerTaskCommands(program);
+registerBacklogCommands(program);
 registerAgentCommands(program);
 registerAutomationCommands(program);
 registerNotificationCommands(program);
