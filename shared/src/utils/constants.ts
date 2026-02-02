@@ -17,7 +17,6 @@ export const PRIORITY_LABELS: Record<string, string> = {
  */
 export const STATUS_LABELS: Record<string, string> = {
   todo: 'To Do',
-  planning: 'Planning',
   'in-progress': 'In Progress',
   done: 'Done',
   blocked: 'Blocked',

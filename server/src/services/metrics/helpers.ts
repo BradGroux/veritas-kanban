@@ -10,18 +10,63 @@ export const TELEMETRY_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'telemet
 
 /**
  * Get timestamp for start of period
+ * For 'custom' period, returns null (use from/to params instead)
  */
-export function getPeriodStart(period: MetricsPeriod): string {
+export function getPeriodStart(period: MetricsPeriod, customFrom?: string): string | null {
+  // Custom period uses explicit from/to params
+  if (period === 'custom') {
+    return customFrom || null;
+  }
+
+  // All period returns null (no date filter)
+  if (period === 'all') {
+    return null;
+  }
+
   const now = new Date();
   switch (period) {
+    case 'today':
+      // Start of current day (00:00:00)
+      now.setHours(0, 0, 0, 0);
+      break;
     case '24h':
-      now.setHours(now.getHours() - 24);
+      now.setDate(now.getDate() - 1);
+      break;
+    case '3d':
+      now.setDate(now.getDate() - 3);
+      break;
+    case 'wtd': {
+      // Start of current week (Monday 00:00:00)
+      now.setHours(0, 0, 0, 0);
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1; // Sunday is 0, Monday is 1
+      now.setDate(now.getDate() - diff);
+      break;
+    }
+    case 'mtd':
+      // Start of current month (1st day 00:00:00)
+      now.setDate(1);
+      now.setHours(0, 0, 0, 0);
+      break;
+    case 'ytd':
+      // Start of current year (Jan 1 00:00:00)
+      now.setMonth(0, 1);
+      now.setHours(0, 0, 0, 0);
       break;
     case '7d':
       now.setDate(now.getDate() - 7);
       break;
     case '30d':
       now.setDate(now.getDate() - 30);
+      break;
+    case '3m':
+      now.setMonth(now.getMonth() - 3);
+      break;
+    case '6m':
+      now.setMonth(now.getMonth() - 6);
+      break;
+    case '12m':
+      now.setMonth(now.getMonth() - 12);
       break;
   }
   return now.toISOString();
@@ -30,14 +75,72 @@ export function getPeriodStart(period: MetricsPeriod): string {
 /**
  * Get timestamp range for previous period (for trend comparison)
  */
-export function getPreviousPeriodRange(period: MetricsPeriod): { since: string; until: string } {
+export function getPreviousPeriodRange(
+  period: MetricsPeriod,
+  customFrom?: string,
+  customTo?: string
+): { since: string; until: string } | null {
+  // Can't calculate trends for 'all' or 'custom' periods
+  if (period === 'all') {
+    return null;
+  }
+
+  if (period === 'custom') {
+    if (!customFrom || !customTo) return null;
+    const fromDate = new Date(customFrom);
+    const toDate = new Date(customTo);
+    const periodMs = toDate.getTime() - fromDate.getTime();
+    const previousStart = new Date(fromDate.getTime() - periodMs);
+    return {
+      since: previousStart.toISOString(),
+      until: fromDate.toISOString(),
+    };
+  }
+
   const now = new Date();
-  const periodMs =
-    period === '24h'
-      ? 24 * 60 * 60 * 1000
-      : period === '7d'
-        ? 7 * 24 * 60 * 60 * 1000
-        : 30 * 24 * 60 * 60 * 1000;
+  let periodMs: number;
+
+  switch (period) {
+    case 'today':
+      // Previous day
+      periodMs = 24 * 60 * 60 * 1000;
+      break;
+    case '24h':
+      periodMs = 24 * 60 * 60 * 1000;
+      break;
+    case '3d':
+      periodMs = 3 * 24 * 60 * 60 * 1000;
+      break;
+    case 'wtd':
+      // Previous week
+      periodMs = 7 * 24 * 60 * 60 * 1000;
+      break;
+    case 'mtd':
+      // Previous month (approximate - use 30 days)
+      periodMs = 30 * 24 * 60 * 60 * 1000;
+      break;
+    case 'ytd':
+      // Previous year (approximate)
+      periodMs = 365 * 24 * 60 * 60 * 1000;
+      break;
+    case '7d':
+      periodMs = 7 * 24 * 60 * 60 * 1000;
+      break;
+    case '30d':
+      periodMs = 30 * 24 * 60 * 60 * 1000;
+      break;
+    case '3m':
+      periodMs = 90 * 24 * 60 * 60 * 1000;
+      break;
+    case '6m':
+      periodMs = 180 * 24 * 60 * 60 * 1000;
+      break;
+    case '12m':
+      periodMs = 365 * 24 * 60 * 60 * 1000;
+      break;
+    default:
+      return null;
+  }
 
   const currentPeriodStart = new Date(now.getTime() - periodMs);
   const previousPeriodStart = new Date(currentPeriodStart.getTime() - periodMs);

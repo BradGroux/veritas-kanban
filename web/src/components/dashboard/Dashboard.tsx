@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { 
   useMetrics, 
+  useTaskCost,
+  useUtilization,
   formatTokens, 
   formatDuration, 
   formatPercent,
@@ -10,31 +12,14 @@ import {
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { 
-  CheckCircle, 
-  Archive,
-  ListTodo,
-  Play,
-  Ban,
-  RefreshCw,
-  MessageSquare,
-  Wrench,
-  Link2,
-  HelpCircle,
   TrendingUp,
   TrendingDown,
   Minus,
-  Download,
+  RefreshCw,
 } from 'lucide-react';
 import { ExportDialog } from './ExportDialog';
+import { DashboardFilterBar } from './DashboardFilterBar';
 import { cn } from '@/lib/utils';
 import { DrillDownPanel, type DrillDownType } from './DrillDownPanel';
 import { TasksDrillDown } from './TasksDrillDown';
@@ -79,59 +64,7 @@ function TrendIndicator({
     </span>
   );
 }
-import { BudgetCard } from './BudgetCard';
-
-interface MetricCardProps {
-  label: string;
-  value: string | number;
-  icon?: React.ReactNode;
-  color?: 'default' | 'blue' | 'yellow' | 'green' | 'red' | 'muted';
-  subValue?: string;
-  onClick?: () => void;
-  clickable?: boolean;
-}
-
-function MetricCard({ label, value, icon, color = 'default', subValue, onClick, clickable }: MetricCardProps) {
-  const colorClasses = {
-    default: 'bg-card border-border',
-    blue: 'bg-blue-500/10 border-blue-500/20',
-    yellow: 'bg-yellow-500/10 border-yellow-500/20',
-    green: 'bg-green-500/10 border-green-500/20',
-    red: 'bg-red-500/10 border-red-500/20',
-    muted: 'bg-muted/50 border-muted-foreground/20',
-  };
-
-  const textClasses = {
-    default: 'text-foreground',
-    blue: 'text-blue-500',
-    yellow: 'text-yellow-500',
-    green: 'text-green-500',
-    red: 'text-red-500',
-    muted: 'text-muted-foreground',
-  };
-
-  const Component = clickable ? 'button' : 'div';
-
-  return (
-    <Component 
-      className={cn(
-        'rounded-lg border p-4 flex flex-col items-center justify-center min-w-[100px]',
-        colorClasses[color],
-        clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all focus:outline-none focus:ring-2 focus:ring-ring'
-      )}
-      onClick={onClick}
-    >
-      {icon && <div className={cn('mb-1', textClasses[color])}>{icon}</div>}
-      <div className={cn('text-2xl font-bold', textClasses[color])}>
-        {value}
-      </div>
-      <div className="text-xs text-muted-foreground text-center">{label}</div>
-      {subValue && (
-        <div className="text-xs text-muted-foreground mt-1">{subValue}</div>
-      )}
-    </Component>
-  );
-}
+// BudgetCard moved to BoardSidebar
 
 interface StatCardProps {
   title: React.ReactNode;
@@ -189,12 +122,16 @@ function StatRow({ label, value, subLabel, highlight }: StatRowProps) {
 }
 
 export function Dashboard() {
-  const [period, setPeriod] = useState<MetricsPeriod>('24h');
+  const [period, setPeriod] = useState<MetricsPeriod>('3d');
+  const [customFrom, setCustomFrom] = useState<string | undefined>();
+  const [customTo, setCustomTo] = useState<string | undefined>();
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
-  const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project);
+  const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project, customFrom, customTo);
+  const { data: taskCost } = useTaskCost(period, project, customFrom, customTo);
+  const { data: utilization } = useUtilization(period, customFrom, customTo);
   const { data: tasks } = useTasks();
   const { data: projectsList = [] } = useProjects();
   
@@ -238,46 +175,24 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Header with filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Select value={project || 'all'} onValueChange={(v) => setProject(v === 'all' ? undefined : v)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Projects" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Projects</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Select value={period} onValueChange={(v) => setPeriod(v as MetricsPeriod)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24h</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setExportDialogOpen(true)}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
-            {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
-          </div>
-        </div>
+      {/* Filter Bar */}
+      <DashboardFilterBar
+        period={period}
+        onPeriodChange={(p, from, to) => {
+          setPeriod(p);
+          setCustomFrom(from);
+          setCustomTo(to);
+        }}
+        project={project}
+        onProjectChange={setProject}
+        projects={projects}
+        onExportClick={() => setExportDialogOpen(true)}
+      />
+
+      {/* Updated timestamp */}
+      <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground -mt-2">
+        <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+        {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
       </div>
       
       {/* Export Dialog */}
@@ -288,106 +203,8 @@ export function Dashboard() {
         projects={projects}
       />
 
-      {/* Task Counts Row */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Tasks</h3>
-        {isLoading ? (
-          <div className="grid grid-cols-7 gap-3">
-            {[...Array(7)].map((_, i) => (
-              <Skeleton key={i} className="h-24 rounded-lg" />
-            ))}
-          </div>
-        ) : metrics && (
-          <div className="grid grid-cols-7 gap-3">
-            <MetricCard 
-              label="Total" 
-              value={metrics.tasks.total}
-              icon={<ListTodo className="h-4 w-4" />}
-              onClick={() => setDrillDown('tasks')}
-              clickable
-            />
-            <MetricCard 
-              label="To Do" 
-              value={metrics.tasks.byStatus['todo'] || 0}
-              color="muted"
-            />
-            <MetricCard 
-              label="In Progress" 
-              value={metrics.tasks.byStatus['in-progress'] || 0}
-              icon={<Play className="h-4 w-4" />}
-              color="blue"
-            />
-            <MetricCard 
-              label="Blocked" 
-              value={metrics.tasks.byStatus['blocked'] || 0}
-              icon={<Ban className="h-4 w-4" />}
-              color="red"
-            />
-            <MetricCard 
-              label="Done" 
-              value={metrics.tasks.byStatus['done'] || 0}
-              icon={<CheckCircle className="h-4 w-4" />}
-              color="green"
-            />
-            <MetricCard 
-              label="Archived" 
-              value={metrics.tasks.archived}
-              icon={<Archive className="h-4 w-4" />}
-              color="muted"
-            />
-            <MetricCard 
-              label="Completed" 
-              value={metrics.tasks.completed}
-              icon={<CheckCircle className="h-4 w-4" />}
-              color="green"
-              subValue="Done + Archived"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Blocked Reason Breakdown (only show if there are blocked tasks) */}
-      {metrics && metrics.tasks.byStatus['blocked'] > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Blocked Tasks Breakdown</h3>
-          <div className="grid grid-cols-5 gap-3">
-            <MetricCard 
-              label="Waiting on Feedback" 
-              value={metrics.tasks.byBlockedReason['waiting-on-feedback'] || 0}
-              icon={<MessageSquare className="h-4 w-4" />}
-              color="yellow"
-            />
-            <MetricCard 
-              label="Technical Snag" 
-              value={metrics.tasks.byBlockedReason['technical-snag'] || 0}
-              icon={<Wrench className="h-4 w-4" />}
-              color="red"
-            />
-            <MetricCard 
-              label="Prerequisite" 
-              value={metrics.tasks.byBlockedReason['prerequisite'] || 0}
-              icon={<Link2 className="h-4 w-4" />}
-              color="blue"
-            />
-            <MetricCard 
-              label="Other" 
-              value={metrics.tasks.byBlockedReason['other'] || 0}
-              icon={<HelpCircle className="h-4 w-4" />}
-              color="muted"
-            />
-            <MetricCard 
-              label="Unspecified" 
-              value={metrics.tasks.byBlockedReason['unspecified'] || 0}
-              icon={<Ban className="h-4 w-4" />}
-              color="muted"
-            />
-          </div>
-        </div>
-      )}
-
       {/* Agent Operations Row */}
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Agent Operations ({period})</h3>
         {isLoading ? (
           <div className="grid grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
@@ -526,17 +343,97 @@ export function Dashboard() {
         ) : null}
       </div>
 
-      {/* Budget Tracking Card */}
-      <BudgetCard project={project} />
+      {/* Budget moved to BoardSidebar */}
 
-      {/* Agent Comparison */}
-      <AgentComparison project={project} />
-
-      {/* Agent Status Timeline */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Agent Activity</h3>
+      {/* Agent Comparison (left) + Agent Activity (right) */}
+      <div className="grid grid-cols-2 gap-4">
+        <AgentComparison project={project} />
         <div className="rounded-lg border bg-card p-4">
           <StatusTimeline />
+        </div>
+      </div>
+
+      {/* Cost per Task + Agent Utilization */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Cost per Task */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Cost per Task</h3>
+          {taskCost ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total Cost</span>
+                <span className="font-bold text-lg">${taskCost.totalCost.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Avg per Task</span>
+                <span className="font-semibold">${taskCost.avgCostPerTask.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm pb-2 border-b">
+                <span className="text-muted-foreground">Tasks with Cost</span>
+                <span className="font-semibold">{taskCost.tasks.length}</span>
+              </div>
+              <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {taskCost.tasks.slice(0, 10).map((t) => (
+                  <button
+                    key={t.taskId}
+                    className="flex items-center justify-between w-full text-left text-sm hover:bg-muted/50 rounded px-2 py-1 transition-colors"
+                    onClick={() => handleTaskClick(t.taskId)}
+                  >
+                    <span className="truncate flex-1 mr-2 text-muted-foreground">
+                      {t.taskTitle || t.taskId}
+                    </span>
+                    <span className="font-mono font-medium shrink-0">
+                      ${t.estimatedCost.toFixed(2)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Skeleton className="h-[200px]" />
+          )}
+        </div>
+
+        {/* Agent Utilization */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Agent Utilization</h3>
+          {utilization ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-sm">Overall</span>
+                <span className={cn(
+                  'font-bold text-lg',
+                  utilization.utilizationPercent > 50 ? 'text-green-500' :
+                  utilization.utilizationPercent > 20 ? 'text-yellow-500' : 'text-muted-foreground'
+                )}>
+                  {utilization.utilizationPercent.toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Active Time</span>
+                <span className="font-semibold">{formatDuration(utilization.totalActiveMs)}</span>
+              </div>
+              <div className="border-t pt-2 space-y-1.5 max-h-[200px] overflow-y-auto">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Daily</div>
+                {utilization.daily.map((d) => (
+                  <div key={d.date} className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground w-20 shrink-0 text-xs">{d.date.slice(5)}</span>
+                    <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 rounded-sm transition-all"
+                        style={{ width: `${Math.min(100, d.utilizationPercent)}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-xs w-12 text-right shrink-0">
+                      {d.utilizationPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Skeleton className="h-[200px]" />
+          )}
         </div>
       </div>
 

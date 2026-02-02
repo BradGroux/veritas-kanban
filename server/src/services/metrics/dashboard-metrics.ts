@@ -45,8 +45,10 @@ const log = createLogger('dashboard-metrics');
 export async function computeAllMetrics(
   taskService: TaskService,
   telemetryDir: string,
-  period: MetricsPeriod = '24h',
-  project?: string
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<{
   tasks: TaskMetrics;
   runs: RunMetrics;
@@ -54,7 +56,7 @@ export async function computeAllMetrics(
   duration: DurationMetrics;
   trends: TrendComparison;
 }> {
-  const since = getPeriodStart(period);
+  const since = getPeriodStart(period, from);
   const files = await getEventFiles(telemetryDir, since);
 
   // Combined accumulator for single-pass processing
@@ -87,7 +89,8 @@ export async function computeAllMetrics(
           const event = JSON.parse(line) as AnyTelemetryEvent;
 
           // Early timestamp filter
-          if (event.timestamp < since) continue;
+          if (since && event.timestamp < since) continue;
+          if (to && event.timestamp > to) continue;
           if (project && event.project !== project) continue;
 
           const eventType = event.type;
@@ -106,7 +109,10 @@ export async function computeAllMetrics(
               runAcc.errors++;
               agentAcc.errors++;
             } else {
-              if (runEvent.success) {
+              const isSuccess =
+                runEvent.success === true ||
+                (runEvent as unknown as Record<string, unknown>).status === 'success';
+              if (isSuccess) {
                 runAcc.successes++;
                 agentAcc.successes++;
               } else {
@@ -163,8 +169,8 @@ export async function computeAllMetrics(
     }
   }
 
-  // Get task metrics (separate query, always fast)
-  const tasks = await computeTaskMetrics(taskService, project);
+  // Get task metrics — filtered by period like everything else
+  const tasks = await computeTaskMetrics(taskService, project, since);
 
   // Build run metrics
   const totalRuns = runAcc.successes + runAcc.failures + runAcc.errors;
@@ -258,7 +264,23 @@ export async function computeAllMetrics(
   };
 
   // Calculate trends by comparing with previous period
-  const previousRange = getPreviousPeriodRange(period);
+  const previousRange = getPreviousPeriodRange(period, from, to);
+
+  // If trends can't be calculated for this period (e.g., 'all' or missing custom dates), use flat trends
+  if (!previousRange) {
+    const trends: TrendComparison = {
+      runsTrend: 'flat',
+      runsChange: 0,
+      successRateTrend: 'flat',
+      successRateChange: 0,
+      tokensTrend: 'flat',
+      tokensChange: 0,
+      durationTrend: 'flat',
+      durationChange: 0,
+    };
+    return { tasks, runs, tokens, duration, trends };
+  }
+
   const previousFiles = await getEventFiles(telemetryDir, previousRange.since);
 
   // Quick accumulator for previous period (runs, tokens, duration only)
@@ -283,7 +305,10 @@ export async function computeAllMetrics(
           if (event.type === 'run.completed') {
             const runEvent = event as RunTelemetryEvent;
             prevRuns++;
-            if (runEvent.success) prevSuccesses++;
+            const wasSuccess =
+              runEvent.success === true ||
+              (runEvent as unknown as Record<string, unknown>).status === 'success';
+            if (wasSuccess) prevSuccesses++;
             if (runEvent.durationMs && runEvent.durationMs > 0) {
               prevDurationSum += runEvent.durationMs;
               prevDurationCount++;
@@ -329,10 +354,12 @@ export async function computeAllMetrics(
  */
 export async function computeTrends(
   telemetryDir: string,
-  period: '7d' | '30d',
-  project?: string
+  period: MetricsPeriod,
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<TrendsData> {
-  const since = getPeriodStart(period);
+  const since = getPeriodStart(period, from);
   const files = await getEventFiles(telemetryDir, since);
 
   // Accumulator per day
@@ -347,12 +374,35 @@ export async function computeTrends(
       inputTokens: number;
       outputTokens: number;
       durations: number[];
+      costEstimate: number;
+      tasksCreated: number;
+      statusChanges: number;
+      tasksArchived: number;
     }
   >();
 
   // Initialize all days in the period
-  const startDate = new Date(since);
-  const endDate = new Date();
+  if (period === 'custom' && (!from || !to)) {
+    throw new Error('Custom trends require from/to');
+  }
+
+  let startDate: Date;
+  if (since) {
+    startDate = new Date(since);
+  } else {
+    // 'all' period: infer start from earliest telemetry file date
+    const dates = files
+      .map((f) => {
+        const match = f.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
+        return match?.[1];
+      })
+      .filter((d): d is string => Boolean(d))
+      .sort();
+
+    startDate = dates.length > 0 ? new Date(dates[0] + 'T00:00:00.000Z') : new Date();
+  }
+
+  const endDate = to ? new Date(to) : new Date();
   for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10);
     dailyData.set(dateStr, {
@@ -364,6 +414,10 @@ export async function computeTrends(
       inputTokens: 0,
       outputTokens: 0,
       durations: [],
+      costEstimate: 0,
+      tasksCreated: 0,
+      statusChanges: 0,
+      tasksArchived: 0,
     });
   }
 
@@ -379,7 +433,8 @@ export async function computeTrends(
           const event = JSON.parse(line) as AnyTelemetryEvent;
 
           // Early timestamp filter
-          if (event.timestamp < since) continue;
+          if (since && event.timestamp < since) continue;
+          if (to && event.timestamp > to) continue;
           if (project && event.project !== project) continue;
 
           const dateStr = event.timestamp.slice(0, 10);
@@ -393,14 +448,30 @@ export async function computeTrends(
               inputTokens: 0,
               outputTokens: 0,
               durations: [],
+              costEstimate: 0,
+              tasksCreated: 0,
+              statusChanges: 0,
+              tasksArchived: 0,
             });
           }
           const dayAcc = dailyData.get(dateStr)!;
 
+          // Count task activity events
+          if (event.type === 'task.created') {
+            dayAcc.tasksCreated++;
+          } else if (event.type === 'task.status_changed') {
+            dayAcc.statusChanges++;
+          } else if (event.type === 'task.archived') {
+            dayAcc.tasksArchived++;
+          }
+
           if (event.type === 'run.completed') {
             const runEvent = event as RunTelemetryEvent;
             dayAcc.runs++;
-            if (runEvent.success) {
+            const isSuccess =
+              runEvent.success === true ||
+              (runEvent as unknown as Record<string, unknown>).status === 'success';
+            if (isSuccess) {
               dayAcc.successes++;
             } else {
               dayAcc.failures++;
@@ -418,6 +489,11 @@ export async function computeTrends(
             dayAcc.totalTokens += totalTokens;
             dayAcc.inputTokens += tokenEvent.inputTokens;
             dayAcc.outputTokens += tokenEvent.outputTokens;
+            // Accumulate reported cost for daily cost estimates
+            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
+            if (typeof eventCost === 'number' && eventCost > 0) {
+              dayAcc.costEstimate = (dayAcc.costEstimate || 0) + eventCost;
+            }
           }
         } catch {
           // Intentionally silent: skip malformed NDJSON line
@@ -452,7 +528,11 @@ export async function computeTrends(
       totalTokens: data.totalTokens,
       inputTokens: data.inputTokens,
       outputTokens: data.outputTokens,
+      costEstimate: Math.round(data.costEstimate * 100) / 100,
       avgDurationMs,
+      tasksCreated: data.tasksCreated,
+      statusChanges: data.statusChanges,
+      tasksArchived: data.tasksArchived,
     });
   }
 
@@ -499,7 +579,7 @@ export async function computeAgentComparison(
         try {
           const event = JSON.parse(line) as AnyTelemetryEvent;
 
-          if (event.timestamp < since) continue;
+          if (since && event.timestamp < since) continue;
           if (project && event.project !== project) continue;
 
           const eventType = event.type;
@@ -529,7 +609,10 @@ export async function computeAgentComparison(
               acc.errors++;
             } else {
               acc.runs++;
-              if (runEvent.success) {
+              const isSuccess =
+                runEvent.success === true ||
+                (runEvent as unknown as Record<string, unknown>).status === 'success';
+              if (isSuccess) {
                 acc.successes++;
               } else {
                 acc.failures++;
@@ -565,9 +648,12 @@ export async function computeAgentComparison(
             acc.totalTokens += totalTokens;
             acc.inputTokens += tokenEvent.inputTokens;
             acc.outputTokens += tokenEvent.outputTokens;
-            // Cost estimate: $0.01/1K input, $0.03/1K output
+            // Prefer reported cost; fall back to estimation ($0.01/1K in, $0.03/1K out)
+            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
             acc.costEstimate +=
-              (tokenEvent.inputTokens / 1000) * 0.01 + (tokenEvent.outputTokens / 1000) * 0.03;
+              typeof eventCost === 'number' && eventCost > 0
+                ? eventCost
+                : (tokenEvent.inputTokens / 1000) * 0.01 + (tokenEvent.outputTokens / 1000) * 0.03;
           }
         } catch {
           // Intentionally silent: skip malformed NDJSON line
@@ -681,5 +767,187 @@ export async function computeAgentComparison(
     recommendations,
     totalAgents: agentData.size,
     qualifyingAgents: agents.length,
+  };
+}
+
+/**
+ * Compute cost per task — aggregates token usage and cost by taskId.
+ */
+export async function computeTaskCost(
+  telemetryDir: string,
+  taskService: TaskService,
+  period: MetricsPeriod,
+  project?: string,
+  from?: string,
+  to?: string
+): Promise<import('./types.js').TaskCostMetrics> {
+  const since = getPeriodStart(period, from);
+  const files = await getEventFiles(telemetryDir, since);
+
+  const taskCosts = new Map<
+    string,
+    { inputTokens: number; outputTokens: number; totalTokens: number; cost: number; runs: number }
+  >();
+
+  for (const filePath of files) {
+    try {
+      const rl = createLineReader(filePath);
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line) as AnyTelemetryEvent;
+          if (since && event.timestamp < since) continue;
+          if (to && event.timestamp > to) continue;
+          if (project && event.project !== project) continue;
+
+          if (event.type === 'run.tokens' && event.taskId) {
+            const tokenEvent = event as TokenTelemetryEvent;
+            const existing = taskCosts.get(event.taskId) || {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              cost: 0,
+              runs: 0,
+            };
+            existing.inputTokens += tokenEvent.inputTokens;
+            existing.outputTokens += tokenEvent.outputTokens;
+            existing.totalTokens +=
+              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
+            if (typeof eventCost === 'number' && eventCost > 0) {
+              existing.cost += eventCost;
+            } else {
+              // Estimate at Opus rates
+              existing.cost +=
+                tokenEvent.inputTokens * (15 / 1e6) + tokenEvent.outputTokens * (75 / 1e6);
+            }
+            existing.runs++;
+            taskCosts.set(event.taskId, existing);
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
+      }
+    }
+  }
+
+  // Look up task titles
+  const allTasks = await taskService.listTasks();
+  const taskMap = new Map(allTasks.map((t) => [t.id, t.title]));
+
+  let totalCost = 0;
+  const tasks: import('./types.js').TaskCostEntry[] = [];
+
+  for (const [taskId, data] of taskCosts) {
+    const cost = Math.round(data.cost * 100) / 100;
+    totalCost += cost;
+    tasks.push({
+      taskId,
+      taskTitle: taskMap.get(taskId),
+      inputTokens: data.inputTokens,
+      outputTokens: data.outputTokens,
+      totalTokens: data.totalTokens,
+      estimatedCost: cost,
+      runs: data.runs,
+      avgCostPerRun: data.runs > 0 ? Math.round((cost / data.runs) * 100) / 100 : 0,
+    });
+  }
+
+  // Sort by cost descending
+  tasks.sort((a, b) => b.estimatedCost - a.estimatedCost);
+
+  return {
+    period,
+    tasks,
+    totalCost: Math.round(totalCost * 100) / 100,
+    avgCostPerTask: tasks.length > 0 ? Math.round((totalCost / tasks.length) * 100) / 100 : 0,
+  };
+}
+
+/**
+ * Compute agent utilization — active vs idle time from status history.
+ */
+export async function computeUtilization(
+  telemetryDir: string,
+  period: MetricsPeriod,
+  from?: string,
+  to?: string
+): Promise<import('./types.js').UtilizationMetrics> {
+  const since = getPeriodStart(period, from);
+  const files = await getEventFiles(telemetryDir, since);
+
+  // Track time between run.started and run.completed events per day
+  const dailyActive = new Map<string, number>();
+  const runStarts = new Map<string, string>(); // agent → start timestamp
+
+  for (const filePath of files) {
+    try {
+      const rl = createLineReader(filePath);
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line) as AnyTelemetryEvent;
+          if (since && event.timestamp < since) continue;
+          if (to && event.timestamp > to) continue;
+
+          if (event.type === 'run.started') {
+            const agent = (event as any).agent || 'unknown';
+            runStarts.set(agent, event.timestamp);
+          } else if (event.type === 'run.completed') {
+            const runEvent = event as RunTelemetryEvent;
+            const agent = runEvent.agent || 'unknown';
+            const durationMs = runEvent.durationMs || 0;
+            if (durationMs > 0) {
+              const dateStr = event.timestamp.slice(0, 10);
+              dailyActive.set(dateStr, (dailyActive.get(dateStr) || 0) + durationMs);
+            }
+            runStarts.delete(agent);
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
+      }
+    }
+  }
+
+  // Build daily utilization (assume 24h per day as total available time)
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const daily: import('./types.js').DailyUtilization[] = [];
+  let totalActiveMs = 0;
+  let totalDays = 0;
+
+  const sortedDates = [...dailyActive.keys()].sort();
+  for (const date of sortedDates) {
+    const activeMs = dailyActive.get(date) || 0;
+    const idleMs = MS_PER_DAY - activeMs;
+    totalActiveMs += activeMs;
+    totalDays++;
+    daily.push({
+      date,
+      activeMs,
+      idleMs: Math.max(0, idleMs),
+      errorMs: 0,
+      utilizationPercent: Math.round((activeMs / MS_PER_DAY) * 10000) / 100,
+    });
+  }
+
+  const totalMs = totalDays * MS_PER_DAY || 1;
+  const totalIdleMs = totalMs - totalActiveMs;
+
+  return {
+    period,
+    totalActiveMs,
+    totalIdleMs: Math.max(0, totalIdleMs),
+    totalErrorMs: 0,
+    utilizationPercent: Math.round((totalActiveMs / totalMs) * 10000) / 100,
+    daily,
   };
 }

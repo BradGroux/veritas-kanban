@@ -1,34 +1,30 @@
-import {
-  Plus,
-  Settings,
-  Keyboard,
-  Activity,
-  ListOrdered,
-  Archive,
-  MessageSquare,
-} from 'lucide-react';
+import { Plus, Settings, Search, ListOrdered, Archive, Inbox, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
-import { ActivitySidebar } from './ActivitySidebar';
-import { ArchiveSidebar } from './ArchiveSidebar';
+// ActivitySidebar removed — merged into ActivityFeed (GH-66)
+// ArchiveSidebar removed — replaced with full-page ArchivePage
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { UserMenu } from './UserMenu';
-import { AgentStatusIndicator } from '@/components/shared/AgentStatusIndicator';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
 import { useState, useCallback } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
+import { useBacklogCount } from '@/hooks/useBacklog';
+import { useTheme } from '@/hooks/useTheme';
+import { Badge } from '@/components/ui/badge';
 
 export function Header() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  // activityOpen removed — sidebar merged into feed (GH-66)
+  // archiveOpen removed — archive is now a full page view
   const [chatOpen, setChatOpen] = useState(false);
-  const { setOpenCreateDialog, setOpenChatPanel, openHelpDialog } = useKeyboard();
+  const { setOpenCreateDialog, setOpenChatPanel } = useKeyboard();
   const { view, setView } = useView();
+  const { data: backlogCount = 0 } = useBacklogCount();
+  const { theme, setTheme } = useTheme();
 
   const openSecuritySettings = useCallback(() => {
     setSettingsTab('security');
@@ -57,8 +53,6 @@ export function Header() {
             </button>
             <div className="h-4 w-px bg-border" aria-hidden="true" />
             <WebSocketIndicator />
-            <div className="h-4 w-px bg-border" aria-hidden="true" />
-            <AgentStatusIndicator onOpenActivityLog={() => setActivityOpen(true)} />
           </div>
 
           <div className="flex items-center gap-2" role="toolbar" aria-label="Board actions">
@@ -67,49 +61,40 @@ export function Header() {
               New Task
             </Button>
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={openHelpDialog}
-              aria-label="Keyboard shortcuts"
-              title="Keyboard shortcuts (?)"
-            >
-              <Keyboard className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setActivityOpen(true)}
-              aria-label="Activity log"
-              title="Activity log"
-            >
-              <Activity className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button
               variant={view === 'activity' ? 'secondary' : 'ghost'}
               size="icon"
               onClick={() => setView(view === 'activity' ? 'board' : 'activity')}
-              aria-label="Activity feed"
-              title="Activity feed"
+              aria-label="Activity"
+              title="Activity"
             >
               <ListOrdered className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
+              variant={view === 'backlog' ? 'secondary' : 'ghost'}
               size="icon"
-              onClick={() => setArchiveOpen(true)}
+              onClick={() => setView(view === 'backlog' ? 'board' : 'backlog')}
+              aria-label="Backlog"
+              title="Backlog"
+              className="relative"
+            >
+              <Inbox className="h-4 w-4" aria-hidden="true" />
+              {backlogCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
+                >
+                  {backlogCount > 99 ? '99+' : backlogCount}
+                </Badge>
+              )}
+            </Button>
+            <Button
+              variant={view === 'archive' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'archive' ? 'board' : 'archive')}
               aria-label="Archive"
               title="Archive"
             >
               <Archive className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setChatOpen(true)}
-              aria-label="Agent Chat"
-              title="Agent Chat (⌘⇧C)"
-            >
-              <MessageSquare className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -120,7 +105,33 @@ export function Header() {
             >
               <Settings className="h-4 w-4" aria-hidden="true" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              aria-label="Toggle theme"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'light' ? (
+                <Moon className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Sun className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
             <UserMenu onOpenSecuritySettings={openSecuritySettings} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+              aria-label="Command palette"
+              title="Command palette (⌘K)"
+              className="gap-1.5 text-muted-foreground"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px]">
+                ⌘K
+              </kbd>
+            </Button>
           </div>
         </div>
       </nav>
@@ -134,8 +145,6 @@ export function Header() {
         }}
         defaultTab={settingsTab}
       />
-      <ActivitySidebar open={activityOpen} onOpenChange={setActivityOpen} />
-      <ArchiveSidebar open={archiveOpen} onOpenChange={setArchiveOpen} />
       <ChatPanel open={chatOpen} onOpenChange={setChatOpen} />
     </header>
   );

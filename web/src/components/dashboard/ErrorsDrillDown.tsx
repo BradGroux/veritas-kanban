@@ -8,10 +8,31 @@ interface ErrorsDrillDownProps {
   period: MetricsPeriod;
   project?: string;
   onTaskClick?: (taskId: string) => void;
+  from?: string;
+  to?: string;
 }
 
-export function ErrorsDrillDown({ period, project, onTaskClick }: ErrorsDrillDownProps) {
-  const { data: failedRuns, isLoading } = useFailedRuns(period, project);
+function getPeriodLabel(period: MetricsPeriod): string {
+  const labels: Record<MetricsPeriod, string> = {
+    today: 'today',
+    '24h': 'last 24 hours',
+    '3d': 'last 3 days',
+    wtd: 'this week',
+    mtd: 'this month',
+    ytd: 'this year',
+    '7d': 'last 7 days',
+    '30d': 'last 30 days',
+    '3m': 'last 3 months',
+    '6m': 'last 6 months',
+    '12m': 'last 12 months',
+    all: 'all time',
+    custom: 'custom period',
+  };
+  return labels[period];
+}
+
+export function ErrorsDrillDown({ period, project, onTaskClick, from, to }: ErrorsDrillDownProps) {
+  const { data: failedRuns, isLoading } = useFailedRuns(period, project, 50, from, to);
 
   if (isLoading) {
     return (
@@ -26,8 +47,11 @@ export function ErrorsDrillDown({ period, project, onTaskClick }: ErrorsDrillDow
   if (!failedRuns || failedRuns.length === 0) {
     return (
       <div className="text-center py-8">
-        <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <p className="text-muted-foreground">No failed runs in the selected period</p>
+        <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center">
+          <span className="text-green-500 text-xl">✓</span>
+        </div>
+        <p className="text-foreground font-medium">All runs successful</p>
+        <p className="text-sm text-muted-foreground mt-1">No failures in the selected period</p>
       </div>
     );
   }
@@ -38,8 +62,7 @@ export function ErrorsDrillDown({ period, project, onTaskClick }: ErrorsDrillDow
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <AlertTriangle className="h-4 w-4 text-red-500" />
         <span>
-          {failedRuns.length} failed run(s) in the{' '}
-          {period === '24h' ? 'last 24 hours' : 'last 7 days'}
+          {failedRuns.length} failed run(s) in the {getPeriodLabel(period)}
         </span>
       </div>
 

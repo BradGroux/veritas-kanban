@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
 import {
-  ChevronDown,
-  ChevronRight,
   Trophy,
   Zap,
   DollarSign,
@@ -16,14 +14,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-
 interface AgentComparisonData {
   agent: string;
   runs: number;
@@ -96,8 +86,7 @@ interface AgentComparisonProps {
 }
 
 export function AgentComparison({ project }: AgentComparisonProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const period = '7d';
   const [sortField, setSortField] = useState<SortField>('runs');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -173,12 +162,8 @@ export function AgentComparison({ project }: AgentComparisonProps) {
   return (
     <div className="rounded-lg border bg-card">
       {/* Header */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-      >
+      <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-2">
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           <h3 className="text-sm font-medium">Agent Comparison</h3>
           {data && (
             <span className="text-xs text-muted-foreground">
@@ -186,22 +171,10 @@ export function AgentComparison({ project }: AgentComparisonProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <Select value={period} onValueChange={(v) => setPeriod(v as '7d' | '30d')}>
-            <SelectTrigger className="h-7 w-[100px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </button>
+      </div>
 
       {/* Content */}
-      {isExpanded && (
-        <div className="p-4 pt-0 space-y-4">
+      <div className="p-4 pt-0 space-y-4">
           {isLoading && (
             <div className="space-y-3">
               <Skeleton className="h-16 w-full" />
@@ -388,7 +361,6 @@ export function AgentComparison({ project }: AgentComparisonProps) {
             </>
           )}
         </div>
-      )}
     </div>
   );
 }

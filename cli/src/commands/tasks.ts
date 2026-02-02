@@ -13,7 +13,7 @@ export function registerTaskCommands(program: Command): void {
     .description('List tasks')
     .option(
       '-s, --status <status>',
-      'Filter by status (todo, planning, in-progress, blocked, done)'
+      'Filter by status (todo, in-progress, blocked, done)'
     )
     .option('-t, --type <type>', 'Filter by type (code, research, content, automation)')
     .option('-p, --project <project>', 'Filter by project')

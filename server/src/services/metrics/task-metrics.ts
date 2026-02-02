@@ -16,11 +16,13 @@ import type {
 } from './types.js';
 
 /**
- * Get task counts by status
+ * Get task counts by status, optionally filtered by time period.
+ * When a period is provided, only tasks updated within that window are counted.
  */
 export async function computeTaskMetrics(
   taskService: TaskService,
-  project?: string
+  project?: string,
+  since?: string | null
 ): Promise<TaskMetrics> {
   const [activeTasks, archivedTasks] = await Promise.all([
     taskService.listTasks(),
@@ -28,15 +30,29 @@ export async function computeTaskMetrics(
   ]);
 
   // Filter by project if specified
-  const filteredActive = project ? activeTasks.filter((t) => t.project === project) : activeTasks;
-  const filteredArchived = project
+  let filteredActive = project ? activeTasks.filter((t) => t.project === project) : activeTasks;
+  let filteredArchived = project
     ? archivedTasks.filter((t) => t.project === project)
     : archivedTasks;
+
+  // Filter by time period if specified (tasks updated within the window)
+  if (since) {
+    const sinceDate = new Date(since).getTime();
+    filteredActive = filteredActive.filter((t) => {
+      const updated = t.updated ? new Date(t.updated).getTime() : 0;
+      const created = t.created ? new Date(t.created).getTime() : 0;
+      return updated >= sinceDate || created >= sinceDate;
+    });
+    filteredArchived = filteredArchived.filter((t) => {
+      const updated = t.updated ? new Date(t.updated).getTime() : 0;
+      const created = t.created ? new Date(t.created).getTime() : 0;
+      return updated >= sinceDate || created >= sinceDate;
+    });
+  }
 
   // Count by status
   const byStatus: Record<TaskStatus, number> = {
     todo: 0,
-    planning: 0,
     'in-progress': 0,
     blocked: 0,
     done: 0,

@@ -201,12 +201,21 @@ export interface AgentOutput {
   timestamp: string;
 }
 
+export interface ActiveAgentInfo {
+  agent: string;
+  status: 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
+  taskId?: string;
+  taskTitle?: string;
+  startedAt: string;
+}
+
 // Global agent status (not per-task)
 export interface GlobalAgentStatus {
   status: 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
   subAgentCount: number;
   activeTask?: string;
   activeTaskTitle?: string;
+  activeAgents: ActiveAgentInfo[];
   lastUpdated: string;
   error?: string;
 }

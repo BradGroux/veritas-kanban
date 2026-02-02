@@ -21,7 +21,6 @@ import {
   Play,
   CheckCircle,
   XCircle,
-  FileEdit,
 } from 'lucide-react';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { formatDuration } from '@/hooks/useTimeTracking';
@@ -105,8 +104,6 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     for (let i = 0; i < pSubs.length; i++) {
       if (pSubs[i].completed !== nSubs[i].completed) return false;
     }
-    // Plan field — presence matters for the indicator
-    if ((pt.plan || '') !== (nt.plan || '')) return false;
     // Verification steps — compare count and checked state
     const pVSteps = pt.verificationSteps || [];
     const nVSteps = nt.verificationSteps || [];
@@ -406,19 +403,7 @@ export const TaskCard = memo(function TaskCard({
                   {task.attachments.length}
                 </span>
               )}
-              {/* Plan indicator */}
-              {task.plan && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 flex items-center gap-1">
-                      <FileEdit className="h-3 w-3" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="font-medium">Has execution plan</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {/* Plan indicator removed — planning was agent-internal */}
               {/* Right side: subtask count + time tracking */}
               {subtaskTotal > 0 && (
                 <Tooltip>

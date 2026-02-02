@@ -34,25 +34,42 @@ export class MetricsService {
     this.telemetryDir = telemetryDir || TELEMETRY_DIR;
   }
 
-  async getTaskMetrics(project?: string): Promise<TaskMetrics> {
-    return computeTaskMetrics(this.taskService, project);
+  async getTaskMetrics(project?: string, since?: string | null): Promise<TaskMetrics> {
+    return computeTaskMetrics(this.taskService, project, since);
   }
 
-  async getRunMetrics(period: MetricsPeriod, project?: string): Promise<RunMetrics> {
-    return computeRunMetrics(this.telemetryDir, period, project);
+  async getRunMetrics(
+    period: MetricsPeriod,
+    project?: string,
+    from?: string,
+    to?: string
+  ): Promise<RunMetrics> {
+    return computeRunMetrics(this.telemetryDir, period, project, from, to);
   }
 
-  async getTokenMetrics(period: MetricsPeriod, project?: string): Promise<TokenMetrics> {
-    return computeTokenMetrics(this.telemetryDir, period, project);
+  async getTokenMetrics(
+    period: MetricsPeriod,
+    project?: string,
+    from?: string,
+    to?: string
+  ): Promise<TokenMetrics> {
+    return computeTokenMetrics(this.telemetryDir, period, project, from, to);
   }
 
-  async getDurationMetrics(period: MetricsPeriod, project?: string): Promise<DurationMetrics> {
-    return computeDurationMetrics(this.telemetryDir, period, project);
+  async getDurationMetrics(
+    period: MetricsPeriod,
+    project?: string,
+    from?: string,
+    to?: string
+  ): Promise<DurationMetrics> {
+    return computeDurationMetrics(this.telemetryDir, period, project, from, to);
   }
 
   async getAllMetrics(
-    period: MetricsPeriod = '24h',
-    project?: string
+    period: MetricsPeriod = '7d',
+    project?: string,
+    from?: string,
+    to?: string
   ): Promise<{
     tasks: TaskMetrics;
     runs: RunMetrics;
@@ -60,11 +77,16 @@ export class MetricsService {
     duration: DurationMetrics;
     trends: TrendComparison;
   }> {
-    return computeAllMetrics(this.taskService, this.telemetryDir, period, project);
+    return computeAllMetrics(this.taskService, this.telemetryDir, period, project, from, to);
   }
 
-  async getTrends(period: '7d' | '30d', project?: string): Promise<TrendsData> {
-    return computeTrends(this.telemetryDir, period, project);
+  async getTrends(
+    period: MetricsPeriod,
+    project?: string,
+    from?: string,
+    to?: string
+  ): Promise<TrendsData> {
+    return computeTrends(this.telemetryDir, period, project, from, to);
   }
 
   async getBudgetMetrics(
@@ -94,10 +116,76 @@ export class MetricsService {
     return computeVelocityMetrics(this.taskService, project, limit);
   }
 
+  async getTaskCost(
+    period: MetricsPeriod,
+    project?: string,
+    from?: string,
+    to?: string
+  ): Promise<import('./types.js').TaskCostMetrics> {
+    const { computeTaskCost } = await import('./dashboard-metrics.js');
+    return computeTaskCost(this.telemetryDir, this.taskService, period, project, from, to);
+  }
+
+  async getUtilization(
+    period: MetricsPeriod,
+    from?: string,
+    to?: string
+  ): Promise<import('./types.js').UtilizationMetrics> {
+    const { statusHistoryService } = await import('../status-history-service.js');
+    const { getPeriodStart } = await import('./helpers.js');
+
+    const since = getPeriodStart(period, from);
+    const sinceDate = since ? new Date(since) : null;
+    const toDate = to ? new Date(to) : new Date();
+
+    // Get daily summaries for the period
+    const daily: import('./types.js').DailyUtilization[] = [];
+    let totalActiveMs = 0;
+    let totalIdleMs = 0;
+    let totalErrorMs = 0;
+
+    // Walk dates in the period
+    const startDate = sinceDate || new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    for (let d = new Date(startDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10);
+      const summary = await statusHistoryService.getDailySummary(dateStr);
+
+      const dayTotal = summary.activeMs + summary.idleMs + summary.errorMs;
+      totalActiveMs += summary.activeMs;
+      totalIdleMs += summary.idleMs;
+      totalErrorMs += summary.errorMs;
+
+      daily.push({
+        date: dateStr,
+        activeMs: summary.activeMs,
+        idleMs: summary.idleMs,
+        errorMs: summary.errorMs,
+        utilizationPercent: dayTotal > 0
+          ? Math.round((summary.activeMs / dayTotal) * 10000) / 100
+          : 0,
+      });
+    }
+
+    const totalMs = totalActiveMs + totalIdleMs + totalErrorMs;
+
+    return {
+      period,
+      totalActiveMs,
+      totalIdleMs,
+      totalErrorMs,
+      utilizationPercent: totalMs > 0
+        ? Math.round((totalActiveMs / totalMs) * 10000) / 100
+        : 0,
+      daily,
+    };
+  }
+
   async getFailedRuns(
     period: MetricsPeriod,
     project?: string,
-    limit = 50
+    limit = 50,
+    from?: string,
+    to?: string
   ): Promise<FailedRunDetails[]> {
     return computeFailedRuns(this.telemetryDir, period, project, limit);
   }

@@ -7,10 +7,31 @@ import { cn } from '@/lib/utils';
 interface DurationDrillDownProps {
   period: MetricsPeriod;
   project?: string;
+  from?: string;
+  to?: string;
 }
 
-export function DurationDrillDown({ period, project }: DurationDrillDownProps) {
-  const { data: metrics, isLoading } = useDurationMetrics(period, project);
+function getPeriodLabel(period: MetricsPeriod): string {
+  const labels: Record<MetricsPeriod, string> = {
+    today: 'today',
+    '24h': 'last 24 hours',
+    '3d': 'last 3 days',
+    wtd: 'this week',
+    mtd: 'this month',
+    ytd: 'this year',
+    '7d': 'last 7 days',
+    '30d': 'last 30 days',
+    '3m': 'last 3 months',
+    '6m': 'last 6 months',
+    '12m': 'last 12 months',
+    all: 'all time',
+    custom: 'custom period',
+  };
+  return labels[period];
+}
+
+export function DurationDrillDown({ period, project, from, to }: DurationDrillDownProps) {
+  const { data: metrics, isLoading } = useDurationMetrics(period, project, from, to);
 
   if (isLoading) {
     return (
@@ -32,32 +53,24 @@ export function DurationDrillDown({ period, project }: DurationDrillDownProps) {
     );
   }
 
-  const periodLabel = period === '24h' ? 'last 24 hours' : 'last 7 days';
-
   return (
     <div className="space-y-6">
       {/* Summary Card */}
       <div className="rounded-lg border bg-card p-4">
         <h4 className="text-sm font-medium text-muted-foreground mb-3">
-          Run Duration Summary ({periodLabel})
+          Run Duration Summary ({getPeriodLabel(period)})
         </h4>
         <div className="grid grid-cols-4 gap-4">
           <div>
-            <div className="text-2xl font-bold text-primary">
-              {metrics.runs}
-            </div>
+            <div className="text-2xl font-bold text-primary">{metrics.runs}</div>
             <div className="text-xs text-muted-foreground">Total Runs</div>
           </div>
           <div>
-            <div className="text-2xl font-bold">
-              {formatDuration(metrics.avgMs)}
-            </div>
+            <div className="text-2xl font-bold">{formatDuration(metrics.avgMs)}</div>
             <div className="text-xs text-muted-foreground">Average</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-green-500">
-              {formatDuration(metrics.p50Ms)}
-            </div>
+            <div className="text-2xl font-bold text-green-500">{formatDuration(metrics.p50Ms)}</div>
             <div className="text-xs text-muted-foreground">Median (p50)</div>
           </div>
           <div>
@@ -75,23 +88,24 @@ export function DurationDrillDown({ period, project }: DurationDrillDownProps) {
           <Bot className="h-4 w-4" />
           Breakdown by Agent
         </h4>
-        
+
         {metrics.byAgent.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">
-            No agent data available
-          </div>
+          <div className="text-center py-4 text-muted-foreground">No agent data available</div>
         ) : (
           <div className="space-y-2">
             {metrics.byAgent.map((agent, index) => {
               // Find fastest and slowest
-              const isFastest = index === metrics.byAgent.length - 1 || 
-                agent.avgMs === Math.min(...metrics.byAgent.map(a => a.avgMs));
-              const isSlowest = index === 0 && metrics.byAgent.length > 1 &&
-                agent.avgMs === Math.max(...metrics.byAgent.map(a => a.avgMs));
-              
+              const isFastest =
+                index === metrics.byAgent.length - 1 ||
+                agent.avgMs === Math.min(...metrics.byAgent.map((a) => a.avgMs));
+              const isSlowest =
+                index === 0 &&
+                metrics.byAgent.length > 1 &&
+                agent.avgMs === Math.max(...metrics.byAgent.map((a) => a.avgMs));
+
               return (
-                <AgentDurationRow 
-                  key={agent.agent} 
+                <AgentDurationRow
+                  key={agent.agent}
                   agent={agent}
                   overallAvg={metrics.avgMs}
                   isFastest={isFastest}
@@ -123,13 +137,15 @@ function AgentDurationRow({ agent, overallAvg, isFastest, isSlowest }: AgentDura
   const diff = agent.avgMs - overallAvg;
   const diffPercent = overallAvg > 0 ? (diff / overallAvg) * 100 : 0;
   const isAboveAvg = diff > 0;
-  
+
   return (
-    <div className={cn(
-      'rounded-lg border p-3',
-      isFastest && 'border-green-500/30 bg-green-500/5',
-      isSlowest && 'border-yellow-500/30 bg-yellow-500/5'
-    )}>
+    <div
+      className={cn(
+        'rounded-lg border p-3',
+        isFastest && 'border-green-500/30 bg-green-500/5',
+        isSlowest && 'border-yellow-500/30 bg-yellow-500/5'
+      )}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-muted-foreground" />
@@ -151,7 +167,7 @@ function AgentDurationRow({ agent, overallAvg, isFastest, isSlowest }: AgentDura
           {agent.runs} runs
         </Badge>
       </div>
-      
+
       <div className="grid grid-cols-4 gap-4 text-sm">
         <div>
           <span className="text-muted-foreground text-xs block">Average</span>
@@ -167,11 +183,9 @@ function AgentDurationRow({ agent, overallAvg, isFastest, isSlowest }: AgentDura
         </div>
         <div className="text-right">
           <span className="text-muted-foreground text-xs block">vs Avg</span>
-          <span className={cn(
-            'font-medium',
-            isAboveAvg ? 'text-red-500' : 'text-green-500'
-          )}>
-            {isAboveAvg ? '+' : ''}{diffPercent.toFixed(1)}%
+          <span className={cn('font-medium', isAboveAvg ? 'text-red-500' : 'text-green-500')}>
+            {isAboveAvg ? '+' : ''}
+            {diffPercent.toFixed(1)}%
           </span>
         </div>
       </div>

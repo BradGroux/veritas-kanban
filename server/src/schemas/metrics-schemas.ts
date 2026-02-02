@@ -5,15 +5,20 @@ import { MetricsPeriodSchema } from './common.js';
  * GET /api/metrics/* query params
  */
 export const MetricsQuerySchema = z.object({
-  period: MetricsPeriodSchema.default('24h'),
+  period: MetricsPeriodSchema.default('7d'),
   project: z.string().optional(),
+  from: z.string().optional(), // ISO date string for custom period start
+  to: z.string().optional(), // ISO date string for custom period end
 });
 
 /**
- * GET /api/metrics/tasks - query params (project only, no period)
+ * GET /api/metrics/tasks - query params
  */
 export const TaskMetricsQuerySchema = z.object({
   project: z.string().optional(),
+  period: MetricsPeriodSchema.default('all'),
+  from: z.string().optional(),
+  to: z.string().optional(),
 });
 
 /**

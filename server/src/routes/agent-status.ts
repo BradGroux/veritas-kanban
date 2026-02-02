@@ -17,6 +17,14 @@ const router: RouterType = Router();
 // Status states
 export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
 
+export interface ActiveAgent {
+  agent: string;
+  status: AgentStatusState;
+  taskId?: string;
+  taskTitle?: string;
+  startedAt: string;
+}
+
 export interface AgentStatus {
   status: AgentStatusState;
   activeTask?: {
@@ -24,6 +32,7 @@ export interface AgentStatus {
     title?: string;
   };
   subAgentCount: number;
+  activeAgents: ActiveAgent[];
   lastUpdated: string;
   errorMessage?: string;
 }
@@ -46,7 +55,7 @@ function loadPersistedStatus(): AgentStatus {
         log.info(
           `[AgentStatus] Restored persisted status: ${parsed.status} (subAgents: ${parsed.subAgentCount})`
         );
-        return parsed;
+        return { activeAgents: [], ...parsed };
       }
     }
   } catch {
@@ -55,6 +64,7 @@ function loadPersistedStatus(): AgentStatus {
   return {
     status: 'idle',
     subAgentCount: 0,
+    activeAgents: [],
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -128,6 +138,7 @@ function resetIdleTimeout(): void {
     currentStatus = {
       status: 'idle',
       subAgentCount: 0,
+      activeAgents: [],
       lastUpdated: new Date().toISOString(),
     };
     persistStatus(currentStatus);
@@ -178,6 +189,14 @@ export function getAgentStatus(): AgentStatus {
 }
 
 // Validation schema for POST
+const activeAgentSchema = z.object({
+  agent: z.string(),
+  status: z.enum(['idle', 'working', 'thinking', 'sub-agent', 'error']).default('working'),
+  taskId: z.string().optional(),
+  taskTitle: z.string().optional(),
+  startedAt: z.string().optional(),
+});
+
 const updateStatusSchema = z.object({
   status: z.enum(['idle', 'working', 'thinking', 'sub-agent', 'error']).optional(),
   activeTask: z
@@ -188,6 +207,7 @@ const updateStatusSchema = z.object({
     .optional()
     .nullable(),
   subAgentCount: z.number().int().min(0).optional(),
+  activeAgents: z.array(activeAgentSchema).optional(),
   errorMessage: z.string().optional().nullable(),
 });
 
@@ -196,11 +216,12 @@ const updateStatusSchema = z.object({
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    const { activeTask, errorMessage, ...rest } = currentStatus;
+    const { activeTask, errorMessage, activeAgents, ...rest } = currentStatus;
     res.json({
       ...rest,
       activeTask: activeTask?.id,
       activeTaskTitle: activeTask?.title,
+      activeAgents: activeAgents || [],
       error: errorMessage,
     });
   })
@@ -237,10 +258,18 @@ router.post(
       newStatus.errorMessage = update.errorMessage ?? undefined;
     }
 
-    // Clear activeTask and errorMessage when going idle
+    if (update.activeAgents !== undefined) {
+      newStatus.activeAgents = update.activeAgents.map((a) => ({
+        ...a,
+        startedAt: a.startedAt || new Date().toISOString(),
+      }));
+    }
+
+    // Clear activeTask, errorMessage, and agents when going idle
     if (update.status === 'idle') {
       newStatus.activeTask = undefined;
       newStatus.errorMessage = undefined;
+      newStatus.activeAgents = [];
     }
 
     const result = updateAgentStatus(newStatus);

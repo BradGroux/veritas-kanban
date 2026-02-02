@@ -1,0 +1,86 @@
+{
+  "repos": [],
+  "agents": [
+    {
+      "type": "claude-code",
+      "name": "Claude Code",
+      "command": "claude",
+      "args": ["--dangerously-skip-permissions"],
+      "enabled": true
+    },
+    {
+      "type": "amp",
+      "name": "Amp",
+      "command": "amp",
+      "args": ["--dangerously-allow-all"],
+      "enabled": true
+    },
+    {
+      "type": "copilot",
+      "name": "GitHub Copilot",
+      "command": "copilot",
+      "args": ["-p"],
+      "enabled": false
+    },
+    {
+      "type": "gemini",
+      "name": "Gemini CLI",
+      "command": "gemini",
+      "args": [],
+      "enabled": false
+    }
+  ],
+  "defaultAgent": "claude-code",
+  "features": {
+    "board": {
+      "showDashboard": true,
+      "showArchiveSuggestions": true,
+      "cardDensity": "normal",
+      "showPriorityIndicators": true,
+      "showProjectBadges": true,
+      "showSprintBadges": true,
+      "enableDragAndDrop": true,
+      "showDoneMetrics": true
+    },
+    "tasks": {
+      "enableTimeTracking": true,
+      "enableSubtaskAutoComplete": true,
+      "enableDependencies": true,
+      "enableAttachments": true,
+      "attachmentMaxFileSize": 10485760,
+      "attachmentMaxPerTask": 20,
+      "attachmentMaxTotalSize": 52428800,
+      "enableComments": true,
+      "defaultPriority": "medium"
+    },
+    "agents": {
+      "timeoutMinutes": 30,
+      "autoCommitOnComplete": false,
+      "autoCleanupWorktrees": false,
+      "enablePreview": true
+    },
+    "telemetry": {
+      "enabled": true,
+      "retentionDays": 90,
+      "enableTraces": false,
+      "enableActivityTracking": true
+    },
+    "notifications": {
+      "enabled": false,
+      "onTaskComplete": true,
+      "onAgentFailure": true,
+      "onReviewNeeded": true,
+      "channel": ""
+    },
+    "archive": {
+      "autoArchiveEnabled": false,
+      "autoArchiveAfterDays": 30
+    },
+    "budget": {
+      "enabled": true,
+      "monthlyTokenLimit": 0,
+      "monthlyCostLimit": 0,
+      "warningThreshold": 80
+    }
+  }
+}

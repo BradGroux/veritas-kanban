@@ -14,9 +14,11 @@ const log = createLogger('token-metrics');
 export async function computeTokenMetrics(
   telemetryDir: string,
   period: MetricsPeriod,
-  project?: string
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<TokenMetrics> {
-  const since = getPeriodStart(period);
+  const since = getPeriodStart(period, from);
   const files = await getEventFiles(telemetryDir, since);
 
   const accumulator: TokenAccumulator = {
@@ -28,35 +30,44 @@ export async function computeTokenMetrics(
     byAgent: new Map(),
   };
 
-  await streamEvents(files, ['run.tokens'], since, project, accumulator, (event, acc) => {
-    const tokenEvent = event as TokenTelemetryEvent;
-    const agent = tokenEvent.agent || 'veritas';
-    // Calculate totalTokens if not provided
-    const totalTokens = tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-    const cacheTokens = tokenEvent.cacheTokens ?? 0;
+  await streamEvents(
+    files,
+    ['run.tokens'],
+    since,
+    project,
+    accumulator,
+    (event, acc) => {
+      const tokenEvent = event as TokenTelemetryEvent;
+      const agent = tokenEvent.agent || 'veritas';
+      // Calculate totalTokens if not provided
+      const totalTokens =
+        tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+      const cacheTokens = tokenEvent.cacheTokens ?? 0;
 
-    acc.totalTokens += totalTokens;
-    acc.inputTokens += tokenEvent.inputTokens;
-    acc.outputTokens += tokenEvent.outputTokens;
-    acc.cacheTokens += cacheTokens;
-    acc.tokensPerRun.push(totalTokens);
+      acc.totalTokens += totalTokens;
+      acc.inputTokens += tokenEvent.inputTokens;
+      acc.outputTokens += tokenEvent.outputTokens;
+      acc.cacheTokens += cacheTokens;
+      acc.tokensPerRun.push(totalTokens);
 
-    if (!acc.byAgent.has(agent)) {
-      acc.byAgent.set(agent, {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheTokens: 0,
-        runs: 0,
-      });
-    }
-    const agentAcc = acc.byAgent.get(agent)!;
-    agentAcc.totalTokens += totalTokens;
-    agentAcc.inputTokens += tokenEvent.inputTokens;
-    agentAcc.outputTokens += tokenEvent.outputTokens;
-    agentAcc.cacheTokens += cacheTokens;
-    agentAcc.runs++;
-  });
+      if (!acc.byAgent.has(agent)) {
+        acc.byAgent.set(agent, {
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheTokens: 0,
+          runs: 0,
+        });
+      }
+      const agentAcc = acc.byAgent.get(agent)!;
+      agentAcc.totalTokens += totalTokens;
+      agentAcc.inputTokens += tokenEvent.inputTokens;
+      agentAcc.outputTokens += tokenEvent.outputTokens;
+      agentAcc.cacheTokens += cacheTokens;
+      agentAcc.runs++;
+    },
+    to
+  );
 
   // Sort for percentile calculations
   accumulator.tokensPerRun.sort((a, b) => a - b);
@@ -126,6 +137,7 @@ export async function computeBudgetMetrics(
   let totalTokens = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let reportedCost = 0; // Sum of event.cost when available (preferred over estimation)
 
   // Stream through files for current month only
   for (const filePath of files) {
@@ -150,6 +162,10 @@ export async function computeBudgetMetrics(
           totalTokens += eventTotal;
           inputTokens += tokenEvent.inputTokens;
           outputTokens += tokenEvent.outputTokens;
+          // Use the reported cost if available (preferred over estimated)
+          if (typeof (tokenEvent as unknown as Record<string, unknown>).cost === 'number') {
+            reportedCost += (tokenEvent as unknown as Record<string, unknown>).cost as number;
+          }
         } catch {
           // Intentionally silent: skip malformed NDJSON line
           continue;
@@ -162,9 +178,10 @@ export async function computeBudgetMetrics(
     }
   }
 
-  // Cost estimation (simplified pricing model)
-  // Input: $0.01 per 1K tokens, Output: $0.03 per 1K tokens
-  const estimatedCost = (inputTokens / 1000) * 0.01 + (outputTokens / 1000) * 0.03;
+  // Cost: prefer reported cost from events; fall back to estimation
+  // Fallback rates: Input $0.01/1K, Output $0.03/1K (rough average across models)
+  const fallbackCost = (inputTokens / 1000) * 0.01 + (outputTokens / 1000) * 0.03;
+  const estimatedCost = reportedCost > 0 ? reportedCost : fallbackCost;
 
   // Burn rate calculations
   const tokensPerDay = daysElapsed > 0 ? totalTokens / daysElapsed : 0;

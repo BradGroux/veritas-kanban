@@ -47,7 +47,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 mb-4" role="search" aria-label="Filter tasks">
+    <div className="flex items-center gap-3" role="search" aria-label="Filter tasks">
       {/* Search */}
       <div className="relative flex-1 max-w-sm">
         <Search

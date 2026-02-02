@@ -3,7 +3,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle, Play, Ban, ListTodo, FileEdit } from 'lucide-react';
+import { CheckCircle, Play, Ban, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskStatus, Task } from '@veritas-kanban/shared';
 
@@ -25,11 +25,6 @@ const statusConfig: Record<
     icon: <ListTodo className="h-4 w-4" />,
     color: 'text-muted-foreground',
     label: 'To Do',
-  },
-  planning: {
-    icon: <FileEdit className="h-4 w-4" />,
-    color: 'text-violet-500',
-    label: 'Planning',
   },
   'in-progress': {
     icon: <Play className="h-4 w-4" />,
@@ -81,7 +76,6 @@ export function TasksDrillDown({
   const statusCounts = useMemo(() => {
     const counts: Record<TaskStatus, number> = {
       todo: 0,
-      planning: 0,
       'in-progress': 0,
       blocked: 0,
       done: 0,

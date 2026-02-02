@@ -1,7 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
 
-export type MetricsPeriod = '24h' | '7d';
+export type MetricsPeriod =
+  | 'today'
+  | '24h'
+  | '3d'
+  | '7d'
+  | '30d'
+  | '3m'
+  | '6m'
+  | '12m'
+  | 'wtd'
+  | 'mtd'
+  | 'ytd'
+  | 'all'
+  | 'custom';
 
 export interface TaskMetrics {
   byStatus: Record<string, number>;
@@ -66,20 +79,36 @@ export interface AllMetrics {
 
 const API_BASE = '/api';
 
-async function fetchMetrics(period: MetricsPeriod, project?: string): Promise<AllMetrics> {
+async function fetchMetrics(
+  period: MetricsPeriod,
+  project?: string,
+  from?: string,
+  to?: string
+): Promise<AllMetrics> {
   const params = new URLSearchParams();
   params.set('period', period);
   if (project) {
     params.set('project', project);
   }
+  if (from) {
+    params.set('from', from);
+  }
+  if (to) {
+    params.set('to', to);
+  }
 
   return apiFetch<AllMetrics>(`${API_BASE}/metrics/all?${params}`);
 }
 
-export function useMetrics(period: MetricsPeriod = '24h', project?: string) {
+export function useMetrics(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
+) {
   return useQuery({
-    queryKey: ['metrics', period, project],
-    queryFn: () => fetchMetrics(period, project),
+    queryKey: ['metrics', period, project, from, to],
+    queryFn: () => fetchMetrics(period, project, from, to),
     refetchInterval: 30000, // Refresh every 30 seconds
     staleTime: 10000, // Consider stale after 10 seconds
   });
@@ -173,7 +202,9 @@ export interface DetailedDurationMetrics extends DurationMetrics {
 async function fetchFailedRuns(
   period: MetricsPeriod,
   project?: string,
-  limit = 50
+  limit = 50,
+  from?: string,
+  to?: string
 ): Promise<FailedRunDetails[]> {
   const params = new URLSearchParams();
   params.set('period', period);
@@ -181,77 +212,202 @@ async function fetchFailedRuns(
     params.set('project', project);
   }
   params.set('limit', String(limit));
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
 
   return apiFetch<FailedRunDetails[]>(`${API_BASE}/metrics/failed-runs?${params}`);
 }
 
 async function fetchRunMetrics(
   period: MetricsPeriod,
-  project?: string
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<DetailedRunMetrics> {
   const params = new URLSearchParams();
   params.set('period', period);
   if (project) {
     params.set('project', project);
   }
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
 
   return apiFetch<DetailedRunMetrics>(`${API_BASE}/metrics/runs?${params}`);
 }
 
 async function fetchTokenMetrics(
   period: MetricsPeriod,
-  project?: string
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<DetailedTokenMetrics> {
   const params = new URLSearchParams();
   params.set('period', period);
   if (project) {
     params.set('project', project);
   }
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
 
   return apiFetch<DetailedTokenMetrics>(`${API_BASE}/metrics/tokens?${params}`);
 }
 
 async function fetchDurationMetrics(
   period: MetricsPeriod,
-  project?: string
+  project?: string,
+  from?: string,
+  to?: string
 ): Promise<DetailedDurationMetrics> {
   const params = new URLSearchParams();
   params.set('period', period);
   if (project) {
     params.set('project', project);
   }
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
 
   return apiFetch<DetailedDurationMetrics>(`${API_BASE}/metrics/duration?${params}`);
 }
 
-export function useFailedRuns(period: MetricsPeriod = '24h', project?: string, limit = 50) {
+export function useFailedRuns(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  limit = 50,
+  from?: string,
+  to?: string
+) {
   return useQuery({
-    queryKey: ['failed-runs', period, project, limit],
-    queryFn: () => fetchFailedRuns(period, project, limit),
+    queryKey: ['failed-runs', period, project, limit, from, to],
+    queryFn: () => fetchFailedRuns(period, project, limit, from, to),
     staleTime: 30000,
   });
 }
 
-export function useRunMetrics(period: MetricsPeriod = '24h', project?: string) {
+export function useRunMetrics(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
+) {
   return useQuery({
-    queryKey: ['run-metrics', period, project],
-    queryFn: () => fetchRunMetrics(period, project),
+    queryKey: ['run-metrics', period, project, from, to],
+    queryFn: () => fetchRunMetrics(period, project, from, to),
     staleTime: 30000,
   });
 }
 
-export function useTokenMetrics(period: MetricsPeriod = '24h', project?: string) {
+export function useTokenMetrics(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
+) {
   return useQuery({
-    queryKey: ['token-metrics', period, project],
-    queryFn: () => fetchTokenMetrics(period, project),
+    queryKey: ['token-metrics', period, project, from, to],
+    queryFn: () => fetchTokenMetrics(period, project, from, to),
     staleTime: 30000,
   });
 }
 
-export function useDurationMetrics(period: MetricsPeriod = '24h', project?: string) {
+export function useDurationMetrics(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
+) {
   return useQuery({
-    queryKey: ['duration-metrics', period, project],
-    queryFn: () => fetchDurationMetrics(period, project),
+    queryKey: ['duration-metrics', period, project, from, to],
+    queryFn: () => fetchDurationMetrics(period, project, from, to),
+    staleTime: 30000,
+  });
+}
+
+// ── Task Cost ───────────────────────────────────────────────────────
+
+export interface TaskCostEntry {
+  taskId: string;
+  taskTitle?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  runs: number;
+  avgCostPerRun: number;
+}
+
+export interface TaskCostMetrics {
+  period: MetricsPeriod;
+  tasks: TaskCostEntry[];
+  totalCost: number;
+  avgCostPerTask: number;
+}
+
+async function fetchTaskCost(
+  period: MetricsPeriod,
+  project?: string,
+  from?: string,
+  to?: string
+): Promise<TaskCostMetrics> {
+  const params = new URLSearchParams();
+  params.set('period', period);
+  if (project) params.set('project', project);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return apiFetch<TaskCostMetrics>(`${API_BASE}/metrics/task-cost?${params}`);
+}
+
+export function useTaskCost(
+  period: MetricsPeriod = '7d',
+  project?: string,
+  from?: string,
+  to?: string
+) {
+  return useQuery({
+    queryKey: ['task-cost', period, project, from, to],
+    queryFn: () => fetchTaskCost(period, project, from, to),
+    staleTime: 30000,
+  });
+}
+
+// ── Agent Utilization ───────────────────────────────────────────────
+
+export interface DailyUtilization {
+  date: string;
+  activeMs: number;
+  idleMs: number;
+  errorMs: number;
+  utilizationPercent: number;
+}
+
+export interface UtilizationMetrics {
+  period: MetricsPeriod;
+  totalActiveMs: number;
+  totalIdleMs: number;
+  totalErrorMs: number;
+  utilizationPercent: number;
+  daily: DailyUtilization[];
+}
+
+async function fetchUtilization(
+  period: MetricsPeriod,
+  from?: string,
+  to?: string
+): Promise<UtilizationMetrics> {
+  const params = new URLSearchParams();
+  params.set('period', period);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return apiFetch<UtilizationMetrics>(`${API_BASE}/metrics/utilization?${params}`);
+}
+
+export function useUtilization(
+  period: MetricsPeriod = '7d',
+  from?: string,
+  to?: string
+) {
+  return useQuery({
+    queryKey: ['utilization', period, from, to],
+    queryFn: () => fetchUtilization(period, from, to),
     staleTime: 30000,
   });
 }

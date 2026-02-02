@@ -19,9 +19,9 @@ import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
-import { useDeleteTask } from '@/hooks/useTasks';
+import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
-import { Trash2, Calendar, Clock, RotateCcw } from 'lucide-react';
+import { Trash2, Archive, Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { Task, BlockedReason } from '@veritas-kanban/shared';
 import { sanitizeText } from '@/lib/sanitize';
 
@@ -41,11 +41,17 @@ export function TaskDetailsTab({
   onRestore,
 }: TaskDetailsTabProps) {
   const deleteTask = useDeleteTask();
+  const archiveTask = useArchiveTask();
   const { settings: featureSettings } = useFeatureSettings();
   const taskSettings = featureSettings.tasks;
 
   const handleDelete = async () => {
     await deleteTask.mutateAsync(task.id);
+    onClose();
+  };
+
+  const handleArchive = async () => {
+    await archiveTask.mutateAsync(task.id);
     onClose();
   };
 
@@ -79,27 +85,7 @@ export function TaskDetailsTab({
         )}
       </div>
 
-      {/* Execution Plan (visible when status is planning or plan has content) */}
-      {(task.status === 'planning' || task.plan) && (
-        <div className="space-y-2">
-          <Label className="text-muted-foreground flex items-center gap-1.5">
-            📋 Execution Plan
-          </Label>
-          {readOnly ? (
-            <div className="text-sm whitespace-pre-wrap text-foreground/80 bg-violet-500/5 border border-violet-500/20 rounded-md p-3 min-h-[60px]">
-              {sanitizeText(task.plan || '') || 'No plan defined'}
-            </div>
-          ) : (
-            <Textarea
-              value={task.plan || ''}
-              onChange={(e) => onUpdate('plan', e.target.value)}
-              placeholder="Define the approach, steps, and considerations..."
-              rows={6}
-              className="resize-none bg-violet-500/5 border-violet-500/20 focus:border-violet-500/40"
-            />
-          )}
-        </div>
-      )}
+      {/* Plan section removed (GH-66 cleanup — planning was agent-internal, not board-level) */}
 
       {/* Metadata Section */}
       <TaskMetadataSection task={task} onUpdate={onUpdate} readOnly={readOnly} />
@@ -176,11 +162,16 @@ export function TaskDetailsTab({
           </Button>
         ) : (
           !readOnly && (
+            <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={handleArchive}>
+              <Archive className="h-4 w-4 mr-2" />
+              Archive
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full">
+                <Button variant="destructive" className="flex-1">
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Task
+                  Delete
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -201,6 +192,7 @@ export function TaskDetailsTab({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            </div>
           )
         )}
       </div>

@@ -11,7 +11,20 @@ import type {
 
 // ── Period & Core Types ─────────────────────────────────────────────
 
-export type MetricsPeriod = '24h' | '7d' | '30d';
+export type MetricsPeriod =
+  | 'today'
+  | '24h'
+  | '3d'
+  | '7d'
+  | '30d'
+  | '3m'
+  | '6m'
+  | '12m'
+  | 'wtd'
+  | 'mtd'
+  | 'ytd'
+  | 'all'
+  | 'custom';
 
 export interface TaskMetrics {
   byStatus: Record<TaskStatus, number>;
@@ -156,11 +169,16 @@ export interface DailyTrendPoint {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  costEstimate: number;
   avgDurationMs: number;
+  // Task activity counts
+  tasksCreated: number;
+  statusChanges: number;
+  tasksArchived: number;
 }
 
 export interface TrendsData {
-  period: '7d' | '30d';
+  period: MetricsPeriod;
   daily: DailyTrendPoint[];
 }
 
@@ -260,6 +278,45 @@ export interface VelocityMetrics {
   averageVelocity: number; // Overall average tasks per sprint
   trend: VelocityTrend; // Current trend indicator
   currentSprint?: CurrentSprintProgress; // Progress on current/active sprint
+}
+
+// ── Cost per Task ───────────────────────────────────────────────────
+
+export interface TaskCostEntry {
+  taskId: string;
+  taskTitle?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  runs: number;
+  avgCostPerRun: number;
+}
+
+export interface TaskCostMetrics {
+  period: MetricsPeriod;
+  tasks: TaskCostEntry[];
+  totalCost: number;
+  avgCostPerTask: number;
+}
+
+// ── Agent Utilization ───────────────────────────────────────────────
+
+export interface UtilizationMetrics {
+  period: MetricsPeriod;
+  totalActiveMs: number;
+  totalIdleMs: number;
+  totalErrorMs: number;
+  utilizationPercent: number; // active / (active + idle + error)
+  daily: DailyUtilization[];
+}
+
+export interface DailyUtilization {
+  date: string;
+  activeMs: number;
+  idleMs: number;
+  errorMs: number;
+  utilizationPercent: number;
 }
 
 // ── Stream Event Handler ────────────────────────────────────────────

@@ -109,7 +109,7 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
   type: z.string().optional(),
-  status: z.enum(['todo', 'planning', 'in-progress', 'blocked', 'done']).optional(),
+  status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
@@ -793,6 +793,31 @@ router.get(
     };
 
     res.json(context);
+  })
+);
+
+// POST /api/tasks/:id/demote - Move active task to backlog
+router.post(
+  '/:id/demote',
+  asyncHandler(async (req, res) => {
+    const { getBacklogService } = await import('../services/backlog-service.js');
+    const backlogService = getBacklogService();
+
+    const task = await backlogService.demoteToBacklog(req.params.id as string);
+
+    // Broadcast change to websocket clients
+    broadcastTaskChange('deleted', task.id);
+
+    // Audit log
+    const authReq = req as AuthenticatedRequest;
+    await auditLog({
+      action: 'task.demoted',
+      actor: authReq.auth?.keyName || 'unknown',
+      resource: task.id,
+      details: { title: task.title },
+    });
+
+    res.json({ success: true, data: task });
   })
 );
 

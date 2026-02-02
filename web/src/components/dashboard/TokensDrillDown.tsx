@@ -7,10 +7,31 @@ import { cn } from '@/lib/utils';
 interface TokensDrillDownProps {
   period: MetricsPeriod;
   project?: string;
+  from?: string;
+  to?: string;
 }
 
-export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
-  const { data: metrics, isLoading } = useTokenMetrics(period, project);
+function getPeriodLabel(period: MetricsPeriod): string {
+  const labels: Record<MetricsPeriod, string> = {
+    today: 'today',
+    '24h': 'last 24 hours',
+    '3d': 'last 3 days',
+    wtd: 'this week',
+    mtd: 'this month',
+    ytd: 'this year',
+    '7d': 'last 7 days',
+    '30d': 'last 30 days',
+    '3m': 'last 3 months',
+    '6m': 'last 6 months',
+    '12m': 'last 12 months',
+    all: 'all time',
+    custom: 'custom period',
+  };
+  return labels[period];
+}
+
+export function TokensDrillDown({ period, project, from, to }: TokensDrillDownProps) {
+  const { data: metrics, isLoading } = useTokenMetrics(period, project, from, to);
 
   if (isLoading) {
     return (
@@ -32,14 +53,12 @@ export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
     );
   }
 
-  const periodLabel = period === '24h' ? 'last 24 hours' : 'last 7 days';
-
   return (
     <div className="space-y-6">
       {/* Summary Card */}
       <div className="rounded-lg border bg-card p-4">
         <h4 className="text-sm font-medium text-muted-foreground mb-3">
-          Token Usage Summary ({periodLabel})
+          Token Usage Summary ({getPeriodLabel(period)})
         </h4>
         <div className={cn('grid gap-4', metrics.cacheTokens > 0 ? 'grid-cols-4' : 'grid-cols-3')}>
           <div>
@@ -69,7 +88,7 @@ export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
             </div>
           )}
         </div>
-        
+
         <div className="mt-4 pt-3 border-t">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Per Run Statistics:</span>
@@ -97,21 +116,18 @@ export function TokensDrillDown({ period, project }: TokensDrillDownProps) {
           <Bot className="h-4 w-4" />
           Breakdown by Agent
         </h4>
-        
+
         {metrics.byAgent.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">
-            No agent data available
-          </div>
+          <div className="text-center py-4 text-muted-foreground">No agent data available</div>
         ) : (
           <div className="space-y-2">
             {metrics.byAgent.map((agent, index) => {
-              const percentage = metrics.totalTokens > 0 
-                ? (agent.totalTokens / metrics.totalTokens) * 100 
-                : 0;
-              
+              const percentage =
+                metrics.totalTokens > 0 ? (agent.totalTokens / metrics.totalTokens) * 100 : 0;
+
               return (
-                <AgentTokenRow 
-                  key={agent.agent} 
+                <AgentTokenRow
+                  key={agent.agent}
                   agent={agent}
                   percentage={percentage}
                   isTop={index === 0}
@@ -140,10 +156,7 @@ interface AgentTokenRowProps {
 
 function AgentTokenRow({ agent, percentage, isTop }: AgentTokenRowProps) {
   return (
-    <div className={cn(
-      'rounded-lg border p-3',
-      isTop && 'border-primary/30 bg-primary/5'
-    )}>
+    <div className={cn('rounded-lg border p-3', isTop && 'border-primary/30 bg-primary/5')}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-muted-foreground" />
@@ -159,15 +172,12 @@ function AgentTokenRow({ agent, percentage, isTop }: AgentTokenRowProps) {
           {agent.runs} runs
         </Badge>
       </div>
-      
+
       {/* Progress Bar */}
       <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
-        <div 
-          className="h-full bg-primary transition-all"
-          style={{ width: `${percentage}%` }}
-        />
+        <div className="h-full bg-primary transition-all" style={{ width: `${percentage}%` }} />
       </div>
-      
+
       <div className="flex justify-between text-sm">
         <div className="flex gap-4 flex-wrap">
           <span>
@@ -189,9 +199,7 @@ function AgentTokenRow({ agent, percentage, isTop }: AgentTokenRowProps) {
             </span>
           )}
         </div>
-        <span className="text-muted-foreground">
-          {percentage.toFixed(1)}%
-        </span>
+        <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
       </div>
     </div>
   );

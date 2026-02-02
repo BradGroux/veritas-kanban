@@ -13,15 +13,21 @@ const log = createLogger('telemetry-reader');
 
 /**
  * Get list of event files within a date range (includes .ndjson and .ndjson.gz)
+ * If since is null, returns all event files (for 'all' period)
  */
-export async function getEventFiles(telemetryDir: string, since: string): Promise<string[]> {
+export async function getEventFiles(telemetryDir: string, since: string | null): Promise<string[]> {
   try {
     const files = await fs.readdir(telemetryDir);
     const eventFiles = files.filter(
       (f) => f.startsWith('events-') && (f.endsWith('.ndjson') || f.endsWith('.ndjson.gz'))
     );
-    const sinceDate = since.slice(0, 10);
 
+    if (!since) {
+      // Return all event files (for 'all' period)
+      return eventFiles.map((f) => path.join(telemetryDir, f));
+    }
+
+    const sinceDate = since.slice(0, 10);
     return eventFiles
       .filter((filename) => {
         const match = filename.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
@@ -64,10 +70,11 @@ export function createLineReader(filePath: string): readline.Interface {
 export async function streamEvents<T>(
   files: string[],
   types: TelemetryEventType[],
-  since: string,
+  since: string | null,
   project: string | undefined,
   accumulator: T,
-  handler: StreamEventHandler<T>
+  handler: StreamEventHandler<T>,
+  until?: string
 ): Promise<T> {
   for (const filePath of files) {
     try {
@@ -81,7 +88,8 @@ export async function streamEvents<T>(
 
           // Early filtering for performance
           if (!types.includes(event.type)) continue;
-          if (event.timestamp < since) continue;
+          if (since && event.timestamp < since) continue;
+          if (until && event.timestamp > until) continue;
           if (project && event.project !== project) continue;
 
           handler(event, accumulator);

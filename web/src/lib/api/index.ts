@@ -5,6 +5,7 @@
 
 // Import API sections
 import { tasksApi } from './tasks';
+import { backlogApi } from './backlog';
 import { settingsApi, configApi } from './config';
 import { agentApi, worktreeApi, previewApi } from './agent';
 import { diffApi, conflictsApi, githubApi } from './diff';
@@ -15,6 +16,7 @@ import { chatApi } from './chat';
 // Assemble the full API object (matches original structure exactly)
 export const api = {
   tasks: tasksApi,
+  backlog: backlogApi,
   settings: settingsApi,
   config: configApi,
   worktree: worktreeApi,
@@ -38,12 +40,14 @@ export { managedList } from './managed-list';
 
 // Re-export all types from each module
 export type { ArchiveSuggestion } from './tasks';
+export type { BacklogListResponse, BacklogFilterOptions } from './backlog';
 
 export type {
   AgentStatus,
   AgentStatusResponse,
   AgentOutput,
   GlobalAgentStatus,
+  ActiveAgentInfo,
   WorktreeInfo,
   PreviewServer,
 } from './agent';

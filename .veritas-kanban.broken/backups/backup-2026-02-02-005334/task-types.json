@@ -1,0 +1,42 @@
+[
+  {
+    "id": "code",
+    "label": "Code",
+    "icon": "Code",
+    "color": "border-l-violet-500",
+    "order": 0,
+    "isDefault": true,
+    "created": "2026-02-02T06:53:34.142Z",
+    "updated": "2026-02-02T06:53:34.143Z"
+  },
+  {
+    "id": "research",
+    "label": "Research",
+    "icon": "Search",
+    "color": "border-l-cyan-500",
+    "order": 1,
+    "isDefault": true,
+    "created": "2026-02-02T06:53:34.143Z",
+    "updated": "2026-02-02T06:53:34.143Z"
+  },
+  {
+    "id": "content",
+    "label": "Content",
+    "icon": "FileText",
+    "color": "border-l-orange-500",
+    "order": 2,
+    "isDefault": true,
+    "created": "2026-02-02T06:53:34.143Z",
+    "updated": "2026-02-02T06:53:34.143Z"
+  },
+  {
+    "id": "automation",
+    "label": "Automation",
+    "icon": "Zap",
+    "color": "border-l-emerald-500",
+    "order": 3,
+    "isDefault": true,
+    "created": "2026-02-02T06:53:34.143Z",
+    "updated": "2026-02-02T06:53:34.143Z"
+  }
+]

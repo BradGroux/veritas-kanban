@@ -6,7 +6,8 @@ import { z } from 'zod';
  * Examples: task_20260128_abc123, task_20260115_x7Y2pQ
  * Also accepts legacy/test formats for backward compatibility
  */
-export const TaskIdSchema = z.string()
+export const TaskIdSchema = z
+  .string()
   .min(5)
   .refine(
     (id) => /^task_(\d{8}_[a-zA-Z0-9_-]{1,20}|[a-zA-Z0-9_-]+)$/.test(id),
@@ -35,7 +36,7 @@ export function positiveInt(opts?: { min?: number; max?: number }) {
  */
 export function optionalPositiveInt(defaultValue: number, opts?: { min?: number; max?: number }) {
   return z.preprocess(
-    (val) => val === undefined || val === '' ? defaultValue : val,
+    (val) => (val === undefined || val === '' ? defaultValue : val),
     positiveInt(opts)
   );
 }
@@ -48,9 +49,12 @@ export const nonEmptyString = z.string().min(1, 'Value cannot be empty');
 /**
  * ISO date string validation
  */
-export const isoDateString = z.string().datetime({ offset: true }).or(
-  z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/, 'Invalid ISO date format')
-);
+export const isoDateString = z
+  .string()
+  .datetime({ offset: true })
+  .or(
+    z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/, 'Invalid ISO date format')
+  );
 
 /**
  * Optional ISO date string
@@ -60,12 +64,10 @@ export const optionalIsoDate = isoDateString.optional();
 /**
  * File path validation (basic safety check)
  */
-export const filePathSchema = z.string()
+export const filePathSchema = z
+  .string()
   .min(1, 'File path required')
-  .refine(
-    (path) => !path.includes('..') && !path.startsWith('/'),
-    'Path traversal not allowed'
-  );
+  .refine((path) => !path.includes('..') && !path.startsWith('/'), 'Path traversal not allowed');
 
 /**
  * Telemetry event types (matching shared types)
@@ -86,6 +88,20 @@ export type ValidTelemetryEventType = z.infer<typeof TelemetryEventTypeSchema>;
 /**
  * Metrics period validation
  */
-export const MetricsPeriodSchema = z.enum(['24h', '7d', '30d']);
+export const MetricsPeriodSchema = z.enum([
+  'today',
+  '24h',
+  '3d',
+  '7d',
+  '30d',
+  '3m',
+  '6m',
+  '12m',
+  'wtd',
+  'mtd',
+  'ytd',
+  'all',
+  'custom',
+]);
 
 export type ValidMetricsPeriod = z.infer<typeof MetricsPeriodSchema>;

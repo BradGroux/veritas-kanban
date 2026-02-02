@@ -1,7 +1,7 @@
 // Task Types
 
 export type TaskType = string;
-export type TaskStatus = 'todo' | 'planning' | 'in-progress' | 'blocked' | 'done';
+export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 /** Built-in agent types. Custom agents use any string slug. */
 export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
@@ -180,9 +180,6 @@ export interface Task {
     result?: string; // Result summary from sub-agent
   };
 
-  // Planning phase
-  plan?: string; // Markdown content for the execution plan
-
   // Time tracking
   timeTracking?: TimeTracking;
 
@@ -245,7 +242,6 @@ export interface UpdateTaskInput {
   verificationSteps?: VerificationStep[];
   blockedBy?: string[];
   blockedReason?: BlockedReason | null; // null to clear
-  plan?: string;
   automation?: {
     sessionKey?: string;
     spawnedAt?: string;

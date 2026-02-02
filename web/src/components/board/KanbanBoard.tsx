@@ -17,20 +17,23 @@ import {
   searchParamsToFilters,
 } from './FilterBar';
 import { BulkActionsBar } from './BulkActionsBar';
+import { BoardSidebar } from './BoardSidebar';
+import { useBulkActions } from '@/hooks/useBulkActions';
+import { CheckSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 
-// Lazy-load DashboardSection to split recharts + d3 (~800KB) out of main bundle
-const DashboardSection = lazy(() =>
-  import('@/components/dashboard/DashboardSection').then((mod) => ({
-    default: mod.DashboardSection,
+// Lazy-load Dashboard to split recharts + d3 (~800KB) out of main bundle
+const Dashboard = lazy(() =>
+  import('@/components/dashboard/Dashboard').then((mod) => ({
+    default: mod.Dashboard,
   }))
 );
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
-  { id: 'planning', title: 'Planning' },
   { id: 'in-progress', title: 'In Progress' },
   { id: 'blocked', title: 'Blocked' },
   { id: 'done', title: 'Done' },
@@ -52,6 +55,7 @@ export function KanbanBoard() {
   });
 
   const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
+  const { isSelecting, toggleSelecting } = useBulkActions();
 
   // Sync filters to URL
   useEffect(() => {
@@ -181,57 +185,82 @@ export function KanbanBoard() {
 
   return (
     <>
-      <FilterBar tasks={tasks || []} filters={filters} onFiltersChange={setFilters} />
+      <div className="flex items-center gap-3 mb-4">
+        <FilterBar tasks={tasks || []} filters={filters} onFiltersChange={setFilters} />
+        {!isSelecting && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleSelecting}
+            className="text-muted-foreground shrink-0"
+          >
+            <CheckSquare className="h-4 w-4 mr-1" />
+            Select
+          </Button>
+        )}
+      </div>
 
       <BulkActionsBar tasks={filteredTasks} />
 
       {featureSettings.board.showArchiveSuggestions && <ArchiveSuggestionBanner />}
 
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
-        <section aria-label={`Kanban board, ${filteredTasks.length} tasks`}>
-          {featureSettings.board.enableDragAndDrop ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={collisionDetection}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="grid grid-cols-5 gap-4" role="group" aria-label="Kanban columns">
+        <div className="grid grid-cols-5 gap-4">
+          <section className="col-span-4" aria-label={`Kanban board, ${filteredTasks.length} tasks`}>
+            {featureSettings.board.enableDragAndDrop ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={collisionDetection}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
+                  {COLUMNS.map((column) => (
+                    <KanbanColumn
+                      key={column.id}
+                      id={column.id}
+                      title={column.title}
+                      tasks={liveTasksByStatus[column.id]}
+                      allTasks={filteredTasks}
+                      onTaskClick={handleTaskClick}
+                      selectedTaskId={selectedTaskId}
+                      isDragActive={isDragActive}
+                    />
+                  ))}
+                </div>
+
+                <DragOverlay>
+                  {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+                </DragOverlay>
+              </DndContext>
+            ) : (
+              <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
                 {COLUMNS.map((column) => (
                   <KanbanColumn
                     key={column.id}
                     id={column.id}
                     title={column.title}
-                    tasks={liveTasksByStatus[column.id]}
+                    tasks={tasksByStatus[column.id]}
                     allTasks={filteredTasks}
                     onTaskClick={handleTaskClick}
                     selectedTaskId={selectedTaskId}
-                    isDragActive={isDragActive}
                   />
                 ))}
               </div>
+            )}
+          </section>
 
-              <DragOverlay>
-                {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
-              </DragOverlay>
-            </DndContext>
-          ) : (
-            <div className="grid grid-cols-5 gap-4" role="group" aria-label="Kanban columns">
-              {COLUMNS.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  id={column.id}
-                  title={column.title}
-                  tasks={tasksByStatus[column.id]}
-                  allTasks={filteredTasks}
-                  onTaskClick={handleTaskClick}
-                  selectedTaskId={selectedTaskId}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+          <BoardSidebar onTaskClick={(taskId) => {
+            const task = filteredTasks.find((t) => t.id === taskId);
+            if (task) {
+              handleTaskClick(task);
+            } else {
+              // Task may be archived or not on board — fire open-task event for API fallback
+              window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
+            }
+          }} />
+        </div>
 
         {featureSettings.board.showDashboard && (
           <Suspense
@@ -244,7 +273,9 @@ export function KanbanBoard() {
               </div>
             }
           >
-            <DashboardSection />
+            <div className="mt-6 border-t pt-4">
+              <Dashboard />
+            </div>
           </Suspense>
         )}
       </FeatureErrorBoundary>
