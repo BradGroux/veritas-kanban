@@ -735,20 +735,20 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
         )}
       </div>
 
+      {/* Daily Summary — always visible */}
+      <div className="mb-6">
+        <DailySummaryPanel />
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
           <TabsTrigger value="feed">Activity Feed</TabsTrigger>
           <TabsTrigger value="status">Status History</TabsTrigger>
-          <TabsTrigger value="summary">Daily Summary</TabsTrigger>
         </TabsList>
 
         <TabsContent value="status" className="mt-4">
           <StatusHistoryPanel />
-        </TabsContent>
-
-        <TabsContent value="summary" className="mt-4">
-          <DailySummaryPanel />
         </TabsContent>
 
         <TabsContent value="feed" className="mt-4">
