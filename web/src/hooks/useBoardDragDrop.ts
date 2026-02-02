@@ -4,13 +4,14 @@ import {
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
+  KeyboardSensor,
   PointerSensor,
   pointerWithin,
   rectIntersection,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Task, TaskStatus } from '@veritas-kanban/shared';
 
 interface UseBoardDragDropOptions {
@@ -51,6 +52,9 @@ export function useBoardDragDrop({
       activationConstraint: {
         distance: 8,
       },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 

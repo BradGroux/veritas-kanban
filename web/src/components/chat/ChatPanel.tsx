@@ -123,6 +123,7 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
       <SheetContent
         className="w-[500px] sm:max-w-[500px] overflow-hidden flex flex-col p-0"
         side="right"
+        aria-label={taskId ? 'Task chat panel' : 'Board chat panel'}
       >
         {/* Header action buttons — positioned next to Sheet's built-in X */}
         {currentSessionId && session?.messages && session.messages.length > 0 && (
@@ -211,7 +212,7 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
 
         {/* Messages */}
         <ScrollArea className="flex-1 px-4" onScrollCapture={handleScroll} ref={scrollAreaRef}>
-          <div className="py-4 space-y-4">
+          <div className="py-4 space-y-4" role="log" aria-label="Chat messages" aria-live="polite">
             {session?.messages.map((msg) => (
               <ChatMessageBubble key={msg.id} message={msg} />
             ))}
@@ -247,11 +248,17 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Type a message..."
+              aria-label="Chat message"
               disabled={isPending}
               className="flex-1"
               autoFocus
             />
-            <Button onClick={handleSend} disabled={!message.trim() || isPending} size="icon">
+            <Button
+              onClick={handleSend}
+              disabled={!message.trim() || isPending}
+              size="icon"
+              aria-label="Send message"
+            >
               {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

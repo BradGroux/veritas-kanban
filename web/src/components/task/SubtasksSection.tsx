@@ -59,7 +59,7 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
   };
 
   return (
-    <div className="space-y-3">
+    <section className="space-y-3" aria-label="Subtasks">
       <div className="flex items-center justify-between">
         <Label className="text-muted-foreground">Subtasks</Label>
         {totalCount > 0 && (
@@ -93,6 +93,7 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
               checked={subtask.completed}
               onCheckedChange={() => handleToggleSubtask(subtask)}
               className="flex-shrink-0"
+              aria-label={`Mark "${subtask.title}" as ${subtask.completed ? 'incomplete' : 'complete'}`}
             />
             <span
               className={cn(
@@ -107,8 +108,12 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
               size="icon"
               className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => handleDeleteSubtask(subtask.id)}
+              aria-label={`Delete subtask: ${subtask.title}`}
             >
-              <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+              <Trash2
+                className="h-3 w-3 text-muted-foreground hover:text-destructive"
+                aria-hidden="true"
+              />
             </Button>
           </div>
         ))}
@@ -121,6 +126,7 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
           onChange={(e) => setNewSubtaskTitle(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add a subtask..."
+          aria-label="New subtask title"
           className="text-sm"
           disabled={isAdding}
         />
@@ -129,8 +135,9 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
           onClick={handleAddSubtask}
           disabled={!newSubtaskTitle.trim() || isAdding}
           className="h-9 w-9 shrink-0"
+          aria-label="Add subtask"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -147,6 +154,6 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
           />
         </div>
       )}
-    </div>
+    </section>
   );
 }

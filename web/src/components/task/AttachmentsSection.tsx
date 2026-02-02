@@ -103,13 +103,27 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
               onClick={handleToggleExpand}
               disabled={loadingText}
               className="h-7 w-7 p-0"
+              aria-label={
+                expanded
+                  ? `Collapse ${attachment.originalName}`
+                  : `Expand ${attachment.originalName}`
+              }
+              aria-expanded={expanded}
             >
-              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {expanded ? (
+                <ChevronUp className="h-3 w-3" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              )}
             </Button>
           )}
           <Button size="sm" variant="ghost" asChild className="h-7 w-7 p-0">
-            <a href={downloadUrl} download={attachment.originalName}>
-              <Download className="h-3 w-3" />
+            <a
+              href={downloadUrl}
+              download={attachment.originalName}
+              aria-label={`Download ${attachment.originalName}`}
+            >
+              <Download className="h-3 w-3" aria-hidden="true" />
             </a>
           </Button>
           <Button
@@ -118,8 +132,9 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
             onClick={handleDelete}
             disabled={deleteAttachment.isPending}
             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            aria-label={`Delete ${attachment.originalName}`}
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3 w-3" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -191,9 +206,9 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <section className="space-y-4" aria-label="Attachments">
       <div className="flex items-center gap-2">
-        <Paperclip className="h-4 w-4 text-muted-foreground" />
+        <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Label className="text-muted-foreground">Attachments</Label>
         {attachments.length > 0 && (
           <span className="text-xs text-muted-foreground">({attachments.length})</span>
@@ -217,6 +232,15 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload files — drop files here or click to browse"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
         className={cn(
           'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
           isDragging && 'border-primary bg-primary/5',
@@ -250,6 +274,6 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }

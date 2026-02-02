@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -143,6 +144,9 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
+            <DialogDescription>
+              Fill in the details below to create a new task. You can optionally use a template.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Template selector */}
@@ -216,7 +220,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
               </Tabs>
 
               <Select value={selectedTemplate || 'none'} onValueChange={handleTemplateSelect}>
-                <SelectTrigger className="mt-2">
+                <SelectTrigger className="mt-2" aria-label="Task template">
                   <SelectValue placeholder="Select template..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -274,7 +278,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   <div className="grid gap-2">
                     <Label htmlFor="type">Type</Label>
                     <Select value={type} onValueChange={setType}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Task type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -296,7 +300,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   <div className="grid gap-2">
                     <Label htmlFor="priority">Priority</Label>
                     <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Task priority">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -321,7 +325,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Project">
                         <SelectValue placeholder="Select project..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -342,6 +346,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         value={newProjectName}
                         onChange={(e) => setNewProjectName(e.target.value)}
                         placeholder="Enter project name..."
+                        aria-label="New project name"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && newProjectName.trim()) {
@@ -378,7 +383,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                       value={sprint || '__none__'}
                       onValueChange={(v) => setSprint(v === '__none__' ? '' : v)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Sprint">
                         <SelectValue placeholder="No sprint" />
                       </SelectTrigger>
                       <SelectContent>
@@ -395,7 +400,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   <div className="grid gap-2">
                     <Label>Agent</Label>
                     <Select value={agent || 'auto'} onValueChange={setAgent}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Agent">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -420,12 +425,17 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 />
 
                 {subtasks.length > 0 && (
-                  <div className="grid gap-2">
-                    <Label>Subtasks ({subtasks.length})</Label>
-                    <div className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-medium">Subtasks ({subtasks.length})</legend>
+                    <div
+                      className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2"
+                      role="list"
+                      aria-label="Template subtasks"
+                    >
                       {subtasks.map((subtask) => (
                         <div
                           key={subtask.id}
+                          role="listitem"
                           className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50"
                         >
                           <div className="flex items-center gap-2 flex-1">
@@ -445,7 +455,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </fieldset>
                 )}
               </>
             )}

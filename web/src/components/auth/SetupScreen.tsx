@@ -14,7 +14,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
   if (/\d/.test(password)) score++;
   if (/[^a-zA-Z0-9]/.test(password)) score++;
-  
+
   if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
   if (score <= 2) return { score, label: 'Fair', color: 'bg-orange-500' };
   if (score <= 3) return { score, label: 'Good', color: 'bg-yellow-500' };
@@ -29,7 +29,7 @@ export function SetupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Recovery key state
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -42,18 +42,18 @@ export function SetupScreen() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || isSubmitting) return;
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     const result = await setup(password);
-    
+
     if (result.success && result.recoveryKey) {
       setRecoveryKey(result.recoveryKey);
     } else {
       setError(result.error || 'Setup failed');
     }
-    
+
     setIsSubmitting(false);
   };
 
@@ -67,7 +67,9 @@ export function SetupScreen() {
   const downloadRecoveryKey = () => {
     if (!recoveryKey) return;
     const blob = new Blob(
-      [`Veritas Kanban Recovery Key\n\nYour recovery key: ${recoveryKey}\n\nKeep this file safe! You will need it if you forget your password.\n\nGenerated: ${new Date().toISOString()}`],
+      [
+        `Veritas Kanban Recovery Key\n\nYour recovery key: ${recoveryKey}\n\nKeep this file safe! You will need it if you forget your password.\n\nGenerated: ${new Date().toISOString()}`,
+      ],
       { type: 'text/plain' }
     );
     const url = URL.createObjectURL(blob);
@@ -96,9 +98,7 @@ export function SetupScreen() {
           </div>
 
           <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
-            <div className="font-mono text-xl text-center tracking-wider py-2">
-              {recoveryKey}
-            </div>
+            <div className="font-mono text-xl text-center tracking-wider py-2">{recoveryKey}</div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={copyRecoveryKey}>
                 {copiedKey ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
@@ -164,8 +164,13 @@ export function SetupScreen() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                )}
               </button>
             </div>
             {password && (
@@ -202,7 +207,10 @@ export function SetupScreen() {
           </div>
 
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            <div
+              role="alert"
+              className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive"
+            >
               {error}
             </div>
           )}

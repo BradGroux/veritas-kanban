@@ -5,8 +5,8 @@ import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
 import type { TaskStatus, Task } from '@veritas-kanban/shared';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { DndContext, DragOverlay, type Announcements } from '@dnd-kit/core';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { TaskCard } from '@/components/task/TaskCard';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import {
@@ -129,6 +129,26 @@ export function KanbanBoard() {
   setOnOpenTask(handleTaskClick);
   setOnMoveTask(handleMoveTask);
 
+  // Track which column each task is in during drag for announcements
+  const dragSourceColumnRef = useRef<string | null>(null);
+
+  const getColumnTitle = useCallback(
+    (columnId: string) => COLUMNS.find((c) => c.id === columnId)?.title || columnId,
+    []
+  );
+
+  const findTaskColumn = useCallback(
+    (taskId: string, state: Record<TaskStatus, Task[]>): string | null => {
+      for (const col of COLUMNS) {
+        if (state[col.id]?.some((t) => t.id === taskId)) {
+          return col.id;
+        }
+      }
+      return null;
+    },
+    []
+  );
+
   // Drag and drop logic
   const {
     activeTask,
@@ -164,6 +184,67 @@ export function KanbanBoard() {
     ? tasks?.find((t) => t.id === selectedTask.id) || selectedTask
     : null;
 
+  // Screen reader announcements for drag-and-drop lifecycle
+  const announcements: Announcements = useMemo(
+    () => ({
+      onDragStart({ active }) {
+        const task = filteredTasks.find((t) => t.id === active.id);
+        const column = findTaskColumn(active.id as string, tasksByStatus);
+        dragSourceColumnRef.current = column;
+        const taskTitle = task?.title || active.id;
+        const columnTitle = column ? getColumnTitle(column) : 'unknown';
+        return `Picked up task ${taskTitle} from ${columnTitle}`;
+      },
+      onDragOver({ active, over }) {
+        const task = filteredTasks.find((t) => t.id === active.id);
+        const taskTitle = task?.title || active.id;
+        if (!over) return `Task ${taskTitle} is no longer over a droppable area`;
+        const overId = over.id as string;
+        const isColumn = COLUMNS.some((c) => c.id === overId);
+        const columnTitle = isColumn
+          ? getColumnTitle(overId)
+          : getColumnTitle(findTaskColumn(overId, liveTasksByStatus) || '');
+        return `Task ${taskTitle} is over ${columnTitle}`;
+      },
+      onDragEnd({ active, over }) {
+        const task = filteredTasks.find((t) => t.id === active.id);
+        const taskTitle = task?.title || active.id;
+        if (!over) {
+          const sourceTitle = dragSourceColumnRef.current
+            ? getColumnTitle(dragSourceColumnRef.current)
+            : 'its original column';
+          dragSourceColumnRef.current = null;
+          return `Task ${taskTitle} returned to ${sourceTitle}`;
+        }
+        const overId = over.id as string;
+        const isColumn = COLUMNS.some((c) => c.id === overId);
+        const columnTitle = isColumn
+          ? getColumnTitle(overId)
+          : getColumnTitle(findTaskColumn(active.id as string, liveTasksByStatus) || '');
+        dragSourceColumnRef.current = null;
+        return `Task ${taskTitle} dropped in ${columnTitle}`;
+      },
+      onDragCancel({ active }) {
+        const task = filteredTasks.find((t) => t.id === active.id);
+        const taskTitle = task?.title || active.id;
+        const sourceTitle = dragSourceColumnRef.current
+          ? getColumnTitle(dragSourceColumnRef.current)
+          : 'its original column';
+        dragSourceColumnRef.current = null;
+        return `Dragging cancelled. Task ${taskTitle} returned to ${sourceTitle}`;
+      },
+    }),
+    [filteredTasks, tasksByStatus, liveTasksByStatus, findTaskColumn, getColumnTitle]
+  );
+
+  const screenReaderInstructions = useMemo(
+    () => ({
+      draggable:
+        'To pick up a task, press space or enter. Use arrow keys to reorder within a column. Press space or enter again to drop the task, or press escape to cancel. To move a task to a different column, use keyboard shortcuts 1 through 5.',
+    }),
+    []
+  );
+
   if (isLoading) {
     return <BoardLoadingSkeleton columns={COLUMNS} />;
   }
@@ -196,6 +277,7 @@ export function KanbanBoard() {
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
+              accessibility={{ announcements, screenReaderInstructions }}
             >
               <div className="grid grid-cols-5 gap-4" role="group" aria-label="Kanban columns">
                 {COLUMNS.map((column) => (

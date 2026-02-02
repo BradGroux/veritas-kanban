@@ -13,13 +13,13 @@ export function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Recovery mode state
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  
+
   // New recovery key display
   const [newRecoveryKey, setNewRecoveryKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -28,34 +28,34 @@ export function LoginScreen() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password || isSubmitting) return;
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     const result = await login(password, rememberMe);
-    
+
     if (!result.success) {
       setError(result.error || 'Invalid password');
     }
-    
+
     setIsSubmitting(false);
   };
 
   const handleRecover = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recoveryKey || !newPassword || newPassword !== confirmNewPassword || isSubmitting) return;
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     const result = await recover(recoveryKey, newPassword);
-    
+
     if (result.success && result.recoveryKey) {
       setNewRecoveryKey(result.recoveryKey);
     } else {
       setError(result.error || 'Recovery failed');
     }
-    
+
     setIsSubmitting(false);
   };
 
@@ -69,7 +69,9 @@ export function LoginScreen() {
   const downloadRecoveryKey = () => {
     if (!newRecoveryKey) return;
     const blob = new Blob(
-      [`Veritas Kanban Recovery Key\n\nYour recovery key: ${newRecoveryKey}\n\nKeep this file safe! You will need it if you forget your password.\n\nGenerated: ${new Date().toISOString()}`],
+      [
+        `Veritas Kanban Recovery Key\n\nYour recovery key: ${newRecoveryKey}\n\nKeep this file safe! You will need it if you forget your password.\n\nGenerated: ${new Date().toISOString()}`,
+      ],
       { type: 'text/plain' }
     );
     const url = URL.createObjectURL(blob);
@@ -140,7 +142,7 @@ export function LoginScreen() {
   if (showRecovery) {
     const passwordsMatch = newPassword === confirmNewPassword;
     const isValid = recoveryKey && newPassword.length >= 8 && passwordsMatch;
-    
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-6">
@@ -149,9 +151,7 @@ export function LoginScreen() {
               <Key className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-bold">Reset Password</h1>
-            <p className="text-muted-foreground">
-              Enter your recovery key and a new password.
-            </p>
+            <p className="text-muted-foreground">Enter your recovery key and a new password.</p>
           </div>
 
           <form onSubmit={handleRecover} className="space-y-4">
@@ -183,8 +183,13 @@ export function LoginScreen() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="w-4 h-4" aria-hidden="true" />
+                  )}
                 </button>
               </div>
             </div>
@@ -204,7 +209,10 @@ export function LoginScreen() {
             </div>
 
             {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+              <div
+                role="alert"
+                className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive"
+              >
                 {error}
               </div>
             )}
@@ -238,9 +246,7 @@ export function LoginScreen() {
             <Lock className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold">Welcome Back</h1>
-          <p className="text-muted-foreground">
-            Enter your password to access Veritas Kanban.
-          </p>
+          <p className="text-muted-foreground">Enter your password to access Veritas Kanban.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -260,8 +266,13 @@ export function LoginScreen() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
@@ -278,7 +289,10 @@ export function LoginScreen() {
           </div>
 
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            <div
+              role="alert"
+              className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive"
+            >
               {error}
             </div>
           )}

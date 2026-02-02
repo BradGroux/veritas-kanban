@@ -28,17 +28,20 @@ function formatRelativeTime(timestamp: string): string {
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} minute${Math.floor(seconds / 60) === 1 ? '' : 's'} ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hour${Math.floor(seconds / 3600) === 1 ? '' : 's'} ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)} day${Math.floor(seconds / 86400) === 1 ? '' : 's'} ago`;
-  
+  if (seconds < 3600)
+    return `${Math.floor(seconds / 60)} minute${Math.floor(seconds / 60) === 1 ? '' : 's'} ago`;
+  if (seconds < 86400)
+    return `${Math.floor(seconds / 3600)} hour${Math.floor(seconds / 3600) === 1 ? '' : 's'} ago`;
+  if (seconds < 604800)
+    return `${Math.floor(seconds / 86400)} day${Math.floor(seconds / 86400) === 1 ? '' : 's'} ago`;
+
   return date.toLocaleDateString();
 }
 
 function getInitials(name: string): string {
   return name
     .split(' ')
-    .map(part => part[0])
+    .map((part) => part[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -94,16 +97,24 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
                   setEditText(comment.text);
                   setIsEditing(true);
                 }}
+                aria-label={`Edit comment by ${comment.author}`}
               >
-                <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                <Pencil
+                  className="h-3 w-3 text-muted-foreground hover:text-foreground"
+                  aria-hidden="true"
+                />
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
                 onClick={() => setDeleteDialogOpen(true)}
+                aria-label={`Delete comment by ${comment.author}`}
               >
-                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                <Trash2
+                  className="h-3 w-3 text-muted-foreground hover:text-destructive"
+                  aria-hidden="true"
+                />
               </Button>
             </div>
           </div>
@@ -113,6 +124,7 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 className="text-sm min-h-[60px] resize-none"
+                aria-label="Edit comment"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -132,12 +144,7 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
                   <Check className="h-3 w-3 mr-1" />
                   Save
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7"
-                  onClick={handleCancelEdit}
-                >
+                <Button variant="ghost" size="sm" className="h-7" onClick={handleCancelEdit}>
                   <X className="h-3 w-3 mr-1" />
                   Cancel
                 </Button>
@@ -156,7 +163,8 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
           <AlertDialogHeader>
             <AlertDialogTitle>Delete comment?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this comment by {comment.author}. This action cannot be undone.
+              This will permanently delete this comment by {comment.author}. This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -185,13 +193,13 @@ export function CommentsSection({ task }: CommentsSectionProps) {
 
   const handleAddComment = async () => {
     if (!text.trim() || !author.trim()) return;
-    
+
     setIsAdding(true);
     try {
-      await addComment.mutateAsync({ 
-        taskId: task.id, 
-        author: author.trim(), 
-        text: text.trim() 
+      await addComment.mutateAsync({
+        taskId: task.id,
+        author: author.trim(),
+        text: text.trim(),
       });
       setText('');
     } finally {
@@ -207,14 +215,12 @@ export function CommentsSection({ task }: CommentsSectionProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <section className="space-y-4" aria-label="Comments">
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+        <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Label className="text-muted-foreground">Comments</Label>
         {comments.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            ({comments.length})
-          </span>
+          <span className="text-xs text-muted-foreground">({comments.length})</span>
         )}
       </div>
 
@@ -238,6 +244,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
             placeholder="Your name"
+            aria-label="Comment author name"
             className="text-sm max-w-[150px]"
             disabled={isAdding}
           />
@@ -248,6 +255,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add a comment... (Cmd/Ctrl+Enter to submit)"
+            aria-label="New comment"
             className="text-sm min-h-[80px] resize-none"
             disabled={isAdding}
           />
@@ -262,6 +270,6 @@ export function CommentsSection({ task }: CommentsSectionProps) {
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

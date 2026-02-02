@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { 
-  useMetrics, 
-  formatTokens, 
-  formatDuration, 
+import {
+  useMetrics,
+  formatTokens,
+  formatDuration,
   formatPercent,
   type MetricsPeriod,
   type TrendDirection,
@@ -18,8 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  CheckCircle, 
+import {
+  CheckCircle,
   Archive,
   ListTodo,
   Play,
@@ -48,13 +48,7 @@ import { AgentComparison } from './AgentComparison';
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
 // change: the actual percentage change in the value (can be negative)
-function TrendIndicator({ 
-  direction, 
-  change, 
-}: { 
-  direction: TrendDirection; 
-  change: number;
-}) {
+function TrendIndicator({ direction, change }: { direction: TrendDirection; change: number }) {
   if (direction === 'flat') {
     return (
       <span className="inline-flex items-center text-muted-foreground text-xs">
@@ -63,15 +57,15 @@ function TrendIndicator({
       </span>
     );
   }
-  
+
   // direction='up' means improvement, which is always green
   const isGood = direction === 'up';
   const colorClass = isGood ? 'text-green-500' : 'text-red-500';
-  
+
   // Arrow direction based on actual value change
   const valueWentUp = change > 0;
   const Icon = valueWentUp ? TrendingUp : TrendingDown;
-  
+
   return (
     <span className={cn('inline-flex items-center text-xs', colorClass)}>
       <Icon className="h-3 w-3 mr-0.5" />
@@ -91,7 +85,15 @@ interface MetricCardProps {
   clickable?: boolean;
 }
 
-function MetricCard({ label, value, icon, color = 'default', subValue, onClick, clickable }: MetricCardProps) {
+function MetricCard({
+  label,
+  value,
+  icon,
+  color = 'default',
+  subValue,
+  onClick,
+  clickable,
+}: MetricCardProps) {
   const colorClasses = {
     default: 'bg-card border-border',
     blue: 'bg-blue-500/10 border-blue-500/20',
@@ -113,22 +115,22 @@ function MetricCard({ label, value, icon, color = 'default', subValue, onClick, 
   const Component = clickable ? 'button' : 'div';
 
   return (
-    <Component 
+    <Component
       className={cn(
         'rounded-lg border p-4 flex flex-col items-center justify-center min-w-[100px]',
         colorClasses[color],
-        clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all focus:outline-none focus:ring-2 focus:ring-ring'
+        clickable &&
+          'cursor-pointer hover:ring-2 hover:ring-ring transition-all focus:outline-none focus:ring-2 focus:ring-ring'
       )}
       onClick={onClick}
+      {...(clickable
+        ? { 'aria-label': `${label}: ${value}${subValue ? `, ${subValue}` : ''}` }
+        : {})}
     >
       {icon && <div className={cn('mb-1', textClasses[color])}>{icon}</div>}
-      <div className={cn('text-2xl font-bold', textClasses[color])}>
-        {value}
-      </div>
+      <div className={cn('text-2xl font-bold', textClasses[color])}>{value}</div>
       <div className="text-xs text-muted-foreground text-center">{label}</div>
-      {subValue && (
-        <div className="text-xs text-muted-foreground mt-1">{subValue}</div>
-      )}
+      {subValue && <div className="text-xs text-muted-foreground mt-1">{subValue}</div>}
     </Component>
   );
 }
@@ -142,7 +144,7 @@ interface StatCardProps {
 
 function StatCard({ title, children, onClick, clickable }: StatCardProps) {
   return (
-    <div 
+    <div
       className={cn(
         'rounded-lg border bg-card p-4',
         clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all'
@@ -150,17 +152,22 @@ function StatCard({ title, children, onClick, clickable }: StatCardProps) {
       onClick={onClick}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
-      onKeyDown={clickable ? (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick?.();
-        }
-      } : undefined}
+      aria-label={
+        clickable ? `View details: ${typeof title === 'string' ? title : 'section'}` : undefined
+      }
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
     >
       <h4 className="text-sm font-medium text-muted-foreground mb-3">{title}</h4>
-      <div className="space-y-2">
-        {children}
-      </div>
+      <div className="space-y-2">{children}</div>
     </div>
   );
 }
@@ -177,12 +184,8 @@ function StatRow({ label, value, subLabel, highlight }: StatRowProps) {
     <div className="flex justify-between items-baseline">
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="text-right">
-        <span className={cn('font-semibold', highlight && 'text-primary')}>
-          {value}
-        </span>
-        {subLabel && (
-          <span className="text-xs text-muted-foreground ml-1">({subLabel})</span>
-        )}
+        <span className={cn('font-semibold', highlight && 'text-primary')}>{value}</span>
+        {subLabel && <span className="text-xs text-muted-foreground ml-1">({subLabel})</span>}
       </div>
     </div>
   );
@@ -193,23 +196,25 @@ export function Dashboard() {
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  
-  const { data: metrics, isLoading, isFetching, error, dataUpdatedAt } = useMetrics(period, project);
+
+  const {
+    data: metrics,
+    isLoading,
+    isFetching,
+    error,
+    dataUpdatedAt,
+  } = useMetrics(period, project);
   const { data: tasks } = useTasks();
   const { data: projectsList = [] } = useProjects();
-  
+
   // Get unique project IDs from tasks, then map to project configs for labels
-  const projectIds = tasks 
-    ? [...new Set(tasks.filter(t => t.project).map(t => t.project!))]
+  const projectIds = tasks
+    ? [...new Set(tasks.filter((t) => t.project).map((t) => t.project!))]
     : [];
-  const projects = projectsList.filter(p => projectIds.includes(p.id));
+  const projects = projectsList.filter((p) => projectIds.includes(p.id));
 
   if (error) {
-    return (
-      <div className="p-4 text-center text-destructive">
-        Failed to load metrics
-      </div>
-    );
+    return <div className="p-4 text-center text-destructive">Failed to load metrics</div>;
   }
 
   // Color thresholds: green <10% error, yellow 10-25%, red >25%
@@ -221,11 +226,16 @@ export function Dashboard() {
 
   const getDrillDownTitle = () => {
     switch (drillDown) {
-      case 'tasks': return 'Task Details';
-      case 'errors': return 'Failed Runs';
-      case 'tokens': return 'Token Usage Breakdown';
-      case 'duration': return 'Run Duration Breakdown';
-      default: return '';
+      case 'tasks':
+        return 'Task Details';
+      case 'errors':
+        return 'Failed Runs';
+      case 'tokens':
+        return 'Token Usage Breakdown';
+      case 'duration':
+        return 'Run Duration Breakdown';
+      default:
+        return '';
     }
   };
 
@@ -241,18 +251,23 @@ export function Dashboard() {
       {/* Header with filters */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Select value={project || 'all'} onValueChange={(v) => setProject(v === 'all' ? undefined : v)}>
+          <Select
+            value={project || 'all'}
+            onValueChange={(v) => setProject(v === 'all' ? undefined : v)}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All Projects" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Projects</SelectItem>
               {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          
+
           <Select value={period} onValueChange={(v) => setPeriod(v as MetricsPeriod)}>
             <SelectTrigger className="w-[120px]">
               <SelectValue />
@@ -263,23 +278,21 @@ export function Dashboard() {
             </SelectContent>
           </Select>
         </div>
-        
+
         <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setExportDialogOpen(true)}
-          >
+          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
-            {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+            {isFetching
+              ? 'Refreshing...'
+              : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
           </div>
         </div>
       </div>
-      
+
       {/* Export Dialog */}
       <ExportDialog
         open={exportDialogOpen}
@@ -297,86 +310,86 @@ export function Dashboard() {
               <Skeleton key={i} className="h-24 rounded-lg" />
             ))}
           </div>
-        ) : metrics && (
-          <div className="grid grid-cols-7 gap-3">
-            <MetricCard 
-              label="Total" 
-              value={metrics.tasks.total}
-              icon={<ListTodo className="h-4 w-4" />}
-              onClick={() => setDrillDown('tasks')}
-              clickable
-            />
-            <MetricCard 
-              label="To Do" 
-              value={metrics.tasks.byStatus['todo'] || 0}
-              color="muted"
-            />
-            <MetricCard 
-              label="In Progress" 
-              value={metrics.tasks.byStatus['in-progress'] || 0}
-              icon={<Play className="h-4 w-4" />}
-              color="blue"
-            />
-            <MetricCard 
-              label="Blocked" 
-              value={metrics.tasks.byStatus['blocked'] || 0}
-              icon={<Ban className="h-4 w-4" />}
-              color="red"
-            />
-            <MetricCard 
-              label="Done" 
-              value={metrics.tasks.byStatus['done'] || 0}
-              icon={<CheckCircle className="h-4 w-4" />}
-              color="green"
-            />
-            <MetricCard 
-              label="Archived" 
-              value={metrics.tasks.archived}
-              icon={<Archive className="h-4 w-4" />}
-              color="muted"
-            />
-            <MetricCard 
-              label="Completed" 
-              value={metrics.tasks.completed}
-              icon={<CheckCircle className="h-4 w-4" />}
-              color="green"
-              subValue="Done + Archived"
-            />
-          </div>
+        ) : (
+          metrics && (
+            <div className="grid grid-cols-7 gap-3">
+              <MetricCard
+                label="Total"
+                value={metrics.tasks.total}
+                icon={<ListTodo className="h-4 w-4" />}
+                onClick={() => setDrillDown('tasks')}
+                clickable
+              />
+              <MetricCard label="To Do" value={metrics.tasks.byStatus['todo'] || 0} color="muted" />
+              <MetricCard
+                label="In Progress"
+                value={metrics.tasks.byStatus['in-progress'] || 0}
+                icon={<Play className="h-4 w-4" />}
+                color="blue"
+              />
+              <MetricCard
+                label="Blocked"
+                value={metrics.tasks.byStatus['blocked'] || 0}
+                icon={<Ban className="h-4 w-4" />}
+                color="red"
+              />
+              <MetricCard
+                label="Done"
+                value={metrics.tasks.byStatus['done'] || 0}
+                icon={<CheckCircle className="h-4 w-4" />}
+                color="green"
+              />
+              <MetricCard
+                label="Archived"
+                value={metrics.tasks.archived}
+                icon={<Archive className="h-4 w-4" />}
+                color="muted"
+              />
+              <MetricCard
+                label="Completed"
+                value={metrics.tasks.completed}
+                icon={<CheckCircle className="h-4 w-4" />}
+                color="green"
+                subValue="Done + Archived"
+              />
+            </div>
+          )
         )}
       </div>
 
       {/* Blocked Reason Breakdown (only show if there are blocked tasks) */}
       {metrics && metrics.tasks.byStatus['blocked'] > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Blocked Tasks Breakdown</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">
+            Blocked Tasks Breakdown
+          </h3>
           <div className="grid grid-cols-5 gap-3">
-            <MetricCard 
-              label="Waiting on Feedback" 
+            <MetricCard
+              label="Waiting on Feedback"
               value={metrics.tasks.byBlockedReason['waiting-on-feedback'] || 0}
               icon={<MessageSquare className="h-4 w-4" />}
               color="yellow"
             />
-            <MetricCard 
-              label="Technical Snag" 
+            <MetricCard
+              label="Technical Snag"
               value={metrics.tasks.byBlockedReason['technical-snag'] || 0}
               icon={<Wrench className="h-4 w-4" />}
               color="red"
             />
-            <MetricCard 
-              label="Prerequisite" 
+            <MetricCard
+              label="Prerequisite"
               value={metrics.tasks.byBlockedReason['prerequisite'] || 0}
               icon={<Link2 className="h-4 w-4" />}
               color="blue"
             />
-            <MetricCard 
-              label="Other" 
+            <MetricCard
+              label="Other"
               value={metrics.tasks.byBlockedReason['other'] || 0}
               icon={<HelpCircle className="h-4 w-4" />}
               color="muted"
             />
-            <MetricCard 
-              label="Unspecified" 
+            <MetricCard
+              label="Unspecified"
               value={metrics.tasks.byBlockedReason['unspecified'] || 0}
               icon={<Ban className="h-4 w-4" />}
               color="muted"
@@ -387,7 +400,9 @@ export function Dashboard() {
 
       {/* Agent Operations Row */}
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Agent Operations ({period})</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">
+          Agent Operations ({period})
+        </h3>
         {isLoading ? (
           <div className="grid grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
@@ -398,17 +413,19 @@ export function Dashboard() {
           metrics.runs.runs === 0 ? (
             <div className="rounded-lg border bg-muted/20 p-8 text-center">
               <p className="text-muted-foreground">No agent runs recorded in this period</p>
-              <p className="text-xs text-muted-foreground mt-1">Runs will appear here once telemetry data is collected</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Runs will appear here once telemetry data is collected
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-4">
               {/* Error Rate Card */}
-              <StatCard 
+              <StatCard
                 title={
                   <div className="flex items-center justify-between">
                     <span>Success / Errors</span>
-                    <TrendIndicator 
-                      direction={metrics.trends.successRateTrend} 
+                    <TrendIndicator
+                      direction={metrics.trends.successRateTrend}
                       change={metrics.trends.successRateChange}
                     />
                   </div>
@@ -416,29 +433,28 @@ export function Dashboard() {
                 onClick={() => setDrillDown('errors')}
                 clickable
               >
-                <StatRow 
-                  label="Total Runs" 
-                  value={metrics.runs.runs} 
-                />
-                <StatRow 
-                  label="Successful" 
+                <StatRow label="Total Runs" value={metrics.runs.runs} />
+                <StatRow
+                  label="Successful"
                   value={metrics.runs.successes}
                   subLabel={formatPercent(metrics.runs.successRate)}
                 />
-                <StatRow 
-                  label="Failed" 
+                <StatRow
+                  label="Failed"
                   value={metrics.runs.failures + metrics.runs.errors}
                   highlight={metrics.runs.errorRate > 0.1}
                 />
                 <div className="pt-2 border-t mt-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Error Rate</span>
-                    <span className={cn(
-                      'text-lg font-bold',
-                      getErrorRateColor(metrics.runs.errorRate) === 'red' && 'text-red-500',
-                      getErrorRateColor(metrics.runs.errorRate) === 'yellow' && 'text-yellow-500',
-                      getErrorRateColor(metrics.runs.errorRate) === 'green' && 'text-green-500',
-                    )}>
+                    <span
+                      className={cn(
+                        'text-lg font-bold',
+                        getErrorRateColor(metrics.runs.errorRate) === 'red' && 'text-red-500',
+                        getErrorRateColor(metrics.runs.errorRate) === 'yellow' && 'text-yellow-500',
+                        getErrorRateColor(metrics.runs.errorRate) === 'green' && 'text-green-500'
+                      )}
+                    >
                       {formatPercent(metrics.runs.errorRate)}
                     </span>
                   </div>
@@ -446,12 +462,12 @@ export function Dashboard() {
               </StatCard>
 
               {/* Tokens Card */}
-              <StatCard 
+              <StatCard
                 title={
                   <div className="flex items-center justify-between">
                     <span>Token Usage</span>
-                    <TrendIndicator 
-                      direction={metrics.trends.tokensTrend} 
+                    <TrendIndicator
+                      direction={metrics.trends.tokensTrend}
                       change={metrics.trends.tokensChange}
                     />
                   </div>
@@ -459,23 +475,11 @@ export function Dashboard() {
                 onClick={() => setDrillDown('tokens')}
                 clickable
               >
-                <StatRow 
-                  label="Total" 
-                  value={formatTokens(metrics.tokens.totalTokens)} 
-                />
-                <StatRow 
-                  label="Input" 
-                  value={formatTokens(metrics.tokens.inputTokens)} 
-                />
-                <StatRow 
-                  label="Output" 
-                  value={formatTokens(metrics.tokens.outputTokens)} 
-                />
+                <StatRow label="Total" value={formatTokens(metrics.tokens.totalTokens)} />
+                <StatRow label="Input" value={formatTokens(metrics.tokens.inputTokens)} />
+                <StatRow label="Output" value={formatTokens(metrics.tokens.outputTokens)} />
                 {metrics.tokens.cacheTokens > 0 && (
-                  <StatRow 
-                    label="Cache" 
-                    value={formatTokens(metrics.tokens.cacheTokens)} 
-                  />
+                  <StatRow label="Cache" value={formatTokens(metrics.tokens.cacheTokens)} />
                 )}
                 <div className="pt-2 border-t mt-2">
                   <div className="text-xs text-muted-foreground mb-1">Per Run</div>
@@ -487,12 +491,12 @@ export function Dashboard() {
               </StatCard>
 
               {/* Duration Card */}
-              <StatCard 
+              <StatCard
                 title={
                   <div className="flex items-center justify-between">
                     <span>Run Duration</span>
-                    <TrendIndicator 
-                      direction={metrics.trends.durationTrend} 
+                    <TrendIndicator
+                      direction={metrics.trends.durationTrend}
                       change={metrics.trends.durationChange}
                     />
                   </div>
@@ -500,14 +504,8 @@ export function Dashboard() {
                 onClick={() => setDrillDown('duration')}
                 clickable
               >
-                <StatRow 
-                  label="Runs" 
-                  value={metrics.duration.runs} 
-                />
-                <StatRow 
-                  label="Average" 
-                  value={formatDuration(metrics.duration.avgMs)} 
-                />
+                <StatRow label="Runs" value={metrics.duration.runs} />
+                <StatRow label="Average" value={formatDuration(metrics.duration.avgMs)} />
                 <div className="pt-2 border-t mt-2">
                   <div className="flex justify-between text-sm">
                     <div>
@@ -550,30 +548,13 @@ export function Dashboard() {
         onClose={() => setDrillDown(null)}
       >
         {drillDown === 'tasks' && (
-          <TasksDrillDown 
-            project={project} 
-            onTaskClick={handleTaskClick}
-          />
+          <TasksDrillDown project={project} onTaskClick={handleTaskClick} />
         )}
         {drillDown === 'errors' && (
-          <ErrorsDrillDown 
-            period={period} 
-            project={project}
-            onTaskClick={handleTaskClick}
-          />
+          <ErrorsDrillDown period={period} project={project} onTaskClick={handleTaskClick} />
         )}
-        {drillDown === 'tokens' && (
-          <TokensDrillDown 
-            period={period} 
-            project={project}
-          />
-        )}
-        {drillDown === 'duration' && (
-          <DurationDrillDown 
-            period={period} 
-            project={project}
-          />
-        )}
+        {drillDown === 'tokens' && <TokensDrillDown period={period} project={project} />}
+        {drillDown === 'duration' && <DurationDrillDown period={period} project={project} />}
       </DrillDownPanel>
     </div>
   );

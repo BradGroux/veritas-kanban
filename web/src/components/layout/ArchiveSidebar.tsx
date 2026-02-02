@@ -237,11 +237,11 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-[400px] sm:w-[450px] p-0">
+        <SheetContent side="right" className="w-[400px] sm:w-[450px] p-0" aria-label="Archive">
           <SheetHeader className="px-4 py-3 border-b">
             <div className="flex items-center justify-between pr-8">
               <SheetTitle className="flex items-center gap-2">
-                <Archive className="h-5 w-5" />
+                <Archive className="h-5 w-5" aria-hidden="true" />
                 Archive
                 {archivedTasks && archivedTasks.length > 0 && (
                   <Badge variant="secondary" className="ml-1">
