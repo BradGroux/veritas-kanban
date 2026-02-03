@@ -10,7 +10,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -597,9 +597,9 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 🗺️ Roadmap
 
-### v1.4.0 — Multi-Agent Ready
+### v1.5.0 — Multi-Agent Ready
 
-See the [v1.4.0 milestone](https://github.com/BradGroux/veritas-kanban/milestone/7) for what's next. Community contributions welcome!
+See the [open milestones](https://github.com/BradGroux/veritas-kanban/milestones) for what's next. Community contributions welcome!
 
 - [Multi-agent dashboard sidebar](https://github.com/BradGroux/veritas-kanban/issues/28) — See all active agents at a glance
 - [Multi-agent task assignment](https://github.com/BradGroux/veritas-kanban/issues/29) — Multiple agents on a single task

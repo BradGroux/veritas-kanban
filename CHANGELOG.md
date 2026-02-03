@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(Nothing yet.)
+
+---
+
+## [1.4.1] - 2026-02-02
+
+### Security
+
+- **SEC-001 Path Traversal Prevention** — added strict path segment validation + base directory enforcement in server utilities; applied to file-based services that join paths from user-controlled ids
+- **SEC-007 Admin Authorization** — enforced admin (or admin+agent where appropriate) on mutating settings/config/activity/status-history/notifications endpoints
+
+### Fixed
+
+- **Agent Status Panel** now uses real-time WebSocket updates (`useRealtimeAgentStatus`) and correctly handles `activeAgents` payloads
+- Improved proxy/IP trust behavior for rate limiting (`X-Forwarded-For` only trusted when `trust proxy` is configured)
+
+## [1.4.0] - 2026-02-01
+
 ### ✨ Highlights
 
 - **CLI Workflow Commands** — Two-command task lifecycle (`vk begin` / `vk done`) plus time tracking, comments, agent status, and project management from the terminal
@@ -35,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Project management CLI** — `vk project list` and `vk project create "name"` with `--color` and `--description` flags
 - All commands support `--json` for scripting and automation
 - 5 new command modules, 18 subcommands, 651 lines added
+
+---
 
 ---
 
@@ -363,7 +383,9 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v1.3.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/BradGroux/veritas-kanban/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.0.0...v1.1.0
