@@ -66,6 +66,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
   const taskIdsByStatus = useMemo(() => {
     const map: Record<TaskStatus, string[]> = {
       todo: [],
+      planning: [],
       'in-progress': [],
       blocked: [],
       done: [],

@@ -1,7 +1,7 @@
 // Task Types
 
 export type TaskType = string;
-export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done';
+export type TaskStatus = 'todo' | 'planning' | 'in-progress' | 'blocked' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 /** Built-in agent types. Custom agents use any string slug. */
 export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';

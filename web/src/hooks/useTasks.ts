@@ -336,6 +336,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
   if (!tasks) {
     return {
       todo: [],
+      planning: [],
       'in-progress': [],
       blocked: [],
       done: [],
@@ -344,6 +345,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
 
   return {
     todo: sortByPosition(tasks.filter((t) => t.status === 'todo')),
+    planning: sortByPosition(tasks.filter((t) => t.status === 'planning')),
     'in-progress': sortByPosition(tasks.filter((t) => t.status === 'in-progress')),
     blocked: sortByPosition(tasks.filter((t) => t.status === 'blocked')),
     done: sortByPosition(tasks.filter((t) => t.status === 'done')),

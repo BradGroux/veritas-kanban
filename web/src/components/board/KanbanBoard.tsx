@@ -34,6 +34,7 @@ const Dashboard = lazy(() =>
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
+  { id: 'planning', title: 'Planning' },
   { id: 'in-progress', title: 'In Progress' },
   { id: 'blocked', title: 'Blocked' },
   { id: 'done', title: 'Done' },
@@ -206,7 +207,10 @@ export function KanbanBoard() {
 
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
         <div className="grid grid-cols-5 gap-4">
-          <section className="col-span-4" aria-label={`Kanban board, ${filteredTasks.length} tasks`}>
+          <section
+            className="col-span-4"
+            aria-label={`Kanban board, ${filteredTasks.length} tasks`}
+          >
             {featureSettings.board.enableDragAndDrop ? (
               <DndContext
                 sensors={sensors}
@@ -251,15 +255,17 @@ export function KanbanBoard() {
             )}
           </section>
 
-          <BoardSidebar onTaskClick={(taskId) => {
-            const task = filteredTasks.find((t) => t.id === taskId);
-            if (task) {
-              handleTaskClick(task);
-            } else {
-              // Task may be archived or not on board — fire open-task event for API fallback
-              window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
-            }
-          }} />
+          <BoardSidebar
+            onTaskClick={(taskId) => {
+              const task = filteredTasks.find((t) => t.id === taskId);
+              if (task) {
+                handleTaskClick(task);
+              } else {
+                // Task may be archived or not on board — fire open-task event for API fallback
+                window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
+              }
+            }}
+          />
         </div>
 
         {featureSettings.board.showDashboard && (
