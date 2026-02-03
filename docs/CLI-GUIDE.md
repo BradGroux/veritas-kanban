@@ -188,6 +188,7 @@ vk list                           # All tasks
 vk list --status in-progress      # Filter by status
 vk list --type code               # Filter by type
 vk list --project my-app          # Filter by project
+vk list -S "Sprint 1"             # Filter by sprint
 vk list --status in-progress --type code  # Combine filters
 vk list --json                    # JSON output
 ```
@@ -200,6 +201,7 @@ vk list --json                    # JSON output
 | `--status` | Filter by status (todo, in-progress, blocked, done) |
 | `--type` | Filter by task type |
 | `--project` | Filter by project name |
+| `-S, --sprint` | Filter by sprint name or ID |
 | `--json` | Output as JSON |
 
 ---
@@ -228,6 +230,7 @@ Create a new task.
 ```bash
 vk create "Implement OAuth login"
 vk create "Fix button alignment" --type code --priority high --project my-app
+vk create "Sprint task" -S "Sprint 1"
 ```
 
 **Flags:**
@@ -236,6 +239,7 @@ vk create "Fix button alignment" --type code --priority high --project my-app
 | `--type` | Task type (code, research, content, etc.) |
 | `--priority` | Priority level (low, medium, high) |
 | `--project` | Project name |
+| `-S, --sprint` | Sprint name or ID |
 | `--json` | Output as JSON |
 
 ---
@@ -247,6 +251,7 @@ Update task fields.
 ```bash
 vk update abc123 --status review
 vk update abc123 --title "New title" --priority high
+vk update abc123 -S "Sprint 2"
 ```
 
 **Flags:**
@@ -257,6 +262,7 @@ vk update abc123 --title "New title" --priority high
 | `--priority` | New priority |
 | `--type` | New type |
 | `--project` | New project |
+| `-S, --sprint` | Sprint name or ID |
 | `--json` | Output as JSON |
 
 ---

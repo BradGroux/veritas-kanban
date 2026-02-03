@@ -244,12 +244,12 @@ Composite commands that orchestrate multiple API calls into a single action. Add
 
 ### Task Commands
 
-| Command             | Alias | Description                                                        |
-| ------------------- | ----- | ------------------------------------------------------------------ |
-| `vk list`           | `ls`  | List tasks with optional `--status`, `--type`, `--project` filters |
-| `vk show <id>`      |       | Show task details (supports partial ID matching)                   |
-| `vk create <title>` |       | Create a new task with `--type`, `--priority`, `--project` options |
-| `vk update <id>`    |       | Update task fields (`--status`, `--title`, `--priority`, etc.)     |
+| Command             | Alias | Description                                                                    |
+| ------------------- | ----- | ------------------------------------------------------------------------------ |
+| `vk list`           | `ls`  | List tasks with optional `--status`, `--type`, `--project`, `--sprint` filters |
+| `vk show <id>`      |       | Show task details (supports partial ID matching)                               |
+| `vk create <title>` |       | Create a new task with `--type`, `--priority`, `--project`, `--sprint` options |
+| `vk update <id>`    |       | Update task fields (`--status`, `--title`, `--priority`, `--sprint`, etc.)     |
 
 ### Time Tracking Commands
 
