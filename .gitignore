@@ -33,7 +33,6 @@ pnpm-debug.log*
 tasks/active/*.md
 tasks/archive/*.md
 tasks/backlog/*.md
-tasks/examples/*.md
 tasks/attachments/
 tasks/archive-attachments/
 .veritas-kanban/*
