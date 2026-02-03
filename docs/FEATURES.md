@@ -369,24 +369,33 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, etc.
 
 ### Tools
 
-| Tool                        | Description                                          |
-| --------------------------- | ---------------------------------------------------- |
-| `list_tasks`                | List tasks with optional status/type/project filters |
-| `get_task`                  | Get task by ID (supports partial matching)           |
-| `create_task`               | Create a new task                                    |
-| `update_task`               | Update task fields                                   |
-| `archive_task`              | Archive a task                                       |
-| `start_agent`               | Start an AI agent on a code task                     |
-| `stop_agent`                | Stop a running agent                                 |
-| `list_pending_automation`   | List automation tasks awaiting execution             |
-| `list_running_automation`   | List currently running automation tasks              |
-| `start_automation`          | Start an automation task via sub-agent               |
-| `complete_automation`       | Mark automation complete or failed                   |
-| `create_notification`       | Create a notification for Teams delivery             |
-| `get_pending_notifications` | Get unsent notifications formatted for Teams         |
-| `check_notifications`       | Check for tasks needing notification                 |
-| `get_summary`               | Overall kanban summary (status counts, projects)     |
-| `get_memory_summary`        | Task summary formatted for AI memory files           |
+| Tool                        | Description                                                 |
+| --------------------------- | ----------------------------------------------------------- |
+| `list_tasks`                | List tasks with optional status/type/project/sprint filters |
+| `get_task`                  | Get task by ID (supports partial matching)                  |
+| `create_task`               | Create a new task (supports sprint assignment)              |
+| `update_task`               | Update task fields (supports sprint assignment)             |
+| `archive_task`              | Archive a task                                              |
+| `start_agent`               | Start an AI agent on a code task                            |
+| `stop_agent`                | Stop a running agent                                        |
+| `list_pending_automation`   | List automation tasks awaiting execution                    |
+| `list_running_automation`   | List currently running automation tasks                     |
+| `start_automation`          | Start an automation task via sub-agent                      |
+| `complete_automation`       | Mark automation complete or failed                          |
+| `create_notification`       | Create a notification for Teams delivery                    |
+| `get_pending_notifications` | Get unsent notifications formatted for Teams                |
+| `check_notifications`       | Check for tasks needing notification                        |
+| `get_summary`               | Overall kanban summary (status counts, projects)            |
+| `get_memory_summary`        | Task summary formatted for AI memory files                  |
+| `list_sprints`              | List sprints (optional includeHidden filter)                |
+| `get_sprint`                | Get sprint by ID                                            |
+| `create_sprint`             | Create a new sprint                                         |
+| `update_sprint`             | Update sprint fields                                        |
+| `delete_sprint`             | Delete a sprint (optional force flag)                       |
+| `can_delete_sprint`         | Check if sprint can be deleted                              |
+| `reorder_sprints`           | Reorder sprints by ID array                                 |
+| `get_archive_suggestions`   | Get sprints ready to archive (all tasks done)               |
+| `close_sprint`              | Archive all done tasks in a sprint                          |
 
 ### Resources
 

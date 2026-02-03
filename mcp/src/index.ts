@@ -19,6 +19,7 @@ import { agentTools, handleAgentTool } from './tools/agents.js';
 import { automationTools, handleAutomationTool } from './tools/automation.js';
 import { notificationTools, handleNotificationTool } from './tools/notifications.js';
 import { summaryTools, handleSummaryTool } from './tools/summary.js';
+import { sprintTools, handleSprintTool } from './tools/sprints.js';
 
 // Create MCP server
 const server = new Server(
@@ -41,6 +42,7 @@ const allTools = [
   ...automationTools,
   ...notificationTools,
   ...summaryTools,
+  ...sprintTools,
 ];
 
 // List available tools
@@ -70,6 +72,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     if (summaryTools.some((t) => t.name === name)) {
       return await handleSummaryTool(name, args);
+    }
+    if (sprintTools.some((t) => t.name === name)) {
+      return await handleSprintTool(name, args);
     }
 
     return {
