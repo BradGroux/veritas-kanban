@@ -358,6 +358,17 @@ vk project list                  # List all projects
 vk project create "my-app" --color "#7c3aed" --description "Main app"
 ```
 
+### Sprint Management
+
+```bash
+vk sprint list                   # List all sprints
+vk sprint create "Sprint 1"      # Create a sprint
+vk sprint update <id> -l "Name"  # Update sprint
+vk sprint delete <id>            # Delete sprint
+vk sprint suggestions            # Show sprints ready to archive
+vk sprint close <id>             # Archive all done tasks in sprint
+```
+
 ### GitHub Sync
 
 ```bash

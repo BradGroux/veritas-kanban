@@ -291,6 +291,19 @@ Manage projects from the terminal. Added in v1.4 (#44).
 | `vk project list`                                              | List all projects                                        |
 | `vk project create "name" --color "#hex" --description "desc"` | Create a new project with optional color and description |
 
+### Sprint Commands
+
+Manage time-boxed sprints from the terminal.
+
+| Command                    | Alias | Description                                          |
+| -------------------------- | ----- | ---------------------------------------------------- |
+| `vk sprint list`           | `ls`  | List all sprints (`--hidden` to include hidden)      |
+| `vk sprint create <label>` |       | Create a new sprint (`-d` for description)           |
+| `vk sprint update <id>`    |       | Update sprint (`-l` label, `-d` desc, `--hide/show`) |
+| `vk sprint delete <id>`    | `rm`  | Delete a sprint (`-y` skip confirm, `-f` force)      |
+| `vk sprint suggestions`    |       | Show sprints ready to archive (all tasks done)       |
+| `vk sprint close <id>`     |       | Archive all done tasks in a sprint                   |
+
 ### Agent Commands
 
 | Command                   | Description                                              |
