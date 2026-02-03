@@ -32,6 +32,8 @@ pnpm-debug.log*
 # Runtime data (keep .gitkeep for structure)
 tasks/active/*.md
 tasks/archive/*.md
+tasks/backlog/*.md
+tasks/examples/*.md
 tasks/attachments/
 tasks/archive-attachments/
 .veritas-kanban/*
