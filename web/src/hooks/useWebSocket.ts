@@ -62,8 +62,7 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 20;
 
 function getDefaultWsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const isDev = ['3000', '5173'].includes(window.location.port);
-  return isDev ? `${protocol}//localhost:3001/ws` : `${protocol}//${window.location.host}/ws`;
+  return `${protocol}//${window.location.host}/ws`;
 }
 
 /**
