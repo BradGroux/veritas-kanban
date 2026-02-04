@@ -15,8 +15,54 @@ Common issues and solutions for Veritas Kanban. Can't find your issue? [Open a D
 - [UI & Frontend](#ui--frontend)
 - [Data & Storage](#data--storage)
 - [Useful Commands](#useful-commands)
+- [Dev Reliability (ports, hangs, and restarts)](#dev-reliability-ports-hangs-and-restarts)
 
 ---
+
+## Dev Reliability (ports, hangs, and restarts)
+
+### Quick fix: clean restart
+
+If the UI is acting hung or the API is returning unexpected 404s, run:
+
+```bash
+pnpm dev:clean
+```
+
+This:
+
+- frees ports **3001** (server) and **3000** (web)
+- kills stale dev watchers for this repo (`tsx watch`, `vite`, `concurrently`)
+- restarts `pnpm dev`
+
+### Check server health
+
+VK provides a canonical health endpoint for tooling:
+
+```bash
+curl -s http://localhost:3001/api/health
+```
+
+Expected: HTTP 200 JSON like:
+
+```json
+{ "ok": true, "service": "veritas-kanban", "version": "1.x.x" }
+```
+
+### Optional: auto-restart watchdog (dev)
+
+If you want VK to auto-restart when unhealthy during dev:
+
+```bash
+pnpm dev:watchdog
+```
+
+Environment variables:
+
+- `WATCHDOG_INTERVAL_SECONDS` (default 30)
+- `WATCHDOG_FAIL_THRESHOLD` (default 3)
+
+> Note: watchdog is for local dev convenience. For production, prefer a real supervisor (pm2/docker) with health checks.
 
 ## Installation & Build
 
