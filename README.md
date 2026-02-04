@@ -358,6 +358,17 @@ vk project list                  # List all projects
 vk project create "my-app" --color "#7c3aed" --description "Main app"
 ```
 
+### Sprint Management
+
+```bash
+vk sprint list                   # List all sprints
+vk sprint create "Sprint 1"      # Create a sprint
+vk sprint update <id> -l "Name"  # Update sprint
+vk sprint delete <id>            # Delete sprint
+vk sprint suggestions            # Show sprints ready to archive
+vk sprint close <id>             # Archive all done tasks in sprint
+```
+
 ### GitHub Sync
 
 ```bash
@@ -470,13 +481,22 @@ For AI assistants (Claude Desktop, etc.):
 
 ### Available Tools
 
-| Tool           | Description       |
-| -------------- | ----------------- |
-| `list_tasks`   | List with filters |
-| `get_task`     | Get task by ID    |
-| `create_task`  | Create new task   |
-| `update_task`  | Update fields     |
-| `archive_task` | Archive task      |
+| Tool                      | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `list_tasks`              | List with filters (status/type/project/sprint) |
+| `get_task`                | Get task by ID                                 |
+| `create_task`             | Create new task (supports sprint)              |
+| `update_task`             | Update fields (supports sprint)                |
+| `archive_task`            | Archive task                                   |
+| `list_sprints`            | List sprints                                   |
+| `get_sprint`              | Get sprint by ID                               |
+| `create_sprint`           | Create a new sprint                            |
+| `update_sprint`           | Update sprint fields                           |
+| `delete_sprint`           | Delete a sprint                                |
+| `can_delete_sprint`       | Check if sprint can be deleted                 |
+| `reorder_sprints`         | Reorder sprints                                |
+| `get_archive_suggestions` | Get sprints ready to archive                   |
+| `close_sprint`            | Archive done tasks in sprint                   |
 
 ### Resources
 

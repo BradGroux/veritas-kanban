@@ -244,12 +244,12 @@ Composite commands that orchestrate multiple API calls into a single action. Add
 
 ### Task Commands
 
-| Command             | Alias | Description                                                        |
-| ------------------- | ----- | ------------------------------------------------------------------ |
-| `vk list`           | `ls`  | List tasks with optional `--status`, `--type`, `--project` filters |
-| `vk show <id>`      |       | Show task details (supports partial ID matching)                   |
-| `vk create <title>` |       | Create a new task with `--type`, `--priority`, `--project` options |
-| `vk update <id>`    |       | Update task fields (`--status`, `--title`, `--priority`, etc.)     |
+| Command             | Alias | Description                                                                    |
+| ------------------- | ----- | ------------------------------------------------------------------------------ |
+| `vk list`           | `ls`  | List tasks with optional `--status`, `--type`, `--project`, `--sprint` filters |
+| `vk show <id>`      |       | Show task details (supports partial ID matching)                               |
+| `vk create <title>` |       | Create a new task with `--type`, `--priority`, `--project`, `--sprint` options |
+| `vk update <id>`    |       | Update task fields (`--status`, `--title`, `--priority`, `--sprint`, etc.)     |
 
 ### Time Tracking Commands
 
@@ -290,6 +290,19 @@ Manage projects from the terminal. Added in v1.4 (#44).
 | -------------------------------------------------------------- | -------------------------------------------------------- |
 | `vk project list`                                              | List all projects                                        |
 | `vk project create "name" --color "#hex" --description "desc"` | Create a new project with optional color and description |
+
+### Sprint Commands
+
+Manage time-boxed sprints from the terminal.
+
+| Command                    | Alias | Description                                          |
+| -------------------------- | ----- | ---------------------------------------------------- |
+| `vk sprint list`           | `ls`  | List all sprints (`--hidden` to include hidden)      |
+| `vk sprint create <label>` |       | Create a new sprint (`-d` for description)           |
+| `vk sprint update <id>`    |       | Update sprint (`-l` label, `-d` desc, `--hide/show`) |
+| `vk sprint delete <id>`    | `rm`  | Delete a sprint (`-y` skip confirm, `-f` force)      |
+| `vk sprint suggestions`    |       | Show sprints ready to archive (all tasks done)       |
+| `vk sprint close <id>`     |       | Archive all done tasks in a sprint                   |
 
 ### Agent Commands
 
@@ -356,24 +369,33 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, etc.
 
 ### Tools
 
-| Tool                        | Description                                          |
-| --------------------------- | ---------------------------------------------------- |
-| `list_tasks`                | List tasks with optional status/type/project filters |
-| `get_task`                  | Get task by ID (supports partial matching)           |
-| `create_task`               | Create a new task                                    |
-| `update_task`               | Update task fields                                   |
-| `archive_task`              | Archive a task                                       |
-| `start_agent`               | Start an AI agent on a code task                     |
-| `stop_agent`                | Stop a running agent                                 |
-| `list_pending_automation`   | List automation tasks awaiting execution             |
-| `list_running_automation`   | List currently running automation tasks              |
-| `start_automation`          | Start an automation task via sub-agent               |
-| `complete_automation`       | Mark automation complete or failed                   |
-| `create_notification`       | Create a notification for Teams delivery             |
-| `get_pending_notifications` | Get unsent notifications formatted for Teams         |
-| `check_notifications`       | Check for tasks needing notification                 |
-| `get_summary`               | Overall kanban summary (status counts, projects)     |
-| `get_memory_summary`        | Task summary formatted for AI memory files           |
+| Tool                        | Description                                                 |
+| --------------------------- | ----------------------------------------------------------- |
+| `list_tasks`                | List tasks with optional status/type/project/sprint filters |
+| `get_task`                  | Get task by ID (supports partial matching)                  |
+| `create_task`               | Create a new task (supports sprint assignment)              |
+| `update_task`               | Update task fields (supports sprint assignment)             |
+| `archive_task`              | Archive a task                                              |
+| `start_agent`               | Start an AI agent on a code task                            |
+| `stop_agent`                | Stop a running agent                                        |
+| `list_pending_automation`   | List automation tasks awaiting execution                    |
+| `list_running_automation`   | List currently running automation tasks                     |
+| `start_automation`          | Start an automation task via sub-agent                      |
+| `complete_automation`       | Mark automation complete or failed                          |
+| `create_notification`       | Create a notification for Teams delivery                    |
+| `get_pending_notifications` | Get unsent notifications formatted for Teams                |
+| `check_notifications`       | Check for tasks needing notification                        |
+| `get_summary`               | Overall kanban summary (status counts, projects)            |
+| `get_memory_summary`        | Task summary formatted for AI memory files                  |
+| `list_sprints`              | List sprints (optional includeHidden filter)                |
+| `get_sprint`                | Get sprint by ID                                            |
+| `create_sprint`             | Create a new sprint                                         |
+| `update_sprint`             | Update sprint fields                                        |
+| `delete_sprint`             | Delete a sprint (optional force flag)                       |
+| `can_delete_sprint`         | Check if sprint can be deleted                              |
+| `reorder_sprints`           | Reorder sprints by ID array                                 |
+| `get_archive_suggestions`   | Get sprints ready to archive (all tasks done)               |
+| `close_sprint`              | Archive all done tasks in a sprint                          |
 
 ### Resources
 

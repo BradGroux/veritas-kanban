@@ -11,12 +11,10 @@ export function registerTaskCommands(program: Command): void {
     .command('list')
     .alias('ls')
     .description('List tasks')
-    .option(
-      '-s, --status <status>',
-      'Filter by status (todo, in-progress, blocked, done)'
-    )
+    .option('-s, --status <status>', 'Filter by status (todo, in-progress, blocked, done)')
     .option('-t, --type <type>', 'Filter by type (code, research, content, automation)')
     .option('-p, --project <project>', 'Filter by project')
+    .option('-S, --sprint <sprint>', 'Filter by sprint')
     .option('-v, --verbose', 'Show more details')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
@@ -32,6 +30,9 @@ export function registerTaskCommands(program: Command): void {
         }
         if (options.project) {
           filtered = filtered.filter((t) => t.project === options.project);
+        }
+        if (options.sprint) {
+          filtered = filtered.filter((t) => t.sprint === options.sprint);
         }
 
         if (options.json) {
@@ -89,6 +90,7 @@ export function registerTaskCommands(program: Command): void {
     .description('Create a new task')
     .option('-t, --type <type>', 'Task type (code, research, content, automation)', 'code')
     .option('-p, --project <project>', 'Project name')
+    .option('-S, --sprint <sprint>', 'Sprint name or ID')
     .option('-d, --description <desc>', 'Task description')
     .option('--priority <priority>', 'Priority (low, medium, high)', 'medium')
     .option('--json', 'Output as JSON')
@@ -100,6 +102,7 @@ export function registerTaskCommands(program: Command): void {
             title,
             type: options.type,
             project: options.project,
+            sprint: options.sprint,
             description: options.description || '',
             priority: options.priority,
           }),
@@ -124,6 +127,7 @@ export function registerTaskCommands(program: Command): void {
     .option('-s, --status <status>', 'New status')
     .option('-t, --type <type>', 'New type')
     .option('-p, --project <project>', 'New project')
+    .option('-S, --sprint <sprint>', 'Sprint name or ID')
     .option('--priority <priority>', 'New priority')
     .option('--title <title>', 'New title')
     .option('--json', 'Output as JSON')
@@ -140,6 +144,7 @@ export function registerTaskCommands(program: Command): void {
         if (options.status) updates.status = options.status;
         if (options.type) updates.type = options.type;
         if (options.project) updates.project = options.project;
+        if (options.sprint) updates.sprint = options.sprint;
         if (options.priority) updates.priority = options.priority;
         if (options.title) updates.title = options.title;
 

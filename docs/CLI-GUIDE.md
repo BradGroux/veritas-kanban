@@ -18,6 +18,7 @@ Comprehensive guide to the `vk` command-line tool for Veritas Kanban.
   - [Comments](#comments)
   - [Agent Status](#agent-status)
   - [Project Management](#project-management)
+  - [Sprint Management](#sprint-management)
   - [Agent Commands](#agent-commands)
   - [Automation Commands](#automation-commands)
   - [GitHub Sync](#github-sync)
@@ -187,6 +188,7 @@ vk list                           # All tasks
 vk list --status in-progress      # Filter by status
 vk list --type code               # Filter by type
 vk list --project my-app          # Filter by project
+vk list -S "Sprint 1"             # Filter by sprint
 vk list --status in-progress --type code  # Combine filters
 vk list --json                    # JSON output
 ```
@@ -199,6 +201,7 @@ vk list --json                    # JSON output
 | `--status` | Filter by status (todo, in-progress, blocked, done) |
 | `--type` | Filter by task type |
 | `--project` | Filter by project name |
+| `-S, --sprint` | Filter by sprint name or ID |
 | `--json` | Output as JSON |
 
 ---
@@ -227,6 +230,7 @@ Create a new task.
 ```bash
 vk create "Implement OAuth login"
 vk create "Fix button alignment" --type code --priority high --project my-app
+vk create "Sprint task" -S "Sprint 1"
 ```
 
 **Flags:**
@@ -235,6 +239,7 @@ vk create "Fix button alignment" --type code --priority high --project my-app
 | `--type` | Task type (code, research, content, etc.) |
 | `--priority` | Priority level (low, medium, high) |
 | `--project` | Project name |
+| `-S, --sprint` | Sprint name or ID |
 | `--json` | Output as JSON |
 
 ---
@@ -246,6 +251,7 @@ Update task fields.
 ```bash
 vk update abc123 --status review
 vk update abc123 --title "New title" --priority high
+vk update abc123 -S "Sprint 2"
 ```
 
 **Flags:**
@@ -256,6 +262,7 @@ vk update abc123 --title "New title" --priority high
 | `--priority` | New priority |
 | `--type` | New type |
 | `--project` | New project |
+| `-S, --sprint` | Sprint name or ID |
 | `--json` | Output as JSON |
 
 ---
@@ -413,6 +420,122 @@ vk project create "rubicon" --color "#7c3aed" --description "Main product"
 | --------------- | ------------------------ |
 | `--color` | Project color (hex) |
 | `--description` | Project description |
+| `--json` | Output as JSON |
+
+---
+
+### Sprint Management
+
+Manage time-boxed sprints from the terminal.
+
+#### `vk sprint list`
+
+List all sprints.
+
+```bash
+vk sprint list                   # List visible sprints
+vk sprint list --hidden          # Include hidden sprints
+vk sprint list --json            # JSON output
+```
+
+**Aliases:** `ls`
+
+**Flags:**
+| Flag | Description |
+| ---------- | ------------------------- |
+| `--hidden` | Include hidden sprints |
+| `--json` | Output as JSON |
+
+---
+
+#### `vk sprint create <label>`
+
+Create a new sprint.
+
+```bash
+vk sprint create "Sprint 1"
+vk sprint create "Sprint 2" -d "Q1 2026 development cycle"
+```
+
+**Flags:**
+| Flag | Description |
+| ---------------------- | -------------------- |
+| `-d, --description` | Sprint description |
+| `--json` | Output as JSON |
+
+---
+
+#### `vk sprint update <id>`
+
+Update a sprint's name, description, or visibility.
+
+```bash
+vk sprint update sprint-1-abc123 -l "Sprint 1 (Revised)"
+vk sprint update sprint-1-abc123 -d "Updated description"
+vk sprint update sprint-1-abc123 --hide    # Hide from listings
+vk sprint update sprint-1-abc123 --show    # Un-hide
+```
+
+**Flags:**
+| Flag | Description |
+| ---------------------- | ------------------------- |
+| `-l, --label` | New sprint name |
+| `-d, --description` | Sprint description |
+| `--hide` | Hide sprint from listings |
+| `--show` | Show hidden sprint |
+| `--json` | Output as JSON |
+
+---
+
+#### `vk sprint delete <id>`
+
+Delete a sprint.
+
+```bash
+vk sprint delete sprint-1-abc123           # With confirmation prompt
+vk sprint delete sprint-1-abc123 -y        # Skip confirmation
+vk sprint delete sprint-1-abc123 --force   # Force delete even if tasks reference it
+```
+
+**Aliases:** `rm`
+
+**Flags:**
+| Flag | Description |
+| ------------ | ------------------------------------------- |
+| `-y, --yes` | Skip confirmation prompt |
+| `-f, --force` | Force delete even if tasks reference sprint |
+
+---
+
+#### `vk sprint suggestions`
+
+Show sprints that are ready to archive (all tasks completed).
+
+```bash
+vk sprint suggestions
+vk sprint suggestions --json
+```
+
+**Flags:**
+| Flag | Description |
+| -------- | ------------------------- |
+| `--json` | Output as JSON |
+
+---
+
+#### `vk sprint close <id>`
+
+Archive all completed tasks in a sprint. Use this to "close out" a sprint when all work is done.
+
+```bash
+vk sprint close sprint-1-abc123            # With confirmation prompt
+vk sprint close sprint-1-abc123 -y         # Skip confirmation
+```
+
+**Flags:**
+| Flag | Description |
+| ---------- | ------------------------- |
+| `-y, --yes` | Skip confirmation prompt |
 | `--json` | Output as JSON |
 
 ---
