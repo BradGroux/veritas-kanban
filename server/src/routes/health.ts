@@ -153,6 +153,16 @@ async function getDataDirSize(dirPath: string): Promise<number> {
 export const healthRouter = Router();
 
 /**
+ * API-facing health router.
+ *
+ * Why this exists in addition to /health:
+ * - /health is container/orchestrator friendly (live/ready/deep)
+ * - /api/health is a canonical VK API signal used by dev tooling/watchdogs
+ *   to distinguish "VK is healthy" from "something else is bound to :3001".
+ */
+export const apiHealthRouter = Router();
+
+/**
  * GET /health/live — Liveness probe
  * Confirms process is running. Always returns 200.
  */
@@ -213,7 +223,7 @@ healthRouter.get('/ready', async (_req, res) => {
  * GET /health/deep — Full diagnostics (admin only)
  * Returns detailed system information. Always returns 200.
  */
-healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) => {
+async function buildDeepHealthPayload() {
   const [storage, disk, tasksFile] = await Promise.all([
     checkStorage(),
     checkDisk(),
@@ -248,7 +258,7 @@ healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) =>
   // Get circuit breaker status for all registered services
   const circuitBreakers = getCircuitBreakerStatus();
 
-  res.json({
+  return {
     status: storageStatus === 'fail' || disk === 'fail' ? 'degraded' : 'ok',
     checks: {
       storage: storageStatus as 'ok' | 'fail',
@@ -274,7 +284,12 @@ healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) =>
       sizeBytes: dataDirSize,
     },
     timestamp: new Date().toISOString(),
-  });
+  };
+}
+
+healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) => {
+  const payload = await buildDeepHealthPayload();
+  res.json(payload);
 });
 
 /**
@@ -285,4 +300,44 @@ healthRouter.get('/', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
+});
+
+// ============================================
+// /api/health (canonical API signal)
+// ============================================
+
+/**
+ * GET /api/health — Lightweight liveness signal for dev tooling.
+ *
+ * Returns a minimal JSON payload that is cheap to compute and safe to call
+ * frequently.
+ */
+apiHealthRouter.get('/', async (_req, res) => {
+  // Read version from package.json (best-effort)
+  let version = 'unknown';
+  try {
+    const pkgPath = path.resolve(process.cwd(), 'package.json');
+    const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
+    version = pkg.version || 'unknown';
+  } catch {
+    // Ignore
+  }
+
+  res.json({
+    ok: true,
+    service: 'veritas-kanban',
+    version,
+    uptimeMs: Math.round(process.uptime() * 1000),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /api/health/deep — Full diagnostics (admin only).
+ *
+ * Same payload as /health/deep, exposed under /api for watchdogs and tooling.
+ */
+apiHealthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) => {
+  const payload = await buildDeepHealthPayload();
+  res.json(payload);
 });
