@@ -15,7 +15,7 @@ import type {
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
-import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
+import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 
 const log = createLogger('task-cache');
 
@@ -250,6 +250,19 @@ export class TaskService {
   private taskToFilename(task: Task): string {
     const slug = makeSlug(task.title);
     return `${task.id}-${slug}.md`;
+  }
+
+  /**
+   * Find the actual filename on disk for a task ID.
+   * Files are named `{id}-{slug}.md` but the slug may have changed since creation.
+   * Falls back to computed filename if no match found.
+   */
+  private async findTaskFile(dir: string, taskId: string): Promise<string | null> {
+    const files = await fs.readdir(dir);
+    // Files always start with `{taskId}-` prefix
+    const prefix = `${taskId}-`;
+    const match = files.find((f) => f.startsWith(prefix) && f.endsWith('.md'));
+    return match ?? null;
   }
 
   /** Recursively strip undefined values from an object (YAML can't serialize them) */
@@ -500,8 +513,14 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return false;
 
-    const filename = this.taskToFilename(task);
-    const filepath = path.join(this.tasksDir, filename);
+    // Find actual file on disk (slug may differ from current title)
+    const actualFilename = await this.findTaskFile(this.tasksDir, id);
+    if (!actualFilename) {
+      log.warn({ taskId: id }, 'Task file not found on disk for deletion');
+      return false;
+    }
+
+    const filepath = path.join(this.tasksDir, actualFilename);
 
     await withFileLock(filepath, async () => {
       this.markWrite();
@@ -523,9 +542,15 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return false;
 
-    const filename = this.taskToFilename(task);
-    const sourcePath = path.join(this.tasksDir, filename);
-    const destPath = path.join(this.archiveDir, filename);
+    // Find actual file on disk (slug may differ from current title)
+    const actualFilename = await this.findTaskFile(this.tasksDir, id);
+    if (!actualFilename) {
+      log.warn({ taskId: id }, 'Task file not found on disk for archiving');
+      return false;
+    }
+
+    const sourcePath = path.join(this.tasksDir, actualFilename);
+    const destPath = path.join(this.archiveDir, actualFilename);
 
     await withFileLock(sourcePath, async () => {
       this.markWrite();
@@ -583,9 +608,15 @@ export class TaskService {
     const task = await this.getArchivedTask(id);
     if (!task) return null;
 
-    const filename = this.taskToFilename(task);
-    const sourcePath = path.join(this.archiveDir, filename);
-    const destPath = path.join(this.tasksDir, filename);
+    // Find actual file on disk (slug may differ from current title)
+    const actualFilename = await this.findTaskFile(this.archiveDir, id);
+    if (!actualFilename) {
+      log.warn({ taskId: id }, 'Archived task file not found on disk for restoration');
+      return null;
+    }
+
+    const sourcePath = path.join(this.archiveDir, actualFilename);
+    const destPath = path.join(this.tasksDir, actualFilename);
 
     // Update status to done
     const restoredTask: Task = {
@@ -664,13 +695,15 @@ export class TaskService {
     const sprintTasks = tasks.filter((t) => t.sprint === sprint);
 
     if (sprintTasks.length === 0) {
-      throw new Error(`No tasks found for sprint "${sprint}"`);
+      throw new ValidationError(
+        `No active tasks found for sprint "${sprint}" (may already be archived)`
+      );
     }
 
     // Check all tasks are done
     const notDone = sprintTasks.filter((t) => t.status !== 'done');
     if (notDone.length > 0) {
-      throw new Error(`Cannot archive sprint: ${notDone.length} task(s) are not done`);
+      throw new ValidationError(`Cannot archive sprint: ${notDone.length} task(s) are not done`);
     }
 
     // Archive all tasks
