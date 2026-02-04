@@ -21,6 +21,19 @@ Common issues and solutions for Veritas Kanban. Can't find your issue? [Open a D
 
 ## Dev Reliability (ports, hangs, and restarts)
 
+### Agent note: planning is NOT a status
+
+`planning` was removed entirely as a `TaskStatus` (process/UI heavy and overkill for an agent-first Kanban).
+
+Valid statuses are:
+
+- `todo`
+- `in-progress`
+- `blocked`
+- `done`
+
+If you need “planning”, put it in the task body/checklist or treat it as agent-internal planning — not a board column.
+
 ### Quick fix: clean restart
 
 If the UI is acting hung or the API is returning unexpected 404s, run:
