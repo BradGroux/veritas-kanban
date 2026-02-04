@@ -59,7 +59,7 @@ import attachmentRoutes from './routes/attachments.js';
 import { configRoutes } from './routes/config.js';
 import { agentRoutes } from './routes/agents.js';
 import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js';
-import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
+import { healthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
 
@@ -290,9 +290,6 @@ app.use(express.json({ limit: '1mb' }));
 
 // Health checks (liveness, readiness, deep diagnostics)
 app.use('/health', healthRouter);
-
-// Canonical VK API health signal (unauthenticated; used by dev tooling/watchdogs)
-app.use('/api/health', apiHealthRouter);
 
 // ============================================
 // Prometheus Metrics (unauthenticated, for scraping)

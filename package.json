@@ -13,8 +13,6 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
-    "dev:clean": "bash scripts/dev-clean.sh",
-    "dev:watchdog": "bash scripts/dev-watchdog.sh",
     "build": "pnpm --filter server build && pnpm --filter web build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
