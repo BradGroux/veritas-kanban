@@ -14,9 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { MarkdownText } from '@/components/shared/MarkdownText';
 import { useAddComment, useEditComment, useDeleteComment } from '@/hooks/useTasks';
 import type { Task, Comment } from '@veritas-kanban/shared';
-import { sanitizeText } from '@/lib/sanitize';
 
 interface CommentsSectionProps {
   task: Task;
@@ -144,9 +144,9 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
               </div>
             </div>
           ) : (
-            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-              {sanitizeText(comment.text)}
-            </p>
+            <div className="text-sm text-foreground break-words">
+              <MarkdownText>{comment.text}</MarkdownText>
+            </div>
           )}
         </div>
       </div>
@@ -246,7 +246,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add a comment... (Cmd/Ctrl+Enter to submit)"
+            placeholder="Add a comment... (supports Markdown, Cmd/Ctrl+Enter to submit)"
             className="text-sm min-h-[80px] resize-none"
             disabled={isAdding}
           />

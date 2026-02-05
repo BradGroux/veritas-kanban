@@ -20,11 +20,11 @@ import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
 import { LessonsLearnedSection } from '../LessonsLearnedSection';
+import { MarkdownText } from '@/components/shared/MarkdownText';
 import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { Trash2, Archive, Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { Task, BlockedReason } from '@veritas-kanban/shared';
-import { sanitizeText } from '@/lib/sanitize';
 
 interface TaskDetailsTabProps {
   task: Task;
@@ -72,14 +72,18 @@ export function TaskDetailsTab({
       <div className="space-y-2">
         <Label className="text-muted-foreground">Description</Label>
         {readOnly ? (
-          <div className="text-sm whitespace-pre-wrap text-foreground/80 bg-muted/30 rounded-md p-3 min-h-[60px]">
-            {sanitizeText(task.description || '') || 'No description'}
+          <div className="text-sm text-foreground/80 bg-muted/30 rounded-md p-3 min-h-[60px]">
+            {task.description ? (
+              <MarkdownText>{task.description}</MarkdownText>
+            ) : (
+              <span className="text-muted-foreground italic">No description</span>
+            )}
           </div>
         ) : (
           <Textarea
             value={task.description}
             onChange={(e) => onUpdate('description', e.target.value)}
-            placeholder="Add a description..."
+            placeholder="Add a description... (supports Markdown)"
             rows={4}
             className="resize-none"
           />
