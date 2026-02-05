@@ -17,6 +17,11 @@ import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { fireHook, getHookEventForStatusChange } from './hook-service.js';
+import {
+  validateTransition,
+  executePostTransitionActions,
+  type TransitionActionCallbacks,
+} from './transition-hooks-service.js';
 
 const log = createLogger('task-cache');
 
@@ -475,6 +480,32 @@ export class TaskService {
       const previousStatus = freshTask.status;
       const statusChanged = input.status !== undefined && input.status !== previousStatus;
 
+      // Validate transition hooks (quality gates) before allowing status change
+      if (statusChanged && input.status) {
+        // Create a preview of the task with proposed changes for validation
+        const previewTask: Task = {
+          ...freshTask,
+          ...restInput,
+          blockedReason:
+            blockedReasonUpdate === null
+              ? undefined
+              : (blockedReasonUpdate ?? freshTask.blockedReason),
+        };
+        const validation = await validateTransition(previewTask, previousStatus, input.status);
+        if (!validation.allowed) {
+          throw new ValidationError(
+            validation.errorMessage || 'Transition blocked by quality gates',
+            validation.failedGates.map(
+              (g: { gate: { type: string; name: string }; message?: string }) => ({
+                code: g.gate.type,
+                message: g.message || g.gate.name,
+                path: ['status'],
+              })
+            )
+          );
+        }
+      }
+
       updatedTask = {
         ...freshTask,
         ...restInput,
@@ -517,6 +548,38 @@ export class TaskService {
             log.warn({ taskId: updatedTask.id, hookEvent }, 'Hook execution failed: %s', err);
           });
         }
+
+        // Execute post-transition actions (quality gates)
+        const actionCallbacks: TransitionActionCallbacks = {
+          onAutoStartTimer: async (t) => {
+            // Start time tracking if not already active
+            if (!t.timeTracking?.isRunning) {
+              await this.startTimer(t.id);
+            }
+          },
+          onAutoStopTimer: async (t) => {
+            // Stop time tracking if currently running
+            if (t.timeTracking?.isRunning) {
+              await this.stopTimer(t.id);
+            }
+          },
+          onLogActivity: async (t, from, to) => {
+            log.info({ taskId: t.id, from, to }, 'Transition action: logged activity');
+          },
+          onPromptLessonsLearned: async (t) => {
+            // Flag task for lessons learned capture (could set a field or emit event)
+            log.info({ taskId: t.id }, 'Transition action: prompt lessons learned');
+          },
+        };
+
+        executePostTransitionActions(
+          updatedTask,
+          previousStatus,
+          updatedTask.status,
+          actionCallbacks
+        ).catch((err) => {
+          log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
+        });
       }
     });
 

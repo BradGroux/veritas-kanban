@@ -26,12 +26,14 @@ const statusLabels: Record<TaskStatus, string> = {
   'in-progress': 'In Progress',
   blocked: 'Blocked',
   done: 'Done',
+  cancelled: 'Cancelled',
 };
 
 const priorityLabels: Record<TaskPriority, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+  critical: 'Critical',
 };
 
 export function TaskMetadataSection({

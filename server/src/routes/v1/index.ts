@@ -52,6 +52,7 @@ import { agentStatusRoutes } from '../agent-status.js';
 import { statusHistoryRoutes } from '../status-history.js';
 import digestRoutes from '../digest.js';
 import auditRoutes from '../audit.js';
+import transitionHooksRoutes from '../transition-hooks.js';
 
 const v1Router: IRouter = Router();
 
@@ -112,6 +113,7 @@ v1Router.use('/telemetry', telemetryRoutes);
 v1Router.use('/metrics', metricsRoutes);
 v1Router.use('/traces', tracesRoutes);
 v1Router.use('/settings', settingsRoutes);
+v1Router.use('/settings/transition-hooks', transitionHooksRoutes);
 v1Router.use('/agent/status', agentStatusRoutes);
 v1Router.use('/status-history', statusHistoryRoutes);
 v1Router.use('/digest', digestRoutes);

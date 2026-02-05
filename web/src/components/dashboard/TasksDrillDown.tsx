@@ -41,6 +41,11 @@ const statusConfig: Record<
     color: 'text-green-500',
     label: 'Done',
   },
+  cancelled: {
+    icon: <Ban className="h-4 w-4" />,
+    color: 'text-gray-400',
+    label: 'Cancelled',
+  },
 };
 
 export function TasksDrillDown({
@@ -79,6 +84,7 @@ export function TasksDrillDown({
       'in-progress': 0,
       blocked: 0,
       done: 0,
+      cancelled: 0,
     };
     filteredTasks.forEach((t) => counts[t.status]++);
     return counts;

@@ -25,6 +25,7 @@ const columnColors: Record<TaskStatus, string> = {
   'in-progress': 'border-t-blue-500',
   blocked: 'border-t-red-500',
   done: 'border-t-green-500',
+  cancelled: 'border-t-gray-400',
 };
 
 export function KanbanColumn({

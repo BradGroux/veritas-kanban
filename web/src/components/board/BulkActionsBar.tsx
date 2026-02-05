@@ -71,6 +71,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
       'in-progress': [],
       blocked: [],
       done: [],
+      cancelled: [],
     };
     for (const task of tasks) {
       if (map[task.status]) {

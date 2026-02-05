@@ -142,6 +142,7 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
 }
 
 const priorityColors: Record<TaskPriority, string> = {
+  critical: 'bg-purple-500/20 text-purple-400',
   high: 'bg-red-500/20 text-red-400',
   medium: 'bg-amber-500/20 text-amber-400',
   low: 'bg-slate-500/20 text-slate-400',

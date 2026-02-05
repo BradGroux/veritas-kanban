@@ -56,6 +56,7 @@ export async function computeTaskMetrics(
     'in-progress': 0,
     blocked: 0,
     done: 0,
+    cancelled: 0,
   };
 
   // Count by blocked reason

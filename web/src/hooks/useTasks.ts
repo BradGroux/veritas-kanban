@@ -347,6 +347,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
       'in-progress': [],
       blocked: [],
       done: [],
+      cancelled: [],
     };
   }
 
@@ -355,6 +356,7 @@ export function useTasksByStatus(tasks: Task[] | undefined) {
     'in-progress': sortByPosition(tasks.filter((t) => t.status === 'in-progress')),
     blocked: sortByPosition(tasks.filter((t) => t.status === 'blocked')),
     done: sortByPosition(tasks.filter((t) => t.status === 'done')),
+    cancelled: sortByPosition(tasks.filter((t) => t.status === 'cancelled')),
   };
 }
 
