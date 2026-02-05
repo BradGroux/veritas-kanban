@@ -102,7 +102,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white',
+        'inline-flex items-center justify-center w-20 px-2 py-0.5 rounded text-xs font-medium text-white',
         colorClass
       )}
     >
@@ -200,10 +200,13 @@ function StatusHistoryPanel({ onTaskClick }: StatusHistoryPanelProps) {
                   <StatusBadge status={entry.previousStatus} />
                   <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                   <StatusBadge status={entry.newStatus} />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    {entry.taskId && (
+                      <span className="text-sm text-muted-foreground shrink-0">{entry.taskId}</span>
+                    )}
                     <span
                       className={cn(
-                        'text-sm truncate block',
+                        'text-sm truncate',
                         entry.taskId && onTaskClick && 'hover:underline',
                         // Color based on newStatus
                         entry.newStatus === 'working' || entry.newStatus === 'thinking'
@@ -218,11 +221,6 @@ function StatusHistoryPanel({ onTaskClick }: StatusHistoryPanelProps) {
                     >
                       {entry.taskTitle || '—'}
                     </span>
-                    {entry.taskId && (
-                      <span className="text-xs text-muted-foreground/60 font-mono truncate block">
-                        {entry.taskId}
-                      </span>
-                    )}
                   </div>
                   {entry.durationMs && (
                     <span className="text-xs text-muted-foreground ml-auto shrink-0">
