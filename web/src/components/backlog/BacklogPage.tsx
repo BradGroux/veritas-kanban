@@ -290,7 +290,18 @@ function BacklogTaskCard({
           className="mt-1"
         />
 
-        <div className="flex-1 min-w-0" onClick={onClick}>
+        <div
+          className="flex-1 min-w-0"
+          onClick={onClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onClick();
+            }
+          }}
+        >
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <h3 className="font-medium truncate">{task.title}</h3>

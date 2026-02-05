@@ -270,25 +270,28 @@ export class ChatService {
     sessionId: string,
     message: Omit<ChatMessage, 'id' | 'timestamp'>
   ): Promise<ChatMessage> {
-    const session = await this.getSession(sessionId);
-
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
     const newMessage: ChatMessage = {
       id: this.generateMessageId(),
       timestamp: new Date().toISOString(),
       ...message,
     };
 
-    session.messages.push(newMessage);
-    session.updated = newMessage.timestamp;
-
-    const filePath = this.getSessionPath(sessionId, session.taskId);
-    const content = this.serializeSession(session);
+    // Determine file path - need to check both task-scoped and board-level paths
+    const taskMatch = sessionId.match(/^task_(.+)$/);
+    const taskId = taskMatch ? taskMatch[1] : undefined;
+    const filePath = this.getSessionPath(sessionId, taskId);
 
     await withFileLock(filePath, async () => {
+      const session = await this.getSession(sessionId);
+
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+
+      session.messages.push(newMessage);
+      session.updated = newMessage.timestamp;
+
+      const content = this.serializeSession(session);
       await fs.writeFile(filePath, content, 'utf-8');
     });
 
@@ -301,25 +304,28 @@ export class ChatService {
    * Delete a session
    */
   async deleteSession(sessionId: string): Promise<void> {
-    const session = await this.getSession(sessionId);
-
-    if (!session) {
-      // Already gone — treat as success
-      log.info({ sessionId }, 'Chat session already deleted or never existed');
-      return;
-    }
-
-    const filePath = this.getSessionPath(sessionId, session.taskId);
+    // Determine file path - need to check both task-scoped and board-level paths
+    const taskMatch = sessionId.match(/^task_(.+)$/);
+    const taskId = taskMatch ? taskMatch[1] : undefined;
+    const filePath = this.getSessionPath(sessionId, taskId);
 
     await withFileLock(filePath, async () => {
+      const session = await this.getSession(sessionId);
+
+      if (!session) {
+        // Already gone — treat as success
+        log.info({ sessionId }, 'Chat session already deleted or never existed');
+        return;
+      }
+
       try {
         await fs.unlink(filePath);
       } catch (err: any) {
         if (err.code !== 'ENOENT') throw err;
       }
-    });
 
-    log.info({ sessionId }, 'Deleted chat session');
+      log.info({ sessionId }, 'Deleted chat session');
+    });
   }
 }
 

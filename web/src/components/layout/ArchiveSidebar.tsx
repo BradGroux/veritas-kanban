@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Archive,
   RefreshCw,
@@ -225,7 +225,7 @@ export function ArchiveSidebar({ open, onOpenChange }: ArchiveSidebarProps) {
   }, [archivedTasks, search, typeFilter, projectFilter]);
 
   // Reset visible count when filters change
-  useMemo(() => {
+  useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [search, typeFilter, projectFilter]);
 

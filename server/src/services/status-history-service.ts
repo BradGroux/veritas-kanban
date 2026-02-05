@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { fileExists } from '../storage/fs-helpers.js';
 import { join } from 'path';
 import { createLogger } from '../lib/logger.js';
+import { withFileLock } from './file-lock.js';
 const log = createLogger('status-history-service');
 
 export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
@@ -110,22 +111,24 @@ export class StatusHistoryService {
       durationMs,
     };
 
-    let entries: StatusHistoryEntry[] = [];
+    await withFileLock(this.historyFile, async () => {
+      let entries: StatusHistoryEntry[] = [];
 
-    if (await fileExists(this.historyFile)) {
-      try {
-        const content = await readFile(this.historyFile, 'utf-8');
-        entries = JSON.parse(content);
-      } catch {
-        // Intentionally silent: corrupted history file — start fresh
-        entries = [];
+      if (await fileExists(this.historyFile)) {
+        try {
+          const content = await readFile(this.historyFile, 'utf-8');
+          entries = JSON.parse(content);
+        } catch {
+          // Intentionally silent: corrupted history file — start fresh
+          entries = [];
+        }
       }
-    }
 
-    // Prepend new entry and limit to MAX_ENTRIES
-    entries = [entry, ...entries].slice(0, this.MAX_ENTRIES);
+      // Prepend new entry and limit to MAX_ENTRIES
+      entries = [entry, ...entries].slice(0, this.MAX_ENTRIES);
 
-    await writeFile(this.historyFile, JSON.stringify(entries, null, 2), 'utf-8');
+      await writeFile(this.historyFile, JSON.stringify(entries, null, 2), 'utf-8');
+    });
 
     this.lastEntry = entry;
 

@@ -1,11 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 interface UseSortableListOptions<T extends { id: string }> {
@@ -26,6 +20,12 @@ export function useSortableList<T extends { id: string }>({
   onReorder,
 }: UseSortableListOptions<T>): UseSortableListReturn<T> {
   const [localItems, setLocalItems] = useState(items);
+
+  // Ref to track latest items for rollback (avoids stale closure issue)
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -55,13 +55,13 @@ export function useSortableList<T extends { id: string }>({
 
         // Fire onReorder in background
         onReorder(orderedIds).catch((error) => {
-          // Rollback on error
+          // Rollback on error using ref for latest items
           console.error('Failed to reorder items:', error);
-          setLocalItems(items);
+          setLocalItems(itemsRef.current);
         });
       }
     },
-    [localItems, items, onReorder]
+    [localItems, onReorder]
   );
 
   const handleMoveUp = useCallback(
@@ -72,10 +72,10 @@ export function useSortableList<T extends { id: string }>({
       setLocalItems(reordered);
       onReorder(orderedIds).catch((error) => {
         console.error('Failed to reorder items:', error);
-        setLocalItems(items);
+        setLocalItems(itemsRef.current);
       });
     },
-    [localItems, items, onReorder]
+    [localItems, onReorder]
   );
 
   const handleMoveDown = useCallback(
@@ -86,10 +86,10 @@ export function useSortableList<T extends { id: string }>({
       setLocalItems(reordered);
       onReorder(orderedIds).catch((error) => {
         console.error('Failed to reorder items:', error);
-        setLocalItems(items);
+        setLocalItems(itemsRef.current);
       });
     },
-    [localItems, items, onReorder]
+    [localItems, onReorder]
   );
 
   return {

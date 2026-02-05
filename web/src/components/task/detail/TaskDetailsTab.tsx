@@ -19,6 +19,7 @@ import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
+import { LessonsLearnedSection } from '../LessonsLearnedSection';
 import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { Trash2, Archive, Calendar, Clock, RotateCcw } from 'lucide-react';
@@ -140,6 +141,13 @@ export function TaskDetailsTab({
         </div>
       )}
 
+      {/* Lessons Learned (only shown for completed tasks) */}
+      {task.status === 'done' && (
+        <div className="border-t pt-4">
+          <LessonsLearnedSection task={task} onUpdate={onUpdate} readOnly={readOnly} />
+        </div>
+      )}
+
       {/* Metadata Footer */}
       <div className="border-t pt-4 space-y-2 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
@@ -163,35 +171,35 @@ export function TaskDetailsTab({
         ) : (
           !readOnly && (
             <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={handleArchive}>
-              <Archive className="h-4 w-4 mr-2" />
-              Archive
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="flex-1">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this task?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete "{task.title}".
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
+              <Button variant="outline" className="flex-1" onClick={handleArchive}>
+                <Archive className="h-4 w-4 mr-2" />
+                Archive
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="flex-1">
+                    <Trash2 className="h-4 w-4 mr-2" />
                     Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete "{task.title}".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )
         )}

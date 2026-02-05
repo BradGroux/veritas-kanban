@@ -216,14 +216,11 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const runCommand = useCallback(
-    (cmd: CommandItem) => {
-      setOpen(false);
-      // Small delay so dialog closes before action fires
-      setTimeout(() => cmd.action(), 50);
-    },
-    []
-  );
+  const runCommand = useCallback((cmd: CommandItem) => {
+    setOpen(false);
+    // Small delay so dialog closes before action fires
+    setTimeout(() => cmd.action(), 50);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -263,6 +260,7 @@ export function CommandPalette() {
               setSelectedIndex(0);
             }}
             placeholder="Type a command or search..."
+            aria-label="Search commands"
             className="flex-1 h-12 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
@@ -273,9 +271,7 @@ export function CommandPalette() {
         {/* Results */}
         <div ref={listRef} className="max-h-[320px] overflow-y-auto p-2">
           {filtered.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No commands found
-            </div>
+            <div className="py-6 text-center text-sm text-muted-foreground">No commands found</div>
           ) : (
             grouped.map((group) => (
               <div key={group.category}>
@@ -298,10 +294,12 @@ export function CommandPalette() {
                       onClick={() => runCommand(cmd)}
                       onMouseEnter={() => setSelectedIndex(idx)}
                     >
-                      <span className={cn(
-                        'shrink-0',
-                        idx === selectedIndex ? 'text-primary' : 'text-muted-foreground'
-                      )}>
+                      <span
+                        className={cn(
+                          'shrink-0',
+                          idx === selectedIndex ? 'text-primary' : 'text-muted-foreground'
+                        )}
+                      >
                         {cmd.icon}
                       </span>
                       <span className="flex-1 text-left">{cmd.label}</span>

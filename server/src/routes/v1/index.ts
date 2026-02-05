@@ -53,6 +53,7 @@ import { statusHistoryRoutes } from '../status-history.js';
 import digestRoutes from '../digest.js';
 import auditRoutes from '../audit.js';
 import transitionHooksRoutes from '../transition-hooks.js';
+import lessonsRoutes from '../lessons.js';
 
 const v1Router: IRouter = Router();
 
@@ -118,5 +119,6 @@ v1Router.use('/agent/status', agentStatusRoutes);
 v1Router.use('/status-history', statusHistoryRoutes);
 v1Router.use('/digest', digestRoutes);
 v1Router.use('/audit', auditRoutes);
+v1Router.use('/lessons', lessonsRoutes);
 
 export { v1Router };

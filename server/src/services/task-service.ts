@@ -356,6 +356,8 @@ export class TaskService {
         comments: data.comments,
         attachments: data.attachments,
         position: data.position,
+        lessonsLearned: data.lessonsLearned,
+        lessonTags: data.lessonTags,
       };
     } catch (error) {
       log.error({ err: error, filename }, 'Failed to parse task file');

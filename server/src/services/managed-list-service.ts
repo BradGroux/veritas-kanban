@@ -4,6 +4,7 @@ import { join } from 'path';
 import { nanoid } from 'nanoid';
 import type { ManagedListItem } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import { withFileLock } from './file-lock.js';
 const log = createLogger('managed-list-service');
 
 export interface ManagedListServiceConfig<T extends ManagedListItem> {
@@ -59,7 +60,9 @@ export class ManagedListService<T extends ManagedListItem> {
    * Save items to JSON file
    */
   private async save(): Promise<void> {
-    await writeFile(this.filePath, JSON.stringify(this.items, null, 2), 'utf-8');
+    await withFileLock(this.filePath, async () => {
+      await writeFile(this.filePath, JSON.stringify(this.items, null, 2), 'utf-8');
+    });
   }
 
   /**

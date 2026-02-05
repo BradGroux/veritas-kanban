@@ -152,7 +152,7 @@ async function fetchBulkMetrics(taskIds: string[]): Promise<Map<string, TaskCard
  */
 export function useBulkTaskMetrics(taskIds: string[], enabled = true) {
   return useQuery({
-    queryKey: ['bulkTaskMetrics', taskIds.sort().join(',')],
+    queryKey: ['bulkTaskMetrics', [...taskIds].sort().join(',')],
     queryFn: () => fetchBulkMetrics(taskIds),
     enabled: enabled && taskIds.length > 0,
     staleTime: 60000, // 1 minute

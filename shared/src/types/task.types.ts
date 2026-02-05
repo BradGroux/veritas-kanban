@@ -191,6 +191,10 @@ export interface Task {
 
   // Position within column (for drag-and-drop ordering)
   position?: number;
+
+  // Lessons learned (captured after task completion)
+  lessonsLearned?: string; // Markdown content
+  lessonTags?: string[]; // Categorization tags
 }
 
 export interface ReviewComment {
@@ -252,6 +256,8 @@ export interface UpdateTaskInput {
   comments?: Comment[];
   attachments?: Attachment[];
   position?: number;
+  lessonsLearned?: string;
+  lessonTags?: string[];
 }
 
 export interface TaskFilters {

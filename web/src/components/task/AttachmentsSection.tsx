@@ -103,11 +103,18 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
               onClick={handleToggleExpand}
               disabled={loadingText}
               className="h-7 w-7 p-0"
+              aria-label={expanded ? 'Collapse text preview' : 'Expand text preview'}
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
           )}
-          <Button size="sm" variant="ghost" asChild className="h-7 w-7 p-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            asChild
+            className="h-7 w-7 p-0"
+            aria-label="Download attachment"
+          >
             <a href={downloadUrl} download={attachment.originalName}>
               <Download className="h-3 w-3" />
             </a>
@@ -118,6 +125,7 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
             onClick={handleDelete}
             disabled={deleteAttachment.isPending}
             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            aria-label="Delete attachment"
           >
             <Trash2 className="h-3 w-3" />
           </Button>

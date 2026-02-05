@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { api } from '@/lib/api';
 import type { FeatureSettings } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
@@ -95,8 +95,17 @@ export function useUpdateFeatureSettings() {
  */
 export function useDebouncedFeatureUpdate(delayMs = 500) {
   const update = useUpdateFeatureSettings();
-  const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
-  const pendingRef = { current: {} as Record<string, any> };
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<Record<string, any>>({});
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const flush = useCallback(() => {
     if (Object.keys(pendingRef.current).length > 0) {

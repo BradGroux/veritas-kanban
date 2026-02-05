@@ -288,6 +288,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 <div
                   className="flex-1 min-w-0"
                   onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setExpandedTaskId(expandedTaskId === task.id ? null : task.id);
+                    }
+                  }}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">

@@ -8,6 +8,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { Task } from '@veritas-kanban/shared';
+import { withFileLock } from './file-lock.js';
 
 export interface Notification {
   id: string;
@@ -96,8 +97,6 @@ export class NotificationService {
   // ============ CRUD Operations ============
 
   async createNotification(input: CreateNotificationInput): Promise<Notification> {
-    const notifications = await this.loadNotifications();
-
     const notification: Notification = {
       ...input,
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -105,14 +104,19 @@ export class NotificationService {
       sent: false,
     };
 
-    notifications.push(notification);
+    await withFileLock(this.notificationsFile, async () => {
+      const notifications = await this.loadNotifications();
 
-    // Keep only last N notifications
-    if (notifications.length > this.maxNotifications) {
-      notifications.splice(0, notifications.length - this.maxNotifications);
-    }
+      notifications.push(notification);
 
-    await this.saveNotifications(notifications);
+      // Keep only last N notifications
+      if (notifications.length > this.maxNotifications) {
+        notifications.splice(0, notifications.length - this.maxNotifications);
+      }
+
+      await this.saveNotifications(notifications);
+    });
+
     return notification;
   }
 

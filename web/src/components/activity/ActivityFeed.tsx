@@ -626,13 +626,15 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
         fresh.add(id);
       }
     }
-    if (fresh.size > 0 && knownIdsRef.current.size > 0) {
+    // Always update known IDs to prevent re-animating the same items
+    const hadItems = knownIdsRef.current.size > 0;
+    knownIdsRef.current = currentIds;
+    if (fresh.size > 0 && hadItems) {
       // Only animate if we already had items (not first load)
       setNewIds(fresh);
       const timer = setTimeout(() => setNewIds(new Set()), 500);
       return () => clearTimeout(timer);
     }
-    knownIdsRef.current = currentIds;
   }, [allActivities]);
 
   // Infinite scroll via IntersectionObserver

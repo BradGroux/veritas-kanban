@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { fileExists } from '../storage/fs-helpers.js';
 import { join } from 'path';
 import { createLogger } from '../lib/logger.js';
+import { withFileLock } from './file-lock.js';
 const log = createLogger('activity-service');
 
 export type ActivityType =
@@ -158,28 +159,30 @@ export class ActivityService {
       timestamp: new Date().toISOString(),
     };
 
-    let activities: Activity[] = [];
+    await withFileLock(this.activityFile, async () => {
+      let activities: Activity[] = [];
 
-    if (await fileExists(this.activityFile)) {
-      try {
-        const content = await readFile(this.activityFile, 'utf-8');
-        activities = JSON.parse(content);
-      } catch {
-        // Intentionally silent: corrupted file — reset to empty list
-        activities = [];
+      if (await fileExists(this.activityFile)) {
+        try {
+          const content = await readFile(this.activityFile, 'utf-8');
+          activities = JSON.parse(content);
+        } catch {
+          // Intentionally silent: corrupted file — reset to empty list
+          activities = [];
+        }
       }
-    }
 
-    // Prepend new activity and limit to MAX_ACTIVITIES
-    activities = [activity, ...activities].slice(0, this.MAX_ACTIVITIES);
+      // Prepend new activity and limit to MAX_ACTIVITIES
+      activities = [activity, ...activities].slice(0, this.MAX_ACTIVITIES);
 
-    if (activities.length >= this.MAX_ACTIVITIES) {
-      log.warn(
-        `[Activity] Activity limit reached (${this.MAX_ACTIVITIES}), trimming oldest entries`
-      );
-    }
+      if (activities.length >= this.MAX_ACTIVITIES) {
+        log.warn(
+          `[Activity] Activity limit reached (${this.MAX_ACTIVITIES}), trimming oldest entries`
+        );
+      }
 
-    await writeFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
+      await writeFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
+    });
 
     return activity;
   }

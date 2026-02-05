@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
@@ -20,17 +20,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { 
-  useConflictStatus, 
-  useFileConflict, 
+import {
+  useConflictStatus,
+  useFileConflict,
   useResolveConflict,
   useAbortConflict,
   useContinueConflict,
 } from '@/hooks/useConflicts';
-import { 
-  AlertTriangle, 
-  Check, 
-  X, 
+import {
+  AlertTriangle,
+  Check,
+  X,
   ChevronLeft,
   ChevronRight,
   FileWarning,
@@ -52,25 +52,27 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [manualContent, setManualContent] = useState('');
   const [showAbortDialog, setShowAbortDialog] = useState(false);
-  
+
   const { data: status, isLoading: statusLoading } = useConflictStatus(open ? task.id : undefined);
   const { data: fileConflict, isLoading: fileLoading } = useFileConflict(
     open && selectedFile ? task.id : undefined,
     selectedFile || undefined
   );
-  
+
   const resolveConflict = useResolveConflict();
   const abortConflict = useAbortConflict();
   const continueConflict = useContinueConflict();
 
   // Auto-select first file if none selected
-  if (status?.conflictingFiles.length && !selectedFile) {
-    setSelectedFile(status.conflictingFiles[0]);
-  }
+  useEffect(() => {
+    if (status?.conflictingFiles.length && !selectedFile) {
+      setSelectedFile(status.conflictingFiles[0]);
+    }
+  }, [status?.conflictingFiles, selectedFile]);
 
   const handleResolve = async (resolution: 'ours' | 'theirs' | 'manual') => {
     if (!selectedFile) return;
-    
+
     await resolveConflict.mutateAsync({
       taskId: task.id,
       filePath: selectedFile,
@@ -79,7 +81,7 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
     });
 
     // Move to next file or close if done
-    const remaining = status?.conflictingFiles.filter(f => f !== selectedFile) || [];
+    const remaining = status?.conflictingFiles.filter((f) => f !== selectedFile) || [];
     if (remaining.length > 0) {
       setSelectedFile(remaining[0]);
     } else {
@@ -100,13 +102,12 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
     }
   };
 
-  const currentIndex = selectedFile && status?.conflictingFiles 
-    ? status.conflictingFiles.indexOf(selectedFile) 
-    : -1;
+  const currentIndex =
+    selectedFile && status?.conflictingFiles ? status.conflictingFiles.indexOf(selectedFile) : -1;
 
   const navigateFile = (direction: 'prev' | 'next') => {
     if (!status?.conflictingFiles.length) return;
-    
+
     let newIndex = currentIndex;
     if (direction === 'prev') {
       newIndex = currentIndex > 0 ? currentIndex - 1 : status.conflictingFiles.length - 1;
@@ -117,9 +118,11 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
   };
 
   // Initialize manual content when file changes
-  if (fileConflict && manualContent !== fileConflict.content) {
-    setManualContent(fileConflict.content);
-  }
+  useEffect(() => {
+    if (fileConflict) {
+      setManualContent(fileConflict.content);
+    }
+  }, [fileConflict]);
 
   return (
     <>
@@ -133,10 +136,11 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
                   Merge Conflicts
                 </SheetTitle>
                 <SheetDescription>
-                  {status?.rebaseInProgress ? 'Rebase' : 'Merge'} has conflicts that need to be resolved
+                  {status?.rebaseInProgress ? 'Rebase' : 'Merge'} has conflicts that need to be
+                  resolved
                 </SheetDescription>
               </div>
-              
+
               <div className="flex items-center gap-2">
                 {status?.conflictingFiles.length === 0 && (
                   <Button onClick={handleContinue} disabled={continueConflict.isPending}>
@@ -182,9 +186,9 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
                         key={file}
                         onClick={() => setSelectedFile(file)}
                         className={cn(
-                          "w-full text-left px-3 py-2 rounded-md text-sm truncate",
-                          "hover:bg-muted transition-colors",
-                          selectedFile === file && "bg-muted font-medium"
+                          'w-full text-left px-3 py-2 rounded-md text-sm truncate',
+                          'hover:bg-muted transition-colors',
+                          selectedFile === file && 'bg-muted font-medium'
                         )}
                       >
                         <FileWarning className="h-3 w-3 inline mr-2 text-amber-500" />
@@ -226,9 +230,7 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
-                    <code className="text-sm bg-muted px-2 py-1 rounded">
-                      {selectedFile}
-                    </code>
+                    <code className="text-sm bg-muted px-2 py-1 rounded">{selectedFile}</code>
                   </div>
 
                   {/* Conflict viewer tabs */}
@@ -304,12 +306,13 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
                     </TabsContent>
 
                     {/* Manual edit view */}
-                    <TabsContent value="manual" className="flex-1 overflow-hidden m-0 p-4 flex flex-col">
+                    <TabsContent
+                      value="manual"
+                      className="flex-1 overflow-hidden m-0 p-4 flex flex-col"
+                    >
                       <div className="flex-1 flex flex-col border rounded-lg overflow-hidden">
                         <div className="px-3 py-2 bg-muted/50 border-b flex items-center justify-between">
-                          <span className="text-sm font-medium">
-                            Manual Resolution
-                          </span>
+                          <span className="text-sm font-medium">Manual Resolution</span>
                           <Button
                             size="sm"
                             onClick={() => handleResolve('manual')}
@@ -351,9 +354,11 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
       <AlertDialog open={showAbortDialog} onOpenChange={setShowAbortDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Abort {status?.rebaseInProgress ? 'Rebase' : 'Merge'}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Abort {status?.rebaseInProgress ? 'Rebase' : 'Merge'}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will discard all conflict resolutions and return to the state before the 
+              This will discard all conflict resolutions and return to the state before the
               {status?.rebaseInProgress ? ' rebase' : ' merge'} started.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -363,9 +368,7 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
               onClick={handleAbort}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {abortConflict.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
+              {abortConflict.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Abort
             </AlertDialogAction>
           </AlertDialogFooter>
