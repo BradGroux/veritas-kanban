@@ -66,6 +66,7 @@ const TaskBehaviorSettingsSchema = z
       .optional(),
     enableComments: z.boolean().optional(),
     defaultPriority: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional(),
+    autoSaveDelayMs: z.number().int().min(200).max(5000).optional(),
   })
   .strict()
   .optional();

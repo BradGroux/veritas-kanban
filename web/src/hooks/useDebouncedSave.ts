@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUpdateTask } from './useTasks';
 import { useToast } from '@/hooks/useToast';
+import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { Task } from '@veritas-kanban/shared';
 
 export function useDebouncedSave(task: Task | null) {
   const updateTask = useUpdateTask();
   const { toast } = useToast();
+  const autoSaveDelayMs = useFeatureSetting('tasks', 'autoSaveDelayMs');
   const [localTask, setLocalTask] = useState<Task | null>(task);
   const [changedFields, setChangedFields] = useState<Set<keyof Task>>(new Set());
   const changedFieldsRef = useRef(changedFields);
@@ -79,10 +81,10 @@ export function useDebouncedSave(task: Task | null) {
           },
         }
       );
-    }, 500);
+    }, autoSaveDelayMs);
 
     return () => clearTimeout(timeout);
-  }, [localTask, changedFields]);
+  }, [localTask, changedFields, autoSaveDelayMs]);
 
   const updateField = useCallback(<K extends keyof Task>(field: K, value: Task[K]) => {
     setLocalTask((prev) => (prev ? { ...prev, [field]: value } : null));

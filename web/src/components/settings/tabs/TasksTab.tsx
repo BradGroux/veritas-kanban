@@ -5,10 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  useFeatureSettings,
-  useDebouncedFeatureUpdate,
-} from '@/hooks/useFeatureSettings';
+import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
 
@@ -96,6 +93,18 @@ export function TasksTab() {
           description="Enable comments on tasks"
           checked={settings.tasks.enableComments}
           onCheckedChange={(v) => update('enableComments', v)}
+        />
+        <NumberRow
+          label="Auto-save Delay"
+          description="Delay before saving changes (ms)"
+          value={settings.tasks.autoSaveDelayMs}
+          onChange={(v) => update('autoSaveDelayMs', v)}
+          min={200}
+          max={5000}
+          step={100}
+          unit="ms"
+          hideSpinners
+          maxLength={4}
         />
         <SettingRow label="Default Priority" description="Default priority for new tasks">
           <Select

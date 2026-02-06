@@ -170,6 +170,7 @@ export interface TaskBehaviorSettings {
   attachmentMaxTotalSize: number; // bytes
   enableComments: boolean;
   defaultPriority: TaskPriority;
+  autoSaveDelayMs: number; // Debounce delay for auto-save (ms), default 500
 }
 
 /** Agent & git settings */
@@ -278,6 +279,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     attachmentMaxTotalSize: 50 * 1024 * 1024, // 50MB
     enableComments: true,
     defaultPriority: 'medium',
+    autoSaveDelayMs: 500,
   },
   agents: {
     timeoutMinutes: 30,
