@@ -330,15 +330,18 @@ export function Dashboard() {
                 {taskCost.tasks.slice(0, 10).map((t) => (
                   <button
                     key={t.taskId}
-                    className="flex items-center justify-between w-full text-left text-sm hover:bg-muted/50 rounded px-2 py-1 transition-colors"
+                    className="group flex items-center justify-between w-full text-left text-sm hover:bg-primary/10 rounded px-2 py-1.5 transition-colors cursor-pointer border border-transparent hover:border-primary/20"
                     onClick={() => handleTaskClick(t.taskId)}
                   >
-                    <span className="truncate flex-1 mr-2 text-muted-foreground">
+                    <span className="truncate flex-1 mr-2 text-muted-foreground group-hover:text-foreground transition-colors">
                       {t.taskTitle || t.taskId}
                     </span>
-                    <span className="font-mono font-medium shrink-0">
-                      ${t.estimatedCost.toFixed(2)}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="font-mono font-medium">
+                        ${t.estimatedCost.toFixed(2)}
+                      </span>
+                      <span className="text-muted-foreground/0 group-hover:text-primary transition-colors text-xs">→</span>
+                    </div>
                   </button>
                 ))}
               </div>

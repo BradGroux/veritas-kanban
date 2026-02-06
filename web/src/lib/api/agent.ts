@@ -111,7 +111,7 @@ export interface RegisteredAgent {
   provider?: string;
   capabilities?: Array<{ name: string; description?: string }>;
   version?: string;
-  status: 'online' | 'offline' | 'busy';
+  status: 'online' | 'offline' | 'busy' | 'idle';
   currentTask?: string;
   currentTaskTitle?: string;
   lastHeartbeat?: string;
@@ -119,10 +119,12 @@ export interface RegisteredAgent {
 }
 
 export interface RegistryStats {
-  totalAgents: number;
-  onlineAgents: number;
-  busyAgents: number;
-  offlineAgents: number;
+  total: number;
+  online: number;
+  busy: number;
+  idle: number;
+  offline: number;
+  capabilities: string[];
 }
 
 export const registryApi = {

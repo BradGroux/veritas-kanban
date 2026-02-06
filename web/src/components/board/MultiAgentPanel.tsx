@@ -39,6 +39,7 @@ function formatTimeAgo(timestamp: string): string {
 const STATUS_STYLES = {
   online: { color: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)', label: 'Online' },
   busy: { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)', label: 'Busy' },
+  idle: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)', label: 'Idle' },
   offline: { color: '#6b7280', bg: 'rgba(107, 114, 128, 0.08)', label: 'Offline' },
   error: { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)', label: 'Error' },
 } as const;
@@ -55,7 +56,7 @@ interface AgentCardProps {
 
 function AgentCard({ agent, isActive, currentTaskTitle, currentTaskId, onTaskClick }: AgentCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const effectiveStatus = isActive ? 'busy' : agent.status;
+  const effectiveStatus = isActive ? 'busy' : (agent.status as keyof typeof STATUS_STYLES);
   const style = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.offline;
 
   return (
@@ -238,17 +239,17 @@ export function MultiAgentPanel({ onTaskClick }: MultiAgentPanelProps) {
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60">
           <span className="flex items-center gap-1">
             <CircleDot className="w-2.5 h-2.5 text-green-500" />
-            {stats.onlineAgents} online
+            {stats.online + stats.busy} active
           </span>
-          {stats.busyAgents > 0 && (
+          {stats.busy > 0 && (
             <span className="flex items-center gap-1">
               <CircleDot className="w-2.5 h-2.5 text-purple-500" />
-              {stats.busyAgents} busy
+              {stats.busy} busy
             </span>
           )}
           <span className="flex items-center gap-1">
             <CircleDot className="w-2.5 h-2.5 text-gray-500" />
-            {stats.totalAgents} total
+            {stats.total} total
           </span>
         </div>
       )}

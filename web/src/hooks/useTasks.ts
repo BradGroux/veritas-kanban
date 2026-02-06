@@ -148,7 +148,31 @@ export function useArchiveTask() {
 
   return useMutation({
     mutationFn: (id: string) => api.tasks.archive(id),
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      // Cancel outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+
+      // Snapshot previous value for rollback
+      const previous = queryClient.getQueryData<Task[]>(['tasks']);
+
+      // Optimistically remove the task from the board immediately
+      if (previous) {
+        queryClient.setQueryData<Task[]>(
+          ['tasks'],
+          previous.filter((t) => t.id !== id),
+        );
+      }
+
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      // Roll back on failure
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after mutation settles to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['tasks', 'archived'] });
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
