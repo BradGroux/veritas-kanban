@@ -941,28 +941,39 @@ export async function computeUtilization(
     }
   }
 
-  // Build daily utilization (assume 24h per day as total available time)
+  // Build daily utilization
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const daily: import('./types.js').DailyUtilization[] = [];
   let totalActiveMs = 0;
-  let totalDays = 0;
+  let totalAvailableMs = 0;
 
   const sortedDates = [...dailyActive.keys()].sort();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   for (const date of sortedDates) {
     const activeMs = dailyActive.get(date) || 0;
-    const idleMs = MS_PER_DAY - activeMs;
+
+    // For the current day, use elapsed time since midnight instead of full 24h
+    let availableMs = MS_PER_DAY;
+    if (date === todayStr) {
+      const now = new Date();
+      availableMs = (now.getUTCHours() * 3600000) + (now.getUTCMinutes() * 60000) + (now.getUTCSeconds() * 1000);
+      availableMs = Math.max(availableMs, activeMs); // At least as much as active time
+    }
+
+    const idleMs = availableMs - activeMs;
     totalActiveMs += activeMs;
-    totalDays++;
+    totalAvailableMs += availableMs;
     daily.push({
       date,
       activeMs,
       idleMs: Math.max(0, idleMs),
       errorMs: 0,
-      utilizationPercent: Math.round((activeMs / MS_PER_DAY) * 10000) / 100,
+      utilizationPercent: Math.round((activeMs / availableMs) * 10000) / 100,
     });
   }
 
-  const totalMs = totalDays * MS_PER_DAY || 1;
+  const totalMs = totalAvailableMs || 1;
   const totalIdleMs = totalMs - totalActiveMs;
 
   return {

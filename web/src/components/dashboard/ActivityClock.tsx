@@ -4,11 +4,12 @@
  *
  * Shows a 24-hour ring with activity intensity per hour.
  * More activity = thicker/brighter segment.
+ * Pulls from telemetry trends (which aggregates from real event data).
  */
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { apiFetch } from '@/lib/api/helpers';
 import { Clock, Info } from 'lucide-react';
 import {
   Tooltip,
@@ -22,19 +23,32 @@ interface ActivityClockProps {
   period: MetricsPeriod;
 }
 
+interface StatusHistoryEntry {
+  timestamp: string;
+  previousStatus: string;
+  newStatus: string;
+  durationMs?: number;
+}
+
 export function ActivityClock({ period }: ActivityClockProps) {
-  const { data: activities = [] } = useQuery({
-    queryKey: ['activity', 'clock', period],
-    queryFn: () => api.activity.list(500),
+  // Pull from status history which has timestamps of actual agent state changes
+  const { data: entries = [] } = useQuery<StatusHistoryEntry[]>({
+    queryKey: ['status-history', 'clock', period],
+    queryFn: async () => {
+      const res = await apiFetch<StatusHistoryEntry[]>('/api/status-history?limit=500');
+      return Array.isArray(res) ? res : [];
+    },
     staleTime: 60_000,
   });
 
   const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, () => 0);
 
-    for (const activity of activities) {
-      const hour = new Date(activity.timestamp).getHours();
-      hours[hour]++;
+    for (const entry of entries) {
+      if (entry.timestamp) {
+        const hour = new Date(entry.timestamp).getHours();
+        hours[hour]++;
+      }
     }
 
     const max = Math.max(...hours, 1);
@@ -44,7 +58,7 @@ export function ActivityClock({ period }: ActivityClockProps) {
       intensity: count / max,
       label: hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`,
     }));
-  }, [activities]);
+  }, [entries]);
 
   const totalActivity = hourlyData.reduce((sum, h) => sum + h.count, 0);
   const peakHour = hourlyData.reduce((peak, h) => (h.count > peak.count ? h : peak), hourlyData[0]);
@@ -61,7 +75,6 @@ export function ActivityClock({ period }: ActivityClockProps) {
     const startRad = (startAngle * Math.PI) / 180;
     const endRad = (endAngle * Math.PI) / 180;
 
-    // Variable thickness based on intensity
     const segRadius = innerRadius + (outerRadius - innerRadius) * Math.max(data.intensity, 0.15);
 
     const x1 = center + segRadius * Math.cos(startRad);
@@ -91,7 +104,7 @@ export function ActivityClock({ period }: ActivityClockProps) {
         stroke="rgba(0,0,0,0.15)"
         strokeWidth="0.5"
       >
-        <title>{data.label}: {data.count} activities</title>
+        <title>{data.label}: {data.count} transitions</title>
       </path>
     );
   });
@@ -108,9 +121,9 @@ export function ActivityClock({ period }: ActivityClockProps) {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-[250px]">
               <p className="text-xs">
-                24-hour ring showing when agent activity happens.
+                24-hour ring showing when agent state transitions happen.
                 Brighter/thicker segments = more activity at that hour.
-                Midnight at top, noon at bottom.
+                Midnight at top, noon at bottom. Based on status history.
               </p>
             </TooltipContent>
           </Tooltip>
@@ -120,17 +133,15 @@ export function ActivityClock({ period }: ActivityClockProps) {
       <div className="flex items-center justify-center">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {segments}
-          {/* Center text */}
           <text x={center} y={center - 8} textAnchor="middle" className="fill-foreground text-lg font-bold">
             {totalActivity}
           </text>
           <text x={center} y={center + 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
-            activities
+            transitions
           </text>
         </svg>
       </div>
 
-      {/* Legend */}
       <div className="flex justify-between text-[10px] text-muted-foreground mt-2 px-2">
         <span>Peak: {peakHour.label} ({peakHour.count})</span>
         <span>24h distribution</span>
