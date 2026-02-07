@@ -1,5 +1,5 @@
 import type { WebSocketServer, WebSocket } from 'ws';
-import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
+import type { AnyTelemetryEvent, SquadMessage } from '@veritas-kanban/shared';
 import {
   notifyTaskChange,
   notifyChatMessage,
@@ -101,25 +101,13 @@ export function broadcastChatMessage(sessionId: string, event: ChatBroadcastEven
 
 export interface SquadBroadcastEvent {
   type: 'squad:message';
-  message: {
-    id: string;
-    agent: string;
-    message: string;
-    tags?: string[];
-    timestamp: string;
-  };
+  message: SquadMessage;
 }
 
 /**
  * Broadcast a squad message to all connected WebSocket clients.
  */
-export function broadcastSquadMessage(message: {
-  id: string;
-  agent: string;
-  message: string;
-  tags?: string[];
-  timestamp: string;
-}): void {
+export function broadcastSquadMessage(message: SquadMessage): void {
   if (!wssRef) return;
 
   const event: SquadBroadcastEvent = {

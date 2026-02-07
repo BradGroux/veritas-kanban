@@ -12,6 +12,13 @@ function hasDangerousKeys(obj: unknown): boolean {
   return false;
 }
 
+const GeneralSettingsSchema = z
+  .object({
+    humanDisplayName: z.string().min(1).max(50).optional(),
+  })
+  .strict()
+  .optional();
+
 const DashboardWidgetSettingsSchema = z
   .object({
     showTokenUsage: z.boolean().optional(),
@@ -159,8 +166,26 @@ const HooksSettingsSchema = z
   .strict()
   .optional();
 
+const SquadWebhookSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    mode: z.enum(['webhook', 'openclaw']).optional(),
+    // Generic webhook fields
+    url: z.string().url().max(500).optional(),
+    secret: z.string().min(16).max(128).optional(),
+    // OpenClaw fields
+    openclawGatewayUrl: z.string().url().max(500).optional(),
+    openclawGatewayToken: z.string().min(16).max(128).optional(),
+    // Common fields
+    notifyOnHuman: z.boolean().optional(),
+    notifyOnAgent: z.boolean().optional(),
+  })
+  .strict()
+  .optional();
+
 export const FeatureSettingsPatchSchema = z
   .object({
+    general: GeneralSettingsSchema,
     board: BoardSettingsSchema,
     tasks: TaskBehaviorSettingsSchema,
     agents: AgentBehaviorSettingsSchema,
@@ -169,6 +194,7 @@ export const FeatureSettingsPatchSchema = z
     archive: ArchiveSettingsSchema,
     budget: BudgetSettingsSchema,
     hooks: HooksSettingsSchema,
+    squadWebhook: SquadWebhookSettingsSchema,
   })
   .strict()
   .refine((val) => !hasDangerousKeys(val), {

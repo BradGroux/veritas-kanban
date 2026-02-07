@@ -18,6 +18,8 @@ import type {
   BroadcastPriority,
 } from '@veritas-kanban/shared';
 import { fileExists } from '../storage/fs-helpers.js';
+import { validatePathSegment } from '../utils/sanitize.js';
+import { withFileLock } from './file-lock.js';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
 const BROADCASTS_DIR = path.join(DATA_DIR, 'broadcasts');
@@ -124,6 +126,7 @@ export class BroadcastStorageService {
    * Get the file path for a broadcast ID.
    */
   private getBroadcastPath(id: string): string {
+    validatePathSegment(id);
     return path.join(BROADCASTS_DIR, `${id}.md`);
   }
 
@@ -148,7 +151,9 @@ export class BroadcastStorageService {
     const content = serializeBroadcast(broadcast);
 
     try {
-      await fs.writeFile(filePath, content, 'utf-8');
+      await withFileLock(filePath, async () => {
+        await fs.writeFile(filePath, content, 'utf-8');
+      });
       log.info({ id, priority: broadcast.priority }, 'Broadcast created');
       return broadcast;
     } catch (err) {
@@ -232,32 +237,35 @@ export class BroadcastStorageService {
    * Mark a broadcast as read by an agent.
    */
   async markRead(id: string, agent: string): Promise<boolean> {
-    const broadcast = await this.getById(id);
-
-    if (!broadcast) {
-      return false;
-    }
-
-    // Check if already marked as read
-    const alreadyRead = broadcast.readBy.some((r: BroadcastReadReceipt) => r.agent === agent);
-    if (alreadyRead) {
-      return true; // Already read, nothing to do
-    }
-
-    // Add read receipt
-    broadcast.readBy.push({
-      agent,
-      readAt: new Date().toISOString(),
-    });
-
-    // Save back to file
     const filePath = this.getBroadcastPath(id);
-    const content = serializeBroadcast(broadcast);
 
     try {
-      await fs.writeFile(filePath, content, 'utf-8');
-      log.info({ id, agent }, 'Broadcast marked as read');
-      return true;
+      return await withFileLock(filePath, async () => {
+        // Read inside lock to prevent TOCTTOU race
+        const broadcast = await this.getById(id);
+
+        if (!broadcast) {
+          return false;
+        }
+
+        // Check if already marked as read
+        const alreadyRead = broadcast.readBy.some((r: BroadcastReadReceipt) => r.agent === agent);
+        if (alreadyRead) {
+          return true;
+        }
+
+        // Add read receipt
+        broadcast.readBy.push({
+          agent,
+          readAt: new Date().toISOString(),
+        });
+
+        // Write back
+        const content = serializeBroadcast(broadcast);
+        await fs.writeFile(filePath, content, 'utf-8');
+        log.info({ id, agent }, 'Broadcast marked as read');
+        return true;
+      });
     } catch (err) {
       log.error({ err, id, agent }, 'Failed to mark broadcast as read');
       return false;

@@ -47,9 +47,14 @@ export interface ChatSendInput {
 export interface SquadMessage {
   id: string;
   agent: string; // Which agent sent this
+  displayName?: string; // Optional display name (e.g., "Human" or actual person name)
   message: string;
   tags?: string[]; // Optional categorization
   timestamp: string;
+  system?: boolean; // True if this is an automated system message
+  event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status'; // Event type for system messages
+  taskTitle?: string; // Task title for system messages
+  duration?: string; // Duration string for completed/failed events (e.g., "2m 44s")
 }
 
 /**
@@ -59,4 +64,8 @@ export interface SquadMessageInput {
   agent: string;
   message: string;
   tags?: string[];
+  system?: boolean; // Mark as system message
+  event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status';
+  taskTitle?: string;
+  duration?: string;
 }

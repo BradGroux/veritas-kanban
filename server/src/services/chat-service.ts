@@ -342,20 +342,32 @@ export class ChatService {
   /**
    * Send a message to the squad channel
    */
-  async sendSquadMessage(input: {
-    agent: string;
-    message: string;
-    tags?: string[];
-  }): Promise<SquadMessage> {
+  async sendSquadMessage(
+    input: {
+      agent: string;
+      message: string;
+      tags?: string[];
+      system?: boolean;
+      event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status';
+      taskTitle?: string;
+      duration?: string;
+    },
+    displayName?: string
+  ): Promise<SquadMessage> {
     const messageId = this.generateMessageId();
     const timestamp = new Date().toISOString();
 
     const squadMessage: SquadMessage = {
       id: messageId,
       agent: input.agent,
+      displayName: displayName,
       message: input.message,
       tags: input.tags,
       timestamp,
+      system: input.system,
+      event: input.event,
+      taskTitle: input.taskTitle,
+      duration: input.duration,
     };
 
     // Store as daily markdown file: squad/YYYY-MM-DD.md
@@ -374,15 +386,24 @@ export class ChatService {
       }
 
       // Append the new message in a consistent format
+      const systemTag = squadMessage.system ? ' [system]' : '';
+      const eventTag = squadMessage.event ? ` [${squadMessage.event}]` : '';
       const tagsStr = squadMessage.tags?.length ? ` [${squadMessage.tags.join(', ')}]` : '';
-      const messageBlock = `## ${squadMessage.agent} | ${messageId} | ${timestamp}${tagsStr}\n\n${squadMessage.message}\n\n---\n\n`;
+      const displayStr = displayName ? ` (${displayName})` : '';
+      const taskTitleStr = squadMessage.taskTitle ? ` | ${squadMessage.taskTitle}` : '';
+      const durationStr = squadMessage.duration ? ` (${squadMessage.duration})` : '';
+
+      const messageBlock = `## ${squadMessage.agent}${displayStr} | ${messageId} | ${timestamp}${systemTag}${eventTag}${tagsStr}${taskTitleStr}${durationStr}\n\n${squadMessage.message}\n\n---\n\n`;
 
       content += messageBlock;
 
       await fs.writeFile(filePath, content, 'utf-8');
     });
 
-    log.info({ messageId, agent: input.agent, tags: input.tags }, 'Squad message sent');
+    log.info(
+      { messageId, agent: input.agent, tags: input.tags, system: input.system },
+      'Squad message sent'
+    );
 
     return squadMessage;
   }
@@ -395,9 +416,12 @@ export class ChatService {
       since?: string; // ISO timestamp
       agent?: string;
       limit?: number;
+      includeSystem?: boolean;
     } = {}
   ): Promise<SquadMessage[]> {
     const messages: SquadMessage[] = [];
+    const includeSystem = options.includeSystem !== false; // Default to true
+    const sinceTimestamp = options.since ? Date.parse(options.since) : null;
 
     try {
       // Read all daily squad files
@@ -416,37 +440,102 @@ export class ChatService {
         for (const block of messageBlocks) {
           if (!block.trim() || block.startsWith('# Squad Chat')) continue;
 
-          // Parse header: ## agent | messageId | timestamp [tags]
           const lines = block.trim().split('\n');
-          const headerMatch = lines[0].match(
-            /^##\s+(.+?)\s+\|\s+(.+?)\s+\|\s+(.+?)(?:\s+\[(.+?)\])?$/
+          const headerLine = lines[0];
+          const normalizedHeader = headerLine.replace(/^##\s+/, '');
+          const headerParts = normalizedHeader.split('|').map((part) => part.trim());
+
+          if (headerParts.length < 3) continue;
+
+          const [agentPart, idPart, metaPart, taskPart] = headerParts;
+          if (!agentPart || !idPart || !metaPart) continue;
+
+          const agentMatch = agentPart.match(/^(.+?)(?:\s+\((.+?)\))?$/);
+          if (!agentMatch) continue;
+
+          const agent = agentMatch[1].trim();
+          const displayName = agentMatch[2]?.trim();
+
+          const bracketMatches = [...metaPart.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]);
+          const isSystem = bracketMatches.includes('system');
+          if (!includeSystem && isSystem) continue;
+
+          const eventMatch = bracketMatches.find((value) => value.startsWith('agent.'));
+          const event = eventMatch ? (eventMatch as SquadMessage['event']) : undefined;
+
+          const tagMatch = bracketMatches.find(
+            (value) => value !== 'system' && !value.startsWith('agent.')
           );
+          const tags = tagMatch
+            ? tagMatch
+                .split(',')
+                .map((tag) => tag.trim())
+                .filter(Boolean)
+            : undefined;
 
-          if (!headerMatch) continue;
+          let timestampSegment = metaPart.replace(/\[.*?\]/g, '').trim();
+          let duration: string | undefined;
 
-          const [, agent, id, timestamp, tagsStr] = headerMatch;
-          const message = lines.slice(1).join('\n').trim();
-          const tags = tagsStr?.split(',').map((t) => t.trim()) || undefined;
+          if (!taskPart) {
+            const durationMatch = timestampSegment.match(/\(([^)]+)\)\s*$/);
+            if (durationMatch) {
+              duration = durationMatch[1];
+              timestampSegment = timestampSegment.replace(/\(([^)]+)\)\s*$/, '').trim();
+            }
+          }
+
+          const timestamp = timestampSegment;
+          if (!timestamp) continue;
+
+          let taskTitle: string | undefined;
+          if (taskPart) {
+            const durationMatch = taskPart.match(/\(([^)]+)\)\s*$/);
+            if (durationMatch) {
+              duration = durationMatch[1];
+            }
+            const title = taskPart.replace(/\(([^)]+)\)\s*$/, '').trim();
+            taskTitle = title || undefined;
+          }
+
+          const messageBody = lines.slice(1).join('\n').trim();
 
           const squadMessage: SquadMessage = {
-            id,
+            id: idPart,
             agent,
-            message,
+            displayName: displayName || undefined,
+            message: messageBody,
             tags,
             timestamp,
+            system: isSystem ? true : undefined,
+            event,
+            taskTitle,
+            duration,
           };
 
-          // Apply filters
-          if (options.since && squadMessage.timestamp < options.since) continue;
+          const numericTimestamp = Date.parse(timestamp);
+          if (
+            sinceTimestamp &&
+            !Number.isNaN(numericTimestamp) &&
+            numericTimestamp < sinceTimestamp
+          ) {
+            continue;
+          }
+
           if (options.agent && squadMessage.agent !== options.agent) continue;
 
           messages.push(squadMessage);
-
-          // Respect limit
-          if (options.limit && messages.length >= options.limit) {
-            return messages;
-          }
         }
+      }
+
+      const getTime = (ts: string) => {
+        const value = Date.parse(ts);
+        return Number.isNaN(value) ? 0 : value;
+      };
+
+      messages.sort((a, b) => getTime(a.timestamp) - getTime(b.timestamp));
+
+      if (options.limit && messages.length > options.limit) {
+        return messages.slice(-options.limit);
       }
 
       return messages;

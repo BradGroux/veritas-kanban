@@ -146,6 +146,11 @@ export interface DashboardWidgetSettings {
   showTrendsCharts: boolean;
 }
 
+/** General user settings */
+export interface GeneralSettings {
+  humanDisplayName: string; // Display name for human user in Squad Chat (default: "Human")
+}
+
 /** Board display settings */
 export interface BoardSettings {
   showDashboard: boolean;
@@ -250,8 +255,23 @@ export interface DelegationScope {
   priorities?: TaskPriority[];
 }
 
+/** Squad webhook settings */
+export interface SquadWebhookSettings {
+  enabled: boolean;
+  mode: 'webhook' | 'openclaw'; // 'webhook' = generic HTTP POST, 'openclaw' = gateway wake
+  // Generic webhook fields:
+  url?: string; // Where to POST notifications
+  secret?: string; // Optional HMAC signing secret for verification
+  notifyOnHuman: boolean; // Fire webhook when human posts (default: true)
+  notifyOnAgent: boolean; // Fire webhook when agent posts (default: false)
+  // OpenClaw fields:
+  openclawGatewayUrl?: string; // e.g., "http://127.0.0.1:18789"
+  openclawGatewayToken?: string; // Auth token
+}
+
 /** All feature settings combined */
 export interface FeatureSettings {
+  general: GeneralSettings;
   board: BoardSettings;
   tasks: TaskBehaviorSettings;
   agents: AgentBehaviorSettings;
@@ -260,10 +280,14 @@ export interface FeatureSettings {
   archive: ArchiveSettings;
   budget: BudgetSettings;
   hooks: HooksSettings;
+  squadWebhook: SquadWebhookSettings;
 }
 
 /** Default feature settings — matches current app behavior */
 export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
+  general: {
+    humanDisplayName: 'Human',
+  },
   board: {
     showDashboard: true,
     showArchiveSuggestions: true,
@@ -333,5 +357,14 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   hooks: {
     enabled: false, // Disabled by default
     // Individual hooks unconfigured by default
+  },
+  squadWebhook: {
+    enabled: false, // Disabled by default
+    mode: 'webhook', // Default to generic webhook mode
+    url: '',
+    notifyOnHuman: true,
+    notifyOnAgent: false,
+    openclawGatewayUrl: '',
+    openclawGatewayToken: '',
   },
 };

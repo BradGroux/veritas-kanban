@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Send, Loader2, Users, Filter } from 'lucide-react';
+import { Send, Loader2, Users, Filter, Settings2 } from 'lucide-react';
 import { useSquadMessages, useSendSquadMessage, useSquadStream } from '@/hooks/useChat';
+import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { SquadMessage } from '@veritas-kanban/shared';
 
 interface SquadChatPanelProps {
@@ -21,6 +22,7 @@ interface SquadChatPanelProps {
 
 // Agent colors for visual distinction
 const agentColors: Record<string, string> = {
+  Human: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', // Human user - distinct green
   VERITAS: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   TARS: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   CASE: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -34,10 +36,45 @@ const agentColors: Record<string, string> = {
 };
 
 export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
+  const humanDisplayName = useFeatureSetting('general', 'humanDisplayName');
+
+  // Load includeSystem preference from localStorage
+  const [includeSystem, setIncludeSystem] = useState<boolean>(() => {
+    const saved = localStorage.getItem('squadChat.includeSystem');
+    return saved === null ? true : saved === 'true'; // Default to true
+  });
+
+  // Save includeSystem preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('squadChat.includeSystem', includeSystem.toString());
+  }, [includeSystem]);
+
+  // Available agents for the selector (Human display name is dynamic)
+  const availableAgents = [
+    humanDisplayName, // Human user first (from settings)
+    'VERITAS',
+    'TARS',
+    'CASE',
+    'Ava',
+    'R2-D2',
+    'K-2SO',
+    'MAX',
+    'Johnny 5',
+    'Bishop',
+    'Marvin',
+  ];
+
   const [message, setMessage] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState(humanDisplayName || 'Human'); // Human user default (from settings)
   const [agentFilter, setAgentFilter] = useState<string>('all');
 
-  const { data: messages = [], isLoading } = useSquadMessages({ limit: 50 });
+  // Sync selectedAgent when humanDisplayName loads from settings
+  useEffect(() => {
+    if (humanDisplayName) {
+      setSelectedAgent((prev) => (prev === 'Human' || prev === '' ? humanDisplayName : prev));
+    }
+  }, [humanDisplayName]);
+  const { data: messages = [], isLoading } = useSquadMessages({ limit: 50, includeSystem });
   const { mutate: sendMessage, isPending } = useSendSquadMessage();
   const { newMessage } = useSquadStream();
 
@@ -46,12 +83,36 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
+  // Scroll helper — finds the actual scrollable viewport inside ScrollArea
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    // Try scrollIntoView on the sentinel div first
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior });
+    }
+    // Fallback: find Radix ScrollArea viewport and scroll it directly
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  }, []);
+
+  // Auto-scroll to bottom when panel opens
+  useEffect(() => {
+    if (open) {
+      // Use setTimeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        scrollToBottom('instant');
+        setShouldAutoScroll(true);
+      }, 150);
+    }
+  }, [open, scrollToBottom]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScroll) {
+      scrollToBottom();
     }
-  }, [messages, newMessage, shouldAutoScroll]);
+  }, [messages, newMessage, shouldAutoScroll, scrollToBottom]);
 
   // Detect manual scroll-up to pause auto-scroll
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -63,15 +124,20 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   const handleSend = () => {
     if (!message.trim() || isPending) return;
 
+    // Send "Human" to backend if user selected their display name, otherwise send the agent name
+    const agentForBackend = selectedAgent === humanDisplayName ? 'Human' : selectedAgent;
+
     sendMessage(
       {
-        agent: 'VERITAS', // Default agent - could be configurable
+        agent: agentForBackend,
         message: message.trim(),
       },
       {
         onSuccess: () => {
           setMessage('');
           setShouldAutoScroll(true);
+          // Force scroll to bottom immediately after sending
+          setTimeout(() => scrollToBottom(), 100);
           // Re-focus the input so user can keep typing
           requestAnimationFrame(() => inputRef.current?.focus());
         },
@@ -125,9 +191,16 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground ml-auto">
-            {filteredMessages.length} message{filteredMessages.length !== 1 ? 's' : ''}
-          </span>
+          <Button
+            variant={includeSystem ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setIncludeSystem(!includeSystem)}
+            className="ml-auto h-8 text-xs gap-1.5"
+            title={includeSystem ? 'Hide system messages' : 'Show system messages'}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            {includeSystem ? 'Hide' : 'Show'} System
+          </Button>
         </div>
 
         {/* Messages */}
@@ -149,15 +222,38 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
                 </p>
               </div>
             )}
-            {filteredMessages.map((msg) => (
-              <SquadMessageBubble key={msg.id} message={msg} />
-            ))}
+            {filteredMessages.map((msg) =>
+              msg.system ? (
+                <SystemMessageDivider key={msg.id} message={msg} />
+              ) : (
+                <SquadMessageBubble
+                  key={msg.id}
+                  message={msg}
+                  humanDisplayName={humanDisplayName}
+                />
+              )
+            )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
         {/* Input Area */}
         <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-muted-foreground">Sending as:</span>
+            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+              <SelectTrigger className="h-8 text-xs w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAgents.map((agent) => (
+                  <SelectItem key={agent} value={agent}>
+                    {agent}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-2">
             <Input
               ref={inputRef}
@@ -185,16 +281,28 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
 
 interface SquadMessageBubbleProps {
   message: SquadMessage;
+  humanDisplayName: string;
 }
 
-function SquadMessageBubble({ message }: SquadMessageBubbleProps) {
+const SquadMessageBubble = React.memo(function SquadMessageBubble({
+  message,
+  humanDisplayName,
+}: SquadMessageBubbleProps) {
   const colorClass = agentColors[message.agent] || agentColors.VERITAS;
+  const isHuman = message.agent === 'Human';
+  // Use the display name for Human agents, otherwise use the agent name
+  const displayName = isHuman ? humanDisplayName : message.agent;
 
   return (
-    <div className={`rounded-lg border p-3 ${colorClass}`}>
+    <div
+      className={`rounded-lg border p-3 ${colorClass} ${isHuman ? 'ring-1 ring-emerald-500/50' : ''}`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">{message.agent}</span>
+          <span className="font-semibold text-sm">
+            {displayName}
+            {isHuman && <span className="ml-1 text-xs opacity-70">(Human)</span>}
+          </span>
           {message.tags && message.tags.length > 0 && (
             <div className="flex gap-1">
               {message.tags.map((tag) => (
@@ -215,4 +323,57 @@ function SquadMessageBubble({ message }: SquadMessageBubbleProps) {
       <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.message}</div>
     </div>
   );
+});
+
+interface SystemMessageDividerProps {
+  message: SquadMessage;
 }
+
+const SystemMessageDivider = React.memo(function SystemMessageDivider({
+  message,
+}: SystemMessageDividerProps) {
+  // Format system message based on event type
+  const getEventIcon = () => {
+    switch (message.event) {
+      case 'agent.spawned':
+        return '🚀';
+      case 'agent.completed':
+        return '✅';
+      case 'agent.failed':
+        return '❌';
+      case 'agent.status':
+        return '⏳';
+      default:
+        return '🔔';
+    }
+  };
+
+  const getEventText = () => {
+    const duration = message.duration ? ` (${message.duration})` : '';
+    const taskTitle = message.taskTitle ? `: ${message.taskTitle}` : '';
+
+    switch (message.event) {
+      case 'agent.spawned':
+        return `${message.agent} assigned${taskTitle}`;
+      case 'agent.completed':
+        return `${message.agent} completed${taskTitle}${duration}`;
+      case 'agent.failed':
+        return `${message.agent} failed${taskTitle}${duration}`;
+      case 'agent.status':
+        return `${message.agent} is working on${taskTitle}${duration}`;
+      default:
+        return message.message;
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 py-2 text-xs text-muted-foreground/80">
+      <div className="flex-1 h-px bg-border" />
+      <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted/30">
+        <span>{getEventIcon()}</span>
+        <span className="font-medium">{getEventText()}</span>
+      </div>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+});

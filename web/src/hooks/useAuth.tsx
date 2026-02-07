@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
+import { apiFetch } from '@/lib/api/helpers';
 
 // Types
 export interface AuthStatus {
@@ -37,26 +38,6 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// API helpers
-async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include', // Include cookies
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP ${response.status}`);
-  }
-
-  return data;
-}
-
 // Auth Provider
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
@@ -66,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshStatus = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchApi<AuthStatus>('/api/auth/status');
+      const data = await apiFetch<AuthStatus>('/api/auth/status');
       setStatus(data);
     } catch (err) {
       console.error('[Auth] Failed to check auth status:', err);
@@ -83,8 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setup = useCallback(async (password: string) => {
     try {
-      const data = await fetchApi<{ success: boolean; recoveryKey: string }>('/api/auth/setup', {
+      const data = await apiFetch<{ success: boolean; recoveryKey: string }>('/api/auth/setup', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       });
       // Don't refresh status here - let SetupScreen show the recovery key first
@@ -99,8 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (password: string, rememberMe = false) => {
       try {
-        await fetchApi('/api/auth/login', {
+        await apiFetch('/api/auth/login', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password, rememberMe }),
         });
         await refreshStatus();
@@ -115,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetchApi('/api/auth/logout', { method: 'POST' });
+      await apiFetch('/api/auth/logout', { method: 'POST' });
     } finally {
       await refreshStatus();
     }
@@ -124,10 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const recover = useCallback(
     async (recoveryKey: string, newPassword: string) => {
       try {
-        const data = await fetchApi<{ success: boolean; recoveryKey: string }>(
+        const data = await apiFetch<{ success: boolean; recoveryKey: string }>(
           '/api/auth/recover',
           {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ recoveryKey, newPassword }),
           }
         );
@@ -143,8 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     try {
-      await fetchApi('/api/auth/change-password', {
+      await apiFetch('/api/auth/change-password', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       return { success: true };

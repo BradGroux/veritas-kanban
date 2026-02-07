@@ -28,7 +28,20 @@ import {
   useValidateRepoPath,
   useSetDefaultAgent,
 } from '@/hooks/useConfig';
-import { Plus, Trash2, Check, X, Loader2, FolderGit2, Bot, Star, Moon, Sun } from 'lucide-react';
+import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
+import {
+  Plus,
+  Trash2,
+  Check,
+  X,
+  Loader2,
+  FolderGit2,
+  Bot,
+  Star,
+  Moon,
+  Sun,
+  User,
+} from 'lucide-react';
 import type { RepoConfig, AgentConfig } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
@@ -37,6 +50,9 @@ export function GeneralTab() {
   const { data: config, isLoading } = useConfig();
   const [showAddForm, setShowAddForm] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { settings } = useFeatureSettings();
+  const { debouncedUpdate } = useDebouncedFeatureUpdate();
+  const [localDisplayName, setLocalDisplayName] = useState(settings.general.humanDisplayName);
 
   return (
     <div className="space-y-6">
@@ -62,6 +78,33 @@ export function GeneralTab() {
             onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
             aria-label="Toggle dark mode"
           />
+        </div>
+      </div>
+
+      {/* User Preferences */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium">User Preferences</h3>
+        <div className="rounded-md border p-4 bg-card space-y-3">
+          <div className="grid gap-2">
+            <Label htmlFor="human-display-name" className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              Display Name (Squad Chat)
+            </Label>
+            <Input
+              id="human-display-name"
+              value={localDisplayName}
+              onChange={(e) => setLocalDisplayName(e.target.value)}
+              onBlur={() =>
+                debouncedUpdate({ general: { humanDisplayName: localDisplayName || 'Human' } })
+              }
+              placeholder="Human"
+              className="max-w-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              How your messages appear in Squad Chat. Shows as "{localDisplayName} (Human)" in the
+              chat.
+            </p>
+          </div>
         </div>
       </div>
 

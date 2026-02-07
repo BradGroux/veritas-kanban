@@ -11,7 +11,7 @@ export interface WebSocketMessage {
 }
 
 export interface UseWebSocketOptions {
-  /** URL to connect to. Defaults to ws(s)://host:3001/ws */
+  /** URL to connect to. Defaults to ws(s)://currenthost/ws */
   url?: string;
   /** Whether to automatically connect. Default true. */
   autoConnect?: boolean;
@@ -62,8 +62,9 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 20;
 
 function getDefaultWsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const isDev = ['3000', '5173'].includes(window.location.port);
-  return isDev ? `${protocol}//localhost:3001/ws` : `${protocol}//${window.location.host}/ws`;
+  // Always use the same host:port as the current page for WebSocket connection
+  // This works for both dev (Vite on :5173) and production (server on :3000/:3001)
+  return `${protocol}//${window.location.host}/ws`;
 }
 
 /**

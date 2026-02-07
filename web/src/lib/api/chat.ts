@@ -86,11 +86,14 @@ export async function getSquadMessages(options?: {
   since?: string;
   agent?: string;
   limit?: number;
+  includeSystem?: boolean;
 }): Promise<SquadMessage[]> {
   const params = new URLSearchParams();
   if (options?.since) params.set('since', options.since);
   if (options?.agent) params.set('agent', options.agent);
   if (options?.limit) params.set('limit', options.limit.toString());
+  if (options?.includeSystem !== undefined)
+    params.set('includeSystem', options.includeSystem.toString());
 
   const response = await fetch(`${API_BASE}/chat/squad?${params}`, {
     credentials: 'include',

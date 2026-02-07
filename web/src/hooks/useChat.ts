@@ -131,7 +131,12 @@ export function useChatStream(sessionId: string | undefined) {
 /**
  * Get squad messages with optional filters
  */
-export function useSquadMessages(options?: { since?: string; agent?: string; limit?: number }) {
+export function useSquadMessages(options?: {
+  since?: string;
+  agent?: string;
+  limit?: number;
+  includeSystem?: boolean;
+}) {
   return useQuery({
     queryKey: ['chat', 'squad', options],
     queryFn: () => chatApi.getSquadMessages(options),
@@ -147,8 +152,19 @@ export function useSendSquadMessage() {
 
   return useMutation({
     mutationFn: (input: SquadMessageInput) => chatApi.sendSquadMessage(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat', 'squad'] });
+    onSuccess: (newMessage) => {
+      // Optimistically update all matching query cache entries
+      queryClient.setQueriesData(
+        { queryKey: ['chat', 'squad'] },
+        (old: SquadMessage[] | undefined) => {
+          if (!old) return [newMessage];
+          // Add new message if not already present
+          const exists = old.some((m) => m.id === newMessage.id);
+          return exists ? old : [...old, newMessage];
+        }
+      );
+
+      // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
     },
   });
 }
@@ -165,8 +181,21 @@ export function useSquadStream() {
       const msg = (e as CustomEvent).detail;
 
       if (msg.type === 'squad:message') {
-        setNewMessage(msg.message as SquadMessage);
-        queryClient.invalidateQueries({ queryKey: ['chat', 'squad'] });
+        const incomingMessage = msg.message as SquadMessage;
+        setNewMessage(incomingMessage);
+
+        // Optimistically add the message to cache immediately
+        queryClient.setQueriesData(
+          { queryKey: ['chat', 'squad'] },
+          (old: SquadMessage[] | undefined) => {
+            if (!old) return [incomingMessage];
+            // Add message if not already present
+            const exists = old.some((m) => m.id === incomingMessage.id);
+            return exists ? old : [...old, incomingMessage];
+          }
+        );
+
+        // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
 
         // Clear the new message notification after a short delay
         setTimeout(() => setNewMessage(null), 3000);

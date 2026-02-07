@@ -179,7 +179,15 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         return;
       }
       // Validate expected top-level keys
-      const validSections = ['board', 'tasks', 'agents', 'telemetry', 'notifications', 'archive'];
+      const validSections = [
+        'general',
+        'board',
+        'tasks',
+        'agents',
+        'telemetry',
+        'notifications',
+        'archive',
+      ];
       const importedKeys = Object.keys(imported);
       const unknownKeys = importedKeys.filter((k) => !validSections.includes(k));
       if (unknownKeys.length > 0) {

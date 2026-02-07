@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { getChatService } from '../services/chat-service.js';
 import { sendGatewayChat, loadGatewayToken } from '../services/gateway-chat-client.js';
 import { broadcastChatMessage, broadcastSquadMessage } from '../services/broadcast-service.js';
+import { fireSquadWebhook } from '../services/squad-webhook-service.js';
+import { ConfigService } from '../services/config-service.js';
 import type { ChatSendInput } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -21,6 +23,7 @@ loadGatewayToken().catch(() => {});
 
 const router: RouterType = Router();
 const chatService = getChatService();
+const configService = new ConfigService();
 
 // Validation schemas
 const chatSendSchema = z.object({
@@ -36,6 +39,10 @@ const squadMessageSchema = z.object({
   agent: z.string().min(1, 'Agent name required'),
   message: z.string().min(1, 'Message cannot be empty'),
   tags: z.array(z.string()).optional(),
+  system: z.boolean().optional(),
+  event: z.enum(['agent.spawned', 'agent.completed', 'agent.failed', 'agent.status']).optional(),
+  taskTitle: z.string().optional(),
+  duration: z.string().optional(),
 });
 
 /**
@@ -247,16 +254,39 @@ router.post(
   asyncHandler(async (req, res) => {
     const validatedInput = squadMessageSchema.parse(req.body);
 
-    const message = await chatService.sendSquadMessage({
-      agent: validatedInput.agent,
-      message: validatedInput.message,
-      tags: validatedInput.tags,
-    });
+    // Get displayName from settings if agent is Human
+    const config = await configService.getFeatureSettings();
+    const isHuman =
+      validatedInput.agent === 'Human' || validatedInput.agent.toLowerCase() === 'human';
+    const displayName = isHuman ? config.general.humanDisplayName : undefined;
 
-    log.info({ messageId: message.id, agent: message.agent }, 'Squad message sent');
+    const message = await chatService.sendSquadMessage(
+      {
+        agent: validatedInput.agent,
+        message: validatedInput.message,
+        tags: validatedInput.tags,
+        system: validatedInput.system,
+        event: validatedInput.event,
+        taskTitle: validatedInput.taskTitle,
+        duration: validatedInput.duration,
+      },
+      displayName
+    );
+
+    log.info(
+      { messageId: message.id, agent: message.agent, system: message.system },
+      'Squad message sent'
+    );
 
     // Broadcast to WebSocket clients
     broadcastSquadMessage(message);
+
+    // Fire webhook if configured (async, don't block response)
+    if (config.squadWebhook) {
+      fireSquadWebhook(message, config.squadWebhook).catch((err) => {
+        log.error({ err: err.message, messageId: message.id }, 'Squad webhook failed');
+      });
+    }
 
     res.status(201).json(message);
   })
@@ -265,7 +295,7 @@ router.post(
 /**
  * GET /api/chat/squad
  * Get squad messages with optional filters
- * Query params: since (ISO timestamp), agent (filter by agent), limit (max messages)
+ * Query params: since (ISO timestamp), agent (filter by agent), limit (max messages), includeSystem (true/false)
  */
 router.get(
   '/squad',
@@ -273,11 +303,13 @@ router.get(
     const since = typeof req.query.since === 'string' ? req.query.since : undefined;
     const agent = typeof req.query.agent === 'string' ? req.query.agent : undefined;
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
+    const includeSystem = req.query.includeSystem === 'false' ? false : true; // Default to true
 
     const messages = await chatService.getSquadMessages({
       since,
       agent,
       limit,
+      includeSystem,
     });
 
     res.json(messages);
