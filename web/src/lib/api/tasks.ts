@@ -179,6 +179,55 @@ export const tasksApi = {
     return handleResponse<Task>(response);
   },
 
+  // Deliverables
+  addDeliverable: async (
+    taskId: string,
+    deliverable: {
+      title: string;
+      type: 'document' | 'code' | 'report' | 'artifact' | 'other';
+      path?: string;
+      description?: string;
+      agent?: string;
+    }
+  ): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(deliverable),
+    });
+    return handleResponse<Task>(response);
+  },
+
+  updateDeliverable: async (
+    taskId: string,
+    deliverableId: string,
+    updates: {
+      title?: string;
+      type?: 'document' | 'code' | 'report' | 'artifact' | 'other';
+      path?: string;
+      status?: 'pending' | 'attached' | 'reviewed' | 'accepted';
+      description?: string;
+      agent?: string;
+    }
+  ): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
+      credentials: 'include',
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return handleResponse<Task>(response);
+  },
+
+  deleteDeliverable: async (taskId: string, deliverableId: string): Promise<Task> => {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
+      credentials: 'include',
+      method: 'DELETE',
+    });
+    return handleResponse<Task>(response);
+  },
+
   getBlockingStatus: async (
     taskId: string
   ): Promise<{

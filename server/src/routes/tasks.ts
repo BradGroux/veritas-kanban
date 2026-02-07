@@ -5,6 +5,7 @@ import { WorktreeService } from '../services/worktree-service.js';
 import { activityService } from '../services/activity-service.js';
 import { getBlockingService } from '../services/blocking-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
+import { getDelegationService } from '../services/delegation-service.js';
 import type { CreateTaskInput, UpdateTaskInput, Task, TaskSummary } from '@veritas-kanban/shared';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -19,6 +20,7 @@ const router: RouterType = Router();
 const taskService = getTaskService();
 const worktreeService = new WorktreeService();
 const blockingService = getBlockingService();
+const delegationService = getDelegationService();
 
 // Validation schemas
 const createTaskSchema = z.object({
@@ -278,6 +280,7 @@ router.get(
           blockedReason: task.blockedReason,
           position: task.position,
           attachmentCount: task.attachments?.length ?? 0,
+          deliverableCount: task.deliverables?.length ?? 0,
           github: task.github,
           timeTracking: task.timeTracking
             ? {
@@ -537,6 +540,44 @@ router.patch(
     const oldTask = await taskService.getTask(req.params.id as string);
     if (!oldTask) {
       throw new NotFoundError('Task not found');
+    }
+
+    // Check delegation if moving to 'done'
+    if (input.status === 'done' && oldTask.status !== 'done') {
+      const authReq = req as AuthenticatedRequest;
+      const agentName = authReq.auth?.keyName || 'unknown';
+
+      const delegationCheck = await delegationService.canApprove(agentName, {
+        id: oldTask.id,
+        priority: oldTask.priority,
+        project: oldTask.project,
+        tags: [], // Tasks don't have tags yet, but delegation supports them
+      });
+
+      if (delegationCheck.allowed) {
+        // Log delegated approval
+        await delegationService.logApproval({
+          taskId: oldTask.id,
+          taskTitle: oldTask.title,
+          agent: agentName,
+        });
+
+        // Add activity log entry noting delegation
+        await activityService.logActivity(
+          'status_changed',
+          oldTask.id,
+          oldTask.title,
+          {
+            from: oldTask.status,
+            status: 'done',
+            delegated: true,
+            delegateAgent: agentName,
+          },
+          agentName
+        );
+      }
+      // If delegation check fails, no special handling — the request proceeds normally
+      // (human users can still approve, or API keys with admin/agent role)
     }
 
     // Check if trying to move blocked task to in-progress

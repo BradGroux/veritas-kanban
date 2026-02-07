@@ -94,6 +94,12 @@ export function TasksTab() {
           checked={settings.tasks.enableComments}
           onCheckedChange={(v) => update('enableComments', v)}
         />
+        <ToggleRow
+          label="Require Deliverable for Done"
+          description="Prevent tasks from being marked done without at least one deliverable"
+          checked={settings.tasks.requireDeliverableForDone}
+          onCheckedChange={(v) => update('requireDeliverableForDone', v)}
+        />
         <NumberRow
           label="Auto-save Delay"
           description="Delay before saving changes (ms)"

@@ -171,6 +171,7 @@ export interface TaskBehaviorSettings {
   enableComments: boolean;
   defaultPriority: TaskPriority;
   autoSaveDelayMs: number; // Debounce delay for auto-save (ms), default 500
+  requireDeliverableForDone: boolean; // If true, tasks can't move to 'done' without at least one deliverable
 }
 
 /** Agent & git settings */
@@ -231,6 +232,24 @@ export interface HooksSettings {
   onArchived?: HookConfig;
 }
 
+/** Delegation settings — allow an agent to approve tasks temporarily */
+export interface DelegationSettings {
+  enabled: boolean;
+  delegateAgent: string; // Agent ID that can approve
+  expires: string; // ISO timestamp when delegation ends
+  scope: DelegationScope;
+  excludePriorities?: TaskPriority[]; // e.g., exclude 'critical'
+  excludeTags?: string[]; // Exclude tasks with these tags
+  createdAt: string;
+  createdBy: string; // Who set up the delegation
+}
+
+export interface DelegationScope {
+  type: 'all' | 'project' | 'priority';
+  projectIds?: string[];
+  priorities?: TaskPriority[];
+}
+
 /** All feature settings combined */
 export interface FeatureSettings {
   board: BoardSettings;
@@ -280,6 +299,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     enableComments: true,
     defaultPriority: 'medium',
     autoSaveDelayMs: 500,
+    requireDeliverableForDone: false,
   },
   agents: {
     timeoutMinutes: 30,

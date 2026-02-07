@@ -11,6 +11,7 @@ import {
   Timer,
   Loader2,
   Paperclip,
+  FileText,
   ListChecks,
   ShieldCheck,
   Zap,
@@ -113,6 +114,7 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     }
     // Attachments — only count matters for the badge
     if ((pt.attachments?.length || 0) !== (nt.attachments?.length || 0)) return false;
+    if ((pt.deliverables?.length || 0) !== (nt.deliverables?.length || 0)) return false;
   }
 
   // blockerTitles — compare array values
@@ -402,6 +404,13 @@ export const TaskCard = memo(function TaskCard({
                 <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
                   <Paperclip className="h-3 w-3" />
                   {task.attachments.length}
+                </span>
+              )}
+              {/* Deliverable indicator */}
+              {task.deliverables && task.deliverables.length > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
+                  <FileText className="h-3 w-3" />
+                  {task.deliverables.length}
                 </span>
               )}
               {/* Plan indicator removed — planning was agent-internal */}

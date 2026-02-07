@@ -22,7 +22,10 @@ export type ActivityType =
   | 'sprint_archived'
   | 'template_applied'
   | 'comment_added'
-  | 'comment_deleted';
+  | 'comment_deleted'
+  | 'deliverable_added'
+  | 'deliverable_updated'
+  | 'deliverable_deleted';
 
 export interface Activity {
   id: string;

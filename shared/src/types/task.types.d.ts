@@ -1,5 +1,3 @@
-// Task Types
-
 export type TaskType = string;
 export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -8,12 +6,10 @@ export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'v
 export type AgentType = BuiltInAgentType | (string & {});
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';
 export type BlockedCategory = 'waiting-on-feedback' | 'technical-snag' | 'prerequisite' | 'other';
-
 export interface BlockedReason {
   category: BlockedCategory;
   note?: string;
 }
-
 export interface TaskGit {
   repo: string;
   branch: string;
@@ -22,7 +18,6 @@ export interface TaskGit {
   prUrl?: string;
   prNumber?: number;
 }
-
 export interface TaskAttempt {
   id: string;
   agent: AgentType;
@@ -30,116 +25,70 @@ export interface TaskAttempt {
   started?: string;
   ended?: string;
 }
-
 export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
   created: string;
 }
-
 export interface VerificationStep {
   id: string;
   description: string;
   checked: boolean;
-  checkedAt?: string; // ISO timestamp when checked
+  checkedAt?: string;
 }
-
 export interface TimeEntry {
   id: string;
   startTime: string;
-  endTime?: string; // Undefined if timer is running
-  duration?: number; // Duration in seconds (calculated when stopped)
-  description?: string; // Optional note for the entry
-  manual?: boolean; // True if manually entered
+  endTime?: string;
+  duration?: number;
+  description?: string;
+  manual?: boolean;
 }
-
 export interface TimeTracking {
   entries: TimeEntry[];
-  totalSeconds: number; // Total tracked time in seconds
-  isRunning: boolean; // Is timer currently running
-  activeEntryId?: string; // ID of the currently running entry
+  totalSeconds: number;
+  isRunning: boolean;
+  activeEntryId?: string;
 }
-
 export interface Comment {
   id: string;
   author: string;
   text: string;
   timestamp: string;
 }
-
 export interface Attachment {
   id: string;
-  filename: string; // Sanitized filename stored on disk
-  originalName: string; // Original filename from upload
+  filename: string;
+  originalName: string;
   mimeType: string;
-  size: number; // File size in bytes
-  uploaded: string; // ISO timestamp
+  size: number;
+  uploaded: string;
 }
-
 export type DeliverableType = 'document' | 'code' | 'report' | 'artifact' | 'other';
 export type DeliverableStatus = 'pending' | 'attached' | 'reviewed' | 'accepted';
-
 export interface Deliverable {
   id: string;
   title: string;
   type: DeliverableType;
-  path?: string; // File path or URL
+  path?: string;
   status: DeliverableStatus;
-  agent?: string; // Who produced it
-  created: string; // ISO timestamp
+  agent?: string;
+  created: string;
   description?: string;
 }
-
 export interface AttachmentLimits {
-  maxFileSize: number; // Max size per file in bytes
-  maxFilesPerTask: number; // Max number of attachments per task
-  maxTotalSize: number; // Max total size for all attachments per task
+  maxFileSize: number;
+  maxFilesPerTask: number;
+  maxTotalSize: number;
 }
-
-// Default attachment limits
-export const DEFAULT_ATTACHMENT_LIMITS: AttachmentLimits = {
-  maxFileSize: 10 * 1024 * 1024, // 10MB per file
-  maxFilesPerTask: 20, // 20 files per task
-  maxTotalSize: 50 * 1024 * 1024, // 50MB total per task
-};
-
-// Allowed MIME types for attachments
-export const ALLOWED_MIME_TYPES = [
-  // Documents
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/markdown',
-  'text/html',
-  'text/csv',
-
-  // Images
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
-
-  // Code & Config
-  'application/json',
-  'application/xml',
-  'text/xml',
-  'application/yaml',
-  'text/yaml',
-];
-
+export declare const DEFAULT_ATTACHMENT_LIMITS: AttachmentLimits;
+export declare const ALLOWED_MIME_TYPES: string[];
 /** Cross-reference linking a kanban task to a GitHub Issue */
 export interface TaskGitHub {
   issueNumber: number;
   repo: string;
 }
-
 export interface Task {
   id: string;
   title: string;
@@ -151,67 +100,30 @@ export interface Task {
   sprint?: string;
   created: string;
   updated: string;
-
-  // Agent assignment — "auto" uses routing engine, or a specific agent slug
   agent?: AgentType | 'auto';
-  // Multi-agent assignment — multiple agents collaborating on a task
   agents?: AgentType[];
-
-  // Code task specific
   git?: TaskGit;
-
-  // GitHub Issue cross-reference
   github?: TaskGitHub;
-
-  // Current attempt
   attempt?: TaskAttempt;
-
-  // Attempt history
   attempts?: TaskAttempt[];
-
-  // Review comments (for code tasks)
   reviewComments?: ReviewComment[];
-
-  // Review state
   review?: ReviewState;
-
-  // Subtasks
   subtasks?: Subtask[];
-  autoCompleteOnSubtasks?: boolean; // Auto-complete parent when all subtasks done
-
-  // Verification checklist (done criteria)
+  autoCompleteOnSubtasks?: boolean;
   verificationSteps?: VerificationStep[];
-
-  // Dependencies
-  blockedBy?: string[]; // Array of task IDs that block this task
-
-  // Blocked reason (why the task is in blocked status)
+  blockedBy?: string[];
   blockedReason?: BlockedReason;
-
-  // Automation task specific (for veritas sub-agent)
   automation?: {
-    sessionKey?: string; // Clawdbot session key
-    spawnedAt?: string; // When sub-agent was spawned
-    completedAt?: string; // When sub-agent finished
-    result?: string; // Result summary from sub-agent
+    sessionKey?: string;
+    spawnedAt?: string;
+    completedAt?: string;
+    result?: string;
   };
-
-  // Time tracking
   timeTracking?: TimeTracking;
-
-  // Comments
   comments?: Comment[];
-
-  // Attachments
   attachments?: Attachment[];
-
-  // Deliverables
   deliverables?: Deliverable[];
-
-  // Position within column (for drag-and-drop ordering)
   position?: number;
-
-  // Cost prediction and tracking
   costPrediction?: {
     estimatedCost: number;
     confidence: 'low' | 'medium' | 'high';
@@ -225,13 +137,10 @@ export interface Task {
     };
     predictedAt: string;
   };
-  actualCost?: number; // Actual cost after completion (from telemetry)
-
-  // Lessons learned (captured after task completion)
-  lessonsLearned?: string; // Markdown content
-  lessonTags?: string[]; // Categorization tags
+  actualCost?: number;
+  lessonsLearned?: string;
+  lessonTags?: string[];
 }
-
 export interface ReviewComment {
   id: string;
   file: string;
@@ -239,17 +148,12 @@ export interface ReviewComment {
   content: string;
   created: string;
 }
-
 export type ReviewDecision = 'approved' | 'changes-requested' | 'rejected';
-
 export interface ReviewState {
   decision?: ReviewDecision;
   decidedAt?: string;
   summary?: string;
 }
-
-// API Types
-
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -257,12 +161,11 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   project?: string;
   sprint?: string;
-  agent?: AgentType | 'auto'; // Pre-assign an agent (or "auto" for routing engine)
-  agents?: AgentType[]; // Multi-agent assignment
-  subtasks?: Subtask[]; // Can be provided when creating from a template
-  blockedBy?: string[]; // Can be provided when creating from a blueprint
+  agent?: AgentType | 'auto';
+  agents?: AgentType[];
+  subtasks?: Subtask[];
+  blockedBy?: string[];
 }
-
 export interface UpdateTaskInput {
   title?: string;
   description?: string;
@@ -282,7 +185,7 @@ export interface UpdateTaskInput {
   autoCompleteOnSubtasks?: boolean;
   verificationSteps?: VerificationStep[];
   blockedBy?: string[];
-  blockedReason?: BlockedReason | null; // null to clear
+  blockedReason?: BlockedReason | null;
   automation?: {
     sessionKey?: string;
     spawnedAt?: string;
@@ -297,14 +200,12 @@ export interface UpdateTaskInput {
   lessonsLearned?: string;
   lessonTags?: string[];
 }
-
 export interface TaskFilters {
   status?: TaskStatus | TaskStatus[];
   type?: TaskType | TaskType[];
   project?: string;
   search?: string;
 }
-
 /**
  * Lightweight task representation for board/list views.
  * Returned when `?view=summary` is used on GET /api/tasks.
@@ -334,7 +235,6 @@ export interface TaskSummary {
   };
   attempt?: TaskAttempt;
 }
-
 /**
  * Paginated response envelope for GET /api/tasks.
  */

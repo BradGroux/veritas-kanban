@@ -13,6 +13,7 @@ import type {
   TimeTracking,
 } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
+import { ConfigService } from './config-service.js';
 import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -484,6 +485,27 @@ export class TaskService {
 
       // Validate transition hooks (quality gates) before allowing status change
       if (statusChanged && input.status) {
+        // Check requireDeliverableForDone setting
+        if (input.status === 'done') {
+          const configService = new ConfigService();
+          const settings = await configService.getFeatureSettings();
+          if (settings.tasks.requireDeliverableForDone) {
+            const deliverables = input.deliverables ?? freshTask.deliverables ?? [];
+            if (deliverables.length === 0) {
+              throw new ValidationError(
+                'Cannot complete task without at least one deliverable (required by settings)',
+                [
+                  {
+                    code: 'DELIVERABLE_REQUIRED',
+                    message: 'Task requires at least one deliverable to be marked as done',
+                    path: ['status'],
+                  },
+                ]
+              );
+            }
+          }
+        }
+
         // Create a preview of the task with proposed changes for validation
         const previewTask: Task = {
           ...freshTask,

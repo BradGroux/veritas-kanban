@@ -18,6 +18,7 @@ import { VerificationSection } from '../VerificationSection';
 import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
+import { DeliverablesSection } from '../DeliverablesSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
 import { LessonsLearnedSection } from '../LessonsLearnedSection';
 import { MarkdownText } from '@/components/shared/MarkdownText';
@@ -137,6 +138,11 @@ export function TaskDetailsTab({
           <TimeTrackingSection task={task} />
         </div>
       )}
+
+      {/* Deliverables */}
+      <div className="border-t pt-4">
+        <DeliverablesSection task={task} />
+      </div>
 
       {/* Comments */}
       {taskSettings.enableComments && (

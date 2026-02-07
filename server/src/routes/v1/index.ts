@@ -24,6 +24,7 @@ import { taskRoutes } from '../tasks.js';
 import { taskCommentRoutes } from '../task-comments.js';
 import { taskSubtaskRoutes } from '../task-subtasks.js';
 import { taskVerificationRoutes } from '../task-verification.js';
+import { taskDeliverableRoutes } from '../task-deliverables.js';
 import attachmentRoutes from '../attachments.js';
 import { backlogRoutes } from '../backlog.js';
 
@@ -63,6 +64,7 @@ import digestRoutes from '../digest.js';
 import auditRoutes from '../audit.js';
 import transitionHooksRoutes from '../transition-hooks.js';
 import lessonsRoutes from '../lessons.js';
+import delegationRoutes from '../delegation.js';
 
 const v1Router: IRouter = Router();
 
@@ -84,6 +86,7 @@ v1Router.use('/tasks', taskRoutes);
 v1Router.use('/tasks', taskCommentRoutes);
 v1Router.use('/tasks', taskSubtaskRoutes);
 v1Router.use('/tasks', taskVerificationRoutes);
+v1Router.use('/tasks', taskDeliverableRoutes);
 
 // Attachment routes get the stricter upload rate limit (20 req/min)
 // applied BEFORE the route handler for upload (POST) requests.
@@ -138,5 +141,6 @@ v1Router.use('/status-history', statusHistoryRoutes);
 v1Router.use('/digest', digestRoutes);
 v1Router.use('/audit', auditRoutes);
 v1Router.use('/lessons', lessonsRoutes);
+v1Router.use('/delegation', delegationRoutes);
 
 export { v1Router };
