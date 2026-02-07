@@ -120,3 +120,38 @@ export function broadcastTelemetryEvent(event: AnyTelemetryEvent): void {
     }
   });
 }
+
+export interface BroadcastMessageEvent {
+  type: 'broadcast:new';
+  broadcast: {
+    id: string;
+    message: string;
+    priority: string;
+    from?: string;
+    tags?: string[];
+    createdAt: string;
+    readBy: Array<{ agent: string; readAt: string }>;
+  };
+}
+
+/**
+ * Broadcast a new broadcast message to all connected WebSocket clients.
+ * Clients can listen for 'broadcast:new' messages to receive real-time notifications.
+ */
+export function broadcastNewMessage(broadcast: BroadcastMessageEvent['broadcast']): void {
+  if (!wssRef) return;
+
+  const message: BroadcastMessageEvent = {
+    type: 'broadcast:new',
+    broadcast,
+  };
+
+  const payload = JSON.stringify(message);
+
+  wssRef.clients.forEach((client: WebSocket) => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      client.send(payload);
+    }
+  });
+}
