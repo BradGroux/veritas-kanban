@@ -22,6 +22,24 @@ interface DelegationResponse {
   delegation: DelegationSettings | null;
 }
 
+function formatDateTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function addHours(date: Date, hours: number): Date {
+  const result = new Date(date);
+  result.setHours(result.getHours() + hours);
+  return result;
+}
+
 export function DelegationTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -141,26 +159,26 @@ export function DelegationTab() {
 
       {/* Active Delegation Banner */}
       {isActive && !hasExpired && delegation && (
-        <Card className="border-blue-500 bg-blue-50 dark:bg-blue-950">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <CardTitle className="text-base">Delegation Active</CardTitle>
-              </div>
-              <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900">
-                Active
-              </Badge>
+        <div className="border-2 border-blue-500 bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <span className="font-semibold text-base">Delegation Active</span>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 dark:bg-blue-900">
+              Active
+            </span>
+          </div>
+          <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-medium">🤖 Delegate Agent:</span>
-              <Badge>{delegation.delegateAgent}</Badge>
+              <span className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-800">
+                {delegation.delegateAgent}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              <span>Expires: {format(new Date(delegation.expires), 'PPp')}</span>
+              <span>Expires: {formatDateTime(delegation.expires)}</span>
             </div>
             {delegation.excludePriorities && delegation.excludePriorities.length > 0 && (
               <div className="flex items-center gap-2">
@@ -177,36 +195,33 @@ export function DelegationTab() {
             >
               Revoke Delegation
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Expired Notice */}
       {delegation && hasExpired && (
-        <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-              <CardTitle className="text-base">Delegation Expired</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <p>The delegation expired on {format(new Date(delegation.expires), 'PPp')}</p>
-          </CardContent>
-        </Card>
+        <div className="border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-950 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            <span className="font-semibold text-base">Delegation Expired</span>
+          </div>
+          <p className="text-sm">The delegation expired on {formatDateTime(delegation.expires)}</p>
+        </div>
       )}
 
-      <Separator />
+      <hr className="border-t border-gray-200 dark:border-gray-700" />
 
       {/* Setup Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Set Up Delegation</CardTitle>
-          <CardDescription>
+      <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+        <div className="mb-3">
+          <h4 className="font-semibold text-base">Set Up Delegation</h4>
+          <p className="text-sm text-muted-foreground">
             Configure approval delegation for a specific time period
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </p>
+        </div>
+
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="delegate-agent">Delegate Agent</Label>
             <Select value={delegateAgent} onValueChange={setDelegateAgent}>
@@ -292,15 +307,13 @@ export function DelegationTab() {
               </>
             )}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">How It Works</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+      <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+        <h4 className="font-semibold text-sm mb-2">How It Works</h4>
+        <div className="space-y-2 text-sm text-muted-foreground">
           <p>
             • The delegated agent can mark tasks as "done" without human approval during the
             delegation period
@@ -308,8 +321,8 @@ export function DelegationTab() {
           <p>• All delegated approvals are logged for audit purposes</p>
           <p>• Delegation automatically expires after the configured duration</p>
           <p>• You can revoke delegation at any time</p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
