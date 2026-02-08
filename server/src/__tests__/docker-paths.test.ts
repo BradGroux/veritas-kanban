@@ -1,18 +1,24 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
-// Mock node:fs/promises completely to prevent ANY filesystem operations
-vi.mock('node:fs/promises', () => {
-  const mockFsPromises = {
+// Mock node:fs/promises while preserving the real module shape for Vitest
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const mocked: typeof actual = {
+    ...actual,
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
-    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 0 }),
     access: vi.fn().mockResolvedValue(undefined),
+    copyFile: vi.fn().mockResolvedValue(undefined),
+    unlink: vi.fn().mockResolvedValue(undefined),
+    rename: vi.fn().mockResolvedValue(undefined),
+    statfs: vi.fn().mockResolvedValue({ bfree: 1024 * 1024, bsize: 1024 }),
   };
   return {
-    ...mockFsPromises,
-    default: mockFsPromises, // Provide default export
+    ...mocked,
+    default: mocked, // Vitest requires a default export when mocking ESM
   };
 });
 
