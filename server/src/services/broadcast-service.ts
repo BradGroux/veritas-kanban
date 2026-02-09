@@ -180,3 +180,96 @@ export function broadcastNewMessage(broadcast: BroadcastMessageEvent['broadcast'
     }
   });
 }
+
+export interface WorkflowStatusEvent {
+  type: 'workflow:status';
+  payload: {
+    id: string;
+    workflowId: string;
+    workflowVersion: number;
+    taskId?: string;
+    status: string;
+    currentStep?: string;
+    startedAt: string;
+    completedAt?: string;
+    error?: string;
+    steps: Array<{
+      stepId: string;
+      status: string;
+      agent?: string;
+      sessionKey?: string;
+      startedAt?: string;
+      completedAt?: string;
+      duration?: number;
+      retries: number;
+      output?: string;
+      error?: string;
+    }>;
+  };
+}
+
+/**
+ * Broadcast workflow run status updates to all connected WebSocket clients.
+ * Sends full run state to avoid extra HTTP fetches.
+ */
+export function broadcastWorkflowStatus(run: {
+  id: string;
+  workflowId: string;
+  workflowVersion: number;
+  taskId?: string;
+  status: string;
+  currentStep?: string;
+  startedAt: string;
+  completedAt?: string;
+  error?: string;
+  steps: Array<{
+    stepId: string;
+    status: string;
+    agent?: string;
+    sessionKey?: string;
+    startedAt?: string;
+    completedAt?: string;
+    duration?: number;
+    retries: number;
+    output?: string;
+    error?: string;
+  }>;
+}): void {
+  if (!wssRef) return;
+
+  const message: WorkflowStatusEvent = {
+    type: 'workflow:status',
+    payload: {
+      id: run.id,
+      workflowId: run.workflowId,
+      workflowVersion: run.workflowVersion,
+      taskId: run.taskId,
+      status: run.status,
+      currentStep: run.currentStep,
+      startedAt: run.startedAt,
+      completedAt: run.completedAt,
+      error: run.error,
+      steps: run.steps.map((s) => ({
+        stepId: s.stepId,
+        status: s.status,
+        agent: s.agent,
+        sessionKey: s.sessionKey,
+        startedAt: s.startedAt,
+        completedAt: s.completedAt,
+        duration: s.duration,
+        retries: s.retries,
+        output: s.output,
+        error: s.error,
+      })),
+    },
+  };
+
+  const payload = JSON.stringify(message);
+
+  wssRef.clients.forEach((client: WebSocket) => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      client.send(payload);
+    }
+  });
+}
