@@ -20,6 +20,8 @@ const MAX_WORKFLOW_NAME_LENGTH = 200;
 const MAX_WORKFLOW_DESCRIPTION_LENGTH = 2000;
 const MAX_AGENTS_PER_WORKFLOW = 20;
 const MAX_STEPS_PER_WORKFLOW = 50;
+const MAX_TOOLS_PER_AGENT = 50;
+const MAX_RETRY_DELAY_MS = 300000; // 5 minutes max delay
 
 export class WorkflowService {
   private workflowsDir: string;
@@ -259,6 +261,16 @@ export class WorkflowService {
     const agentIdSet = new Set(agentIds);
     const stepIdSet = new Set(stepIds);
 
+    // Validate agent-specific constraints
+    for (const agent of workflow.agents) {
+      // Tools array size validation
+      if (agent.tools && agent.tools.length > MAX_TOOLS_PER_AGENT) {
+        throw new ValidationError(
+          `Agent ${agent.id} exceeds maximum of ${MAX_TOOLS_PER_AGENT} tools (has ${agent.tools.length})`
+        );
+      }
+    }
+
     for (const step of workflow.steps) {
       // Agent steps must reference a valid agent
       if ((step.type === 'agent' || step.type === 'loop') && !agentIdSet.has(step.agent!)) {
@@ -277,6 +289,20 @@ export class WorkflowService {
         throw new ValidationError(
           `Step ${step.id} verify_step references unknown step ${step.loop.verify_step}`
         );
+      }
+
+      // Validate retry_delay_ms bounds
+      if (step.on_fail?.retry_delay_ms !== undefined) {
+        if (step.on_fail.retry_delay_ms < 0) {
+          throw new ValidationError(
+            `Step ${step.id} retry_delay_ms cannot be negative (got ${step.on_fail.retry_delay_ms})`
+          );
+        }
+        if (step.on_fail.retry_delay_ms > MAX_RETRY_DELAY_MS) {
+          throw new ValidationError(
+            `Step ${step.id} retry_delay_ms exceeds maximum of ${MAX_RETRY_DELAY_MS}ms (5 minutes)`
+          );
+        }
       }
     }
   }

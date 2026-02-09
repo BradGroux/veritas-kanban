@@ -473,7 +473,7 @@ export class WorkflowRunService {
   /**
    * Resume a blocked workflow run
    */
-  async resumeRun(runId: string, resumeContext?: Record<string, any>): Promise<WorkflowRun> {
+  async resumeRun(runId: string, resumeContext?: Record<string, unknown>): Promise<WorkflowRun> {
     const run = await this.getRun(runId);
     if (!run) {
       throw new NotFoundError(`Run ${runId} not found`);

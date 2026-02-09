@@ -7,7 +7,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import yaml from 'yaml';
-import type { WorkflowStep, WorkflowRun, StepExecutionResult } from '../types/workflow.js';
+import type {
+  WorkflowStep,
+  WorkflowRun,
+  StepExecutionResult,
+  WorkflowAgent,
+} from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 
@@ -114,7 +119,7 @@ export class WorkflowStepExecutor {
    * Render a template string with context (simplified Jinja2-style)
    * Phase 1: Basic string interpolation
    */
-  private renderTemplate(template: string, context: Record<string, any>): string {
+  private renderTemplate(template: string, context: Record<string, unknown>): string {
     let rendered = template;
 
     // Simple {{variable}} substitution
@@ -174,7 +179,13 @@ export class WorkflowStepExecutor {
     output: unknown,
     filename?: string
   ): Promise<string> {
-    const outputDir = path.join(this.runsDir, runId, 'step-outputs');
+    // Sanitize runId to prevent path traversal (defensive — already validated upstream)
+    const safeRunId = sanitizeFilename(runId);
+    if (!safeRunId || safeRunId !== runId) {
+      throw new Error(`Invalid run ID: ${runId}`);
+    }
+
+    const outputDir = path.join(this.runsDir, safeRunId, 'step-outputs');
     await fs.mkdir(outputDir, { recursive: true });
 
     const candidate = filename || `${stepId}.md`;
@@ -239,7 +250,13 @@ export class WorkflowStepExecutor {
    * Returns content or null if file doesn't exist
    */
   private async loadProgressFile(runId: string): Promise<string | null> {
-    const progressPath = path.join(this.runsDir, runId, 'progress.md');
+    // Sanitize runId to prevent path traversal (defensive — already validated upstream)
+    const safeRunId = sanitizeFilename(runId);
+    if (!safeRunId || safeRunId !== runId) {
+      throw new Error(`Invalid run ID: ${runId}`);
+    }
+
+    const progressPath = path.join(this.runsDir, safeRunId, 'progress.md');
 
     try {
       const content = await fs.readFile(progressPath, 'utf-8');
@@ -256,8 +273,32 @@ export class WorkflowStepExecutor {
    * Append step output to progress.md
    */
   private async appendProgressFile(runId: string, stepId: string, output: unknown): Promise<void> {
-    const progressPath = path.join(this.runsDir, runId, 'progress.md');
+    // Sanitize runId to prevent path traversal (defensive — already validated upstream)
+    const safeRunId = sanitizeFilename(runId);
+    if (!safeRunId || safeRunId !== runId) {
+      throw new Error(`Invalid run ID: ${runId}`);
+    }
+
+    const progressPath = path.join(this.runsDir, safeRunId, 'progress.md');
     const timestamp = new Date().toISOString();
+
+    // Check progress file size before appending (cap at 10MB)
+    const MAX_PROGRESS_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    try {
+      const stats = await fs.stat(progressPath);
+      if (stats.size > MAX_PROGRESS_FILE_SIZE) {
+        log.warn(
+          { runId, fileSize: stats.size },
+          'Progress file exceeds size limit — skipping append'
+        );
+        return; // Skip appending if file is too large
+      }
+    } catch (err: unknown) {
+      // File doesn't exist yet — that's fine
+      if (!(err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT')) {
+        throw err;
+      }
+    }
 
     const entry = `## Step: ${stepId} (${timestamp})\n\n${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}\n\n---\n\n`;
 
@@ -270,8 +311,8 @@ export class WorkflowStepExecutor {
    * Build steps context for template resolution
    * Enables {{steps.step-id.output}} references
    */
-  private buildStepsContext(run: WorkflowRun): Record<string, any> {
-    const stepsContext: Record<string, any> = {};
+  private buildStepsContext(run: WorkflowRun): Record<string, unknown> {
+    const stepsContext: Record<string, unknown> = {};
 
     for (const stepRun of run.steps) {
       if (stepRun.status === 'completed' && run.context[stepRun.stepId]) {
@@ -292,11 +333,11 @@ export class WorkflowStepExecutor {
    * Get agent definition from workflow context
    * Used to retrieve agent-specific settings (tools, model, etc.)
    */
-  private getAgentDefinition(run: WorkflowRun, agentId: string): any {
+  private getAgentDefinition(run: WorkflowRun, agentId: string): WorkflowAgent | null {
     // Agent definitions are stored in workflow context during run initialization
-    const workflow = run.context.workflow;
+    const workflow = run.context.workflow as { agents?: WorkflowAgent[] } | undefined;
     if (!workflow || !workflow.agents) return null;
 
-    return workflow.agents.find((a: any) => a.id === agentId) || null;
+    return workflow.agents.find((a) => a.id === agentId) || null;
   }
 }

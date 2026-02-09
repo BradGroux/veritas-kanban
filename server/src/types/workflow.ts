@@ -15,8 +15,8 @@ export interface WorkflowDefinition {
   config?: WorkflowConfig;
   agents: WorkflowAgent[];
   steps: WorkflowStep[];
-  variables?: Record<string, any>;
-  schemas?: Record<string, any>;
+  variables?: Record<string, unknown>;
+  schemas?: Record<string, unknown>;
 }
 
 export interface WorkflowConfig {
@@ -100,7 +100,7 @@ export interface WorkflowRun {
   taskId?: string; // Optional task association
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
-  context: Record<string, any>; // Shared context across steps
+  context: Record<string, unknown>; // Shared context across steps
   startedAt: string;
   completedAt?: string;
   lastCheckpoint?: string; // Phase 2: Last state persistence timestamp (#113)
@@ -132,7 +132,7 @@ export interface StepRun {
 // ==================== Step Execution Types ====================
 
 export interface StepExecutionResult {
-  output: any; // Parsed output (for context passing)
+  output: unknown; // Parsed output (for context passing)
   outputPath: string; // Path to output file
 }
 
@@ -155,7 +155,7 @@ export interface WorkflowAuditEvent {
   action: 'create' | 'edit' | 'delete' | 'run';
   workflowId: string;
   workflowVersion?: number;
-  changes?: Array<{ field: string; oldValue: any; newValue: any }>;
+  changes?: Array<{ field: string; oldValue: unknown; newValue: unknown }>;
   runId?: string;
 }
 
