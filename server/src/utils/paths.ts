@@ -181,3 +181,17 @@ export function getReportsOutputDir(): string {
   // Keep historical layout: sibling docs/reports directory to .veritas-kanban
   return path.join(getStorageRoot(), 'docs', 'reports');
 }
+
+// ---------------------------------------------------------------------------
+// Workflow Engine Directories (Phase 1 - v3.0)
+// ---------------------------------------------------------------------------
+
+/** Directory for workflow YAML definitions (.veritas-kanban/workflows). */
+export function getWorkflowsDir(): string {
+  return path.join(getRuntimeDir(), 'workflows');
+}
+
+/** Directory for workflow run state (.veritas-kanban/workflow-runs). */
+export function getWorkflowRunsDir(): string {
+  return path.join(getRuntimeDir(), 'workflow-runs');
+}
