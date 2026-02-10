@@ -12,10 +12,11 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, Play, Users, ListOrdered } from 'lucide-react';
+import { ArrowLeft, Search, Play, Users, ListOrdered, BarChart3 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkflowRunList } from './WorkflowRunList';
+import { WorkflowDashboard } from './WorkflowDashboard';
 
 interface WorkflowsPageProps {
   onBack: () => void;
@@ -36,6 +37,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [showDashboard, setShowDashboard] = useState(false);
   const { toast } = useToast();
 
   // Fetch workflows on mount
@@ -95,6 +97,10 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
     }
   };
 
+  if (showDashboard) {
+    return <WorkflowDashboard onBack={() => setShowDashboard(false)} />;
+  }
+
   if (selectedWorkflowId) {
     return (
       <WorkflowRunList workflowId={selectedWorkflowId} onBack={() => setSelectedWorkflowId(null)} />
@@ -113,6 +119,11 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
           <h1 className="text-2xl font-bold">Workflows</h1>
           <Badge variant="secondary">{filteredWorkflows.length} workflows</Badge>
         </div>
+
+        <Button onClick={() => setShowDashboard(true)}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Dashboard
+        </Button>
       </div>
 
       {/* Search */}
