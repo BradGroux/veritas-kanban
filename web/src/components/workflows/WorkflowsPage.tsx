@@ -46,8 +46,8 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
       try {
         const response = await fetch('/api/workflows');
         if (!response.ok) throw new Error('Failed to fetch workflows');
-        const data = await response.json();
-        setWorkflows(data);
+        const json = await response.json();
+        setWorkflows(json.data ?? json);
       } catch (error) {
         toast({
           title: '❌ Failed to load workflows',

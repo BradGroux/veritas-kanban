@@ -91,8 +91,8 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     try {
       const response = await fetch(`/api/workflow-runs/${runId}`);
       if (!response.ok) throw new Error('Failed to fetch workflow run');
-      const data = await response.json();
-      setRun(data);
+      const json = await response.json();
+      setRun(json.data ?? json);
     } catch (error) {
       toast({
         title: '❌ Failed to load workflow run',
@@ -120,9 +120,9 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
       try {
         const workflowResponse = await fetch(`/api/workflows/${run.workflowId}`);
         if (!workflowResponse.ok) throw new Error('Failed to fetch workflow definition');
-        const data = await workflowResponse.json();
+        const json = await workflowResponse.json();
         if (!isCancelled) {
-          setWorkflow(data);
+          setWorkflow(json.data ?? json);
         }
       } catch (error) {
         console.error('Failed to fetch workflow definition:', error);

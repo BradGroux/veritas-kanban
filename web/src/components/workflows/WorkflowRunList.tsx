@@ -59,8 +59,8 @@ export function WorkflowRunList({ workflowId, onBack }: WorkflowRunListProps) {
       try {
         const response = await fetch(`/api/workflow-runs?workflowId=${workflowId}`);
         if (!response.ok) throw new Error('Failed to fetch workflow runs');
-        const data = await response.json();
-        setRuns(data);
+        const json = await response.json();
+        setRuns(json.data ?? json);
       } catch (error) {
         toast({
           title: '❌ Failed to load workflow runs',

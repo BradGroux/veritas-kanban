@@ -59,13 +59,15 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
         // Fetch available workflows
         const workflowsRes = await fetch('/api/workflows');
         if (workflowsRes.ok) {
-          setWorkflows(await workflowsRes.json());
+          const wJson = await workflowsRes.json();
+          setWorkflows(wJson.data ?? wJson);
         }
 
         // Fetch active runs for this task
         const runsRes = await fetch(`/api/workflow-runs?taskId=${task.id}`);
         if (runsRes.ok) {
-          const runs = await runsRes.json();
+          const rJson = await runsRes.json();
+          const runs = rJson.data ?? rJson;
           setActiveRuns(
             runs.filter((r: WorkflowRun) => r.status === 'running' || r.status === 'blocked')
           );
@@ -91,7 +93,8 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
 
       if (!response.ok) throw new Error('Failed to start workflow run');
 
-      const run = await response.json();
+      const runJson = await response.json();
+      const run = runJson.data ?? runJson;
       toast({
         title: 'Workflow run started',
         description: `Run ID: ${run.id}`,
