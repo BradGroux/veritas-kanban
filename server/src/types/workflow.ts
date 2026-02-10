@@ -56,6 +56,9 @@ export interface WorkflowStep {
   // Gate-specific config
   condition?: string; // Jinja2 expression evaluating to boolean
   on_false?: EscalationPolicy;
+
+  // Parallel-specific config (Phase 4)
+  parallel?: ParallelConfig;
 }
 
 export interface StepOutput {
@@ -86,6 +89,24 @@ export interface LoopConfig {
   verify_each?: boolean;
   verify_step?: string; // Step ID to run after each iteration
   max_iterations?: number;
+  continue_on_error?: boolean; // If true, failed iterations don't fail the loop (Phase 4)
+}
+
+// ==================== Parallel Step Configuration (Phase 4) ====================
+
+export interface ParallelConfig {
+  steps: ParallelSubStep[]; // Sub-steps to execute in parallel
+  completion: 'all' | 'any' | number; // Wait for all, any, or N sub-steps
+  fail_fast?: boolean; // If true, abort others when one fails (default: true)
+  timeout?: number; // Max time to wait for parallel steps (seconds)
+}
+
+export interface ParallelSubStep {
+  id: string;
+  agent: string;
+  input: string; // Template for sub-step input
+  output?: StepOutput;
+  timeout?: number;
 }
 
 // ==================== Workflow Run Types ====================

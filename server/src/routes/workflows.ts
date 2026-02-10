@@ -322,4 +322,149 @@ router.post(
   })
 );
 
+/**
+ * POST /api/workflow-runs/:runId/steps/:stepId/approve — Approve a gate step
+ * Phase 4: Gate approval endpoint
+ */
+router.post(
+  '/runs/:runId/steps/:stepId/approve',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const runId = getStringParam(req.params.runId);
+    const stepId = getStringParam(req.params.stepId);
+    const userId = getUserId(req);
+
+    const run = await workflowRunService.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Workflow run ${runId} not found`);
+    }
+
+    // Check execute permission on the workflow
+    await assertWorkflowPermission(run.workflowId, userId, 'execute');
+
+    // Find the step
+    const stepRun = run.steps.find((s) => s.stepId === stepId);
+    if (!stepRun) {
+      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
+    }
+
+    if (stepRun.status !== 'failed') {
+      throw new ValidationError(
+        `Step ${stepId} is not awaiting approval (current status: ${stepRun.status})`
+      );
+    }
+
+    // Security: Verify this is actually a gate step
+    const workflow = await workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${run.workflowId} not found`);
+    }
+
+    const stepDef = workflow.steps.find((s) => s.id === stepId);
+    if (!stepDef || stepDef.type !== 'gate') {
+      throw new ValidationError(
+        `Step ${stepId} is not a gate step (type: ${stepDef?.type || 'unknown'})`
+      );
+    }
+
+    // Approve: add approval to context and resume
+    const approvalContext = {
+      ...run.context,
+      _gateApproval: {
+        stepId,
+        approved: true,
+        approvedBy: userId,
+        approvedAt: new Date().toISOString(),
+      },
+    };
+
+    const resumed = await workflowRunService.resumeRun(runId, approvalContext);
+
+    res.json(resumed);
+  })
+);
+
+/**
+ * POST /api/workflow-runs/:runId/steps/:stepId/reject — Reject a gate step
+ * Phase 4: Gate rejection endpoint
+ */
+router.post(
+  '/runs/:runId/steps/:stepId/reject',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const runId = getStringParam(req.params.runId);
+    const stepId = getStringParam(req.params.stepId);
+    const userId = getUserId(req);
+
+    const run = await workflowRunService.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Workflow run ${runId} not found`);
+    }
+
+    // Check execute permission on the workflow
+    await assertWorkflowPermission(run.workflowId, userId, 'execute');
+
+    // Find the step
+    const stepRun = run.steps.find((s) => s.stepId === stepId);
+    if (!stepRun) {
+      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
+    }
+
+    if (stepRun.status !== 'failed') {
+      throw new ValidationError(
+        `Step ${stepId} is not awaiting approval (current status: ${stepRun.status})`
+      );
+    }
+
+    // Security: Verify this is actually a gate step
+    const workflow = await workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${run.workflowId} not found`);
+    }
+
+    const stepDef = workflow.steps.find((s) => s.id === stepId);
+    if (!stepDef || stepDef.type !== 'gate') {
+      throw new ValidationError(
+        `Step ${stepId} is not a gate step (type: ${stepDef?.type || 'unknown'})`
+      );
+    }
+
+    // Reject: mark run as failed
+    run.status = 'failed';
+    run.error = `Step ${stepId} rejected by ${userId}`;
+    run.completedAt = new Date().toISOString();
+
+    // This would be saved by the workflow run service
+    // For now, just return the updated run
+    res.json(run);
+  })
+);
+
+/**
+ * GET /api/workflow-runs/:runId/steps/:stepId/status — Get detailed step status
+ * Phase 4: Step status endpoint (useful for parallel sub-steps)
+ */
+router.get(
+  '/runs/:runId/steps/:stepId/status',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const runId = getStringParam(req.params.runId);
+    const stepId = getStringParam(req.params.stepId);
+    const userId = getUserId(req);
+
+    const run = await workflowRunService.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Workflow run ${runId} not found`);
+    }
+
+    // Check view permission on the workflow
+    await assertWorkflowPermission(run.workflowId, userId, 'view');
+
+    // Find the step
+    const stepRun = run.steps.find((s) => s.stepId === stepId);
+    if (!stepRun) {
+      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
+    }
+
+    res.json(stepRun);
+  })
+);
+
 export { router as workflowRoutes };
