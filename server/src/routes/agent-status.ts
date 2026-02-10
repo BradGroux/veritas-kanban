@@ -294,4 +294,85 @@ router.post(
   })
 );
 
+// Schema for delegation violation reports
+const DelegationViolationSchema = z.object({
+  agent: z.string().min(1),
+  action: z.string().min(1), // e.g. "file_edit", "code_change", "multi_step_work"
+  taskId: z.string().optional(),
+  details: z.string().optional(), // Additional context about the violation
+});
+
+/**
+ * POST /api/agent/delegation-violation
+ * Report an orchestrator delegation violation.
+ * When orchestratorDelegation enforcement is enabled, this logs a warning
+ * and optionally posts to squad chat.
+ */
+router.post(
+  '/delegation-violation',
+  asyncHandler(async (req, res) => {
+    const parsed = DelegationViolationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid delegation violation report', parsed.error.format());
+    }
+
+    const { agent, action, taskId, details } = parsed.data;
+
+    // Import ConfigService dynamically to avoid circular deps
+    const { ConfigService } = await import('../services/config-service.js');
+    const configService = new ConfigService();
+    const settings = await configService.getFeatureSettings();
+
+    const enforcementEnabled = settings.enforcement?.orchestratorDelegation ?? false;
+
+    if (!enforcementEnabled) {
+      res.json({
+        success: true,
+        enforced: false,
+        message: 'Delegation enforcement is disabled',
+      });
+      return;
+    }
+
+    // Log the violation
+    log.warn(
+      { agent, action, taskId, details },
+      'Orchestrator delegation violation: %s performed %s directly',
+      agent,
+      action
+    );
+
+    // Post to squad chat if enabled
+    const squadChatEnabled = settings.enforcement?.squadChat ?? false;
+    if (squadChatEnabled) {
+      try {
+        // Import fireHook to post to squad chat
+        const { fireHook } = await import('../services/hook-service.js');
+        // Create a synthetic task for the squad chat message
+        const violationMessage = `⚠️ Delegation Violation: ${agent} performed "${action}" directly instead of delegating to a sub-agent.${details ? ` Details: ${details}` : ''}${taskId ? ` (Task: ${taskId})` : ''}`;
+
+        // Post directly to squad chat endpoint using native fetch
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+        await fetch(`${baseUrl}/api/chat/squad`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent: 'ENFORCEMENT',
+            message: violationMessage,
+            tags: ['delegation-violation', 'enforcement'],
+          }),
+        });
+      } catch (err) {
+        log.warn({ err }, 'Failed to post delegation violation to squad chat');
+      }
+    }
+
+    res.json({
+      success: true,
+      enforced: true,
+      message: `Delegation violation logged for ${agent}: ${action}`,
+    });
+  })
+);
+
 export { router as agentStatusRoutes };

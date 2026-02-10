@@ -226,6 +226,7 @@ export interface EnforcementSettings {
   closingComments: boolean; // Require deliverable summary in review comments before completion
   autoTelemetry: boolean; // Emit run.started/run.completed on status changes
   autoTimeTracking: boolean; // Auto-start/stop timers on status changes
+  orchestratorDelegation: boolean; // Warn when orchestrator does implementation work instead of delegating
 }
 
 /** Individual hook configuration */
@@ -370,6 +371,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     closingComments: false,
     autoTelemetry: false,
     autoTimeTracking: false,
+    orchestratorDelegation: false,
   },
   hooks: {
     enabled: false, // Disabled by default

@@ -135,6 +135,7 @@ const EnforcementSettingsSchema = z
     closingComments: z.boolean().optional(),
     autoTelemetry: z.boolean().optional(),
     autoTimeTracking: z.boolean().optional(),
+    orchestratorDelegation: z.boolean().optional(),
   })
   .strict()
   .optional();
