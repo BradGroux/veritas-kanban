@@ -71,7 +71,7 @@ export function LessonsLearnedSection({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border border-violet-300 bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 p-4">
+    <div className="space-y-4 rounded-lg border border-violet-300 bg-violet-100 dark:border-violet-800 dark:bg-violet-950 p-4">
       <div className="flex items-center gap-2 text-violet-700 dark:text-violet-400">
         <Lightbulb className="h-5 w-5" />
         <h3 className="font-semibold">Lessons Learned</h3>
@@ -85,7 +85,7 @@ export function LessonsLearnedSection({
       <div className="space-y-2">
         <Label htmlFor="lessonsLearned">Notes (Markdown supported)</Label>
         {readOnly ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none p-3 bg-background rounded border">
+          <div className="prose prose-sm dark:prose-invert max-w-none p-3 bg-background dark:bg-violet-900/30 rounded border dark:border-violet-800">
             {task.lessonsLearned || (
               <span className="text-muted-foreground italic">No lessons captured</span>
             )}
@@ -99,7 +99,7 @@ export function LessonsLearnedSection({
               debouncedUpdate(e.target.value);
             }}
             placeholder="What did you learn from this task? What would you do differently next time?"
-            className="min-h-[120px] bg-background"
+            className="min-h-[120px] bg-background dark:bg-violet-900/30 dark:border-violet-800"
           />
         )}
       </div>
