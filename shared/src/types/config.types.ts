@@ -179,6 +179,12 @@ export interface TaskBehaviorSettings {
   requireDeliverableForDone: boolean; // If true, tasks can't move to 'done' without at least one deliverable
 }
 
+/** Markdown settings */
+export interface MarkdownSettings {
+  enableMarkdown: boolean;
+  enableCodeHighlighting: boolean;
+}
+
 /** Agent & git settings */
 export interface AgentBehaviorSettings {
   timeoutMinutes: number; // 5-480
@@ -284,6 +290,7 @@ export interface FeatureSettings {
   general: GeneralSettings;
   board: BoardSettings;
   tasks: TaskBehaviorSettings;
+  markdown: MarkdownSettings;
   agents: AgentBehaviorSettings;
   telemetry: TelemetryFeatureSettings;
   notifications: NotificationSettings;
@@ -335,6 +342,10 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     defaultPriority: 'medium',
     autoSaveDelayMs: 500,
     requireDeliverableForDone: false,
+  },
+  markdown: {
+    enableMarkdown: true,
+    enableCodeHighlighting: true,
   },
   agents: {
     timeoutMinutes: 30,

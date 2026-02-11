@@ -1,5 +1,7 @@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -21,7 +23,6 @@ import { CommentsSection } from '../CommentsSection';
 import { DeliverablesSection } from '../DeliverablesSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
 import { LessonsLearnedSection } from '../LessonsLearnedSection';
-import { MarkdownText } from '@/components/shared/MarkdownText';
 import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { Trash2, Archive, Calendar, Clock, RotateCcw } from 'lucide-react';
@@ -46,6 +47,8 @@ export function TaskDetailsTab({
   const archiveTask = useArchiveTask();
   const { settings: featureSettings } = useFeatureSettings();
   const taskSettings = featureSettings.tasks;
+  const markdownSettings = featureSettings.markdown;
+  const markdownEnabled = markdownSettings?.enableMarkdown ?? true;
 
   const handleDelete = async () => {
     await deleteTask.mutateAsync(task.id);
@@ -75,16 +78,27 @@ export function TaskDetailsTab({
         {readOnly ? (
           <div className="text-sm text-foreground/80 bg-muted/30 rounded-md p-3 min-h-[60px]">
             {task.description ? (
-              <MarkdownText>{task.description}</MarkdownText>
+              markdownEnabled ? (
+                <MarkdownRenderer content={task.description} />
+              ) : (
+                <p className="whitespace-pre-wrap">{task.description}</p>
+              )
             ) : (
               <span className="text-muted-foreground italic">No description</span>
             )}
           </div>
+        ) : markdownEnabled ? (
+          <MarkdownEditor
+            value={task.description}
+            onChange={(value) => onUpdate('description', value)}
+            placeholder="Add a description... (supports Markdown)"
+            minHeight={120}
+          />
         ) : (
           <Textarea
             value={task.description}
             onChange={(e) => onUpdate('description', e.target.value)}
-            placeholder="Add a description... (supports Markdown)"
+            placeholder="Add a description..."
             rows={4}
             className="resize-none"
           />

@@ -3,6 +3,8 @@ import { MessageSquare, Pencil, Trash2, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
@@ -14,8 +16,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MarkdownText } from '@/components/shared/MarkdownText';
 import { useAddComment, useEditComment, useDeleteComment } from '@/hooks/useTasks';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import type { Task, Comment } from '@veritas-kanban/shared';
 
 interface CommentsSectionProps {
@@ -47,7 +49,15 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) {
+function CommentItem({
+  comment,
+  taskId,
+  markdownEnabled,
+}: {
+  comment: Comment;
+  taskId: string;
+  markdownEnabled: boolean;
+}) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -114,19 +124,34 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
           </div>
           {isEditing ? (
             <div className="space-y-2">
-              <Textarea
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                className="text-sm min-h-[60px] resize-none"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    handleSaveEdit();
-                  }
-                  if (e.key === 'Escape') handleCancelEdit();
-                }}
-              />
+              {markdownEnabled ? (
+                <MarkdownEditor
+                  value={editText}
+                  onChange={setEditText}
+                  minHeight={80}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleSaveEdit();
+                    }
+                    if (e.key === 'Escape') handleCancelEdit();
+                  }}
+                />
+              ) : (
+                <Textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="text-sm min-h-[60px] resize-none"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleSaveEdit();
+                    }
+                    if (e.key === 'Escape') handleCancelEdit();
+                  }}
+                />
+              )}
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
@@ -145,7 +170,11 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
             </div>
           ) : (
             <div className="text-sm text-foreground break-words">
-              <MarkdownText>{comment.text}</MarkdownText>
+              {markdownEnabled ? (
+                <MarkdownRenderer content={comment.text} className="break-words" />
+              ) : (
+                <p className="whitespace-pre-wrap">{comment.text}</p>
+              )}
             </div>
           )}
         </div>
@@ -176,6 +205,8 @@ function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) 
 }
 
 export function CommentsSection({ task }: CommentsSectionProps) {
+  const { settings: featureSettings } = useFeatureSettings();
+  const markdownEnabled = featureSettings.markdown?.enableMarkdown ?? true;
   const [author, setAuthor] = useState('Veritas');
   const [text, setText] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -225,7 +256,12 @@ export function CommentsSection({ task }: CommentsSectionProps) {
       ) : (
         <div className="space-y-3">
           {comments.map((comment) => (
-            <CommentItem key={comment.id} comment={comment} taskId={task.id} />
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              taskId={task.id}
+              markdownEnabled={markdownEnabled}
+            />
           ))}
         </div>
       )}
@@ -242,14 +278,26 @@ export function CommentsSection({ task }: CommentsSectionProps) {
           />
         </div>
         <div className="flex gap-2">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Add a comment... (supports Markdown, Cmd/Ctrl+Enter to submit)"
-            className="text-sm min-h-[80px] resize-none"
-            disabled={isAdding}
-          />
+          {markdownEnabled ? (
+            <MarkdownEditor
+              value={text}
+              onChange={setText}
+              onKeyDown={handleKeyDown}
+              placeholder="Add a comment... (supports Markdown, Cmd/Ctrl+Enter to submit)"
+              minHeight={100}
+              maxHeight={240}
+              disabled={isAdding}
+            />
+          ) : (
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Add a comment... (Cmd/Ctrl+Enter to submit)"
+              className="text-sm min-h-[80px] resize-none"
+              disabled={isAdding}
+            />
+          )}
         </div>
         <div className="flex justify-end">
           <Button

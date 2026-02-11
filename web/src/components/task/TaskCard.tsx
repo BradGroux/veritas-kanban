@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
 import {
   Check,
@@ -175,6 +176,8 @@ export const TaskCard = memo(function TaskCard({
   const isChecked = isBulkSelected(task.id);
   const { settings: featureSettings } = useFeatureSettings();
   const boardSettings = featureSettings.board;
+  const markdownSettings = featureSettings.markdown;
+  const markdownEnabled = markdownSettings?.enableMarkdown ?? true;
   const isCompact = boardSettings.cardDensity === 'compact';
 
   const style = {
@@ -301,9 +304,18 @@ export const TaskCard = memo(function TaskCard({
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium leading-tight truncate">{task.title}</h3>
                 {!isCompact && task.description && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {sanitizeText(task.description)}
-                  </p>
+                  <div className="mt-1">
+                    {markdownEnabled ? (
+                      <MarkdownRenderer
+                        content={task.description}
+                        className="prose-sm max-w-none text-xs text-muted-foreground line-clamp-2 [&_p]:my-0 [&_ul]:my-0 [&_ol]:my-0 [&_li]:my-0"
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {sanitizeText(task.description)}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

@@ -17,8 +17,16 @@ export function TasksTab() {
     debouncedUpdate({ tasks: { [key]: value } });
   };
 
+  const updateMarkdown = (key: string, value: any) => {
+    debouncedUpdate({ markdown: { [key]: value } });
+  };
+
   const resetTasks = () => {
     debouncedUpdate({ tasks: DEFAULT_FEATURE_SETTINGS.tasks });
+  };
+
+  const resetMarkdown = () => {
+    debouncedUpdate({ markdown: DEFAULT_FEATURE_SETTINGS.markdown });
   };
 
   return (
@@ -127,6 +135,25 @@ export function TasksTab() {
             </SelectContent>
           </Select>
         </SettingRow>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <SectionHeader title="Markdown" onReset={resetMarkdown} />
+        <SaveIndicator isPending={isPending} />
+      </div>
+      <div className="divide-y">
+        <ToggleRow
+          label="Enable Markdown"
+          description="Use Markdown formatting in task descriptions and comments"
+          checked={settings.markdown.enableMarkdown}
+          onCheckedChange={(v) => updateMarkdown('enableMarkdown', v)}
+        />
+        <ToggleRow
+          label="Code Highlighting"
+          description="Highlight fenced code blocks in Markdown previews"
+          checked={settings.markdown.enableCodeHighlighting}
+          onCheckedChange={(v) => updateMarkdown('enableCodeHighlighting', v)}
+        />
       </div>
     </div>
   );

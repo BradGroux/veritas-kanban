@@ -78,6 +78,14 @@ const TaskBehaviorSettingsSchema = z
   .strict()
   .optional();
 
+const MarkdownSettingsSchema = z
+  .object({
+    enableMarkdown: z.boolean().optional(),
+    enableCodeHighlighting: z.boolean().optional(),
+  })
+  .strict()
+  .optional();
+
 const AgentBehaviorSettingsSchema = z
   .object({
     timeoutMinutes: z.number().int().min(5).max(480).optional(),
@@ -200,6 +208,7 @@ export const FeatureSettingsPatchSchema = z
     general: GeneralSettingsSchema,
     board: BoardSettingsSchema,
     tasks: TaskBehaviorSettingsSchema,
+    markdown: MarkdownSettingsSchema,
     agents: AgentBehaviorSettingsSchema,
     telemetry: TelemetrySettingsSchema,
     notifications: NotificationSettingsSchema,
