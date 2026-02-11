@@ -258,6 +258,8 @@ export interface SharedResourcesSettings {
   enabled: boolean;
   maxResources: number;
   allowedTypes: Array<'prompt' | 'guideline' | 'skill' | 'config' | 'template'>;
+}
+
 /** Documentation freshness tracking settings */
 export interface DocFreshnessSettings {
   enabled: boolean;
@@ -408,6 +410,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     enabled: false,
     maxResources: 250,
     allowedTypes: ['prompt', 'guideline', 'skill', 'config', 'template'],
+  },
   docFreshness: {
     enabled: false,
     defaultMaxAgeDays: 30,

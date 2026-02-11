@@ -142,7 +142,7 @@ v1Router.use('/agent/status', agentStatusRoutes);
 v1Router.use('/cost-prediction', costPredictionRoutes);
 v1Router.use('/deliverables', scheduledDeliverablesRoutes);
 v1Router.use('/reports', reportRoutes);
-v1Router.use('/docs', docFreshnessRoutes);
+v1Router.use('/doc-freshness', docFreshnessRoutes);
 v1Router.use('/docs', docsRoutes);
 v1Router.use('/errors', errorLearningRoutes);
 v1Router.use('/hooks', lifecycleHooksRoutes);

@@ -75,6 +75,7 @@ const LazyEnforcementTab = lazy(() =>
 );
 const LazySharedResourcesTab = lazy(() =>
   import('./tabs/SharedResourcesTab').then((m) => ({ default: m.SharedResourcesTab }))
+);
 const LazyDocFreshnessTab = lazy(() =>
   import('./tabs/DocFreshnessTab').then((m) => ({ default: m.DocFreshnessTab }))
 );
@@ -210,6 +211,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         'telemetry',
         'notifications',
         'markdown',
+        'docFreshness',
         'archive',
         'sharedResources',
       ];
@@ -336,6 +338,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'shared-resources' && (
           <SettingsErrorBoundary tabName="Shared Resources">
             <LazySharedResourcesTab />
+          </SettingsErrorBoundary>
+        )}
         {activeTab === 'doc-freshness' && (
           <SettingsErrorBoundary tabName="Doc Freshness">
             <LazyDocFreshnessTab />

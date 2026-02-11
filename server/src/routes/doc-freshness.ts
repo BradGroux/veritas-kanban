@@ -1,15 +1,15 @@
 /**
  * Documentation Freshness API Routes
  *
- * GET    /api/docs                 — List tracked documents
- * GET    /api/docs/:id             — Get one tracked document
- * POST   /api/docs                 — Track a new document
- * PATCH  /api/docs/:id             — Update metadata
- * DELETE /api/docs/:id             — Stop tracking
- * POST   /api/docs/:id/review      — Mark as freshly reviewed
- * GET    /api/docs/alerts          — List freshness alerts
- * POST   /api/docs/alerts/:id/acknowledge — Acknowledge an alert
- * GET    /api/docs/summary         — Freshness health summary
+ * GET    /api/doc-freshness                 — List tracked documents
+ * GET    /api/doc-freshness/:id             — Get one tracked document
+ * POST   /api/doc-freshness                 — Track a new document
+ * PATCH  /api/doc-freshness/:id             — Update metadata
+ * DELETE /api/doc-freshness/:id             — Stop tracking
+ * POST   /api/doc-freshness/:id/review      — Mark as freshly reviewed
+ * GET    /api/doc-freshness/alerts          — List freshness alerts
+ * POST   /api/doc-freshness/alerts/:id/acknowledge — Acknowledge an alert
+ * GET    /api/doc-freshness/summary         — Freshness health summary
  */
 
 import { Router, type Router as RouterType } from 'express';
@@ -26,10 +26,8 @@ import { getDocFreshnessService } from '../services/doc-freshness-service.js';
 import type { TrackedDocument } from '@veritas-kanban/shared';
 
 const router: RouterType = Router();
-const RESERVED_IDS = new Set(['stats', 'directories', 'search', 'file', 'alerts', 'summary']);
-
 /**
- * GET /api/docs
+ * GET /api/doc-freshness
  */
 router.get(
   '/',
@@ -49,7 +47,7 @@ router.get(
 );
 
 /**
- * GET /api/docs/summary
+ * GET /api/doc-freshness/summary
  */
 router.get(
   '/summary',
@@ -62,7 +60,7 @@ router.get(
 );
 
 /**
- * GET /api/docs/alerts
+ * GET /api/doc-freshness/alerts
  */
 router.get(
   '/alerts',
@@ -82,7 +80,7 @@ router.get(
 );
 
 /**
- * POST /api/docs
+ * POST /api/doc-freshness
  */
 router.post(
   '/',
@@ -95,14 +93,12 @@ router.post(
 );
 
 /**
- * GET /api/docs/:id
+ * GET /api/doc-freshness/:id
  */
 router.get(
   '/:id',
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     const id = String(req.params.id);
-    if (RESERVED_IDS.has(id)) return next();
-
     const service = getDocFreshnessService();
     const document = await service.getDocument(id);
     if (!document) throw new NotFoundError('Tracked document not found');
@@ -111,7 +107,7 @@ router.get(
 );
 
 /**
- * PATCH /api/docs/:id
+ * PATCH /api/doc-freshness/:id
  */
 router.patch(
   '/:id',
@@ -126,7 +122,7 @@ router.patch(
 );
 
 /**
- * DELETE /api/docs/:id
+ * DELETE /api/doc-freshness/:id
  */
 router.delete(
   '/:id',
@@ -140,7 +136,7 @@ router.delete(
 );
 
 /**
- * POST /api/docs/:id/review
+ * POST /api/doc-freshness/:id/review
  */
 router.post(
   '/:id/review',
@@ -155,7 +151,7 @@ router.post(
 );
 
 /**
- * POST /api/docs/alerts/:id/acknowledge
+ * POST /api/doc-freshness/alerts/:id/acknowledge
  */
 router.post(
   '/alerts/:id/acknowledge',
