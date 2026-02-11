@@ -686,16 +686,19 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 🗺️ Roadmap
 
-See the [open milestones](https://github.com/BradGroux/veritas-kanban/milestones) for what's next. Community contributions welcome!
-
-### Planned for v2.2
-
-- [Prompts Registry](https://github.com/BradGroux/veritas-kanban/issues/101) — Centralized prompt templates with versioning and agent-specific customization
-- [Docker Path Fix Enhancement](https://github.com/BradGroux/veritas-kanban/issues/102) — Additional Docker deployment improvements building on v2.1.2 fix
+See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for what's next. Community contributions welcome!
 
 ### Backlog
 
 - [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1) — Full keyboard navigation, screen reader support, color contrast
+- [Example video](https://github.com/BradGroux/veritas-kanban/issues/68) — Hosted walkthrough video on YouTube or Vimeo
+
+### Shipped in v3.2.0
+
+- ~~[Markdown Editor](https://github.com/BradGroux/veritas-kanban/pull/118)~~ — Rich editing toolbar, live preview, keyboard shortcuts (Ctrl+B/I/K) for task descriptions and comments
+- ~~[Shared Resources Registry](https://github.com/BradGroux/veritas-kanban/pull/119)~~ — Reusable resources (prompts, guidelines, templates) mountable across projects
+- ~~[Documentation Freshness](https://github.com/BradGroux/veritas-kanban/pull/120)~~ — Staleness tracking with freshness scores, alerts, and auto-review task creation
+- ~~[Docker Auth Persistence](https://github.com/BradGroux/veritas-kanban/issues/116)~~ — Fixed auth state wiped on container rebuild; added automatic migration
 
 ### Shipped in v2.1.2
 
@@ -704,38 +707,15 @@ See the [open milestones](https://github.com/BradGroux/veritas-kanban/milestones
 ### Shipped in v2.1.1
 
 - ~~[Reverse Proxy Support](https://github.com/BradGroux/veritas-kanban/issues/100)~~ — Added `TRUST_PROXY` environment variable for nginx, Caddy, Traefik, and other reverse proxies
+- ~~[Prompts Registry](https://github.com/BradGroux/veritas-kanban/issues/101)~~ — Centralized prompt templates with versioning and agent-specific customization
 
 ### Shipped in v2.0.0
 
-- ~~[Dashboard widget toggles](https://github.com/BradGroux/veritas-kanban/issues/92)~~ — Show/hide individual dashboard widgets with localStorage persistence
-
-- ~~[Multi-agent dashboard sidebar](https://github.com/BradGroux/veritas-kanban/issues/28)~~ — Live agent status, expandable cards, registry integration
-- ~~[Multi-agent task assignment](https://github.com/BradGroux/veritas-kanban/issues/29)~~ — Multiple agents per task, color-coded chips
-- ~~[@Mention notifications](https://github.com/BradGroux/veritas-kanban/issues/30)~~ — @agent-name parsing, thread subscriptions, delivery tracking
-- ~~[Agent permission levels](https://github.com/BradGroux/veritas-kanban/issues/31)~~ — Intern / Specialist / Lead with approval workflows
-- ~~[Agent self-reporting](https://github.com/BradGroux/veritas-kanban/issues/52)~~ — Agent registry, heartbeat tracking, REST API
-- ~~[CLI usage reporting](https://github.com/BradGroux/veritas-kanban/issues/50)~~ — `vk usage` command
-- ~~[Markdown rendering](https://github.com/BradGroux/veritas-kanban/issues/63)~~ — Rich markdown in task descriptions and comments
-- ~~[Cost prediction](https://github.com/BradGroux/veritas-kanban/issues/54)~~ — Multi-factor model (tokens, compute, overhead)
-- ~~[Error learning workflow](https://github.com/BradGroux/veritas-kanban/issues/91)~~ — Structured failure analysis, similarity search
-- ~~[Task lifecycle hooks](https://github.com/BradGroux/veritas-kanban/issues/72)~~ — 7 built-in hooks, 8 events, custom hooks API
-- ~~[Documentation freshness](https://github.com/BradGroux/veritas-kanban/issues/74)~~ — Steward workflow, freshness headers, automation
-- ~~[Where Time Went](https://github.com/BradGroux/veritas-kanban/issues/57)~~ — Time breakdown by project
-- ~~[Activity Clock](https://github.com/BradGroux/veritas-kanban/issues/58)~~ — 24-hour donut chart
-- ~~[Hourly Activity Chart](https://github.com/BradGroux/veritas-kanban/issues/59)~~ — Bar chart with event counts
-- ~~[Wall Time Toggle](https://github.com/BradGroux/veritas-kanban/issues/60)~~ — Total agent time + avg run duration
-- ~~[Session Metrics](https://github.com/BradGroux/veritas-kanban/issues/61)~~ — Session count, success rate, completion tracking
-- ~~[Production binding](https://github.com/BradGroux/veritas-kanban/issues/55)~~ — VK_HOST + VK_PORT env vars
+- ~~[Dashboard widget toggles](https://github.com/BradGroux/veritas-kanban/issues/92)~~ · ~~[Multi-agent dashboard](https://github.com/BradGroux/veritas-kanban/issues/28)~~ · ~~[Multi-agent task assignment](https://github.com/BradGroux/veritas-kanban/issues/29)~~ · ~~[@Mention notifications](https://github.com/BradGroux/veritas-kanban/issues/30)~~ · ~~[Agent permission levels](https://github.com/BradGroux/veritas-kanban/issues/31)~~ · ~~[Agent self-reporting](https://github.com/BradGroux/veritas-kanban/issues/52)~~ · ~~[CLI usage reporting](https://github.com/BradGroux/veritas-kanban/issues/50)~~ · ~~[Markdown rendering](https://github.com/BradGroux/veritas-kanban/issues/63)~~ · ~~[Cost prediction](https://github.com/BradGroux/veritas-kanban/issues/54)~~ · ~~[Error learning](https://github.com/BradGroux/veritas-kanban/issues/91)~~ · ~~[Task lifecycle hooks](https://github.com/BradGroux/veritas-kanban/issues/72)~~ · ~~[Documentation freshness](https://github.com/BradGroux/veritas-kanban/issues/74)~~ · ~~[Where Time Went](https://github.com/BradGroux/veritas-kanban/issues/57)~~ · ~~[Activity Clock](https://github.com/BradGroux/veritas-kanban/issues/58)~~ · ~~[Hourly Activity](https://github.com/BradGroux/veritas-kanban/issues/59)~~ · ~~[Wall Time Toggle](https://github.com/BradGroux/veritas-kanban/issues/60)~~ · ~~[Session Metrics](https://github.com/BradGroux/veritas-kanban/issues/61)~~ · ~~[Production binding](https://github.com/BradGroux/veritas-kanban/issues/55)~~
 
 ### Shipped in v1.6.0
 
-- ~~[Model Usage schema & API](https://github.com/BradGroux/veritas-kanban/issues/47)~~
-- ~~[Global usage aggregation](https://github.com/BradGroux/veritas-kanban/issues/48)~~
-- ~~[Dashboard Model Usage panel](https://github.com/BradGroux/veritas-kanban/issues/49)~~
-- ~~[Standup summary with cost](https://github.com/BradGroux/veritas-kanban/issues/51)~~
-- ~~[Per-model cost tables](https://github.com/BradGroux/veritas-kanban/issues/53)~~
-- ~~[Dashboard filter bar](https://github.com/BradGroux/veritas-kanban/issues/56)~~
-- ~~[Dev reliability & health endpoints](https://github.com/BradGroux/veritas-kanban/issues/82)~~
+- ~~[Model Usage schema & API](https://github.com/BradGroux/veritas-kanban/issues/47)~~ · ~~[Global usage aggregation](https://github.com/BradGroux/veritas-kanban/issues/48)~~ · ~~[Dashboard Model Usage](https://github.com/BradGroux/veritas-kanban/issues/49)~~ · ~~[Standup with cost](https://github.com/BradGroux/veritas-kanban/issues/51)~~ · ~~[Per-model cost tables](https://github.com/BradGroux/veritas-kanban/issues/53)~~ · ~~[Dashboard filter bar](https://github.com/BradGroux/veritas-kanban/issues/56)~~ · ~~[Health endpoints](https://github.com/BradGroux/veritas-kanban/issues/82)~~
 
 ### Shipped in v1.1.0–v1.3.0
 
