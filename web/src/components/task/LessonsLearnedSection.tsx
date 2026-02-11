@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,23 @@ export function LessonsLearnedSection({
   readOnly = false,
 }: LessonsLearnedSectionProps) {
   const [newTag, setNewTag] = useState('');
+  const [localNotes, setLocalNotes] = useState(task.lessonsLearned || '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local state when task changes externally
+  useEffect(() => {
+    setLocalNotes(task.lessonsLearned || '');
+  }, [task.lessonsLearned]);
+
+  const debouncedUpdate = useCallback(
+    (value: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        onUpdate('lessonsLearned', value);
+      }, 500);
+    },
+    [onUpdate]
+  );
 
   // Only show for completed tasks
   if (task.status !== 'done') {
@@ -54,7 +71,7 @@ export function LessonsLearnedSection({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20 p-4">
+    <div className="space-y-4 rounded-lg border border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 p-4">
       <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
         <Lightbulb className="h-5 w-5" />
         <h3 className="font-semibold">Lessons Learned</h3>
@@ -76,8 +93,11 @@ export function LessonsLearnedSection({
         ) : (
           <Textarea
             id="lessonsLearned"
-            value={task.lessonsLearned || ''}
-            onChange={(e) => onUpdate('lessonsLearned', e.target.value)}
+            value={localNotes}
+            onChange={(e) => {
+              setLocalNotes(e.target.value);
+              debouncedUpdate(e.target.value);
+            }}
             placeholder="What did you learn from this task? What would you do differently next time?"
             className="min-h-[120px] bg-background"
           />
