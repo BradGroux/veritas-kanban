@@ -198,6 +198,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         'agents',
         'telemetry',
         'notifications',
+        'markdown',
         'archive',
       ];
       const importedKeys = Object.keys(imported);

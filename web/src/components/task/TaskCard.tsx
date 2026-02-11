@@ -180,6 +180,16 @@ export const TaskCard = memo(function TaskCard({
   const markdownEnabled = markdownSettings?.enableMarkdown ?? true;
   const isCompact = boardSettings.cardDensity === 'compact';
 
+  const descriptionPreview = useMemo(() => {
+    if (!task.description) return '';
+    return task.description.slice(0, 400);
+  }, [task.description]);
+
+  const plainDescriptionPreview = useMemo(
+    () => (descriptionPreview ? sanitizeText(descriptionPreview) : ''),
+    [descriptionPreview]
+  );
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -307,12 +317,12 @@ export const TaskCard = memo(function TaskCard({
                   <div className="mt-1">
                     {markdownEnabled ? (
                       <MarkdownRenderer
-                        content={task.description}
+                        content={descriptionPreview}
                         className="prose-sm max-w-none text-xs text-muted-foreground line-clamp-2 [&_p]:my-0 [&_ul]:my-0 [&_ol]:my-0 [&_li]:my-0"
                       />
                     ) : (
                       <p className="text-xs text-muted-foreground line-clamp-2">
-                        {sanitizeText(task.description)}
+                        {plainDescriptionPreview}
                       </p>
                     )}
                   </div>
@@ -569,7 +579,7 @@ export const TaskCard = memo(function TaskCard({
         <TooltipContent side="top" className="max-w-xs">
           <p className="font-medium">{task.title}</p>
           {task.description && (
-            <p className="text-muted-foreground text-sm mt-1">{sanitizeText(task.description)}</p>
+            <p className="text-muted-foreground text-sm mt-1">{plainDescriptionPreview}</p>
           )}
         </TooltipContent>
       </Tooltip>
