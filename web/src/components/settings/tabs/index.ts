@@ -7,3 +7,4 @@ export { NotificationsTab } from './NotificationsTab';
 export { ManageTab } from './ManageTab';
 export { EnforcementTab } from './EnforcementTab';
 export { SharedResourcesTab } from './SharedResourcesTab';
+export { DocFreshnessTab } from './DocFreshnessTab';

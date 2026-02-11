@@ -186,6 +186,17 @@ const HooksSettingsSchema = z
   .strict()
   .optional();
 
+const DocFreshnessSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    defaultMaxAgeDays: z.number().int().min(1).max(365).optional(),
+    alertOnStale: z.boolean().optional(),
+    autoCreateReviewTasks: z.boolean().optional(),
+    staleScanIntervalHours: z.number().int().min(1).max(168).optional(),
+  })
+  .strict()
+  .optional();
+
 const SquadWebhookSettingsSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -228,6 +239,7 @@ export const FeatureSettingsPatchSchema = z
     enforcement: EnforcementSettingsSchema,
     hooks: HooksSettingsSchema,
     sharedResources: SharedResourcesSettingsSchema,
+    docFreshness: DocFreshnessSettingsSchema,
     squadWebhook: SquadWebhookSettingsSchema,
   })
   .strict()

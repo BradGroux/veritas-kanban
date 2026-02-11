@@ -258,6 +258,13 @@ export interface SharedResourcesSettings {
   enabled: boolean;
   maxResources: number;
   allowedTypes: Array<'prompt' | 'guideline' | 'skill' | 'config' | 'template'>;
+/** Documentation freshness tracking settings */
+export interface DocFreshnessSettings {
+  enabled: boolean;
+  defaultMaxAgeDays: number;
+  alertOnStale: boolean;
+  autoCreateReviewTasks: boolean;
+  staleScanIntervalHours: number;
 }
 
 /** Delegation settings — allow an agent to approve tasks temporarily */
@@ -306,6 +313,7 @@ export interface FeatureSettings {
   enforcement: EnforcementSettings;
   hooks: HooksSettings;
   sharedResources: SharedResourcesSettings;
+  docFreshness: DocFreshnessSettings;
   squadWebhook: SquadWebhookSettings;
 }
 
@@ -400,6 +408,12 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     enabled: false,
     maxResources: 250,
     allowedTypes: ['prompt', 'guideline', 'skill', 'config', 'template'],
+  docFreshness: {
+    enabled: false,
+    defaultMaxAgeDays: 30,
+    alertOnStale: true,
+    autoCreateReviewTasks: false,
+    staleScanIntervalHours: 24,
   },
   squadWebhook: {
     enabled: false, // Disabled by default

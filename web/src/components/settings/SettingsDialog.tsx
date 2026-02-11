@@ -38,6 +38,7 @@ import {
   Lock,
   CheckCircle2,
   Boxes,
+  BookOpen,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
@@ -74,6 +75,8 @@ const LazyEnforcementTab = lazy(() =>
 );
 const LazySharedResourcesTab = lazy(() =>
   import('./tabs/SharedResourcesTab').then((m) => ({ default: m.SharedResourcesTab }))
+const LazyDocFreshnessTab = lazy(() =>
+  import('./tabs/DocFreshnessTab').then((m) => ({ default: m.DocFreshnessTab }))
 );
 
 // ============ Tab Skeleton ============
@@ -105,6 +108,7 @@ type TabId =
   | 'tool-policies'
   | 'enforcement'
   | 'shared-resources'
+  | 'doc-freshness'
   | 'manage';
 
 interface TabDef {
@@ -125,6 +129,7 @@ const TABS: TabDef[] = [
   { id: 'tool-policies', label: 'Tool Policies', icon: Lock },
   { id: 'enforcement', label: 'Enforcement', icon: CheckCircle2 },
   { id: 'shared-resources', label: 'Shared Resources', icon: Boxes },
+  { id: 'doc-freshness', label: 'Doc Freshness', icon: BookOpen },
   { id: 'manage', label: 'Manage', icon: Archive },
 ];
 
@@ -331,6 +336,9 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'shared-resources' && (
           <SettingsErrorBoundary tabName="Shared Resources">
             <LazySharedResourcesTab />
+        {activeTab === 'doc-freshness' && (
+          <SettingsErrorBoundary tabName="Doc Freshness">
+            <LazyDocFreshnessTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'manage' && (
