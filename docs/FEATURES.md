@@ -78,6 +78,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
   ![Apply task template](../assets/scr-apply_task_template.png)
 
 - **Blueprint preview** — Preview template output before applying
+- **Markdown editor (v3.2.0)** — Rich markdown editing for task descriptions and comments with formatting toolbar, live preview, keyboard shortcuts (Ctrl+B/I/K), syntax highlighting, and dark mode support. Configurable via Settings → Tasks.
 - **Markdown preview** — Live preview panel for task descriptions
 - **Activity log** — Full history of task events (created, updated, status changed, agent started/completed, archived, etc.)
 
@@ -271,13 +272,27 @@ Structured failure analysis to prevent recurring issues.
 - **Stats API** — Aggregate error patterns and frequency analysis
 - **Inspired by** @nateherk's Klouse dashboard concept ("spin up agents to analyze what broke")
 
-### Documentation Freshness (#74)
+### Shared Resources Registry (v3.2.0)
 
-Automated staleness detection for project documentation.
+Reusable resources mountable across projects with full CRUD API and Settings tab management.
 
+- **Resource types** — Prompts, guidelines, skills, configs, templates
+- **Resource CRUD** — Define reusable resources via Settings → Shared Resources
+- **Mount/unmount** — Mount resources across projects with full API support
+- **API endpoints** — `/api/shared-resources/*` for create, read, update, delete, mount, and unmount operations
+- **Version control** — Resources stored as files for git version control
+- **Project scoping** — Resources can be global or project-specific
+- **Consistency** — Single source of truth for agent behavior across all projects
+
+### Documentation Freshness (#74, v3.2.0)
+
+Automated staleness detection for project documentation with real-time tracking and alerting.
+
+- **Freshness tracking** — Track document staleness with freshness scores, alerts, and optional auto-review task creation
 - **Freshness headers** — YAML frontmatter with `fresh-days`, `owner`, `last-verified` fields
 - **Steward workflow** — Assigned doc owners responsible for periodic review
-- **Staleness API** — Query which docs need review based on freshness thresholds
+- **Staleness API** — Query which docs need review based on freshness thresholds at `/api/doc-freshness`
+- **Configurable thresholds** — Set staleness thresholds via Settings → Doc Freshness
 - **3-phase automation** — Manual → scheduled checks → CI integration
 - **Inspired by** @mvoutov's BoardKit Orchestrator ("stale docs = hallucinating AI")
 

@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Persist runtime auth/config state to the Docker volume by routing `.veritas-kanban` paths through `getRuntimeDir()` and migrating legacy files on startup (`security.json`, agent registry, lifecycle hooks, error analyses, agent permissions).
 - Added Docker migration guidance for recovering auth state after rebuilding containers.
+- Dark mode Lessons Learned display bug fixed (text was unreadable in dark mode)
+- Plain text card previews for task descriptions (markdown rendering disabled on board cards for performance)
+- JWT rotation test flakiness fixed (timing issue resolved)
 
 ## [3.1.0] - 2026-02-10
 
