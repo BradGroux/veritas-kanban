@@ -6,3 +6,4 @@ export { DataTab } from './DataTab';
 export { NotificationsTab } from './NotificationsTab';
 export { ManageTab } from './ManageTab';
 export { EnforcementTab } from './EnforcementTab';
+export { SharedResourcesTab } from './SharedResourcesTab';

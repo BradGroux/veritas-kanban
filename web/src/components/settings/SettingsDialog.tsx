@@ -37,6 +37,7 @@ import {
   Plane,
   Lock,
   CheckCircle2,
+  Boxes,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
@@ -71,6 +72,9 @@ const LazyToolPoliciesTab = lazy(() =>
 const LazyEnforcementTab = lazy(() =>
   import('./tabs/EnforcementTab').then((m) => ({ default: m.EnforcementTab }))
 );
+const LazySharedResourcesTab = lazy(() =>
+  import('./tabs/SharedResourcesTab').then((m) => ({ default: m.SharedResourcesTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -100,6 +104,7 @@ type TabId =
   | 'delegation'
   | 'tool-policies'
   | 'enforcement'
+  | 'shared-resources'
   | 'manage';
 
 interface TabDef {
@@ -119,6 +124,7 @@ const TABS: TabDef[] = [
   { id: 'delegation', label: 'Delegation', icon: Plane },
   { id: 'tool-policies', label: 'Tool Policies', icon: Lock },
   { id: 'enforcement', label: 'Enforcement', icon: CheckCircle2 },
+  { id: 'shared-resources', label: 'Shared Resources', icon: Boxes },
   { id: 'manage', label: 'Manage', icon: Archive },
 ];
 
@@ -199,6 +205,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         'telemetry',
         'notifications',
         'archive',
+        'sharedResources',
       ];
       const importedKeys = Object.keys(imported);
       const unknownKeys = importedKeys.filter((k) => !validSections.includes(k));
@@ -318,6 +325,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'enforcement' && (
           <SettingsErrorBoundary tabName="Enforcement">
             <LazyEnforcementTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'shared-resources' && (
+          <SettingsErrorBoundary tabName="Shared Resources">
+            <LazySharedResourcesTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'manage' && (

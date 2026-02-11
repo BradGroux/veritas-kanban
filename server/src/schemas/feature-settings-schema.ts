@@ -195,6 +195,17 @@ const SquadWebhookSettingsSchema = z
   .strict()
   .optional();
 
+const SharedResourcesSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxResources: z.number().int().min(1).max(1000).optional(),
+    allowedTypes: z
+      .array(z.enum(['prompt', 'guideline', 'skill', 'config', 'template']))
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 export const FeatureSettingsPatchSchema = z
   .object({
     general: GeneralSettingsSchema,
@@ -207,6 +218,7 @@ export const FeatureSettingsPatchSchema = z
     budget: BudgetSettingsSchema,
     enforcement: EnforcementSettingsSchema,
     hooks: HooksSettingsSchema,
+    sharedResources: SharedResourcesSettingsSchema,
     squadWebhook: SquadWebhookSettingsSchema,
   })
   .strict()
