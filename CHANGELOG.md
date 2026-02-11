@@ -5,6 +5,13 @@ All notable changes to Veritas Kanban are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Persist runtime auth/config state to the Docker volume by routing `.veritas-kanban` paths through `getRuntimeDir()` and migrating legacy files on startup (`security.json`, agent registry, lifecycle hooks, error analyses, agent permissions).
+- Added Docker migration guidance for recovering auth state after rebuilding containers.
+
 ## [3.1.0] - 2026-02-10
 
 ### Added

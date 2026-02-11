@@ -11,6 +11,7 @@
 import path from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from '../storage/fs-helpers.js';
 import { createLogger } from '../lib/logger.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('agent-registry');
 
@@ -89,11 +90,17 @@ class AgentRegistryService {
   private agents: Map<string, RegisteredAgent> = new Map();
   private dataDir: string;
   private filePath: string;
+  private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    this.dataDir = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+    this.dataDir = getRuntimeDir();
     this.filePath = path.join(this.dataDir, 'agent-registry.json');
+    this.legacyFilePath = path.join(
+      process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban'),
+      'agent-registry.json'
+    );
+    this.migrateLegacyRegistry();
     this.load();
     this.startStaleCheck();
   }
@@ -259,6 +266,28 @@ class AgentRegistryService {
 
   private startStaleCheck(): void {
     this.staleCheckInterval = setInterval(() => this.checkStaleAgents(), STALE_CHECK_INTERVAL_MS);
+  }
+
+  private migrateLegacyRegistry(): void {
+    if (this.legacyFilePath === this.filePath) return;
+
+    if (existsSync(this.legacyFilePath) && !existsSync(this.filePath)) {
+      try {
+        const dir = path.dirname(this.filePath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+
+        const data = readFileSync(this.legacyFilePath, 'utf-8');
+        writeFileSync(this.filePath, data, 'utf-8');
+        log.info(
+          { from: this.legacyFilePath, to: this.filePath },
+          'Migrated agent registry data to the runtime directory'
+        );
+      } catch (err) {
+        log.warn({ err }, 'Failed to migrate legacy agent registry data');
+      }
+    }
   }
 
   /**

@@ -430,6 +430,24 @@ wscat -c "ws://localhost:3001/ws?api_key=<api-key>"
 
 In Docker, the `DATA_DIR` environment variable maps to `/app/data` by default inside the container.
 
+**Auth state persistence fix (v3.1.1):** Runtime config/state files (including `security.json`) now always live under `${DATA_DIR}/.veritas-kanban`. On startup, Veritas Kanban will automatically migrate any legacy runtime files it finds in container-only paths (for example, `/app/.veritas-kanban` or `/app/server/.veritas-kanban`) into the Docker volume.
+
+If you upgraded from an older image and already lost auth state, you can recover by copying `security.json` from a still-running/old container (if available) into the volume:
+
+```bash
+# Find the old container ID, then copy the file into your host
+docker cp <old-container>:/app/server/.veritas-kanban/security.json ./security.json
+
+# Or if it lived at /app/.veritas-kanban
+docker cp <old-container>:/app/.veritas-kanban/security.json ./security.json
+
+# Place it into the volume-backed data dir
+mkdir -p ./data/.veritas-kanban
+cp ./security.json ./data/.veritas-kanban/security.json
+```
+
+For older versions (pre-3.1.1), set `DATA_DIR` or `VERITAS_DATA_DIR` to `/app/data` in `docker-compose.yml` to ensure runtime state persists across rebuilds.
+
 ### Backup
 
 #### Bare Metal

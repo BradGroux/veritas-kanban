@@ -13,7 +13,11 @@
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+import { getRuntimeDir } from '../utils/paths.js';
+import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
+const DATA_DIR = getRuntimeDir();
+const LEGACY_DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+let migrationChecked = false;
 
 const log = createLogger('agent-permissions');
 
@@ -102,6 +106,16 @@ class AgentPermissionService {
   }
 
   private async ensureLoaded(): Promise<void> {
+    if (!migrationChecked) {
+      migrationChecked = true;
+      await migrateLegacyFiles(
+        LEGACY_DATA_DIR,
+        DATA_DIR,
+        ['agent-permissions.json', 'approval-requests.json'],
+        'agent permission'
+      );
+    }
+
     if (this.loaded) return;
     try {
       const data = await fs.readFile(this.permissionsPath, 'utf-8');

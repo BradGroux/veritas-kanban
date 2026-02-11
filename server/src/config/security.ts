@@ -8,11 +8,44 @@ import {
 import path from 'path';
 import crypto from 'crypto';
 import { createLogger } from '../lib/logger.js';
+import { getRuntimeDir } from '../utils/paths.js';
 const log = createLogger('security');
 
 // Security config file location
-const DATA_DIR = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '.veritas-kanban');
-const SECURITY_CONFIG_PATH = path.join(DATA_DIR, 'security.json');
+const RUNTIME_DIR = getRuntimeDir();
+const SECURITY_CONFIG_PATH = path.join(RUNTIME_DIR, 'security.json');
+// Legacy path: security.ts originally only checked VERITAS_DATA_DIR (not DATA_DIR),
+// so we preserve that for migration detection. Other services checked DATA_DIR instead.
+const LEGACY_DATA_DIR = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '.veritas-kanban');
+const LEGACY_SECURITY_CONFIG_PATH = path.join(LEGACY_DATA_DIR, 'security.json');
+let migrationChecked = false;
+
+function migrateSecurityConfig(): void {
+  if (migrationChecked) return;
+  migrationChecked = true;
+
+  if (LEGACY_SECURITY_CONFIG_PATH === SECURITY_CONFIG_PATH) return;
+
+  if (existsSync(LEGACY_SECURITY_CONFIG_PATH) && !existsSync(SECURITY_CONFIG_PATH)) {
+    try {
+      if (!existsSync(RUNTIME_DIR)) {
+        mkdirSync(RUNTIME_DIR, { recursive: true });
+      }
+
+      const data = readFileSync(LEGACY_SECURITY_CONFIG_PATH, 'utf-8');
+      writeFileSync(SECURITY_CONFIG_PATH, data, 'utf-8');
+      log.info(
+        {
+          from: LEGACY_SECURITY_CONFIG_PATH,
+          to: SECURITY_CONFIG_PATH,
+        },
+        'Migrated security.json to the runtime data directory'
+      );
+    } catch (err) {
+      log.warn({ err }, 'Failed to migrate security.json from legacy path');
+    }
+  }
+}
 
 /** A versioned JWT secret with optional expiry for rotation grace periods */
 export interface JwtSecretEntry {
@@ -61,6 +94,7 @@ let runtimeJwtSecret: string | null = null;
  * Load security config from disk
  */
 export function getSecurityConfig(): SecurityConfig {
+  migrateSecurityConfig();
   const now = Date.now();
 
   // Use cache in production, refresh in dev
@@ -298,8 +332,8 @@ export function getJwtRotationStatus(): {
 export function saveSecurityConfig(config: SecurityConfig): void {
   try {
     // Ensure data directory exists
-    if (!existsSync(DATA_DIR)) {
-      mkdirSync(DATA_DIR, { recursive: true });
+    if (!existsSync(RUNTIME_DIR)) {
+      mkdirSync(RUNTIME_DIR, { recursive: true });
     }
 
     // Write atomically (write to temp, then rename)
