@@ -59,7 +59,10 @@ export interface ApprovalRequest {
 
 // ─── Default Permissions ─────────────────────────────────────────
 
-const DEFAULT_PERMISSIONS: Record<PermissionLevel, Omit<AgentPermissionConfig, 'agentId' | 'updatedAt'>> = {
+const DEFAULT_PERMISSIONS: Record<
+  PermissionLevel,
+  Omit<AgentPermissionConfig, 'agentId' | 'updatedAt'>
+> = {
   intern: {
     level: 'intern',
     canCreateTasks: false,
@@ -169,7 +172,17 @@ class AgentPermissionService {
    */
   async updatePermissions(
     agentId: string,
-    update: Partial<Pick<AgentPermissionConfig, 'trustedDomains' | 'canCreateTasks' | 'canDelegate' | 'canApprove' | 'autoComplete' | 'restrictions'>>
+    update: Partial<
+      Pick<
+        AgentPermissionConfig,
+        | 'trustedDomains'
+        | 'canCreateTasks'
+        | 'canDelegate'
+        | 'canApprove'
+        | 'autoComplete'
+        | 'restrictions'
+      >
+    >
   ): Promise<AgentPermissionConfig> {
     await this.ensureLoaded();
 
@@ -196,7 +209,10 @@ class AgentPermissionService {
   /**
    * Check if an agent can perform an action.
    */
-  async checkPermission(agentId: string, action: string): Promise<{
+  async checkPermission(
+    agentId: string,
+    action: string
+  ): Promise<{
     allowed: boolean;
     reason?: string;
     requiresApproval?: boolean;
@@ -267,7 +283,10 @@ class AgentPermissionService {
     this.approvals.push(request);
     await this.saveApprovals();
 
-    log.info({ requestId: request.id, agentId: params.agentId, action: params.action }, 'Approval requested');
+    log.info(
+      { requestId: request.id, agentId: params.agentId, action: params.action },
+      'Approval requested'
+    );
     return request;
   }
 
@@ -303,7 +322,9 @@ class AgentPermissionService {
     if (filters?.agentId) {
       results = results.filter((a) => a.agentId === filters.agentId!.toLowerCase());
     }
-    return results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return results.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 }
 

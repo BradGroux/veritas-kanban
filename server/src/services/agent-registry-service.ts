@@ -143,8 +143,10 @@ class AgentRegistryService {
 
     agent.lastHeartbeat = new Date().toISOString();
     if (update?.status) agent.status = update.status;
-    if (update?.currentTaskId !== undefined) agent.currentTaskId = update.currentTaskId || undefined;
-    if (update?.currentTaskTitle !== undefined) agent.currentTaskTitle = update.currentTaskTitle || undefined;
+    if (update?.currentTaskId !== undefined)
+      agent.currentTaskId = update.currentTaskId || undefined;
+    if (update?.currentTaskTitle !== undefined)
+      agent.currentTaskTitle = update.currentTaskTitle || undefined;
     if (update?.metadata) agent.metadata = { ...agent.metadata, ...update.metadata };
 
     this.agents.set(agentId, agent);
@@ -175,10 +177,7 @@ class AgentRegistryService {
   /**
    * List all registered agents, optionally filtered.
    */
-  list(filters?: {
-    status?: string;
-    capability?: string;
-  }): RegisteredAgent[] {
+  list(filters?: { status?: string; capability?: string }): RegisteredAgent[] {
     let agents = Array.from(this.agents.values());
 
     if (filters?.status) {
@@ -187,9 +186,7 @@ class AgentRegistryService {
 
     if (filters?.capability) {
       const cap = filters.capability.toLowerCase();
-      agents = agents.filter((a) =>
-        a.capabilities.some((c) => c.name.toLowerCase() === cap)
-      );
+      agents = agents.filter((a) => a.capabilities.some((c) => c.name.toLowerCase() === cap));
     }
 
     return agents;
@@ -200,8 +197,8 @@ class AgentRegistryService {
    */
   findByCapability(capability: string): RegisteredAgent[] {
     const cap = capability.toLowerCase();
-    return Array.from(this.agents.values()).filter((a) =>
-      a.status !== 'offline' && a.capabilities.some((c) => c.name.toLowerCase() === cap)
+    return Array.from(this.agents.values()).filter(
+      (a) => a.status !== 'offline' && a.capabilities.some((c) => c.name.toLowerCase() === cap)
     );
   }
 

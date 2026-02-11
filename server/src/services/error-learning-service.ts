@@ -41,17 +41,17 @@ export interface ErrorContext {
 }
 
 export type ErrorType =
-  | 'runtime'          // Code execution failure
-  | 'api'              // External API error
-  | 'validation'       // Input validation failure
-  | 'timeout'          // Operation timed out
-  | 'permission'       // Access denied
-  | 'resource'         // Resource not found / exhausted
-  | 'model'            // AI model error (rate limit, hallucination, etc.)
-  | 'git'              // Git operation failure
-  | 'build'            // Build/compile failure
-  | 'test'             // Test failure
-  | 'configuration'    // Config/env issue
+  | 'runtime' // Code execution failure
+  | 'api' // External API error
+  | 'validation' // Input validation failure
+  | 'timeout' // Operation timed out
+  | 'permission' // Access denied
+  | 'resource' // Resource not found / exhausted
+  | 'model' // AI model error (rate limit, hallucination, etc.)
+  | 'git' // Git operation failure
+  | 'build' // Build/compile failure
+  | 'test' // Test failure
+  | 'configuration' // Config/env issue
   | 'unknown';
 
 export interface ErrorAnalysis {
@@ -177,7 +177,19 @@ class ErrorLearningService {
    */
   async updateAnalysis(
     id: string,
-    update: Partial<Pick<ErrorAnalysis, 'rootCause' | 'summary' | 'severity' | 'optionsConsidered' | 'chosenFix' | 'preventionSteps' | 'tags' | 'analyzedBy'>>
+    update: Partial<
+      Pick<
+        ErrorAnalysis,
+        | 'rootCause'
+        | 'summary'
+        | 'severity'
+        | 'optionsConsidered'
+        | 'chosenFix'
+        | 'preventionSteps'
+        | 'tags'
+        | 'analyzedBy'
+      >
+    >
   ): Promise<ErrorAnalysis | null> {
     await this.ensureLoaded();
 
@@ -228,7 +240,9 @@ class ErrorLearningService {
       results = results.filter((a) => a.severity === filters.severity);
     }
     if (filters?.agent) {
-      results = results.filter((a) => a.context.agent === filters.agent || a.analyzedBy === filters.agent);
+      results = results.filter(
+        (a) => a.context.agent === filters.agent || a.analyzedBy === filters.agent
+      );
     }
 
     // Most recent first
@@ -301,10 +315,14 @@ class ErrorLearningService {
     await this.ensureLoaded();
 
     // Simple keyword matching — could be replaced with embeddings
-    const keywords = errorMessage.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const keywords = errorMessage
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
 
     const scored = this.analyses.map((analysis) => {
-      const text = `${analysis.context.errorMessage} ${analysis.rootCause} ${analysis.summary}`.toLowerCase();
+      const text =
+        `${analysis.context.errorMessage} ${analysis.rootCause} ${analysis.summary}`.toLowerCase();
       const matches = keywords.filter((kw) => text.includes(kw)).length;
       return { analysis, score: matches / Math.max(keywords.length, 1) };
     });
