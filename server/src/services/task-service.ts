@@ -275,6 +275,18 @@ export class TaskService {
     return match ?? null;
   }
 
+  /**
+   * Find ALL files on disk for a task ID (handles stale files from title changes).
+   * Files are named `{id}-{slug}.md` but the slug changes when title is updated,
+   * leaving orphaned files behind. This method returns all matching files so they
+   * can be cleaned up together.
+   */
+  private async findAllTaskFiles(dir: string, taskId: string): Promise<string[]> {
+    const files = await fs.readdir(dir);
+    const prefix = `${taskId}-`;
+    return files.filter((f) => f.startsWith(prefix) && f.endsWith('.md'));
+  }
+
   /** Recursively strip undefined values from an object (YAML can't serialize them) */
   private deepCleanUndefined(obj: Record<string, any>): Record<string, any> {
     const clean: Record<string, any> = {};
@@ -737,19 +749,24 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return false;
 
-    // Find actual file on disk (slug may differ from current title)
-    const actualFilename = await this.findTaskFile(this.tasksDir, id);
-    if (!actualFilename) {
-      log.warn({ taskId: id }, 'Task file not found on disk for deletion');
+    // Find ALL files on disk with this task ID (handles orphaned slug variations)
+    const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
+    if (allFilenames.length === 0) {
+      log.warn({ taskId: id }, 'No task files found on disk for deletion');
       return false;
     }
 
-    const filepath = path.join(this.tasksDir, actualFilename);
-
-    await withFileLock(filepath, async () => {
-      this.markWrite();
-      await fs.unlink(filepath);
-    });
+    // Delete ALL matching files (cleanup orphaned files from title changes)
+    await Promise.all(
+      allFilenames.map(async (filename) => {
+        const filepath = path.join(this.tasksDir, filename);
+        await withFileLock(filepath, async () => {
+          this.markWrite();
+          await fs.unlink(filepath);
+        });
+        log.debug({ taskId: id, filename }, 'Deleted task file');
+      })
+    );
 
     // Remove from cache
     this.cacheInvalidate(id);
@@ -766,20 +783,25 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return false;
 
-    // Find actual file on disk (slug may differ from current title)
-    const actualFilename = await this.findTaskFile(this.tasksDir, id);
-    if (!actualFilename) {
-      log.warn({ taskId: id }, 'Task file not found on disk for archiving');
+    // Find ALL files on disk with this task ID (handles orphaned slug variations)
+    const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
+    if (allFilenames.length === 0) {
+      log.warn({ taskId: id }, 'No task files found on disk for archiving');
       return false;
     }
 
-    const sourcePath = path.join(this.tasksDir, actualFilename);
-    const destPath = path.join(this.archiveDir, actualFilename);
-
-    await withFileLock(sourcePath, async () => {
-      this.markWrite();
-      await fs.rename(sourcePath, destPath);
-    });
+    // Archive ALL matching files (cleanup orphaned files from title changes)
+    await Promise.all(
+      allFilenames.map(async (filename) => {
+        const sourcePath = path.join(this.tasksDir, filename);
+        const destPath = path.join(this.archiveDir, filename);
+        await withFileLock(sourcePath, async () => {
+          this.markWrite();
+          await fs.rename(sourcePath, destPath);
+        });
+        log.debug({ taskId: id, filename }, 'Archived task file');
+      })
+    );
 
     // Remove from active cache (archived tasks are not cached)
     this.cacheInvalidate(id);
