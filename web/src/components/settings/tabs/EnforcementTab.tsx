@@ -28,9 +28,7 @@ export function EnforcementTab() {
         Structural process enforcement — all gates are opt-in
       </p>
 
-      {/* Quality Gates */}
       <div className="space-y-4 mt-6">
-        <h3 className="text-sm font-medium text-foreground">Quality Gates</h3>
         <div className="divide-y">
           <div>
             <ToggleRow
