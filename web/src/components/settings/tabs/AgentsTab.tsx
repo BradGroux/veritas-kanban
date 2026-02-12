@@ -157,7 +157,9 @@ export function AgentsTab() {
           <NumberRow
             label="Timeout"
             description="Kill agent process after N minutes (5-480)"
-            value={settings.agents.timeoutMinutes}
+            value={
+              settings.agents?.timeoutMinutes ?? DEFAULT_FEATURE_SETTINGS.agents.timeoutMinutes
+            }
             onChange={(v) => update('timeoutMinutes', v)}
             min={5}
             max={480}
@@ -168,19 +170,27 @@ export function AgentsTab() {
           <ToggleRow
             label="Auto-Commit on Complete"
             description="Automatically commit changes when agent finishes successfully"
-            checked={settings.agents.autoCommitOnComplete}
+            checked={
+              settings.agents?.autoCommitOnComplete ??
+              DEFAULT_FEATURE_SETTINGS.agents.autoCommitOnComplete
+            }
             onCheckedChange={(v) => update('autoCommitOnComplete', v)}
           />
           <ToggleRow
             label="Auto-Cleanup Worktrees"
             description="Remove worktree when task is archived"
-            checked={settings.agents.autoCleanupWorktrees}
+            checked={
+              settings.agents?.autoCleanupWorktrees ??
+              DEFAULT_FEATURE_SETTINGS.agents.autoCleanupWorktrees
+            }
             onCheckedChange={(v) => update('autoCleanupWorktrees', v)}
           />
           <ToggleRow
             label="Preview Panel"
             description="Show preview panel in task detail view"
-            checked={settings.agents.enablePreview}
+            checked={
+              settings.agents?.enablePreview ?? DEFAULT_FEATURE_SETTINGS.agents.enablePreview
+            }
             onCheckedChange={(v) => update('enablePreview', v)}
           />
         </div>

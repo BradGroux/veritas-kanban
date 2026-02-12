@@ -63,7 +63,7 @@ describe('Enforcement gates', () => {
     const task = await service.createTask({ title: 'Review gate enabled', type: 'code' });
 
     await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
-      'Cannot complete task without all four review scores = 10'
+      /Review Gate.*requires all four review scores/
     );
   });
 
@@ -111,7 +111,7 @@ describe('Enforcement gates', () => {
     const task = await service.createTask({ title: 'Closing comments enabled' });
 
     await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
-      'Cannot complete task without at least one review comment with deliverable summary'
+      /Closing Comments:/
     );
   });
 

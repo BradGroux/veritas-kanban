@@ -523,16 +523,26 @@ export class TaskService {
             const scores = input.reviewScores ?? freshTask.reviewScores ?? [];
             const allPerfect = scores.length === 4 && scores.every((s: number) => s === 10);
             if (!allPerfect) {
-              throw new ValidationError(
-                'Cannot complete task without all four review scores = 10 (4x10 gate)',
-                [
-                  {
-                    code: 'REVIEW_GATE',
-                    message: 'All 4 review scores must be 10 to mark as done',
-                    path: ['reviewScores'],
-                  },
-                ]
-              );
+              const scoresDisplay =
+                scores.length === 4
+                  ? scores.join('/')
+                  : scores.length > 0
+                    ? scores.join('/')
+                    : 'none';
+              const detailMessage =
+                scores.length === 4
+                  ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay}`
+                  : scores.length > 0
+                    ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay} (incomplete)`
+                    : `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. No review scores set yet.`;
+
+              throw new ValidationError(detailMessage, [
+                {
+                  code: 'REVIEW_GATE',
+                  message: detailMessage,
+                  path: ['reviewScores'],
+                },
+              ]);
             }
           }
 
@@ -543,17 +553,19 @@ export class TaskService {
               comments.length > 0 &&
               comments.some((c: { content: string }) => c.content && c.content.length >= 20);
             if (!hasClosingComment) {
-              throw new ValidationError(
-                'Cannot complete task without at least one review comment with deliverable summary',
-                [
-                  {
-                    code: 'CLOSING_COMMENTS_REQUIRED',
-                    message:
-                      'At least one review comment with ≥20 characters required to mark as done',
-                    path: ['reviewComments'],
-                  },
-                ]
-              );
+              const commentCount = comments.length;
+              const detailMessage =
+                commentCount === 0
+                  ? 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. No comments added yet.'
+                  : 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. Current comments are too short.';
+
+              throw new ValidationError(detailMessage, [
+                {
+                  code: 'CLOSING_COMMENTS_REQUIRED',
+                  message: detailMessage,
+                  path: ['reviewComments'],
+                },
+              ]);
             }
           }
         }

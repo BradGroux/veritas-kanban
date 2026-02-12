@@ -38,15 +38,18 @@ export function DataTab() {
         <ToggleRow
           label="Telemetry Collection"
           description="Master toggle for all telemetry event collection"
-          checked={settings.telemetry.enabled}
+          checked={settings.telemetry?.enabled ?? DEFAULT_FEATURE_SETTINGS.telemetry.enabled}
           onCheckedChange={(v) => updateTelemetry('enabled', v)}
         />
-        {settings.telemetry.enabled && (
+        {(settings.telemetry?.enabled ?? DEFAULT_FEATURE_SETTINGS.telemetry.enabled) && (
           <>
             <NumberRow
               label="Retention Period"
               description="Auto-purge events older than N days (7-365)"
-              value={settings.telemetry.retentionDays}
+              value={
+                settings.telemetry?.retentionDays ??
+                DEFAULT_FEATURE_SETTINGS.telemetry.retentionDays
+              }
               onChange={(v) => updateTelemetry('retentionDays', v)}
               min={7}
               max={365}
@@ -57,13 +60,18 @@ export function DataTab() {
             <ToggleRow
               label="Trace Collection"
               description="Enable detailed trace collection for agent runs"
-              checked={settings.telemetry.enableTraces}
+              checked={
+                settings.telemetry?.enableTraces ?? DEFAULT_FEATURE_SETTINGS.telemetry.enableTraces
+              }
               onCheckedChange={(v) => updateTelemetry('enableTraces', v)}
             />
             <ToggleRow
               label="Activity Tracking"
               description="Log activity events for the sidebar"
-              checked={settings.telemetry.enableActivityTracking}
+              checked={
+                settings.telemetry?.enableActivityTracking ??
+                DEFAULT_FEATURE_SETTINGS.telemetry.enableActivityTracking
+              }
               onCheckedChange={(v) => updateTelemetry('enableActivityTracking', v)}
             />
           </>
@@ -79,15 +87,18 @@ export function DataTab() {
           <ToggleRow
             label="Budget Tracking"
             description="Track monthly token usage against budget limits"
-            checked={settings.budget.enabled}
+            checked={settings.budget?.enabled ?? DEFAULT_FEATURE_SETTINGS.budget.enabled}
             onCheckedChange={(v) => updateBudget('enabled', v)}
           />
-          {settings.budget.enabled && (
+          {(settings.budget?.enabled ?? DEFAULT_FEATURE_SETTINGS.budget.enabled) && (
             <>
               <NumberRow
                 label="Monthly Token Limit"
                 description="Set monthly token budget (0 = no limit)"
-                value={settings.budget.monthlyTokenLimit}
+                value={
+                  settings.budget?.monthlyTokenLimit ??
+                  DEFAULT_FEATURE_SETTINGS.budget.monthlyTokenLimit
+                }
                 onChange={(v) => updateBudget('monthlyTokenLimit', v)}
                 min={0}
                 max={9_999_999_999}
@@ -98,7 +109,10 @@ export function DataTab() {
               <NumberRow
                 label="Monthly Cost Limit"
                 description="Set monthly cost budget in dollars (0 = no limit)"
-                value={settings.budget.monthlyCostLimit}
+                value={
+                  settings.budget?.monthlyCostLimit ??
+                  DEFAULT_FEATURE_SETTINGS.budget.monthlyCostLimit
+                }
                 onChange={(v) => updateBudget('monthlyCostLimit', v)}
                 min={0}
                 max={9_999_999_999}
@@ -109,7 +123,10 @@ export function DataTab() {
               <NumberRow
                 label="Warning Threshold"
                 description="Show warning when usage exceeds this percentage of budget"
-                value={settings.budget.warningThreshold}
+                value={
+                  settings.budget?.warningThreshold ??
+                  DEFAULT_FEATURE_SETTINGS.budget.warningThreshold
+                }
                 onChange={(v) => updateBudget('warningThreshold', v)}
                 min={50}
                 max={99}
@@ -132,14 +149,21 @@ export function DataTab() {
           <ToggleRow
             label="Auto-Archive"
             description="Automatically archive completed sprints"
-            checked={settings.archive.autoArchiveEnabled}
+            checked={
+              settings.archive?.autoArchiveEnabled ??
+              DEFAULT_FEATURE_SETTINGS.archive.autoArchiveEnabled
+            }
             onCheckedChange={(v) => updateArchive('autoArchiveEnabled', v)}
           />
-          {settings.archive.autoArchiveEnabled && (
+          {(settings.archive?.autoArchiveEnabled ??
+            DEFAULT_FEATURE_SETTINGS.archive.autoArchiveEnabled) && (
             <NumberRow
               label="Archive After"
               description="Days after completion before auto-archiving"
-              value={settings.archive.autoArchiveAfterDays}
+              value={
+                settings.archive?.autoArchiveAfterDays ??
+                DEFAULT_FEATURE_SETTINGS.archive.autoArchiveAfterDays
+              }
               onChange={(v) => updateArchive('autoArchiveAfterDays', v)}
               min={1}
               max={365}

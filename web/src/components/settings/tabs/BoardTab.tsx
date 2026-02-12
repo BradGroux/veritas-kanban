@@ -31,10 +31,10 @@ export function BoardTab() {
         <ToggleRow
           label="Show Dashboard"
           description="Display the metrics dashboard section above the board"
-          checked={settings.board.showDashboard}
+          checked={settings.board?.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard}
           onCheckedChange={(v) => update('showDashboard', v)}
         />
-        {settings.board.showDashboard && (
+        {(settings.board?.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard) && (
           <>
             <div className="pl-6 border-l-2 border-muted ml-2 space-y-0 divide-y">
               {(
@@ -71,7 +71,8 @@ export function BoardTab() {
                     debouncedUpdate({
                       board: {
                         dashboardWidgets: {
-                          ...settings.board.dashboardWidgets,
+                          ...(settings.board?.dashboardWidgets ??
+                            DEFAULT_FEATURE_SETTINGS.board.dashboardWidgets),
                           [key]: v,
                         },
                       },
@@ -85,12 +86,15 @@ export function BoardTab() {
         <ToggleRow
           label="Archive Suggestions"
           description="Show banner when all sprint tasks are complete"
-          checked={settings.board.showArchiveSuggestions}
+          checked={
+            settings.board?.showArchiveSuggestions ??
+            DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions
+          }
           onCheckedChange={(v) => update('showArchiveSuggestions', v)}
         />
         <SettingRow label="Card Density" description="Compact cards use less space">
           <Select
-            value={settings.board.cardDensity}
+            value={settings.board?.cardDensity ?? DEFAULT_FEATURE_SETTINGS.board.cardDensity}
             onValueChange={(v) => update('cardDensity', v)}
           >
             <SelectTrigger className="w-28 h-8">
@@ -105,31 +109,42 @@ export function BoardTab() {
         <ToggleRow
           label="Priority Indicators"
           description="Show priority badge on task cards"
-          checked={settings.board.showPriorityIndicators}
+          checked={
+            settings.board?.showPriorityIndicators ??
+            DEFAULT_FEATURE_SETTINGS.board.showPriorityIndicators
+          }
           onCheckedChange={(v) => update('showPriorityIndicators', v)}
         />
         <ToggleRow
           label="Project Badges"
           description="Show project badge on task cards"
-          checked={settings.board.showProjectBadges}
+          checked={
+            settings.board?.showProjectBadges ?? DEFAULT_FEATURE_SETTINGS.board.showProjectBadges
+          }
           onCheckedChange={(v) => update('showProjectBadges', v)}
         />
         <ToggleRow
           label="Sprint Badges"
           description="Show sprint badge on task cards"
-          checked={settings.board.showSprintBadges}
+          checked={
+            settings.board?.showSprintBadges ?? DEFAULT_FEATURE_SETTINGS.board.showSprintBadges
+          }
           onCheckedChange={(v) => update('showSprintBadges', v)}
         />
         <ToggleRow
           label="Drag & Drop"
           description="Allow dragging cards between columns"
-          checked={settings.board.enableDragAndDrop}
+          checked={
+            settings.board?.enableDragAndDrop ?? DEFAULT_FEATURE_SETTINGS.board.enableDragAndDrop
+          }
           onCheckedChange={(v) => update('enableDragAndDrop', v)}
         />
         <ToggleRow
           label="Done Column Metrics"
           description="Show agent run count, success status, and duration on completed tasks"
-          checked={settings.board.showDoneMetrics}
+          checked={
+            settings.board?.showDoneMetrics ?? DEFAULT_FEATURE_SETTINGS.board.showDoneMetrics
+          }
           onCheckedChange={(v) => update('showDoneMetrics', v)}
         />
       </div>

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
+import { toast } from '@/hooks/useToast';
 import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
 
 /**
@@ -122,6 +123,41 @@ export function useUpdateTask() {
       if (input.status) {
         queryClient.invalidateQueries({ queryKey: ['metrics'] });
         queryClient.invalidateQueries({ queryKey: ['task-counts'] });
+      }
+    },
+    // Handle validation errors with detailed toast messages
+    onError: (error: Error & { code?: string; details?: unknown }, { input }) => {
+      // Extract enforcement gate error details
+      const details = error.details as
+        | Array<{ code: string; message: string; path: string[] }>
+        | undefined;
+
+      // If this is an enforcement gate error, show a detailed toast
+      if (details && details.length > 0) {
+        const gateError = details[0];
+
+        // Map gate codes to user-friendly titles
+        const gateNames: Record<string, string> = {
+          REVIEW_GATE: '🔒 Review Gate',
+          CLOSING_COMMENTS_REQUIRED: '💬 Closing Comments Required',
+          DELIVERABLE_REQUIRED: '📦 Deliverable Required',
+        };
+
+        const title = gateNames[gateError.code] || '⚠️ Validation Error';
+
+        toast({
+          title,
+          description: gateError.message,
+          variant: 'destructive',
+          duration: 8000, // Longer duration for enforcement messages
+        });
+      } else {
+        // Generic error fallback
+        toast({
+          title: '❌ Update Failed',
+          description: error.message || 'An unexpected error occurred',
+          variant: 'destructive',
+        });
       }
     },
     // NOTE: No general onSettled invalidation here. The onSuccess handler already
