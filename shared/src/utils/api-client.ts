@@ -20,10 +20,17 @@ interface ApiEnvelope<T> {
  */
 export function createApiClient(baseUrl = DEFAULT_BASE) {
   return async function api<T>(path: string, options?: RequestInit): Promise<T> {
+    const apiKey = typeof process !== 'undefined' ? process.env?.VK_API_KEY : undefined;
+    const authHeaders: Record<string, string> = {};
+    if (apiKey) {
+      authHeaders['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     const res = await fetch(`${baseUrl}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options?.headers,
       },
     });
