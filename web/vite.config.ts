@@ -3,6 +3,17 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const viteAllowedHostsEnv = process.env.VITE_ALLOWED_HOSTS?.trim();
+const viteAllowedHosts =
+  viteAllowedHostsEnv && viteAllowedHostsEnv.length > 0
+    ? viteAllowedHostsEnv === '*'
+      ? true
+      : viteAllowedHostsEnv
+          .split(',')
+          .map((host) => host.trim())
+          .filter(Boolean)
+    : undefined;
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -37,7 +48,9 @@ export default defineConfig({
     },
   },
   server: {
+    host: process.env.VITE_HOST || undefined,
     port: 3000,
+    allowedHosts: viteAllowedHosts,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
