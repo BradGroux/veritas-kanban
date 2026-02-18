@@ -5,6 +5,8 @@
  * Pings each configured service and returns up/down/unconfigured status with response time.
  */
 import { Router } from 'express';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { ConfigService } from '../services/config-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { createLogger } from '../lib/logger.js';
@@ -32,12 +34,37 @@ function isPrivateIpv4(hostname: string): boolean {
   const parts = hostname.split('.').map((p) => Number(p));
   if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
   const [a, b] = parts;
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    a === 169 ||
+    (a === 100 && b >= 64 && b <= 127) || // carrier-grade NAT
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
 }
 
-function validateServiceUrl(
+function isPrivateIpv6(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === '::1' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80')
+  );
+}
+
+function isBlockedIp(hostname: string): boolean {
+  const ipVersion = isIP(hostname);
+  if (ipVersion === 4) return isPrivateIpv4(hostname);
+  if (ipVersion === 6) return isPrivateIpv6(hostname);
+  return false;
+}
+
+async function validateServiceUrl(
   url: string
-): { ok: true; href: string } | { ok: false; reason: string } {
+): Promise<{ ok: true; href: string } | { ok: false; reason: string }> {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -45,7 +72,13 @@ function validateServiceUrl(
     }
 
     const host = parsed.hostname.toLowerCase();
-    if (BLOCKED_HOSTS.has(host) || isPrivateIpv4(host) || host.endsWith('.local')) {
+    if (BLOCKED_HOSTS.has(host) || isBlockedIp(host) || host.endsWith('.local')) {
+      return { ok: false, reason: 'blocked host' };
+    }
+
+    // Prevent DNS rebinding/indirection to private addresses.
+    const resolutions = await lookup(host, { all: true });
+    if (resolutions.some((entry) => isBlockedIp(entry.address))) {
       return { ok: false, reason: 'blocked host' };
     }
 
@@ -59,7 +92,7 @@ function validateServiceUrl(
  * Ping a service URL and return its status.
  */
 async function pingService(service: CoolifyServiceConfig): Promise<ServiceStatus> {
-  const validated = validateServiceUrl(service.url);
+  const validated = await validateServiceUrl(service.url);
   if (!validated.ok) {
     return { status: 'down', error: validated.reason };
   }
@@ -72,7 +105,7 @@ async function pingService(service: CoolifyServiceConfig): Promise<ServiceStatus
     const response = await fetch(validated.href, {
       method: 'HEAD',
       signal: controller.signal,
-      redirect: 'follow',
+      redirect: 'manual',
     });
     const responseTimeMs = Math.round(performance.now() - start);
 

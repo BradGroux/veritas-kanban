@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run",
+    "test": "VERITAS_DISABLE_WATCHERS=1 vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
     "reset-password": "tsx src/scripts/reset-password.ts"

@@ -20,7 +20,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "pnpm -r test",
+    "test:unit": "pnpm -r --workspace-concurrency=1 test",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
