@@ -119,6 +119,32 @@ export const DEFAULT_ROUTING_CONFIG: AgentRoutingConfig = {
   maxRetries: 1,
 };
 
+// ============ Coolify Integration Types ============
+
+/** Configuration for an individual Coolify-hosted service */
+export interface CoolifyServiceConfig {
+  url: string;
+  apiKey?: string;
+  /** Additional API URL (e.g., OpenPanel has separate dashboard + API URLs) */
+  apiUrl?: string;
+  /** Client ID for services that use client-based auth (e.g., OpenPanel) */
+  clientId?: string;
+}
+
+/** All Coolify services that VK can integrate with */
+export interface CoolifyServicesConfig {
+  supabase?: CoolifyServiceConfig;
+  openpanel?: CoolifyServiceConfig;
+  n8n?: CoolifyServiceConfig;
+  plane?: CoolifyServiceConfig;
+  appsmith?: CoolifyServiceConfig;
+}
+
+/** Top-level Coolify configuration */
+export interface CoolifyConfig {
+  services: CoolifyServicesConfig;
+}
+
 export interface AppConfig {
   repos: RepoConfig[];
   agents: AgentConfig[];
@@ -126,6 +152,7 @@ export interface AppConfig {
   agentRouting?: AgentRoutingConfig;
   telemetry?: TelemetryConfig;
   features?: FeatureSettings;
+  coolify?: CoolifyConfig;
 }
 
 // ============ Feature Settings Types ============
