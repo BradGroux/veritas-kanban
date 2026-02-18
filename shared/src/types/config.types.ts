@@ -260,6 +260,7 @@ export interface EnforcementSettings {
   autoTelemetry: boolean; // Emit run.started/run.completed on status changes
   autoTimeTracking: boolean; // Auto-start/stop timers on status changes
   orchestratorDelegation: boolean; // Warn when orchestrator does implementation work instead of delegating
+  orchestratorAgent?: string; // The designated orchestrator agent name (e.g. "veritas")
 }
 
 /** Individual hook configuration */
@@ -428,6 +429,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     autoTelemetry: false,
     autoTimeTracking: false,
     orchestratorDelegation: false,
+    orchestratorAgent: '',
   },
   hooks: {
     enabled: false, // Disabled by default
