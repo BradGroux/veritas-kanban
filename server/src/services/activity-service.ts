@@ -26,7 +26,11 @@ export type ActivityType =
   | 'comment_deleted'
   | 'deliverable_added'
   | 'deliverable_updated'
-  | 'deliverable_deleted';
+  | 'deliverable_deleted'
+  | 'observation_added'
+  | 'observation_deleted'
+  | 'dependency_added'
+  | 'dependency_removed';
 
 export interface Activity {
   id: string;

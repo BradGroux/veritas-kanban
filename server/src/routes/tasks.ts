@@ -1143,6 +1143,9 @@ router.post(
     const { depends_on, blocks } = input;
     const targetId = depends_on || blocks;
     const type: 'depends_on' | 'blocks' = depends_on ? 'depends_on' : 'blocks';
+    if (!targetId) {
+      throw new ValidationError('Either depends_on or blocks is required');
+    }
 
     const task = await taskService.addDependency(taskId, targetId, type);
 
@@ -1443,7 +1446,7 @@ router.post(
     const updatedTask = await taskService.updateTask(taskId, { checkpoint });
 
     // Broadcast change
-    broadcastTaskChange('updated', updatedTask);
+    broadcastTaskChange('updated', updatedTask.id);
 
     res.json({ success: true, checkpoint });
   })
@@ -1510,7 +1513,7 @@ router.delete(
     const updatedTask = await taskService.updateTask(taskId, { checkpoint: undefined });
 
     // Broadcast change
-    broadcastTaskChange('updated', updatedTask);
+    broadcastTaskChange('updated', updatedTask.id);
 
     res.json({ success: true });
   })
