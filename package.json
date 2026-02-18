@@ -30,7 +30,8 @@
     "audit": "pnpm audit --prod",
     "audit:all": "pnpm audit",
     "seed": "bash scripts/seed.sh",
-    "prepare": "husky"
+    "prepare": "husky",
+    "demo": "docker compose -f demo/docker-compose.demo.yml up --build"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
