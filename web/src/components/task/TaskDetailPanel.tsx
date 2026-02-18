@@ -64,6 +64,8 @@ export function TaskDetailPanel({
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [taskChatOpen, setTaskChatOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const addObservation = useAddObservation();
+  const deleteObservation = useDeleteObservation();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
