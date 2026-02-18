@@ -26,16 +26,50 @@ interface ServiceStatus {
   error?: string;
 }
 
+const BLOCKED_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+  const [a, b] = parts;
+  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+function validateServiceUrl(
+  url: string
+): { ok: true; href: string } | { ok: false; reason: string } {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, reason: 'unsupported protocol' };
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (BLOCKED_HOSTS.has(host) || isPrivateIpv4(host) || host.endsWith('.local')) {
+      return { ok: false, reason: 'blocked host' };
+    }
+
+    return { ok: true, href: parsed.href };
+  } catch {
+    return { ok: false, reason: 'invalid url' };
+  }
+}
+
 /**
  * Ping a service URL and return its status.
  */
 async function pingService(service: CoolifyServiceConfig): Promise<ServiceStatus> {
+  const validated = validateServiceUrl(service.url);
+  if (!validated.ok) {
+    return { status: 'down', error: validated.reason };
+  }
+
   const start = performance.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
 
   try {
-    const response = await fetch(service.url, {
+    const response = await fetch(validated.href, {
       method: 'HEAD',
       signal: controller.signal,
       redirect: 'follow',

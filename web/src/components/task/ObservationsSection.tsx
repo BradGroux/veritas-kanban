@@ -58,11 +58,9 @@ const TYPE_COLORS: Record<ObservationType, string> = {
 
 function ObservationItem({
   observation,
-  taskId,
   onDelete,
 }: {
   observation: Observation;
-  taskId: string;
   onDelete: (observationId: string) => Promise<void>;
 }) {
   void taskId;
@@ -258,12 +256,7 @@ export function ObservationsSection({
           .slice()
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
           .map((obs) => (
-            <ObservationItem
-              key={obs.id}
-              observation={obs}
-              taskId={task.id}
-              onDelete={onDeleteObservation}
-            />
+            <ObservationItem key={obs.id} observation={obs} onDelete={onDeleteObservation} />
           ))}
       </div>
     </div>

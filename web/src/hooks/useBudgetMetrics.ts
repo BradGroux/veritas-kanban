@@ -53,7 +53,13 @@ async function fetchBudgetMetrics(
 
 export function useBudgetMetrics(project?: string) {
   const { settings } = useFeatureSettings();
-  const { enabled, monthlyTokenLimit, monthlyCostLimit, warningThreshold } = settings.budget;
+  const budget = settings.budget ?? {
+    enabled: false,
+    monthlyTokenLimit: 1_000_000,
+    monthlyCostLimit: 100,
+    warningThreshold: 0.8,
+  };
+  const { enabled, monthlyTokenLimit, monthlyCostLimit, warningThreshold } = budget;
   const { isConnected } = useWebSocketStatus();
 
   return useQuery({
