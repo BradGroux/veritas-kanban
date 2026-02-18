@@ -177,7 +177,12 @@ function isLocalhostRequest(req: Request | IncomingMessage): boolean {
   );
 }
 
-function extractApiKey(req: Request | IncomingMessage): string | null {
+function extractApiKey(
+  req: Request | IncomingMessage,
+  options: { allowQueryParam?: boolean } = {}
+): string | null {
+  const { allowQueryParam = false } = options;
+
   // Check Authorization header (Bearer token)
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
@@ -190,16 +195,9 @@ function extractApiKey(req: Request | IncomingMessage): string | null {
     return apiKeyHeader;
   }
 
-  // Check query parameter (for WebSocket connections)
-  if ('query' in req && typeof req.query === 'object' && req.query !== null) {
-    const query = req.query as Record<string, unknown>;
-    if (typeof query.api_key === 'string') {
-      return query.api_key;
-    }
-  }
-
-  // For IncomingMessage (WebSocket), parse URL
-  if ('url' in req && typeof req.url === 'string') {
+  // Optional fallback for WebSocket clients only.
+  // HTTP requests must use headers, not query parameters.
+  if (allowQueryParam && 'url' in req && typeof req.url === 'string') {
     try {
       const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const apiKey = url.searchParams.get('api_key');
@@ -300,7 +298,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   }
 
   // 2. Check API key (agents/services)
-  const apiKey = extractApiKey(req);
+  const apiKey = extractApiKey(req, { allowQueryParam: false });
   if (apiKey) {
     const validation = validateApiKey(apiKey, config);
     if (validation.valid) {
@@ -326,7 +324,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     details: {
       hint: passwordAuthEnabled
         ? 'Please log in or provide an API key'
-        : 'Provide API key via Authorization header (Bearer <key>), X-API-Key header, or api_key query parameter',
+        : 'Provide API key via Authorization header (Bearer <key>) or X-API-Key header',
     },
   });
 }
@@ -454,8 +452,8 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     }
   }
 
-  // 2. Check API key
-  const apiKey = extractApiKey(req);
+  // 2. Check API key (headers; query-param fallback for WS only)
+  const apiKey = extractApiKey(req, { allowQueryParam: true });
   if (apiKey) {
     const validation = validateApiKey(apiKey, config);
     if (validation.valid) {
@@ -483,7 +481,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     isLocalhost,
     error: passwordAuthEnabled
       ? 'Authentication required. Please log in.'
-      : 'Authentication required. Provide api_key query parameter.',
+      : 'Authentication required. Provide API key via Authorization or X-API-Key header (WebSocket also supports api_key query parameter).',
   };
 }
 

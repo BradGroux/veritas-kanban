@@ -37,6 +37,7 @@ import { requestTimeout } from './middleware/request-timeout.js';
 import {
   authenticate,
   authorize,
+  authorizeWrite,
   authenticateWebSocket,
   validateWebSocketOrigin,
   getAuthStatus,
@@ -421,6 +422,12 @@ app.use('/api', apiRateLimit);
 
 // Apply authentication to all API routes (except /api/auth which is handled above)
 app.use('/api', authenticate);
+
+// ============================================
+// Authorization: write access enforcement
+// Read-only roles can perform only GET/HEAD/OPTIONS on API routes.
+// ============================================
+app.use('/api', authorizeWrite);
 
 // ============================================
 // API Versioning Middleware

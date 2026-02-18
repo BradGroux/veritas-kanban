@@ -67,9 +67,12 @@ export const envSchema = z.object({
   VERITAS_AUTH_LOCALHOST_BYPASS: booleanString.default('false'),
 
   /** Role assigned to localhost-bypass connections */
-  VERITAS_AUTH_LOCALHOST_ROLE: z.enum(['admin', 'editor', 'viewer']).optional().default('viewer'),
+  VERITAS_AUTH_LOCALHOST_ROLE: z
+    .enum(['admin', 'agent', 'read-only'])
+    .optional()
+    .default('read-only'),
 
-  /** Comma-separated additional API keys (format: name:key,name:key) */
+  /** Comma-separated additional API keys (format: name:key:role,name:key:role) */
   VERITAS_API_KEYS: z.string().optional().default(''),
 
   // ── Data ────────────────────────────────────────────────────────────

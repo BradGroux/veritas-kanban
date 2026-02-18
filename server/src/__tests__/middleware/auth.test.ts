@@ -373,7 +373,7 @@ describe('Auth Middleware', () => {
       expect(req.auth?.role).toBe('admin');
     });
 
-    it('should extract API key from query parameter', () => {
+    it('should reject API key in HTTP query parameter (headers only)', () => {
       process.env.VERITAS_ADMIN_KEY = 'query-key';
       const req = mockRequest({
         query: { api_key: 'query-key' },
@@ -384,8 +384,8 @@ describe('Auth Middleware', () => {
       const next = mockNext();
 
       authenticate(req, res, next);
-      expect(next).toHaveBeenCalled();
-      expect(req.auth?.role).toBe('admin');
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
     });
   });
 
