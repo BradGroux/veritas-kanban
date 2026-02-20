@@ -1,0 +1,34 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'BradGroux'
+    labels:
+      - 'dependencies'
+    groups:
+      # Group minor/patch updates to reduce PR noise
+      production-dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    reviewers:
+      - 'BradGroux'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
