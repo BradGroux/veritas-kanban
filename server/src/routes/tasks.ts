@@ -1449,7 +1449,7 @@ router.post(
     const updatedTask = await taskService.updateTask(taskId, { checkpoint });
 
     if (!updatedTask) {
-      return res.status(404).json({ error: 'Task update failed' });
+      return res.status(404).json({ error: 'Task update failed - task not found' });
     }
 
     // Broadcast change
@@ -1520,7 +1520,7 @@ router.delete(
     const updatedTask = await taskService.updateTask(taskId, { checkpoint: undefined });
 
     if (!updatedTask) {
-      return res.status(404).json({ error: 'Task update failed' });
+      return res.status(404).json({ error: 'Task update failed - task not found' });
     }
 
     // Broadcast change
