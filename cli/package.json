@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@veritas-kanban/shared": "workspace:*",
-    "commander": "^12.1.0",
+    "commander": "^14.0.3",
     "chalk": "^5.3.0"
   },
   "devDependencies": {
