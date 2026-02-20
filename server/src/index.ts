@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
@@ -268,15 +269,42 @@ app.use(compression({ level: 6, threshold: 1024 }));
 // ============================================
 // Security: CORS Configuration
 // ============================================
+const normalizeOrigin = (origin: string): string => origin.trim().replace(/\/+$/, '');
+
+const parseCorsOrigins = (value: string): string[] =>
+  value
+    .split(',')
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+const buildDefaultDevOrigins = (): string[] => {
+  const hosts = new Set<string>(['localhost', '127.0.0.1']);
+  const hostname = os.hostname().trim().toLowerCase();
+
+  if (hostname) {
+    hosts.add(hostname);
+    if (!hostname.includes('.')) {
+      hosts.add(`${hostname}.local`);
+    }
+  }
+
+  const configuredHost = process.env.HOST?.trim().toLowerCase();
+  if (configuredHost && configuredHost !== '0.0.0.0' && configuredHost !== '::') {
+    hosts.add(configuredHost);
+  }
+
+  const origins: string[] = [];
+  for (const host of hosts) {
+    origins.push(`http://${host}:5173`, `http://${host}:3000`);
+  }
+
+  return origins;
+};
+
 // Allowed origins from environment (comma-separated) or defaults for dev
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-  : [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000',
-    ];
+  ? parseCorsOrigins(process.env.CORS_ORIGINS)
+  : buildDefaultDevOrigins();
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
@@ -286,7 +314,7 @@ const corsOptions: cors.CorsOptions = {
       return;
     }
 
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes(normalizeOrigin(origin))) {
       callback(null, true);
     } else {
       log.warn({ origin }, 'CORS blocked request from disallowed origin');

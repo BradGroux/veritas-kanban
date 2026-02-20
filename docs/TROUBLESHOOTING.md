@@ -254,7 +254,24 @@ If you see CORS errors in the browser console, update `CORS_ORIGINS` in `server/
 
 ```bash
 # Add your frontend URL (comma-separated, no trailing slashes)
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000,http://your-hostname:5173
+```
+
+When using hostname access on LAN (for example `http://manfredclaw:5173`), include that hostname origin explicitly.
+
+### Vite: "Blocked request. This host is not allowed."
+
+If the web dev server rejects LAN hostname access, configure Vite host allowlist in `web/.env`:
+
+```bash
+VITE_HOST=0.0.0.0
+VITE_ALLOWED_HOSTS=your-hostname,your-hostname.local,your-ip
+```
+
+You can allow all hosts for trusted LAN-only environments:
+
+```bash
+VITE_ALLOWED_HOSTS=*
 ```
 
 ### Accessing from another machine on the network
@@ -266,7 +283,16 @@ By default, the server binds to `localhost`. To access from other machines:
 HOST=0.0.0.0
 ```
 
-Update `CORS_ORIGINS` to include the IP/hostname you'll access from.
+Update both CORS and Vite allowlist to include the IP/hostname you'll access from:
+
+```bash
+# server/.env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000,http://your-hostname:5173
+
+# web/.env
+VITE_HOST=0.0.0.0
+VITE_ALLOWED_HOSTS=your-hostname,your-hostname.local,your-ip
+```
 
 ---
 
