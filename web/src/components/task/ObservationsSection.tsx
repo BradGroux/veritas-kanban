@@ -63,7 +63,6 @@ function ObservationItem({
   observation: Observation;
   onDelete: (observationId: string) => Promise<void>;
 }) {
-  void taskId;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleDelete = async () => {
