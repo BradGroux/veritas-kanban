@@ -5,6 +5,29 @@ All notable changes to Veritas Kanban are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Orchestrator Delegation Enforcement** — Full enforcement gate for orchestrator delegation
+  - Orchestrator agent selector in Settings → Enforcement (dropdown of enabled agents)
+  - Active/Inactive status badge showing enforcement state
+  - Warning banner when delegation enabled but no agent selected
+  - Section auto-disables when delegation toggle is off
+  - Zod-validated `orchestratorAgent` field (string, max 50 chars)
+  - `POST /api/agent/delegation-violation` endpoint for violation reporting
+  - Auto-posts violations to squad chat when squad chat enforcement is enabled
+
+- **Enforcement Gate Toast Notifications** — Enhanced error feedback for all enforcement gates
+  - Gate-specific titles and actionable guidance for REVIEW_GATE, CLOSING_COMMENTS_REQUIRED, DELIVERABLE_REQUIRED, ORCHESTRATOR_DELEGATION
+  - 10-second toast duration for enforcement messages (up from 5s)
+  - BulkActionsBar surfaces gate details on bulk move failures
+
+- **Dashboard Enforcement Indicator** — At-a-glance enforcement status
+  - Shows active/total gate count with color-coded shield icon (green/amber/gray)
+  - Individual gate dots (green = active, gray = off)
+  - Renders in dashboard status bar alongside refresh timestamp
+
 ## [3.3.0] - 2026-02-15
 
 ### ✨ Highlights

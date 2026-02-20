@@ -119,6 +119,32 @@ export const DEFAULT_ROUTING_CONFIG: AgentRoutingConfig = {
   maxRetries: 1,
 };
 
+// ============ Coolify Integration Types ============
+
+/** Configuration for an individual Coolify-hosted service */
+export interface CoolifyServiceConfig {
+  url: string;
+  apiKey?: string;
+  /** Additional API URL (e.g., OpenPanel has separate dashboard + API URLs) */
+  apiUrl?: string;
+  /** Client ID for services that use client-based auth (e.g., OpenPanel) */
+  clientId?: string;
+}
+
+/** All Coolify services that VK can integrate with */
+export interface CoolifyServicesConfig {
+  supabase?: CoolifyServiceConfig;
+  openpanel?: CoolifyServiceConfig;
+  n8n?: CoolifyServiceConfig;
+  plane?: CoolifyServiceConfig;
+  appsmith?: CoolifyServiceConfig;
+}
+
+/** Top-level Coolify configuration */
+export interface CoolifyConfig {
+  services: CoolifyServicesConfig;
+}
+
 export interface AppConfig {
   repos: RepoConfig[];
   agents: AgentConfig[];
@@ -126,6 +152,7 @@ export interface AppConfig {
   agentRouting?: AgentRoutingConfig;
   telemetry?: TelemetryConfig;
   features?: FeatureSettings;
+  coolify?: CoolifyConfig;
 }
 
 // ============ Feature Settings Types ============
@@ -233,6 +260,7 @@ export interface EnforcementSettings {
   autoTelemetry: boolean; // Emit run.started/run.completed on status changes
   autoTimeTracking: boolean; // Auto-start/stop timers on status changes
   orchestratorDelegation: boolean; // Warn when orchestrator does implementation work instead of delegating
+  orchestratorAgent?: string; // The designated orchestrator agent name (e.g. "veritas")
 }
 
 /** Individual hook configuration */
@@ -401,6 +429,7 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     autoTelemetry: false,
     autoTimeTracking: false,
     orchestratorDelegation: false,
+    orchestratorAgent: '',
   },
   hooks: {
     enabled: false, // Disabled by default

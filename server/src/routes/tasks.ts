@@ -1141,7 +1141,10 @@ router.post(
     }
 
     const { depends_on, blocks } = input;
-    const targetId = depends_on || blocks;
+    const targetId = depends_on ?? blocks;
+    if (!targetId) {
+      throw new ValidationError('Must provide either depends_on or blocks');
+    }
     const type: 'depends_on' | 'blocks' = depends_on ? 'depends_on' : 'blocks';
     if (!targetId) {
       throw new ValidationError('Either depends_on or blocks is required');
@@ -1445,6 +1448,10 @@ router.post(
     // Update task with checkpoint
     const updatedTask = await taskService.updateTask(taskId, { checkpoint });
 
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task update failed - task not found' });
+    }
+
     // Broadcast change
     broadcastTaskChange('updated', updatedTask.id);
 
@@ -1511,6 +1518,10 @@ router.delete(
 
     // Clear checkpoint by setting it to undefined
     const updatedTask = await taskService.updateTask(taskId, { checkpoint: undefined });
+
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task update failed - task not found' });
+    }
 
     // Broadcast change
     broadcastTaskChange('updated', updatedTask.id);

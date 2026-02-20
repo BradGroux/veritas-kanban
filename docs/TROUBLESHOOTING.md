@@ -91,10 +91,10 @@ pnpm install
 pnpm build
 ```
 
-If errors persist, check your Node.js version — **Node 20+** is required:
+If errors persist, check your Node.js version — **Node 22+** is required:
 
 ```bash
-node -v  # Should be v20.x or higher
+node -v  # Should be v22.x or higher
 ```
 
 ### `pnpm` not found

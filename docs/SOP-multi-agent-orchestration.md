@@ -121,4 +121,22 @@ See [SQUAD-CHAT-PROTOCOL.md](SQUAD-CHAT-PROTOCOL.md) for full details.
 6. **Opus**: Reviews, marks done, updates sprint recap comment.
 7. **Opus**: Sets agent status back to idle once all workers complete (`vk agent idle`).
 
+---
+
+## Workflow Engine (v3.0)
+
+For repeatable multi-agent pipelines, consider using the **Workflow Engine** instead of manual orchestration:
+
+- Define pipelines as YAML with sequential, loop, gate, and parallel steps.
+- Tool policies restrict what each agent role can do.
+- Session isolation prevents context bleed between steps.
+- Real-time dashboard shows active runs, success rates, and per-workflow health.
+
+See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full details and example workflows.
+
+**When to use Workflows vs. Manual Orchestration:**
+
+- **Workflows:** Repeatable pipelines you run more than once (feature dev, security audits, release processes).
+- **Manual orchestration:** One-off sprint management, ad-hoc task assignment, exploratory work.
+
 Following this SOP keeps human oversight minimal while preserving accountability.

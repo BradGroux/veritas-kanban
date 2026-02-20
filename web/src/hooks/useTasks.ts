@@ -136,20 +136,37 @@ export function useUpdateTask() {
       if (details && details.length > 0) {
         const gateError = details[0];
 
-        // Map gate codes to user-friendly titles
-        const gateNames: Record<string, string> = {
-          REVIEW_GATE: '🔒 Review Gate',
-          CLOSING_COMMENTS_REQUIRED: '💬 Closing Comments Required',
-          DELIVERABLE_REQUIRED: '📦 Deliverable Required',
+        // Map gate codes to user-friendly titles and actionable guidance
+        const gateInfo: Record<string, { title: string; guidance: string }> = {
+          REVIEW_GATE: {
+            title: '🔒 Review Gate Blocked',
+            guidance: 'Add all four review scores (10/10/10/10) before completing this task.',
+          },
+          CLOSING_COMMENTS_REQUIRED: {
+            title: '💬 Closing Comments Required',
+            guidance:
+              'Add a review comment with a deliverable summary (≥20 chars) before completing.',
+          },
+          DELIVERABLE_REQUIRED: {
+            title: '📦 Deliverable Required',
+            guidance: 'Attach at least one deliverable before marking this task as done.',
+          },
+          ORCHESTRATOR_DELEGATION: {
+            title: '🤖 Delegation Required',
+            guidance:
+              'Orchestrator should delegate this work to a sub-agent instead of doing it directly.',
+          },
         };
 
-        const title = gateNames[gateError.code] || '⚠️ Validation Error';
+        const info = gateInfo[gateError.code];
+        const title = info?.title || '⚠️ Enforcement Gate';
+        const guidance = info?.guidance || '';
 
         toast({
           title,
-          description: gateError.message,
+          description: `${gateError.message}${guidance ? `\n\n→ ${guidance}` : ''}`,
           variant: 'destructive',
-          duration: 8000, // Longer duration for enforcement messages
+          duration: 10000, // Longer duration for enforcement messages
         });
       } else {
         // Generic error fallback

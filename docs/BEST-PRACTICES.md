@@ -72,4 +72,29 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 10. **Copy/pasting unvetted external code**
     - Run security review (see RF-002) and cite sources.
 
+---
+
+## v3.3.0 Features — Best Practices
+
+11. **Use task dependencies to enforce ordering**
+    - Set `depends_on` / `blocks` relationships so agents don't start work before prerequisites are complete.
+    - The API's cycle detection prevents circular chains — trust it and model dependencies accurately.
+
+12. **Leverage crash-recovery checkpointing for long tasks**
+    - Call `POST /api/tasks/:id/checkpoint` periodically during multi-step agent work.
+    - Secrets are auto-sanitized — don't worry about leaking credentials in checkpoint state.
+    - Clear checkpoints after task completion to avoid stale data (`DELETE /api/tasks/:id/checkpoint`).
+
+13. **Capture observations for institutional memory**
+    - Log decisions, blockers, and insights as observations (`POST /api/observations`).
+    - Use importance scoring (1–10) so future agents can filter by significance.
+    - Search across all tasks with `GET /api/observations/search?query=...` to avoid repeating past mistakes.
+
+14. **Use the agent filter for workload visibility**
+    - Query `GET /api/tasks?agent=name` to see what each agent is working on before assigning new work.
+
+15. **Use workflows for repeatable multi-agent pipelines**
+    - If you're doing the same plan→implement→review cycle repeatedly, encode it as a YAML workflow.
+    - Workflows provide retry policies, gate approvals, and real-time observability that ad-hoc scripts don't.
+
 Stick to these rules and the board stays trustworthy even with dozens of agents in parallel.

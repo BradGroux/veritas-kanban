@@ -43,6 +43,17 @@ vi.mock('@/hooks/useBoardDragDrop', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useAgentStatus', () => ({
+  useRealtimeAgentStatus: () => ({
+    status: 'idle',
+    subAgentCount: 0,
+    activeAgents: [],
+    lastUpdated: new Date().toISOString(),
+    isConnected: true,
+    isStale: false,
+  }),
+}));
+
 vi.mock('@/hooks/useKeyboard', () => ({
   useKeyboard: () => ({
     selectedTaskId: null,
@@ -64,6 +75,12 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
         showProjectBadges: true,
         showSprintBadges: true,
         showDoneMetrics: false,
+      },
+      budget: {
+        enabled: false,
+        monthlyTokenLimit: 1_000_000,
+        monthlyCostLimit: 100,
+        warningThreshold: 0.8,
       },
     },
   }),
@@ -201,10 +218,10 @@ describe('KanbanBoard', () => {
     mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
     renderBoard();
 
-    expect(screen.getByText('To Do')).toBeDefined();
-    expect(screen.getByText('In Progress')).toBeDefined();
-    expect(screen.getByText('Blocked')).toBeDefined();
-    expect(screen.getByText('Done')).toBeDefined();
+    expect(screen.getAllByText('To Do').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Blocked').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Done').length).toBeGreaterThan(0);
   });
 
   it('renders empty board when no tasks', () => {

@@ -14,6 +14,11 @@ Complete feature reference for Veritas Kanban. For a quick overview, see the [RE
 - [AI Agent Integration](#ai-agent-integration)
 - [PRD-Driven Autonomous Development](#prd-driven-autonomous-development)
 - [Multi-Agent System (v2.0)](#multi-agent-system-v200)
+- [Squad Chat (v2.0)](#squad-chat-v200)
+- [Broadcast Notifications (v2.0)](#broadcast-notifications-v200)
+- [Task Deliverables (v2.0)](#task-deliverables-v200)
+- [Efficient Polling (v2.0)](#efficient-polling-v200)
+- [Approval Delegation (v2.0)](#approval-delegation-v200)
 - [Lifecycle Automation (v2.0)](#lifecycle-automation-v200)
 - [GitHub Issues Sync](#github-issues-sync)
 - [Activity Feed](#activity-feed)
@@ -27,6 +32,7 @@ Complete feature reference for Veritas Kanban. For a quick overview, see the [RE
 - [API](#api)
 - [Notifications](#notifications)
 - [Storage & Architecture](#storage--architecture)
+- [Reverse Proxy Ready (v2.1.1)](#reverse-proxy-ready-v211)
 - [Infrastructure & DevOps](#infrastructure--devops)
 - [Testing](#testing)
 - [Accessibility](#accessibility)
@@ -435,6 +441,134 @@ Automated staleness detection for project documentation with real-time tracking 
 - **Configurable thresholds** — Set staleness thresholds via Settings → Doc Freshness
 - **3-phase automation** — Manual → scheduled checks → CI integration
 - **Inspired by** @mvoutov's BoardKit Orchestrator ("stale docs = hallucinating AI")
+
+---
+
+## Squad Chat (v2.0.0)
+
+Real-time agent-to-agent communication channel for multi-agent collaboration.
+
+- **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
+- **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
+- **Model attribution** — Each message tagged with the sending agent's model for provenance tracking
+- **Configurable display names** — Agents set custom display names for chat identity
+- **Squad Chat Webhook** — Configurable webhooks for external integration; supports generic HTTP and OpenClaw Direct modes
+- **OpenClaw Direct gateway wake** — Real-time squad chat notifications pushed to OpenClaw gateway for agent orchestration
+- **Searchable history** — Browse and search past squad chat messages
+
+### API Endpoints
+
+| Endpoint          | Method | Description                 |
+| ----------------- | ------ | --------------------------- |
+| `/api/chat/squad` | POST   | Send a squad chat message   |
+| `/api/chat/squad` | GET    | Retrieve squad chat history |
+
+---
+
+## Broadcast Notifications (v2.0.0)
+
+Priority-based persistent notification system with agent-specific delivery and read receipts.
+
+- **Priority levels** — Notifications carry priority (low, normal, high, urgent) for triage
+- **Agent-specific delivery** — Target notifications to specific agents or broadcast to all
+- **Read receipts** — Track which agents have acknowledged notifications
+- **Persistent storage** — Notifications persisted to disk, survive server restarts
+- **Notification queue** — Unsent notifications queued for batch delivery
+- **Per-event toggles** — Enable/disable notification types in Settings → Notifications
+
+### API Endpoints
+
+| Endpoint                      | Method | Description                             |
+| ----------------------------- | ------ | --------------------------------------- |
+| `/api/notifications`          | POST   | Create a notification                   |
+| `/api/notifications`          | GET    | List notifications (filterable)         |
+| `/api/notifications/:id/read` | POST   | Mark notification as read               |
+| `/api/notifications/pending`  | GET    | Get unsent notifications (Teams format) |
+
+---
+
+## Task Deliverables (v2.0.0)
+
+First-class deliverable objects attached to tasks with type and status tracking.
+
+- **Deliverable types** — Code, documentation, data, config, test, and custom types
+- **Status tracking** — Pending, in-progress, complete, and rejected lifecycle
+- **Task association** — Deliverables linked to parent tasks for traceability
+- **Structured metadata** — Each deliverable carries type, status, description, and optional file references
+- **Enforcement gate** — `closingComments` gate can require deliverable summary (≥20 chars) before task completion
+
+### API Endpoints
+
+| Endpoint                           | Method | Description                  |
+| ---------------------------------- | ------ | ---------------------------- |
+| `/api/tasks/:id/deliverables`      | GET    | List deliverables for a task |
+| `/api/tasks/:id/deliverables`      | POST   | Add a deliverable to a task  |
+| `/api/tasks/:id/deliverables/:did` | PUT    | Update a deliverable         |
+| `/api/tasks/:id/deliverables/:did` | DELETE | Remove a deliverable         |
+| `/api/scheduled-deliverables`      | GET    | View scheduled deliverables  |
+
+---
+
+## Efficient Polling (v2.0.0)
+
+Optimized change-detection endpoint for agents that poll instead of using WebSocket.
+
+- **Change feed** — `GET /api/changes?since=<ISO timestamp>` returns only tasks modified after the given timestamp
+- **ETag support** — Responses include `ETag` headers; clients send `If-None-Match` to receive `304 Not Modified` when nothing changed
+- **Minimal payload** — Returns only changed task IDs and their new status, reducing bandwidth
+- **Agent-friendly** — Designed for headless agents that cannot maintain WebSocket connections
+- **Complements WebSocket** — Use WebSocket for real-time UI updates; use `/api/changes` for lightweight agent polling
+
+### API Endpoints
+
+| Endpoint                   | Method | Description                                    |
+| -------------------------- | ------ | ---------------------------------------------- |
+| `/api/changes?since=<ISO>` | GET    | Get tasks changed since timestamp (ETag aware) |
+
+---
+
+## Approval Delegation (v2.0.0)
+
+Vacation mode with scoped approval delegation and automatic routing.
+
+- **Delegation rules** — Delegate approval authority to another agent or user for a defined period
+- **Scoped delegation** — Restrict delegation to specific projects, task types, or priority levels
+- **Automatic routing** — Approval requests automatically routed to the delegate when the primary approver is unavailable
+- **Vacation mode** — Mark yourself as unavailable; all approvals reroute to your configured delegate
+- **Audit trail** — All delegated approvals logged with both original approver and delegate for accountability
+
+---
+
+## Reverse Proxy Ready (v2.1.1)
+
+Deploy Veritas Kanban behind nginx, Caddy, Traefik, or any reverse proxy.
+
+- **`TRUST_PROXY` environment variable** — Set to `true`, `1`, or a comma-separated list of trusted proxy IPs/CIDRs
+- **Correct client IP resolution** — With `TRUST_PROXY` enabled, Express reads the real client IP from `X-Forwarded-For` headers
+- **Secure cookies** — When behind a TLS-terminating proxy, session cookies respect `X-Forwarded-Proto`
+- **Rate limiting accuracy** — Rate limits apply to the real client IP, not the proxy's IP
+- **WebSocket passthrough** — WebSocket connections work through reverse proxies with standard `Upgrade` header forwarding
+
+### Example Configurations
+
+**nginx:**
+
+```nginx
+location / {
+    proxy_pass http://localhost:3001;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+**Environment:**
+
+```bash
+TRUST_PROXY=true
+```
 
 ---
 
@@ -1562,4 +1696,4 @@ Working toward WCAG 2.1 AA compliance.
 
 ---
 
-_Last updated: 2026-02-06 · [Back to README](../README.md)_
+_Last updated: 2026-02-17 · [Back to README](../README.md)_

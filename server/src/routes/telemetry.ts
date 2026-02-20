@@ -150,9 +150,9 @@ router.post(
   validate({ body: TelemetryBulkQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, TelemetryBulkQuery>, res) => {
     const telemetry = getTelemetryService();
-    const { taskIds } = req.validated.body!;
+    const { taskIds, perTaskLimit } = req.validated.body!;
 
-    const eventsMap = await telemetry.getBulkTaskEvents(taskIds);
+    const eventsMap = await telemetry.getBulkTaskEvents(taskIds, perTaskLimit);
 
     // Convert Map to plain object for JSON response
     const result: Record<string, AnyTelemetryEvent[]> = {};

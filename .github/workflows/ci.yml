@@ -40,9 +40,9 @@ jobs:
       - name: Type check all packages
         run: pnpm typecheck
 
-  # ─── Server Tests ────────────────────────────────────────────────
-  test-server:
-    name: Server Tests
+  # ─── Workspace Unit Tests ────────────────────────────────────────
+  test-workspace:
+    name: Workspace Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,11 +57,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared (server dependency)
+      - name: Build shared (dependency for workspace tests)
         run: pnpm --filter @veritas-kanban/shared build
 
-      - name: Run server tests
-        run: pnpm --filter @veritas-kanban/server test
+      - name: Run workspace unit tests
+        run: pnpm test:unit
 
   # ─── Build ───────────────────────────────────────────────────────
   build:

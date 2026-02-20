@@ -20,7 +20,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "pnpm -r test",
+    "test:unit": "pnpm -r --workspace-concurrency=1 test",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
@@ -30,7 +30,8 @@
     "audit": "pnpm audit --prod",
     "audit:all": "pnpm audit",
     "seed": "bash scripts/seed.sh",
-    "prepare": "husky"
+    "prepare": "husky",
+    "demo": "docker compose -f demo/docker-compose.demo.yml up --build"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
@@ -58,7 +59,9 @@
   },
   "pnpm": {
     "overrides": {
-      "hono": ">=4.11.7"
+      "hono": ">=4.11.7",
+      "ajv": "^8.18.0",
+      "qs": "^6.14.2"
     }
   },
   "repository": {
