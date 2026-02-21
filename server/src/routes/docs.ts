@@ -78,9 +78,9 @@ router.get(
  * GET /api/docs/file/* — Get file with content
  */
 router.get(
-  '/file/*',
+  '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = req.params[0] || (req.params as Record<string, string>)['0'];
+    const filePath = (req.params as any).path || req.params[0];
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const service = getDocsService();
@@ -94,9 +94,9 @@ router.get(
  * PUT /api/docs/file/* — Create or update file
  */
 router.put(
-  '/file/*',
+  '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = req.params[0] || (req.params as Record<string, string>)['0'];
+    const filePath = (req.params as any).path || req.params[0];
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const content = req.body.content;
@@ -114,9 +114,9 @@ router.put(
  * DELETE /api/docs/file/* — Delete file
  */
 router.delete(
-  '/file/*',
+  '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = req.params[0] || (req.params as Record<string, string>)['0'];
+    const filePath = (req.params as any).path || req.params[0];
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const service = getDocsService();
