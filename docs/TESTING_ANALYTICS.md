@@ -20,7 +20,7 @@ Create 3 tasks that run in parallel to test the parallelism detection:
 
 ```bash
 # Task 1: 10:00-10:30 (30 min)
-curl -X POST http://localhost:3002/api/tasks \
+curl -X POST http://localhost:3001/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Feature A - Backend",
@@ -36,7 +36,7 @@ curl -X POST http://localhost:3002/api/tasks \
 TASK1=$(jq -r '.data.id' /tmp/task1.json)
 
 # Add time entries (10:00-10:30)
-curl -X POST http://localhost:3002/api/tasks/$TASK1/time/entry \
+curl -X POST http://localhost:3001/api/tasks/$TASK1/time/entry \
   -H "Content-Type: application/json" \
   -d '{
     "duration": 1800,
@@ -44,7 +44,7 @@ curl -X POST http://localhost:3002/api/tasks/$TASK1/time/entry \
   }'
 
 # Task 2: 10:15-11:00 (45 min) - overlaps with Task 1
-curl -X POST http://localhost:3002/api/tasks \
+curl -X POST http://localhost:3001/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Feature B - Frontend",
@@ -58,7 +58,7 @@ curl -X POST http://localhost:3002/api/tasks \
 
 TASK2=$(jq -r '.data.id' /tmp/task2.json)
 
-curl -X POST http://localhost:3002/api/tasks/$TASK2/time/entry \
+curl -X POST http://localhost:3001/api/tasks/$TASK2/time/entry \
   -H "Content-Type: application/json" \
   -d '{
     "duration": 2700,
@@ -66,7 +66,7 @@ curl -X POST http://localhost:3002/api/tasks/$TASK2/time/entry \
   }'
 
 # Task 3: 10:45-11:30 (45 min) - overlaps with Task 2 only
-curl -X POST http://localhost:3002/api/tasks \
+curl -X POST http://localhost:3001/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Feature C - Testing",
@@ -80,7 +80,7 @@ curl -X POST http://localhost:3002/api/tasks \
 
 TASK3=$(jq -r '.data.id' /tmp/task3.json)
 
-curl -X POST http://localhost:3002/api/tasks/$TASK3/time/entry \
+curl -X POST http://localhost:3001/api/tasks/$TASK3/time/entry \
   -H "Content-Type: application/json" \
   -d '{
     "duration": 2700,
@@ -95,7 +95,7 @@ echo "Created tasks: $TASK1, $TASK2, $TASK3"
 ### Test 1: Get Timeline (No Filters)
 
 ```bash
-curl -s http://localhost:3002/api/analytics/timeline | jq .
+curl -s http://localhost:3001/api/analytics/timeline | jq .
 ```
 
 **Expected Output:**
@@ -108,7 +108,7 @@ curl -s http://localhost:3002/api/analytics/timeline | jq .
 
 ```bash
 # Get timeline for today
-curl -s "http://localhost:3002/api/analytics/timeline?from=2026-02-04T00:00:00Z&to=2026-02-05T23:59:59Z" | jq .
+curl -s "http://localhost:3001/api/analytics/timeline?from=2026-02-04T00:00:00Z&to=2026-02-05T23:59:59Z" | jq .
 ```
 
 **Expected Output:**
@@ -119,7 +119,7 @@ curl -s "http://localhost:3002/api/analytics/timeline?from=2026-02-04T00:00:00Z&
 ### Test 3: Filter by Project
 
 ```bash
-curl -s "http://localhost:3002/api/analytics/timeline?project=veritas" | jq '.data.tasks | length'
+curl -s "http://localhost:3001/api/analytics/timeline?project=veritas" | jq '.data.tasks | length'
 ```
 
 **Expected Output:**
@@ -129,7 +129,7 @@ curl -s "http://localhost:3002/api/analytics/timeline?project=veritas" | jq '.da
 ### Test 4: Get Metrics for Sprint
 
 ```bash
-curl -s "http://localhost:3002/api/analytics/metrics?sprint=v1.5" | jq .
+curl -s "http://localhost:3001/api/analytics/metrics?sprint=v1.5" | jq .
 ```
 
 **Expected Output:**
@@ -142,7 +142,7 @@ curl -s "http://localhost:3002/api/analytics/metrics?sprint=v1.5" | jq .
 ### Test 5: Verify Parallelism Calculation
 
 ```bash
-curl -s http://localhost:3002/api/analytics/timeline | \
+curl -s http://localhost:3001/api/analytics/timeline | \
   jq '.data.parallelism | sort_by(.timestamp) | .[] | {timestamp: .timestamp, count: .concurrentTaskCount}'
 ```
 
@@ -174,7 +174,7 @@ curl -s http://localhost:3002/api/analytics/timeline | \
 ### Test 6: Agent Utilization
 
 ```bash
-curl -s "http://localhost:3002/api/analytics/metrics?sprint=v1.5" | \
+curl -s "http://localhost:3001/api/analytics/metrics?sprint=v1.5" | \
   jq '.data.agentUtilization'
 ```
 
@@ -190,7 +190,7 @@ To test performance with many tasks:
 ```bash
 # Generate 100 tasks with overlapping time entries
 for i in {1..100}; do
-  TASK=$(curl -s -X POST http://localhost:3002/api/tasks \
+  TASK=$(curl -s -X POST http://localhost:3001/api/tasks \
     -H "Content-Type: application/json" \
     -d "{
       \"title\": \"Test Task $i\",
@@ -201,7 +201,7 @@ for i in {1..100}; do
       \"sprint\": \"load-test\"
     }" | jq -r '.data.id')
 
-  curl -s -X POST http://localhost:3002/api/tasks/$TASK/time/entry \
+  curl -s -X POST http://localhost:3001/api/tasks/$TASK/time/entry \
     -H "Content-Type: application/json" \
     -d "{\"duration\": $((RANDOM % 3600 + 300))}"
 
@@ -209,7 +209,7 @@ for i in {1..100}; do
 done
 
 # Time the metrics endpoint
-time curl -s "http://localhost:3002/api/analytics/metrics?sprint=load-test" > /dev/null
+time curl -s "http://localhost:3001/api/analytics/metrics?sprint=load-test" > /dev/null
 ```
 
 **Expected:** Should complete in <2 seconds even with 100 tasks
@@ -220,20 +220,20 @@ time curl -s "http://localhost:3002/api/analytics/metrics?sprint=load-test" > /d
 
 ```bash
 TASK_ID="task_20260205_xxxxx"
-curl -s http://localhost:3002/api/tasks/$TASK_ID | jq '.data.timeTracking'
+curl -s http://localhost:3001/api/tasks/$TASK_ID | jq '.data.timeTracking'
 ```
 
 ### Verify Parallelism Snapshots
 
 ```bash
-curl -s http://localhost:3002/api/analytics/timeline | \
+curl -s http://localhost:3001/api/analytics/timeline | \
   jq '.data | {totalTasks: .summary.totalTasks, snapshotCount: (.parallelism | length), maxConcurrency: .summary.maxConcurrency}'
 ```
 
 ### Check Timeline Period
 
 ```bash
-curl -s http://localhost:3002/api/analytics/timeline | \
+curl -s http://localhost:3001/api/analytics/timeline | \
   jq '.data.period'
 ```
 
@@ -241,19 +241,19 @@ curl -s http://localhost:3002/api/analytics/timeline | \
 
 ### No Data in Timeline
 
-1. Verify tasks have time entries: `curl http://localhost:3002/api/tasks | jq '.data[] | select(.timeTracking.entries | length > 0)'`
+1. Verify tasks have time entries: `curl http://localhost:3001/api/tasks | jq '.data[] | select(.timeTracking.entries | length > 0)'`
 2. Check date range is correct
 3. Ensure timer was stopped (not still running)
 
 ### Incorrect Parallelism
 
-1. Review individual time entries: `curl http://localhost:3002/api/tasks/TASK_ID | jq '.data.timeTracking.entries'`
+1. Review individual time entries: `curl http://localhost:3001/api/tasks/TASK_ID | jq '.data.timeTracking.entries'`
 2. Check entry start/end times
 3. Verify 5-minute sampling window includes the overlap points
 
 ### Performance Issues
 
-1. Check number of tasks: `curl http://localhost:3002/api/tasks | jq '.data | length'`
+1. Check number of tasks: `curl http://localhost:3001/api/tasks | jq '.data | length'`
 2. If >1000 tasks, consider narrowing date range
 3. Use project/sprint filters to reduce data volume
 

@@ -40,11 +40,11 @@ cp server/.env.example server/.env
 docker compose up -d --build
 
 # Verify it's running
-curl http://localhost:3002/health
+curl http://localhost:3001/health
 # → {"status":"ok","timestamp":"..."}
 ```
 
-The app is now available at **http://localhost:3002**.
+The app is now available at **http://localhost:3001**.
 
 Data is persisted in a Docker named volume (`kanban-data`), so it survives container restarts.
 
@@ -169,10 +169,10 @@ NODE_ENV=production node server/dist/index.js
 
 The server:
 
-- Serves the API at `http://localhost:3002/api`
-- Serves the built React frontend at `http://localhost:3002`
-- Provides WebSocket updates at `ws://localhost:3002/ws`
-- Exposes API docs at `http://localhost:3002/api-docs`
+- Serves the API at `http://localhost:3001/api`
+- Serves the built React frontend at `http://localhost:3001`
+- Provides WebSocket updates at `ws://localhost:3001/ws`
+- Exposes API docs at `http://localhost:3001/api-docs`
 
 ### Reverse Proxy (nginx)
 
@@ -266,7 +266,7 @@ Caddy handles TLS automatically:
 
 ```caddyfile
 kanban.example.com {
-    reverse_proxy localhost:3002
+    reverse_proxy localhost:3001
 }
 ```
 
@@ -394,13 +394,13 @@ The API supports three authentication methods:
 
 ```bash
 # 1. Authorization header (Bearer token)
-curl -H "Authorization: Bearer <api-key>" http://localhost:3002/api/tasks
+curl -H "Authorization: Bearer <api-key>" http://localhost:3001/api/tasks
 
 # 2. X-API-Key header
-curl -H "X-API-Key: <api-key>" http://localhost:3002/api/tasks
+curl -H "X-API-Key: <api-key>" http://localhost:3001/api/tasks
 
 # 3. Query parameter (for WebSocket connections)
-wscat -c "ws://localhost:3002/ws?api_key=<api-key>"
+wscat -c "ws://localhost:3001/ws?api_key=<api-key>"
 ```
 
 ### Role Permissions
@@ -524,7 +524,7 @@ docker compose up -d --build
 
 # Verify
 docker compose logs -f
-curl http://localhost:3002/health
+curl http://localhost:3001/health
 ```
 
 ### Bare Metal
@@ -545,7 +545,7 @@ pnpm build
 sudo systemctl restart veritas-kanban
 
 # Verify
-curl http://localhost:3002/health
+curl http://localhost:3001/health
 sudo journalctl -u veritas-kanban --since "1 min ago"
 ```
 
@@ -560,7 +560,7 @@ Veritas Kanban runs startup migrations automatically (`runStartupMigrations()` i
 The server exposes an unauthenticated health endpoint:
 
 ```bash
-curl http://localhost:3002/health
+curl http://localhost:3001/health
 # → {"status":"ok","timestamp":"2026-01-29T12:00:00.000Z"}
 ```
 
@@ -596,7 +596,7 @@ docker compose logs veritas-kanban
 
 ```bash
 # Check auth diagnostics (requires admin key)
-curl -H "X-API-Key: your-admin-key" http://localhost:3002/api/auth/diagnostics
+curl -H "X-API-Key: your-admin-key" http://localhost:3001/api/auth/diagnostics
 ```
 
 ### WebSocket connection refused
@@ -618,5 +618,5 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 The built-in Swagger UI is available at:
 
 ```
-http://localhost:3002/api-docs
+http://localhost:3001/api-docs
 ```

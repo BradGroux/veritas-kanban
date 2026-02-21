@@ -43,7 +43,7 @@ Veritas Kanban provides native infrastructure for every phase of autonomous deve
 
 Before setting up PRD-driven autonomous development:
 
-1. **VK server running** — `http://localhost:3002` (or your configured port)
+1. **VK server running** — `http://localhost:3001` (or your configured port)
 2. **API access** — API key configured (`VERITAS_API_KEY` or `VERITAS_ADMIN_KEY`)
 3. **Git repository** — Your project is a git repository
 4. **Quality checks** — You have automated checks (tests, linters, typecheck)
@@ -92,7 +92,7 @@ Before setting up PRD-driven autonomous development:
 **Via API:**
 
 ```bash
-curl -X POST http://localhost:3002/api/templates \
+curl -X POST http://localhost:3001/api/templates \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -164,7 +164,7 @@ QUALITY GATES (enforced by reviewGate):
 - Safety: Input validation, error handling, no secrets (≥8/10)
 - Testing: Unit tests, edge cases covered (≥8/10)
 
-VK_API: http://localhost:3002
+VK_API: http://localhost:3001
 SQUAD_CHAT_ENDPOINT: POST /api/chat/squad
 
 When all subtasks complete:
@@ -192,7 +192,7 @@ vk create "Feature: Test PRD Workflow" \
 vk automation:start <task-id>
 ```
 
-Monitor via Squad Chat at `http://localhost:3002/squad` (if available) or Activity page.
+Monitor via Squad Chat at `http://localhost:3001/squad` (if available) or Activity page.
 
 ---
 
@@ -209,7 +209,7 @@ When assigned a PRD task (identified by subtasks and enforcement gates), follow 
 1. **Fetch task details:**
 
    ```bash
-   GET http://localhost:3002/api/tasks/{TASK_ID}
+   GET http://localhost:3001/api/tasks/{TASK_ID}
    ```
 
 2. **Verify it's a PRD task:**
@@ -219,7 +219,7 @@ When assigned a PRD task (identified by subtasks and enforcement gates), follow 
 3. **Announce start to Squad Chat:**
 
    ```bash
-   POST http://localhost:3002/api/chat/squad
+   POST http://localhost:3001/api/chat/squad
    {
      "agent": "YOUR_AGENT_NAME",
      "message": "Starting {{task.title}} — {{task.subtasks.length}} stories",
@@ -231,12 +231,12 @@ When assigned a PRD task (identified by subtasks and enforcement gates), follow 
 4. **Start time tracking:**
 
    ```bash
-   POST http://localhost:3002/api/tasks/{TASK_ID}/time/start
+   POST http://localhost:3001/api/tasks/{TASK_ID}/time/start
    ```
 
 5. **Emit telemetry start:**
    ```bash
-   POST http://localhost:3002/api/telemetry/events
+   POST http://localhost:3001/api/telemetry/events
    {
      "type": "run.started",
      "taskId": "{TASK_ID}",
@@ -260,7 +260,7 @@ Parse previous learnings to inform current implementation.
 **Step 2: Find next incomplete story**
 
 ```bash
-GET http://localhost:3002/api/tasks/{TASK_ID}
+GET http://localhost:3001/api/tasks/{TASK_ID}
 
 # Filter subtasks where completed === false
 # Pick first incomplete subtask
@@ -273,7 +273,7 @@ If no incomplete stories remain, proceed to **Completion** section.
 **Step 3: Announce story start**
 
 ```bash
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "{{CURRENT_STORY_TITLE}}: Implementing...",
@@ -321,7 +321,7 @@ EXIT_CODE_TEST=$?
 
 ```bash
 # Announce failure
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "{{CURRENT_STORY_TITLE}}: Quality check failed (typecheck: {{EXIT_CODE_TYPECHECK}}, lint: {{EXIT_CODE_LINT}}, test: {{EXIT_CODE_TEST}}) — fixing...",
@@ -331,13 +331,13 @@ POST http://localhost:3002/api/chat/squad
 
 # Fix issues and retry (max 2 attempts)
 # If 2 failures, escalate:
-POST http://localhost:3002/api/tasks/{TASK_ID}
+POST http://localhost:3001/api/tasks/{TASK_ID}
 {
   "status": "blocked",
   "blockReason": "Quality checks failing after 2 attempts — human review needed"
 }
 
-POST http://localhost:3002/api/tasks/{TASK_ID}/comments
+POST http://localhost:3001/api/tasks/{TASK_ID}/comments
 {
   "text": "Story {{CURRENT_STORY_TITLE}} blocked: quality checks failing. Errors:\n\n{{ERROR_DETAILS}}",
   "author": "YOUR_AGENT_NAME"
@@ -355,7 +355,7 @@ git commit -m "feat({{CURRENT_STORY_ID}}): {{CURRENT_STORY_TITLE}}"
 COMMIT_HASH=$(git rev-parse --short HEAD)
 
 # Announce commit
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "{{CURRENT_STORY_TITLE}}: Tests passing — committed ({{COMMIT_HASH}})",
@@ -390,10 +390,10 @@ EOF
 **Step 9: Mark subtask complete**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}/subtasks/{CURRENT_STORY_ID}/complete
+POST http://localhost:3001/api/tasks/{TASK_ID}/subtasks/{CURRENT_STORY_ID}/complete
 
 # Announce completion
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "{{CURRENT_STORY_TITLE}}: Complete — marked as done",
@@ -413,7 +413,7 @@ When all subtasks are complete:
 **Step 1: Submit review scores**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}/review
+POST http://localhost:3001/api/tasks/{TASK_ID}/review
 {
   "decision": "approved",
   "scores": {
@@ -436,7 +436,7 @@ POST http://localhost:3002/api/tasks/{TASK_ID}/review
 **Step 2: Add closing comment**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}/comments
+POST http://localhost:3001/api/tasks/{TASK_ID}/comments
 {
   "text": "Completed {{task.title}}:\n{{STORY_SUMMARY_LIST}}\n\nAll tests passing, security review clean.",
   "author": "YOUR_AGENT_NAME"
@@ -460,13 +460,13 @@ EOF
 **Step 4: Stop time tracking**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}/time/stop
+POST http://localhost:3001/api/tasks/{TASK_ID}/time/stop
 ```
 
 **Step 5: Emit telemetry completion**
 
 ```bash
-POST http://localhost:3002/api/telemetry/events
+POST http://localhost:3001/api/telemetry/events
 {
   "type": "run.completed",
   "taskId": "{TASK_ID}",
@@ -476,7 +476,7 @@ POST http://localhost:3002/api/telemetry/events
 }
 
 # Report token usage
-POST http://localhost:3002/api/telemetry/events
+POST http://localhost:3001/api/telemetry/events
 {
   "type": "run.tokens",
   "taskId": "{TASK_ID}",
@@ -492,13 +492,13 @@ POST http://localhost:3002/api/telemetry/events
 **Step 6: Mark task complete**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}/complete
+POST http://localhost:3001/api/tasks/{TASK_ID}/complete
 {
   "summary": "Completed {{task.title}} — {{COMPLETED_COUNT}} stories, all tests passing"
 }
 
 # Announce completion
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "{{task.title}}: Complete — {{COMPLETED_COUNT}} stories, {{COMMIT_COUNT}} commits, {{TOTAL_ELAPSED}}",
@@ -513,7 +513,7 @@ POST http://localhost:3002/api/chat/squad
 
 ```bash
 # Log error details
-POST http://localhost:3002/api/errors
+POST http://localhost:3001/api/errors
 {
   "taskId": "{TASK_ID}",
   "errorType": "api_error",
@@ -522,7 +522,7 @@ POST http://localhost:3002/api/errors
 }
 
 # Notify via Squad Chat
-POST http://localhost:3002/api/chat/squad
+POST http://localhost:3001/api/chat/squad
 {
   "agent": "YOUR_AGENT_NAME",
   "message": "ERROR: API call failed ({{API_ENDPOINT}}) — {{ERROR_MESSAGE}}",
@@ -538,7 +538,7 @@ Block task and escalate to human (see Step 6 retry logic above).
 **On git conflicts:**
 
 ```bash
-POST http://localhost:3002/api/tasks/{TASK_ID}
+POST http://localhost:3001/api/tasks/{TASK_ID}
 {
   "status": "blocked",
   "blockReason": "Git merge conflict — human resolution needed"
@@ -772,7 +772,7 @@ Squad Chat provides real-time visibility — ensure it's configured:
 
 ```bash
 # Test Squad Chat posting
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -916,7 +916,7 @@ Use interactive development to design and build the first iteration, then use PR
 
 **Check:**
 
-1. Squad Chat endpoint: `POST http://localhost:3002/api/chat/squad`
+1. Squad Chat endpoint: `POST http://localhost:3001/api/chat/squad`
 2. Authorization header
 3. Required fields: `agent`, `message`, `model`, `tags`
 

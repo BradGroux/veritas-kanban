@@ -58,7 +58,7 @@ Pipe outputs to `jq` or `fzf` for custom dashboards.
      "command": "node",
      "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
      "env": {
-       "VK_API_URL": "http://localhost:3002",
+       "VK_API_URL": "http://localhost:3001",
        "VK_API_KEY": "<admin-key>"
      }
    }

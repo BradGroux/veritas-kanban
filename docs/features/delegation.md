@@ -22,7 +22,7 @@ Approval Delegation allows users to delegate their approval authority to another
 
 ```bash
 # Delegate all approvals (vacation mode)
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -34,7 +34,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
   }'
 
 # Delegate specific project approvals
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -49,7 +49,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
   }'
 
 # Delegate by task type and priority
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -65,7 +65,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
   }'
 
 # Delegate to multiple people with fallback
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -84,15 +84,15 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
 
 ```bash
 # Get all active delegations
-curl http://localhost:3002/api/approvals/delegate \
+curl http://localhost:3001/api/approvals/delegate \
   -H "X-API-Key: YOUR_KEY"
 
 # Get delegations for specific user
-curl "http://localhost:3002/api/approvals/delegate?user=brad" \
+curl "http://localhost:3001/api/approvals/delegate?user=brad" \
   -H "X-API-Key: YOUR_KEY"
 
 # Get delegations where user is delegate
-curl "http://localhost:3002/api/approvals/delegate?delegate=VERITAS" \
+curl "http://localhost:3001/api/approvals/delegate?delegate=VERITAS" \
   -H "X-API-Key: YOUR_KEY"
 ```
 
@@ -100,7 +100,7 @@ curl "http://localhost:3002/api/approvals/delegate?delegate=VERITAS" \
 
 ```bash
 # Extend delegation end date
-curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
+curl -X PATCH http://localhost:3001/api/approvals/delegate/{delegationId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -108,7 +108,7 @@ curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
   }'
 
 # Change delegate
-curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
+curl -X PATCH http://localhost:3001/api/approvals/delegate/{delegationId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -116,7 +116,7 @@ curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
   }'
 
 # Update scope
-curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
+curl -X PATCH http://localhost:3001/api/approvals/delegate/{delegationId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -130,7 +130,7 @@ curl -X PATCH http://localhost:3002/api/approvals/delegate/{delegationId} \
 
 ```bash
 # Cancel delegation early
-curl -X DELETE http://localhost:3002/api/approvals/delegate/{delegationId} \
+curl -X DELETE http://localhost:3001/api/approvals/delegate/{delegationId} \
   -H "X-API-Key: YOUR_KEY"
 ```
 
@@ -265,7 +265,7 @@ Approval audit logs include delegation references:
 Delegate all approvals while away:
 
 ```bash
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -282,7 +282,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
 Delegate urgent approvals to on-call agent:
 
 ```bash
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -302,7 +302,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
 Delegate specific project during transition:
 
 ```bash
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -322,7 +322,7 @@ curl -X POST http://localhost:3002/api/approvals/delegate \
 Delegate code reviews when overloaded:
 
 ```bash
-curl -X POST http://localhost:3002/api/approvals/delegate \
+curl -X POST http://localhost:3001/api/approvals/delegate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -358,11 +358,11 @@ Agents should check for delegated approvals:
 
 ```bash
 # Check if agent has delegated authority
-curl "http://localhost:3002/api/approvals/delegate?delegate=VERITAS" \
+curl "http://localhost:3001/api/approvals/delegate?delegate=VERITAS" \
   -H "X-API-Key: YOUR_KEY"
 
 # Approve on behalf of delegator
-curl -X POST http://localhost:3002/api/tasks/{taskId}/approve \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/approve \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{

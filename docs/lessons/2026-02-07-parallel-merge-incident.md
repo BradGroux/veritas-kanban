@@ -93,7 +93,7 @@ const port = window.location.port === '3000' ? 3001 : 3000;
 
 ### 8. Hardcoded Values Throughout Codebase
 
-**What:** Agent callback URLs, API client defaults, Swagger base URL all hardcoded to `localhost:3002`. Various timeouts and limits were magic numbers.  
+**What:** Agent callback URLs, API client defaults, Swagger base URL all hardcoded to `localhost:3001`. Various timeouts and limits were magic numbers.  
 **Why:** Quick-and-dirty development without env var abstraction.  
 **Impact:** Every hardcoded value had to be hunted down and fixed manually.
 

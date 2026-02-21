@@ -272,16 +272,16 @@ Save and resume agent state across crashes and restarts with automatic secret sa
 
 ```bash
 # Save checkpoint
-curl -X POST http://localhost:3002/api/tasks/US-42/checkpoint \
+curl -X POST http://localhost:3001/api/tasks/US-42/checkpoint \
   -H "Content-Type: application/json" \
   -d '{"state":{"current_step":3,"completed":["step1","step2"],"api_key":"sk-1234"}}'
 
 # Resume checkpoint (secrets sanitized in response)
-curl http://localhost:3002/api/tasks/US-42/checkpoint
+curl http://localhost:3001/api/tasks/US-42/checkpoint
 # Returns: {"state":{"current_step":3,"completed":["step1","step2"],"api_key":"[REDACTED]"},...}
 
 # Clear checkpoint
-curl -X DELETE http://localhost:3002/api/tasks/US-42/checkpoint
+curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
 ```
 
 ---
@@ -311,15 +311,15 @@ Capture and search critical insights, decisions, blockers, and context across ag
 
 ```bash
 # Add observation
-curl -X POST http://localhost:3002/api/observations \
+curl -X POST http://localhost:3001/api/observations \
   -H "Content-Type: application/json" \
   -d '{"taskId":"US-42","type":"decision","content":"Chose React Query over Redux for simpler data fetching","importance":8}'
 
 # Search across all tasks
-curl "http://localhost:3002/api/observations/search?query=react+query&limit=10"
+curl "http://localhost:3001/api/observations/search?query=react+query&limit=10"
 
 # Get observations for task
-curl http://localhost:3002/api/tasks/US-42/observations
+curl http://localhost:3001/api/tasks/US-42/observations
 ```
 
 ---
@@ -343,13 +343,13 @@ Query tasks by agent name for precise agent workload tracking.
 
 ```bash
 # Get all tasks for agent "codex"
-curl "http://localhost:3002/api/tasks?agent=codex"
+curl "http://localhost:3001/api/tasks?agent=codex"
 
 # Get blocked tasks for agent "veritas"
-curl "http://localhost:3002/api/tasks?agent=veritas&status=blocked"
+curl "http://localhost:3001/api/tasks?agent=veritas&status=blocked"
 
 # Paginated results
-curl "http://localhost:3002/api/tasks?agent=codex&limit=25&offset=0"
+curl "http://localhost:3001/api/tasks?agent=codex&limit=25&offset=0"
 ```
 
 ---
@@ -555,7 +555,7 @@ Deploy Veritas Kanban behind nginx, Caddy, Traefik, or any reverse proxy.
 
 ```nginx
 location / {
-    proxy_pass http://localhost:3002;
+    proxy_pass http://localhost:3001;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_http_version 1.1;
@@ -1243,7 +1243,7 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, etc.
     "veritas-kanban": {
       "command": "node",
       "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
-      "env": { "VK_API_URL": "http://localhost:3002" }
+      "env": { "VK_API_URL": "http://localhost:3001" }
     }
   }
 }
@@ -1507,7 +1507,7 @@ RESTful API designed for both human and AI agent consumption.
 
 ### Real-Time Updates
 
-- **WebSocket server** — Real-time task change broadcasts on `ws://localhost:3002`
+- **WebSocket server** — Real-time task change broadcasts on `ws://localhost:3001`
 - **WebSocket connection indicator** — UI shows connected/disconnected status
 
   ![WebSocket activity](../assets/scr-menu_websocket_activity.png)

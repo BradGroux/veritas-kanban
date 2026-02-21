@@ -38,20 +38,20 @@ Clients can authenticate using any of these methods:
 
 ```bash
 curl -H "Authorization: Bearer your-api-key" \
-  http://localhost:3002/api/tasks
+  http://localhost:3001/api/tasks
 ```
 
 ### 2. X-API-Key Header
 
 ```bash
 curl -H "X-API-Key: your-api-key" \
-  http://localhost:3002/api/tasks
+  http://localhost:3001/api/tasks
 ```
 
 ### 3. Query Parameter (WebSocket)
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3002/ws?api_key=your-api-key');
+const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 ```
 
 ## Roles and Permissions
@@ -114,7 +114,7 @@ const key = generateApiKey('vk'); // e.g., vk_AbCdEf123...
 Check the current authentication configuration:
 
 ```bash
-curl http://localhost:3002/api/auth/status
+curl http://localhost:3001/api/auth/status
 ```
 
 Response:
@@ -131,7 +131,7 @@ Response:
 ### Health Check (Unauthenticated)
 
 ```bash
-curl http://localhost:3002/health
+curl http://localhost:3001/health
 ```
 
 ## WebSocket Authentication
@@ -140,7 +140,7 @@ WebSocket connections are authenticated on connect:
 
 ```javascript
 // With API key
-const ws = new WebSocket('ws://localhost:3002/ws?api_key=your-key');
+const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-key');
 
 ws.onclose = (event) => {
   if (event.code === 4001) {

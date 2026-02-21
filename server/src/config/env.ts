@@ -47,7 +47,7 @@ const booleanString = z
 export const envSchema = z.object({
   // ── Server ──────────────────────────────────────────────────────────
   /** HTTP port the server listens on */
-  PORT: portSchema.default('3002'),
+  PORT: portSchema.default('3001'),
 
   /** Node environment: development | production | test */
   NODE_ENV: z.enum(['development', 'production', 'test']).optional().default('development'),

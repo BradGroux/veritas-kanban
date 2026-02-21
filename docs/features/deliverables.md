@@ -22,7 +22,7 @@ Task Deliverables provide structured tracking of work products created during ta
 
 ```bash
 # Code deliverable
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -34,7 +34,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
   }'
 
 # Documentation deliverable with URL
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -46,7 +46,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
   }'
 
 # Data deliverable with metadata
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -67,15 +67,15 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
 
 ```bash
 # Get all deliverables for a task
-curl http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "X-API-Key: YOUR_KEY"
 
 # Filter by type
-curl "http://localhost:3002/api/tasks/{taskId}/deliverables?type=code" \
+curl "http://localhost:3001/api/tasks/{taskId}/deliverables?type=code" \
   -H "X-API-Key: YOUR_KEY"
 
 # Filter by status
-curl "http://localhost:3002/api/tasks/{taskId}/deliverables?status=complete" \
+curl "http://localhost:3001/api/tasks/{taskId}/deliverables?status=complete" \
   -H "X-API-Key: YOUR_KEY"
 ```
 
@@ -83,7 +83,7 @@ curl "http://localhost:3002/api/tasks/{taskId}/deliverables?status=complete" \
 
 ```bash
 # Update status
-curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverableId} \
+curl -X PATCH http://localhost:3001/api/tasks/{taskId}/deliverables/{deliverableId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -91,7 +91,7 @@ curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverable
   }'
 
 # Update description and metadata
-curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverableId} \
+curl -X PATCH http://localhost:3001/api/tasks/{taskId}/deliverables/{deliverableId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -105,7 +105,7 @@ curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverable
 ### Delete Deliverable
 
 ```bash
-curl -X DELETE http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverableId} \
+curl -X DELETE http://localhost:3001/api/tasks/{taskId}/deliverables/{deliverableId} \
   -H "X-API-Key: YOUR_KEY"
 ```
 
@@ -203,7 +203,7 @@ deliverables:
 Track specific files or modules created during development:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -225,7 +225,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
 Link to generated docs or external documentation:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -242,7 +242,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
 Reference design files or tools:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -263,7 +263,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
 Track data exports, migrations, or datasets:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -284,7 +284,7 @@ curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
 Track test files and coverage:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -317,7 +317,7 @@ Agents should create deliverables when completing work:
 
 ```bash
 # After creating/modifying a file
-curl -X POST http://localhost:3002/api/tasks/{taskId}/deliverables \
+curl -X POST http://localhost:3001/api/tasks/{taskId}/deliverables \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -332,7 +332,7 @@ Update deliverable status as work progresses:
 
 ```bash
 # After code review
-curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverableId} \
+curl -X PATCH http://localhost:3001/api/tasks/{taskId}/deliverables/{deliverableId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -340,7 +340,7 @@ curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverable
   }'
 
 # After approval
-curl -X PATCH http://localhost:3002/api/tasks/{taskId}/deliverables/{deliverableId} \
+curl -X PATCH http://localhost:3001/api/tasks/{taskId}/deliverables/{deliverableId} \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{

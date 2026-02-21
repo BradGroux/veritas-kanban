@@ -116,7 +116,7 @@ Visit [http://localhost:3000](http://localhost:3000) → follow the onboarding f
 ### REST call (curl)
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks \
+curl -X POST http://localhost:3001/api/tasks \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <YOUR_ADMIN_KEY>" \
   -d '{
@@ -176,7 +176,7 @@ These cover the "something feels off" moments before you deep-dive logs.
 ### 1. API health (up in <1s)
 
 ```bash
-curl -s http://localhost:3002/api/health | jq
+curl -s http://localhost:3001/api/health | jq
 ```
 
 Expect `{ "ok": true, "service": "veritas-kanban", ... }`. If the call hangs or returns HTML, something else is on the port.

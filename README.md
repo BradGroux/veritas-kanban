@@ -272,7 +272,7 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
            ▼
 ┌──────────────────────────────┐
 │      REST API + WebSocket    │
-│    http://localhost:3002     │
+│    http://localhost:3001     │
 │                              │
 │  ┌───────┐  ┌───────────┐    │
 │  │ Tasks │  │ Workflows │    │
@@ -348,7 +348,7 @@ All API endpoints support versioned paths. The current (and default) version is 
 Every response includes an `X-API-Version: v1` header. Clients may optionally request a specific version:
 
 ```bash
-curl -H "X-API-Version: v1" http://localhost:3002/api/tasks
+curl -H "X-API-Version: v1" http://localhost:3001/api/tasks
 ```
 
 - **Non-breaking changes** (new fields, new endpoints) are added to the current version.
@@ -385,13 +385,13 @@ The `vk begin` and `vk done` commands replace multi-step API workflows with sing
 **Before (6 separate curl calls):**
 
 ```bash
-curl -X PATCH http://localhost:3002/api/tasks/<id> -H "Content-Type: application/json" -d '{"status":"in-progress"}'
-curl -X POST http://localhost:3002/api/tasks/<id>/time/start
-curl -X POST http://localhost:3002/api/agent/status -H "Content-Type: application/json" -d '{"status":"working","taskId":"<id>","taskTitle":"Title"}'
+curl -X PATCH http://localhost:3001/api/tasks/<id> -H "Content-Type: application/json" -d '{"status":"in-progress"}'
+curl -X POST http://localhost:3001/api/tasks/<id>/time/start
+curl -X POST http://localhost:3001/api/agent/status -H "Content-Type: application/json" -d '{"status":"working","taskId":"<id>","taskTitle":"Title"}'
 # ... work happens ...
-curl -X POST http://localhost:3002/api/tasks/<id>/time/stop
-curl -X PATCH http://localhost:3002/api/tasks/<id> -H "Content-Type: application/json" -d '{"status":"done"}'
-curl -X POST http://localhost:3002/api/tasks/<id>/comments -H "Content-Type: application/json" -d '{"author":"agent","text":"summary"}'
+curl -X POST http://localhost:3001/api/tasks/<id>/time/stop
+curl -X PATCH http://localhost:3001/api/tasks/<id> -H "Content-Type: application/json" -d '{"status":"done"}'
+curl -X POST http://localhost:3001/api/tasks/<id>/comments -H "Content-Type: application/json" -d '{"author":"agent","text":"summary"}'
 ```
 
 **After (2 commands):**
@@ -500,17 +500,17 @@ Built and tested with [OpenClaw](https://github.com/openclaw/openclaw) (formerly
 
 ```bash
 # Create a task
-curl -X POST http://localhost:3002/api/tasks \
+curl -X POST http://localhost:3001/api/tasks \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $YOUR_KEY" \
   -d '{"title": "Implement feature X", "type": "code", "status": "in-progress"}'
 
 # Start time tracking
-curl -X POST http://localhost:3002/api/tasks/<id>/time/start \
+curl -X POST http://localhost:3001/api/tasks/<id>/time/start \
   -H "X-API-Key: $YOUR_KEY"
 
 # Mark complete
-curl -X POST http://localhost:3002/api/agents/<id>/complete \
+curl -X POST http://localhost:3001/api/agents/<id>/complete \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $YOUR_KEY" \
   -d '{"success": true, "summary": "What was done"}'
@@ -520,11 +520,11 @@ curl -X POST http://localhost:3002/api/agents/<id>/complete \
 
 ```bash
 # Trigger a manual sync
-curl -X POST http://localhost:3002/api/github/sync \
+curl -X POST http://localhost:3001/api/github/sync \
   -H "X-API-Key: $YOUR_KEY"
 
 # Check sync status
-curl http://localhost:3002/api/github/sync/status \
+curl http://localhost:3001/api/github/sync/status \
   -H "X-API-Key: $YOUR_KEY"
 ```
 
@@ -553,7 +553,7 @@ For AI assistants (Claude Desktop, etc.):
       "command": "node",
       "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
-        "VK_API_URL": "http://localhost:3002"
+        "VK_API_URL": "http://localhost:3001"
       }
     }
   }

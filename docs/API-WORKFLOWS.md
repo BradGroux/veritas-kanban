@@ -2,7 +2,7 @@
 
 **Version**: v3.3  
 **Last Updated**: 2026-02-15  
-**Base URL**: `http://localhost:3002/api`
+**Base URL**: `http://localhost:3001/api`
 
 ---
 
@@ -52,7 +52,7 @@ List all workflows (metadata only, filtered by user permissions).
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/workflows
+curl http://localhost:3001/api/workflows
 ```
 
 **Response**:
@@ -97,7 +97,7 @@ Get a specific workflow definition (full YAML content).
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/workflows/feature-dev
+curl http://localhost:3001/api/workflows/feature-dev
 ```
 
 **Response**:
@@ -172,7 +172,7 @@ Create a new workflow.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/workflows \
+curl -X POST http://localhost:3001/api/workflows \
   -H "Content-Type: application/json" \
   -d '{
     "id": "hello-world",
@@ -240,7 +240,7 @@ Update an existing workflow (auto-increments version).
 **Request**:
 
 ```bash
-curl -X PUT http://localhost:3002/api/workflows/hello-world \
+curl -X PUT http://localhost:3001/api/workflows/hello-world \
   -H "Content-Type: application/json" \
   -d '{
     "id": "hello-world",
@@ -314,7 +314,7 @@ Delete a workflow.
 **Request**:
 
 ```bash
-curl -X DELETE http://localhost:3002/api/workflows/hello-world
+curl -X DELETE http://localhost:3001/api/workflows/hello-world
 ```
 
 **Response**:
@@ -348,7 +348,7 @@ Start a new workflow run.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/workflows/feature-dev/runs \
+curl -X POST http://localhost:3001/api/workflows/feature-dev/runs \
   -H "Content-Type: application/json" \
   -d '{
     "taskId": "US-42",
@@ -436,16 +436,16 @@ List workflow runs with optional filters.
 
 ```bash
 # All runs
-curl http://localhost:3002/api/workflow-runs
+curl http://localhost:3001/api/workflow-runs
 
 # Runs for a specific workflow
-curl "http://localhost:3002/api/workflow-runs?workflowId=feature-dev"
+curl "http://localhost:3001/api/workflow-runs?workflowId=feature-dev"
 
 # Runs for a specific task
-curl "http://localhost:3002/api/workflow-runs?taskId=US-42"
+curl "http://localhost:3001/api/workflow-runs?taskId=US-42"
 
 # Failed runs only
-curl "http://localhost:3002/api/workflow-runs?status=failed"
+curl "http://localhost:3001/api/workflow-runs?status=failed"
 ```
 
 **Response**:
@@ -492,7 +492,7 @@ Get full details of a specific workflow run.
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/workflow-runs/run_20260209_abc123
+curl http://localhost:3001/api/workflow-runs/run_20260209_abc123
 ```
 
 **Response**:
@@ -562,7 +562,7 @@ Get currently running workflow runs only.
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/workflow-runs/active
+curl http://localhost:3001/api/workflow-runs/active
 ```
 
 **Response**:
@@ -603,7 +603,7 @@ Get aggregated workflow statistics for a given period.
 **Request**:
 
 ```bash
-curl "http://localhost:3002/api/workflow-runs/stats?period=7d"
+curl "http://localhost:3001/api/workflow-runs/stats?period=7d"
 ```
 
 **Response**:
@@ -662,7 +662,7 @@ Resume a blocked workflow run (after human approval or escalation).
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/workflow-runs/run_20260209_abc123/resume \
+curl -X POST http://localhost:3001/api/workflow-runs/run_20260209_abc123/resume \
   -H "Content-Type: application/json" \
   -d '{
     "context": {
@@ -717,7 +717,7 @@ Approve a gate step (allows workflow to continue).
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/workflow-runs/run_20260209_abc123/steps/quality-gate/approve
+curl -X POST http://localhost:3001/api/workflow-runs/run_20260209_abc123/steps/quality-gate/approve
 ```
 
 **Response**:
@@ -763,7 +763,7 @@ Reject a gate step (marks workflow as failed).
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/workflow-runs/run_20260209_abc123/steps/quality-gate/reject
+curl -X POST http://localhost:3001/api/workflow-runs/run_20260209_abc123/steps/quality-gate/reject
 ```
 
 **Response**:
@@ -797,7 +797,7 @@ Get detailed status of a specific step (useful for parallel sub-steps).
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/workflow-runs/run_20260209_abc123/steps/implement/status
+curl http://localhost:3001/api/workflow-runs/run_20260209_abc123/steps/implement/status
 ```
 
 **Response**:
@@ -841,7 +841,7 @@ List all tool policies (default + custom).
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/tool-policies
+curl http://localhost:3001/api/tool-policies
 ```
 
 **Response**:
@@ -884,7 +884,7 @@ Get a specific tool policy by role.
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/tool-policies/planner
+curl http://localhost:3001/api/tool-policies/planner
 ```
 
 **Response**:
@@ -914,7 +914,7 @@ Create a new custom tool policy.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/tool-policies \
+curl -X POST http://localhost:3001/api/tool-policies \
   -H "Content-Type: application/json" \
   -d '{
     "role": "custom-auditor",
@@ -969,7 +969,7 @@ Update an existing tool policy (including defaults).
 **Request**:
 
 ```bash
-curl -X PUT http://localhost:3002/api/tool-policies/custom-auditor \
+curl -X PUT http://localhost:3001/api/tool-policies/custom-auditor \
   -H "Content-Type: application/json" \
   -d '{
     "role": "custom-auditor",
@@ -1007,7 +1007,7 @@ Delete a custom tool policy.
 **Request**:
 
 ```bash
-curl -X DELETE http://localhost:3002/api/tool-policies/custom-auditor
+curl -X DELETE http://localhost:3001/api/tool-policies/custom-auditor
 ```
 
 **Response**:
@@ -1035,7 +1035,7 @@ Validate if a specific tool is allowed for a role.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/tool-policies/planner/validate \
+curl -X POST http://localhost:3001/api/tool-policies/planner/validate \
   -H "Content-Type: application/json" \
   -d '{
     "tool": "exec"
@@ -1079,7 +1079,7 @@ Get the full dependency graph for a task (recursive tree traversal).
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/tasks/US-42/dependencies
+curl http://localhost:3001/api/tasks/US-42/dependencies
 ```
 
 **Response**:
@@ -1140,7 +1140,7 @@ Add a dependency to a task.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/US-42/dependencies \
+curl -X POST http://localhost:3001/api/tasks/US-42/dependencies \
   -H "Content-Type: application/json" \
   -d '{
     "dependsOn": "US-40",
@@ -1178,7 +1178,7 @@ Remove a dependency from a task.
 **Request**:
 
 ```bash
-curl -X DELETE http://localhost:3002/api/tasks/US-42/dependencies/US-40?direction=depends_on
+curl -X DELETE http://localhost:3001/api/tasks/US-42/dependencies/US-40?direction=depends_on
 ```
 
 **Query Parameters**:
@@ -1201,7 +1201,7 @@ Save checkpoint state for a task.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/tasks/US-42/checkpoint \
+curl -X POST http://localhost:3001/api/tasks/US-42/checkpoint \
   -H "Content-Type: application/json" \
   -d '{
     "state": {
@@ -1263,7 +1263,7 @@ Resume checkpoint state for a task.
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/tasks/US-42/checkpoint
+curl http://localhost:3001/api/tasks/US-42/checkpoint
 ```
 
 **Response**:
@@ -1307,7 +1307,7 @@ Clear checkpoint state for a task.
 **Request**:
 
 ```bash
-curl -X DELETE http://localhost:3002/api/tasks/US-42/checkpoint
+curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
 ```
 
 **Status Codes**:
@@ -1326,7 +1326,7 @@ Add an observation to a task.
 **Request**:
 
 ```bash
-curl -X POST http://localhost:3002/api/observations \
+curl -X POST http://localhost:3001/api/observations \
   -H "Content-Type: application/json" \
   -d '{
     "taskId": "US-42",
@@ -1384,7 +1384,7 @@ Get all observations for a task.
 **Request**:
 
 ```bash
-curl http://localhost:3002/api/tasks/US-42/observations
+curl http://localhost:3001/api/tasks/US-42/observations
 ```
 
 **Response**:
@@ -1429,7 +1429,7 @@ Full-text search across all observations for all tasks.
 **Request**:
 
 ```bash
-curl "http://localhost:3002/api/observations/search?query=react+query&limit=10&offset=0"
+curl "http://localhost:3001/api/observations/search?query=react+query&limit=10&offset=0"
 ```
 
 **Query Parameters**:
@@ -1481,7 +1481,7 @@ Delete an observation.
 **Request**:
 
 ```bash
-curl -X DELETE http://localhost:3002/api/observations/obs_abc123
+curl -X DELETE http://localhost:3001/api/observations/obs_abc123
 ```
 
 **Status Codes**:
@@ -1504,7 +1504,7 @@ Filter tasks by assigned agent name.
 **Request**:
 
 ```bash
-curl "http://localhost:3002/api/tasks?agent=codex"
+curl "http://localhost:3001/api/tasks?agent=codex"
 ```
 
 **Query Parameters**:
@@ -1560,7 +1560,7 @@ All workflow state changes are broadcast via WebSocket for real-time UI updates.
 **Connection**:
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3002/ws');
+const ws = new WebSocket('ws://localhost:3001/ws');
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);

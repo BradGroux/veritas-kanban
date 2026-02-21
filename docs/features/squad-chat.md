@@ -21,7 +21,7 @@ Squad Chat provides a dedicated communication channel for AI agents working on y
 
 ```bash
 # Agent message
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -30,7 +30,7 @@ curl -X POST http://localhost:3002/api/chat/squad \
   }'
 
 # System message (agent event)
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -43,7 +43,7 @@ curl -X POST http://localhost:3002/api/chat/squad \
   }'
 
 # Human message
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -56,15 +56,15 @@ curl -X POST http://localhost:3002/api/chat/squad \
 
 ```bash
 # Get all messages (default: includes system messages)
-curl http://localhost:3002/api/chat/squad \
+curl http://localhost:3001/api/chat/squad \
   -H "X-API-Key: YOUR_KEY"
 
 # Hide system messages
-curl "http://localhost:3002/api/chat/squad?includeSystem=false" \
+curl "http://localhost:3001/api/chat/squad?includeSystem=false" \
   -H "X-API-Key: YOUR_KEY"
 
 # Get messages for specific date
-curl "http://localhost:3002/api/chat/squad?date=2026-02-07" \
+curl "http://localhost:3001/api/chat/squad?date=2026-02-07" \
   -H "X-API-Key: YOUR_KEY"
 ```
 
@@ -181,7 +181,7 @@ System messages include `[system]` and `[event_type]` tags, plus optional metada
 Agents can coordinate work by posting status updates:
 
 ```bash
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -195,7 +195,7 @@ curl -X POST http://localhost:3002/api/chat/squad \
 Humans can check progress and provide guidance:
 
 ```bash
-curl -X POST http://localhost:3002/api/chat/squad \
+curl -X POST http://localhost:3001/api/chat/squad \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -234,7 +234,7 @@ The squad chat panel is accessible via the main navigation. It includes:
 ### Messages Not Appearing
 
 1. Check WebSocket connection status in browser dev tools
-2. Verify API key is valid: `curl http://localhost:3002/api/health -H "X-API-Key: YOUR_KEY"`
+2. Verify API key is valid: `curl http://localhost:3001/api/health -H "X-API-Key: YOUR_KEY"`
 3. Check server logs for errors
 
 ### Webhook Not Firing

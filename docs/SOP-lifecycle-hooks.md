@@ -29,7 +29,7 @@ Each hook can:
 Enable hooks via the settings API:
 
 ```bash
-curl -X PATCH http://localhost:3002/api/config/settings \
+curl -X PATCH http://localhost:3001/api/config/settings \
   -H "Content-Type: application/json" \
   -d '{
     "hooks": {
@@ -199,19 +199,19 @@ app.listen(3002);
 Check current hooks configuration:
 
 ```bash
-curl http://localhost:3002/api/config/settings | jq '.data.hooks'
+curl http://localhost:3001/api/config/settings | jq '.data.hooks'
 ```
 
 Enable/disable hooks quickly:
 
 ```bash
 # Enable all hooks
-curl -X PATCH http://localhost:3002/api/config/settings \
+curl -X PATCH http://localhost:3001/api/config/settings \
   -H "Content-Type: application/json" \
   -d '{"hooks": {"enabled": true}}'
 
 # Disable all hooks
-curl -X PATCH http://localhost:3002/api/config/settings \
+curl -X PATCH http://localhost:3001/api/config/settings \
   -H "Content-Type: application/json" \
   -d '{"hooks": {"enabled": false}}'
 ```
