@@ -74,6 +74,7 @@ const TaskBehaviorSettingsSchema = z
     enableComments: z.boolean().optional(),
     defaultPriority: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional(),
     autoSaveDelayMs: z.number().int().min(200).max(5000).optional(),
+    requireDeliverableForDone: z.boolean().optional(),
   })
   .strict()
   .optional();
