@@ -22,7 +22,7 @@ Broadcast Notifications provide a system-wide notification mechanism for importa
 
 ```bash
 # Info notification
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -32,7 +32,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
   }'
 
 # Warning notification with expiration
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -43,7 +43,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
   }'
 
 # Critical notification with action button
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -55,7 +55,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
   }'
 
 # Agent-specific notification
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -70,22 +70,22 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
 
 ```bash
 # Get all active broadcasts
-curl http://localhost:3001/api/notifications/broadcast \
+curl http://localhost:3002/api/notifications/broadcast \
   -H "X-API-Key: YOUR_KEY"
 
 # Get broadcasts for specific agent
-curl "http://localhost:3001/api/notifications/broadcast?agent=TARS" \
+curl "http://localhost:3002/api/notifications/broadcast?agent=TARS" \
   -H "X-API-Key: YOUR_KEY"
 
 # Include dismissed broadcasts
-curl "http://localhost:3001/api/notifications/broadcast?includeDismissed=true" \
+curl "http://localhost:3002/api/notifications/broadcast?includeDismissed=true" \
   -H "X-API-Key: YOUR_KEY"
 ```
 
 ### Mark as Read
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/read \
+curl -X POST http://localhost:3002/api/notifications/broadcast/{id}/read \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -97,7 +97,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/read \
 
 ```bash
 # Dismiss for specific agent
-curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/dismiss \
+curl -X POST http://localhost:3002/api/notifications/broadcast/{id}/dismiss \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -105,7 +105,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/dismiss \
   }'
 
 # Dismiss globally (requires admin role)
-curl -X DELETE http://localhost:3001/api/notifications/broadcast/{id} \
+curl -X DELETE http://localhost:3002/api/notifications/broadcast/{id} \
   -H "X-API-Key: ADMIN_KEY"
 ```
 
@@ -174,7 +174,7 @@ Broadcasts appear at the top of the board (sticky header) with the following beh
 ### Deployment Announcements
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -189,7 +189,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
 ### Agent Task Completion
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -204,7 +204,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
 ### Critical Security Alerts
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -219,7 +219,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast \
 ### Maintenance Windows
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast \
+curl -X POST http://localhost:3002/api/notifications/broadcast \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
@@ -255,11 +255,11 @@ Agents should poll for broadcasts on startup and periodically:
 
 ```bash
 # Check for unread broadcasts
-BROADCASTS=$(curl -s "http://localhost:3001/api/notifications/broadcast?agent=TARS" \
+BROADCASTS=$(curl -s "http://localhost:3002/api/notifications/broadcast?agent=TARS" \
   -H "X-API-Key: YOUR_KEY")
 
 # Mark as read after displaying
-curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/read \
+curl -X POST http://localhost:3002/api/notifications/broadcast/{id}/read \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{ "agent": "TARS" }'
@@ -268,7 +268,7 @@ curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/read \
 Agents can dismiss broadcasts after acknowledging:
 
 ```bash
-curl -X POST http://localhost:3001/api/notifications/broadcast/{id}/dismiss \
+curl -X POST http://localhost:3002/api/notifications/broadcast/{id}/dismiss \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{ "agent": "TARS" }'

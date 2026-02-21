@@ -114,7 +114,7 @@ VK's built-in enforcement gates integrate directly with the cross-model review w
 4. **Enabling gates**:
 
    ```bash
-   curl -X PATCH http://localhost:3001/api/settings/features \
+   curl -X PATCH http://localhost:3002/api/settings/features \
      -H 'Content-Type: application/json' \
      -d '{"enforcement": {"reviewGate": true, "closingComments": true}}'
    ```

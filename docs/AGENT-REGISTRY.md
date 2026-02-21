@@ -257,7 +257,7 @@ Removes the agent from the registry entirely.
 Every agent must register itself when it starts working. This is the **first thing** you do.
 
 ```bash
-curl -s -X POST http://localhost:3001/api/agents/register \
+curl -s -X POST http://localhost:3002/api/agents/register \
   -H 'Content-Type: application/json' \
   -d '{
     "id": "YOUR_AGENT_NAME",
@@ -275,7 +275,7 @@ curl -s -X POST http://localhost:3001/api/agents/register \
 Update your status to `busy` with the task info:
 
 ```bash
-curl -s -X POST http://localhost:3001/api/agents/register/YOUR_AGENT_NAME/heartbeat \
+curl -s -X POST http://localhost:3002/api/agents/register/YOUR_AGENT_NAME/heartbeat \
   -H 'Content-Type: application/json' \
   -d '{
     "status": "busy",
@@ -289,7 +289,7 @@ curl -s -X POST http://localhost:3001/api/agents/register/YOUR_AGENT_NAME/heartb
 Send heartbeats to stay marked as online. If you skip this for 5 minutes, the registry marks you `offline`.
 
 ```bash
-curl -s -X POST http://localhost:3001/api/agents/register/YOUR_AGENT_NAME/heartbeat \
+curl -s -X POST http://localhost:3002/api/agents/register/YOUR_AGENT_NAME/heartbeat \
   -H 'Content-Type: application/json' \
   -d '{"status": "busy"}'
 ```
@@ -299,7 +299,7 @@ curl -s -X POST http://localhost:3001/api/agents/register/YOUR_AGENT_NAME/heartb
 Clear the task assignment and go idle:
 
 ```bash
-curl -s -X POST http://localhost:3001/api/agents/register/YOUR_AGENT_NAME/heartbeat \
+curl -s -X POST http://localhost:3002/api/agents/register/YOUR_AGENT_NAME/heartbeat \
   -H 'Content-Type: application/json' \
   -d '{
     "status": "idle",
@@ -315,17 +315,17 @@ When the orchestrator (VERITAS) spawns a sub-agent via `sessions_spawn`, include
 ```
 FIRST ACTION (before any other work):
 1. Register yourself with Veritas Kanban:
-   curl -s -X POST http://localhost:3001/api/agents/register \
+   curl -s -X POST http://localhost:3002/api/agents/register \
      -H 'Content-Type: application/json' \
      -d '{"id":"AGENT_NAME","name":"AGENT_NAME","model":"MODEL","provider":"anthropic","capabilities":[{"name":"SKILL"}],"version":"2.0.0","metadata":{"role":"ROLE"}}'
 
 2. Set yourself as busy on the task:
-   curl -s -X POST http://localhost:3001/api/agents/register/AGENT_NAME/heartbeat \
+   curl -s -X POST http://localhost:3002/api/agents/register/AGENT_NAME/heartbeat \
      -H 'Content-Type: application/json' \
      -d '{"status":"busy","currentTaskId":"TASK_ID","currentTaskTitle":"TASK_TITLE"}'
 
 3. When finished, set idle:
-   curl -s -X POST http://localhost:3001/api/agents/register/AGENT_NAME/heartbeat \
+   curl -s -X POST http://localhost:3002/api/agents/register/AGENT_NAME/heartbeat \
      -H 'Content-Type: application/json' \
      -d '{"status":"idle","currentTaskId":null,"currentTaskTitle":null}'
 ```

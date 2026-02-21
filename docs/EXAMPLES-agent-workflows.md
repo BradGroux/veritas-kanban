@@ -125,16 +125,16 @@ See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full YAML examples.
 
 ```bash
 # Save checkpoint mid-work
-curl -X POST http://localhost:3001/api/tasks/US-42/checkpoint \
+curl -X POST http://localhost:3002/api/tasks/US-42/checkpoint \
   -H "Content-Type: application/json" \
   -d '{"state":{"step":3,"completed":["auth","db"],"notes":"Working on API layer"}}'
 
 # After restart, resume from checkpoint
-CHECKPOINT=$(curl -s http://localhost:3001/api/tasks/US-42/checkpoint)
+CHECKPOINT=$(curl -s http://localhost:3002/api/tasks/US-42/checkpoint)
 # Feed $CHECKPOINT into agent prompt for continuity
 
 # Clean up after completion
-curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
+curl -X DELETE http://localhost:3002/api/tasks/US-42/checkpoint
 ```
 
 ---
@@ -145,10 +145,10 @@ curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
 
 ```bash
 # Log a decision
-curl -X POST http://localhost:3001/api/observations \
+curl -X POST http://localhost:3002/api/observations \
   -H "Content-Type: application/json" \
   -d '{"taskId":"US-42","type":"decision","content":"Chose WebSocket over SSE for real-time updates — lower latency, bidirectional","importance":9}'
 
 # Future agent searches before making the same decision
-curl "http://localhost:3001/api/observations/search?query=websocket+vs+sse"
+curl "http://localhost:3002/api/observations/search?query=websocket+vs+sse"
 ```

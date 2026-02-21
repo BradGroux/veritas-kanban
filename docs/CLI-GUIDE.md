@@ -478,30 +478,30 @@ Before v1.4, starting or finishing a task required multiple separate API calls. 
 
 ```bash
 # Starting a task (3 calls)
-curl -X PATCH http://localhost:3001/api/tasks/<id> \
+curl -X PATCH http://localhost:3002/api/tasks/<id> \
   -H "Content-Type: application/json" \
   -d '{"status":"in-progress"}'
 
-curl -X POST http://localhost:3001/api/tasks/<id>/time/start
+curl -X POST http://localhost:3002/api/tasks/<id>/time/start
 
-curl -X POST http://localhost:3001/api/agent/status \
+curl -X POST http://localhost:3002/api/agent/status \
   -H "Content-Type: application/json" \
   -d '{"status":"working","taskId":"<id>","taskTitle":"Implement OAuth"}'
 
 # ... work happens ...
 
 # Completing a task (4 calls)
-curl -X POST http://localhost:3001/api/tasks/<id>/time/stop
+curl -X POST http://localhost:3002/api/tasks/<id>/time/stop
 
-curl -X PATCH http://localhost:3001/api/tasks/<id> \
+curl -X PATCH http://localhost:3002/api/tasks/<id> \
   -H "Content-Type: application/json" \
   -d '{"status":"done"}'
 
-curl -X POST http://localhost:3001/api/tasks/<id>/comments \
+curl -X POST http://localhost:3002/api/tasks/<id>/comments \
   -H "Content-Type: application/json" \
   -d '{"author":"agent","text":"Added OAuth2 with Google and GitHub providers"}'
 
-curl -X POST http://localhost:3001/api/agent/status \
+curl -X POST http://localhost:3002/api/agent/status \
   -H "Content-Type: application/json" \
   -d '{"status":"idle"}'
 ```
@@ -612,14 +612,14 @@ The CLI reads configuration from environment variables:
 
 | Variable     | Default                 | Description                |
 | ------------ | ----------------------- | -------------------------- |
-| `VK_API_URL` | `http://localhost:3001` | Veritas Kanban server URL  |
+| `VK_API_URL` | `http://localhost:3002` | Veritas Kanban server URL  |
 | `VK_API_KEY` | _(none)_                | API key for authentication |
 
 ### Setting the API URL
 
 ```bash
 # Default — local development
-export VK_API_URL=http://localhost:3001
+export VK_API_URL=http://localhost:3002
 
 # Remote server
 export VK_API_URL=https://kanban.example.com

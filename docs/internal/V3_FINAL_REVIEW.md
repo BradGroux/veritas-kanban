@@ -235,7 +235,7 @@ steps:
 **curl commands work** (validated against live server):
 
 ```bash
-curl -X POST http://localhost:3001/api/workflows/hello-world/runs \
+curl -X POST http://localhost:3002/api/workflows/hello-world/runs \
   -H "Content-Type: application/json" \
   -d '{}'
 # ✅ Returns 201 with run object

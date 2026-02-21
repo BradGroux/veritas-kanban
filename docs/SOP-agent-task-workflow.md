@@ -31,40 +31,40 @@ Use this playbook anytime an agent (human or LLM) takes a task from **todo** to 
 
 ```bash
 # ── 1. Claim ──────────────────────────────────────────────
-curl -X PATCH http://localhost:3001/api/tasks/<id> \
+curl -X PATCH http://localhost:3002/api/tasks/<id> \
   -H "Content-Type: application/json" \
   -d '{"status":"in-progress"}'
 
-curl -X POST http://localhost:3001/api/tasks/<id>/time/start
+curl -X POST http://localhost:3002/api/tasks/<id>/time/start
 
-curl -X POST http://localhost:3001/api/agent/status \
+curl -X POST http://localhost:3002/api/agent/status \
   -H "Content-Type: application/json" \
   -d '{"status":"working","taskId":"<id>","taskTitle":"Fix CLI"}'
 
 # ⚠️  Emit run.started telemetry (powers Success Rate + Run Duration graphs)
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.started","taskId":"<id>","agent":"<agent-name>"}'
 
 # ── 2. Update (optional comment) ─────────────────────────
-curl -X POST http://localhost:3001/api/tasks/<id>/comments \
+curl -X POST http://localhost:3002/api/tasks/<id>/comments \
   -H "Content-Type: application/json" \
   -d '{"text":"Blocked on dependency"}'
 
 # ── 3. Complete ───────────────────────────────────────────
-curl -X POST http://localhost:3001/api/tasks/<id>/time/stop
+curl -X POST http://localhost:3002/api/tasks/<id>/time/stop
 
 # ⚠️  Emit run.completed telemetry (durationMs = ms since run.started)
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.completed","taskId":"<id>","agent":"<agent-name>","durationMs":<DURATION_MS>,"success":true}'
 
 # ⚠️  Report token usage (powers Token Usage + Monthly Budget graphs)
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.tokens","taskId":"<id>","agent":"<agent-name>","model":"<model>","inputTokens":<N>,"outputTokens":<N>,"cacheTokens":<N>,"cost":<N>}'
 
-curl -X PATCH http://localhost:3001/api/tasks/<id> \
+curl -X PATCH http://localhost:3002/api/tasks/<id> \
   -H "Content-Type: application/json" \
   -d '{
     "status":"done",
@@ -74,7 +74,7 @@ curl -X PATCH http://localhost:3001/api/tasks/<id> \
 
 # ── On Failure ────────────────────────────────────────────
 # Same as complete, but success=false:
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.completed","taskId":"<id>","agent":"<agent-name>","durationMs":<DURATION_MS>,"success":false}'
 ```
@@ -101,7 +101,7 @@ Veritas Kanban supports **6 enforcement gates** that can harden your workflow by
 **Check if enforcement is enabled before starting work:**
 
 ```bash
-curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
+curl http://localhost:3002/api/settings/features | jq '.data.enforcement'
 ```
 
 **Example response:**
@@ -252,15 +252,15 @@ For long-running tasks, save agent state periodically so work can resume after c
 
 ```bash
 # Save checkpoint mid-work (secrets auto-sanitized)
-curl -X POST http://localhost:3001/api/tasks/<id>/checkpoint \
+curl -X POST http://localhost:3002/api/tasks/<id>/checkpoint \
   -H "Content-Type: application/json" \
   -d '{"state":{"current_step":3,"completed":["step1","step2"],"notes":"Working on step 3"}}'
 
 # On restart, check for existing checkpoint
-curl http://localhost:3001/api/tasks/<id>/checkpoint
+curl http://localhost:3002/api/tasks/<id>/checkpoint
 
 # Clear after task completion
-curl -X DELETE http://localhost:3001/api/tasks/<id>/checkpoint
+curl -X DELETE http://localhost:3002/api/tasks/<id>/checkpoint
 ```
 
 **Rules:**
@@ -275,12 +275,12 @@ Capture important decisions, blockers, and insights as task observations:
 
 ```bash
 # Log a decision
-curl -X POST http://localhost:3001/api/observations \
+curl -X POST http://localhost:3002/api/observations \
   -H "Content-Type: application/json" \
   -d '{"taskId":"<id>","type":"decision","content":"Chose approach X over Y because...","importance":8}'
 
 # Search observations across all tasks
-curl "http://localhost:3001/api/observations/search?query=approach+X"
+curl "http://localhost:3002/api/observations/search?query=approach+X"
 ```
 
 **When to create observations:**
@@ -296,7 +296,7 @@ Before starting a task, check its dependency status:
 
 ```bash
 # Check dependencies
-curl http://localhost:3001/api/tasks/<id>/dependencies
+curl http://localhost:3002/api/tasks/<id>/dependencies
 
 # If upstream blockers are incomplete, don't start — pick another task instead.
 ```

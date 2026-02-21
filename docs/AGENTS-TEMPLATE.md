@@ -29,7 +29,7 @@ List what this agent can do. Used for task routing.
 On startup, register with Veritas Kanban:
 
 ```bash
-curl -X POST http://localhost:3001/api/agents/register \
+curl -X POST http://localhost:3002/api/agents/register \
   -H 'Content-Type: application/json' \
   -d '{
     "id": "my-agent-id",
@@ -49,7 +49,7 @@ curl -X POST http://localhost:3001/api/agents/register \
 Send periodic heartbeats to stay registered (every 2-3 minutes):
 
 ```bash
-curl -X POST http://localhost:3001/api/agents/register/my-agent-id/heartbeat \
+curl -X POST http://localhost:3002/api/agents/register/my-agent-id/heartbeat \
   -H 'Content-Type: application/json' \
   -d '{
     "status": "busy",
@@ -72,7 +72,7 @@ curl -X POST http://localhost:3001/api/agents/register/my-agent-id/heartbeat \
 On shutdown, deregister cleanly:
 
 ```bash
-curl -X DELETE http://localhost:3001/api/agents/register/my-agent-id
+curl -X DELETE http://localhost:3002/api/agents/register/my-agent-id
 ```
 
 ## Discovery
@@ -80,31 +80,31 @@ curl -X DELETE http://localhost:3001/api/agents/register/my-agent-id
 ### List all agents
 
 ```bash
-curl http://localhost:3001/api/agents/register
+curl http://localhost:3002/api/agents/register
 ```
 
 ### Filter by status
 
 ```bash
-curl http://localhost:3001/api/agents/register?status=online
+curl http://localhost:3002/api/agents/register?status=online
 ```
 
 ### Filter by capability
 
 ```bash
-curl http://localhost:3001/api/agents/register?capability=code
+curl http://localhost:3002/api/agents/register?capability=code
 ```
 
 ### Find agents for a capability
 
 ```bash
-curl http://localhost:3001/api/agents/register/capabilities/research
+curl http://localhost:3002/api/agents/register/capabilities/research
 ```
 
 ### Registry stats
 
 ```bash
-curl http://localhost:3001/api/agents/register/stats
+curl http://localhost:3002/api/agents/register/stats
 ```
 
 ## Task Integration
@@ -126,7 +126,7 @@ The dashboard's **Success Rate**, **Token Usage**, and **Average Run Duration** 
 ### When Starting a Task
 
 ```bash
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.started","taskId":"<TASK_ID>","agent":"my-agent-id"}'
 ```
@@ -135,12 +135,12 @@ curl -X POST http://localhost:3001/api/telemetry/events \
 
 ```bash
 # Report run result (success or failure)
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.completed","taskId":"<TASK_ID>","agent":"my-agent-id","durationMs":<MS>,"success":true}'
 
 # Report token usage (powers Token Usage + Monthly Budget)
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.tokens","taskId":"<TASK_ID>","agent":"my-agent-id","model":"<MODEL>","inputTokens":<N>,"outputTokens":<N>,"cacheTokens":<N>,"cost":<N>}'
 ```
@@ -148,7 +148,7 @@ curl -X POST http://localhost:3001/api/telemetry/events \
 ### On Failure
 
 ```bash
-curl -X POST http://localhost:3001/api/telemetry/events \
+curl -X POST http://localhost:3002/api/telemetry/events \
   -H "Content-Type: application/json" \
   -d '{"type":"run.completed","taskId":"<TASK_ID>","agent":"my-agent-id","durationMs":<MS>,"success":false}'
 ```
@@ -170,10 +170,10 @@ The registry enables agents to discover each other:
 
 ```bash
 # Find who can help with code review
-curl http://localhost:3001/api/agents/register/capabilities/review
+curl http://localhost:3002/api/agents/register/capabilities/review
 
 # Check if a specific agent is available
-curl http://localhost:3001/api/agents/register/codex-1
+curl http://localhost:3002/api/agents/register/codex-1
 ```
 
 This is the foundation for multi-agent task assignment (#29) and @mention notifications (#30).

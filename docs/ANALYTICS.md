@@ -31,7 +31,7 @@ Returns timeline data showing task execution periods and parallelism snapshots.
 #### Example Request
 
 ```bash
-curl -X GET "http://localhost:3001/api/analytics/timeline?from=2026-01-01T00:00:00Z&to=2026-02-01T23:59:59Z&project=veritas"
+curl -X GET "http://localhost:3002/api/analytics/timeline?from=2026-01-01T00:00:00Z&to=2026-02-01T23:59:59Z&project=veritas"
 ```
 
 #### Response Schema
@@ -107,7 +107,7 @@ Returns aggregate metrics for a time period or sprint.
 #### Example Request
 
 ```bash
-curl -X GET "http://localhost:3001/api/analytics/metrics?sprint=v1.5"
+curl -X GET "http://localhost:3002/api/analytics/metrics?sprint=v1.5"
 ```
 
 #### Response Schema
@@ -350,21 +350,21 @@ The service reads from:
 FROM=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
 TO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-curl -s "http://localhost:3001/api/analytics/timeline?from=$FROM&to=$TO" | \
+curl -s "http://localhost:3002/api/analytics/timeline?from=$FROM&to=$TO" | \
   jq '.data.parallelism | max_by(.concurrentTaskCount)'
 ```
 
 ### Example 2: Get Sprint Metrics
 
 ```bash
-curl -s "http://localhost:3001/api/analytics/metrics?sprint=v1.5" | \
+curl -s "http://localhost:3002/api/analytics/metrics?sprint=v1.5" | \
   jq '.data.efficiency'
 ```
 
 ### Example 3: Agent Comparison
 
 ```bash
-curl -s "http://localhost:3001/api/analytics/metrics?from=2026-01-01T00:00:00Z&to=2026-02-01T00:00:00Z" | \
+curl -s "http://localhost:3002/api/analytics/metrics?from=2026-01-01T00:00:00Z&to=2026-02-01T00:00:00Z" | \
   jq '.data.agentUtilization | sort_by(.durationSeconds) | reverse'
 ```
 

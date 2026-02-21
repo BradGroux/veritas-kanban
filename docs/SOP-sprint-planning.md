@@ -42,7 +42,7 @@ Store the final prompt under `prompt-registry/sprint-planning.md`.
 Use the bulk endpoint to create the entire sprint quickly:
 
 ```bash
-curl -X POST http://localhost:3001/api/tasks/bulk \
+curl -X POST http://localhost:3002/api/tasks/bulk \
   -H "Authorization: Bearer <admin-key>" \
   -H "Content-Type: application/json" \
   -d '{

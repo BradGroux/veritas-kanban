@@ -21,15 +21,15 @@ The `/api/changes` endpoint provides an efficient mechanism for agents to detect
 
 ```bash
 # Initial poll (get current state)
-curl http://localhost:3001/api/changes \
+curl http://localhost:3002/api/changes \
   -H "X-API-Key: YOUR_KEY"
 
 # Poll for changes since timestamp
-curl "http://localhost:3001/api/changes?since=2026-02-07T15:00:00Z" \
+curl "http://localhost:3002/api/changes?since=2026-02-07T15:00:00Z" \
   -H "X-API-Key: YOUR_KEY"
 
 # Poll with ETag (server returns 304 if nothing changed)
-curl "http://localhost:3001/api/changes?since=2026-02-07T15:00:00Z" \
+curl "http://localhost:3002/api/changes?since=2026-02-07T15:00:00Z" \
   -H "X-API-Key: YOUR_KEY" \
   -H "If-None-Match: \"abc123\""
 ```
@@ -121,7 +121,7 @@ Content-Type: application/json
 Agents should save the ETag and include it in the next request:
 
 ```bash
-curl "http://localhost:3001/api/changes?since=2026-02-07T15:00:00Z" \
+curl "http://localhost:3002/api/changes?since=2026-02-07T15:00:00Z" \
   -H "X-API-Key: YOUR_KEY" \
   -H "If-None-Match: \"abc123\""
 ```
@@ -149,7 +149,7 @@ ETAG=""
 while true; do
   # Poll for changes
   RESPONSE=$(curl -s -w "\n%{http_code}" \
-    "http://localhost:3001/api/changes?since=$LAST_CHECK" \
+    "http://localhost:3002/api/changes?since=$LAST_CHECK" \
     -H "X-API-Key: $YOUR_KEY" \
     -H "If-None-Match: $ETAG")
 
@@ -162,7 +162,7 @@ while true; do
 
     # Update timestamp and ETag
     LAST_CHECK=$(echo "$BODY" | jq -r '.timestamp')
-    ETAG=$(curl -I -s "http://localhost:3001/api/changes?since=$LAST_CHECK" \
+    ETAG=$(curl -I -s "http://localhost:3002/api/changes?since=$LAST_CHECK" \
       -H "X-API-Key: $YOUR_KEY" | grep -i 'etag:' | cut -d' ' -f2 | tr -d '\r\n')
 
   elif [ "$STATUS_CODE" -eq 304 ]; then
@@ -188,7 +188,7 @@ MAX_INTERVAL=300
 
 while true; do
   RESPONSE=$(curl -s -w "\n%{http_code}" \
-    "http://localhost:3001/api/changes?since=$LAST_CHECK" \
+    "http://localhost:3002/api/changes?since=$LAST_CHECK" \
     -H "X-API-Key: $YOUR_KEY" \
     -H "If-None-Match: $ETAG")
 
@@ -229,7 +229,7 @@ done
 
 ```bash
 # Poll for changes
-CHANGES=$(curl -s "http://localhost:3001/api/changes?since=$LAST_CHECK" \
+CHANGES=$(curl -s "http://localhost:3002/api/changes?since=$LAST_CHECK" \
   -H "X-API-Key: YOUR_KEY")
 
 # Filter for agent assignments
@@ -246,7 +246,7 @@ done
 ### Detect Completed Tasks
 
 ```bash
-CHANGES=$(curl -s "http://localhost:3001/api/changes?since=$LAST_CHECK" \
+CHANGES=$(curl -s "http://localhost:3002/api/changes?since=$LAST_CHECK" \
   -H "X-API-Key: YOUR_KEY")
 
 COMPLETED=$(echo "$CHANGES" | jq -r \
@@ -255,7 +255,7 @@ COMPLETED=$(echo "$CHANGES" | jq -r \
 for TASK_ID in $COMPLETED; do
   echo "Task completed: $TASK_ID"
   # Post to squad chat
-  curl -X POST http://localhost:3001/api/chat/squad \
+  curl -X POST http://localhost:3002/api/chat/squad \
     -H "Content-Type: application/json" \
     -H "X-API-Key: $YOUR_KEY" \
     -d "{\"agent\":\"VERITAS\",\"message\":\"Task $TASK_ID completed!\"}"
@@ -266,7 +266,7 @@ done
 
 ```bash
 # Only check changes for rubicon project
-CHANGES=$(curl -s "http://localhost:3001/api/changes?since=$LAST_CHECK&project=rubicon" \
+CHANGES=$(curl -s "http://localhost:3002/api/changes?since=$LAST_CHECK&project=rubicon" \
   -H "X-API-Key: YOUR_KEY")
 
 echo "Changes in Rubicon project:"
@@ -313,7 +313,7 @@ elif response.status == 200:
 
 ```bash
 # Fetch entire task list every poll
-curl http://localhost:3001/api/tasks \
+curl http://localhost:3002/api/tasks \
   -H "X-API-Key: YOUR_KEY"
 # Returns ~100KB for 50 tasks
 # Requires parsing entire list to find changes
@@ -323,7 +323,7 @@ curl http://localhost:3001/api/tasks \
 
 ```bash
 # Fetch only changes
-curl "http://localhost:3001/api/changes?since=..." \
+curl "http://localhost:3002/api/changes?since=..." \
   -H "X-API-Key: YOUR_KEY"
 # Returns ~2KB for 5 changes
 # Changes are pre-identified

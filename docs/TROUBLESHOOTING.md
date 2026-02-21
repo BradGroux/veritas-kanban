@@ -53,7 +53,7 @@ This:
 VK provides a canonical health endpoint for tooling:
 
 ```bash
-curl -s http://localhost:3001/api/health
+curl -s http://localhost:3002/api/health
 ```
 
 Expected: HTTP 200 JSON like:
@@ -176,7 +176,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Check the auth diagnostics endpoint:
 
 ```bash
-curl -H "X-API-Key: your-admin-key" http://localhost:3001/api/auth/diagnostics
+curl -H "X-API-Key: your-admin-key" http://localhost:3002/api/auth/diagnostics
 ```
 
 Verify your `.env` has the correct key format:
@@ -204,13 +204,13 @@ See [Deployment Guide](DEPLOYMENT.md#reverse-proxy-nginx) for full configuration
 
 ```bash
 # 1. Authorization header (Bearer token)
-curl -H "Authorization: Bearer your-api-key" http://localhost:3001/api/tasks
+curl -H "Authorization: Bearer your-api-key" http://localhost:3002/api/tasks
 
 # 2. X-API-Key header
-curl -H "X-API-Key: your-api-key" http://localhost:3001/api/tasks
+curl -H "X-API-Key: your-api-key" http://localhost:3002/api/tasks
 
 # 3. Query parameter (useful for WebSocket connections)
-ws://localhost:3001/ws?api_key=your-api-key
+ws://localhost:3002/ws?api_key=your-api-key
 ```
 
 ---
@@ -235,7 +235,7 @@ HOST=127.0.0.1 pnpm dev
 ssh -L 127.0.0.1:3001:127.0.0.1:3001 user@server
 
 # May cause issues — binds to all interfaces
-ssh -L 3001:localhost:3001 user@server
+ssh -L 3001:localhost:3002 user@server
 ssh -L 0.0.0.0:3001:127.0.0.1:3001 user@server
 ```
 
@@ -386,12 +386,12 @@ docker compose up -d
 
 ### Agent can't connect to the API
 
-1. Verify the server is running: `curl http://localhost:3001/api/health`
+1. Verify the server is running: `curl http://localhost:3002/api/health`
 2. Check your agent's API key has the `agent` role:
    ```bash
    VERITAS_API_KEYS=my-agent:my-secret-key:agent
    ```
-3. For agents running in Docker/containers, use `host.docker.internal:3001` instead of `localhost:3001`
+3. For agents running in Docker/containers, use `host.docker.internal:3001` instead of `localhost:3002`
 
 ### Agent names/models — is it hardcoded?
 
@@ -410,7 +410,7 @@ Verify the MCP server config in your Claude Desktop settings:
       "command": "node",
       "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
-        "VK_API_URL": "http://localhost:3001",
+        "VK_API_URL": "http://localhost:3002",
         "VK_API_KEY": "your-admin-key"
       }
     }
@@ -429,7 +429,7 @@ Build the MCP server first: `cd mcp && pnpm build`
 1. Check the browser console for errors (F12 → Console)
 2. Verify both services are running:
    - Web: http://localhost:3000
-   - API: http://localhost:3001/api/health
+   - API: http://localhost:3002/api/health
 3. Try a hard refresh: `Ctrl+Shift+R` (Windows/Linux) or `Cmd+Shift+R` (Mac)
 
 ### Drag and drop not working
@@ -500,11 +500,11 @@ pnpm cli create       # Create a task
 pnpm cli update       # Update a task
 
 # Health checks
-curl http://localhost:3001/api/health          # Server health
-curl http://localhost:3001/api/auth/diagnostics # Auth diagnostics (needs admin key)
+curl http://localhost:3002/api/health          # Server health
+curl http://localhost:3002/api/auth/diagnostics # Auth diagnostics (needs admin key)
 
 # API docs
-open http://localhost:3001/api-docs            # Swagger UI
+open http://localhost:3002/api-docs            # Swagger UI
 ```
 
 ---

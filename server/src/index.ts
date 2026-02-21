@@ -135,7 +135,7 @@ if (trustProxy !== undefined && trustProxy !== '') {
   }
 }
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // ============================================
 // Performance: ETag Generation
@@ -179,7 +179,7 @@ app.set('etag', 'weak');
 //   new Function() for module evaluation.
 //
 //   Note: In dev, Vite (port 3000) serves the frontend and proxies /api
-//   to Express (port 3001). These CSP headers apply to Express responses
+//   to Express (port 3002). These CSP headers apply to Express responses
 //   only, not to Vite-served HTML. They still matter for any HTML served
 //   directly by Express (e.g., error pages) and as defense-in-depth.
 //

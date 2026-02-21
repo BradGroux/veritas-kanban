@@ -25,13 +25,13 @@ enforcement gates.
 ### Fetch current settings
 
 ```bash
-curl http://localhost:3001/api/settings/features | jq
+curl http://localhost:3002/api/settings/features | jq
 ```
 
 ### Enable review gate + closing comments
 
 ```bash
-curl -X PATCH http://localhost:3001/api/settings/features \
+curl -X PATCH http://localhost:3002/api/settings/features \
   -H 'Content-Type: application/json' \
   -d '{
     "enforcement": {
@@ -44,7 +44,7 @@ curl -X PATCH http://localhost:3001/api/settings/features \
 ### Enable automation gates
 
 ```bash
-curl -X PATCH http://localhost:3001/api/settings/features \
+curl -X PATCH http://localhost:3002/api/settings/features \
   -H 'Content-Type: application/json' \
   -d '{
     "enforcement": {
@@ -58,7 +58,7 @@ curl -X PATCH http://localhost:3001/api/settings/features \
 ### Enable orchestrator delegation warnings
 
 ```bash
-curl -X PATCH http://localhost:3001/api/settings/features \
+curl -X PATCH http://localhost:3002/api/settings/features \
   -H 'Content-Type: application/json' \
   -d '{
     "enforcement": {
@@ -70,7 +70,7 @@ curl -X PATCH http://localhost:3001/api/settings/features \
 ### Disable all enforcement gates
 
 ```bash
-curl -X PATCH http://localhost:3001/api/settings/features \
+curl -X PATCH http://localhost:3002/api/settings/features \
   -H 'Content-Type: application/json' \
   -d '{
     "enforcement": {
@@ -274,7 +274,7 @@ If you're an autonomous agent interacting with the Veritas Kanban API, here's ho
 **Before attempting a status change to `done`:**
 
 ```bash
-curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
+curl http://localhost:3002/api/settings/features | jq '.data.enforcement'
 ```
 
 **Response:**
@@ -304,14 +304,14 @@ curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
 1. **If `reviewGate` is enabled:** Fetch the task and check `reviewScores`:
 
    ```bash
-   curl http://localhost:3001/api/tasks/US-42 | jq '.data.reviewScores'
+   curl http://localhost:3002/api/tasks/US-42 | jq '.data.reviewScores'
    ```
 
    All four dimensions (`security`, `reliability`, `performance`, `accessibility`) must be `10`.
 
 2. **If `closingComments` is enabled:** Fetch task comments and ensure at least one is ≥20 characters:
    ```bash
-   curl http://localhost:3001/api/tasks/US-42 | jq '.data.comments'
+   curl http://localhost:3002/api/tasks/US-42 | jq '.data.comments'
    ```
 
 If either check fails, **fix the deficiency before attempting completion:**
@@ -326,7 +326,7 @@ If either check fails, **fix the deficiency before attempting completion:**
 **Example: reviewGate violation**
 
 ```bash
-curl -X PATCH http://localhost:3001/api/tasks/US-42 \
+curl -X PATCH http://localhost:3002/api/tasks/US-42 \
   -H "Content-Type: application/json" \
   -d '{"status":"done"}'
 ```
@@ -380,7 +380,7 @@ If you are the orchestrator and `orchestratorDelegation` is enabled:
 
 ```bash
 # Orchestrator creates a sub-agent task
-curl -X POST http://localhost:3001/api/tasks \
+curl -X POST http://localhost:3002/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Implement OAuth login",
@@ -415,7 +415,7 @@ curl -X POST http://localhost:3001/api/tasks \
 
 ```bash
 # Cache enforcement config at session start
-ENFORCEMENT=$(curl -s http://localhost:3001/api/settings/features | jq '.data.enforcement')
+ENFORCEMENT=$(curl -s http://localhost:3002/api/settings/features | jq '.data.enforcement')
 
 # Use cached values for pre-flight checks
 if [ "$(echo $ENFORCEMENT | jq -r '.reviewGate')" == "true" ]; then
@@ -436,13 +436,13 @@ The API does not fail silently — it returns `400 Bad Request` with an error co
 Check the enforcement config:
 
 ```bash
-curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
+curl http://localhost:3002/api/settings/features | jq '.data.enforcement'
 ```
 
 If a gate is `true` and you want it off, disable it:
 
 ```bash
-curl -X PATCH http://localhost:3001/api/settings/features \
+curl -X PATCH http://localhost:3002/api/settings/features \
   -H 'Content-Type: application/json' \
   -d '{"enforcement":{"<gate-name>":false}}'
 ```

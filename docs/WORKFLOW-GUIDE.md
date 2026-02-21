@@ -124,7 +124,7 @@ steps:
 
 ```bash
 # Start a workflow run
-curl -X POST http://localhost:3001/api/workflows/hello-world/runs \
+curl -X POST http://localhost:3002/api/workflows/hello-world/runs \
   -H "Content-Type: application/json" \
   -d '{}'
 
@@ -523,7 +523,7 @@ Tool policies define which tools each agent role can access, enabling least-priv
 **Via API:**
 
 ```bash
-curl -X POST http://localhost:3001/api/tool-policies \
+curl -X POST http://localhost:3002/api/tool-policies \
   -H "Content-Type: application/json" \
   -d '{
     "role": "auditor",
@@ -1202,7 +1202,7 @@ If the server crashes mid-workflow, runs can be recovered:
 
 3. **Resume manually** (if blocked):
    ```bash
-   curl -X POST http://localhost:3001/api/workflow-runs/run_XYZ/resume
+   curl -X POST http://localhost:3002/api/workflow-runs/run_XYZ/resume
    ```
 
 > **📝 Note**: Automatic recovery is planned for a future release.

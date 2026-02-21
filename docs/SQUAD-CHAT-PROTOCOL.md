@@ -26,7 +26,7 @@ Squad chat is the **glass box** — the real-time visibility layer that lets hum
 ### curl (when script isn't available)
 
 ```bash
-curl -s -X POST "http://localhost:3001/api/chat/squad" \
+curl -s -X POST "http://localhost:3002/api/chat/squad" \
   -H 'Content-Type: application/json' \
   -d '{
     "agent": "YOUR_NAME",
@@ -55,7 +55,7 @@ The script supports these env vars for non-default configurations:
 
 ### Troubleshooting
 
-- **Connection refused:** Verify VK server is running (`curl http://localhost:3001/api/health`)
+- **Connection refused:** Verify VK server is running (`curl http://localhost:3002/api/health`)
 - **Script fails silently:** Check that `jq` is installed (`which jq`)
 - **Wrong port:** Set `VK_PORT` env var to match your server configuration
 
@@ -95,7 +95,7 @@ Every sub-agent task **must** include this block:
 ```
 SQUAD CHAT (mandatory): Post updates to squad chat as YOUR_NAME throughout your work.
 Use this command for regular updates:
-  curl -s -X POST "http://localhost:3001/api/chat/squad" \
+  curl -s -X POST "http://localhost:3002/api/chat/squad" \
     -H 'Content-Type: application/json' \
     -d '{"agent":"YOUR_NAME","message":"YOUR UPDATE","tags":["relevant","tags"],"model":"YOUR_MODEL"}'
 
