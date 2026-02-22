@@ -16,7 +16,7 @@
     "@veritas-kanban/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "hono": "^4.12.0",
-    "zod": "^3.24.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
