@@ -64,7 +64,6 @@ import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
-import { requireExternalApiKey } from './middleware/external-api-key.js';
 
 const log = createLogger('server');
 
@@ -419,9 +418,6 @@ app.use('/api/auth', authRateLimit, authRoutes);
 // Security: Rate Limiting (100 req/min)
 // Applies to both /api/* and /api/v1/* (since /api/v1 starts with /api)
 // ============================================
-// External API key required for non-localhost requests (protects tunnel endpoint)
-app.use('/api', requireExternalApiKey);
-
 app.use('/api', apiRateLimit);
 
 // Apply authentication to all API routes (except /api/auth which is handled above)
