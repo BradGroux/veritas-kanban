@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
@@ -445,14 +446,16 @@ if (process.env.NODE_ENV === 'production') {
     })
   );
 
-  // All other static files (index.html, favicon, manifest) — always revalidate
+  // All other static files (favicon, manifest) — always revalidate.
+  // index.html is excluded so it always goes through the SPA fallback
+  // handler below, which injects the CSP nonce into <script> tags.
   app.use(
     express.static(webDistPath, {
       maxAge: 0,
       etag: true,
       lastModified: true,
+      index: false, // Don't serve index.html for directory requests
       setHeaders(res, filePath) {
-        // index.html must never be cached stale — it references hashed bundles
         if (filePath.endsWith('.html')) {
           res.set('Cache-Control', 'no-cache');
         }
@@ -461,13 +464,20 @@ if (process.env.NODE_ENV === 'production') {
   );
 
   // SPA fallback: serve index.html for any non-API route
+  // Read index.html once at startup so we can inject the CSP nonce per-request.
+  const indexHtml = fs.readFileSync(path.join(webDistPath, 'index.html'), 'utf-8');
+
   app.get('*', (_req, res, next) => {
     // Don't serve index.html for API routes or WebSocket
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();
     }
+    const nonce = res.locals.cspNonce as string;
+    // Inject nonce into all <script> tags so they pass the CSP check
+    const html = indexHtml.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`);
     res.set('Cache-Control', 'no-cache');
-    res.sendFile(path.join(webDistPath, 'index.html'));
+    res.set('Content-Type', 'text/html');
+    res.send(html);
   });
 }
 

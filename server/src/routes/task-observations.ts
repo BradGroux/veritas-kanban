@@ -171,7 +171,7 @@ observationSearchRouter.get(
     }
 
     const queryLower = query.toLowerCase();
-    const allTasks = await taskService.getAllTasks();
+    const allTasks = await taskService.listTasks();
 
     // NOTE: Full-text search should be replaced with a proper index (e.g., SQLite FTS5)
     // when task count exceeds ~500 for better performance.
