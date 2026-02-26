@@ -126,7 +126,7 @@ export function useUpdateTask() {
       }
     },
     // Handle validation errors with detailed toast messages
-    onError: (error: Error & { code?: string; details?: unknown }, { input }) => {
+    onError: (error: Error & { code?: string; details?: unknown }, { input: _input }) => {
       // Extract enforcement gate error details
       const details = error.details as
         | Array<{ code: string; message: string; path: string[] }>

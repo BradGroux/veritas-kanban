@@ -58,7 +58,7 @@ const TYPE_COLORS: Record<ObservationType, string> = {
 
 function ObservationItem({
   observation,
-  taskId,
+  taskId: _taskId,
   onDelete,
 }: {
   observation: Observation;

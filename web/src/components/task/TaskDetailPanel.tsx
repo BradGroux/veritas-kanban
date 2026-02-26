@@ -59,6 +59,8 @@ export function TaskDetailPanel({
   const taskSettings = featureSettings.tasks;
   const agentSettings = featureSettings.agents;
   const { localTask, updateField, isDirty } = useDebouncedSave(task);
+  const addObservation = useAddObservation();
+  const deleteObservation = useDeleteObservation();
   const [activeTab, setActiveTab] = useState('details');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
