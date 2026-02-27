@@ -270,6 +270,7 @@ app.use(compression({ level: 6, threshold: 1024 }));
 // Security: CORS Configuration
 // ============================================
 // Allowed origins from environment (comma-separated) or defaults for dev
+const serverPort = process.env.PORT || '3001';
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
   : [
@@ -278,6 +279,10 @@ const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
       'http://127.0.0.1:5173',
       'http://127.0.0.1:3000',
     ];
+// Always allow the server's own origin (for SPA assets served with crossorigin attr)
+for (const host of [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]) {
+  if (!ALLOWED_ORIGINS.includes(host)) ALLOWED_ORIGINS.push(host);
+}
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
@@ -525,7 +530,29 @@ let configService: ConfigService | null = null;
 })();
 
 // Create HTTP server
-const server = createServer(app);
+// ── BASE_PATH prefix stripping ────────────────────────────────────
+// When served behind a path-based reverse proxy (e.g. Tailscale Serve at
+// /kanban), the browser sends requests like /kanban/api/v1/tasks.  The
+// proxy strips the prefix before forwarding, but direct localhost access
+// still carries the prefix.  Strip it at the raw HTTP level so Express
+// routes and the WebSocket server see clean paths in both cases.
+const basePath = (process.env.BASE_PATH || '').replace(/\/+$/, '');
+
+const server = createServer((req, res) => {
+  if (basePath && req.url?.startsWith(basePath)) {
+    req.url = req.url.slice(basePath.length) || '/';
+  }
+  app(req, res);
+});
+
+// Strip prefix for WebSocket upgrade requests (must run before ws library)
+if (basePath) {
+  server.prependListener('upgrade', (req) => {
+    if (req.url?.startsWith(basePath)) {
+      req.url = req.url.slice(basePath.length) || '/';
+    }
+  });
+}
 
 // ============================================
 // WebSocket Server — Real-time Updates

@@ -105,6 +105,10 @@ export const envSchema = z.object({
   /** Days after which telemetry is compressed */
   TELEMETRY_COMPRESS_DAYS: positiveIntString,
 
+  // ── Reverse Proxy ───────────────────────────────────────────────────
+  /** URL path prefix to strip (e.g. '/kanban' for Tailscale Serve) */
+  BASE_PATH: z.string().optional().default(''),
+
   // ── External Services ───────────────────────────────────────────────
   /** Clawdbot gateway URL */
   CLAWDBOT_GATEWAY: z.string().url().optional().default('http://127.0.0.1:18789'),
