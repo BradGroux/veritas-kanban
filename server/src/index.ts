@@ -496,7 +496,8 @@ if (process.env.NODE_ENV === 'production') {
   );
 
   // SPA fallback: serve index.html for any non-API route
-  app.get('*', (_req, res, next) => {
+  // Express 5 / path-to-regexp v8+ requires named wildcards (fixes #150)
+  app.get('{*path}', (_req, res, next) => {
     // Don't serve index.html for API routes or WebSocket
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();
