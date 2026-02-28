@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE } from '@/lib/config';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 
 export type WorkflowPeriod = '24h' | '7d' | '30d';
@@ -39,8 +40,6 @@ export interface WorkflowStats {
     avgDuration: number;
   }>;
 }
-
-const API_BASE = '/api';
 
 async function fetchWorkflowStats(period: WorkflowPeriod): Promise<WorkflowStats> {
   return apiFetch<WorkflowStats>(`${API_BASE}/workflows/runs/stats?period=${period}`);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
-import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE, apiFetch } from '@/lib/api/helpers';
 
 // Types
 export interface AuthStatus {
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshStatus = useCallback(async () => {
     try {
       setError(null);
-      const data = await apiFetch<AuthStatus>('/api/auth/status');
+      const data = await apiFetch<AuthStatus>(`${API_BASE}/auth/status`);
       setStatus(data);
     } catch (err) {
       console.error('[Auth] Failed to check auth status:', err);
@@ -64,11 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setup = useCallback(async (password: string) => {
     try {
-      const data = await apiFetch<{ success: boolean; recoveryKey: string }>('/api/auth/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
+      const data = await apiFetch<{ success: boolean; recoveryKey: string }>(
+        `${API_BASE}/auth/setup`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        }
+      );
       // Don't refresh status here - let SetupScreen show the recovery key first
       // The user will trigger a refresh when they click "Continue to App"
       return { success: true, recoveryKey: data.recoveryKey };
@@ -81,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (password: string, rememberMe = false) => {
       try {
-        await apiFetch('/api/auth/login', {
+        await apiFetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password, rememberMe }),
@@ -98,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await apiFetch('/api/auth/logout', { method: 'POST' });
+      await apiFetch(`${API_BASE}/auth/logout`, { method: 'POST' });
     } finally {
       await refreshStatus();
     }
@@ -108,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (recoveryKey: string, newPassword: string) => {
       try {
         const data = await apiFetch<{ success: boolean; recoveryKey: string }>(
-          '/api/auth/recover',
+          `${API_BASE}/auth/recover`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -127,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     try {
-      await apiFetch('/api/auth/change-password', {
+      await apiFetch(`${API_BASE}/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),

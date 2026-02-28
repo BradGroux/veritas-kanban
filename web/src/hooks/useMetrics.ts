@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE } from '@/lib/config';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 
 export type MetricsPeriod =
@@ -77,8 +78,6 @@ export interface AllMetrics {
   duration: DurationMetrics;
   trends: TrendComparison;
 }
-
-const API_BASE = '/api';
 
 async function fetchMetrics(
   period: MetricsPeriod,
