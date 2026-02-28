@@ -28,6 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Individual gate dots (green = active, gray = off)
   - Renders in dashboard status bar alongside refresh timestamp
 
+## [3.3.1] - 2026-02-28
+
+### Fixed
+
+- **#153 — Express 5 wildcard route compatibility** — Updated route patterns for Express 5.x compatibility
+- **Security: upgrade hono to >=4.12.2** — Addressed GHSA-xh87-mx6m-69f3 vulnerability
+
+### Changed
+
+- **#148 — Bump vite from 6.4.1 to 7.3.1** — Major version upgrade with performance improvements
+- **#149 — Bump tailwindcss from 3.4.19 to 4.2.1** — Major version upgrade with new features
+- **#154 — Bump production dependencies (8 updates)** — Routine dependency maintenance
+
+---
+
 ## [3.3.0] - 2026-02-15
 
 ### ✨ Highlights
