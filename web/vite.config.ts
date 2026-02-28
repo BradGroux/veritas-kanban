@@ -1,6 +1,6 @@
-/// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 const viteAllowedHostsEnv = process.env.VITE_ALLOWED_HOSTS?.trim();
@@ -15,7 +15,8 @@ const viteAllowedHosts =
     : undefined;
 
 export default defineConfig({
-  plugins: [react()],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  plugins: [react(), tailwindcss() as any],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
