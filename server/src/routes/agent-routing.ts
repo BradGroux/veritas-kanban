@@ -133,7 +133,7 @@ router.put(
       parsed = routingConfigSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Invalid routing config', error.errors);
+        throw new ValidationError('Invalid routing config', error.issues);
       }
       throw error;
     }

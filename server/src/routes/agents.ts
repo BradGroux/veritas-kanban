@@ -24,8 +24,8 @@ const completeAgentSchema = z.object({
 
 const reportTokensSchema = z.object({
   attemptId: z.string().optional(),
-  inputTokens: z.number({ required_error: 'inputTokens is required' }).int().nonnegative(),
-  outputTokens: z.number({ required_error: 'outputTokens is required' }).int().nonnegative(),
+  inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
+  outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),
   model: z.string().optional(),
   agent: AgentTypeSchema.optional(),
@@ -40,7 +40,7 @@ router.post(
       ({ agent } = startAgentSchema.parse(req.body) as { agent?: AgentType });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -60,7 +60,7 @@ router.post(
       ({ success, summary, error } = completeAgentSchema.parse(req.body));
     } catch (err) {
       if (err instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', err.errors);
+        throw new ValidationError('Validation failed', err.issues);
       }
       throw err;
     }
@@ -145,7 +145,7 @@ router.post(
       agent = parsed.agent as AgentType | undefined;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
