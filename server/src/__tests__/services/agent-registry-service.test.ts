@@ -16,7 +16,10 @@ vi.mock('../../storage/fs-helpers.js', () => ({
 // Must import after mock
 const { getAgentRegistryService, disposeAgentRegistryService } =
   await import('../../services/agent-registry-service.js');
-import type { RegisteredAgent } from '../../services/agent-registry-service.js';
+import type { RegisteredAgent, TaskSyncContext } from '../../services/agent-registry-service.js';
+
+const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
+const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
 
 describe('AgentRegistryService', () => {
   beforeEach(() => {
@@ -398,12 +401,15 @@ describe('AgentRegistryService', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
-      const updated = service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskTitle: 'Wire backend sync',
-        taskStatus: 'in-progress',
-      });
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskTitle: 'Wire backend sync',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       expect(updated).not.toBeNull();
       expect(updated!.status).toBe('busy');
@@ -418,19 +424,25 @@ describe('AgentRegistryService', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
 
-      service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskTitle: 'Wire backend sync',
-        taskStatus: 'in-progress',
-      });
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskTitle: 'Wire backend sync',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
-      const updated = service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskStatus: 'done',
-      });
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'done',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       expect(updated).not.toBeNull();
       expect(updated!.status).toBe('idle');
@@ -444,18 +456,24 @@ describe('AgentRegistryService', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
-      service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskTitle: 'Current task',
-        taskStatus: 'in-progress',
-      });
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskTitle: 'Current task',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
-      const updated = service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncB',
-        taskStatus: 'done',
-      });
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncB',
+          taskStatus: 'done',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       expect(updated).not.toBeNull();
       expect(updated!.status).toBe('busy');
@@ -467,11 +485,14 @@ describe('AgentRegistryService', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Codex Primary', capabilities: [{ name: 'code' }] });
 
-      const updated = service.syncFromTask({
-        agentRef: 'codex primary',
-        taskId: 'task_20260228_syncA',
-        taskStatus: 'in-progress',
-      });
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'codex primary',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       expect(updated).not.toBeNull();
       expect(updated!.id).toBe('coder-1');
@@ -485,24 +506,63 @@ describe('AgentRegistryService', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
 
-      service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskStatus: 'in-progress',
-      });
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       // Within 10s flap window => should remain busy
       vi.setSystemTime(new Date('2026-02-28T12:00:05.000Z'));
-      const updated = service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskStatus: 'done',
-      });
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'done',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       expect(updated?.status).toBe('busy');
       expect(updated?.currentTaskId).toBe('task_20260228_syncA');
 
       vi.useRealTimers();
+    });
+
+    it('should reject unauthorized sync context', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      expect(() =>
+        service.syncFromTask(
+          {
+            agentRef: 'coder-1',
+            taskId: 'task_20260228_syncA',
+            taskStatus: 'in-progress',
+          },
+          { source: 'task-service-untrusted' as any }
+        )
+      ).toThrow('Unauthorized task sync context');
+    });
+
+    it('should ignore malformed agentRef in sync operations', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'bad/ref',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      expect(updated).toBeNull();
+      expect(service.get('coder-1')?.status).toBe('online');
     });
   });
 
@@ -511,14 +571,17 @@ describe('AgentRegistryService', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
-      const changed = service.reconcileFromTasks([
-        {
-          id: 'task_20260228_syncA',
-          title: 'Backend hook',
-          status: 'in-progress',
-          agent: 'coder-1',
-        },
-      ]);
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_syncA',
+            title: 'Backend hook',
+            status: 'in-progress',
+            agent: 'coder-1',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
 
       const agent = service.get('coder-1');
       expect(changed).toBe(1);
@@ -533,20 +596,26 @@ describe('AgentRegistryService', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
 
-      service.syncFromTask({
-        agentRef: 'coder-1',
-        taskId: 'task_20260228_syncA',
-        taskStatus: 'in-progress',
-      });
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
 
       vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
-      const changed = service.reconcileFromTasks([
-        {
-          id: 'task_20260228_syncA',
-          status: 'done',
-          agent: 'coder-1',
-        },
-      ]);
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_syncA',
+            status: 'done',
+            agent: 'coder-1',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
 
       const agent = service.get('coder-1');
       expect(changed).toBe(1);
@@ -554,6 +623,30 @@ describe('AgentRegistryService', () => {
       expect(agent?.currentTaskId).toBeUndefined();
 
       vi.useRealTimers();
+    });
+
+    it('should reject unauthorized reconcile context', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      expect(() =>
+        service.reconcileFromTasks([{ id: 'task_1', status: 'in-progress', agent: 'coder-1' }], {
+          source: 'task-service-untrusted' as any,
+        })
+      ).toThrow('Unauthorized task reconcile context');
+    });
+
+    it('should enforce reconciliation batch bounds', () => {
+      const service = getAgentRegistryService();
+      const tooLarge = Array.from({ length: 10001 }, (_, i) => ({
+        id: `task_${i}`,
+        status: 'todo' as const,
+        agent: 'coder-1',
+      }));
+
+      expect(() => service.reconcileFromTasks(tooLarge, TASK_RECONCILE_CONTEXT)).toThrow(
+        'Reconciliation batch too large'
+      );
     });
   });
 
@@ -575,6 +668,40 @@ describe('AgentRegistryService', () => {
     it('should return false for unknown agent', () => {
       const service = getAgentRegistryService();
       expect(service.deregister('nonexistent')).toBe(false);
+    });
+
+    it('should clear flap-guard state on deregister', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      service.deregister('coder-1');
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      const updated = service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_syncA',
+          taskStatus: 'done',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      // If flap state was not cleared, this can incorrectly remain busy.
+      expect(updated?.status).toBe('idle');
+
+      vi.useRealTimers();
     });
   });
 });

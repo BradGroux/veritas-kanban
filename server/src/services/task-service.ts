@@ -25,10 +25,12 @@ import {
   executePostTransitionActions,
   type TransitionActionCallbacks,
 } from './transition-hooks-service.js';
-import { getAgentRegistryService } from './agent-registry-service.js';
+import { getAgentRegistryService, type TaskSyncContext } from './agent-registry-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('task-cache');
+const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
+const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
 
 /**
  * Task ID format validation
@@ -463,12 +465,15 @@ export class TaskService {
     if (!['todo', 'in-progress', 'blocked', 'done', 'cancelled'].includes(task.status)) return;
 
     const registry = getAgentRegistryService();
-    registry.syncFromTask({
-      agentRef: task.agent,
-      taskId: task.id,
-      taskTitle: task.title,
-      taskStatus: task.status,
-    });
+    registry.syncFromTask(
+      {
+        agentRef: task.agent,
+        taskId: task.id,
+        taskTitle: task.title,
+        taskStatus: task.status,
+      },
+      TASK_SYNC_CONTEXT
+    );
   }
 
   private startTaskSyncReconciler(): void {
@@ -492,7 +497,8 @@ export class TaskService {
           title: task.title,
           status: task.status,
           agent: task.agent,
-        }))
+        })),
+        TASK_RECONCILE_CONTEXT
       );
 
       if (changes > 0) {

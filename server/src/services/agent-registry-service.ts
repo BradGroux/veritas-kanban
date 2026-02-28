@@ -83,6 +83,10 @@ export interface TaskSyncUpdate {
   taskStatus: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 }
 
+export interface TaskSyncContext {
+  source: 'task-service' | 'task-reconciler';
+}
+
 export interface TaskSyncSnapshot {
   id: string;
   title?: string;
@@ -100,6 +104,12 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+
+/** Defensive cap to avoid pathological reconciliation payload sizes */
+const MAX_RECONCILE_BATCH = 10_000;
+
+/** Basic ref validation for task-agent sync paths */
+const AGENT_REF_REGEX = /^[a-zA-Z0-9._: -]{1,100}$/;
 
 // ─── Service ─────────────────────────────────────────────────────
 
@@ -189,7 +199,16 @@ class AgentRegistryService {
    *   but only when the agent is still attached to the same task (prevents clobbering
    *   if agent moved on to a different task).
    */
-  syncFromTask(update: TaskSyncUpdate): RegisteredAgent | null {
+  syncFromTask(update: TaskSyncUpdate, context: TaskSyncContext): RegisteredAgent | null {
+    if (!this.isAuthorizedSyncContext(context)) {
+      throw new Error('Unauthorized task sync context');
+    }
+
+    if (!this.isValidAgentRef(update.agentRef)) {
+      log.warn({ agentRef: update.agentRef }, 'Rejected malformed agentRef in syncFromTask');
+      return null;
+    }
+
     const agent = this.findByRef(update.agentRef);
     if (!agent) return null;
 
@@ -234,11 +253,26 @@ class AgentRegistryService {
    * - If an agent has an in-progress task assigned, force busy + task linkage.
    * - If an agent is busy on a task that is now terminal, clear it (subject to flap guard).
    */
-  reconcileFromTasks(tasks: TaskSyncSnapshot[]): number {
+  reconcileFromTasks(tasks: TaskSyncSnapshot[], context: TaskSyncContext): number {
+    if (!this.isAuthorizedSyncContext(context)) {
+      throw new Error('Unauthorized task reconcile context');
+    }
+
+    if (tasks.length > MAX_RECONCILE_BATCH) {
+      throw new Error(`Reconciliation batch too large: ${tasks.length} > ${MAX_RECONCILE_BATCH}`);
+    }
+
     const byAgentRef = new Map<string, TaskSyncSnapshot>();
 
     for (const task of tasks) {
       if (!task.agent) continue;
+      if (!this.isValidAgentRef(task.agent)) {
+        log.warn(
+          { agentRef: task.agent, taskId: task.id },
+          'Skipping malformed agentRef in reconcileFromTasks'
+        );
+        continue;
+      }
       const key = task.agent.trim().toLowerCase();
       const existing = byAgentRef.get(key);
 
@@ -258,12 +292,15 @@ class AgentRegistryService {
       if (mapped?.status === 'in-progress') {
         const prevStatus = agent.status;
         const prevTaskId = agent.currentTaskId;
-        const updated = this.syncFromTask({
-          agentRef: agent.id,
-          taskId: mapped.id,
-          taskTitle: mapped.title,
-          taskStatus: 'in-progress',
-        });
+        const updated = this.syncFromTask(
+          {
+            agentRef: agent.id,
+            taskId: mapped.id,
+            taskTitle: mapped.title,
+            taskStatus: 'in-progress',
+          },
+          context
+        );
         if (updated && (updated.currentTaskId !== prevTaskId || updated.status !== prevStatus)) {
           changed++;
         }
@@ -275,11 +312,14 @@ class AgentRegistryService {
         if (task && task.status !== 'in-progress') {
           const prevStatus = agent.status;
           const prevTaskId = agent.currentTaskId;
-          const updated = this.syncFromTask({
-            agentRef: agent.id,
-            taskId: task.id,
-            taskStatus: task.status,
-          });
+          const updated = this.syncFromTask(
+            {
+              agentRef: agent.id,
+              taskId: task.id,
+              taskStatus: task.status,
+            },
+            context
+          );
           if (updated && (updated.status !== prevStatus || updated.currentTaskId !== prevTaskId)) {
             changed++;
           }
@@ -295,6 +335,7 @@ class AgentRegistryService {
    */
   deregister(agentId: string): boolean {
     const existed = this.agents.delete(agentId);
+    this.lastBusyAtByAgent.delete(agentId);
     if (existed) {
       this.persist();
       log.info({ agentId }, `Agent deregistered: ${agentId}`);
@@ -364,6 +405,15 @@ class AgentRegistryService {
       offline: agents.filter((a) => a.status === 'offline').length,
       capabilities: Array.from(allCaps).sort(),
     };
+  }
+
+  private isAuthorizedSyncContext(context: TaskSyncContext): boolean {
+    return context.source === 'task-service' || context.source === 'task-reconciler';
+  }
+
+  private isValidAgentRef(agentRef: string): boolean {
+    const normalized = agentRef.trim();
+    return AGENT_REF_REGEX.test(normalized);
   }
 
   /**
