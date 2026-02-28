@@ -393,6 +393,170 @@ describe('AgentRegistryService', () => {
 
   // ── Deregister ───────────────────────────────────────────────
 
+  describe('syncFromTask()', () => {
+    it('should set agent busy and attach task when task moves in-progress', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      const updated = service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskTitle: 'Wire backend sync',
+        taskStatus: 'in-progress',
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.status).toBe('busy');
+      expect(updated!.currentTaskId).toBe('task_20260228_syncA');
+      expect(updated!.currentTaskTitle).toBe('Wire backend sync');
+    });
+
+    it('should set agent idle and clear task on terminal status for same task', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskTitle: 'Wire backend sync',
+        taskStatus: 'in-progress',
+      });
+
+      vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
+      const updated = service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskStatus: 'done',
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.status).toBe('idle');
+      expect(updated!.currentTaskId).toBeUndefined();
+      expect(updated!.currentTaskTitle).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    it('should not clobber current task when terminal update is for a different task', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskTitle: 'Current task',
+        taskStatus: 'in-progress',
+      });
+
+      const updated = service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncB',
+        taskStatus: 'done',
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.status).toBe('busy');
+      expect(updated!.currentTaskId).toBe('task_20260228_syncA');
+      expect(updated!.currentTaskTitle).toBe('Current task');
+    });
+
+    it('should resolve agent by name when task.agent stores display name', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Codex Primary', capabilities: [{ name: 'code' }] });
+
+      const updated = service.syncFromTask({
+        agentRef: 'codex primary',
+        taskId: 'task_20260228_syncA',
+        taskStatus: 'in-progress',
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.id).toBe('coder-1');
+      expect(updated!.status).toBe('busy');
+    });
+
+    it('should prevent rapid busy-to-idle flapping within guard window', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskStatus: 'in-progress',
+      });
+
+      // Within 10s flap window => should remain busy
+      vi.setSystemTime(new Date('2026-02-28T12:00:05.000Z'));
+      const updated = service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskStatus: 'done',
+      });
+
+      expect(updated?.status).toBe('busy');
+      expect(updated?.currentTaskId).toBe('task_20260228_syncA');
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe('reconcileFromTasks()', () => {
+    it('should correct drift to busy when task is in-progress', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      const changed = service.reconcileFromTasks([
+        {
+          id: 'task_20260228_syncA',
+          title: 'Backend hook',
+          status: 'in-progress',
+          agent: 'coder-1',
+        },
+      ]);
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_syncA');
+    });
+
+    it('should clear busy agent when assigned task is terminal', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask({
+        agentRef: 'coder-1',
+        taskId: 'task_20260228_syncA',
+        taskStatus: 'in-progress',
+      });
+
+      vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
+      const changed = service.reconcileFromTasks([
+        {
+          id: 'task_20260228_syncA',
+          status: 'done',
+          agent: 'coder-1',
+        },
+      ]);
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.status).toBe('idle');
+      expect(agent?.currentTaskId).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+  });
+
   describe('deregister()', () => {
     it('should remove an agent', () => {
       const service = getAgentRegistryService();

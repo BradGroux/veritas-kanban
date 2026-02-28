@@ -202,11 +202,19 @@ export function MultiAgentPanel({ onTaskClick }: MultiAgentPanelProps) {
     }
 
     // Start with registered agents
-    const cards = registeredAgents.map((agent) => ({
-      agent,
-      isActive: activeMap.has(agent.id.toLowerCase()) || activeMap.has(agent.name.toLowerCase()),
-      activeInfo: activeMap.get(agent.id.toLowerCase()) || activeMap.get(agent.name.toLowerCase()),
-    }));
+    const cards = registeredAgents.map((agent) => {
+      const realtimeActive =
+        activeMap.has(agent.id.toLowerCase()) || activeMap.has(agent.name.toLowerCase());
+      const registryBusy = agent.status === 'busy';
+
+      return {
+        agent,
+        // Truthful fallback: if realtime feed is stale, honor registry busy state
+        isActive: realtimeActive || registryBusy,
+        activeInfo:
+          activeMap.get(agent.id.toLowerCase()) || activeMap.get(agent.name.toLowerCase()),
+      };
+    });
 
     // Add any active agents that aren't in the registry
     for (const [key, info] of activeMap.entries()) {

@@ -76,6 +76,20 @@ export interface AgentRegistryData {
   lastUpdated: string;
 }
 
+export interface TaskSyncUpdate {
+  agentRef: string;
+  taskId: string;
+  taskTitle?: string;
+  taskStatus: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+}
+
+export interface TaskSyncSnapshot {
+  id: string;
+  title?: string;
+  status: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+  agent?: string;
+}
+
 // ─── Configuration ───────────────────────────────────────────────
 
 /** How long before an agent is considered offline (no heartbeat) */
@@ -83,6 +97,9 @@ const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /** How often to check for stale agents */
 const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+
+/** Prevent rapid busy<->idle oscillation on quick status churn */
+const TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
 
 // ─── Service ─────────────────────────────────────────────────────
 
@@ -92,6 +109,7 @@ class AgentRegistryService {
   private filePath: string;
   private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private lastBusyAtByAgent: Map<string, number> = new Map();
 
   constructor() {
     this.dataDir = getRuntimeDir();
@@ -160,6 +178,116 @@ class AgentRegistryService {
     this.persist();
 
     return agent;
+  }
+
+  /**
+   * Apply task lifecycle state to agent registry state.
+   *
+   * Precedence contract:
+   * - Task transition to in-progress is authoritative for busy + currentTask assignment.
+   * - Terminal transitions (todo/blocked/done/cancelled) move agent to idle + clear task,
+   *   but only when the agent is still attached to the same task (prevents clobbering
+   *   if agent moved on to a different task).
+   */
+  syncFromTask(update: TaskSyncUpdate): RegisteredAgent | null {
+    const agent = this.findByRef(update.agentRef);
+    if (!agent) return null;
+
+    const previousStatus = agent.status;
+    const previousTaskId = agent.currentTaskId;
+
+    if (update.taskStatus === 'in-progress') {
+      agent.status = 'busy';
+      agent.currentTaskId = update.taskId;
+      agent.currentTaskTitle = update.taskTitle;
+      this.lastBusyAtByAgent.set(agent.id, Date.now());
+    } else {
+      // Only clear if registry still points to this task (avoid stale overwrites)
+      if (agent.currentTaskId && agent.currentTaskId !== update.taskId) {
+        return agent;
+      }
+
+      // Flap guard: ignore immediate busy->idle transitions for same task
+      const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
+      if (lastBusyAt && Date.now() - lastBusyAt < TASK_SYNC_FLAP_GUARD_MS) {
+        return agent;
+      }
+
+      agent.status = 'idle';
+      agent.currentTaskId = undefined;
+      agent.currentTaskTitle = undefined;
+    }
+
+    const changed = previousStatus !== agent.status || previousTaskId !== agent.currentTaskId;
+    if (changed) {
+      this.agents.set(agent.id, agent);
+      this.persist();
+    }
+
+    return agent;
+  }
+
+  /**
+   * Reconcile registry status from the current task snapshot.
+   *
+   * Drift correction:
+   * - If an agent has an in-progress task assigned, force busy + task linkage.
+   * - If an agent is busy on a task that is now terminal, clear it (subject to flap guard).
+   */
+  reconcileFromTasks(tasks: TaskSyncSnapshot[]): number {
+    const byAgentRef = new Map<string, TaskSyncSnapshot>();
+
+    for (const task of tasks) {
+      if (!task.agent) continue;
+      const key = task.agent.trim().toLowerCase();
+      const existing = byAgentRef.get(key);
+
+      // Authoritative precedence: in-progress wins
+      if (!existing || task.status === 'in-progress') {
+        byAgentRef.set(key, task);
+      }
+    }
+
+    let changed = 0;
+
+    for (const agent of this.agents.values()) {
+      const mapped =
+        byAgentRef.get(agent.id.trim().toLowerCase()) ??
+        byAgentRef.get(agent.name.trim().toLowerCase());
+
+      if (mapped?.status === 'in-progress') {
+        const prevStatus = agent.status;
+        const prevTaskId = agent.currentTaskId;
+        const updated = this.syncFromTask({
+          agentRef: agent.id,
+          taskId: mapped.id,
+          taskTitle: mapped.title,
+          taskStatus: 'in-progress',
+        });
+        if (updated && (updated.currentTaskId !== prevTaskId || updated.status !== prevStatus)) {
+          changed++;
+        }
+        continue;
+      }
+
+      if (agent.status === 'busy' && agent.currentTaskId) {
+        const task = tasks.find((t) => t.id === agent.currentTaskId);
+        if (task && task.status !== 'in-progress') {
+          const prevStatus = agent.status;
+          const prevTaskId = agent.currentTaskId;
+          const updated = this.syncFromTask({
+            agentRef: agent.id,
+            taskId: task.id,
+            taskStatus: task.status,
+          });
+          if (updated && (updated.status !== prevStatus || updated.currentTaskId !== prevTaskId)) {
+            changed++;
+          }
+        }
+      }
+    }
+
+    return changed;
   }
 
   /**
@@ -236,6 +364,23 @@ class AgentRegistryService {
       offline: agents.filter((a) => a.status === 'offline').length,
       capabilities: Array.from(allCaps).sort(),
     };
+  }
+
+  /**
+   * Resolve an agent by id first, then by case-insensitive name.
+   */
+  private findByRef(agentRef: string): RegisteredAgent | null {
+    const byId = this.agents.get(agentRef);
+    if (byId) return byId;
+
+    const normalized = agentRef.trim().toLowerCase();
+    for (const agent of this.agents.values()) {
+      if (agent.name.trim().toLowerCase() === normalized) {
+        return agent;
+      }
+    }
+
+    return null;
   }
 
   /**
