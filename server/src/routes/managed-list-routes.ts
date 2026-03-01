@@ -46,7 +46,7 @@ export function createManagedListRouter<T extends ManagedListItem>(
         data = createSchema ? createSchema.parse(req.body) : req.body;
       } catch (err: any) {
         if (err.name === 'ZodError') {
-          throw new ValidationError('Validation error', err.errors);
+          throw new ValidationError('Validation error', err.issues);
         }
         throw err;
       }
@@ -65,7 +65,7 @@ export function createManagedListRouter<T extends ManagedListItem>(
         data = updateSchema ? updateSchema.parse(req.body) : req.body;
       } catch (err: any) {
         if (err.name === 'ZodError') {
-          throw new ValidationError('Validation error', err.errors);
+          throw new ValidationError('Validation error', err.issues);
         }
         throw err;
       }
@@ -119,7 +119,7 @@ export function createManagedListRouter<T extends ManagedListItem>(
         ({ orderedIds } = schema.parse(req.body));
       } catch (err: any) {
         if (err.name === 'ZodError') {
-          throw new ValidationError('Validation error', err.errors);
+          throw new ValidationError('Validation error', err.issues);
         }
         throw err;
       }

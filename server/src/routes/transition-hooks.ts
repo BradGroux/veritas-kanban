@@ -119,7 +119,7 @@ router.put(
       config = configSchema.parse(req.body);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        throw new ValidationError('Invalid configuration', err.errors);
+        throw new ValidationError('Invalid configuration', err.issues);
       }
       throw err;
     }
@@ -149,7 +149,7 @@ router.patch(
       config = configSchema.parse(merged);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        throw new ValidationError('Invalid configuration', err.errors);
+        throw new ValidationError('Invalid configuration', err.issues);
       }
       throw err;
     }
@@ -251,7 +251,7 @@ router.put(
       rule = ruleSchema.parse(req.body);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        throw new ValidationError('Invalid rule', err.errors);
+        throw new ValidationError('Invalid rule', err.issues);
       }
       throw err;
     }
@@ -280,7 +280,7 @@ router.post(
       rule = ruleSchema.parse(req.body);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        throw new ValidationError('Invalid rule', err.errors);
+        throw new ValidationError('Invalid rule', err.issues);
       }
       throw err;
     }

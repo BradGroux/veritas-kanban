@@ -38,7 +38,7 @@ router.post(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = SetDelegationRequestSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new ValidationError('Invalid delegation settings', parsed.error.errors);
+      throw new ValidationError('Invalid delegation settings', parsed.error.issues);
     }
 
     const { delegateAgent, expires, scope, excludePriorities, excludeTags, createdBy } =

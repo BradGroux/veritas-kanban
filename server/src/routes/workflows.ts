@@ -32,11 +32,11 @@ function getUserId(req: AuthenticatedRequest): string {
 // Validation schemas
 const startRunSchema = z.object({
   taskId: z.string().optional(),
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
 });
 
 const resumeRunSchema = z.object({
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Basic input validation - detailed validation happens in WorkflowService
@@ -48,8 +48,8 @@ const workflowCreateSchema = z.object({
   config: z.unknown().optional(),
   agents: z.array(z.unknown()).min(1).max(20),
   steps: z.array(z.unknown()).min(1).max(50),
-  variables: z.record(z.unknown()).optional(),
-  schemas: z.record(z.unknown()).optional(),
+  variables: z.record(z.string(), z.unknown()).optional(),
+  schemas: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ==================== Workflow CRUD Routes ====================
