@@ -310,6 +310,23 @@ describe('Settings Routes', () => {
     expect(res.status).toBe(200);
   });
 
+  it('PATCH /features should accept tasks.requireDeliverableForDone', async () => {
+    const settings = {
+      telemetry: { enabled: true, retentionDays: 30, enableTraces: false },
+      tasks: {
+        attachmentMaxFileSize: 10000000,
+        attachmentMaxPerTask: 20,
+        attachmentMaxTotalSize: 50000000,
+        requireDeliverableForDone: true,
+      },
+    };
+    mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(settings);
+    const res = await request(app)
+      .patch('/api/settings/features')
+      .send({ tasks: { requireDeliverableForDone: true } });
+    expect(res.status).toBe(200);
+  });
+
   it('PATCH /features should handle error', async () => {
     mockConfigServiceForSettings.updateFeatureSettings.mockRejectedValue(new Error('fail'));
     const res = await request(app)
