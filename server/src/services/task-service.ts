@@ -25,12 +25,21 @@ import {
   executePostTransitionActions,
   type TransitionActionCallbacks,
 } from './transition-hooks-service.js';
-import { getAgentRegistryService, type TaskSyncContext } from './agent-registry-service.js';
+import {
+  getAgentRegistryService,
+  createTaskSyncCapability,
+  type TaskSyncCapability,
+} from './agent-registry-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('task-cache');
-const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
-const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
+/**
+ * Unforgeable capability tokens for privileged task-sync operations.
+ * Created via createTaskSyncCapability() — plain objects/strings are rejected.
+ * @see agent-registry-service.ts#createTaskSyncCapability
+ */
+const TASK_SYNC_CONTEXT: TaskSyncCapability = createTaskSyncCapability();
+const TASK_RECONCILE_CONTEXT: TaskSyncCapability = createTaskSyncCapability();
 
 /**
  * Task ID format validation
@@ -464,7 +473,16 @@ export class TaskService {
 
     if (!['todo', 'in-progress', 'blocked', 'done', 'cancelled'].includes(task.status)) return;
 
+    // Issue #157: Defensive no-op+warning for invalid/unregistered agent refs in sync path.
+    // (Valid refs were checked at write time; this guards against stale/legacy data.)
     const registry = getAgentRegistryService();
+    if (!registry.isRegistered(task.agent)) {
+      log.warn(
+        { agent: task.agent, taskId: task.id },
+        'syncAgentRegistry: skipping sync for unregistered agent ref (no-op)'
+      );
+      return;
+    }
     registry.syncFromTask(
       {
         agentRef: task.agent,
@@ -565,6 +583,25 @@ export class TaskService {
       updated: now,
     };
 
+    // Issue #157: Validate task.agent against the authoritative registry.
+    // Reject unknown/unregistered refs before persistence.
+    if (task.agent && task.agent !== 'auto') {
+      const registry = getAgentRegistryService();
+      if (!registry.isRegistered(task.agent)) {
+        log.warn({ agent: task.agent }, 'createTask: rejecting unknown agent ref');
+        throw new ValidationError(
+          `Unknown or unregistered agent: "${task.agent}". Register the agent before assigning tasks.`,
+          [
+            {
+              code: 'UNKNOWN_AGENT_REF',
+              message: `Agent "${task.agent}" is not registered`,
+              path: ['agent'],
+            },
+          ]
+        );
+      }
+    }
+
     const filename = this.taskToFilename(task);
     const filepath = path.join(this.tasksDir, filename);
     const content = this.taskToMarkdown(task);
@@ -626,6 +663,24 @@ export class TaskService {
       const previousStatus = freshTask.status;
       const statusChanged = input.status !== undefined && input.status !== previousStatus;
       let settings: Awaited<ReturnType<ConfigService['getFeatureSettings']>> | null = null;
+
+      // Issue #157: Validate updated agent ref against registry before persistence.
+      if (input.agent !== undefined && input.agent && input.agent !== 'auto') {
+        const registry = getAgentRegistryService();
+        if (!registry.isRegistered(input.agent)) {
+          log.warn({ agent: input.agent, taskId: id }, 'updateTask: rejecting unknown agent ref');
+          throw new ValidationError(
+            `Unknown or unregistered agent: "${input.agent}". Register the agent before assigning tasks.`,
+            [
+              {
+                code: 'UNKNOWN_AGENT_REF',
+                message: `Agent "${input.agent}" is not registered`,
+                path: ['agent'],
+              },
+            ]
+          );
+        }
+      }
 
       if (statusChanged) {
         const configService = new ConfigService();

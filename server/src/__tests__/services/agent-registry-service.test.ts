@@ -14,12 +14,13 @@ vi.mock('../../storage/fs-helpers.js', () => ({
 }));
 
 // Must import after mock
-const { getAgentRegistryService, disposeAgentRegistryService } =
+const { getAgentRegistryService, disposeAgentRegistryService, createTaskSyncCapability } =
   await import('../../services/agent-registry-service.js');
-import type { RegisteredAgent, TaskSyncContext } from '../../services/agent-registry-service.js';
+import type { RegisteredAgent, TaskSyncCapability } from '../../services/agent-registry-service.js';
 
-const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
-const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
+// Obtain genuine capability tokens — tests use these for trusted call paths
+const TASK_SYNC_CONTEXT: TaskSyncCapability = createTaskSyncCapability();
+const TASK_RECONCILE_CONTEXT: TaskSyncCapability = createTaskSyncCapability();
 
 describe('AgentRegistryService', () => {
   beforeEach(() => {
@@ -532,18 +533,31 @@ describe('AgentRegistryService', () => {
       vi.useRealTimers();
     });
 
-    it('should reject unauthorized sync context', () => {
+    it('should reject unauthorized sync context (forged plain object)', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
+      // Plain objects — including those that mimic the old string-based shape — are rejected
       expect(() =>
         service.syncFromTask(
-          {
-            agentRef: 'coder-1',
-            taskId: 'task_20260228_syncA',
-            taskStatus: 'in-progress',
-          },
-          { source: 'task-service-untrusted' as any }
+          { agentRef: 'coder-1', taskId: 'task_20260228_syncA', taskStatus: 'in-progress' },
+          { source: 'task-service' } as any
+        )
+      ).toThrow('Unauthorized task sync context');
+
+      // Forged string — cannot carry the module-scoped Symbol
+      expect(() =>
+        service.syncFromTask(
+          { agentRef: 'coder-1', taskId: 'task_20260228_syncA', taskStatus: 'in-progress' },
+          'task-service' as any
+        )
+      ).toThrow('Unauthorized task sync context');
+
+      // Empty object
+      expect(() =>
+        service.syncFromTask(
+          { agentRef: 'coder-1', taskId: 'task_20260228_syncA', taskStatus: 'in-progress' },
+          {} as any
         )
       ).toThrow('Unauthorized task sync context');
     });
@@ -625,14 +639,23 @@ describe('AgentRegistryService', () => {
       vi.useRealTimers();
     });
 
-    it('should reject unauthorized reconcile context', () => {
+    it('should reject unauthorized reconcile context (forged plain object/string)', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
+      // Forged plain object with old string shape
       expect(() =>
         service.reconcileFromTasks([{ id: 'task_1', status: 'in-progress', agent: 'coder-1' }], {
-          source: 'task-service-untrusted' as any,
-        })
+          source: 'task-reconciler',
+        } as any)
+      ).toThrow('Unauthorized task reconcile context');
+
+      // Null / undefined
+      expect(() =>
+        service.reconcileFromTasks(
+          [{ id: 'task_1', status: 'in-progress', agent: 'coder-1' }],
+          null as any
+        )
       ).toThrow('Unauthorized task reconcile context');
     });
 
@@ -702,6 +725,71 @@ describe('AgentRegistryService', () => {
       expect(updated?.status).toBe('idle');
 
       vi.useRealTimers();
+    });
+  });
+  // ── Issue #157: isRegistered() ──────────────────────────────────────────────
+  describe('isRegistered()', () => {
+    it('returns true for a registered agent id', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'agent-reg', name: 'Reg Agent', capabilities: [] });
+      expect(service.isRegistered('agent-reg')).toBe(true);
+    });
+
+    it('returns true when matching by display name', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'agent-reg2', name: 'Display Name Agent', capabilities: [] });
+      expect(service.isRegistered('Display Name Agent')).toBe(true);
+    });
+
+    it('returns false for an unknown ref', () => {
+      const service = getAgentRegistryService();
+      expect(service.isRegistered('totally-unknown-agent')).toBe(false);
+    });
+
+    it('returns false after deregistration', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'dereg-agent', name: 'Dereg Agent', capabilities: [] });
+      service.deregister('dereg-agent');
+      expect(service.isRegistered('dereg-agent')).toBe(false);
+    });
+  });
+
+  // ── Issue #158: Capability token unforgeability ─────────────────────────────
+  describe('createTaskSyncCapability() — unforgeability', () => {
+    it('returns a frozen object with a Symbol brand', () => {
+      const cap = createTaskSyncCapability();
+      expect(typeof cap).toBe('object');
+      expect(Object.isFrozen(cap)).toBe(true);
+    });
+
+    it('two separate calls produce independently valid tokens', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'cap-agent', name: 'Cap Agent', capabilities: [] });
+
+      const cap1 = createTaskSyncCapability();
+      const cap2 = createTaskSyncCapability();
+
+      // Both should work
+      expect(() =>
+        service.syncFromTask(
+          { agentRef: 'cap-agent', taskId: 'task_20260228_capA', taskStatus: 'in-progress' },
+          cap1
+        )
+      ).not.toThrow();
+
+      expect(() =>
+        service.syncFromTask(
+          { agentRef: 'cap-agent', taskId: 'task_20260228_capA', taskStatus: 'done' },
+          cap2
+        )
+      ).not.toThrow();
+    });
+
+    it('enumerating the capability token does NOT reveal the Symbol key', () => {
+      const cap = createTaskSyncCapability();
+      // Object.keys / JSON.stringify cannot see Symbol-keyed properties
+      expect(Object.keys(cap)).toHaveLength(0);
+      expect(JSON.stringify(cap)).toBe('{}');
     });
   });
 });

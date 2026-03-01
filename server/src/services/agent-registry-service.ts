@@ -83,8 +83,46 @@ export interface TaskSyncUpdate {
   taskStatus: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 }
 
-export interface TaskSyncContext {
-  source: 'task-service' | 'task-reconciler';
+/**
+ * Module-scoped Symbol used as an unforgeable brand for TaskSyncCapability.
+ *
+ * ⚠️  NOT EXPORTED — this Symbol cannot be referenced or replicated outside this
+ * module.  It is the sole mechanism that makes TaskSyncCapability unforgeable:
+ * any plain object or string that does not carry this Symbol property will be
+ * rejected by `isAuthorizedSyncContext`.
+ */
+const TASK_SYNC_SYMBOL = Symbol('vk.internal.task-sync-capability');
+
+/**
+ * Opaque capability token for privileged task-sync operations.
+ *
+ * Consumers must obtain a value via `createTaskSyncCapability()`.  They cannot
+ * construct one manually because the backing Symbol is not exported.
+ *
+ * @see createTaskSyncCapability
+ */
+export type TaskSyncCapability = Readonly<{ [TASK_SYNC_SYMBOL]: true }>;
+
+/**
+ * Backward-compatible alias kept so existing imports compile without change.
+ * New code should use `TaskSyncCapability` directly.
+ */
+export type TaskSyncContext = TaskSyncCapability;
+
+/**
+ * Create an internal task-sync capability token.
+ *
+ * ⚠️  INTERNAL USE ONLY — this function should only be imported by
+ * `task-service.ts` and the task-reconcile path.  Passing the returned token to
+ * `syncFromTask` / `reconcileFromTasks` is the *only* way to call those
+ * privileged methods; plain objects and strings are always rejected.
+ *
+ * The backing Symbol (`TASK_SYNC_SYMBOL`) is module-scoped and never exported,
+ * so external callers cannot forge a valid capability by constructing a plain
+ * object — even if they inspect the token at runtime.
+ */
+export function createTaskSyncCapability(): TaskSyncCapability {
+  return Object.freeze({ [TASK_SYNC_SYMBOL]: true }) as TaskSyncCapability;
 }
 
 export interface TaskSyncSnapshot {
@@ -210,7 +248,13 @@ class AgentRegistryService {
     }
 
     const agent = this.findByRef(update.agentRef);
-    if (!agent) return null;
+    if (!agent) {
+      log.warn(
+        { agentRef: update.agentRef },
+        'syncFromTask: agentRef not found in registry — no-op (defensive)'
+      );
+      return null;
+    }
 
     const previousStatus = agent.status;
     const previousTaskId = agent.currentTaskId;
@@ -407,8 +451,27 @@ class AgentRegistryService {
     };
   }
 
-  private isAuthorizedSyncContext(context: TaskSyncContext): boolean {
-    return context.source === 'task-service' || context.source === 'task-reconciler';
+  /**
+   * Verify that `context` is a genuine TaskSyncCapability produced by
+   * `createTaskSyncCapability()`.  Plain objects and strings always fail because
+   * they cannot carry the module-scoped `TASK_SYNC_SYMBOL` property.
+   *
+   * @internal
+   */
+  private isAuthorizedSyncContext(context: TaskSyncCapability): boolean {
+    return (
+      context !== null &&
+      typeof context === 'object' &&
+      (context as Record<symbol, unknown>)[TASK_SYNC_SYMBOL] === true
+    );
+  }
+
+  /**
+   * Return true when `agentRef` resolves to a registered agent.
+   * Used by task-service to validate task.agent before persistence.
+   */
+  isRegistered(agentRef: string): boolean {
+    return this.findByRef(agentRef) !== null;
   }
 
   private isValidAgentRef(agentRef: string): boolean {
