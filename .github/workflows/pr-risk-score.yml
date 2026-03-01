@@ -1,0 +1,36 @@
+name: PR Risk Score
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  risk-score:
+    name: PR Risk Scoring & Merge Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run PR Risk Scorer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RISK_THRESHOLD_MEDIUM: ${{ vars.RISK_THRESHOLD_MEDIUM || '30' }}
+          RISK_THRESHOLD_HIGH: ${{ vars.RISK_THRESHOLD_HIGH || '60' }}
+          MERGE_GATE_ENABLED: ${{ vars.MERGE_GATE_ENABLED || 'true' }}
+          REQUIRED_APPROVALS: ${{ vars.REQUIRED_APPROVALS || '2' }}
+          SECURITY_REVIEW_LABEL: ${{ vars.SECURITY_REVIEW_LABEL || 'security-reviewed' }}
+        run: node scripts/pr-risk-scorer.mjs
