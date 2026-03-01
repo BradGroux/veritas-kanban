@@ -17,6 +17,7 @@
  */
 
 import { createLogger } from '../lib/logger.js';
+import { validateWebhookUrl } from '../utils/url-validation.js';
 import type { Task, EnforcementSettings } from '@veritas-kanban/shared';
 import { getChatService } from './chat-service.js';
 
@@ -212,6 +213,13 @@ async function fireSquadChat(
  * Single retry after 2 seconds on failure.
  */
 async function fireWebhook(url: string, payload: HookPayload): Promise<void> {
+  // Validate URL to prevent SSRF attacks
+  const validation = validateWebhookUrl(url);
+  if (!validation.valid) {
+    log.warn({ url, reason: validation.reason }, 'Webhook URL blocked (SSRF prevention)');
+    return;
+  }
+
   const body = JSON.stringify(payload);
 
   const doFetch = async (): Promise<void> => {

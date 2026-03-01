@@ -8,6 +8,7 @@
 import crypto from 'crypto';
 import type { SquadMessage, SquadWebhookSettings } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import { validateWebhookUrl } from '../utils/url-validation.js';
 
 const log = createLogger('squad-webhook');
 
@@ -83,6 +84,13 @@ async function fireOpenClawWake(
   };
 
   const url = `${settings.openclawGatewayUrl}/tools/invoke`;
+
+  // Validate URL to prevent SSRF attacks
+  const validation = validateWebhookUrl(url);
+  if (!validation.valid) {
+    log.warn({ url, reason: validation.reason }, 'Webhook URL blocked (SSRF prevention)');
+    return;
+  }
 
   try {
     const controller = new AbortController();
