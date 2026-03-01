@@ -455,7 +455,7 @@ router.post(
       ({ orderedIds } = reorderTasksSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -554,7 +554,7 @@ router.post(
       var input = createTaskSchema.parse(req.body) as CreateTaskInput;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -639,7 +639,7 @@ router.patch(
       input = updateTaskSchema.parse(req.body) as UpdateTaskInput;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -860,7 +860,7 @@ router.post(
       ({ templateId, templateName, fieldsChanged } = applyTemplateSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -997,7 +997,7 @@ router.post(
       input = bulkUpdateSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1062,7 +1062,7 @@ router.post(
       input = bulkArchiveSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1135,7 +1135,7 @@ router.post(
       input = addDependencySchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1304,7 +1304,7 @@ router.post(
       input = appendProgressSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1399,7 +1399,7 @@ function sanitizeCheckpointState(state: Record<string, any>): Record<string, any
 const checkpointSchema = z
   .object({
     step: z.number().int().min(0),
-    state: z.record(z.any()),
+    state: z.record(z.string(), z.any()),
   })
   .refine(
     (data) => {
@@ -1429,7 +1429,7 @@ router.post(
       input = checkpointSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }

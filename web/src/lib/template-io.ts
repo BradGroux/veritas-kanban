@@ -22,17 +22,17 @@ function sanitizeKeys(obj: unknown): unknown {
   }
 
   const sanitized: Record<string, unknown> = {};
-  
+
   for (const [key, value] of Object.entries(obj)) {
     // Reject dangerous keys
-    if (DANGEROUS_KEYS.some(dangerous => key.includes(dangerous))) {
+    if (DANGEROUS_KEYS.some((dangerous) => key.includes(dangerous))) {
       throw new Error(`Forbidden key detected: ${key}`);
     }
-    
+
     // Recursively sanitize nested objects
     sanitized[key] = sanitizeKeys(value);
   }
-  
+
   return sanitized;
 }
 
@@ -40,7 +40,7 @@ function sanitizeKeys(obj: unknown): unknown {
  * Format Zod validation errors into human-readable messages
  */
 function formatZodError(error: ZodError): string {
-  const firstError = error.errors[0];
+  const firstError = error.issues[0];
   if (firstError) {
     const path = firstError.path.join('.');
     return path ? `${path}: ${firstError.message}` : firstError.message;
@@ -55,7 +55,7 @@ export function exportTemplate(template: TaskTemplate): void {
   const json = JSON.stringify(template, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  
+
   const a = document.createElement('a');
   a.href = url;
   a.download = `template-${template.name.toLowerCase().replace(/\s+/g, '-')}.json`;
@@ -72,7 +72,7 @@ export function exportAllTemplates(templates: TaskTemplate[]): void {
   const json = JSON.stringify(templates, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  
+
   const a = document.createElement('a');
   a.href = url;
   a.download = `templates-${new Date().toISOString().split('T')[0]}.json`;
@@ -86,7 +86,9 @@ export function exportAllTemplates(templates: TaskTemplate[]): void {
  * Parse and validate imported template JSON
  * Throws errors for invalid templates (caller should handle with toast)
  */
-export async function parseTemplateFile(file: File): Promise<ValidatedTemplate | ValidatedTemplate[]> {
+export async function parseTemplateFile(
+  file: File
+): Promise<ValidatedTemplate | ValidatedTemplate[]> {
   // Check file size (max 1MB)
   if (file.size > 1024 * 1024) {
     throw new Error('File size exceeds 1MB limit');
@@ -133,5 +135,5 @@ export function checkDuplicateName(
   templateName: string,
   existingTemplates: TaskTemplate[]
 ): boolean {
-  return existingTemplates.some(t => t.name.toLowerCase() === templateName.toLowerCase());
+  return existingTemplates.some((t) => t.name.toLowerCase() === templateName.toLowerCase());
 }
