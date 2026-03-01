@@ -1,0 +1,108 @@
+name: PR Risk Score
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  risk-score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Gather PR metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+
+          FILES_JSON=$(gh api repos/$REPO/pulls/$PR_NUM/files --paginate)
+          FILES_CHANGED=$(echo "$FILES_JSON" | jq 'length')
+          LINES_ADDED=$(echo "$FILES_JSON" | jq '[.[].additions] | add // 0')
+          LINES_DELETED=$(echo "$FILES_JSON" | jq '[.[].deletions] | add // 0')
+          CHANGED_FILES=$(echo "$FILES_JSON" | jq -c '[.[].filename]')
+
+          HAS_TESTS=$(echo "$FILES_JSON" | jq 'any(.[]; .filename | test("test|spec|__tests__"; "i"))')
+
+          AUTHOR=${{ github.event.pull_request.user.login }}
+          SINCE=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-90d +%Y-%m-%dT%H:%M:%SZ)
+          AUTHOR_COMMITS=$(gh api "repos/$REPO/commits?author=$AUTHOR&since=$SINCE&per_page=1" -i 2>/dev/null | grep -oP 'page=\K[0-9]+(?=>; rel="last")' || echo "0")
+          [ -z "$AUTHOR_COMMITS" ] && AUTHOR_COMMITS=0
+
+          REVIEWS=$(gh api repos/$REPO/pulls/$PR_NUM/reviews)
+          APPROVALS=$(echo "$REVIEWS" | jq '[.[] | select(.state == "APPROVED")] | length')
+
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          CI_PASSING=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" | jq '[.check_runs[] | select(.name != "risk-score")] | if length == 0 then true else all(.[]; .conclusion == "success" or .conclusion == null) end')
+
+          cat > /tmp/pr-data.json <<EOF
+          {
+            "filesChanged": $FILES_CHANGED,
+            "linesAdded": $LINES_ADDED,
+            "linesDeleted": $LINES_DELETED,
+            "changedFiles": $CHANGED_FILES,
+            "hasTests": $HAS_TESTS,
+            "authorCommitsLast90d": $AUTHOR_COMMITS,
+            "approvals": $APPROVALS,
+            "ciPassing": $CI_PASSING
+          }
+          EOF
+
+      - name: Score PR
+        id: score
+        run: |
+          CONFIG=".github/pr-risk-config.json"
+          SCORER=".github/pr-risk-scorer.mjs"
+          OUTPUT=$(node "$SCORER" --config "$CONFIG" --pr-json /tmp/pr-data.json 2>/dev/null || true)
+          SCORE=$(echo "$OUTPUT" | jq -r '.score')
+          LEVEL=$(echo "$OUTPUT" | jq -r '.level')
+          BLOCKED=$(echo "$OUTPUT" | jq -r '.blocked')
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "blocked=$BLOCKED" >> "$GITHUB_OUTPUT"
+          echo "result<<EOFRESULT" >> "$GITHUB_OUTPUT"
+          echo "$OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "EOFRESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SCORE=${{ steps.score.outputs.score }}
+          LEVEL=${{ steps.score.outputs.level }}
+          ICON="✅"; [ "$LEVEL" = "medium" ] && ICON="⚠️"; [ "$LEVEL" = "high" ] && ICON="🔶"; [ "$LEVEL" = "critical" ] && ICON="🚫"
+
+          BODY="## $ICON PR Risk Score: $SCORE/100 ($LEVEL)
+          <details><summary>Breakdown</summary>
+
+          \`\`\`json
+          ${{ steps.score.outputs.result }}
+          \`\`\`
+          </details>"
+
+          # Update existing comment or create new
+          EXISTING=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | startswith("## ")) | select(.body | contains("PR Risk Score")) | .id' | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$EXISTING -X PATCH -f body="$BODY"
+          else
+            gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
+          fi
+
+      - name: Enforce merge gate
+        run: |
+          BLOCKED=${{ steps.score.outputs.blocked }}
+          BYPASS='${{ contains(github.event.pull_request.labels.*.name, 'security-reviewed') }}'
+          if [ "$BLOCKED" = "true" ] && [ "$BYPASS" != "true" ]; then
+            echo "::error::PR risk score too high (${{ steps.score.outputs.score }}). Add 'security-reviewed' label after review to bypass."
+            exit 1
+          fi

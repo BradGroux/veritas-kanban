@@ -1,0 +1,44 @@
+{
+  "weights": {
+    "filesChanged": 0.15,
+    "linesChanged": 0.15,
+    "hasTests": 0.2,
+    "fileTypes": 0.15,
+    "authorFamiliarity": 0.1,
+    "reviewApprovals": 0.15,
+    "ciStatus": 0.1
+  },
+  "thresholds": {
+    "low": 30,
+    "medium": 60,
+    "high": 80
+  },
+  "rules": {
+    "maxFilesLow": 5,
+    "maxFilesHigh": 50,
+    "maxLinesLow": 100,
+    "maxLinesHigh": 1000,
+    "criticalFilePatterns": [
+      "*.lock",
+      "*.yml",
+      "*.yaml",
+      "Dockerfile*",
+      ".github/**",
+      "**/migrations/**",
+      "**/security/**"
+    ],
+    "testFilePatterns": [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/__tests__/**",
+      "**/test/**",
+      "**/tests/**"
+    ]
+  },
+  "mergeGate": {
+    "blockAbove": 80,
+    "requireSecurityReviewAbove": 60,
+    "bypassLabel": "security-reviewed",
+    "allowedBypassTeams": ["maintainers", "security"]
+  }
+}
