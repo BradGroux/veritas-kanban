@@ -8,6 +8,7 @@ const ListTasksSchema = z.object({
   status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
   type: z.enum(['code', 'research', 'content', 'automation']).optional(),
   project: z.string().optional(),
+  sprint: z.string().optional(),
 });
 
 const CreateTaskSchema = z.object({
@@ -16,6 +17,7 @@ const CreateTaskSchema = z.object({
   type: z.enum(['code', 'research', 'content', 'automation']).default('code'),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
   project: z.string().optional(),
+  sprint: z.string().optional(),
 });
 
 const UpdateTaskSchema = z.object({
@@ -26,6 +28,7 @@ const UpdateTaskSchema = z.object({
   type: z.enum(['code', 'research', 'content', 'automation']).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
+  sprint: z.string().optional(),
 });
 
 const TaskIdSchema = z.object({
@@ -52,6 +55,10 @@ export const taskTools = [
         project: {
           type: 'string',
           description: 'Filter by project name',
+        },
+        sprint: {
+          type: 'string',
+          description: 'Filter by sprint ID',
         },
       },
     },
@@ -98,6 +105,10 @@ export const taskTools = [
           type: 'string',
           description: 'Project name',
         },
+        sprint: {
+          type: 'string',
+          description: 'Sprint ID',
+        },
       },
       required: ['title'],
     },
@@ -138,6 +149,10 @@ export const taskTools = [
         project: {
           type: 'string',
           description: 'New project',
+        },
+        sprint: {
+          type: 'string',
+          description: 'New sprint ID',
         },
       },
       required: ['id'],
@@ -187,6 +202,9 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
       }
       if (params.project) {
         tasks = tasks.filter((t) => t.project === params.project);
+      }
+      if (params.sprint) {
+        tasks = tasks.filter((t) => t.sprint === params.sprint);
       }
 
       return {
