@@ -85,6 +85,29 @@ export interface TaskSyncUpdate {
 
 export interface TaskSyncContext {
   source: 'task-service' | 'task-reconciler';
+  /** Unforgeable capability token — must be obtained via createTaskSyncToken() */
+  readonly __capabilityToken?: symbol;
+}
+
+/**
+ * Module-scoped unforgeable capability symbol.
+ * Only code that imports createTaskSyncToken from this module can produce valid tokens.
+ */
+const SYNC_CAPABILITY_KEY = Symbol('agent-registry-sync-capability');
+
+/**
+ * Create an unforgeable TaskSyncContext. Only this module exports this factory,
+ * so external/untrusted code cannot construct a valid context.
+ */
+export function createTaskSyncToken(source: 'task-service' | 'task-reconciler'): TaskSyncContext {
+  return Object.freeze({ source, __capabilityToken: SYNC_CAPABILITY_KEY });
+}
+
+/**
+ * Validate that a context carries the unforgeable capability token.
+ */
+export function isValidSyncToken(context: TaskSyncContext): boolean {
+  return context.__capabilityToken === SYNC_CAPABILITY_KEY;
 }
 
 export interface TaskSyncSnapshot {
@@ -408,12 +431,35 @@ class AgentRegistryService {
   }
 
   private isAuthorizedSyncContext(context: TaskSyncContext): boolean {
-    return context.source === 'task-service' || context.source === 'task-reconciler';
+    // Primary check: unforgeable capability token (new secure path)
+    if (isValidSyncToken(context)) return true;
+    // Reject: string-only contexts are no longer accepted
+    return false;
   }
 
   private isValidAgentRef(agentRef: string): boolean {
     const normalized = agentRef.trim();
     return AGENT_REF_REGEX.test(normalized);
+  }
+
+  /**
+   * Validate that an agent ref exists in the registry.
+   * Used by task-service to reject invalid agent assignments on create/update.
+   * Returns true if the ref matches a registered agent (by id or name).
+   */
+  validateAgentRef(agentRef: string): { valid: boolean; reason?: string } {
+    if (!agentRef) return { valid: true }; // no agent assigned is fine
+
+    if (!this.isValidAgentRef(agentRef)) {
+      return { valid: false, reason: `Malformed agent ref: ${agentRef}` };
+    }
+
+    const agent = this.findByRef(agentRef);
+    if (!agent) {
+      return { valid: false, reason: `Unknown agent ref: ${agentRef} — not found in registry` };
+    }
+
+    return { valid: true };
   }
 
   /**

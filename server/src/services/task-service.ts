@@ -25,12 +25,16 @@ import {
   executePostTransitionActions,
   type TransitionActionCallbacks,
 } from './transition-hooks-service.js';
-import { getAgentRegistryService, type TaskSyncContext } from './agent-registry-service.js';
+import {
+  getAgentRegistryService,
+  createTaskSyncToken,
+  type TaskSyncContext,
+} from './agent-registry-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('task-cache');
-const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
-const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
+const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
+const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
 
 /**
  * Task ID format validation
@@ -565,6 +569,21 @@ export class TaskService {
       updated: now,
     };
 
+    // Validate agent ref against registry (#157)
+    if (task.agent) {
+      const registry = getAgentRegistryService();
+      const validation = registry.validateAgentRef(task.agent);
+      if (!validation.valid) {
+        throw new ValidationError(validation.reason || 'Invalid agent ref', [
+          {
+            code: 'INVALID_AGENT_REF',
+            message: validation.reason || 'Invalid agent ref',
+            path: ['agent'],
+          },
+        ]);
+      }
+    }
+
     const filename = this.taskToFilename(task);
     const filepath = path.join(this.tasksDir, filename);
     const content = this.taskToMarkdown(task);
@@ -750,6 +769,21 @@ export class TaskService {
       // Clear checkpoint when task completes successfully
       if (input.status === 'done' && freshTask.checkpoint) {
         checkpointUpdate = undefined;
+      }
+
+      // Validate agent ref against registry if being changed (#157)
+      if (restInput.agent !== undefined && restInput.agent !== freshTask.agent) {
+        const registry = getAgentRegistryService();
+        const validation = registry.validateAgentRef(restInput.agent);
+        if (!validation.valid) {
+          throw new ValidationError(validation.reason || 'Invalid agent ref', [
+            {
+              code: 'INVALID_AGENT_REF',
+              message: validation.reason || 'Invalid agent ref',
+              path: ['agent'],
+            },
+          ]);
+        }
       }
 
       updatedTask = {
