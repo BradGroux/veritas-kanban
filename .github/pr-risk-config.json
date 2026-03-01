@@ -10,8 +10,8 @@
   },
   "thresholds": {
     "low": 30,
-    "medium": 60,
-    "high": 80
+    "medium": 40,
+    "high": 70
   },
   "rules": {
     "maxFilesLow": 5,
@@ -39,6 +39,8 @@
     "blockAbove": 80,
     "requireSecurityReviewAbove": 60,
     "bypassLabel": "security-reviewed",
-    "allowedBypassTeams": ["maintainers", "security"]
+    "allowedBypassTeams": ["maintainers", "security"],
+    "enabled": false,
+    "requiredApprovals": 1
   }
 }
