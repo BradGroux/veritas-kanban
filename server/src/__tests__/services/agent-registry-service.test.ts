@@ -14,12 +14,12 @@ vi.mock('../../storage/fs-helpers.js', () => ({
 }));
 
 // Must import after mock
-const { getAgentRegistryService, disposeAgentRegistryService } =
+const { getAgentRegistryService, disposeAgentRegistryService, createTaskSyncToken } =
   await import('../../services/agent-registry-service.js');
 import type { RegisteredAgent, TaskSyncContext } from '../../services/agent-registry-service.js';
 
-const TASK_SYNC_CONTEXT: TaskSyncContext = { source: 'task-service' };
-const TASK_RECONCILE_CONTEXT: TaskSyncContext = { source: 'task-reconciler' };
+const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
+const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
 
 describe('AgentRegistryService', () => {
   beforeEach(() => {
