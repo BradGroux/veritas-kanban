@@ -28,6 +28,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Individual gate dots (green = active, gray = off)
   - Renders in dashboard status bar alongside refresh timestamp
 
+## [3.3.2] - 2026-03-01
+
+### ✨ Highlights
+
+**Veritas Kanban 3.3.2 delivers sprint management for CLI + MCP surfaces** alongside task↔agent state synchronization, security hardening of the sync auth boundary, and a circuit breaker test suite.
+
+### Added
+
+- **#161 — Sprint Management (CLI + MCP)** — Full sprint CRUD and task integration from the command line and MCP
+  - `vk sprint list` — list sprints with `--hidden` / `--json` flags
+  - `vk sprint create` — create sprints with optional description
+  - `vk sprint update` — update label, description, visibility
+  - `vk sprint delete` — delete sprints (with `--force` for non-empty)
+  - `vk sprint close` — archive completed tasks in a sprint
+  - `vk sprint suggestions` — show sprints ready to archive
+  - `vk list -S <sprint>` / `vk create -S <sprint>` / `vk update -S <sprint>` — task sprint integration
+  - MCP tools: `list_sprints`, `create_sprint`, `update_sprint`, `delete_sprint`, `close_sprint`, `sprint_suggestions`
+  - Sprint field surfaced on `list_tasks`, `create_task`, `update_task` MCP tools
+
+- **#155 — Task↔Agent State Sync + Reconciliation** — Bi-directional sync engine keeping task state consistent with agent execution state; reconciliation pass resolves diverged records
+
+- **#156 — Circuit Breaker Test Suite** — 18 new unit tests covering circuit breaker open/half-open/closed transitions, timeout behaviour, and error thresholds
+
+### Fixed
+
+- **#159 — Harden task-agent sync auth boundary** — Tightened authentication checks on sync routes to prevent unauthorized state manipulation (#157 #158)
+
+---
+
 ## [3.3.1] - 2026-02-28
 
 ### Fixed
