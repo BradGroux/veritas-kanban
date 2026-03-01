@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.3] - 2026-03-01
+
+### ✨ Highlights
+
+**Veritas Kanban 3.3.3 is a patch correction release** delivering stability, security, and performance fixes on top of 3.3.2, plus full Zod 4 API migration completing the TypeScript compilation fix.
+
+### Fixed
+
+- **#162 — Complete Zod 4 API migration** — Resolved 50+ TypeScript compilation errors blocking CI/CD
+  - `ZodError.errors` → `ZodError.issues` across all route files and middleware
+  - `z.record(valueSchema)` → `z.record(z.string(), valueSchema)` for explicit key types
+  - Schema defaults corrected from string to proper numeric/boolean types (`PORT`, `VERITAS_AUTH_ENABLED`, `RATE_LIMIT_MAX`)
+  - `required_error` → `message` in number schemas (`agents.ts`, `agent-schemas.ts`)
+  - Affected: `validate.ts`, `agent-registry.ts`, `workflows.ts`, `lifecycle-hooks.ts`, `tasks.ts`, `reports.ts`, `env.ts`
+
+- **#165 — SSRF protection for webhook URLs** — Added server-side request forgery safeguards for all outbound webhook destinations (replaces #163)
+
 ### Added
 
 - **Orchestrator Delegation Enforcement** — Full enforcement gate for orchestrator delegation
@@ -27,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows active/total gate count with color-coded shield icon (green/amber/gray)
   - Individual gate dots (green = active, gray = off)
   - Renders in dashboard status bar alongside refresh timestamp
+
+### Performance
+
+- **#167 — WebSocket broadcast batching** — Batch broadcasts to prevent event loop blocking under high-frequency update load (replaces #164/#166)
+
+---
 
 ## [3.3.2] - 2026-03-01
 
