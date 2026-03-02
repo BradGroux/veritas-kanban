@@ -222,7 +222,7 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 ### 🔌 Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — Model Context Protocol for AI assistants
+- **MCP Server** — 26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via Model Context Protocol
 - **Notifications** — Teams integration for task updates
 
 ---
@@ -560,15 +560,63 @@ For AI assistants (Claude Desktop, etc.):
 }
 ```
 
-### Available Tools
+### Available Tools (26)
 
-| Tool           | Description       |
-| -------------- | ----------------- |
-| `list_tasks`   | List with filters |
-| `get_task`     | Get task by ID    |
-| `create_task`  | Create new task   |
-| `update_task`  | Update fields     |
-| `archive_task` | Archive task      |
+#### Task Management
+
+| Tool           | Description                                 |
+| -------------- | ------------------------------------------- |
+| `list_tasks`   | List tasks with status/project/type filters |
+| `get_task`     | Get task details by ID                      |
+| `create_task`  | Create a new task                           |
+| `update_task`  | Update task fields                          |
+| `archive_task` | Archive a task                              |
+| `delete_task`  | Permanently delete a task                   |
+
+#### Agent Control
+
+| Tool          | Description              |
+| ------------- | ------------------------ |
+| `start_agent` | Start an agent on a task |
+| `stop_agent`  | Stop a running agent     |
+
+#### Automation
+
+| Tool                      | Description                        |
+| ------------------------- | ---------------------------------- |
+| `list_pending_automation` | List tasks pending automation      |
+| `list_running_automation` | List currently running automations |
+| `start_automation`        | Start automation for a task        |
+| `complete_automation`     | Complete an automation run         |
+
+#### Notifications
+
+| Tool                        | Description                     |
+| --------------------------- | ------------------------------- |
+| `create_notification`       | Create a broadcast notification |
+| `get_pending_notifications` | Get pending notifications       |
+| `check_notifications`       | Check for new notifications     |
+
+#### Summaries
+
+| Tool                 | Description                |
+| -------------------- | -------------------------- |
+| `get_summary`        | Get a board summary        |
+| `get_memory_summary` | Get memory/context summary |
+
+#### Sprint Management
+
+| Tool                      | Description                                     |
+| ------------------------- | ----------------------------------------------- |
+| `list_sprints`            | List all sprints (use includeHidden for hidden) |
+| `get_sprint`              | Get sprint details by ID                        |
+| `create_sprint`           | Create a new sprint                             |
+| `update_sprint`           | Update an existing sprint                       |
+| `delete_sprint`           | Delete a sprint (force=true to override refs)   |
+| `can_delete_sprint`       | Check if a sprint can safely be deleted         |
+| `reorder_sprints`         | Reorder sprints by ID array                     |
+| `get_archive_suggestions` | Get sprints ready to archive                    |
+| `close_sprint`            | Archive all completed tasks in a sprint         |
 
 ### Resources
 
