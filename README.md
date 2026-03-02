@@ -62,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 ## 📚 Documentation Map
 
 - [MCP Server Guide](docs/mcp/README.md) — 26 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
