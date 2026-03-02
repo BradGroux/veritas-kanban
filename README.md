@@ -61,6 +61,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## 📚 Documentation Map
 
+- [MCP Server Guide](docs/mcp/README.md) — 26 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
@@ -544,7 +545,11 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-For AI assistants (Claude Desktop, etc.):
+26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via [Model Context Protocol](https://modelcontextprotocol.io/).
+
+**→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, and troubleshooting.
+
+**Quick config** (Claude Desktop / Cursor / OpenClaw):
 
 ```json
 {
@@ -559,74 +564,6 @@ For AI assistants (Claude Desktop, etc.):
   }
 }
 ```
-
-### Available Tools (26)
-
-#### Task Management
-
-| Tool           | Description                                 |
-| -------------- | ------------------------------------------- |
-| `list_tasks`   | List tasks with status/project/type filters |
-| `get_task`     | Get task details by ID                      |
-| `create_task`  | Create a new task                           |
-| `update_task`  | Update task fields                          |
-| `archive_task` | Archive a task                              |
-| `delete_task`  | Permanently delete a task                   |
-
-#### Agent Control
-
-| Tool          | Description              |
-| ------------- | ------------------------ |
-| `start_agent` | Start an agent on a task |
-| `stop_agent`  | Stop a running agent     |
-
-#### Automation
-
-| Tool                      | Description                        |
-| ------------------------- | ---------------------------------- |
-| `list_pending_automation` | List tasks pending automation      |
-| `list_running_automation` | List currently running automations |
-| `start_automation`        | Start automation for a task        |
-| `complete_automation`     | Complete an automation run         |
-
-#### Notifications
-
-| Tool                        | Description                     |
-| --------------------------- | ------------------------------- |
-| `create_notification`       | Create a broadcast notification |
-| `get_pending_notifications` | Get pending notifications       |
-| `check_notifications`       | Check for new notifications     |
-
-#### Summaries
-
-| Tool                 | Description                |
-| -------------------- | -------------------------- |
-| `get_summary`        | Get a board summary        |
-| `get_memory_summary` | Get memory/context summary |
-
-#### Sprint Management
-
-| Tool                      | Description                                     |
-| ------------------------- | ----------------------------------------------- |
-| `list_sprints`            | List all sprints (use includeHidden for hidden) |
-| `get_sprint`              | Get sprint details by ID                        |
-| `create_sprint`           | Create a new sprint                             |
-| `update_sprint`           | Update an existing sprint                       |
-| `delete_sprint`           | Delete a sprint (force=true to override refs)   |
-| `can_delete_sprint`       | Check if a sprint can safely be deleted         |
-| `reorder_sprints`         | Reorder sprints by ID array                     |
-| `get_archive_suggestions` | Get sprints ready to archive                    |
-| `close_sprint`            | Archive all completed tasks in a sprint         |
-
-### Resources
-
-| URI                     | Description          |
-| ----------------------- | -------------------- |
-| `kanban://tasks`        | All tasks            |
-| `kanban://tasks/active` | In-progress + review |
-| `kanban://task/{id}`    | Single task          |
-
----
 
 ## 📄 Task Format
 

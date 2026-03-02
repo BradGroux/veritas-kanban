@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Comprehensive MCP server documentation at `docs/mcp/README.md` — architecture, quickstart, full tool catalog with examples, security model, troubleshooting playbook, and FAQ
+- Condensed root README MCP section with link to dedicated docs
+
 ## [3.3.3] - 2026-03-01
 
 ### ✨ Highlights
