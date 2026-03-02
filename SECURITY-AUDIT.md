@@ -1,6 +1,6 @@
 # Security Audit Report
 
-**Last audited:** 2026-01-29
+**Last audited:** 2026-03-02
 **Tool:** pnpm audit (pnpm 9.15.4)
 **Node version:** 22.x
 
@@ -27,9 +27,11 @@
 
 The following version overrides are configured in the root `package.json` to pin patched versions:
 
-| Package | Override   | Reason                                   |
-| ------- | ---------- | ---------------------------------------- |
-| `hono`  | `>=4.11.7` | Ensures patched version (prior advisory) |
+| Package     | Override   | Reason                                           |
+| ----------- | ---------- | ------------------------------------------------ |
+| `hono`      | `>=4.12.2` | Timing attack vulnerability fix (GHSA-xh87-mx6m) |
+| `minimatch` | `>=10.2.3` | ReDoS vulnerabilities (GHSA-7r86, GHSA-23c5)     |
+| `qs`        | `^6.14.2`  | Prototype pollution fix                          |
 
 ## Accepted Risks / Suppressions
 

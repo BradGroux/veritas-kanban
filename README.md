@@ -229,16 +229,16 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 
 ## 🛠️ Tech Stack
 
-| Layer               | Technology                           | Version                        |
-| ------------------- | ------------------------------------ | ------------------------------ |
-| **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 6, Tailwind 3.4 |
-| **Backend**         | Express, WebSocket                   | Express 4.21                   |
-| **Language**        | TypeScript (strict mode)             | 5.7                            |
-| **Storage**         | Markdown files with YAML frontmatter | gray-matter                    |
-| **Git**             | simple-git, worktree management      | —                              |
-| **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4      |
-| **Runtime**         | Node.js                              | 22+                            |
-| **Package Manager** | pnpm                                 | 9+                             |
+| Layer               | Technology                           | Version                          |
+| ------------------- | ------------------------------------ | -------------------------------- |
+| **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 7.3, Tailwind 4.2 |
+| **Backend**         | Express, WebSocket                   | Express 5.2                      |
+| **Language**        | TypeScript (strict mode)             | 5.7                              |
+| **Storage**         | Markdown files with YAML frontmatter | gray-matter                      |
+| **Git**             | simple-git, worktree management      | —                                |
+| **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4        |
+| **Runtime**         | Node.js                              | 22+                              |
+| **Package Manager** | pnpm                                 | 9+                               |
 
 ---
 

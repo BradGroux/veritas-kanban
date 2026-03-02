@@ -420,7 +420,3 @@ curl -s "http://localhost:3001/api/analytics/metrics?from=2026-01-01T00:00:00Z&t
 ---
 
 **See Also:**
-
-- [Time Tracking](./TIME_TRACKING.md)
-- [Status History](./STATUS_HISTORY.md)
-- [Architecture](./ARCHITECTURE.md)
