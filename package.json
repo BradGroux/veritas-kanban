@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "@types/node": "^25.3.2",
+    "@types/node": "^25.3.3",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "concurrently": "^9.1.0",
@@ -43,7 +43,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
-    "lint-staged": "^16.3.0",
+    "lint-staged": "^16.3.1",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
