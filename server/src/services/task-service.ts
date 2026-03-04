@@ -431,6 +431,7 @@ export class TaskService {
         priority: data.priority || 'medium',
         project: data.project,
         sprint: data.sprint,
+        agent: data.agent,
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
