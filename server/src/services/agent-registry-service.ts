@@ -126,7 +126,23 @@ const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
-const TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+
+function getTaskSyncFlapGuardMs(): number {
+  const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
+  if (!raw) return DEFAULT_TASK_SYNC_FLAP_GUARD_MS;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    log.warn(
+      { value: raw, env: 'VERITAS_TASK_SYNC_FLAP_GUARD_MS' },
+      'Invalid flap guard override; using default'
+    );
+    return DEFAULT_TASK_SYNC_FLAP_GUARD_MS;
+  }
+
+  return parsed;
+}
 
 /** Defensive cap to avoid pathological reconciliation payload sizes */
 const MAX_RECONCILE_BATCH = 10_000;
@@ -143,6 +159,7 @@ class AgentRegistryService {
   private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
   private lastBusyAtByAgent: Map<string, number> = new Map();
+  private taskSyncFlapGuardMs: number;
 
   constructor() {
     this.dataDir = getRuntimeDir();
@@ -151,6 +168,7 @@ class AgentRegistryService {
       process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban'),
       'agent-registry.json'
     );
+    this.taskSyncFlapGuardMs = getTaskSyncFlapGuardMs();
     this.migrateLegacyRegistry();
     this.load();
     this.startStaleCheck();
@@ -251,7 +269,7 @@ class AgentRegistryService {
 
       // Flap guard: ignore immediate busy->idle transitions for same task
       const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
-      if (lastBusyAt && Date.now() - lastBusyAt < TASK_SYNC_FLAP_GUARD_MS) {
+      if (lastBusyAt && Date.now() - lastBusyAt < this.taskSyncFlapGuardMs) {
         return agent;
       }
 

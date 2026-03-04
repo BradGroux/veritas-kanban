@@ -14,8 +14,6 @@ let agentRegistryRoutes: typeof import('../../routes/agent-registry.js').agentRe
 let disposeTaskService: typeof import('../../services/task-service.js').disposeTaskService;
 let disposeAgentRegistryService: typeof import('../../services/agent-registry-service.js').disposeAgentRegistryService;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 function unwrap<T>(body: any): T {
   if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
     return body.data as T;
@@ -32,6 +30,7 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
     // Isolate all storage for this test file.
     process.env.VERITAS_DATA_DIR = testRoot;
     process.env.DATA_DIR = testRoot;
+    process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS = '0';
 
     ({ taskRoutes } = await import('../../routes/tasks.js'));
     ({ agentRegistryRoutes } = await import('../../routes/agent-registry.js'));
@@ -48,6 +47,7 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
   afterAll(async () => {
     disposeTaskService();
     disposeAgentRegistryService();
+    delete process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
     await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});
   });
 
@@ -91,9 +91,7 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
     expect(agentBusy.body.currentTaskId).toBe(createdTask.id);
 
     // 4) Move task to done => registry should return to idle + clear task.
-    // Flap guard is 10s in registry sync logic; wait beyond threshold.
-    await wait(10_500);
-
+    // Test forces flap guard to 0ms (VERITAS_TASK_SYNC_FLAP_GUARD_MS) for deterministic timing.
     const toDone = await request(app)
       .patch(`/api/tasks/${createdTask.id}`)
       .send({ status: 'done' });
