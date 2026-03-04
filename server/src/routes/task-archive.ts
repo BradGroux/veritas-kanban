@@ -16,6 +16,10 @@ const bulkArchiveSchema = z.object({
   sprint: z.string().min(1, 'Sprint is required'),
 });
 
+const bulkArchiveByIdsSchema = z.object({
+  ids: z.array(z.string()).min(1, 'At least one task ID is required'),
+});
+
 // GET /api/tasks/archived - List archived tasks
 router.get(
   '/archived',
@@ -91,6 +95,54 @@ router.post(
     }
 
     res.json({ archived, count: archived.length });
+  })
+);
+
+// POST /api/tasks/bulk-archive-by-ids - Archive multiple tasks by IDs
+router.post(
+  '/bulk-archive-by-ids',
+  asyncHandler(async (req, res) => {
+    let ids: string[];
+    try {
+      ({ ids } = bulkArchiveByIdsSchema.parse(req.body));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+
+    const archived: string[] = [];
+    const failed: string[] = [];
+
+    for (const id of ids) {
+      try {
+        const task = await taskService.getTask(id);
+        if (!task) {
+          failed.push(id);
+          continue;
+        }
+
+        const success = await taskService.archiveTask(id);
+        if (success) {
+          archived.push(id);
+          await activityService.logActivity(
+            'task_archived',
+            task.id,
+            task.title,
+            undefined,
+            task.agent
+          );
+          broadcastTaskChange('archived', id);
+        } else {
+          failed.push(id);
+        }
+      } catch (error) {
+        failed.push(id);
+      }
+    }
+
+    res.json({ archived, count: archived.length, failed });
   })
 );
 
