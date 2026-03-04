@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mass archive failure caused by missing `/api/tasks/bulk-archive-by-ids` endpoint
+
 ### Added
 
 - Comprehensive MCP server documentation at `docs/mcp/README.md` — architecture, quickstart, full tool catalog with examples, security model, troubleshooting playbook, and FAQ
