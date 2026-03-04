@@ -60,7 +60,7 @@
     "@types/mime-types": "^3.0.1",
     "@types/multer": "^2.0.0",
     "@types/sanitize-html": "^2.16.0",
-    "@types/supertest": "^6.0.3",
+    "@types/supertest": "^7.2.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.5.13",
