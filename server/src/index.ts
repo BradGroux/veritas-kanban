@@ -538,8 +538,13 @@ let configService: ConfigService | null = null;
 // routes and the WebSocket server see clean paths in both cases.
 const basePath = (process.env.BASE_PATH || '').replace(/\/+$/, '');
 
+/** Boundary-safe prefix match: ensures the char after basePath is '/', '?', or end-of-string */
+function matchesBasePath(url: string): boolean {
+  return url === basePath || url.startsWith(basePath + '/') || url.startsWith(basePath + '?');
+}
+
 const server = createServer((req, res) => {
-  if (basePath && req.url?.startsWith(basePath)) {
+  if (basePath && req.url && matchesBasePath(req.url)) {
     req.url = req.url.slice(basePath.length) || '/';
   }
   app(req, res);
@@ -548,7 +553,7 @@ const server = createServer((req, res) => {
 // Strip prefix for WebSocket upgrade requests (must run before ws library)
 if (basePath) {
   server.prependListener('upgrade', (req) => {
-    if (req.url?.startsWith(basePath)) {
+    if (req.url && matchesBasePath(req.url)) {
       req.url = req.url.slice(basePath.length) || '/';
     }
   });

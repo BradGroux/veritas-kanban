@@ -38,7 +38,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
+    host: process.env.VITE_DEV_HOST || 'localhost',
     port: 3000,
     proxy: {
       '/api': {
