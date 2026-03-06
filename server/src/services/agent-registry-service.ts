@@ -76,6 +76,47 @@ export interface AgentRegistryData {
   lastUpdated: string;
 }
 
+export interface TaskSyncUpdate {
+  agentRef: string;
+  taskId: string;
+  taskTitle?: string;
+  taskStatus: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+}
+
+export interface TaskSyncContext {
+  source: 'task-service' | 'task-reconciler';
+  /** Unforgeable capability token — must be obtained via createTaskSyncToken() */
+  readonly __capabilityToken?: symbol;
+}
+
+/**
+ * Module-scoped unforgeable capability symbol.
+ * Only code that imports createTaskSyncToken from this module can produce valid tokens.
+ */
+const SYNC_CAPABILITY_KEY = Symbol('agent-registry-sync-capability');
+
+/**
+ * Create an unforgeable TaskSyncContext. Only this module exports this factory,
+ * so external/untrusted code cannot construct a valid context.
+ */
+export function createTaskSyncToken(source: 'task-service' | 'task-reconciler'): TaskSyncContext {
+  return Object.freeze({ source, __capabilityToken: SYNC_CAPABILITY_KEY });
+}
+
+/**
+ * Validate that a context carries the unforgeable capability token.
+ */
+export function isValidSyncToken(context: TaskSyncContext): boolean {
+  return context.__capabilityToken === SYNC_CAPABILITY_KEY;
+}
+
+export interface TaskSyncSnapshot {
+  id: string;
+  title?: string;
+  status: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+  agent?: string;
+}
+
 // ─── Configuration ───────────────────────────────────────────────
 
 /** How long before an agent is considered offline (no heartbeat) */
@@ -83,6 +124,31 @@ const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /** How often to check for stale agents */
 const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+
+/** Prevent rapid busy<->idle oscillation on quick status churn */
+const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+
+function getTaskSyncFlapGuardMs(): number {
+  const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
+  if (!raw) return DEFAULT_TASK_SYNC_FLAP_GUARD_MS;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    log.warn(
+      { value: raw, env: 'VERITAS_TASK_SYNC_FLAP_GUARD_MS' },
+      'Invalid flap guard override; using default'
+    );
+    return DEFAULT_TASK_SYNC_FLAP_GUARD_MS;
+  }
+
+  return parsed;
+}
+
+/** Defensive cap to avoid pathological reconciliation payload sizes */
+const MAX_RECONCILE_BATCH = 10_000;
+
+/** Basic ref validation for task-agent sync paths */
+const AGENT_REF_REGEX = /^[a-zA-Z0-9._: -]{1,100}$/;
 
 // ─── Service ─────────────────────────────────────────────────────
 
@@ -92,6 +158,8 @@ class AgentRegistryService {
   private filePath: string;
   private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private lastBusyAtByAgent: Map<string, number> = new Map();
+  private taskSyncFlapGuardMs: number;
 
   constructor() {
     this.dataDir = getRuntimeDir();
@@ -100,6 +168,7 @@ class AgentRegistryService {
       process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban'),
       'agent-registry.json'
     );
+    this.taskSyncFlapGuardMs = getTaskSyncFlapGuardMs();
     this.migrateLegacyRegistry();
     this.load();
     this.startStaleCheck();
@@ -163,10 +232,151 @@ class AgentRegistryService {
   }
 
   /**
+   * Apply task lifecycle state to agent registry state.
+   *
+   * Precedence contract:
+   * - Task transition to in-progress is authoritative for busy + currentTask assignment.
+   * - Terminal transitions (todo/blocked/done/cancelled) move agent to idle + clear task,
+   *   but only when the agent is still attached to the same task (prevents clobbering
+   *   if agent moved on to a different task).
+   */
+  syncFromTask(update: TaskSyncUpdate, context: TaskSyncContext): RegisteredAgent | null {
+    if (!this.isAuthorizedSyncContext(context)) {
+      throw new Error('Unauthorized task sync context');
+    }
+
+    if (!this.isValidAgentRef(update.agentRef)) {
+      log.warn({ agentRef: update.agentRef }, 'Rejected malformed agentRef in syncFromTask');
+      return null;
+    }
+
+    const agent = this.findByRef(update.agentRef);
+    if (!agent) return null;
+
+    const previousStatus = agent.status;
+    const previousTaskId = agent.currentTaskId;
+
+    if (update.taskStatus === 'in-progress') {
+      agent.status = 'busy';
+      agent.currentTaskId = update.taskId;
+      agent.currentTaskTitle = update.taskTitle;
+      this.lastBusyAtByAgent.set(agent.id, Date.now());
+    } else {
+      // Only clear if registry still points to this task (avoid stale overwrites)
+      if (agent.currentTaskId && agent.currentTaskId !== update.taskId) {
+        return agent;
+      }
+
+      // Flap guard: ignore immediate busy->idle transitions for same task
+      const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
+      if (lastBusyAt && Date.now() - lastBusyAt < this.taskSyncFlapGuardMs) {
+        return agent;
+      }
+
+      agent.status = 'idle';
+      agent.currentTaskId = undefined;
+      agent.currentTaskTitle = undefined;
+    }
+
+    const changed = previousStatus !== agent.status || previousTaskId !== agent.currentTaskId;
+    if (changed) {
+      this.agents.set(agent.id, agent);
+      this.persist();
+    }
+
+    return agent;
+  }
+
+  /**
+   * Reconcile registry status from the current task snapshot.
+   *
+   * Drift correction:
+   * - If an agent has an in-progress task assigned, force busy + task linkage.
+   * - If an agent is busy on a task that is now terminal, clear it (subject to flap guard).
+   */
+  reconcileFromTasks(tasks: TaskSyncSnapshot[], context: TaskSyncContext): number {
+    if (!this.isAuthorizedSyncContext(context)) {
+      throw new Error('Unauthorized task reconcile context');
+    }
+
+    if (tasks.length > MAX_RECONCILE_BATCH) {
+      throw new Error(`Reconciliation batch too large: ${tasks.length} > ${MAX_RECONCILE_BATCH}`);
+    }
+
+    const byAgentRef = new Map<string, TaskSyncSnapshot>();
+
+    for (const task of tasks) {
+      if (!task.agent) continue;
+      if (!this.isValidAgentRef(task.agent)) {
+        log.warn(
+          { agentRef: task.agent, taskId: task.id },
+          'Skipping malformed agentRef in reconcileFromTasks'
+        );
+        continue;
+      }
+      const key = task.agent.trim().toLowerCase();
+      const existing = byAgentRef.get(key);
+
+      // Authoritative precedence: in-progress wins
+      if (!existing || task.status === 'in-progress') {
+        byAgentRef.set(key, task);
+      }
+    }
+
+    let changed = 0;
+
+    for (const agent of this.agents.values()) {
+      const mapped =
+        byAgentRef.get(agent.id.trim().toLowerCase()) ??
+        byAgentRef.get(agent.name.trim().toLowerCase());
+
+      if (mapped?.status === 'in-progress') {
+        const prevStatus = agent.status;
+        const prevTaskId = agent.currentTaskId;
+        const updated = this.syncFromTask(
+          {
+            agentRef: agent.id,
+            taskId: mapped.id,
+            taskTitle: mapped.title,
+            taskStatus: 'in-progress',
+          },
+          context
+        );
+        if (updated && (updated.currentTaskId !== prevTaskId || updated.status !== prevStatus)) {
+          changed++;
+        }
+        continue;
+      }
+
+      if (agent.status === 'busy' && agent.currentTaskId) {
+        const task = tasks.find((t) => t.id === agent.currentTaskId);
+        if (task && task.status !== 'in-progress') {
+          const prevStatus = agent.status;
+          const prevTaskId = agent.currentTaskId;
+          const updated = this.syncFromTask(
+            {
+              agentRef: agent.id,
+              taskId: task.id,
+              taskStatus: task.status,
+            },
+            context
+          );
+          if (updated && (updated.status !== prevStatus || updated.currentTaskId !== prevTaskId)) {
+            changed++;
+          }
+        }
+      }
+    }
+
+    return changed;
+  }
+
+  /**
    * Deregister an agent.
    */
   deregister(agentId: string): boolean {
     const existed = this.agents.delete(agentId);
+    this.lastBusyAtByAgent.delete(agentId);
     if (existed) {
       this.persist();
       log.info({ agentId }, `Agent deregistered: ${agentId}`);
@@ -236,6 +446,55 @@ class AgentRegistryService {
       offline: agents.filter((a) => a.status === 'offline').length,
       capabilities: Array.from(allCaps).sort(),
     };
+  }
+
+  private isAuthorizedSyncContext(context: TaskSyncContext): boolean {
+    // Primary check: unforgeable capability token (new secure path)
+    if (isValidSyncToken(context)) return true;
+    // Reject: string-only contexts are no longer accepted
+    return false;
+  }
+
+  private isValidAgentRef(agentRef: string): boolean {
+    const normalized = agentRef.trim();
+    return AGENT_REF_REGEX.test(normalized);
+  }
+
+  /**
+   * Validate that an agent ref exists in the registry.
+   * Used by task-service to reject invalid agent assignments on create/update.
+   * Returns true if the ref matches a registered agent (by id or name).
+   */
+  validateAgentRef(agentRef: string): { valid: boolean; reason?: string } {
+    if (!agentRef) return { valid: true }; // no agent assigned is fine
+
+    if (!this.isValidAgentRef(agentRef)) {
+      return { valid: false, reason: `Malformed agent ref: ${agentRef}` };
+    }
+
+    const agent = this.findByRef(agentRef);
+    if (!agent) {
+      return { valid: false, reason: `Unknown agent ref: ${agentRef} — not found in registry` };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Resolve an agent by id first, then by case-insensitive name.
+   */
+  private findByRef(agentRef: string): RegisteredAgent | null {
+    const byId = this.agents.get(agentRef);
+    if (byId) return byId;
+
+    const normalized = agentRef.trim().toLowerCase();
+    for (const agent of this.agents.values()) {
+      if (agent.name.trim().toLowerCase() === normalized) {
+        return agent;
+      }
+    }
+
+    return null;
   }
 
   /**

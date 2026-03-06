@@ -32,7 +32,7 @@ const registerSchema = z.object({
   provider: z.string().max(50).optional(),
   capabilities: z.array(capabilitySchema).optional(),
   version: z.string().max(50).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   sessionKey: z.string().max(200).optional(),
 });
 
@@ -40,7 +40,7 @@ const heartbeatSchema = z.object({
   status: z.enum(['online', 'busy', 'idle']).optional(),
   currentTaskId: z.string().max(100).optional().nullable(),
   currentTaskTitle: z.string().max(200).optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ─── Routes ──────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new ValidationError('Invalid registration', parsed.error.errors);
+      throw new ValidationError('Invalid registration', parsed.error.issues);
     }
 
     const registry = getAgentRegistryService();
@@ -129,7 +129,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const parsed = heartbeatSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new ValidationError('Invalid heartbeat', parsed.error.errors);
+      throw new ValidationError('Invalid heartbeat', parsed.error.issues);
     }
 
     const registry = getAgentRegistryService();

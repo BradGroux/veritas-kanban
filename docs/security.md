@@ -262,6 +262,19 @@ Check that `VERITAS_AUTH_LOCALHOST_BYPASS=true` is set, or provide an API key.
 
 ## Changelog
 
+- **v3.3.0** (2026-02-15): Task intelligence security hardening
+  - Crash-recovery checkpointing with auto-sanitization of 20+ secret patterns plus regex value detection
+  - XSS prevention in observational memory via `sanitizeCommentText()`
+  - DFS cycle detection in task dependencies prevents infinite loop attacks
+  - Input sanitization on agent filter (trim + 100 char cap)
+  - Zod validation on all dependency and checkpoint routes
+- **v3.0.0** (2026-02-09): Workflow engine security
+  - ReDoS protection on regex acceptance criteria
+  - Expression injection prevention in template evaluator
+  - Parallel DoS limits (max 50 concurrent sub-steps)
+  - Gate approval authentication and permission checks
+  - RBAC with ACL files for workflow access control
+  - Audit logging of all workflow changes
 - **v2.0.0** (2026-02-06): Multi-agent security
   - Agent permission levels (Intern/Specialist/Lead) with enforcement
   - Agent registry with heartbeat-based liveness tracking

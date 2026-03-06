@@ -1,0 +1,53 @@
+# =============================================================================
+# Veritas Kanban — Demo Environment
+# =============================================================================
+# One command: docker compose -f demo/docker-compose.demo.yml up --build
+# Then open: http://localhost:3099
+#
+# Automatically seeds demo data on first run via the seed sidecar.
+# =============================================================================
+
+services:
+  vk-demo:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: vk-demo
+    working_dir: /app/server
+    ports:
+      - '${DEMO_PORT:-3099}:3001'
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - VERITAS_ADMIN_KEY=${VERITAS_ADMIN_KEY:-demo-admin-key-2026}
+      - VERITAS_AUTH_ENABLED=${VERITAS_AUTH_ENABLED:-false}
+      - VERITAS_AUTH_LOCALHOST_BYPASS=true
+      - VERITAS_AUTH_LOCALHOST_ROLE=admin
+      - CORS_ORIGINS=http://localhost:${DEMO_PORT:-3099}
+    volumes:
+      - demo-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  vk-demo-seed:
+    image: alpine:3.19
+    container_name: vk-demo-seed
+    depends_on:
+      vk-demo:
+        condition: service_healthy
+    volumes:
+      - ./seed.sh:/seed/seed.sh:ro
+    entrypoint: ['sh', '/seed/seed.sh']
+    environment:
+      - API_URL=http://vk-demo:3001
+      - ADMIN_KEY=${VERITAS_ADMIN_KEY:-demo-admin-key-2026}
+
+volumes:
+  demo-data:
+    driver: local

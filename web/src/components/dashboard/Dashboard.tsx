@@ -30,6 +30,7 @@ import { ActivityClock } from './ActivityClock';
 import { HourlyActivityChart } from './HourlyActivityChart';
 import { WallTimeToggle } from './WallTimeToggle';
 import { SessionMetrics } from './SessionMetrics';
+import { EnforcementIndicator } from './EnforcementIndicator';
 
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
@@ -198,10 +199,13 @@ export function Dashboard() {
         onExportClick={() => setExportDialogOpen(true)}
       />
 
-      {/* Updated timestamp */}
-      <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground -mt-2">
-        <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
-        {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+      {/* Status bar: enforcement indicator + updated timestamp */}
+      <div className="flex items-center justify-between -mt-2">
+        <EnforcementIndicator />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+          {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+        </div>
       </div>
 
       {/* Export Dialog */}

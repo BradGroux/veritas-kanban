@@ -27,7 +27,7 @@ router.post(
       ({ description } = addVerificationStepSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -61,7 +61,7 @@ router.patch(
       updates = updateVerificationStepSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }

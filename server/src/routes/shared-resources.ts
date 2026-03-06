@@ -31,7 +31,7 @@ router.get(
       query = SharedResourceListQuerySchema.parse(req.query);
     } catch (err: any) {
       if (err.name === 'ZodError') {
-        throw new ValidationError('Validation error', err.errors);
+        throw new ValidationError('Validation error', err.issues);
       }
       throw err;
     }
@@ -65,7 +65,7 @@ router.post(
       data = SharedResourceCreateSchema.parse(req.body);
     } catch (err: any) {
       if (err.name === 'ZodError') {
-        throw new ValidationError('Validation error', err.errors);
+        throw new ValidationError('Validation error', err.issues);
       }
       throw err;
     }
@@ -84,7 +84,7 @@ router.patch(
       update = SharedResourceUpdateSchema.parse(req.body);
     } catch (err: any) {
       if (err.name === 'ZodError') {
-        throw new ValidationError('Validation error', err.errors);
+        throw new ValidationError('Validation error', err.issues);
       }
       throw err;
     }
@@ -114,7 +114,7 @@ router.post(
       data = SharedResourceMountSchema.parse(req.body);
     } catch (err: any) {
       if (err.name === 'ZodError') {
-        throw new ValidationError('Validation error', err.errors);
+        throw new ValidationError('Validation error', err.issues);
       }
       throw err;
     }
@@ -134,7 +134,7 @@ router.post(
       data = SharedResourceMountSchema.parse(req.body);
     } catch (err: any) {
       if (err.name === 'ZodError') {
-        throw new ValidationError('Validation error', err.errors);
+        throw new ValidationError('Validation error', err.issues);
       }
       throw err;
     }

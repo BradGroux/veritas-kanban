@@ -282,6 +282,7 @@ This is invaluable for Champions-style research tasks or anything needing a real
 
 ## What's Next?
 
+0. **[API Reference](API-REFERENCE.md)** — Complete endpoint catalog, auth, examples, WebSocket, and common workflows.
 1. Read the SOPs:
    - [Agent Task Workflow](SOP-agent-task-workflow.md)
    - [Sprint Planning with AI Agents](SOP-sprint-planning.md)

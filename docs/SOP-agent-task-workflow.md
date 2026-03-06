@@ -244,4 +244,61 @@ System events render as divider lines in the UI — visually distinct from regul
 | Time tracking forgotten | Start timer immediately, add manual entry for elapsed time with reason.         |
 | Reviewer disagrees      | Re-open task, create subtasks for fixes, keep cross-model reviewer in the loop. |
 
+---
+
+## Crash-Recovery Checkpointing (v3.3)
+
+For long-running tasks, save agent state periodically so work can resume after crashes:
+
+```bash
+# Save checkpoint mid-work (secrets auto-sanitized)
+curl -X POST http://localhost:3001/api/tasks/<id>/checkpoint \
+  -H "Content-Type: application/json" \
+  -d '{"state":{"current_step":3,"completed":["step1","step2"],"notes":"Working on step 3"}}'
+
+# On restart, check for existing checkpoint
+curl http://localhost:3001/api/tasks/<id>/checkpoint
+
+# Clear after task completion
+curl -X DELETE http://localhost:3001/api/tasks/<id>/checkpoint
+```
+
+**Rules:**
+
+- Save checkpoints every 5–10 minutes on tasks expected to run >15 minutes.
+- Always clear checkpoints after `vk done`.
+- Checkpoint payloads are capped at 1MB with 24h auto-expiry.
+
+## Observational Memory (v3.3)
+
+Capture important decisions, blockers, and insights as task observations:
+
+```bash
+# Log a decision
+curl -X POST http://localhost:3001/api/observations \
+  -H "Content-Type: application/json" \
+  -d '{"taskId":"<id>","type":"decision","content":"Chose approach X over Y because...","importance":8}'
+
+# Search observations across all tasks
+curl "http://localhost:3001/api/observations/search?query=approach+X"
+```
+
+**When to create observations:**
+
+- Architectural or design decisions (type: `decision`, importance: 7–10)
+- Blockers with workaround details (type: `blocker`)
+- Surprising findings or gotchas (type: `insight`)
+- Context needed for future work (type: `context`)
+
+## Task Dependencies (v3.3)
+
+Before starting a task, check its dependency status:
+
+```bash
+# Check dependencies
+curl http://localhost:3001/api/tasks/<id>/dependencies
+
+# If upstream blockers are incomplete, don't start — pick another task instead.
+```
+
 Follow this SOP and every task stays audit-friendly, searchable, and trustworthy.

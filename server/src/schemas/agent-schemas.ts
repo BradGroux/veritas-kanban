@@ -27,8 +27,8 @@ export type CompleteAgentBody = z.infer<typeof CompleteAgentBodySchema>;
  */
 export const ReportTokensBodySchema = z.object({
   attemptId: z.string().optional(),
-  inputTokens: z.number({ required_error: 'inputTokens is required' }).int().nonnegative(),
-  outputTokens: z.number({ required_error: 'outputTokens is required' }).int().nonnegative(),
+  inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
+  outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),
   model: z.string().optional(),
   agent: AgentTypeSchema.optional(),

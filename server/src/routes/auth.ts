@@ -196,12 +196,12 @@ router.post(
     // Validate request body with Zod
     const parseResult = setupSchema.safeParse(req.body);
     if (!parseResult.success) {
-      const firstError = parseResult.error.errors[0];
+      const firstError = parseResult.error.issues[0];
       const isPasswordMissing = !req.body?.password || typeof req.body.password !== 'string';
       res.status(400).json({
         error: firstError.message,
         code: isPasswordMissing ? 'MISSING_PASSWORD' : 'PASSWORD_TOO_SHORT',
-        details: parseResult.error.errors.map((e) => ({
+        details: parseResult.error.issues.map((e) => ({
           path: e.path.join('.'),
           message: e.message,
         })),
@@ -325,7 +325,7 @@ router.post(
       res.status(400).json({
         error: 'Password is required',
         code: 'MISSING_PASSWORD',
-        details: loginParsed.error.errors.map((e) => ({
+        details: loginParsed.error.issues.map((e) => ({
           path: e.path.join('.'),
           message: e.message,
         })),
@@ -435,13 +435,13 @@ router.post(
     // Validate request body with Zod
     const recoverParsed = recoverSchema.safeParse(req.body);
     if (!recoverParsed.success) {
-      const firstError = recoverParsed.error.errors[0];
+      const firstError = recoverParsed.error.issues[0];
       const isRecoveryKeyMissing =
         !req.body?.recoveryKey || typeof req.body.recoveryKey !== 'string';
       res.status(400).json({
         error: firstError.message,
         code: isRecoveryKeyMissing ? 'MISSING_RECOVERY_KEY' : 'INVALID_NEW_PASSWORD',
-        details: recoverParsed.error.errors.map((e) => ({
+        details: recoverParsed.error.issues.map((e) => ({
           path: e.path.join('.'),
           message: e.message,
         })),
@@ -520,13 +520,13 @@ router.post(
     // Validate request body with Zod
     const changeParsed = changePasswordSchema.safeParse(req.body);
     if (!changeParsed.success) {
-      const firstError = changeParsed.error.errors[0];
+      const firstError = changeParsed.error.issues[0];
       const isCurrentMissing =
         !req.body?.currentPassword || typeof req.body.currentPassword !== 'string';
       res.status(400).json({
         error: firstError.message,
         code: isCurrentMissing ? 'MISSING_CURRENT_PASSWORD' : 'INVALID_NEW_PASSWORD',
-        details: changeParsed.error.errors.map((e) => ({
+        details: changeParsed.error.issues.map((e) => ({
           path: e.path.join('.'),
           message: e.message,
         })),
@@ -586,7 +586,7 @@ router.post(
       res.status(400).json({
         error: 'gracePeriodDays must be a number between 0 and 90',
         code: 'INVALID_GRACE_PERIOD',
-        details: rotateParsed.error.errors.map((e) => ({
+        details: rotateParsed.error.issues.map((e) => ({
           path: e.path.join('.'),
           message: e.message,
         })),

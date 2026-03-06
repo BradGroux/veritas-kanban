@@ -10,7 +10,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.3.3-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -61,6 +61,8 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## 📚 Documentation Map
 
+- [MCP Server Guide](docs/mcp/README.md) — 26 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
@@ -222,23 +224,23 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 ### 🔌 Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — Model Context Protocol for AI assistants
+- **MCP Server** — 26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via Model Context Protocol
 - **Notifications** — Teams integration for task updates
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer               | Technology                           | Version                        |
-| ------------------- | ------------------------------------ | ------------------------------ |
-| **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 6, Tailwind 3.4 |
-| **Backend**         | Express, WebSocket                   | Express 4.21                   |
-| **Language**        | TypeScript (strict mode)             | 5.7                            |
-| **Storage**         | Markdown files with YAML frontmatter | gray-matter                    |
-| **Git**             | simple-git, worktree management      | —                              |
-| **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4      |
-| **Runtime**         | Node.js                              | 22+                            |
-| **Package Manager** | pnpm                                 | 9+                             |
+| Layer               | Technology                           | Version                          |
+| ------------------- | ------------------------------------ | -------------------------------- |
+| **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 7.3, Tailwind 4.2 |
+| **Backend**         | Express, WebSocket                   | Express 5.2                      |
+| **Language**        | TypeScript (strict mode)             | 5.7                              |
+| **Storage**         | Markdown files with YAML frontmatter | gray-matter                      |
+| **Git**             | simple-git, worktree management      | —                                |
+| **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4        |
+| **Runtime**         | Node.js                              | 22+                              |
+| **Package Manager** | pnpm                                 | 9+                               |
 
 ---
 
@@ -544,7 +546,11 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-For AI assistants (Claude Desktop, etc.):
+26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via [Model Context Protocol](https://modelcontextprotocol.io/).
+
+**→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, and troubleshooting.
+
+**Quick config** (Claude Desktop / Cursor / OpenClaw):
 
 ```json
 {
@@ -560,25 +566,25 @@ For AI assistants (Claude Desktop, etc.):
 }
 ```
 
-### Available Tools
+**After adding the config, restart OpenClaw:**
 
-| Tool           | Description       |
-| -------------- | ----------------- |
-| `list_tasks`   | List with filters |
-| `get_task`     | Get task by ID    |
-| `create_task`  | Create new task   |
-| `update_task`  | Update fields     |
-| `archive_task` | Archive task      |
+```bash
+openclaw gateway restart
+```
 
-### Resources
+Verify discovery with `openclaw mcp list`. See [Troubleshooting](docs/TROUBLESHOOTING.md#mcp-server-connection-issues) if the server doesn't appear.
 
-| URI                     | Description          |
-| ----------------------- | -------------------- |
-| `kanban://tasks`        | All tasks            |
-| `kanban://tasks/active` | In-progress + review |
-| `kanban://task/{id}`    | Single task          |
+**Troubleshooting MCP connection issues:**
 
----
+- **Always restart OpenClaw after MCP config changes** — MCP servers are discovered at startup
+- **Verify tools are available:** Run `openclaw mcp list` to confirm 26 Veritas Kanban tools appear
+- **When reporting issues, provide:**
+  - OpenClaw version (`openclaw --version`)
+  - VK version and health (`curl http://localhost:3001/api/health`)
+  - MCP logs (`~/.openclaw/logs/mcp.log` on macOS/Linux)
+  - API accessibility test (`curl -H "X-API-Key: your-key" http://localhost:3001/api/tasks`)
+
+See [full MCP troubleshooting guide](docs/TROUBLESHOOTING.md#mcp-server-connection-issues) for details.
 
 ## 📄 Task Format
 

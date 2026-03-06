@@ -1,6 +1,6 @@
 {
   "name": "veritas-kanban",
-  "version": "3.3.0",
+  "version": "3.3.3",
   "private": true,
   "description": "Local-first task management and AI agent orchestration platform",
   "author": "Brad Groux <brad@digitalmeld.io>",
@@ -20,7 +20,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "pnpm -r test",
+    "test:unit": "pnpm -r --workspace-concurrency=1 test",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
@@ -30,19 +30,20 @@
     "audit": "pnpm audit --prod",
     "audit:all": "pnpm audit",
     "seed": "bash scripts/seed.sh",
-    "prepare": "husky"
+    "prepare": "husky",
+    "demo": "docker compose -f demo/docker-compose.demo.yml up --build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.0",
-    "@types/node": "^22.10.0",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "concurrently": "^9.1.0",
-    "eslint": "^9.17.0",
+    "eslint": "9.38.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
+    "lint-staged": "^16.3.1",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
@@ -58,7 +59,9 @@
   },
   "pnpm": {
     "overrides": {
-      "hono": ">=4.11.7"
+      "hono": ">=4.12.2",
+      "qs": "^6.14.2",
+      "minimatch": ">=10.2.3"
     }
   },
   "repository": {

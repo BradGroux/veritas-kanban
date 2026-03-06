@@ -173,7 +173,7 @@ describe('envSchema', () => {
         expect(result.data.LOG_LEVEL).toBe('info');
         expect(result.data.VERITAS_AUTH_ENABLED).toBe(true);
         expect(result.data.VERITAS_AUTH_LOCALHOST_BYPASS).toBe(false);
-        expect(result.data.VERITAS_AUTH_LOCALHOST_ROLE).toBe('viewer');
+        expect(result.data.VERITAS_AUTH_LOCALHOST_ROLE).toBe('read-only');
         expect(result.data.VERITAS_API_KEYS).toBe('');
         expect(result.data.RATE_LIMIT_MAX).toBe(300);
         expect(result.data.CSP_REPORT_ONLY).toBe(false);
@@ -199,6 +199,31 @@ describe('envSchema', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.CORS_ORIGINS).toBe('http://localhost:3000,http://localhost:5173');
+      }
+    });
+  });
+
+  describe('localhost auth role enum', () => {
+    it('should accept canonical roles', () => {
+      for (const role of ['admin', 'agent', 'read-only']) {
+        const result = envSchema.safeParse({
+          VERITAS_ADMIN_KEY: 'test-key',
+          VERITAS_AUTH_LOCALHOST_ROLE: role,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.VERITAS_AUTH_LOCALHOST_ROLE).toBe(role);
+        }
+      }
+    });
+
+    it('should reject legacy role names', () => {
+      for (const role of ['editor', 'viewer']) {
+        const result = envSchema.safeParse({
+          VERITAS_ADMIN_KEY: 'test-key',
+          VERITAS_AUTH_LOCALHOST_ROLE: role,
+        });
+        expect(result.success).toBe(false);
       }
     });
   });

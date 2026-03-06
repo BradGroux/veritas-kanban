@@ -5,6 +5,105 @@ All notable changes to Veritas Kanban are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Mass archive failure caused by missing `/api/tasks/bulk-archive-by-ids` endpoint
+
+### Added
+
+- Comprehensive MCP server documentation at `docs/mcp/README.md` — architecture, quickstart, full tool catalog with examples, security model, troubleshooting playbook, and FAQ
+- Condensed root README MCP section with link to dedicated docs
+
+## [3.3.3] - 2026-03-01
+
+### ✨ Highlights
+
+**Veritas Kanban 3.3.3 is a patch correction release** delivering stability, security, and performance fixes on top of 3.3.2, plus full Zod 4 API migration completing the TypeScript compilation fix.
+
+### Fixed
+
+- **#162 — Complete Zod 4 API migration** — Resolved 50+ TypeScript compilation errors blocking CI/CD
+  - `ZodError.errors` → `ZodError.issues` across all route files and middleware
+  - `z.record(valueSchema)` → `z.record(z.string(), valueSchema)` for explicit key types
+  - Schema defaults corrected from string to proper numeric/boolean types (`PORT`, `VERITAS_AUTH_ENABLED`, `RATE_LIMIT_MAX`)
+  - `required_error` → `message` in number schemas (`agents.ts`, `agent-schemas.ts`)
+  - Affected: `validate.ts`, `agent-registry.ts`, `workflows.ts`, `lifecycle-hooks.ts`, `tasks.ts`, `reports.ts`, `env.ts`
+
+- **#165 — SSRF protection for webhook URLs** — Added server-side request forgery safeguards for all outbound webhook destinations (replaces #163)
+
+### Added
+
+- **Orchestrator Delegation Enforcement** — Full enforcement gate for orchestrator delegation
+  - Orchestrator agent selector in Settings → Enforcement (dropdown of enabled agents)
+  - Active/Inactive status badge showing enforcement state
+  - Warning banner when delegation enabled but no agent selected
+  - Section auto-disables when delegation toggle is off
+  - Zod-validated `orchestratorAgent` field (string, max 50 chars)
+  - `POST /api/agent/delegation-violation` endpoint for violation reporting
+  - Auto-posts violations to squad chat when squad chat enforcement is enabled
+
+- **Enforcement Gate Toast Notifications** — Enhanced error feedback for all enforcement gates
+  - Gate-specific titles and actionable guidance for REVIEW_GATE, CLOSING_COMMENTS_REQUIRED, DELIVERABLE_REQUIRED, ORCHESTRATOR_DELEGATION
+  - 10-second toast duration for enforcement messages (up from 5s)
+  - BulkActionsBar surfaces gate details on bulk move failures
+
+- **Dashboard Enforcement Indicator** — At-a-glance enforcement status
+  - Shows active/total gate count with color-coded shield icon (green/amber/gray)
+  - Individual gate dots (green = active, gray = off)
+  - Renders in dashboard status bar alongside refresh timestamp
+
+### Performance
+
+- **#167 — WebSocket broadcast batching** — Batch broadcasts to prevent event loop blocking under high-frequency update load (replaces #164/#166)
+
+---
+
+## [3.3.2] - 2026-03-01
+
+### ✨ Highlights
+
+**Veritas Kanban 3.3.2 delivers sprint management for CLI + MCP surfaces** alongside task↔agent state synchronization, security hardening of the sync auth boundary, and a circuit breaker test suite.
+
+### Added
+
+- **#161 — Sprint Management (CLI + MCP)** — Full sprint CRUD and task integration from the command line and MCP
+  - `vk sprint list` — list sprints with `--hidden` / `--json` flags
+  - `vk sprint create` — create sprints with optional description
+  - `vk sprint update` — update label, description, visibility
+  - `vk sprint delete` — delete sprints (with `--force` for non-empty)
+  - `vk sprint close` — archive completed tasks in a sprint
+  - `vk sprint suggestions` — show sprints ready to archive
+  - `vk list -S <sprint>` / `vk create -S <sprint>` / `vk update -S <sprint>` — task sprint integration
+  - MCP tools: `list_sprints`, `create_sprint`, `update_sprint`, `delete_sprint`, `close_sprint`, `sprint_suggestions`
+  - Sprint field surfaced on `list_tasks`, `create_task`, `update_task` MCP tools
+
+- **#155 — Task↔Agent State Sync + Reconciliation** — Bi-directional sync engine keeping task state consistent with agent execution state; reconciliation pass resolves diverged records
+
+- **#156 — Circuit Breaker Test Suite** — 18 new unit tests covering circuit breaker open/half-open/closed transitions, timeout behaviour, and error thresholds
+
+### Fixed
+
+- **#159 — Harden task-agent sync auth boundary** — Tightened authentication checks on sync routes to prevent unauthorized state manipulation (#157 #158)
+
+---
+
+## [3.3.1] - 2026-02-28
+
+### Fixed
+
+- **#153 — Express 5 wildcard route compatibility** — Updated route patterns for Express 5.x compatibility
+- **Security: upgrade hono to >=4.12.2** — Addressed GHSA-xh87-mx6m-69f3 vulnerability
+
+### Changed
+
+- **#148 — Bump vite from 6.4.1 to 7.3.1** — Major version upgrade with performance improvements
+- **#149 — Bump tailwindcss from 3.4.19 to 4.2.1** — Major version upgrade with new features
+- **#154 — Bump production dependencies (8 updates)** — Routine dependency maintenance
+
+---
+
 ## [3.3.0] - 2026-02-15
 
 ### ✨ Highlights

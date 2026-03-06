@@ -36,7 +36,7 @@ router.post(
       ({ title, acceptanceCriteria } = addSubtaskSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -73,7 +73,7 @@ router.patch(
       updates = updateSubtaskSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }

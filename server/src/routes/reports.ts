@@ -90,7 +90,7 @@ router.post(
       includeTimestamp: z.boolean().optional(),
       includePageNumbers: z.boolean().optional(),
       author: z.string().optional(),
-      metadata: z.record(z.string()).optional(),
+      metadata: z.record(z.string(), z.string()).optional(),
     });
     const data = schema.parse(req.body);
     const service = getPdfReportService();

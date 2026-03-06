@@ -136,10 +136,13 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
       clearSelection();
       setMoveTarget(null);
     } catch (error) {
+      const err = error as Error & { details?: Array<{ code: string; message: string }> };
+      const gateDetail = err.details?.[0];
       toast({
         variant: 'destructive',
-        title: 'Move Failed',
-        description: 'Failed to move selected tasks.',
+        title: gateDetail ? `⚠️ Enforcement: ${gateDetail.code}` : 'Move Failed',
+        description: gateDetail?.message || 'Failed to move selected tasks.',
+        duration: gateDetail ? 10000 : 5000,
       });
     } finally {
       setIsProcessing(false);

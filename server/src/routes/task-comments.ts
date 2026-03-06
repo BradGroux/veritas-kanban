@@ -26,7 +26,7 @@ router.post(
       ({ author, text } = addCommentSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -83,7 +83,7 @@ router.patch(
       ({ text } = z.object({ text: z.string().min(1) }).parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }

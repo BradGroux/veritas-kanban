@@ -11,6 +11,7 @@
 
 import fs from 'node:fs';
 import type { FSWatcher } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { access } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
@@ -27,7 +28,23 @@ export const renameSync = fs.renameSync;
 // Watcher primitives (used by task-service, config-service cache invalidation)
 // ---------------------------------------------------------------------------
 
-export const watch = fs.watch;
+function createNoopWatcher(): FSWatcher {
+  const emitter = new EventEmitter();
+  return Object.assign(emitter, {
+    close: () => {
+      emitter.removeAllListeners();
+      return undefined;
+    },
+  }) as unknown as FSWatcher;
+}
+
+export function watch(...args: Parameters<typeof fs.watch>): FSWatcher {
+  if (process.env.VERITAS_DISABLE_WATCHERS === '1') {
+    return createNoopWatcher();
+  }
+  return fs.watch(...args);
+}
+
 export type { FSWatcher };
 
 // ---------------------------------------------------------------------------

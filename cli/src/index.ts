@@ -14,6 +14,7 @@ import { registerProjectCommands } from './commands/projects.js';
 import { registerWorkflowCommands } from './commands/workflow.js';
 import { registerSetupCommands } from './commands/setup.js';
 import { registerUsageCommands } from './commands/usage.js';
+import { registerSprintCommands } from './commands/sprints.js';
 
 const program = new Command();
 
@@ -37,5 +38,6 @@ registerProjectCommands(program);
 registerWorkflowCommands(program);
 registerSetupCommands(program);
 registerUsageCommands(program);
+registerSprintCommands(program);
 
 program.parse();

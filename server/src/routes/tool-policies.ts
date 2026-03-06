@@ -150,7 +150,7 @@ router.use(
     log.error({ err, path: req.path, method: req.method }, 'Tool policy route error');
 
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      res.status(400).json({ error: 'Validation failed', details: err.issues });
       return;
     }
 

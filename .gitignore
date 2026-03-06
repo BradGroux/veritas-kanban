@@ -95,3 +95,10 @@ backups/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Internal data directories - NEVER commit
+tasks/
+.veritas-kanban/
+
+# Local security middleware (not shared)
+server/src/middleware/external-api-key.ts

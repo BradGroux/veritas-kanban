@@ -1,2 +1,2 @@
 // Re-export shared types
-export type { Task } from '@veritas-kanban/shared';
+export type { Task, SprintConfig } from '@veritas-kanban/shared';

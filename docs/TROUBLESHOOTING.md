@@ -91,10 +91,10 @@ pnpm install
 pnpm build
 ```
 
-If errors persist, check your Node.js version — **Node 20+** is required:
+If errors persist, check your Node.js version — **Node 22+** is required:
 
 ```bash
-node -v  # Should be v20.x or higher
+node -v  # Should be v22.x or higher
 ```
 
 ### `pnpm` not found
@@ -254,7 +254,24 @@ If you see CORS errors in the browser console, update `CORS_ORIGINS` in `server/
 
 ```bash
 # Add your frontend URL (comma-separated, no trailing slashes)
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000,http://your-hostname:5173
+```
+
+When using hostname access on LAN (for example `http://manfredclaw:5173`), include that hostname origin explicitly.
+
+### Vite: "Blocked request. This host is not allowed."
+
+If the web dev server rejects LAN hostname access, configure Vite host allowlist in `web/.env`:
+
+```bash
+VITE_HOST=0.0.0.0
+VITE_ALLOWED_HOSTS=your-hostname,your-hostname.local,your-ip
+```
+
+You can allow all hosts for trusted LAN-only environments:
+
+```bash
+VITE_ALLOWED_HOSTS=*
 ```
 
 ### Accessing from another machine on the network
@@ -266,7 +283,16 @@ By default, the server binds to `localhost`. To access from other machines:
 HOST=0.0.0.0
 ```
 
-Update `CORS_ORIGINS` to include the IP/hostname you'll access from.
+Update both CORS and Vite allowlist to include the IP/hostname you'll access from:
+
+```bash
+# server/.env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://your-ip:3000,http://your-hostname:5173
+
+# web/.env
+VITE_HOST=0.0.0.0
+VITE_ALLOWED_HOSTS=your-hostname,your-hostname.local,your-ip
+```
 
 ---
 
@@ -393,6 +419,117 @@ Verify the MCP server config in your Claude Desktop settings:
 ```
 
 Build the MCP server first: `cd mcp && pnpm build`
+
+#### Troubleshooting Checklist
+
+**1. Restart OpenClaw after MCP config changes**
+
+MCP servers are discovered at gateway startup, not dynamically. After adding or modifying the MCP server configuration in your `claude_desktop_config.json` or OpenClaw config, you **must** restart the OpenClaw gateway:
+
+```bash
+# Restart the OpenClaw gateway
+openclaw gateway restart
+
+# Verify gateway is running
+openclaw gateway status
+
+# Check gateway logs for MCP discovery errors (if any)
+tail -f ~/.openclaw/logs/gateway.log
+```
+
+**Common mistakes:**
+
+- Editing config but forgetting to restart → MCP server won't appear
+- Restarting just Claude Desktop/Cursor → doesn't reload OpenClaw's MCP registry
+- Config syntax errors → check logs for JSON parsing errors
+
+**2. Verify MCP discovery and tools after restart**
+
+After restarting, confirm that Veritas Kanban was successfully discovered and all tools are available:
+
+```bash
+# List all discovered MCP servers
+openclaw mcp list
+
+# Expected output should include:
+# veritas-kanban | 26 tools | http://localhost:3001
+
+# View available tools from Veritas Kanban
+openclaw mcp tools veritas-kanban
+
+# Test a specific tool (should return JSON schema)
+openclaw mcp describe veritas-kanban vk_list_tasks
+```
+
+**If Veritas Kanban doesn't appear in the list:**
+
+- Verify the MCP server config path is absolute (not relative): `/Users/you/path/to/veritas-kanban/mcp/dist/index.js`
+- Check that `mcp/dist/index.js` exists: `ls -la /path/to/veritas-kanban/mcp/dist/`
+- Build the MCP server if missing: `cd mcp && pnpm build`
+- Check OpenClaw logs for startup errors: `~/.openclaw/logs/mcp.log`
+
+**If the tool count is wrong (not 26 tools):**
+
+- MCP server may have started but failed to initialize properly
+- Check VK API is accessible: `curl http://localhost:3001/api/health`
+- Verify API key is set in MCP config env vars
+- Review MCP server logs for initialization errors
+
+**3. Gather diagnostics bundle when reporting issues**
+
+If MCP connection fails after following steps 1-2, collect this full diagnostics bundle to share when [reporting an issue](https://github.com/BradGroux/veritas-kanban/issues):
+
+```bash
+# === System & Version Info ===
+echo "=== OpenClaw Version ===" && openclaw --version
+echo "=== Node.js Version ===" && node -v
+echo "=== OS Info ===" && uname -a
+
+# === Veritas Kanban Health ===
+echo "=== VK Health Check ===" && curl -s http://localhost:3001/api/health | jq .
+echo "=== VK Version ===" && cat ~/Projects/veritas-kanban/package.json | jq -r '.version'
+
+# === MCP Discovery Status ===
+echo "=== MCP Server List ===" && openclaw mcp list
+echo "=== VK MCP Tools ===" && openclaw mcp tools veritas-kanban || echo "Server not discovered"
+
+# === OpenClaw Logs (MCP specific) ===
+echo "=== MCP Server Logs (last 50 lines) ==="
+# macOS/Linux:
+tail -n 50 ~/.openclaw/logs/mcp.log 2>/dev/null || echo "MCP log not found"
+
+# Windows (PowerShell):
+# Get-Content $env:USERPROFILE\.openclaw\logs\mcp.log -Tail 50
+
+# === Gateway Logs ===
+echo "=== Gateway Logs (last 50 lines) ==="
+tail -n 50 ~/.openclaw/logs/gateway.log 2>/dev/null || echo "Gateway log not found"
+
+# === MCP Config Validation ===
+echo "=== MCP Config (sanitized) ==="
+# macOS:
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | jq '.mcpServers["veritas-kanban"]' || echo "Config not found"
+
+# Linux:
+cat ~/.config/claude/claude_desktop_config.json | jq '.mcpServers["veritas-kanban"]' 2>/dev/null || echo "Config not found"
+
+# === API Accessibility Test ===
+echo "=== VK API Access Test ==="
+curl -s -H "X-API-Key: test-key" http://localhost:3001/api/tasks | head -c 200
+
+# === MCP Server File Check ===
+echo "=== MCP Server Files ==="
+ls -lh ~/Projects/veritas-kanban/mcp/dist/index.js 2>/dev/null || echo "MCP server not built"
+```
+
+**When reporting an issue, include:**
+
+1. Full output from the diagnostics commands above
+2. Your sanitized MCP config (remove sensitive API keys)
+3. Steps to reproduce the connection failure
+4. Expected vs actual behavior
+
+**Privacy note:** The diagnostics bundle may contain local paths and usernames. Review and redact sensitive information before sharing publicly.
 
 ---
 

@@ -183,6 +183,7 @@ export class TelemetryService {
 
     const { type, since, until, taskId, project, limit } = options;
     const types = type ? (Array.isArray(type) ? type : [type]) : null;
+    const effectiveLimit = Math.min(Math.max(limit ?? 1000, 1), 10_000);
 
     // Determine which files to read based on date range
     const files = await this.getEventFiles(since, until);
@@ -209,9 +210,9 @@ export class TelemetryService {
     // Sort by timestamp (newest first)
     events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-    // Apply limit after sort
-    if (limit && events.length > limit) {
-      return events.slice(0, limit);
+    // Apply limit after sort (guardrail default prevents unbounded reads)
+    if (events.length > effectiveLimit) {
+      return events.slice(0, effectiveLimit);
     }
 
     return events;
@@ -228,41 +229,46 @@ export class TelemetryService {
    * Get events for multiple tasks at once (batch query)
    * Returns a map of taskId -> events[]
    */
-  async getBulkTaskEvents(taskIds: string[]): Promise<Map<string, AnyTelemetryEvent[]>> {
+  async getBulkTaskEvents(
+    taskIds: string[],
+    perTaskLimit: number = 200
+  ): Promise<Map<string, AnyTelemetryEvent[]>> {
     if (taskIds.length === 0) {
       return new Map();
     }
 
     await this.init();
 
-    // Get all recent event files (last 90 days should cover most use cases)
+    const effectivePerTaskLimit = Math.min(Math.max(perTaskLimit, 1), 1000);
     const files = await this.getEventFiles();
-
-    // Read all events
-    let allEvents: AnyTelemetryEvent[] = [];
-    for (const file of files) {
-      const fileEvents = await this.readEventFile(file);
-      allEvents.push(...fileEvents);
-    }
 
     // Create a Set for O(1) lookup
     const taskIdSet = new Set(taskIds);
 
-    // Group events by taskId
+    // Group events by taskId with bounded buffers to cap memory use
     const result = new Map<string, AnyTelemetryEvent[]>();
     for (const taskId of taskIds) {
       result.set(taskId, []);
     }
 
-    for (const event of allEvents) {
-      if (event.taskId && taskIdSet.has(event.taskId)) {
-        result.get(event.taskId)!.push(event);
-      }
+    for (const file of files) {
+      await this.streamEventFile(file, (event) => {
+        if (!event.taskId || !taskIdSet.has(event.taskId)) return;
+        const bucket = result.get(event.taskId);
+        if (!bucket) return;
+
+        if (bucket.length < effectivePerTaskLimit) {
+          bucket.push(event);
+        }
+      });
     }
 
     // Sort events within each task by timestamp (newest first)
     for (const [, events] of result) {
       events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      if (events.length > effectivePerTaskLimit) {
+        events.length = effectivePerTaskLimit;
+      }
     }
 
     return result;

@@ -72,6 +72,7 @@ import lessonsRoutes from '../lessons.js';
 import delegationRoutes from '../delegation.js';
 import { workflowRoutes } from '../workflows.js';
 import toolPolicyRoutes from '../tool-policies.js';
+import { integrationsRoutes } from '../integrations.js';
 
 const v1Router: IRouter = Router();
 
@@ -159,5 +160,6 @@ v1Router.use('/lessons', lessonsRoutes);
 v1Router.use('/delegation', delegationRoutes);
 v1Router.use('/workflows', workflowRoutes);
 v1Router.use('/tool-policies', toolPolicyRoutes);
+v1Router.use('/integrations', integrationsRoutes);
 
 export { v1Router };

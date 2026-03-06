@@ -12,8 +12,47 @@ import {
  */
 let wssRef: WebSocketServer | null = null;
 
+// Performance: batch size for WebSocket broadcasts
+const BROADCAST_BATCH_SIZE = 50;
+
 export function initBroadcast(wss: WebSocketServer): void {
   wssRef = wss;
+}
+
+/**
+ * Broadcast a payload to all connected clients in batches.
+ * Uses setImmediate() between batches to yield to the event loop,
+ * preventing main thread blocking with many clients.
+ *
+ * @param payload - Pre-serialized JSON string
+ */
+function broadcastToClients(payload: string): void {
+  if (!wssRef) return;
+
+  const clients = Array.from(wssRef.clients);
+  const openClients = clients.filter((c) => c.readyState === 1);
+
+  // For small client counts, send synchronously
+  if (openClients.length <= BROADCAST_BATCH_SIZE) {
+    for (const client of openClients) {
+      client.send(payload);
+    }
+    return;
+  }
+
+  // For larger counts, batch with setImmediate to yield event loop
+  let index = 0;
+  const sendBatch = (): void => {
+    const end = Math.min(index + BROADCAST_BATCH_SIZE, openClients.length);
+    for (let i = index; i < end; i++) {
+      openClients[i].send(payload);
+    }
+    index = end;
+    if (index < openClients.length) {
+      setImmediate(sendBatch);
+    }
+  };
+  sendBatch();
 }
 
 export type TaskChangeType =
@@ -58,12 +97,7 @@ export function broadcastTaskChange(
 
   const payload = JSON.stringify(message);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 
   // Also notify via webhook (fire-and-forget)
   notifyTaskChange(changeType, taskId, taskContext);
@@ -85,11 +119,7 @@ export function broadcastChatMessage(sessionId: string, event: ChatBroadcastEven
 
   const payload = JSON.stringify(event);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 
   // Also notify via webhook (fire-and-forget)
   notifyChatMessage(
@@ -117,11 +147,7 @@ export function broadcastSquadMessage(message: SquadMessage): void {
 
   const payload = JSON.stringify(event);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 }
 
 /**
@@ -138,12 +164,7 @@ export function broadcastTelemetryEvent(event: AnyTelemetryEvent): void {
 
   const payload = JSON.stringify(message);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 }
 
 export interface BroadcastMessageEvent {
@@ -173,12 +194,7 @@ export function broadcastNewMessage(broadcast: BroadcastMessageEvent['broadcast'
 
   const payload = JSON.stringify(message);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 }
 
 export interface WorkflowStatusEvent {
@@ -266,10 +282,5 @@ export function broadcastWorkflowStatus(run: {
 
   const payload = JSON.stringify(message);
 
-  wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(payload);
-    }
-  });
+  broadcastToClients(payload);
 }

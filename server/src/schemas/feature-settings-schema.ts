@@ -144,6 +144,7 @@ const EnforcementSettingsSchema = z
     autoTelemetry: z.boolean().optional(),
     autoTimeTracking: z.boolean().optional(),
     orchestratorDelegation: z.boolean().optional(),
+    orchestratorAgent: z.string().max(50).optional(),
   })
   .strict()
   .optional();

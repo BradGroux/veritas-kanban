@@ -455,7 +455,7 @@ router.post(
       ({ orderedIds } = reorderTasksSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -554,7 +554,7 @@ router.post(
       var input = createTaskSchema.parse(req.body) as CreateTaskInput;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -639,7 +639,7 @@ router.patch(
       input = updateTaskSchema.parse(req.body) as UpdateTaskInput;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -860,7 +860,7 @@ router.post(
       ({ templateId, templateName, fieldsChanged } = applyTemplateSchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -997,7 +997,7 @@ router.post(
       input = bulkUpdateSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1062,7 +1062,7 @@ router.post(
       input = bulkArchiveSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1135,17 +1135,20 @@ router.post(
       input = addDependencySchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
 
     const { depends_on, blocks } = input;
-    const targetId = depends_on || blocks;
+    const targetId = depends_on ?? blocks;
     if (!targetId) {
-      throw new ValidationError('Either depends_on or blocks must be specified');
+      throw new ValidationError('Must provide either depends_on or blocks');
     }
     const type: 'depends_on' | 'blocks' = depends_on ? 'depends_on' : 'blocks';
+    if (!targetId) {
+      throw new ValidationError('Either depends_on or blocks is required');
+    }
 
     const task = await taskService.addDependency(taskId, targetId, type);
 
@@ -1301,7 +1304,7 @@ router.post(
       input = appendProgressSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1396,7 +1399,7 @@ function sanitizeCheckpointState(state: Record<string, any>): Record<string, any
 const checkpointSchema = z
   .object({
     step: z.number().int().min(0),
-    state: z.record(z.any()),
+    state: z.record(z.string(), z.any()),
   })
   .refine(
     (data) => {
@@ -1426,7 +1429,7 @@ router.post(
       input = checkpointSchema.parse(req.body);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError('Validation failed', error.errors);
+        throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
@@ -1445,8 +1448,12 @@ router.post(
     // Update task with checkpoint
     const updatedTask = await taskService.updateTask(taskId, { checkpoint });
 
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task update failed - task not found' });
+    }
+
     // Broadcast change
-    broadcastTaskChange('updated', updatedTask?.id);
+    broadcastTaskChange('updated', updatedTask.id);
 
     res.json({ success: true, checkpoint });
   })
@@ -1512,8 +1519,12 @@ router.delete(
     // Clear checkpoint by setting it to undefined
     const updatedTask = await taskService.updateTask(taskId, { checkpoint: undefined });
 
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task update failed - task not found' });
+    }
+
     // Broadcast change
-    broadcastTaskChange('updated', updatedTask?.id);
+    broadcastTaskChange('updated', updatedTask.id);
 
     res.json({ success: true });
   })

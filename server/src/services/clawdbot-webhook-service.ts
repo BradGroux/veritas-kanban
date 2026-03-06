@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { createLogger } from '../lib/logger.js';
+import { validateWebhookUrl } from '../utils/url-validation.js';
 import type { TaskChangeType } from './broadcast-service.js';
 
 const log = createLogger('webhook');
@@ -130,6 +131,13 @@ async function postPayload(url: string, body: string, secret?: string): Promise<
 export async function deliverWebhook(payload: WebhookPayload): Promise<void> {
   const url = getWebhookUrl();
   if (!url) return; // webhook not configured — silently skip
+
+  // Validate URL to prevent SSRF attacks
+  const validation = validateWebhookUrl(url);
+  if (!validation.valid) {
+    log.warn({ reason: validation.reason }, 'Webhook URL blocked (SSRF prevention)');
+    return;
+  }
 
   const body = JSON.stringify(payload);
   const secret = getWebhookSecret();

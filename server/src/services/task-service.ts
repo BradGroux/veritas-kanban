@@ -25,9 +25,16 @@ import {
   executePostTransitionActions,
   type TransitionActionCallbacks,
 } from './transition-hooks-service.js';
+import {
+  getAgentRegistryService,
+  createTaskSyncToken,
+  type TaskSyncContext,
+} from './agent-registry-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('task-cache');
+const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
+const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
 
 /**
  * Task ID format validation
@@ -81,12 +88,15 @@ export class TaskService {
   private watcher: FSWatcher | null = null;
   private lastWriteTime = 0;
   private cacheStats = { hits: 0, misses: 0 };
+  private taskSyncReconcileInterval: ReturnType<typeof setInterval> | null = null;
+  private reconcileRunning = false;
 
   constructor(options: TaskServiceOptions = {}) {
     this.tasksDir = options.tasksDir || DEFAULT_TASKS_DIR;
     this.archiveDir = options.archiveDir || DEFAULT_ARCHIVE_DIR;
     this.telemetry = options.telemetryService || getTelemetryService();
     this.ensureDirectories();
+    this.startTaskSyncReconciler();
   }
 
   // ============ Cache Helpers ============
@@ -245,6 +255,10 @@ export class TaskService {
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;
+    }
+    if (this.taskSyncReconcileInterval) {
+      clearInterval(this.taskSyncReconcileInterval);
+      this.taskSyncReconcileInterval = null;
     }
     this.cache.clear();
     this.cacheInitialized = false;
@@ -417,6 +431,7 @@ export class TaskService {
         priority: data.priority || 'medium',
         project: data.project,
         sprint: data.sprint,
+        agent: data.agent,
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
@@ -446,6 +461,56 @@ export class TaskService {
     } catch (error) {
       log.error({ err: error, filename }, 'Failed to parse task file');
       return null;
+    }
+  }
+
+  private syncAgentRegistryForStatusTransition(task: Task): void {
+    if (!task.agent) return;
+
+    if (!['todo', 'in-progress', 'blocked', 'done', 'cancelled'].includes(task.status)) return;
+
+    const registry = getAgentRegistryService();
+    registry.syncFromTask(
+      {
+        agentRef: task.agent,
+        taskId: task.id,
+        taskTitle: task.title,
+        taskStatus: task.status,
+      },
+      TASK_SYNC_CONTEXT
+    );
+  }
+
+  private startTaskSyncReconciler(): void {
+    this.taskSyncReconcileInterval = setInterval(() => {
+      this.runTaskAgentReconciliation().catch((err) => {
+        log.warn({ err }, 'Task↔agent reconciliation pass failed');
+      });
+    }, 60_000);
+  }
+
+  private async runTaskAgentReconciliation(): Promise<void> {
+    if (this.reconcileRunning) return;
+    this.reconcileRunning = true;
+
+    try {
+      const tasks = await this.listTasks();
+      const registry = getAgentRegistryService();
+      const changes = registry.reconcileFromTasks(
+        tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          agent: task.agent,
+        })),
+        TASK_RECONCILE_CONTEXT
+      );
+
+      if (changes > 0) {
+        log.debug({ changes }, 'Reconciled task↔agent state drift');
+      }
+    } finally {
+      this.reconcileRunning = false;
     }
   }
 
@@ -504,6 +569,21 @@ export class TaskService {
       created: now,
       updated: now,
     };
+
+    // Validate agent ref against registry (#157)
+    if (task.agent) {
+      const registry = getAgentRegistryService();
+      const validation = registry.validateAgentRef(task.agent);
+      if (!validation.valid) {
+        throw new ValidationError(validation.reason || 'Invalid agent ref', [
+          {
+            code: 'INVALID_AGENT_REF',
+            message: validation.reason || 'Invalid agent ref',
+            path: ['agent'],
+          },
+        ]);
+      }
+    }
 
     const filename = this.taskToFilename(task);
     const filepath = path.join(this.tasksDir, filename);
@@ -692,6 +772,21 @@ export class TaskService {
         checkpointUpdate = undefined;
       }
 
+      // Validate agent ref against registry if being changed (#157)
+      if (restInput.agent !== undefined && restInput.agent !== freshTask.agent) {
+        const registry = getAgentRegistryService();
+        const validation = registry.validateAgentRef(restInput.agent);
+        if (!validation.valid) {
+          throw new ValidationError(validation.reason || 'Invalid agent ref', [
+            {
+              code: 'INVALID_AGENT_REF',
+              message: validation.reason || 'Invalid agent ref',
+              path: ['agent'],
+            },
+          ]);
+        }
+      }
+
       updatedTask = {
         ...freshTask,
         ...restInput,
@@ -721,6 +816,8 @@ export class TaskService {
 
       // Emit telemetry event if status changed
       if (statusChanged) {
+        this.syncAgentRegistryForStatusTransition(updatedTask);
+
         await this.telemetry.emit<TaskTelemetryEvent>({
           type: 'task.status_changed',
           taskId: updatedTask.id,

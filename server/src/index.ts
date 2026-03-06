@@ -17,6 +17,7 @@ import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
@@ -37,6 +38,7 @@ import { requestTimeout } from './middleware/request-timeout.js';
 import {
   authenticate,
   authorize,
+  authorizeWrite,
   authenticateWebSocket,
   validateWebSocketOrigin,
   getAuthStatus,
@@ -269,16 +271,43 @@ app.use(compression({ level: 6, threshold: 1024 }));
 // ============================================
 // Security: CORS Configuration
 // ============================================
+const normalizeOrigin = (origin: string): string => origin.trim().replace(/\/+$/, '');
+
+const parseCorsOrigins = (value: string): string[] =>
+  value
+    .split(',')
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+const buildDefaultDevOrigins = (): string[] => {
+  const hosts = new Set<string>(['localhost', '127.0.0.1']);
+  const hostname = os.hostname().trim().toLowerCase();
+
+  if (hostname) {
+    hosts.add(hostname);
+    if (!hostname.includes('.')) {
+      hosts.add(`${hostname}.local`);
+    }
+  }
+
+  const configuredHost = process.env.HOST?.trim().toLowerCase();
+  if (configuredHost && configuredHost !== '0.0.0.0' && configuredHost !== '::') {
+    hosts.add(configuredHost);
+  }
+
+  const origins: string[] = [];
+  for (const host of hosts) {
+    origins.push(`http://${host}:5173`, `http://${host}:3000`);
+  }
+
+  return origins;
+};
+
 // Allowed origins from environment (comma-separated) or defaults for dev
 const serverPort = process.env.PORT || '3001';
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-  : [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000',
-    ];
+  ? parseCorsOrigins(process.env.CORS_ORIGINS)
+  : buildDefaultDevOrigins();
 // Always allow the server's own origin (for SPA assets served with crossorigin attr)
 for (const host of [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]) {
   if (!ALLOWED_ORIGINS.includes(host)) ALLOWED_ORIGINS.push(host);
@@ -292,7 +321,7 @@ const corsOptions: cors.CorsOptions = {
       return;
     }
 
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes(normalizeOrigin(origin))) {
       callback(null, true);
     } else {
       log.warn({ origin }, 'CORS blocked request from disallowed origin');
@@ -401,6 +430,12 @@ app.use('/api', apiRateLimit);
 app.use('/api', authenticate);
 
 // ============================================
+// Authorization: write access enforcement
+// Read-only roles can perform only GET/HEAD/OPTIONS on API routes.
+// ============================================
+app.use('/api', authorizeWrite);
+
+// ============================================
 // API Versioning Middleware
 // Sets X-API-Version response header and validates requested version
 // ============================================
@@ -472,7 +507,8 @@ if (process.env.NODE_ENV === 'production') {
   // Read index.html once at startup so we can inject the CSP nonce per-request.
   const indexHtml = fs.readFileSync(path.join(webDistPath, 'index.html'), 'utf-8');
 
-  app.get('*', (_req, res, next) => {
+  // Express 5 / path-to-regexp v8+ requires named wildcards (fixes #150)
+  app.get('{*path}', (_req, res, next) => {
     // Don't serve index.html for API routes or WebSocket
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();

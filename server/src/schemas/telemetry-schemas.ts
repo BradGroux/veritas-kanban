@@ -60,6 +60,7 @@ export const TelemetryCountQuerySchema = z.object({
  */
 export const TelemetryBulkQuerySchema = z.object({
   taskIds: z.array(TaskIdSchema).min(1).max(100),
+  perTaskLimit: z.coerce.number().int().positive().max(1000).optional().default(200),
 });
 
 export type TelemetryEventsQuery = z.infer<typeof TelemetryEventsQuerySchema>;

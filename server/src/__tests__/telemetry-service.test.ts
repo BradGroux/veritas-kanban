@@ -212,6 +212,20 @@ describe('TelemetryService', () => {
     });
   });
 
+  describe('getBulkTaskEvents', () => {
+    it('should respect per-task limit guardrails', async () => {
+      for (let i = 0; i < 8; i++) {
+        await service.emit<TaskTelemetryEvent>({ type: 'task.created', taskId: 'task_1' });
+      }
+      await service.emit<TaskTelemetryEvent>({ type: 'task.created', taskId: 'task_2' });
+
+      const eventsByTask = await service.getBulkTaskEvents(['task_1', 'task_2'], 3);
+
+      expect(eventsByTask.get('task_1')?.length).toBe(3);
+      expect(eventsByTask.get('task_2')?.length).toBe(1);
+    });
+  });
+
   describe('clear', () => {
     it('should delete all event files', async () => {
       await service.emit<TaskTelemetryEvent>({ type: 'task.created', taskId: 'task_1' });

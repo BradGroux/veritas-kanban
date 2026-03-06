@@ -1,11 +1,23 @@
-/// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+
+const viteAllowedHostsEnv = process.env.VITE_ALLOWED_HOSTS?.trim();
+const viteAllowedHosts =
+  viteAllowedHostsEnv && viteAllowedHostsEnv.length > 0
+    ? viteAllowedHostsEnv === '*'
+      ? true
+      : viteAllowedHostsEnv
+          .split(',')
+          .map((host) => host.trim())
+          .filter(Boolean)
+    : undefined;
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react()],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  plugins: [react(), tailwindcss() as any],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -38,8 +50,9 @@ export default defineConfig({
     },
   },
   server: {
-    host: process.env.VITE_DEV_HOST || 'localhost',
+    host: process.env.VITE_HOST || undefined,
     port: 3000,
+    allowedHosts: viteAllowedHosts,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

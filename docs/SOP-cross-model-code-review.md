@@ -93,4 +93,38 @@ Store in `prompt-registry/cross-model-review.md`.
 | Reviewer finds high severity bug                | Block task, ping human immediately.               |
 | Author disputes reviewer findings               | Create triage meeting or ask human to adjudicate. |
 
+---
+
+## Review Gates (Veritas Kanban Enforcement)
+
+VK's built-in enforcement gates integrate directly with the cross-model review workflow, turning this SOP from a process suggestion into a structural guarantee:
+
+1. **reviewGate** — Blocks task completion unless all four reviewScores (security, reliability, performance, accessibility) are 10. This is the automated enforcement layer that ensures the cross-model review checklist has been completed rigorously.
+
+2. **closingComments** — Requires a substantive review comment (≥20 characters) before task completion. Ensures the reviewer leaves documented findings, not just scores.
+
+3. **How they work together**:
+   - Author (Model A) completes code; task remains `in-progress`
+   - Reviewer (Model B) runs the cross-model review checklist
+   - Reviewer scores all 4 dimensions via the API: `PATCH /api/tasks/{id}` with `reviewScores`
+   - Reviewer leaves findings as comments (must be ≥20 chars if closingComments enabled)
+   - If reviewGate is enabled, task **cannot** move to `done` until all scores are 10
+   - If closingComments is enabled, at least one substantive comment is required
+
+4. **Enabling gates**:
+
+   ```bash
+   curl -X PATCH http://localhost:3001/api/settings/features \
+     -H 'Content-Type: application/json' \
+     -d '{"enforcement": {"reviewGate": true, "closingComments": true}}'
+   ```
+
+5. **Handling gate failures** — If task completion returns a 400 error with `REVIEW_GATE_FAILED` or `CLOSING_COMMENT_REQUIRED`, the reviewer must address the deficiency (raise a score, add a comment) and retry.
+
+6. **Recommendation**: Enable both `reviewGate` and `closingComments` for production workflows. This transforms the cross-model review from a process suggestion into a structural guarantee—no task can slip through without evidence of a thorough review.
+
+7. Full documentation: See [Enforcement Gates](enforcement.md) for all available gates, configuration options, and API reference.
+
+---
+
 This SOP preserved a 91% accuracy rate in RF-002. Keep following it.

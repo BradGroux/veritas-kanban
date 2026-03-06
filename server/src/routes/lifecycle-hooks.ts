@@ -11,20 +11,37 @@
 
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
-import { getLifecycleHooksService, type LifecycleEvent, type HookAction } from '../services/lifecycle-hooks-service.js';
+import {
+  getLifecycleHooksService,
+  type LifecycleEvent,
+  type HookAction,
+} from '../services/lifecycle-hooks-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError } from '../middleware/error-handler.js';
 
 const router: RouterType = Router();
 
 const EVENTS: LifecycleEvent[] = [
-  'task.created', 'task.started', 'task.blocked', 'task.done',
-  'task.cancelled', 'task.assigned', 'task.commented', 'task.reviewed',
+  'task.created',
+  'task.started',
+  'task.blocked',
+  'task.done',
+  'task.cancelled',
+  'task.assigned',
+  'task.commented',
+  'task.reviewed',
 ];
 
 const ACTIONS: HookAction[] = [
-  'notify', 'log_activity', 'start_time', 'stop_time',
-  'verify_checklist', 'request_context', 'emit_telemetry', 'webhook', 'custom',
+  'notify',
+  'log_activity',
+  'start_time',
+  'stop_time',
+  'verify_checklist',
+  'request_context',
+  'emit_telemetry',
+  'webhook',
+  'custom',
 ];
 
 /**
@@ -50,8 +67,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const service = getLifecycleHooksService();
     const executions = await service.getExecutions({
-      hookId: String(req.query.hookId || ""),
-      taskId: String(req.query.taskId || ""),
+      hookId: String(req.query.hookId || ''),
+      taskId: String(req.query.taskId || ''),
       limit: req.query.limit ? Number(String(req.query.limit)) : 50,
     });
     res.json(executions);
@@ -72,7 +89,7 @@ router.post(
       taskTypeFilter: z.array(z.string()).optional(),
       projectFilter: z.array(z.string()).optional(),
       priorityFilter: z.array(z.string()).optional(),
-      config: z.record(z.unknown()).optional(),
+      config: z.record(z.string(), z.unknown()).optional(),
       order: z.number().int().optional(),
     });
     const data = schema.parse(req.body);
@@ -94,7 +111,7 @@ router.patch(
       taskTypeFilter: z.array(z.string()).optional(),
       projectFilter: z.array(z.string()).optional(),
       priorityFilter: z.array(z.string()).optional(),
-      config: z.record(z.unknown()).optional(),
+      config: z.record(z.string(), z.unknown()).optional(),
       order: z.number().int().optional(),
     });
     const update = schema.parse(req.body);

@@ -92,4 +92,25 @@ Combine MCP + prompt registry to let Claude act as your PM.
 - **Archive page:** Use the full-page Archive (accessible from board navigation) instead of the sidebar for faster search and filtering.
 - **Notifications:** Configure Teams/Slack/webhooks once; agents can trigger them via the API.
 
+---
+
+## v3.3.0 Features
+
+| Feature                       | Quick Usage                                                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task dependencies**         | Set `depends_on`/`blocks` in task detail → Dependencies section. API: `GET /api/tasks/:id/dependencies` for the full graph.                  |
+| **Crash-recovery checkpoint** | `POST /api/tasks/:id/checkpoint` to save state; `GET` to resume. Secrets auto-sanitized. 24h expiry.                                         |
+| **Observational memory**      | `POST /api/observations` with type (decision/blocker/insight/context) + importance (1–10). Search: `GET /api/observations/search?query=...`. |
+| **Agent filter**              | `GET /api/tasks?agent=codex` — filter tasks by assigned agent name.                                                                          |
+
+---
+
+## Workflow Engine (v3.0)
+
+- Define pipelines as YAML in `.veritas-kanban/workflows/`.
+- Start runs: `POST /api/workflows/:id/runs`.
+- Monitor live in the **Workflows** tab or Dashboard.
+- Use tool policies to restrict agent permissions per step.
+- See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full details.
+
 Know a trick that belongs here? Add it and mirror to the knowledge base so agents learn it too.
