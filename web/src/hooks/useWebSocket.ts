@@ -62,9 +62,8 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 20;
 
 function getDefaultWsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // Always use the same host:port as the current page for WebSocket connection
-  // This works for both dev (Vite on :5173) and production (server on :3000/:3001)
-  return `${protocol}//${window.location.host}/ws`;
+  const base = import.meta.env.BASE_URL || '/';
+  return `${protocol}//${window.location.host}${base}ws`;
 }
 
 /**

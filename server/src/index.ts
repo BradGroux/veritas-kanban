@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -303,9 +304,14 @@ const buildDefaultDevOrigins = (): string[] => {
 };
 
 // Allowed origins from environment (comma-separated) or defaults for dev
+const serverPort = process.env.PORT || '3001';
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? parseCorsOrigins(process.env.CORS_ORIGINS)
   : buildDefaultDevOrigins();
+// Always allow the server's own origin (for SPA assets served with crossorigin attr)
+for (const host of [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]) {
+  if (!ALLOWED_ORIGINS.includes(host)) ALLOWED_ORIGINS.push(host);
+}
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
@@ -480,14 +486,16 @@ if (process.env.NODE_ENV === 'production') {
     })
   );
 
-  // All other static files (index.html, favicon, manifest) — always revalidate
+  // All other static files (favicon, manifest) — always revalidate.
+  // index.html is excluded so it always goes through the SPA fallback
+  // handler below, which injects the CSP nonce into <script> tags.
   app.use(
     express.static(webDistPath, {
       maxAge: 0,
       etag: true,
       lastModified: true,
+      index: false, // Don't serve index.html for directory requests
       setHeaders(res, filePath) {
-        // index.html must never be cached stale — it references hashed bundles
         if (filePath.endsWith('.html')) {
           res.set('Cache-Control', 'no-cache');
         }
@@ -496,14 +504,21 @@ if (process.env.NODE_ENV === 'production') {
   );
 
   // SPA fallback: serve index.html for any non-API route
+  // Read index.html once at startup so we can inject the CSP nonce per-request.
+  const indexHtml = fs.readFileSync(path.join(webDistPath, 'index.html'), 'utf-8');
+
   // Express 5 / path-to-regexp v8+ requires named wildcards (fixes #150)
   app.get('{*path}', (_req, res, next) => {
     // Don't serve index.html for API routes or WebSocket
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();
     }
+    const nonce = res.locals.cspNonce as string;
+    // Inject nonce into all <script> tags so they pass the CSP check
+    const html = indexHtml.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`);
     res.set('Cache-Control', 'no-cache');
-    res.sendFile(path.join(webDistPath, 'index.html'));
+    res.set('Content-Type', 'text/html');
+    res.send(html);
   });
 }
 
@@ -551,7 +566,34 @@ let configService: ConfigService | null = null;
 })();
 
 // Create HTTP server
-const server = createServer(app);
+// ── BASE_PATH prefix stripping ────────────────────────────────────
+// When served behind a path-based reverse proxy (e.g. Tailscale Serve at
+// /kanban), the browser sends requests like /kanban/api/v1/tasks.  The
+// proxy strips the prefix before forwarding, but direct localhost access
+// still carries the prefix.  Strip it at the raw HTTP level so Express
+// routes and the WebSocket server see clean paths in both cases.
+const basePath = (process.env.BASE_PATH || '').replace(/\/+$/, '');
+
+/** Boundary-safe prefix match: ensures the char after basePath is '/', '?', or end-of-string */
+function matchesBasePath(url: string): boolean {
+  return url === basePath || url.startsWith(basePath + '/') || url.startsWith(basePath + '?');
+}
+
+const server = createServer((req, res) => {
+  if (basePath && req.url && matchesBasePath(req.url)) {
+    req.url = req.url.slice(basePath.length) || '/';
+  }
+  app(req, res);
+});
+
+// Strip prefix for WebSocket upgrade requests (must run before ws library)
+if (basePath) {
+  server.prependListener('upgrade', (req) => {
+    if (req.url && matchesBasePath(req.url)) {
+      req.url = req.url.slice(basePath.length) || '/';
+    }
+  });
+}
 
 // ============================================
 // WebSocket Server — Real-time Updates

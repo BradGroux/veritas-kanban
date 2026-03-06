@@ -59,13 +59,13 @@ export function TaskDetailPanel({
   const taskSettings = featureSettings.tasks;
   const agentSettings = featureSettings.agents;
   const { localTask, updateField, isDirty } = useDebouncedSave(task);
+  const addObservation = useAddObservation();
+  const deleteObservation = useDeleteObservation();
   const [activeTab, setActiveTab] = useState('details');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [taskChatOpen, setTaskChatOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
-  const addObservation = useAddObservation();
-  const deleteObservation = useDeleteObservation();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
