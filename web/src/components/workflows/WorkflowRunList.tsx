@@ -9,6 +9,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
+import { API_BASE } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -57,7 +58,7 @@ export function WorkflowRunList({ workflowId, onBack }: WorkflowRunListProps) {
   useEffect(() => {
     const fetchRuns = async () => {
       try {
-        const response = await fetch(`/api/workflows/runs?workflowId=${workflowId}`);
+        const response = await fetch(`${API_BASE}/workflows/runs?workflowId=${workflowId}`);
         if (!response.ok) throw new Error('Failed to fetch workflow runs');
         const json = await response.json();
         setRuns(json.data ?? json);

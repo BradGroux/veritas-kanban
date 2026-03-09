@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -57,14 +58,14 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
     const fetchData = async () => {
       try {
         // Fetch available workflows
-        const workflowsRes = await fetch('/api/workflows');
+        const workflowsRes = await fetch(`${API_BASE}/workflows`);
         if (workflowsRes.ok) {
           const wJson = await workflowsRes.json();
           setWorkflows(wJson.data ?? wJson);
         }
 
         // Fetch active runs for this task
-        const runsRes = await fetch(`/api/workflows/runs?taskId=${task.id}`);
+        const runsRes = await fetch(`${API_BASE}/workflows/runs?taskId=${task.id}`);
         if (runsRes.ok) {
           const rJson = await runsRes.json();
           const runs = rJson.data ?? rJson;
@@ -85,7 +86,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const handleStartWorkflow = async (workflowId: string) => {
     setIsStarting(workflowId);
     try {
-      const response = await fetch(`/api/workflows/${workflowId}/runs`, {
+      const response = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId: task.id }),
