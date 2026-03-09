@@ -139,13 +139,14 @@ describe('Detail mutation cache patching (no full-list invalidation)', () => {
    * 3. invalidateQueries was NOT called with ['tasks'] (no full refetch)
    */
   async function assertPatchOnly(
-    hookFn: () => ReturnType<typeof useAddSubtask>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    hookFn: () => { mutate: (...args: any[]) => void; isSuccess: boolean },
     mutateArgs: unknown
   ) {
     const { result } = renderHook(hookFn, { wrapper: makeWrapper(qc) });
 
     await act(async () => {
-      result.current.mutate(mutateArgs as never);
+      result.current.mutate(mutateArgs);
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -161,7 +162,7 @@ describe('Detail mutation cache patching (no full-list invalidation)', () => {
     expect(individualCache).toEqual(updatedTask);
 
     // invalidateQueries should NOT have been called with ['tasks']
-    const tasksInvalidations = invalidateSpy.mock.calls.filter((call) => {
+    const tasksInvalidations = invalidateSpy.mock.calls.filter((call: unknown[]) => {
       const key = (call[0] as { queryKey?: unknown })?.queryKey;
       return Array.isArray(key) && key.length === 1 && key[0] === 'tasks';
     });

@@ -13,9 +13,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@veritas-kanban/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "hono": "^4.12.0",
+    "@veritas-kanban/shared": "workspace:*",
+    "hono": "^4.12.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {
