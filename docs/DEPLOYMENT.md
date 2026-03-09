@@ -8,6 +8,7 @@ This guide covers deploying Veritas Kanban in production using Docker (recommend
 
 - [Quick Start (Docker)](#quick-start-docker)
 - [Docker Configuration](#docker-configuration)
+- [NODE_ENV & Docker](#node_env--docker)
 - [Bare Metal Deployment](#bare-metal-deployment)
   - [Prerequisites](#prerequisites)
   - [Build Steps](#build-steps)
@@ -49,6 +50,8 @@ curl http://localhost:3001/health
 The app is now available at **http://localhost:3001**.
 
 Data is persisted in a Docker named volume (`kanban-data`), so it survives container restarts.
+
+> **⚠️ Important:** Do not set `NODE_ENV=development` in your Docker environment — the UI won't load. See [NODE_ENV & Docker](#node_env--docker) for details.
 
 ---
 
@@ -125,6 +128,86 @@ Make sure the host directory exists and is writable by UID 1001:
 mkdir -p ./data
 chown 1001:1001 ./data
 ```
+
+---
+
+## NODE_ENV & Docker
+
+> **⚠️ Common pitfall:** Setting `NODE_ENV=development` in your `docker-compose.yml` will break the UI. You'll see `Cannot GET /` when visiting the app in your browser. ([#197](https://github.com/BradGroux/veritas-kanban/issues/197))
+
+### How it works
+
+Veritas Kanban uses a **split architecture** during development:
+
+| Mode          | Frontend                             | Backend                       | UI served by                            |
+| ------------- | ------------------------------------ | ----------------------------- | --------------------------------------- |
+| `production`  | Pre-built static files (`web/dist/`) | Express on `:3001`            | **Express** (serves static files + API) |
+| `development` | Vite dev server on `:3000`/`:5173`   | Express on `:3001` (API only) | **Vite** (with HMR, proxy to API)       |
+
+In **development mode**, Express is API-only — it does _not_ serve the frontend. The Vite dev server handles that separately. Inside a Docker container, there's no Vite dev server, so nothing serves the UI at `/`.
+
+The Dockerfile's production stage sets `ENV NODE_ENV=production` by default and builds the frontend into static assets that Express serves directly. **Don't override this with `development`.**
+
+### Docker quick-start (working example)
+
+```yaml
+services:
+  veritas-kanban:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3001:3001'
+    environment:
+      # NODE_ENV defaults to production in the Dockerfile — don't set it to development
+      - PORT=3001
+      - VERITAS_ADMIN_KEY=your-secure-key-here # Required — minimum 32 characters
+      - VERITAS_JWT_SECRET=your-jwt-secret-here # Recommended — sessions won't survive restarts without this
+    volumes:
+      - kanban-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  kanban-data:
+    driver: local
+```
+
+```bash
+# Build and start
+docker compose up -d --build
+
+# Verify health
+curl http://localhost:3001/health
+# → {"status":"ok","timestamp":"..."}
+
+# Open the UI
+open http://localhost:3001
+```
+
+### Required environment variables for Docker
+
+| Variable             | Required    | Description                                                                                 |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| `VERITAS_ADMIN_KEY`  | **Yes**     | Admin API key (≥ 32 chars). Generate: `openssl rand -hex 32`                                |
+| `VERITAS_JWT_SECRET` | Recommended | JWT signing secret. Without it, sessions reset on restart. Generate: `openssl rand -hex 64` |
+| `PORT`               | No          | Defaults to `3001`                                                                          |
+| `NODE_ENV`           | No          | Defaults to `production` in Docker. **Do not set to `development`**                         |
+| `DATA_DIR`           | No          | Defaults to `/app/data`. Map a volume here for persistence                                  |
+
+### When do you use `NODE_ENV=development`?
+
+Only for **local development outside Docker**, where you run both servers:
+
+```bash
+# Terminal 1: API server with hot-reload
+pnpm dev
+
+# This starts:
+#   - Express API on http://localhost:3001
+#   - Vite dev server on http://localhost:3000 (proxies API calls to :3001)
+```
+
+If you need to debug inside a container, use `docker exec` to inspect — don't switch to dev mode.
 
 ---
 
@@ -288,12 +371,12 @@ services:
     environment:
       - TRUST_PROXY=1
     labels:
-      traefik.enable: "true"
+      traefik.enable: 'true'
       traefik.http.routers.kanban.rule: Host(`kanban.example.com`)
       traefik.http.routers.kanban.entrypoints: websecure
-      traefik.http.routers.kanban.tls: "true"
+      traefik.http.routers.kanban.tls: 'true'
       traefik.http.routers.kanban.tls.certresolver: mytlschallenge
-      traefik.http.services.kanban.loadbalancer.server.port: "3001"
+      traefik.http.services.kanban.loadbalancer.server.port: '3001'
 ```
 
 **WebSocket:** Traefik automatically handles WebSocket upgrades when the initial HTTP request includes `Upgrade: websocket` headers — no special configuration is needed.
@@ -333,8 +416,8 @@ the task data and the config directory are on persistent volumes:
 
 ```yaml
 volumes:
-  - kanban-data:/app/data              # Task files
-  - kanban-config:/app/.veritas-kanban  # Config, sprints, enforcement gates
+  - kanban-data:/app/data # Task files
+  - kanban-config:/app/.veritas-kanban # Config, sprints, enforcement gates
 ```
 
 Without a config volume, settings (enforcement gates, transition hooks, sprints) are lost
@@ -410,11 +493,11 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Server Configuration
 
-| Variable    | Default | Description                                                       |
-| ----------- | ------- | ----------------------------------------------------------------- |
-| `PORT`      | `3001`  | HTTP server port                                                  |
-| `NODE_ENV`  | —       | Set to `production` for production deployments                    |
-| `LOG_LEVEL` | `info`  | Log verbosity: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| Variable    | Default | Description                                                                                                                              |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`      | `3001`  | HTTP server port                                                                                                                         |
+| `NODE_ENV`  | —       | **Must be `production` for Docker.** See [NODE_ENV & Docker](#node_env--docker) below. Omit to use the Dockerfile default (`production`) |
+| `LOG_LEVEL` | `info`  | Log verbosity: `trace`, `debug`, `info`, `warn`, `error`, `fatal`                                                                        |
 
 ### Authentication
 
@@ -429,13 +512,13 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Networking & Security
 
-| Variable          | Default                                           | Description                                                                                            |
-| ----------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Variable          | Default                                           | Description                                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TRUST_PROXY`     | —                                                 | Express trust proxy setting for reverse proxy deployments. Common: `1` (single hop), `loopback`. Required for correct rate limiting behind nginx/Caddy/Traefik. `true` is blocked for safety |
-| `CORS_ORIGINS`    | `http://localhost:3000,http://localhost:5173,...` | Comma-separated list of allowed CORS origins                                                           |
-| `RATE_LIMIT_MAX`  | `300`                                             | Max API requests per minute per IP (localhost exempt). Auth endpoints have a stricter 15 req/min limit |
-| `CSP_REPORT_ONLY` | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                           |
-| `CSP_REPORT_URI`  | —                                                 | URL to receive CSP violation reports                                                                   |
+| `CORS_ORIGINS`    | `http://localhost:3000,http://localhost:5173,...` | Comma-separated list of allowed CORS origins                                                                                                                                                 |
+| `RATE_LIMIT_MAX`  | `300`                                             | Max API requests per minute per IP (localhost exempt). Auth endpoints have a stricter 15 req/min limit                                                                                       |
+| `CSP_REPORT_ONLY` | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                                                                                                                 |
+| `CSP_REPORT_URI`  | —                                                 | URL to receive CSP violation reports                                                                                                                                                         |
 
 ### Data & Storage
 
@@ -454,9 +537,9 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Frontend (web/.env)
 
-| Variable         | Default                         | Description                                                   |
-| ---------------- | ------------------------------- | ------------------------------------------------------------- |
-| `VITE_API_URL`   | `/api` (uses Vite proxy in dev) | API base URL. Set if the server runs on a different host/port |
+| Variable         | Default                         | Description                                                                                                                                    |
+| ---------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL`   | `/api` (uses Vite proxy in dev) | API base URL. Set if the server runs on a different host/port                                                                                  |
 | `VITE_BASE_PATH` | `/`                             | Build-time path prefix for sub-path deployments (e.g., `/kanban/`). Sets Vite's `base` config. See [Sub-Path Deployment](#sub-path-deployment) |
 
 ### Authentication Methods
