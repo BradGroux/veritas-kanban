@@ -14,6 +14,8 @@ This guide covers deploying Veritas Kanban in production using Docker (recommend
   - [Running](#running)
   - [Reverse Proxy (nginx)](#reverse-proxy-nginx)
   - [Reverse Proxy (Caddy)](#reverse-proxy-caddy)
+  - [Reverse Proxy (Traefik)](#reverse-proxy-traefik)
+  - [Sub-Path Deployment](#sub-path-deployment)
   - [systemd Service](#systemd-service)
 - [Environment Variables](#environment-variables)
 - [Data & Backup](#data--backup)
@@ -272,6 +274,73 @@ kanban.example.com {
 
 Caddy automatically provisions and renews Let's Encrypt certificates, handles HTTP→HTTPS redirects, and supports WebSocket proxying out of the box.
 
+### Reverse Proxy (Traefik)
+
+When using Traefik as a reverse proxy, set `TRUST_PROXY=1` so Express trusts the
+Traefik hop and correctly handles rate limiting and security logging.
+
+Traefik with Docker labels (add to your `docker-compose.yml`):
+
+```yaml
+services:
+  veritas-kanban:
+    # ... (image, volumes, etc.)
+    environment:
+      - TRUST_PROXY=1
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.kanban.rule: Host(`kanban.example.com`)
+      traefik.http.routers.kanban.entrypoints: websecure
+      traefik.http.routers.kanban.tls: "true"
+      traefik.http.routers.kanban.tls.certresolver: mytlschallenge
+      traefik.http.services.kanban.loadbalancer.server.port: "3001"
+```
+
+**WebSocket:** Traefik automatically handles WebSocket upgrades when the initial HTTP request includes `Upgrade: websocket` headers — no special configuration is needed.
+
+### Sub-Path Deployment
+
+If you need to serve Veritas Kanban under a sub-path (e.g., `https://example.com/kanban/`)
+instead of a dedicated domain, the reverse proxy must strip the prefix before forwarding.
+
+**Traefik with `StripPrefix`:**
+
+```yaml
+labels:
+  traefik.http.routers.kanban.rule: Host(`example.com`) && PathPrefix(`/kanban`)
+  traefik.http.middlewares.kanban-strip.stripprefix.prefixes: /kanban
+  traefik.http.routers.kanban.middlewares: kanban-strip
+```
+
+**Important:** When the reverse proxy strips the prefix, the server sees requests at `/`
+as expected. However, the **frontend** generates URLs starting with `/` (e.g., `/api/tasks`,
+`/ws`), which bypass the reverse proxy's path matching. To fix this, build the frontend
+with the `VITE_BASE_PATH` build argument:
+
+```bash
+docker build --build-arg VITE_BASE_PATH=/kanban/ -t veritas-kanban .
+```
+
+This sets Vite's `base` URL, so the frontend loads assets from `/kanban/assets/...` and
+sends API requests to `/kanban/api/...`.
+
+> **Note:** `VITE_BASE_PATH` support requires PR [#189](https://github.com/BradGroux/veritas-kanban/pull/189)
+> or the equivalent changes to `vite.config.ts`, `web/src/lib/config.ts`, and
+> `web/src/lib/api/helpers.ts`.
+
+**Docker volumes for sub-path:** When using Docker with sub-path deployment, ensure both
+the task data and the config directory are on persistent volumes:
+
+```yaml
+volumes:
+  - kanban-data:/app/data              # Task files
+  - kanban-config:/app/.veritas-kanban  # Config, sprints, enforcement gates
+```
+
+Without a config volume, settings (enforcement gates, transition hooks, sprints) are lost
+on every container rebuild because `.veritas-kanban/` lives on the overlay filesystem, not
+on the data volume.
+
 ### systemd Service
 
 Create `/etc/systemd/system/veritas-kanban.service`:
@@ -362,6 +431,7 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 | Variable          | Default                                           | Description                                                                                            |
 | ----------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `TRUST_PROXY`     | —                                                 | Express trust proxy setting for reverse proxy deployments. Common: `1` (single hop), `loopback`. Required for correct rate limiting behind nginx/Caddy/Traefik. `true` is blocked for safety |
 | `CORS_ORIGINS`    | `http://localhost:3000,http://localhost:5173,...` | Comma-separated list of allowed CORS origins                                                           |
 | `RATE_LIMIT_MAX`  | `300`                                             | Max API requests per minute per IP (localhost exempt). Auth endpoints have a stricter 15 req/min limit |
 | `CSP_REPORT_ONLY` | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                           |
@@ -384,9 +454,10 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Frontend (web/.env)
 
-| Variable       | Default                         | Description                                                   |
-| -------------- | ------------------------------- | ------------------------------------------------------------- |
-| `VITE_API_URL` | `/api` (uses Vite proxy in dev) | API base URL. Set if the server runs on a different host/port |
+| Variable         | Default                         | Description                                                   |
+| ---------------- | ------------------------------- | ------------------------------------------------------------- |
+| `VITE_API_URL`   | `/api` (uses Vite proxy in dev) | API base URL. Set if the server runs on a different host/port |
+| `VITE_BASE_PATH` | `/`                             | Build-time path prefix for sub-path deployments (e.g., `/kanban/`). Sets Vite's `base` config. See [Sub-Path Deployment](#sub-path-deployment) |
 
 ### Authentication Methods
 
@@ -604,6 +675,22 @@ curl -H "X-API-Key: your-admin-key" http://localhost:3001/api/auth/diagnostics
 - Verify `CORS_ORIGINS` includes your frontend URL
 - If behind a reverse proxy, ensure WebSocket upgrade headers are forwarded
 - Check that the proxy timeout is long enough (WebSocket connections are long-lived)
+
+### Rate limiting errors behind a reverse proxy
+
+If you see `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` errors in the logs, it means your reverse
+proxy is sending `X-Forwarded-For` headers but Express doesn't trust them. Fix by setting
+the `TRUST_PROXY` environment variable:
+
+```bash
+# Docker Compose
+environment:
+  - TRUST_PROXY=1    # One proxy hop (nginx, Caddy, or Traefik directly in front)
+  - TRUST_PROXY=2    # Two hops (CDN + reverse proxy)
+```
+
+Without this, the rate limiter uses the proxy's IP instead of the real client IP, causing
+all clients to share a single rate limit bucket.
 
 ### Weak admin key warning at startup
 
