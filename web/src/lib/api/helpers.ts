@@ -73,7 +73,11 @@ export async function handleResponse<T>(response: Response): Promise<T> {
  * Use this in hooks instead of raw `fetch` + `response.json()`.
  */
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+  // When deployed under a sub-path, prefix absolute paths with BASE_URL
+  // so /api/v1/tasks becomes e.g. /kanban/api/v1/tasks.
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  const fullUrl = base && url.startsWith('/') ? base + url : url;
+  const response = await fetch(fullUrl, {
     credentials: 'include',
     ...init,
   });
