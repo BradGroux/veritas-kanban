@@ -9,7 +9,7 @@
 - **Imports**: `@radix-ui/react-*` -> `radix-ui` (unified package)
 - **Components**: All 16 registry components updated to v4 API (function components, `data-slot` attributes)
 - **CSS**: Added `@theme inline` block for Tailwind v4 integration, `tw-animate-css`, `shadcn/tailwind.css`
-- **Font**: Added Geist Variable font (`@fontsource-variable/geist`)
+- **Font**: Preserved original system font stack (`system-ui, Roboto, sans-serif`)
 - **New fields in `components.json`**: `rtl`, `menuColor`, `menuAccent`
 
 ## New CLI Commands (v4)
