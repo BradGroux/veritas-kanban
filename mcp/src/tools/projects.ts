@@ -19,17 +19,19 @@ const ListProjectsSchema = z.object({
   includeHidden: z.boolean().optional(),
 });
 
+const TAILWIND_COLOR_RE = /^[a-z]+-\d{2,3}$/;
+
 const CreateProjectSchema = z.object({
   label: z.string().min(1),
   description: z.string().optional(),
-  color: z.string().optional(),
+  color: z.string().regex(TAILWIND_COLOR_RE).optional(),
 });
 
 const UpdateProjectSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1).optional(),
   description: z.string().optional(),
-  color: z.string().optional(),
+  color: z.string().regex(TAILWIND_COLOR_RE).optional(),
   isHidden: z.boolean().optional(),
 });
 
@@ -86,7 +88,7 @@ export const projectTools = [
         },
         color: {
           type: 'string',
-          description: 'Tailwind bg color class for badges (e.g., "bg-blue-500/20")',
+          description: 'Tailwind color class (e.g., blue-500, emerald-600)',
         },
       },
       required: ['label'],
