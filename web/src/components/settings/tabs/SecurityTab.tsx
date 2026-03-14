@@ -211,7 +211,8 @@ export function SecurityTab() {
                   onClick={async () => {
                     // Call the reset endpoint
                     try {
-                      const res = await fetch('/api/auth/reset', { method: 'POST' });
+                      const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+                      const res = await fetch(`${base}/api/auth/reset`, { method: 'POST' });
                       if (res.ok) {
                         window.location.reload();
                       } else {

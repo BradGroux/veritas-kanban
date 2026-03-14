@@ -13,6 +13,7 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getErrorLearningService, type ErrorType } from '../services/error-learning-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { qStr, qStrD, qNum } from '../lib/query-helpers.js';
 import { NotFoundError } from '../middleware/error-handler.js';
 
 const router: RouterType = Router();
@@ -23,10 +24,22 @@ const submitErrorSchema = z.object({
   taskId: z.string().optional(),
   agent: z.string().optional(),
   errorMessage: z.string().min(1),
-  errorType: z.enum([
-    'runtime', 'api', 'validation', 'timeout', 'permission',
-    'resource', 'model', 'git', 'build', 'test', 'configuration', 'unknown',
-  ]).optional(),
+  errorType: z
+    .enum([
+      'runtime',
+      'api',
+      'validation',
+      'timeout',
+      'permission',
+      'resource',
+      'model',
+      'git',
+      'build',
+      'test',
+      'configuration',
+      'unknown',
+    ])
+    .optional(),
   rawDetails: z.string().optional(),
   attemptDescription: z.string().optional(),
 });
@@ -87,12 +100,12 @@ router.get(
 router.get(
   '/search',
   asyncHandler(async (req, res) => {
-    const q = (req.query.q as string) || '';
+    const q = qStrD(req.query.q, '');
     if (!q) {
       return res.json([]);
     }
     const service = getErrorLearningService();
-    const results = await service.searchSimilar(q, Number(req.query.limit) || 5);
+    const results = await service.searchSimilar(q, qNum(req.query.limit) ?? 5);
     res.json(results);
   })
 );
@@ -106,11 +119,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const service = getErrorLearningService();
     const results = await service.listAnalyses({
-      taskId: req.query.taskId as string,
-      errorType: req.query.errorType as ErrorType | undefined,
-      severity: req.query.severity as string,
-      agent: req.query.agent as string,
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      taskId: qStr(req.query.taskId),
+      errorType: qStr(req.query.errorType) as ErrorType | undefined,
+      severity: qStr(req.query.severity),
+      agent: qStr(req.query.agent),
+      limit: qNum(req.query.limit),
     });
     res.json(results);
   })

@@ -791,7 +791,14 @@ export async function computeTaskCost(
 
   const taskCosts = new Map<
     string,
-    { inputTokens: number; outputTokens: number; totalTokens: number; cost: number; runs: number; totalDurationMs: number }
+    {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      cost: number;
+      runs: number;
+      totalDurationMs: number;
+    }
   >();
 
   for (const filePath of files) {
@@ -902,7 +909,7 @@ export async function computeUtilization(
   period: MetricsPeriod,
   from?: string,
   to?: string,
-  utcOffsetHours?: number,
+  utcOffsetHours?: number
 ): Promise<import('./types.js').UtilizationMetrics> {
   const since = getPeriodStart(period, from);
   const files = await getEventFiles(telemetryDir, since);
@@ -922,7 +929,7 @@ export async function computeUtilization(
           if (to && event.timestamp > to) continue;
 
           if (event.type === 'run.started') {
-            const agent = (event as any).agent || 'unknown';
+            const agent = event.agent || 'unknown';
             runStarts.set(agent, event.timestamp);
           } else if (event.type === 'run.completed') {
             const runEvent = event as RunTelemetryEvent;

@@ -15,6 +15,7 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { FloatingChat } from './components/chat/FloatingChat';
+import { SystemHealthBar } from './components/layout/SystemHealthBar';
 
 // Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
 const ActivityFeed = lazy(() =>
@@ -146,6 +147,7 @@ function AppContent() {
                 <div className="min-h-screen bg-background">
                   <SkipToContent />
                   <Header />
+                  <SystemHealthBar />
                   <main id="main-content" className="mx-auto px-14 py-6" tabIndex={-1}>
                     <ErrorBoundary level="section">
                       <MainContent />

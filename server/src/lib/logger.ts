@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { redactSerializers, PINO_REDACT_PATHS } from './redact.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -9,9 +10,21 @@ const isDev = process.env.NODE_ENV !== 'production';
  * - pino-pretty in development (human-readable, colorized)
  * - Log level controlled via LOG_LEVEL env var (default: 'info')
  * - Includes timestamp, pid, hostname in every log line
+ * - Sensitive fields (auth tokens, API keys, secrets) are automatically
+ *   redacted via custom serializers and pino's built-in redact option.
+ *
+ * @see lib/redact.ts — redaction patterns and serializer definitions
  */
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
+  serializers: {
+    ...pino.stdSerializers,
+    ...redactSerializers,
+  },
+  redact: {
+    paths: PINO_REDACT_PATHS,
+    censor: '[REDACTED]',
+  },
   // pino includes pid and hostname by default in JSON mode.
   // In dev we use pino-pretty as a transport for colorized output.
   ...(isDev

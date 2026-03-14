@@ -3,6 +3,7 @@ import { getTaskService } from '../services/task-service.js';
 import { getSummaryService } from '../services/summary-service.js';
 import { activityService } from '../services/activity-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { qStr, qStrD, qNumD } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -22,7 +23,7 @@ router.get(
 router.get(
   '/recent',
   asyncHandler(async (req, res) => {
-    const hours = parseInt(req.query.hours as string) || 24;
+    const hours = qNumD(req.query.hours, 24);
     const tasks = await taskService.listTasks();
     const recentActivity = summaryService.getRecentActivity(tasks, hours);
     res.json(recentActivity);
@@ -33,7 +34,7 @@ router.get(
 router.get(
   '/memory',
   asyncHandler(async (req, res) => {
-    const hours = parseInt(req.query.hours as string) || 24;
+    const hours = qNumD(req.query.hours, 24);
     const tasks = await taskService.listTasks();
     const markdown = summaryService.generateMemoryMarkdown(tasks, hours);
     res.type('text/markdown').send(markdown);
@@ -44,8 +45,8 @@ router.get(
 router.get(
   '/standup',
   asyncHandler(async (req, res) => {
-    const dateParam = req.query.date as string | undefined;
-    const format = (req.query.format as string) || 'json';
+    const dateParam = qStr(req.query.date);
+    const format = qStrD(req.query.format, 'json');
 
     // Parse target date (defaults to today)
     let targetDate: Date;

@@ -1,7 +1,7 @@
 # Veritas Kanban — API Reference
 
-**Version**: 3.3.3  
-**Last Updated**: 2026-03-02  
+**Version**: 3.4.0  
+**Last Updated**: 2026-03-08  
 **Base URL**: `http://localhost:3001/api`  
 **Canonical prefix**: `/api/v1` (alias: `/api`)
 
@@ -27,10 +27,25 @@
 14. [Telemetry](#telemetry)
 15. [Health](#health)
 16. [WebSocket](#websocket)
-17. [Common Workflows](#common-workflows)
-18. [Versioning & Deprecation](#versioning--deprecation)
-19. [Rate Limits](#rate-limits)
-20. [Additional Endpoint Groups](#additional-endpoint-groups)
+17. [Task Verification](#task-verification)
+18. [Task Comments](#task-comments)
+19. [Task Subtasks](#task-subtasks)
+20. [Task Deliverables](#task-deliverables)
+21. [Task Archive](#task-archive)
+22. [Attachments](#attachments)
+23. [Agent Permissions](#agent-permissions)
+24. [Agent Routing](#agent-routing)
+25. [Shared Resources](#shared-resources)
+26. [Doc Freshness](#doc-freshness)
+27. [Cost Prediction](#cost-prediction)
+28. [Error Learning](#error-learning)
+29. [Tool Policies](#tool-policies)
+30. [Traces](#traces)
+31. [Audit](#audit)
+32. [Common Workflows](#common-workflows)
+33. [Versioning & Deprecation](#versioning--deprecation)
+34. [Rate Limits](#rate-limits)
+35. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -711,6 +726,886 @@ Pass API key as `token` query parameter, or rely on localhost bypass if enabled.
 ```json
 { "type": "agent:status", "status": "working", "activeAgents": [ ... ] }
 ```
+
+---
+
+## Task Verification
+
+Verification step checklists for tasks — define acceptance criteria that must be checked off before a task is considered truly complete.
+
+Mounted at `/api/tasks`.
+
+### Add Verification Step
+
+```
+POST /api/tasks/:id/verification
+```
+
+**Body**:
+
+```json
+{
+  "description": "All unit tests passing"
+}
+```
+
+**Response** `201`: The updated task object with the new verification step added.
+
+### Update Verification Step
+
+```
+PATCH /api/tasks/:id/verification/:stepId
+```
+
+**Body** (partial):
+
+```json
+{
+  "checked": true
+}
+```
+
+When `checked` changes, `checkedAt` is automatically set (or cleared).
+
+**Response** `200`: The updated task object.
+
+### Delete Verification Step
+
+```
+DELETE /api/tasks/:id/verification/:stepId
+```
+
+**Response** `200`: The updated task object with the step removed.
+
+---
+
+## Task Comments
+
+Comment threads on tasks — supports adding, editing, and deleting comments. Comments auto-sync to linked GitHub issues.
+
+Mounted at `/api/tasks`.
+
+### Add Comment
+
+```
+POST /api/tasks/:id/comments
+```
+
+**Body**:
+
+```json
+{
+  "author": "veritas",
+  "text": "Root cause identified — auth middleware skips token refresh"
+}
+```
+
+**Response** `201`: The updated task object with the new comment.
+
+### Edit Comment
+
+```
+PATCH /api/tasks/:id/comments/:commentId
+```
+
+**Body**:
+
+```json
+{
+  "text": "Updated analysis — the issue is in the session store"
+}
+```
+
+### Delete Comment
+
+```
+DELETE /api/tasks/:id/comments/:commentId
+```
+
+---
+
+## Task Subtasks
+
+Break tasks into smaller work items with optional acceptance criteria per subtask.
+
+Mounted at `/api/tasks`.
+
+### Add Subtask
+
+```
+POST /api/tasks/:id/subtasks
+```
+
+**Body**:
+
+```json
+{
+  "title": "Add input validation",
+  "acceptanceCriteria": ["Rejects empty strings", "Returns 400 on invalid input"]
+}
+```
+
+**Response** `201`: The updated task object.
+
+### Update Subtask
+
+```
+PATCH /api/tasks/:id/subtasks/:subtaskId
+```
+
+**Body** (partial):
+
+```json
+{
+  "completed": true
+}
+```
+
+### Delete Subtask
+
+```
+DELETE /api/tasks/:id/subtasks/:subtaskId
+```
+
+### Toggle Acceptance Criterion
+
+```
+PATCH /api/tasks/:id/subtasks/:subtaskId/criteria
+```
+
+**Body**:
+
+```json
+{
+  "criteriaIndex": 0
+}
+```
+
+Toggles the checked state of a specific acceptance criterion on a subtask.
+
+---
+
+## Task Deliverables
+
+Track deliverable artifacts (files, PRs, docs) produced by agents working on a task.
+
+Mounted at `/api/tasks`.
+
+### List Deliverables
+
+```
+GET /api/tasks/:id/deliverables
+```
+
+### Add Deliverable
+
+```
+POST /api/tasks/:id/deliverables
+```
+
+**Body**:
+
+```json
+{
+  "title": "API endpoint implementation",
+  "type": "code",
+  "path": "server/src/routes/new-feature.ts",
+  "agent": "codex-1",
+  "description": "REST endpoints for the new feature"
+}
+```
+
+**Response** `201`: The updated task object.
+
+### Update Deliverable
+
+```
+PATCH /api/tasks/:id/deliverables/:deliverableId
+```
+
+**Body** (partial): Any of `title`, `type`, `path`, `status`, `description`.
+
+### Delete Deliverable
+
+```
+DELETE /api/tasks/:id/deliverables/:deliverableId
+```
+
+---
+
+## Task Archive
+
+Archive completed tasks (by sprint or individually) and restore them. Archived tasks are removed from the active board.
+
+Mounted at `/api/tasks`.
+
+| Method | Path                                | Description                        |
+| ------ | ----------------------------------- | ---------------------------------- |
+| `GET`  | `/api/tasks/archived`               | List all archived tasks            |
+| `GET`  | `/api/tasks/archive/suggestions`    | Get sprints ready for archival     |
+| `POST` | `/api/tasks/archive/sprint/:sprint` | Archive all done tasks in a sprint |
+| `POST` | `/api/tasks/bulk-archive`           | Archive by sprint name             |
+| `POST` | `/api/tasks/bulk-archive-by-ids`    | Archive specific task IDs          |
+| `POST` | `/api/tasks/:id/archive`            | Archive a single task              |
+| `POST` | `/api/tasks/:id/restore`            | Restore a task from archive        |
+
+### Archive by Sprint
+
+```
+POST /api/tasks/archive/sprint/:sprint
+```
+
+Archives all completed tasks in the given sprint.
+
+**Response** `200`:
+
+```json
+{
+  "archived": 5
+}
+```
+
+### Archive Single Task
+
+```
+POST /api/tasks/:id/archive
+```
+
+**Auth**: Requires `admin` or `agent` role. Emits audit log entry.
+
+### Restore Task
+
+```
+POST /api/tasks/:id/restore
+```
+
+Restores an archived task back to active status (`done`).
+
+---
+
+## Attachments
+
+File upload/download for task attachments with automatic text extraction (PDF, DOCX, etc.).
+
+Mounted at `/api/tasks`.
+
+| Method   | Path                                         | Description                      |
+| -------- | -------------------------------------------- | -------------------------------- |
+| `POST`   | `/api/tasks/:id/attachments`                 | Upload files (multipart, max 20) |
+| `GET`    | `/api/tasks/:id/attachments`                 | List all attachments             |
+| `GET`    | `/api/tasks/:id/attachments/:attId`          | Get attachment metadata          |
+| `GET`    | `/api/tasks/:id/attachments/:attId/download` | Download file                    |
+| `GET`    | `/api/tasks/:id/attachments/:attId/text`     | Get extracted text               |
+| `DELETE` | `/api/tasks/:id/attachments/:attId`          | Delete attachment                |
+
+### Upload Attachments
+
+```
+POST /api/tasks/:id/attachments
+Content-Type: multipart/form-data
+```
+
+**Field**: `files` — one or more files (max 20 per request).
+
+Files undergo MIME validation via magic bytes. Text is automatically extracted from supported formats.
+
+**Response** `200`:
+
+```json
+{
+  "attachments": [
+    {
+      "id": "att_abc123",
+      "filename": "design-spec.pdf",
+      "originalName": "design-spec.pdf",
+      "mimeType": "application/pdf",
+      "size": 245000
+    }
+  ],
+  "task": { "..." },
+  "rejected": []
+}
+```
+
+### Get Extracted Text
+
+```
+GET /api/tasks/:id/attachments/:attId/text
+```
+
+**Response** `200`:
+
+```json
+{
+  "attachmentId": "att_abc123",
+  "text": "Extracted document content...",
+  "hasText": true
+}
+```
+
+---
+
+## Agent Permissions
+
+Role-based permission levels for agents: `intern`, `specialist`, `lead`. Interns require approval for certain actions.
+
+Mounted at `/api/agents/permissions`.
+
+| Method  | Path                                    | Description                       |
+| ------- | --------------------------------------- | --------------------------------- |
+| `GET`   | `/api/agents/permissions`               | List all agent permissions        |
+| `GET`   | `/api/agents/permissions/:id`           | Get agent permission config       |
+| `PUT`   | `/api/agents/permissions/:id/level`     | Set permission level              |
+| `PATCH` | `/api/agents/permissions/:id`           | Update permission fields          |
+| `POST`  | `/api/agents/permissions/check`         | Check if agent can perform action |
+| `POST`  | `/api/agents/permissions/approvals`     | Request approval (intern)         |
+| `GET`   | `/api/agents/permissions/approvals`     | List pending approvals            |
+| `POST`  | `/api/agents/permissions/approvals/:id` | Review approval request           |
+
+### Set Permission Level
+
+```
+PUT /api/agents/permissions/:id/level
+```
+
+**Body**:
+
+```json
+{
+  "level": "specialist"
+}
+```
+
+Valid levels: `intern`, `specialist`, `lead`.
+
+### Check Permission
+
+```
+POST /api/agents/permissions/check
+```
+
+**Body**:
+
+```json
+{
+  "agentId": "codex-1",
+  "action": "deploy"
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "allowed": true,
+  "level": "specialist",
+  "requiresApproval": false
+}
+```
+
+### Update Permission Fields
+
+```
+PATCH /api/agents/permissions/:id
+```
+
+**Body** (partial):
+
+```json
+{
+  "trustedDomains": ["github.com"],
+  "canCreateTasks": true,
+  "canDelegate": false,
+  "canApprove": false,
+  "restrictions": ["no-deploy"]
+}
+```
+
+### Request Approval
+
+```
+POST /api/agents/permissions/approvals
+```
+
+Used by intern-level agents to request approval for restricted actions.
+
+### Review Approval
+
+```
+POST /api/agents/permissions/approvals/:id
+```
+
+Approve or reject a pending approval request.
+
+---
+
+## Agent Routing
+
+Automatic agent resolution — determines the best agent for a task based on configurable routing rules.
+
+Mounted at `/api/agents`.
+
+| Method | Path                  | Description                   |
+| ------ | --------------------- | ----------------------------- |
+| `POST` | `/api/agents/route`   | Resolve best agent for a task |
+| `GET`  | `/api/agents/routing` | Get routing configuration     |
+| `PUT`  | `/api/agents/routing` | Update routing configuration  |
+
+### Resolve Agent
+
+```
+POST /api/agents/route
+```
+
+Accepts either a task ID or ad-hoc metadata:
+
+**By task ID**:
+
+```json
+{
+  "taskId": "TASK-001"
+}
+```
+
+**By metadata**:
+
+```json
+{
+  "type": "bug",
+  "priority": "high",
+  "project": "rubicon",
+  "subtaskCount": 3
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "agent": "codex-1",
+  "model": "claude-sonnet-4.5",
+  "rule": "high-priority-bugs",
+  "confidence": 0.95
+}
+```
+
+### Get/Update Routing Configuration
+
+```
+GET /api/agents/routing
+PUT /api/agents/routing
+```
+
+**PUT Body**:
+
+```json
+{
+  "enabled": true,
+  "rules": [
+    {
+      "id": "high-bugs",
+      "name": "High priority bugs",
+      "match": { "type": "bug", "priority": "high" },
+      "agent": "codex-1",
+      "model": "claude-sonnet-4.5",
+      "enabled": true
+    }
+  ],
+  "defaultAgent": "veritas",
+  "fallbackOnFailure": true,
+  "maxRetries": 2
+}
+```
+
+---
+
+## Shared Resources
+
+Registry for shared resources (credentials, config files, API keys, docs) that can be mounted to projects.
+
+Mounted at `/api/shared-resources`.
+
+| Method   | Path                                | Description                                          |
+| -------- | ----------------------------------- | ---------------------------------------------------- |
+| `GET`    | `/api/shared-resources`             | List all (filters: `type`, `project`, `tag`, `name`) |
+| `GET`    | `/api/shared-resources/:id`         | Get one resource                                     |
+| `POST`   | `/api/shared-resources`             | Create resource                                      |
+| `PATCH`  | `/api/shared-resources/:id`         | Update resource                                      |
+| `DELETE` | `/api/shared-resources/:id`         | Delete resource                                      |
+| `POST`   | `/api/shared-resources/:id/mount`   | Mount to project(s)                                  |
+| `POST`   | `/api/shared-resources/:id/unmount` | Unmount from project(s)                              |
+
+### Create Resource
+
+```
+POST /api/shared-resources
+```
+
+**Body**:
+
+```json
+{
+  "name": "Production DB Config",
+  "type": "config",
+  "content": "host=db.example.com\nport=5432",
+  "tags": ["database", "production"],
+  "projectIds": ["rubicon"]
+}
+```
+
+### Mount/Unmount
+
+```
+POST /api/shared-resources/:id/mount
+POST /api/shared-resources/:id/unmount
+```
+
+**Body**:
+
+```json
+{
+  "projectIds": ["rubicon", "brainmeld"]
+}
+```
+
+---
+
+## Doc Freshness
+
+Track documentation freshness — monitor when docs were last reviewed and alert when they go stale.
+
+Mounted at `/api/doc-freshness`.
+
+| Method   | Path                                        | Description                                                  |
+| -------- | ------------------------------------------- | ------------------------------------------------------------ |
+| `GET`    | `/api/doc-freshness`                        | List tracked documents (filters: `project`, `type`, `stale`) |
+| `GET`    | `/api/doc-freshness/:id`                    | Get one tracked document                                     |
+| `POST`   | `/api/doc-freshness`                        | Track a new document                                         |
+| `PATCH`  | `/api/doc-freshness/:id`                    | Update document metadata                                     |
+| `DELETE` | `/api/doc-freshness/:id`                    | Stop tracking                                                |
+| `POST`   | `/api/doc-freshness/:id/review`             | Mark as freshly reviewed                                     |
+| `GET`    | `/api/doc-freshness/alerts`                 | List freshness alerts (filters: `severity`, `acknowledged`)  |
+| `POST`   | `/api/doc-freshness/alerts/:id/acknowledge` | Acknowledge an alert                                         |
+| `GET`    | `/api/doc-freshness/summary`                | Freshness health summary                                     |
+
+### Track a Document
+
+```
+POST /api/doc-freshness
+```
+
+**Body**:
+
+```json
+{
+  "path": "docs/API-REFERENCE.md",
+  "type": "api-reference",
+  "project": "veritas-kanban",
+  "maxAgeDays": 30
+}
+```
+
+### Mark as Reviewed
+
+```
+POST /api/doc-freshness/:id/review
+```
+
+**Body** (optional):
+
+```json
+{
+  "reviewer": "brad",
+  "reviewedAt": "2026-03-08T10:00:00Z"
+}
+```
+
+### Get Freshness Summary
+
+```
+GET /api/doc-freshness/summary
+```
+
+**Response** `200`:
+
+```json
+{
+  "total": 15,
+  "fresh": 12,
+  "stale": 2,
+  "critical": 1,
+  "alertCount": 3
+}
+```
+
+---
+
+## Cost Prediction
+
+Predict token costs for tasks before execution — uses historical telemetry data to estimate.
+
+Mounted at `/api/cost-prediction`.
+
+| Method | Path                                  | Description                             |
+| ------ | ------------------------------------- | --------------------------------------- |
+| `POST` | `/api/cost-prediction/predict`        | Predict cost for a task                 |
+| `GET`  | `/api/cost-prediction/accuracy`       | Prediction accuracy for completed tasks |
+| `GET`  | `/api/cost-prediction/accuracy/stats` | Aggregate accuracy statistics           |
+
+### Predict Cost
+
+```
+POST /api/cost-prediction/predict
+```
+
+**By task ID**:
+
+```json
+{
+  "taskId": "TASK-001"
+}
+```
+
+**By metadata**:
+
+```json
+{
+  "type": "feature",
+  "priority": "high",
+  "project": "rubicon",
+  "description": "Implement OAuth2 flow",
+  "subtaskCount": 5
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "estimatedTokens": 45000,
+  "estimatedCost": 0.85,
+  "estimatedDurationMs": 120000,
+  "confidence": 0.78,
+  "basedOn": 12
+}
+```
+
+### Get Accuracy Stats
+
+```
+GET /api/cost-prediction/accuracy/stats
+```
+
+Returns aggregate statistics on prediction accuracy across all completed tasks.
+
+---
+
+## Error Learning
+
+Structured failure analysis — submit errors, record root causes, and search for similar past errors to avoid repeating mistakes.
+
+Mounted at `/api/errors`.
+
+| Method  | Path                 | Description                                                                  |
+| ------- | -------------------- | ---------------------------------------------------------------------------- |
+| `POST`  | `/api/errors/submit` | Submit an error for analysis                                                 |
+| `GET`   | `/api/errors`        | List analyses (filters: `taskId`, `errorType`, `severity`, `agent`, `limit`) |
+| `GET`   | `/api/errors/:id`    | Get specific analysis                                                        |
+| `PATCH` | `/api/errors/:id`    | Update with root cause & fix                                                 |
+| `GET`   | `/api/errors/stats`  | Aggregate error pattern stats                                                |
+| `GET`   | `/api/errors/search` | Search similar past errors (`?q=<query>`)                                    |
+
+### Submit Error
+
+```
+POST /api/errors/submit
+```
+
+**Body**:
+
+```json
+{
+  "taskId": "TASK-001",
+  "agent": "codex-1",
+  "errorMessage": "ECONNREFUSED 127.0.0.1:5432",
+  "errorType": "resource",
+  "rawDetails": "Full stack trace...",
+  "attemptDescription": "Trying to connect to PostgreSQL"
+}
+```
+
+Valid error types: `runtime`, `api`, `validation`, `timeout`, `permission`, `resource`, `model`, `git`, `build`, `test`, `configuration`, `unknown`.
+
+**Response** `201`: The created error analysis object.
+
+### Update Analysis
+
+```
+PATCH /api/errors/:id
+```
+
+**Body** (partial):
+
+```json
+{
+  "rootCause": "PostgreSQL service not running",
+  "severity": "medium",
+  "chosenFix": "Add health check before DB operations",
+  "preventionSteps": ["Add connection retry logic", "Check service status on startup"],
+  "tags": ["database", "connectivity"]
+}
+```
+
+### Search Similar Errors
+
+```
+GET /api/errors/search?q=ECONNREFUSED&limit=5
+```
+
+Returns past errors similar to the query string — useful for avoiding repeated mistakes.
+
+---
+
+## Tool Policies
+
+Role-based tool access restrictions — control which tools each agent role can use.
+
+Mounted at `/api/tool-policies`.
+
+| Method   | Path                                | Description                           |
+| -------- | ----------------------------------- | ------------------------------------- |
+| `GET`    | `/api/tool-policies`                | List all policies                     |
+| `GET`    | `/api/tool-policies/:role`          | Get policy for a role                 |
+| `POST`   | `/api/tool-policies`                | Create a new policy                   |
+| `PUT`    | `/api/tool-policies/:role`          | Update an existing policy             |
+| `DELETE` | `/api/tool-policies/:role`          | Delete a custom policy                |
+| `POST`   | `/api/tool-policies/:role/validate` | Check if a tool is allowed for a role |
+
+### Create Policy
+
+```
+POST /api/tool-policies
+```
+
+**Body**:
+
+```json
+{
+  "role": "intern",
+  "allowed": ["read", "search", "analyze"],
+  "denied": ["deploy", "delete", "admin"],
+  "description": "Restricted access for intern agents"
+}
+```
+
+### Validate Tool Access
+
+```
+POST /api/tool-policies/:role/validate
+```
+
+**Body**:
+
+```json
+{
+  "tool": "deploy"
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "role": "intern",
+  "tool": "deploy",
+  "allowed": false
+}
+```
+
+---
+
+## Traces
+
+Distributed execution tracing — record and query traces for agent task attempts.
+
+Mounted at `/api/traces`.
+
+| Method | Path                       | Description                 |
+| ------ | -------------------------- | --------------------------- |
+| `GET`  | `/api/traces/status`       | Check if tracing is enabled |
+| `POST` | `/api/traces/enable`       | Enable tracing              |
+| `POST` | `/api/traces/disable`      | Disable tracing             |
+| `GET`  | `/api/traces/:attemptId`   | Get a trace by attempt ID   |
+| `GET`  | `/api/traces/task/:taskId` | List all traces for a task  |
+
+### Check Tracing Status
+
+```
+GET /api/traces/status
+```
+
+**Response** `200`:
+
+```json
+{
+  "enabled": true
+}
+```
+
+### Get Task Traces
+
+```
+GET /api/traces/task/TASK-001
+```
+
+Returns all execution traces associated with the given task.
+
+---
+
+## Audit
+
+Immutable, hash-chained audit log. **Admin only.**
+
+Mounted at `/api/audit`.
+
+| Method | Path                | Description                                              |
+| ------ | ------------------- | -------------------------------------------------------- |
+| `GET`  | `/api/audit`        | Recent audit entries (`?limit=N`, default 100, max 1000) |
+| `GET`  | `/api/audit/verify` | Verify hash chain integrity of current month's log       |
+
+**Auth**: Requires `admin` role.
+
+### Query Audit Log
+
+```
+GET /api/audit?limit=50
+```
+
+**Response** `200`:
+
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2026-03-08T07:00:00Z",
+      "action": "task.archive",
+      "actor": "admin-key",
+      "resource": "TASK-001",
+      "details": { "title": "Fix auth bug" },
+      "hash": "sha256:..."
+    }
+  ],
+  "count": 50
+}
+```
+
+### Verify Integrity
+
+```
+GET /api/audit/verify
+```
+
+Verifies the hash chain of the current month's audit log file. Returns chain validity and any broken links.
 
 ---
 

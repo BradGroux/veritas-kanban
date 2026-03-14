@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText } from '../utils/sanitize.js';
 import type { Task, Observation, ObservationType } from '@veritas-kanban/shared';
+import { qStr, qStrD, qNum, qNumD, paramStr } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -38,7 +39,7 @@ router.post(
       agent = agent.slice(0, 100); // Simple sanitization for agent name
     }
 
-    const task = await taskService.getTask(req.params.id as string);
+    const task = await taskService.getTask(paramStr(req.params.id));
     if (!task) {
       throw new NotFoundError('Task not found');
     }
@@ -53,7 +54,7 @@ router.post(
     };
 
     const observations = [...(task.observations || []), observation];
-    const updatedTask = await taskService.updateTask(req.params.id as string, { observations });
+    const updatedTask = await taskService.updateTask(paramStr(req.params.id), { observations });
 
     // Log activity
     await activityService.logActivity(
@@ -76,7 +77,7 @@ router.post(
 router.get(
   '/:id/observations',
   asyncHandler(async (req, res) => {
-    const task = await taskService.getTask(req.params.id as string);
+    const task = await taskService.getTask(paramStr(req.params.id));
     if (!task) {
       throw new NotFoundError('Task not found');
     }
@@ -84,18 +85,18 @@ router.get(
     let observations = task.observations || [];
 
     // Apply filters
-    const typeFilter = req.query.type as string | undefined;
+    const typeFilter = qStr(req.query.type);
     if (typeFilter) {
       observations = observations.filter((o) => o.type === typeFilter);
     }
 
-    const minScore = req.query.minScore ? parseInt(req.query.minScore as string, 10) : undefined;
-    if (minScore !== undefined && !isNaN(minScore)) {
+    const minScore = qNum(req.query.minScore);
+    if (minScore !== undefined) {
       observations = observations.filter((o) => o.score >= minScore);
     }
 
     // Apply sorting
-    const sort = (req.query.sort as string) || 'newest';
+    const sort = qStrD(req.query.sort, 'newest');
     switch (sort) {
       case 'oldest':
         observations.sort(
@@ -114,8 +115,8 @@ router.get(
     }
 
     // Apply limit
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-    if (limit !== undefined && !isNaN(limit) && limit > 0) {
+    const limit = qNum(req.query.limit);
+    if (limit !== undefined && limit > 0) {
       observations = observations.slice(0, limit);
     }
 
@@ -127,18 +128,18 @@ router.get(
 router.delete(
   '/:id/observations/:obsId',
   asyncHandler(async (req, res) => {
-    const task = await taskService.getTask(req.params.id as string);
+    const task = await taskService.getTask(paramStr(req.params.id));
     if (!task) {
       throw new NotFoundError('Task not found');
     }
 
     const observations = task.observations || [];
-    const filtered = observations.filter((o) => o.id !== (req.params.obsId as string));
+    const filtered = observations.filter((o) => o.id !== paramStr(req.params.obsId));
     if (filtered.length === observations.length) {
       throw new NotFoundError('Observation not found');
     }
 
-    const updatedTask = await taskService.updateTask(req.params.id as string, {
+    const updatedTask = await taskService.updateTask(paramStr(req.params.id), {
       observations: filtered,
     });
 
@@ -147,7 +148,7 @@ router.delete(
       task.id,
       task.title,
       {
-        observationId: req.params.obsId as string,
+        observationId: paramStr(req.params.obsId),
       },
       task.agent
     );
@@ -164,7 +165,7 @@ const observationSearchRouter: RouterType = Router();
 observationSearchRouter.get(
   '/search',
   asyncHandler(async (req, res) => {
-    const query = (req.query.q as string) || '';
+    const query = qStrD(req.query.q, '');
     if (!query || query.trim().length === 0) {
       res.json({ results: [], total: 0 });
       return;
@@ -206,8 +207,8 @@ observationSearchRouter.get(
     });
 
     // Apply pagination
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.min(qNumD(req.query.limit, 50), 200);
+    const offset = qNumD(req.query.offset, 0);
     const paged = results.slice(offset, offset + limit);
 
     res.json({ results: paged, total: results.length });

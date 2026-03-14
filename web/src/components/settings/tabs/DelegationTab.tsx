@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { API_BASE } from '@/lib/config';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -54,7 +55,7 @@ export function DelegationTab() {
   const { data, isLoading } = useQuery<DelegationResponse>({
     queryKey: ['delegation'],
     queryFn: async () => {
-      const res = await fetch('/api/delegation');
+      const res = await fetch(`${API_BASE}/delegation`);
       if (!res.ok) throw new Error('Failed to fetch delegation settings');
       return res.json();
     },
@@ -71,7 +72,7 @@ export function DelegationTab() {
       excludePriorities?: string[];
       createdBy: string;
     }) => {
-      const res = await fetch('/api/delegation', {
+      const res = await fetch(`${API_BASE}/delegation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -101,7 +102,7 @@ export function DelegationTab() {
   // Revoke delegation mutation
   const revokeDelegationMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/delegation', { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/delegation`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to revoke delegation');
       return res.json();
     },

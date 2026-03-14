@@ -1,8 +1,27 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { toast } from '@/hooks/useToast';
 import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
+
+/**
+ * Patch a single task in both the list cache (['tasks']) and the individual
+ * cache (['tasks', id]) using the full task object returned by the server.
+ *
+ * This replaces the previous pattern of `invalidateQueries(['tasks'])` which
+ * triggered a full GET /api/tasks re-fetch — wasteful when the mutation
+ * response already contains the complete updated task. Used by detail-level
+ * mutations (subtasks, comments, observations, verification steps) where
+ * only one task changes and the server returns it in full.
+ */
+function patchTaskInCaches(queryClient: QueryClient, task: Task): void {
+  // Patch the list cache in-place (no network request)
+  queryClient.setQueryData<Task[]>(['tasks'], (old) =>
+    old ? old.map((t) => (t.id === task.id ? task : t)) : old
+  );
+  // Also update the individual task cache
+  queryClient.setQueryData(['tasks', task.id], task);
+}
 
 /**
  * Polling intervals based on WebSocket connection state.
@@ -361,8 +380,7 @@ export function useAddSubtask() {
       acceptanceCriteria?: string[];
     }) => api.tasks.addSubtask(taskId, title, acceptanceCriteria),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -381,8 +399,7 @@ export function useUpdateSubtask() {
       updates: { title?: string; completed?: boolean };
     }) => api.tasks.updateSubtask(taskId, subtaskId, updates),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -394,8 +411,7 @@ export function useDeleteSubtask() {
     mutationFn: ({ taskId, subtaskId }: { taskId: string; subtaskId: string }) =>
       api.tasks.deleteSubtask(taskId, subtaskId),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -414,8 +430,7 @@ export function useToggleSubtaskCriteria() {
       criteriaIndex: number;
     }) => api.tasks.toggleSubtaskCriteria(taskId, subtaskId, criteriaIndex),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -427,8 +442,7 @@ export function useAddVerificationStep() {
     mutationFn: ({ taskId, description }: { taskId: string; description: string }) =>
       api.tasks.addVerificationStep(taskId, description),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -447,8 +461,7 @@ export function useUpdateVerificationStep() {
       updates: { description?: string; checked?: boolean };
     }) => api.tasks.updateVerificationStep(taskId, stepId, updates),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -460,8 +473,7 @@ export function useDeleteVerificationStep() {
     mutationFn: ({ taskId, stepId }: { taskId: string; stepId: string }) =>
       api.tasks.deleteVerificationStep(taskId, stepId),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -473,8 +485,7 @@ export function useAddComment() {
     mutationFn: ({ taskId, author, text }: { taskId: string; author: string; text: string }) =>
       api.tasks.addComment(taskId, author, text),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -493,8 +504,7 @@ export function useEditComment() {
       text: string;
     }) => api.tasks.editComment(taskId, commentId, text),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -506,8 +516,7 @@ export function useDeleteComment() {
     mutationFn: ({ taskId, commentId }: { taskId: string; commentId: string }) =>
       api.tasks.deleteComment(taskId, commentId),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -529,8 +538,7 @@ export function useAddObservation() {
       };
     }) => api.tasks.addObservation(taskId, data),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }
@@ -542,8 +550,7 @@ export function useDeleteObservation() {
     mutationFn: ({ taskId, observationId }: { taskId: string; observationId: string }) =>
       api.tasks.deleteObservation(taskId, observationId),
     onSuccess: (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.setQueryData(['tasks', task.id], task);
+      patchTaskInCaches(queryClient, task);
     },
   });
 }

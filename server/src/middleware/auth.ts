@@ -4,6 +4,9 @@ import { IncomingMessage } from 'http';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getSecurityConfig, getJwtSecret, getValidJwtSecrets } from '../config/security.js';
+import { createLogger } from '../lib/logger.js';
+
+const log = createLogger('auth');
 
 // === Types ===
 
@@ -117,7 +120,7 @@ export function checkAdminKeyStrength(): AdminKeyWarning[] {
   if (WEAK_KEYS.has(adminKey)) {
     warnings.push({
       level: 'critical',
-      message: `Admin key is a known weak default ("${adminKey}"). Generate a strong key: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
+      message: `Admin key is a known weak default. Generate a strong key: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
     });
   } else if (adminKey.length < MIN_KEY_LENGTH) {
     warnings.push({
@@ -155,8 +158,8 @@ function isLocalhostRequest(req: Request | IncomingMessage): boolean {
   if (process.env.NODE_ENV === 'production') {
     const config = getAuthConfig();
     if (config.allowLocalhostBypass) {
-      console.warn(
-        '[auth] Localhost bypass is enabled in production; consider disabling VERITAS_AUTH_LOCALHOST_BYPASS.'
+      log.warn(
+        'Localhost bypass is enabled in production; consider disabling VERITAS_AUTH_LOCALHOST_BYPASS.'
       );
     }
   }

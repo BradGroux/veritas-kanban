@@ -20,9 +20,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 ⭐ **If you find this useful, star the repo — it helps others discover it!**
 
-> **⚠️ Notice:** Repo history was rewritten (backlog purge). If you cloned recently and see weird git behavior, read: https://github.com/BradGroux/veritas-kanban/discussions/85
-
-[Quickstart](#-quickstart) · [Features](#-feature-highlights) · [All Features](docs/FEATURES.md) · [Docs](docs/) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](#-api-versioning) · [Agent Integration](#-agent-integration) · [MCP Server](#-mcp-server) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Quickstart](#-quickstart) · [Features](#-feature-highlights) · [Why VK](#-why-veritas-kanban) · [All Features](docs/FEATURES.md) · [Docs](docs/) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](#-api-versioning) · [Agent Integration](#-agent-integration) · [MCP Server](#-mcp-server) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -102,17 +100,48 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## ✨ Feature Highlights
 
-> 📋 **Full feature reference:** [docs/FEATURES.md](docs/FEATURES.md)
+### 🤖 Agent Orchestration
 
-### 📋 Core Board
+Spawn autonomous coding agents on tasks. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
-![Drag-and-drop Kanban demo](assets/demo-drag_drop.gif)
+![Agent orchestration](assets/demo-overview.gif)
+
+### ⚡ Workflow Engine
+
+Define multi-step agent pipelines as version-controlled YAML. Sequential steps, parallel fan-out/fan-in, loop iteration over collections, gate approvals with human-in-the-loop, and retry routing. Think GitHub Actions — but for AI agents. Live execution view with step-by-step progress. Monitoring dashboard with success rates, active runs, and per-workflow health metrics.
+
+### 📋 Task Intelligence
+
+Not just cards on a board. Tasks have dependency graphs with cycle detection, crash-recovery checkpointing (auto-sanitizes secrets), observational memory with importance scoring, time tracking, and full activity logs. Enforcement gates (review gates, delegation enforcement, auto-telemetry) add production guardrails — all optional, all toggleable.
+
+![Task detail features demo](assets/demo-task.gif)
+
+### 🔀 Git-Native Development
+
+Isolated worktrees per task — no branch switching, no conflicts. Built-in code review with unified diff viewer and inline comments. Approval workflows (approve, request changes, reject). Visual merge conflict resolution. Create GitHub PRs directly from the task detail panel. Bidirectional GitHub Issues sync with label mapping.
+
+### 📁 Zero Infrastructure
+
+Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no Docker, no Redis. Clone, `pnpm install`, `pnpm dev` — done. Everything is `grep`-friendly, version-controllable, and human-readable. Back up your entire board with `git push`.
+
+### 🔌 Three Integration Surfaces
+
+- **MCP Server** — 26 tools across 6 categories via Model Context Protocol
+- **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
+- **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
+
+> 📋 **Full feature reference with every config option:** [docs/FEATURES.md](docs/FEATURES.md)
+
+<details>
+<summary><strong>📋 Complete Feature List</strong></summary>
+
+#### Core Board
 
 - **Drag-and-drop Kanban** — Move tasks across To Do, In Progress, Blocked, Done
 - **Markdown storage** — Human-readable task files with YAML frontmatter
 - **Dark/light mode** — Toggle between dark and light themes in Settings
 
-### 🔀 Code Workflow
+#### Code Workflow
 
 - **Git worktrees** — Isolated branches per task, automatic cleanup
 - **Code review** — Unified diff viewer with inline comments
@@ -120,53 +149,51 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 - **Merge conflicts** — Visual conflict resolution UI
 - **GitHub PRs** — Create pull requests directly from task detail
 
-### 🤖 AI Agents (v2.0)
+#### AI Agents
 
-- **Reverse Proxy Ready** — Deploy behind nginx, Caddy, Traefik, or any reverse proxy with the `TRUST_PROXY` environment variable (v2.1.1)
-- **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events (spawned/completed/failed), model attribution per message, and configurable display names (NEW — v2.0)
-- **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery (NEW — v2.0)
-- **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.) (NEW — v2.0)
-- **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling (NEW — v2.0)
-- **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing (NEW — v2.0)
-- **OpenClaw Integration** — Direct gateway wake for real-time squad chat notifications and agent orchestration (NEW — v2.0)
-- **Squad Chat Webhook** — Configurable webhooks (generic HTTP or OpenClaw Direct) for external agent integration (NEW — v2.0)
-- **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status (NEW — v2.0)
-- **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators (NEW — v2.0)
-- **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips (NEW — v2.0)
-- **@Mention notifications** — @agent-name parsing in comments, thread subscriptions (NEW — v2.0)
-- **Permission levels** — Intern / Specialist / Lead tiers with approval workflows (NEW — v2.0)
-- **Error learning** — Structured failure analysis with similarity search (NEW — v2.0)
-- **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API (NEW — v2.0)
 - **Agent orchestration** — Spawn autonomous coding agents on tasks
 - **Custom agents** — Add your own agents with any name and command; not limited to built-in types
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
-- **Built-in OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot)
+- **Built-in OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw)
+- **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
+- **@Mention notifications** — @agent-name parsing in comments, thread subscriptions
+- **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery
+- **Squad Chat Webhook** — Configurable webhooks (generic HTTP or OpenClaw Direct) for external agent integration
+- **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status
+- **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators
+- **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips
+- **Permission levels** — Intern / Specialist / Lead tiers with approval workflows
+- **Error learning** — Structured failure analysis with similarity search
+- **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API
+- **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.)
+- **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling
+- **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing
+- **OpenClaw Integration** — Direct gateway wake for real-time squad chat notifications and agent orchestration
+- **Reverse Proxy Ready** — Deploy behind nginx, Caddy, Traefik, or any reverse proxy with `TRUST_PROXY`
 - **Multiple attempts** — Retry with different agents, preserve history
 - **Running indicator** — Visual feedback when agents are working
 
-### 🔄 Workflow Engine (v3.0)
+#### Workflow Engine
 
 - **YAML workflow definitions** — Define multi-step agent orchestration pipelines as version-controlled YAML files
 - **Visual execution** — Live run view with step-by-step progress, status indicators, and output preview
 - **Sequential & advanced step types** — Agent steps, loop iteration, gate approval, parallel fan-out/fan-in
-- **Loop steps** — Iterate over collections (subtasks, test cases, stories) with configurable completion policies (all_done, any_done, first_success)
+- **Loop steps** — Iterate over collections with configurable completion policies (all_done, any_done, first_success)
 - **Gate steps** — Conditional blocking with human approval, timeout escalation, and expression-based conditions
 - **Parallel steps** — Execute multiple sub-steps concurrently with completion criteria (all, any, N-of-M)
 - **Run state management** — Persistent run state survives server restarts, retry with exponential backoff, resume blocked runs
 - **Tool policies** — Role-based tool restrictions (5 default roles: planner, developer, reviewer, tester, deployer) with custom role CRUD
-- **Session isolation** — Each workflow step can run in a fresh OpenClaw session with configurable context injection (minimal/full/custom)
-- **Monitoring dashboard** — Summary cards (total, active, completed, failed, success rate, avg duration), live active runs table, recent history, per-workflow health metrics
+- **Session isolation** — Each workflow step runs in a fresh OpenClaw session with configurable context injection
+- **Monitoring dashboard** — Summary cards, live active runs table, recent history, per-workflow health metrics
 - **Real-time updates** — WebSocket-primary with polling fallback; 75% reduction in API calls when connected
-- **Workflow API** — 9 CRUD endpoints for workflow definitions, runs, and control (start, resume, approve gates)
+- **Workflow API** — 9 CRUD endpoints for workflow definitions, runs, and control
 - **Enhanced acceptance criteria** — Regex patterns, JSON path equality checks, substring matching for step validation
 - **Security hardening** — ReDoS protection, expression injection prevention, parallel DoS limits, gate approval validation
 - **Progress file tracking** — Shared `progress.md` per run for context passing between steps
-- **Audit logging** — Every workflow change (create/edit/delete) logged to `.veritas-kanban/workflows/.audit.jsonl`
+- **Audit logging** — Every workflow change logged to `.veritas-kanban/workflows/.audit.jsonl`
 - **RBAC** — Role-based access control for workflow execution, editing, and viewing
 
-### 🛡️ Enforcement Gates
-
-**Optional structural enforcement to harden your workflow** — all gates are disabled by default.
+#### Enforcement Gates
 
 - **squadChat** — Auto-post task lifecycle events to squad chat
 - **reviewGate** — Require 4x10 review scores before task completion
@@ -175,44 +202,38 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 - **autoTimeTracking** — Auto-start/stop timers on status changes
 - **orchestratorDelegation** — Warn when orchestrator does implementation work instead of delegating
 
-All gates are toggleable via `PATCH /api/settings/features` under the `enforcement` key. See [docs/enforcement.md](docs/enforcement.md) for full details, error codes, and agent integration guide.
+#### Visibility & Automation
 
-### 🔄 Visibility & Automation
-
-- **GitHub Issues sync** — Bidirectional sync between GitHub Issues and your board (inbound import, outbound status/comment push)
+- **GitHub Issues sync** — Bidirectional sync between GitHub Issues and your board
 - **Activity page** — Status history with clickable task navigation, color-coded badges, and daily summary
-- **Daily standup summary** — Generate standup reports via API or CLI (`vk summary standup`) with completed, in-progress, blocked, and upcoming sections
+- **Daily standup summary** — Generate standup reports via API or CLI (`vk summary standup`)
 - **Task Templates** — Create reusable templates with defaults, subtasks, and multi-task blueprints
-- **Documentation freshness** — Steward workflow with freshness headers and automated staleness detection (NEW — v2.0)
-- **Cost prediction** — Multi-factor cost estimation for tasks (NEW — v2.0)
+- **Documentation freshness** — Steward workflow with freshness headers and automated staleness detection
+- **Cost prediction** — Multi-factor cost estimation for tasks
 
-### 📊 Dashboard (v2.0)
+#### Dashboard
 
-- **Where Time Went** — Time breakdown by project from telemetry data (NEW — v2.0)
-- **Activity Clock** — 24-hour donut chart showing agent work patterns (NEW — v2.0)
-- **Hourly Activity** — Bar chart with event counts per hour (NEW — v2.0)
-- **Wall Time Toggle** — Total agent time + average run duration (NEW — v2.0)
-- **Session Metrics** — Session count, success rate, completion tracking (NEW — v2.0)
-- **Markdown rendering** — Rich markdown in task descriptions and comments (NEW — v2.0)
-- **Timezone-aware metrics** — Server reports local timezone; clients can request metrics in any timezone via `?tz=` (NEW — v2.0)
+- **Where Time Went** — Time breakdown by project from telemetry data
+- **Activity Clock** — 24-hour donut chart showing agent work patterns
+- **Hourly Activity** — Bar chart with event counts per hour
+- **Wall Time Toggle** — Total agent time + average run duration
+- **Session Metrics** — Session count, success rate, completion tracking
+- **Markdown rendering** — Rich markdown in task descriptions and comments
+- **Timezone-aware metrics** — Server reports local timezone; clients can request metrics in any timezone via `?tz=`
 - **Analytics API** — Timeline visualization and aggregate metrics (parallelism, throughput, lead time)
 
-### 🗂️ Organization
-
-![Task detail features demo](assets/demo-task.gif)
-
-> 🎬 [Watch the task workflow demo (MP4)](assets/demo-task.mp4)
+#### Organization
 
 - **Subtasks** — Break down complex work with progress tracking
-- **Task dependencies** — Bidirectional dependency graph (depends_on/blocks) with cycle detection, recursive tree API, and visual badges (NEW — v3.3)
-- **Crash-recovery checkpointing** — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry, and sub-agent context injection (NEW — v3.3)
-- **Observational memory** — Per-task observations with importance scoring (1-10), full-text search, timeline view, and activity logging (NEW — v3.3)
-- **Agent filter** — Query tasks by agent name with `?agent=name` parameter (NEW — v3.3)
+- **Task dependencies** — Bidirectional dependency graph with cycle detection, recursive tree API, and visual badges
+- **Crash-recovery checkpointing** — Save/resume/clear agent state with auto-sanitization of secrets
+- **Observational memory** — Per-task observations with importance scoring, full-text search, timeline view
+- **Sprint management** — Full sprint CRUD from CLI and MCP with suggestions engine
 - **Archive** — Searchable archive with one-click restore
 - **Time tracking** — Start/stop timer or manual entry
 - **Activity log** — Full history of task events
 
-### ⚙️ Settings & Customization
+#### Settings & Customization
 
 - **Modular settings** — 8 focused tabs (General, Board, Tasks, Agents, Data, Notifications, Security, Manage)
 - **Security hardened** — XSS prevention, path traversal blocking, prototype pollution protection
@@ -221,11 +242,13 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 - **Performance** — Lazy-loaded tabs, memoized components, debounced saves
 - **Import/Export** — Backup and restore all settings with validation
 
-### 🔌 Integration
+#### Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — 26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via Model Context Protocol
+- **MCP Server** — 26 tools across 6 categories via Model Context Protocol
 - **Notifications** — Teams integration for task updates
+
+</details>
 
 ---
 
@@ -246,23 +269,32 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 
 ## 🏆 Why Veritas Kanban?
 
-| Feature                      | Veritas Kanban |   Jira   | Linear |    Plane     |    Planka    |
-| ---------------------------- | :------------: | :------: | :----: | :----------: | :----------: |
-| **Open source**              |     ✅ MIT     |    ❌    |   ❌   |   ✅ AGPL    | ✅ Fair Use  |
-| **Local-first**              |       ✅       |    ❌    |   ❌   | ⚠️ Self-host | ⚠️ Self-host |
-| **AI agent orchestration**   |   ✅ Native    |    ❌    |   ❌   |      ❌      |      ❌      |
-| **MCP server**               |       ✅       |    ❌    |   ❌   |      ❌      |      ❌      |
-| **CLI**                      |       ✅       |    ❌    |   ✅   |      ❌      |      ❌      |
-| **Git worktree integration** |       ✅       |    ❌    |   ❌   |      ❌      |      ❌      |
-| **Code review built-in**     |       ✅       |    ❌    |   ❌   |      ❌      |      ❌      |
-| **Markdown file storage**    |       ✅       |    ❌    |   ❌   |      ❌      |      ❌      |
-| **No database required**     |       ✅       |    ❌    |   ❌   |      ❌      |      ❌      |
-| **Time tracking**            |       ✅       | ✅ Addon |   ❌   |      ✅      |      ❌      |
-| **Real-time WebSocket**      |       ✅       |    ✅    |   ✅   |      ✅      |      ✅      |
-| **REST API**                 |       ✅       |    ✅    |   ✅   |      ✅      |      ✅      |
-| **Free forever**             |       ✅       |    ❌    |   ❌   |  ⚠️ Limits   |      ✅      |
+Most agentic AI tools fall into one of two camps: **orchestration frameworks** that are powerful but invisible (CrewAI, AutoGen, LangGraph) — or **project boards** that look nice but have zero agent awareness (Jira, Linear, Notion).
 
-**Veritas Kanban is built for developers and AI agents.** If your workflow involves autonomous coding agents, git-integrated task management, or you just want a board that stores data as plain files you can `grep` — this is it.
+Veritas Kanban is neither. It's the **visual command center for agentic work** — where you can see what your agents are doing, what they've done, and what they're about to do, with full audit trails and production guardrails.
+
+### What makes VK different
+
+|                                 |           Veritas Kanban            | CrewAI / AutoGen / LangGraph | Jira / Linear / Plane |
+| ------------------------------- | :---------------------------------: | :--------------------------: | :-------------------: |
+| **Visual task board**           |       ✅ Drag-and-drop Kanban       |     ❌ Code-only, no UI      |      ✅ Board UI      |
+| **AI agent orchestration**      |       ✅ Native, multi-model        |       ✅ Core purpose        |   ❌ No agent story   |
+| **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
+| **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
+| **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
+| **MCP server**                  |             ✅ 26 tools             |              ❌              |          ❌           |
+| **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
+| **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
+| **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
+| **Enforcement gates**           |       ✅ 6 configurable gates       |              ❌              |          ❌           |
+| **Time + cost tracking**        |       ✅ Per-task, per-model        |              ❌              |       ⚠️ Basic        |
+| **No database required**        |          ✅ Files on disk           |              ✅              |    ❌ Requires DB     |
+| **Open source**                 |               ✅ MIT                |          ⚠️ Varies           |       ⚠️ Varies       |
+| **Platform-agnostic**           |       ✅ Any agent, any model       |     ⚠️ Framework-locked      |          N/A          |
+
+**The bottom line:** Orchestration frameworks give you agent execution without visibility. Project boards give you visibility without agent execution. Veritas Kanban gives you both — plus the guardrails, telemetry, and audit trails that production agentic work demands.
+
+Built and battle-tested with [OpenClaw](https://github.com/openclaw/openclaw). Works with any platform that can make HTTP calls.
 
 ---
 
@@ -697,10 +729,37 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for what's next. Community contributions welcome!
 
+### Planned: v4.0 — Security & Governance
+
+The next major release focuses on **security, governance, and trust** for production agentic workflows.
+
+- [#178](https://github.com/BradGroux/veritas-kanban/issues/178) — Agent Policy & Guard Engine
+- [#179](https://github.com/BradGroux/veritas-kanban/issues/179) — Decision Audit Trail with Assumption Tracking
+- [#180](https://github.com/BradGroux/veritas-kanban/issues/180) — Agent Output Evaluation & Scoring Framework
+- [#181](https://github.com/BradGroux/veritas-kanban/issues/181) — Behavioral Drift Detection & Alerting
+- [#182](https://github.com/BradGroux/veritas-kanban/issues/182) — User Feedback Loop with Sentiment Analytics
+- [#183](https://github.com/BradGroux/veritas-kanban/issues/183) — Draggable & Resizable Dashboard Widget Grid
+- [#184](https://github.com/BradGroux/veritas-kanban/issues/184) — Prompt Template Registry with Version Control
+- [#185](https://github.com/BradGroux/veritas-kanban/issues/185) — Global System Health Status Bar
+- [#186](https://github.com/BradGroux/veritas-kanban/issues/186) — Upgrade to shadcn/ui CLI v4.0
+
 ### Backlog
 
 - [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1) — Full keyboard navigation, screen reader support, color contrast
 - [Example video](https://github.com/BradGroux/veritas-kanban/issues/68) — Hosted walkthrough video on YouTube or Vimeo
+
+### Shipped in v3.3.x
+
+- ~~[Task Dependencies Graph](https://github.com/BradGroux/veritas-kanban/issues/122)~~ — Bidirectional dependency model with cycle detection, recursive tree API, visual badges
+- ~~[Crash-Recovery Checkpointing](https://github.com/BradGroux/veritas-kanban/issues/123)~~ — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry
+- ~~[Observational Memory](https://github.com/BradGroux/veritas-kanban/issues/124)~~ — Per-task observations with importance scoring (1-10), full-text search, timeline view
+- ~~[Agent Filter](https://github.com/BradGroux/veritas-kanban/issues/125)~~ — Query tasks by agent name with `?agent=name` parameter
+- ~~[Sprint Management CLI + MCP](https://github.com/BradGroux/veritas-kanban/issues/161)~~ — Full sprint CRUD from command line and MCP (list, create, update, delete, close, suggestions)
+- ~~[Task↔Agent State Sync](https://github.com/BradGroux/veritas-kanban/issues/155)~~ — Bi-directional sync engine keeping task state consistent with agent execution
+- ~~Orchestrator Delegation Enforcement~~ — Full enforcement gate with delegation violation reporting
+- ~~Express 5 + Vite 7 + Tailwind 4 + Zod 4 migration~~ — Major dependency upgrades
+- ~~[SSRF Webhook Protection](https://github.com/BradGroux/veritas-kanban/issues/165)~~ — Server-side request forgery safeguards
+- ~~[WebSocket Broadcast Batching](https://github.com/BradGroux/veritas-kanban/issues/167)~~ — Prevents event loop blocking under high-frequency updates
 
 ### Shipped in v3.2.0
 

@@ -240,7 +240,7 @@ export class ConfigService {
         };
       } else {
         // Non-object value (shouldn't happen with current schema, but handle it)
-        merged[section] = patchSection as any;
+        merged[section] = patchSection as Record<string, unknown>;
       }
     }
 

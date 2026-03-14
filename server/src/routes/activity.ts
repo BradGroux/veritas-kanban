@@ -7,6 +7,7 @@ import {
 import { asyncHandler } from '../middleware/async-handler.js';
 import { sendPaginated } from '../middleware/response-envelope.js';
 import { authorize } from '../middleware/auth.js';
+import { qStr, qNumD } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 
@@ -23,15 +24,20 @@ const router: RouterType = Router();
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const page = parseInt(req.query.page as string) || 0;
+    const limit = qNumD(req.query.limit, 50);
+    const page = qNumD(req.query.page, 0);
 
     const filters: ActivityFilters = {};
-    if (req.query.agent) filters.agent = req.query.agent as string;
-    if (req.query.type) filters.type = req.query.type as ActivityType;
-    if (req.query.taskId) filters.taskId = req.query.taskId as string;
-    if (req.query.since) filters.since = req.query.since as string;
-    if (req.query.until) filters.until = req.query.until as string;
+    const agent = qStr(req.query.agent);
+    const type = qStr(req.query.type);
+    const taskId = qStr(req.query.taskId);
+    const since = qStr(req.query.since);
+    const until = qStr(req.query.until);
+    if (agent) filters.agent = agent;
+    if (type) filters.type = type as ActivityType;
+    if (taskId) filters.taskId = taskId;
+    if (since) filters.since = since;
+    if (until) filters.until = until;
 
     const hasFilters = Object.keys(filters).length > 0;
 

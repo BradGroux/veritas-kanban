@@ -14,6 +14,7 @@ import { Router, type Router as RouterType } from 'express';
 import { getDocsService } from '../services/docs-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import { qStr, qStrD, qNum, paramStr } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 
@@ -24,11 +25,13 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const service = getDocsService();
+    const sortBy = qStr(req.query.sortBy);
+    const sortOrder = qStr(req.query.sortOrder);
     const files = await service.listFiles({
-      directory: req.query.directory as string,
-      extension: req.query.extension as string,
-      sortBy: req.query.sortBy as 'name' | 'modified' | 'size' | undefined,
-      sortOrder: req.query.sortOrder as 'asc' | 'desc' | undefined,
+      directory: qStr(req.query.directory),
+      extension: qStr(req.query.extension),
+      sortBy: sortBy === 'name' || sortBy === 'modified' || sortBy === 'size' ? sortBy : undefined,
+      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined,
     });
     res.json(files);
   })
@@ -64,11 +67,11 @@ router.get(
 router.get(
   '/search',
   asyncHandler(async (req, res) => {
-    const q = (req.query.q as string) || '';
+    const q = qStrD(req.query.q, '');
     if (!q) return res.json([]);
     const service = getDocsService();
     const results = await service.search(q, {
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      limit: qNum(req.query.limit),
     });
     res.json(results);
   })
@@ -80,7 +83,7 @@ router.get(
 router.get(
   '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = (req.params as any).path || req.params[0];
+    const filePath = paramStr(req.params.path);
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const service = getDocsService();
@@ -96,7 +99,7 @@ router.get(
 router.put(
   '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = (req.params as any).path || req.params[0];
+    const filePath = paramStr(req.params.path);
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const content = req.body.content;
@@ -116,7 +119,7 @@ router.put(
 router.delete(
   '/file/*path',
   asyncHandler(async (req, res) => {
-    const filePath = (req.params as any).path || req.params[0];
+    const filePath = paramStr(req.params.path);
     if (!filePath) return res.status(400).json({ error: 'File path required' });
 
     const service = getDocsService();

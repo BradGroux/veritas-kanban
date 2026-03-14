@@ -15,7 +15,7 @@ import {
   validateTransition,
 } from '../services/transition-hooks-service.js';
 import { getTaskService } from '../services/task-service.js';
-import type { TransitionHooksConfig, TransitionRule } from '@veritas-kanban/shared';
+import type { TransitionHooksConfig, TransitionRule, TaskStatus } from '@veritas-kanban/shared';
 
 const router: RouterType = Router();
 
@@ -179,6 +179,13 @@ router.post(
       throw new ValidationError('toStatus is required');
     }
 
+    const validStatuses: TaskStatus[] = ['todo', 'in-progress', 'blocked', 'done', 'cancelled'];
+    if (!validStatuses.includes(toStatus as TaskStatus)) {
+      throw new ValidationError(
+        `Invalid status: ${toStatus}. Must be one of: ${validStatuses.join(', ')}`
+      );
+    }
+
     const taskService = getTaskService();
     const task = await taskService.getTask(taskId);
 
@@ -186,7 +193,7 @@ router.post(
       throw new ValidationError('Task not found');
     }
 
-    const result = await validateTransition(task, task.status, toStatus as any);
+    const result = await validateTransition(task, task.status, toStatus as TaskStatus);
 
     res.json({
       success: true,

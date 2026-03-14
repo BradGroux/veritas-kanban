@@ -1,38 +1,71 @@
 # Features
 
-Complete feature reference for Veritas Kanban. For a quick overview, see the [README](../README.md).
+Complete feature reference for Veritas Kanban v3.3. Every feature, every API endpoint, every configuration option.
+
+For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different). For troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 
 ## Table of Contents
 
+### Core
+
 - [Board & Task Management](#board--task-management)
 - [Subtasks & Dependencies](#subtasks--dependencies)
 - [Sprint Management](#sprint-management)
-- [Task Templates](#task-templates-v160)
+- [Task Templates](#task-templates)
+
+### Development
+
 - [Code Workflow](#code-workflow)
-- [AI Agent Integration](#ai-agent-integration)
-- [PRD-Driven Autonomous Development](#prd-driven-autonomous-development)
-- [Multi-Agent System (v2.0)](#multi-agent-system-v200)
-- [Squad Chat (v2.0)](#squad-chat-v200)
-- [Broadcast Notifications (v2.0)](#broadcast-notifications-v200)
-- [Task Deliverables (v2.0)](#task-deliverables-v200)
-- [Efficient Polling (v2.0)](#efficient-polling-v200)
-- [Approval Delegation (v2.0)](#approval-delegation-v200)
-- [Lifecycle Automation (v2.0)](#lifecycle-automation-v200)
 - [GitHub Issues Sync](#github-issues-sync)
+
+### AI Agents
+
+- [Agent Integration](#agent-integration)
+- [Multi-Agent System](#multi-agent-system)
+- [Squad Chat](#squad-chat)
+- [Agent Registry & Dashboard](#agent-registry--dashboard)
+- [PRD-Driven Development](#prd-driven-autonomous-development)
+- [Task↔Agent State Sync](#taskagent-state-sync)
+
+### Workflow Engine
+
+- [YAML Pipelines](#workflow-engine)
+- [Step Types](#step-types)
+- [Run State & Monitoring](#run-state-management)
+- [Tool Policies & Session Isolation](#tool-policies)
+
+### Automation & Monitoring
+
+- [Enforcement Gates](#enforcement-gates)
+- [Broadcast Notifications](#broadcast-notifications)
+- [Task Deliverables](#task-deliverables)
+- [Efficient Polling](#efficient-polling)
+- [Approval Delegation](#approval-delegation)
+- [Lifecycle Hooks](#task-lifecycle-hooks)
 - [Activity Feed](#activity-feed)
 - [Daily Standup](#daily-standup)
+
+### Dashboard & Analytics
+
+- [Dashboard Widgets](#dashboard--analytics)
+- [Telemetry & Metrics](#telemetry--metrics)
+
+### Integration
+
 - [CLI](#cli)
 - [MCP Server](#mcp-server)
+- [REST API](#api)
+- [Notifications](#notifications)
+- [Reverse Proxy](#reverse-proxy-ready)
+
+### Platform
+
 - [Security](#security)
 - [Performance](#performance)
-- [Dashboard & Analytics](#dashboard--analytics)
-- [Settings & Customization](#settings--customization)
-- [API](#api)
-- [Notifications](#notifications)
 - [Storage & Architecture](#storage--architecture)
-- [Reverse Proxy Ready (v2.1.1)](#reverse-proxy-ready-v211)
+- [Settings & Customization](#settings--customization)
 - [Infrastructure & DevOps](#infrastructure--devops)
 - [Testing](#testing)
 - [Accessibility](#accessibility)
@@ -85,7 +118,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
   ![Apply task template](../assets/scr-apply_task_template.png)
 
 - **Blueprint preview** — Preview template output before applying
-- **Markdown editor (v3.2.0)** — Rich markdown editing for task descriptions and comments with formatting toolbar, live preview, keyboard shortcuts (Ctrl+B/I/K), syntax highlighting, and dark mode support. Configurable via Settings → Tasks.
+- **Markdown editor** — Rich markdown editing for task descriptions and comments with formatting toolbar, live preview, keyboard shortcuts (Ctrl+B/I/K), syntax highlighting, and dark mode support. Configurable via Settings → Tasks. Added in v3.2.
 - **Markdown preview** — Live preview panel for task descriptions
 - **Activity log** — Full history of task events (created, updated, status changed, agent started/completed, archived, etc.)
 
@@ -111,7 +144,9 @@ Break down complex work and manage task ordering with bidirectional dependency g
 - **Auto-complete** — Optional: automatically mark parent task as done when all subtasks complete
 - **Delete subtasks** — Remove individual subtasks
 
-### Task Dependencies (v3.3.0)
+### Task Dependencies
+
+Added in v3.3.0.
 
 - **Bidirectional dependency model** — Tasks can both depend_on other tasks and block other tasks
 - **Cycle detection** — DFS algorithm traverses both directions to prevent circular dependency loops
@@ -131,6 +166,8 @@ Break down complex work and manage task ordering with bidirectional dependency g
 
 Organize work into time-boxed iterations.
 
+### Board & UI
+
 - **Sprint assignment** — Assign tasks to named sprints from the task detail panel
 - **Sprint list management** — Create, rename, reorder, and archive sprints through the Manage settings tab
 - **Sprint seed migration** — On first run, sprints are auto-discovered from existing task data
@@ -139,11 +176,41 @@ Organize work into time-boxed iterations.
 - **Sprint filtering** — Filter the archive sidebar by sprint
 - **Sprint labels** — Sprint names displayed on task cards
 
+### CLI Commands
+
+Added in v3.3.2.
+
+| Command                 | Description                                |
+| ----------------------- | ------------------------------------------ |
+| `vk sprint list`        | List sprints (`--hidden` / `--json` flags) |
+| `vk sprint create`      | Create a sprint with optional description  |
+| `vk sprint update`      | Update label, description, or visibility   |
+| `vk sprint delete`      | Delete a sprint (`--force` for non-empty)  |
+| `vk sprint close`       | Archive completed tasks in a sprint        |
+| `vk sprint suggestions` | Show sprints ready to archive              |
+
+Task integration: `vk list -S <sprint>`, `vk create -S <sprint>`, `vk update -S <sprint>`
+
+### MCP Tools
+
+Added in v3.3.2.
+
+| Tool                 | Description                         |
+| -------------------- | ----------------------------------- |
+| `list_sprints`       | List all sprints                    |
+| `create_sprint`      | Create a new sprint                 |
+| `update_sprint`      | Update sprint properties            |
+| `delete_sprint`      | Delete a sprint                     |
+| `close_sprint`       | Archive completed tasks in a sprint |
+| `sprint_suggestions` | Get sprints ready to archive        |
+
+Sprint field also surfaced on `list_tasks`, `create_task`, and `update_task` MCP tools.
+
 ---
 
-## Task Templates (v1.6.0)
+## Task Templates
 
-Create reusable templates for consistent task creation.
+Create reusable templates for consistent task creation. Added in v1.6.
 
 ### Templates Page (`/templates`)
 
@@ -196,7 +263,7 @@ Integrated git workflow from branch creation to merge.
 
 ---
 
-## AI Agent Integration
+## Agent Integration
 
 First-class support for autonomous coding agents.
 
@@ -225,6 +292,125 @@ First-class support for autonomous coding agents.
 
 ---
 
+## Multi-Agent System
+
+Full multi-agent orchestration platform with service discovery, assignment, permissions, and communication. Shipped in v2.0.
+
+### Agent Registry
+
+Service discovery and liveness tracking for AI agents.
+
+- **Self-registration** — Agents register via `POST /api/agents/register` with name, model, role, capabilities
+- **Heartbeat tracking** — Agents send periodic heartbeats; marked offline after configurable timeout (default 5 min)
+- **Status lifecycle** — Online → Busy → Idle → Offline with automatic transitions
+- **Capabilities declaration** — Agents declare what they can do (code-review, research, testing, etc.)
+- **Stats endpoint** — `GET /api/agents/register/stats` returns total, online, busy, idle, offline counts
+- **File-based persistence** — Registry stored in `.veritas-kanban/agent-registry.json`
+
+| Endpoint                                | Method | Description                 |
+| --------------------------------------- | ------ | --------------------------- |
+| `/api/agents/register`                  | POST   | Register or update an agent |
+| `/api/agents/register`                  | GET    | List all registered agents  |
+| `/api/agents/register/stats`            | GET    | Registry statistics         |
+| `/api/agents/register/:id`              | DELETE | Deregister an agent         |
+| `/api/agents/register/:id/heartbeat`    | POST   | Send heartbeat              |
+| `/api/agents/register/:id/capabilities` | GET    | Get agent capabilities      |
+
+### Multi-Agent Dashboard Sidebar
+
+Real-time agent monitoring in the board sidebar.
+
+- **Live status cards** — Expandable cards for each registered agent showing status, model, role, last heartbeat
+- **Color-coded indicators** — Green (working), purple (sub-agent), gray (idle), red (error)
+- **Stats summary bar** — Total, online, busy, idle, offline counts at a glance
+- **Auto-refresh** — Polls registry for live updates
+
+### Multi-Agent Task Assignment
+
+Assign multiple agents to a single task.
+
+- **`agents[]` field** — Tasks support an array of assigned agents
+- **Color-coded chips** — Agent assignments displayed as colored chips in task detail and board cards
+- **Shared helpers** — `@veritas-kanban/shared` utilities for agent color assignment and display
+
+### @Mention Notifications
+
+Directed agent communication in task comments.
+
+- **@agent-name parsing** — Comments parsed for @mentions targeting registered agents
+- **Thread subscriptions** — Agents auto-subscribed to tasks they're mentioned in
+- **Delivery tracking** — Track which notifications have been delivered to which agents
+
+### Agent Permission Levels
+
+Role-based autonomy control for multi-agent teams.
+
+- **Three tiers** — Intern (requires approval), Specialist (autonomous within scope), Lead (full autonomy)
+- **Approval workflows** — Configurable approval requirements per permission level
+- **API enforcement** — Permission checks on agent actions, not just UI display
+
+### Error Learning
+
+Structured failure analysis to prevent recurring issues.
+
+- **Failure recording** — Agent failures stored with structured metadata (error type, context, resolution)
+- **Similarity search** — Find similar past failures to suggest fixes
+- **Stats API** — Aggregate error patterns and frequency analysis
+- **Inspired by** @nateherk's Klouse dashboard concept ("spin up agents to analyze what broke")
+
+### Shared Resources Registry
+
+Reusable resources mountable across projects with full CRUD API and Settings tab management. Added in v3.2.
+
+- **Resource types** — Prompts, guidelines, skills, configs, templates
+- **Resource CRUD** — Define reusable resources via Settings → Shared Resources
+- **Mount/unmount** — Mount resources across projects with full API support
+- **API endpoints** — `/api/shared-resources/*` for create, read, update, delete, mount, and unmount operations
+- **Version control** — Resources stored as files for git version control
+- **Project scoping** — Resources can be global or project-specific
+- **Consistency** — Single source of truth for agent behavior across all projects
+
+### Documentation Freshness
+
+Automated staleness detection for project documentation with real-time tracking and alerting. Added in v3.2.
+
+- **Freshness tracking** — Track document staleness with freshness scores, alerts, and optional auto-review task creation
+- **Freshness headers** — YAML frontmatter with `fresh-days`, `owner`, `last-verified` fields
+- **Steward workflow** — Assigned doc owners responsible for periodic review
+- **Staleness API** — Query which docs need review based on freshness thresholds at `/api/doc-freshness`
+- **Configurable thresholds** — Set staleness thresholds via Settings → Doc Freshness
+- **3-phase automation** — Manual → scheduled checks → CI integration
+- **Inspired by** @mvoutov's BoardKit Orchestrator ("stale docs = hallucinating AI")
+
+---
+
+## Squad Chat
+
+Real-time agent-to-agent communication channel for multi-agent collaboration. Shipped in v2.0.
+
+- **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
+- **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
+- **Model attribution** — Each message tagged with the sending agent's model for provenance tracking
+- **Configurable display names** — Agents set custom display names for chat identity
+- **Squad Chat Webhook** — Configurable webhooks for external integration; supports generic HTTP and OpenClaw Direct modes
+- **OpenClaw Direct gateway wake** — Real-time squad chat notifications pushed to OpenClaw gateway for agent orchestration
+- **Searchable history** — Browse and search past squad chat messages
+
+### API Endpoints
+
+| Endpoint          | Method | Description                 |
+| ----------------- | ------ | --------------------------- |
+| `/api/chat/squad` | POST   | Send a squad chat message   |
+| `/api/chat/squad` | GET    | Retrieve squad chat history |
+
+---
+
+## Agent Registry & Dashboard
+
+See [Multi-Agent System → Agent Registry](#agent-registry) and [Multi-Agent System → Multi-Agent Dashboard Sidebar](#multi-agent-dashboard-sidebar) above.
+
+---
+
 ## PRD-Driven Autonomous Development
 
 Transform product requirements into working code through iterative, quality-gated autonomous execution. An AI agent reads a PRD, breaks it into implementable user stories, autonomously codes each story with quality gates, and iterates until complete—memory preserved through git history and progress files.
@@ -248,9 +434,20 @@ Transform product requirements into working code through iterative, quality-gate
 
 ---
 
-## Crash-Recovery Checkpointing (v3.3.0)
+## Task↔Agent State Sync
 
-Save and resume agent state across crashes and restarts with automatic secret sanitization.
+Bi-directional sync engine keeping task state consistent with agent execution state, with reconciliation to resolve diverged records. Added in v3.3.2.
+
+- **Bi-directional sync** — Task status changes propagate to agent state, and agent state transitions update task status
+- **Reconciliation pass** — Automatic reconciliation detects and resolves diverged task/agent records (e.g., agent marked complete but task still in-progress)
+- **Auth boundary hardening** — Tightened authentication checks on sync routes to prevent unauthorized state manipulation (v3.3.2 fix)
+- **Consistency guarantees** — Prevents orphaned states where a task says "running" but no agent is active, or an agent is "complete" but the task is still in-progress
+
+---
+
+## Crash-Recovery Checkpointing
+
+Save and resume agent state across crashes and restarts with automatic secret sanitization. Added in v3.3.0.
 
 - **Save/resume/clear API** — `POST /api/tasks/:id/checkpoint` (save), `GET /api/tasks/:id/checkpoint` (resume), `DELETE /api/tasks/:id/checkpoint` (clear)
 - **Auto-sanitization of secrets** — Detects and sanitizes 20+ key patterns (API keys, tokens, passwords, etc.) plus regex value detection
@@ -286,9 +483,9 @@ curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
 
 ---
 
-## Observational Memory (v3.3.0)
+## Observational Memory
 
-Capture and search critical insights, decisions, blockers, and context across agent workflows.
+Capture and search critical insights, decisions, blockers, and context across agent workflows. Added in v3.3.0.
 
 - **Add/view/delete observations** — `POST /api/observations`, `GET /api/tasks/:id/observations`, `DELETE /api/observations/:id`
 - **Four observation types** — decision, blocker, insight, context with color-coded badges
@@ -324,20 +521,14 @@ curl http://localhost:3001/api/tasks/US-42/observations
 
 ---
 
-## Agent Filter (v3.3.0)
+## Agent Filter
 
-Query tasks by agent name for precise agent workload tracking.
+Query tasks by agent name for precise agent workload tracking. Added in v3.3.0.
 
 - **Query parameter** — `GET /api/tasks?agent=name` filters tasks assigned to specific agent
 - **Input sanitization** — Agent name trimmed and capped at 100 characters
 - **Pagination compatible** — Works with existing `limit`, `offset`, `status` filters
 - **JSDoc/OpenAPI documented** — Full API documentation in server code
-
-**Use cases:**
-
-- Check what tasks are assigned to "codex" → `GET /api/tasks?agent=codex`
-- Find all "veritas" tasks in "blocked" status → `GET /api/tasks?agent=veritas&status=blocked`
-- Agent workload reporting → query by agent name for analytics
 
 **Example:**
 
@@ -347,234 +538,13 @@ curl "http://localhost:3001/api/tasks?agent=codex"
 
 # Get blocked tasks for agent "veritas"
 curl "http://localhost:3001/api/tasks?agent=veritas&status=blocked"
-
-# Paginated results
-curl "http://localhost:3001/api/tasks?agent=codex&limit=25&offset=0"
 ```
 
 ---
 
-Full multi-agent orchestration platform with service discovery, assignment, permissions, and communication.
+## Workflow Engine
 
-### Agent Registry (#52)
-
-Service discovery and liveness tracking for AI agents.
-
-- **Self-registration** — Agents register via `POST /api/agents/register` with name, model, role, capabilities
-- **Heartbeat tracking** — Agents send periodic heartbeats; marked offline after configurable timeout (default 5 min)
-- **Status lifecycle** — Online → Busy → Idle → Offline with automatic transitions
-- **Capabilities declaration** — Agents declare what they can do (code-review, research, testing, etc.)
-- **Stats endpoint** — `GET /api/agents/register/stats` returns total, online, busy, idle, offline counts
-- **File-based persistence** — Registry stored in `.veritas-kanban/agent-registry.json`
-
-| Endpoint                                | Method | Description                 |
-| --------------------------------------- | ------ | --------------------------- |
-| `/api/agents/register`                  | POST   | Register or update an agent |
-| `/api/agents/register`                  | GET    | List all registered agents  |
-| `/api/agents/register/stats`            | GET    | Registry statistics         |
-| `/api/agents/register/:id`              | DELETE | Deregister an agent         |
-| `/api/agents/register/:id/heartbeat`    | POST   | Send heartbeat              |
-| `/api/agents/register/:id/capabilities` | GET    | Get agent capabilities      |
-
-### Multi-Agent Dashboard Sidebar (#28)
-
-Real-time agent monitoring in the board sidebar.
-
-- **Live status cards** — Expandable cards for each registered agent showing status, model, role, last heartbeat
-- **Color-coded indicators** — Green (working), purple (sub-agent), gray (idle), red (error)
-- **Stats summary bar** — Total, online, busy, idle, offline counts at a glance
-- **Auto-refresh** — Polls registry for live updates
-
-### Multi-Agent Task Assignment (#29)
-
-Assign multiple agents to a single task.
-
-- **`agents[]` field** — Tasks support an array of assigned agents
-- **Color-coded chips** — Agent assignments displayed as colored chips in task detail and board cards
-- **Shared helpers** — `@veritas-kanban/shared` utilities for agent color assignment and display
-
-### @Mention Notifications (#30)
-
-Directed agent communication in task comments.
-
-- **@agent-name parsing** — Comments parsed for @mentions targeting registered agents
-- **Thread subscriptions** — Agents auto-subscribed to tasks they're mentioned in
-- **Delivery tracking** — Track which notifications have been delivered to which agents
-
-### Agent Permission Levels (#31)
-
-Role-based autonomy control for multi-agent teams.
-
-- **Three tiers** — Intern (requires approval), Specialist (autonomous within scope), Lead (full autonomy)
-- **Approval workflows** — Configurable approval requirements per permission level
-- **API enforcement** — Permission checks on agent actions, not just UI display
-
-### Error Learning (#91)
-
-Structured failure analysis to prevent recurring issues.
-
-- **Failure recording** — Agent failures stored with structured metadata (error type, context, resolution)
-- **Similarity search** — Find similar past failures to suggest fixes
-- **Stats API** — Aggregate error patterns and frequency analysis
-- **Inspired by** @nateherk's Klouse dashboard concept ("spin up agents to analyze what broke")
-
-### Shared Resources Registry (v3.2.0)
-
-Reusable resources mountable across projects with full CRUD API and Settings tab management.
-
-- **Resource types** — Prompts, guidelines, skills, configs, templates
-- **Resource CRUD** — Define reusable resources via Settings → Shared Resources
-- **Mount/unmount** — Mount resources across projects with full API support
-- **API endpoints** — `/api/shared-resources/*` for create, read, update, delete, mount, and unmount operations
-- **Version control** — Resources stored as files for git version control
-- **Project scoping** — Resources can be global or project-specific
-- **Consistency** — Single source of truth for agent behavior across all projects
-
-### Documentation Freshness (#74, v3.2.0)
-
-Automated staleness detection for project documentation with real-time tracking and alerting.
-
-- **Freshness tracking** — Track document staleness with freshness scores, alerts, and optional auto-review task creation
-- **Freshness headers** — YAML frontmatter with `fresh-days`, `owner`, `last-verified` fields
-- **Steward workflow** — Assigned doc owners responsible for periodic review
-- **Staleness API** — Query which docs need review based on freshness thresholds at `/api/doc-freshness`
-- **Configurable thresholds** — Set staleness thresholds via Settings → Doc Freshness
-- **3-phase automation** — Manual → scheduled checks → CI integration
-- **Inspired by** @mvoutov's BoardKit Orchestrator ("stale docs = hallucinating AI")
-
----
-
-## Squad Chat (v2.0.0)
-
-Real-time agent-to-agent communication channel for multi-agent collaboration.
-
-- **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
-- **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
-- **Model attribution** — Each message tagged with the sending agent's model for provenance tracking
-- **Configurable display names** — Agents set custom display names for chat identity
-- **Squad Chat Webhook** — Configurable webhooks for external integration; supports generic HTTP and OpenClaw Direct modes
-- **OpenClaw Direct gateway wake** — Real-time squad chat notifications pushed to OpenClaw gateway for agent orchestration
-- **Searchable history** — Browse and search past squad chat messages
-
-### API Endpoints
-
-| Endpoint          | Method | Description                 |
-| ----------------- | ------ | --------------------------- |
-| `/api/chat/squad` | POST   | Send a squad chat message   |
-| `/api/chat/squad` | GET    | Retrieve squad chat history |
-
----
-
-## Broadcast Notifications (v2.0.0)
-
-Priority-based persistent notification system with agent-specific delivery and read receipts.
-
-- **Priority levels** — Notifications carry priority (low, normal, high, urgent) for triage
-- **Agent-specific delivery** — Target notifications to specific agents or broadcast to all
-- **Read receipts** — Track which agents have acknowledged notifications
-- **Persistent storage** — Notifications persisted to disk, survive server restarts
-- **Notification queue** — Unsent notifications queued for batch delivery
-- **Per-event toggles** — Enable/disable notification types in Settings → Notifications
-
-### API Endpoints
-
-| Endpoint                      | Method | Description                             |
-| ----------------------------- | ------ | --------------------------------------- |
-| `/api/notifications`          | POST   | Create a notification                   |
-| `/api/notifications`          | GET    | List notifications (filterable)         |
-| `/api/notifications/:id/read` | POST   | Mark notification as read               |
-| `/api/notifications/pending`  | GET    | Get unsent notifications (Teams format) |
-
----
-
-## Task Deliverables (v2.0.0)
-
-First-class deliverable objects attached to tasks with type and status tracking.
-
-- **Deliverable types** — Code, documentation, data, config, test, and custom types
-- **Status tracking** — Pending, in-progress, complete, and rejected lifecycle
-- **Task association** — Deliverables linked to parent tasks for traceability
-- **Structured metadata** — Each deliverable carries type, status, description, and optional file references
-- **Enforcement gate** — `closingComments` gate can require deliverable summary (≥20 chars) before task completion
-
-### API Endpoints
-
-| Endpoint                           | Method | Description                  |
-| ---------------------------------- | ------ | ---------------------------- |
-| `/api/tasks/:id/deliverables`      | GET    | List deliverables for a task |
-| `/api/tasks/:id/deliverables`      | POST   | Add a deliverable to a task  |
-| `/api/tasks/:id/deliverables/:did` | PUT    | Update a deliverable         |
-| `/api/tasks/:id/deliverables/:did` | DELETE | Remove a deliverable         |
-| `/api/scheduled-deliverables`      | GET    | View scheduled deliverables  |
-
----
-
-## Efficient Polling (v2.0.0)
-
-Optimized change-detection endpoint for agents that poll instead of using WebSocket.
-
-- **Change feed** — `GET /api/changes?since=<ISO timestamp>` returns only tasks modified after the given timestamp
-- **ETag support** — Responses include `ETag` headers; clients send `If-None-Match` to receive `304 Not Modified` when nothing changed
-- **Minimal payload** — Returns only changed task IDs and their new status, reducing bandwidth
-- **Agent-friendly** — Designed for headless agents that cannot maintain WebSocket connections
-- **Complements WebSocket** — Use WebSocket for real-time UI updates; use `/api/changes` for lightweight agent polling
-
-### API Endpoints
-
-| Endpoint                   | Method | Description                                    |
-| -------------------------- | ------ | ---------------------------------------------- |
-| `/api/changes?since=<ISO>` | GET    | Get tasks changed since timestamp (ETag aware) |
-
----
-
-## Approval Delegation (v2.0.0)
-
-Vacation mode with scoped approval delegation and automatic routing.
-
-- **Delegation rules** — Delegate approval authority to another agent or user for a defined period
-- **Scoped delegation** — Restrict delegation to specific projects, task types, or priority levels
-- **Automatic routing** — Approval requests automatically routed to the delegate when the primary approver is unavailable
-- **Vacation mode** — Mark yourself as unavailable; all approvals reroute to your configured delegate
-- **Audit trail** — All delegated approvals logged with both original approver and delegate for accountability
-
----
-
-## Reverse Proxy Ready (v2.1.1)
-
-Deploy Veritas Kanban behind nginx, Caddy, Traefik, or any reverse proxy.
-
-- **`TRUST_PROXY` environment variable** — Set to `true`, `1`, or a comma-separated list of trusted proxy IPs/CIDRs
-- **Correct client IP resolution** — With `TRUST_PROXY` enabled, Express reads the real client IP from `X-Forwarded-For` headers
-- **Secure cookies** — When behind a TLS-terminating proxy, session cookies respect `X-Forwarded-Proto`
-- **Rate limiting accuracy** — Rate limits apply to the real client IP, not the proxy's IP
-- **WebSocket passthrough** — WebSocket connections work through reverse proxies with standard `Upgrade` header forwarding
-
-### Example Configurations
-
-**nginx:**
-
-```nginx
-location / {
-    proxy_pass http://localhost:3001;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-}
-```
-
-**Environment:**
-
-```bash
-TRUST_PROXY=true
-```
-
----
-
-## Workflow Engine (v3.0.0)
-
-A deterministic multi-step agent orchestration system for repeatable, observable, and reliable agent execution. Think GitHub Actions for AI agents.
+A deterministic multi-step agent orchestration system for repeatable, observable, and reliable agent execution. Think GitHub Actions for AI agents. Shipped in v3.0.
 
 ### Overview
 
@@ -707,7 +677,7 @@ Execute a single agent prompt with configurable retries.
 - Acceptance criteria validation (substring, regex, JSON path)
 - Retry routing: retry same step, retry different step, escalate
 
-#### 2. Loop Steps (#112)
+#### 2. Loop Steps
 
 Iterate over collections with progress tracking.
 
@@ -806,6 +776,18 @@ Fan-out/fan-in execution with multiple sub-steps running concurrently.
 - Aggregated JSON output with per-sub-step status and errors
 - Max 50 concurrent sub-steps (soft limit)
 
+### Acceptance Criteria
+
+Step outputs can be validated against acceptance criteria using three formats:
+
+| Format    | Syntax                   | Example                         |
+| --------- | ------------------------ | ------------------------------- |
+| Substring | Plain text               | `'DECISION: approved'`          |
+| Regex     | `/pattern/flags`         | `/^STATUS:\s*done$/i`           |
+| JSON Path | `output.path == "value"` | `output.decision == "approved"` |
+
+All three types are backward-compatible — substring matching was the original format.
+
 ### Run State Management
 
 Every workflow run persists its state to disk, enabling:
@@ -826,7 +808,7 @@ pending → running → completed
                  ↘ blocked (gate failure, escalation)
 ```
 
-### Tool Policies (#110)
+### Tool Policies
 
 Role-based tool restrictions for least-privilege security.
 
@@ -852,7 +834,7 @@ Role-based tool restrictions for least-privilege security.
 - Tool filter passed to OpenClaw `sessions_spawn` (ready for integration)
 - Denied list takes precedence over allowed list
 
-### Session Management (#111)
+### Session Isolation
 
 Each workflow step can run in an isolated OpenClaw session.
 
@@ -880,24 +862,16 @@ session:
 
 **Context injection modes:**
 
-- **`minimal`** — Only task metadata and workflow context
-  - Smallest context window
-  - Best for independent steps
-
-- **`full`** — All previous step outputs + workflow variables
-  - Maximum context
-  - Useful for steps that need comprehensive history
-
-- **`custom`** — Explicitly list which previous steps' outputs to include
-  - Surgical context control
-  - Balance between minimal and full
+- **`minimal`** — Only task metadata and workflow context (smallest context window, best for independent steps)
+- **`full`** — All previous step outputs + workflow variables (maximum context, for steps needing comprehensive history)
+- **`custom`** — Explicitly list which previous steps' outputs to include (surgical context control)
 
 **Cleanup policies:**
 
 - **`delete`** — Terminate session after step completes (recommended for production)
 - **`keep`** — Leave session running for debugging
 
-### Dashboard (#114)
+### Workflow Dashboard
 
 Real-time monitoring for workflow execution.
 
@@ -947,7 +921,7 @@ Real-time monitoring for workflow execution.
 - No extra HTTP fetches needed
 - Multiple clients can watch the same run (collaborative viewing)
 
-### API Endpoints
+### Workflow API Endpoints
 
 | Endpoint                                       | Method | Description                                       |
 | ---------------------------------------------- | ------ | ------------------------------------------------- |
@@ -971,7 +945,7 @@ Real-time monitoring for workflow execution.
 | `/api/tool-policies/:role`                     | DELETE | Delete custom policy (default policies immutable) |
 | `/api/tool-policies/:role/validate`            | POST   | Validate tool access                              |
 
-### Security
+### Workflow Security
 
 - **ReDoS protection** — Regex patterns validated with size/complexity limits
 - **Expression injection prevention** — Template evaluator only supports safe variable access and boolean operators
@@ -980,14 +954,6 @@ Real-time monitoring for workflow execution.
 - **Path traversal protection** — `sanitizeFilename` on all file writes
 - **RBAC** — Role-based access control with ACL files (`.acl.json`)
 - **Audit logging** — All workflow changes logged to `.audit.jsonl`
-
-### Performance
-
-- **~75% reduction in API calls** when WebSocket connected
-- **Progress file size cap** — 10MB limit prevents unbounded growth
-- **Lazy-loaded frontend** — WorkflowsPage, WorkflowDashboard only render when navigated to
-- **Memoized filters** — `useMemo` for filtered workflows/runs
-- **Skeleton loading states** — Shimmer placeholders during data fetch
 
 ### Known Limitations
 
@@ -1009,6 +975,145 @@ Real-time monitoring for workflow execution.
 
 ---
 
+## Enforcement Gates
+
+Structural quality gates that prevent workflow violations. Six gates shipped in v3.1, all disabled by default.
+
+### Available Gates
+
+| Gate                     | What It Enforces                                                        |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `squadChat`              | Agents must post to squad chat at every major step                      |
+| `reviewGate`             | Code tasks must pass 4×10 review scoring before completion              |
+| `closingComments`        | Tasks require a deliverable summary (≥20 chars) before moving to Done   |
+| `autoTelemetry`          | Automatic telemetry event emission on task transitions                  |
+| `autoTimeTracking`       | Automatic time tracking start/stop on status changes                    |
+| `orchestratorDelegation` | Orchestrator agent must delegate work to sub-agents, not do it directly |
+
+### Orchestrator Delegation Enforcement
+
+Added in v3.3.3. Prevents the orchestrator agent from directly editing files or writing code — it must delegate to sub-agents.
+
+- **Orchestrator agent selector** — Dropdown in Settings → Enforcement to select which agent is the orchestrator (populated from enabled agents list)
+- **Active/Inactive badge** — Visual status showing whether delegation enforcement is currently active
+- **Warning banner** — Displays when delegation is enabled but no orchestrator agent is selected
+- **Section auto-disable** — The orchestrator selector section auto-disables when the delegation toggle is off
+- **Zod-validated config** — `orchestratorAgent` field validated as string, max 50 characters
+- **Delegation violation endpoint** — `POST /api/agent/delegation-violation` for reporting violations
+- **Squad chat auto-posting** — Violations automatically posted to squad chat when squad chat enforcement is enabled
+
+### Toast Notifications
+
+Added in v3.3.3. Enhanced error feedback when enforcement gates block an action.
+
+- **Gate-specific titles** — Each gate type shows a distinct title (e.g., "Review Gate", "Closing Comments Required", "Orchestrator Delegation")
+- **Actionable guidance** — Toast messages explain what's needed to satisfy the gate
+- **10-second duration** — Enforcement toasts display for 10 seconds (up from the default 5s) to give users time to read
+- **BulkActionsBar support** — Gate-specific error details surface when bulk move operations are blocked by enforcement
+
+### Dashboard Enforcement Indicator
+
+Added in v3.3.3. At-a-glance enforcement status visible on the dashboard.
+
+- **Shield icon** — Color-coded shield showing active/total gate count (green when all active, amber when partial, gray when none)
+- **Individual gate dots** — Each gate represented as a dot (green = active, gray = off) for quick scanning
+- **Dashboard status bar** — Renders alongside the refresh timestamp in the dashboard header
+
+---
+
+## Broadcast Notifications
+
+Priority-based persistent notification system with agent-specific delivery and read receipts. Shipped in v2.0.
+
+- **Priority levels** — Notifications carry priority (low, normal, high, urgent) for triage
+- **Agent-specific delivery** — Target notifications to specific agents or broadcast to all
+- **Read receipts** — Track which agents have acknowledged notifications
+- **Persistent storage** — Notifications persisted to disk, survive server restarts
+- **Notification queue** — Unsent notifications queued for batch delivery
+- **Per-event toggles** — Enable/disable notification types in Settings → Notifications
+
+### API Endpoints
+
+| Endpoint                      | Method | Description                             |
+| ----------------------------- | ------ | --------------------------------------- |
+| `/api/notifications`          | POST   | Create a notification                   |
+| `/api/notifications`          | GET    | List notifications (filterable)         |
+| `/api/notifications/:id/read` | POST   | Mark notification as read               |
+| `/api/notifications/pending`  | GET    | Get unsent notifications (Teams format) |
+
+---
+
+## Task Deliverables
+
+First-class deliverable objects attached to tasks with type and status tracking. Shipped in v2.0.
+
+- **Deliverable types** — Code, documentation, data, config, test, and custom types
+- **Status tracking** — Pending, in-progress, complete, and rejected lifecycle
+- **Task association** — Deliverables linked to parent tasks for traceability
+- **Structured metadata** — Each deliverable carries type, status, description, and optional file references
+- **Enforcement gate** — `closingComments` gate can require deliverable summary (≥20 chars) before task completion
+
+### API Endpoints
+
+| Endpoint                           | Method | Description                  |
+| ---------------------------------- | ------ | ---------------------------- |
+| `/api/tasks/:id/deliverables`      | GET    | List deliverables for a task |
+| `/api/tasks/:id/deliverables`      | POST   | Add a deliverable to a task  |
+| `/api/tasks/:id/deliverables/:did` | PUT    | Update a deliverable         |
+| `/api/tasks/:id/deliverables/:did` | DELETE | Remove a deliverable         |
+| `/api/scheduled-deliverables`      | GET    | View scheduled deliverables  |
+
+---
+
+## Efficient Polling
+
+Optimized change-detection endpoint for agents that poll instead of using WebSocket. Shipped in v2.0.
+
+- **Change feed** — `GET /api/changes?since=<ISO timestamp>` returns only tasks modified after the given timestamp
+- **ETag support** — Responses include `ETag` headers; clients send `If-None-Match` to receive `304 Not Modified` when nothing changed
+- **Minimal payload** — Returns only changed task IDs and their new status, reducing bandwidth
+- **Agent-friendly** — Designed for headless agents that cannot maintain WebSocket connections
+- **Complements WebSocket** — Use WebSocket for real-time UI updates; use `/api/changes` for lightweight agent polling
+
+### API Endpoints
+
+| Endpoint                   | Method | Description                                    |
+| -------------------------- | ------ | ---------------------------------------------- |
+| `/api/changes?since=<ISO>` | GET    | Get tasks changed since timestamp (ETag aware) |
+
+---
+
+## Approval Delegation
+
+Vacation mode with scoped approval delegation and automatic routing. Shipped in v2.0.
+
+- **Delegation rules** — Delegate approval authority to another agent or user for a defined period
+- **Scoped delegation** — Restrict delegation to specific projects, task types, or priority levels
+- **Automatic routing** — Approval requests automatically routed to the delegate when the primary approver is unavailable
+- **Vacation mode** — Mark yourself as unavailable; all approvals reroute to your configured delegate
+- **Audit trail** — All delegated approvals logged with both original approver and delegate for accountability
+
+---
+
+## Task Lifecycle Hooks
+
+Event-driven automation for task status changes. Shipped in v2.0.
+
+- **7 built-in hooks** — subtask-gate, assignee-required, blocked-reason, done-checklist, auto-archive, time-tracking, notification
+- **8 lifecycle events** — created, status-changed, assigned, commented, time-started, time-stopped, subtask-completed, archived
+- **Custom hooks API** — Register custom hooks that fire on lifecycle events
+- **Hook configuration** — Enable/disable hooks, set parameters, define conditions
+
+| Endpoint            | Method | Description                     |
+| ------------------- | ------ | ------------------------------- |
+| `/api/hooks`        | GET    | List all hooks                  |
+| `/api/hooks`        | POST   | Register custom hook            |
+| `/api/hooks/:id`    | PUT    | Update hook configuration       |
+| `/api/hooks/:id`    | DELETE | Remove hook                     |
+| `/api/hooks/events` | GET    | List available lifecycle events |
+
+---
+
 ## GitHub Issues Sync
 
 Bidirectional sync between GitHub Issues and your Kanban board.
@@ -1017,7 +1122,7 @@ Bidirectional sync between GitHub Issues and your Kanban board.
 - **Outbound sync** — Status changes push back to GitHub: done → close issue, reopen on todo/in-progress/blocked
 - **Comment sync** — Comments are synced between GitHub Issues and task comments
 - **Label mapping** — GitHub labels map to task fields: `priority:high` → priority, `type:story` → type
-- **Circuit breaker** — Automatic failure detection and backoff for GitHub API calls
+- **Circuit breaker** — Automatic failure detection and backoff for GitHub API calls (18 unit tests covering open/half-open/closed transitions, timeout behaviour, and error thresholds — added in v3.3.2)
 - **Polling** — Configurable polling interval for checking new/updated issues
 - **Configuration** — Stored in `.veritas-kanban/integrations.json`; sync state in `.veritas-kanban/github-sync.json`
 - **`TaskGitHub` interface** — Shared type with `{issueNumber, repo, syncedAt?}` fields on synced tasks
@@ -1035,7 +1140,9 @@ Bidirectional sync between GitHub Issues and your Kanban board.
 
 Streamlined activity page focused on status history with real-time updates.
 
-### Activity Page (v1.6.0)
+### Activity Page
+
+Redesigned in v1.6.
 
 - **Full-width status history** — Redesigned layout removes activity feed column, status history spans full width
 - **Clickable task navigation** — Click any status history entry to open the task detail panel
@@ -1075,6 +1182,109 @@ Generate daily standup summary reports via API or CLI.
 
 ---
 
+## Dashboard & Analytics
+
+Real-time project metrics and telemetry.
+
+|                                                       |                                                       |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| ![Metrics overview](../assets/scr-metrics_.png)       | ![Token usage](../assets/scr-metrics_token_usage.png) |
+| ![Failed runs](../assets/scr-metrics_failed_runs.png) | ![Export metrics](../assets/scr-export_metrics.png)   |
+
+### Dashboard Widgets
+
+Shipped in v2.0.
+
+- **Widget toggles** — Show/hide individual widgets via settings gear; preferences persisted in localStorage
+- **Where Time Went** — Time breakdown by project, sourced from task-cost telemetry with color-coded bars
+- **Activity Clock** — 24-hour donut chart showing agent work distribution, sourced from status-history transitions
+- **Hourly Activity Chart** — Bar chart with per-hour event counts from status-history
+- **Wall Time Toggle** — Total Agent Time + Average Run Duration with explanatory info tooltips
+- **Session Metrics** — Session count, success rate, completed/failed/abandoned tracking
+- **Markdown rendering** — Rich markdown in task descriptions and comments via MarkdownText component
+- **Cost prediction** — Multi-factor cost estimation model (tokens, compute, overhead) for task budgeting
+- **Timezone-aware metrics** — Server reports timezone in response `meta`; clients send `?tz=<offset>` for cross-region display
+
+### Dashboard Enforcement Indicator
+
+Added in v3.3.3. At-a-glance enforcement gate status on the dashboard.
+
+- **Shield icon with gate count** — Color-coded: green (all active), amber (partial), gray (none)
+- **Individual gate dots** — Green = active, gray = off for each enforcement gate
+- **Dashboard status bar** — Renders alongside refresh timestamp
+
+### Filter Bar
+
+- **Time preset pills** — Today, 3 Days, 1 Week, 1 Month, WTD, MTD, YTD, All
+- **Custom date range** — From/To date picker for precise filtering
+- **Project filter** — Dropdown to filter by project
+- **Export button** — Quick access to data export
+
+### Analytics API
+
+New endpoints for advanced metrics and visualization (v1.6):
+
+| Endpoint                      | Description                                                         |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `GET /api/analytics/timeline` | Task execution timeline with parallelism snapshots                  |
+| `GET /api/analytics/metrics`  | Aggregate metrics (parallelism, throughput, lead time, utilization) |
+
+**Timeline endpoint returns:**
+
+- Start/end times from time tracking
+- Task assignments and status history
+- Parallelism snapshots (concurrent tasks over time)
+
+**Metrics endpoint returns:**
+
+- Parallelism factor (average concurrent tasks)
+- Throughput (tasks completed per period)
+- Lead time (creation to completion)
+- Agent utilization (working time per agent)
+- Efficiency metrics (tracked vs total time)
+
+### Core Features
+
+- **Task status overview** — Counts for each column with color-coded metric cards
+- **Trend indicators** — Up/down/flat trends with percentage change compared to previous period
+- **Blocked task breakdown** — Blocked task counts by category (feedback, technical snag, prerequisite, other)
+- **Sprint velocity** — Track task completion rate over time
+- **Cost budget tracking** — Token usage and cost metrics with budget cards
+- **Agent comparison** — Side-by-side performance metrics across different AI agents (uses `apiFetch()` to properly unwrap the API envelope)
+- **Drill-down panels** — Click any metric card to drill into tasks, errors, tokens, or duration details; focus rings use `ring-inset` to prevent clipping
+  - **Tasks drill-down** — List of tasks matching the selected metric; clicking a task opens its detail panel (with API fallback for deleted tasks via `open-task` event)
+  - **Errors drill-down** — Failed agent runs with error details
+  - **Tokens drill-down** — Token usage breakdown by agent and task
+  - **Duration drill-down** — Time distribution analysis
+- **Trends charts** — Time-series charts for key metrics; rolling average line in vibrant cyan-teal for contrast with the purple theme; bar chart hover uses subtle muted fill instead of white flash
+- **Status timeline** — Daily Activity (75%) + Recent Status Changes (25%) side-by-side layout
+- **Section collapsing** — Dashboard sections apply `overflow-hidden` only when collapsed
+- **Daily digest** — Summary of the day's activity: tasks completed/created, agent runs, token usage, failures and issues
+- **Task-level metrics** — Per-task panel showing attempt history, token counts, duration, cost, and status timeline
+
+  ![Task metrics](../assets/scr-task_metrics.png)
+
+- **Export dialog** — Export dashboard data for external analysis
+
+  ![Export metrics](../assets/scr-export_metrics.png)
+
+---
+
+## Telemetry & Metrics
+
+Event-based telemetry system powering dashboard analytics.
+
+- **Event types** — `run.started`, `run.completed`, `run.tokens` for tracking agent execution lifecycle
+- **Token tracking** — Input tokens, output tokens, cache tokens, and cost per run
+- **Duration tracking** — Millisecond-precision run duration with 7-day cap validation (604,800,000 ms)
+- **Retention policy** — Configurable retention period (default: 30 days) with automatic cleanup of old events
+- **Compression** — NDJSON event files gzip-compressed after configurable threshold (default: 7 days)
+- **Streaming reads** — Large telemetry files streamed instead of loaded into memory
+- **Per-task metrics** — `GET /api/metrics/:taskId` returns attempt history, token counts, duration, and cost for a specific task
+- **Aggregate metrics** — `GET /api/metrics` returns dashboard-level metrics with time-range filtering
+
+---
+
 ## CLI
 
 The `vk` command-line tool for terminal-first workflows. Manage your entire task lifecycle from the terminal.
@@ -1083,7 +1293,7 @@ The `vk` command-line tool for terminal-first workflows. Manage your entire task
 
 ### Workflow Commands
 
-Composite commands that orchestrate multiple API calls into a single action. Added in v1.4 (#44).
+Composite commands that orchestrate multiple API calls into a single action.
 
 | Command                  | Description                                                        |
 | ------------------------ | ------------------------------------------------------------------ |
@@ -1103,9 +1313,20 @@ Composite commands that orchestrate multiple API calls into a single action. Add
 | `vk create <title>` |       | Create a new task with `--type`, `--priority`, `--project` options |
 | `vk update <id>`    |       | Update task fields (`--status`, `--title`, `--priority`, etc.)     |
 
-### Time Tracking Commands
+### Sprint Commands
 
-Full time management from the terminal. Added in v1.4 (#44).
+Added in v3.3.2.
+
+| Command                 | Description                                |
+| ----------------------- | ------------------------------------------ |
+| `vk sprint list`        | List sprints (`--hidden` / `--json` flags) |
+| `vk sprint create`      | Create a sprint with optional description  |
+| `vk sprint update`      | Update label, description, or visibility   |
+| `vk sprint delete`      | Delete a sprint (`--force` for non-empty)  |
+| `vk sprint close`       | Archive completed tasks in a sprint        |
+| `vk sprint suggestions` | Show sprints ready to archive              |
+
+### Time Tracking Commands
 
 | Command                                      | Description                                                    |
 | -------------------------------------------- | -------------------------------------------------------------- |
@@ -1116,16 +1337,12 @@ Full time management from the terminal. Added in v1.4 (#44).
 
 ### Comment Commands
 
-Add comments to tasks from the terminal. Added in v1.4 (#44).
-
 | Command                               | Description                                    |
 | ------------------------------------- | ---------------------------------------------- |
 | `vk comment <id> "text"`              | Add a comment to a task                        |
 | `vk comment <id> "text" --author Bot` | Add a comment with a custom author attribution |
 
 ### Agent Status Commands
-
-Manage the global agent status indicator from the terminal. Added in v1.4 (#44).
 
 | Command                      | Description                                             |
 | ---------------------------- | ------------------------------------------------------- |
@@ -1135,8 +1352,6 @@ Manage the global agent status indicator from the terminal. Added in v1.4 (#44).
 | `vk agent sub-agent <count>` | Set sub-agent mode with the number of active sub-agents |
 
 ### Project Commands
-
-Manage projects from the terminal. Added in v1.4 (#44).
 
 | Command                                                        | Description                                              |
 | -------------------------------------------------------------- | -------------------------------------------------------- |
@@ -1204,28 +1419,34 @@ vk done <id> "Added OAuth2 with Google and GitHub providers"
 
 ## MCP Server
 
-Model Context Protocol server for AI assistant integration (Claude Desktop, etc.).
+Model Context Protocol server for AI assistant integration (Claude Desktop, etc.). 26 tools across task management, agent orchestration, sprint management, and notifications.
 
 ### Tools
 
-| Tool                        | Description                                          |
-| --------------------------- | ---------------------------------------------------- |
-| `list_tasks`                | List tasks with optional status/type/project filters |
-| `get_task`                  | Get task by ID (supports partial matching)           |
-| `create_task`               | Create a new task                                    |
-| `update_task`               | Update task fields                                   |
-| `archive_task`              | Archive a task                                       |
-| `start_agent`               | Start an AI agent on a code task                     |
-| `stop_agent`                | Stop a running agent                                 |
-| `list_pending_automation`   | List automation tasks awaiting execution             |
-| `list_running_automation`   | List currently running automation tasks              |
-| `start_automation`          | Start an automation task via sub-agent               |
-| `complete_automation`       | Mark automation complete or failed                   |
-| `create_notification`       | Create a notification for Teams delivery             |
-| `get_pending_notifications` | Get unsent notifications formatted for Teams         |
-| `check_notifications`       | Check for tasks needing notification                 |
-| `get_summary`               | Overall kanban summary (status counts, projects)     |
-| `get_memory_summary`        | Task summary formatted for AI memory files           |
+| Tool                        | Description                                                 |
+| --------------------------- | ----------------------------------------------------------- |
+| `list_tasks`                | List tasks with optional status/type/project/sprint filters |
+| `get_task`                  | Get task by ID (supports partial matching)                  |
+| `create_task`               | Create a new task (supports sprint field)                   |
+| `update_task`               | Update task fields (supports sprint field)                  |
+| `archive_task`              | Archive a task                                              |
+| `start_agent`               | Start an AI agent on a code task                            |
+| `stop_agent`                | Stop a running agent                                        |
+| `list_pending_automation`   | List automation tasks awaiting execution                    |
+| `list_running_automation`   | List currently running automation tasks                     |
+| `start_automation`          | Start an automation task via sub-agent                      |
+| `complete_automation`       | Mark automation complete or failed                          |
+| `create_notification`       | Create a notification for Teams delivery                    |
+| `get_pending_notifications` | Get unsent notifications formatted for Teams                |
+| `check_notifications`       | Check for tasks needing notification                        |
+| `get_summary`               | Overall kanban summary (status counts, projects)            |
+| `get_memory_summary`        | Task summary formatted for AI memory files                  |
+| `list_sprints`              | List all sprints                                            |
+| `create_sprint`             | Create a new sprint                                         |
+| `update_sprint`             | Update sprint properties                                    |
+| `delete_sprint`             | Delete a sprint                                             |
+| `close_sprint`              | Archive completed tasks in a sprint                         |
+| `sprint_suggestions`        | Get sprints ready to archive                                |
 
 ### Resources
 
@@ -1279,6 +1500,15 @@ Defense-in-depth security model with multiple authentication methods and hardene
 - **CORS origin validation** — Configurable allowed origins via `CORS_ORIGINS` env var
 - **WebSocket origin validation** — Origin checking on WebSocket upgrade requests
 
+### SSRF Protection
+
+Added in v3.3.3. Server-side request forgery safeguards for all outbound webhook destinations.
+
+- **URL validation** — All webhook URLs validated before outbound requests
+- **Private IP blocking** — Prevents webhooks from targeting internal/private IP ranges (10.x, 172.16-31.x, 192.168.x, localhost, link-local)
+- **DNS rebinding protection** — Resolved hostnames checked against private IP ranges after DNS resolution
+- **Protocol restriction** — Only `http://` and `https://` protocols allowed for webhook targets
+
 ### Data Protection
 
 - **MIME type validation** — Server-side file type validation for uploads via [multer](https://github.com/expressjs/multer)
@@ -1287,7 +1517,7 @@ Defense-in-depth security model with multiple authentication methods and hardene
 - **Credential redaction** — Sensitive fields stripped from task data in API responses
 - **Path traversal protection** — Input validation to prevent directory traversal in file operations
 - **Prototype pollution protection** — Settings validation prevents `__proto__` and constructor injection
-- **Zod schema validation** — All API inputs validated with [Zod](https://zod.dev/) schemas
+- **Zod schema validation** — All API inputs validated with [Zod](https://zod.dev/) schemas (fully migrated to Zod 4 in v3.3.3)
 
 ---
 
@@ -1306,6 +1536,7 @@ Optimizations spanning server, frontend, and data lifecycle.
 - **Telemetry retention** — Configurable retention period (default: 30 days) with automatic cleanup of old events
 - **Telemetry compression** — NDJSON event files gzip-compressed after configurable threshold (default: 7 days)
 - **Cache-control headers** — `Last-Modified` and conditional response support
+- **WebSocket broadcast batching** — Batch broadcasts to prevent event loop blocking under high-frequency update load (added in v3.3.3)
 
 ### Frontend
 
@@ -1315,101 +1546,6 @@ Optimizations spanning server, frontend, and data lifecycle.
 - **Memoized task cards** — Custom `React.memo` comparison function avoids unnecessary re-renders from React Query refetches
 - **Debounced saves** — Task edits debounced to reduce API calls
 - **Loading skeletons** — Board, settings tabs, and dashboard show shimmer placeholders during load
-
----
-
-## Dashboard & Analytics
-
-Real-time project metrics and telemetry.
-
-|                                                       |                                                       |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| ![Metrics overview](../assets/scr-metrics_.png)       | ![Token usage](../assets/scr-metrics_token_usage.png) |
-| ![Failed runs](../assets/scr-metrics_failed_runs.png) | ![Export metrics](../assets/scr-export_metrics.png)   |
-
-### Dashboard Widgets (v2.0.0)
-
-- **Widget toggles** (#92) — Show/hide individual widgets via settings gear; preferences persisted in localStorage
-- **Where Time Went** (#57) — Time breakdown by project, sourced from task-cost telemetry with color-coded bars
-- **Activity Clock** (#58) — 24-hour donut chart showing agent work distribution, sourced from status-history transitions
-- **Hourly Activity Chart** (#59) — Bar chart with per-hour event counts from status-history
-- **Wall Time Toggle** (#60) — Total Agent Time + Average Run Duration with explanatory info tooltips
-- **Session Metrics** (#61) — Session count, success rate, completed/failed/abandoned tracking
-- **Markdown rendering** (#63) — Rich markdown in task descriptions and comments via MarkdownText component
-- **Cost prediction** (#54) — Multi-factor cost estimation model (tokens, compute, overhead) for task budgeting
-- **Timezone-aware metrics** — Server reports timezone in response `meta`; clients send `?tz=<offset>` for cross-region display
-
-### Task Lifecycle Hooks (v2.0.0)
-
-Event-driven automation for task status changes (#72).
-
-- **7 built-in hooks** — subtask-gate, assignee-required, blocked-reason, done-checklist, auto-archive, time-tracking, notification
-- **8 lifecycle events** — created, status-changed, assigned, commented, time-started, time-stopped, subtask-completed, archived
-- **Custom hooks API** — Register custom hooks that fire on lifecycle events
-- **Hook configuration** — Enable/disable hooks, set parameters, define conditions
-
-| Endpoint            | Method | Description                     |
-| ------------------- | ------ | ------------------------------- |
-| `/api/hooks`        | GET    | List all hooks                  |
-| `/api/hooks`        | POST   | Register custom hook            |
-| `/api/hooks/:id`    | PUT    | Update hook configuration       |
-| `/api/hooks/:id`    | DELETE | Remove hook                     |
-| `/api/hooks/events` | GET    | List available lifecycle events |
-
-### Filter Bar (v1.6.0)
-
-- **Time preset pills** — Today, 3 Days, 1 Week, 1 Month, WTD, MTD, YTD, All
-- **Custom date range** — From/To date picker for precise filtering
-- **Project filter** — Dropdown to filter by project
-- **Export button** — Quick access to data export
-
-### Analytics API (v1.6.0)
-
-New endpoints for advanced metrics and visualization:
-
-| Endpoint                      | Description                                                         |
-| ----------------------------- | ------------------------------------------------------------------- |
-| `GET /api/analytics/timeline` | Task execution timeline with parallelism snapshots                  |
-| `GET /api/analytics/metrics`  | Aggregate metrics (parallelism, throughput, lead time, utilization) |
-
-**Timeline endpoint returns:**
-
-- Start/end times from time tracking
-- Task assignments and status history
-- Parallelism snapshots (concurrent tasks over time)
-
-**Metrics endpoint returns:**
-
-- Parallelism factor (average concurrent tasks)
-- Throughput (tasks completed per period)
-- Lead time (creation to completion)
-- Agent utilization (working time per agent)
-- Efficiency metrics (tracked vs total time)
-
-### Core Features
-
-- **Task status overview** — Counts for each column with color-coded metric cards
-- **Trend indicators** — Up/down/flat trends with percentage change compared to previous period
-- **Blocked task breakdown** — Blocked task counts by category (feedback, technical snag, prerequisite, other)
-- **Sprint velocity** — Track task completion rate over time
-- **Cost budget tracking** — Token usage and cost metrics with budget cards
-- **Agent comparison** — Side-by-side performance metrics across different AI agents (uses `apiFetch()` to properly unwrap the API envelope)
-- **Drill-down panels** — Click any metric card to drill into tasks, errors, tokens, or duration details; focus rings use `ring-inset` to prevent clipping
-  - **Tasks drill-down** — List of tasks matching the selected metric; clicking a task opens its detail panel (with API fallback for deleted tasks via `open-task` event)
-  - **Errors drill-down** — Failed agent runs with error details
-  - **Tokens drill-down** — Token usage breakdown by agent and task
-  - **Duration drill-down** — Time distribution analysis
-- **Trends charts** — Time-series charts for key metrics; rolling average line in vibrant cyan-teal for contrast with the purple theme; bar chart hover uses subtle muted fill instead of white flash
-- **Status timeline** — Daily Activity (75%) + Recent Status Changes (25%) side-by-side layout
-- **Section collapsing** — Dashboard sections apply `overflow-hidden` only when collapsed
-- **Daily digest** — Summary of the day's activity: tasks completed/created, agent runs, token usage, failures and issues
-- **Task-level metrics** — Per-task panel showing attempt history, token counts, duration, cost, and status timeline
-
-  ![Task metrics](../assets/scr-task_metrics.png)
-
-- **Export dialog** — Export dashboard data for external analysis
-
-  ![Export metrics](../assets/scr-export_metrics.png)
 
 ---
 
@@ -1459,45 +1595,58 @@ RESTful API designed for both human and AI agent consumption.
 
 ### Endpoints
 
-| Route Prefix                     | Description                                                   |
-| -------------------------------- | ------------------------------------------------------------- |
-| `/api/v1/tasks`                  | Task CRUD, listing, reordering                                |
-| `/api/v1/tasks/archived`         | Archive listing, restore                                      |
-| `/api/v1/tasks/:id/time`         | Time tracking (start, stop, entries)                          |
-| `/api/v1/tasks/:id/comments`     | Comments (add, edit, delete)                                  |
-| `/api/v1/tasks/:id/subtasks`     | Subtask management                                            |
-| `/api/v1/tasks/:id/attachments`  | File attachments (upload, download, delete)                   |
-| `/api/v1/config`                 | Board configuration                                           |
-| `/api/v1/settings`               | Feature settings                                              |
-| `/api/v1/agents`                 | Agent start, stop, status, attempts, completion               |
-| `/api/v1/agent/status`           | Global agent status indicator                                 |
-| `/api/v1/automation`             | Automation task lifecycle                                     |
-| `/api/v1/diff`                   | Diff summaries and file diffs                                 |
-| `/api/v1/conflicts`              | Merge conflict status and resolution                          |
-| `/api/v1/github`                 | GitHub PR creation and Issues sync                            |
-| `/api/v1/github/sync`            | GitHub Issues sync (trigger, status, config, mappings)        |
-| `/api/v1/summary`                | Project summary, memory-formatted summary, and standup        |
-| `/api/v1/summary/standup`        | Daily standup summary (json, markdown, text)                  |
-| `/api/v1/notifications`          | Notification CRUD and Teams-formatted pending                 |
-| `/api/v1/templates`              | Task template management                                      |
-| `/api/v1/task-types`             | Custom task type management                                   |
-| `/api/v1/projects`               | Project list management                                       |
-| `/api/v1/sprints`                | Sprint list management                                        |
-| `/api/v1/activity`               | Activity log with filtering (agent, type, taskId, date range) |
-| `/api/v1/activity/filters`       | Distinct agents and types for activity filter dropdowns       |
-| `/api/v1/status-history`         | Task status history and daily summary                         |
-| `/api/v1/preview`                | Markdown preview rendering                                    |
-| `/api/v1/telemetry`              | Telemetry event recording and querying                        |
-| `/api/v1/metrics`                | Dashboard metrics and task-level metrics                      |
-| `/api/v1/traces`                 | Request traces                                                |
-| `/api/v1/digest`                 | Daily digest generation                                       |
-| `/api/v1/agents/register`        | Agent registry (register, list, heartbeat, stats, deregister) |
-| `/api/v1/agents/permissions`     | Agent permission levels and approval workflows                |
-| `/api/v1/hooks`                  | Task lifecycle hooks (list, create, update, delete, events)   |
-| `/api/v1/errors`                 | Error learning (record, search, stats)                        |
-| `/api/v1/docs`                   | Documentation freshness (list, staleness, verify)             |
-| `/api/v1/reports`                | PDF report generation                                         |
-| `/api/v1/scheduled-deliverables` | Scheduled deliverables view                                   |
+| Route Prefix                         | Description                                                   |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `/api/v1/tasks`                      | Task CRUD, listing, reordering                                |
+| `/api/v1/tasks/archived`             | Archive listing, restore                                      |
+| `/api/v1/tasks/:id/time`             | Time tracking (start, stop, entries)                          |
+| `/api/v1/tasks/:id/comments`         | Comments (add, edit, delete)                                  |
+| `/api/v1/tasks/:id/subtasks`         | Subtask management                                            |
+| `/api/v1/tasks/:id/attachments`      | File attachments (upload, download, delete)                   |
+| `/api/v1/tasks/:id/checkpoint`       | Crash-recovery checkpointing (save, resume, clear)            |
+| `/api/v1/tasks/:id/dependencies`     | Dependency graph (add, remove, traverse)                      |
+| `/api/v1/tasks/:id/observations`     | Observational memory (add, view, delete)                      |
+| `/api/v1/config`                     | Board configuration                                           |
+| `/api/v1/settings`                   | Feature settings                                              |
+| `/api/v1/agents`                     | Agent start, stop, status, attempts, completion               |
+| `/api/v1/agent/status`               | Global agent status indicator                                 |
+| `/api/v1/agent/delegation-violation` | Orchestrator delegation violation reporting                   |
+| `/api/v1/automation`                 | Automation task lifecycle                                     |
+| `/api/v1/diff`                       | Diff summaries and file diffs                                 |
+| `/api/v1/conflicts`                  | Merge conflict status and resolution                          |
+| `/api/v1/github`                     | GitHub PR creation and Issues sync                            |
+| `/api/v1/github/sync`                | GitHub Issues sync (trigger, status, config, mappings)        |
+| `/api/v1/summary`                    | Project summary, memory-formatted summary, and standup        |
+| `/api/v1/summary/standup`            | Daily standup summary (json, markdown, text)                  |
+| `/api/v1/notifications`              | Notification CRUD and Teams-formatted pending                 |
+| `/api/v1/templates`                  | Task template management                                      |
+| `/api/v1/task-types`                 | Custom task type management                                   |
+| `/api/v1/projects`                   | Project list management                                       |
+| `/api/v1/sprints`                    | Sprint list management                                        |
+| `/api/v1/observations`               | Observation search across all tasks                           |
+| `/api/v1/activity`                   | Activity log with filtering (agent, type, taskId, date range) |
+| `/api/v1/activity/filters`           | Distinct agents and types for activity filter dropdowns       |
+| `/api/v1/status-history`             | Task status history and daily summary                         |
+| `/api/v1/preview`                    | Markdown preview rendering                                    |
+| `/api/v1/telemetry`                  | Telemetry event recording and querying                        |
+| `/api/v1/metrics`                    | Dashboard metrics and task-level metrics                      |
+| `/api/v1/traces`                     | Request traces                                                |
+| `/api/v1/digest`                     | Daily digest generation                                       |
+| `/api/v1/changes`                    | Efficient polling change feed                                 |
+| `/api/v1/agents/register`            | Agent registry (register, list, heartbeat, stats, deregister) |
+| `/api/v1/agents/permissions`         | Agent permission levels and approval workflows                |
+| `/api/v1/hooks`                      | Task lifecycle hooks (list, create, update, delete, events)   |
+| `/api/v1/errors`                     | Error learning (record, search, stats)                        |
+| `/api/v1/docs`                       | Documentation freshness (list, staleness, verify)             |
+| `/api/v1/reports`                    | PDF report generation                                         |
+| `/api/v1/scheduled-deliverables`     | Scheduled deliverables view                                   |
+| `/api/v1/shared-resources`           | Shared resources CRUD and mount/unmount                       |
+| `/api/v1/doc-freshness`              | Documentation freshness tracking                              |
+| `/api/v1/workflows`                  | Workflow CRUD and run management                              |
+| `/api/v1/workflow-runs`              | Workflow run state, stats, and approval                       |
+| `/api/v1/tool-policies`              | Tool policy CRUD and validation                               |
+| `/api/v1/analytics`                  | Timeline and aggregate metrics                                |
+| `/api/v1/chat/squad`                 | Squad chat messages                                           |
 
 ### Authentication Methods
 
@@ -1514,6 +1663,7 @@ RESTful API designed for both human and AI agent consumption.
 
 - **Agent output streaming** — Live agent output over WebSocket
 - **Broadcast service** — Centralized WebSocket message dispatch for task changes
+- **Broadcast batching** — Batched broadcasts prevent event loop blocking under high-frequency updates (v3.3.3)
 
 ### Response Format
 
@@ -1589,6 +1739,39 @@ Event-driven notifications with Teams integration.
 
 ---
 
+## Reverse Proxy Ready
+
+Deploy Veritas Kanban behind nginx, Caddy, Traefik, or any reverse proxy. Added in v2.1.1.
+
+- **`TRUST_PROXY` environment variable** — Set to `true`, `1`, or a comma-separated list of trusted proxy IPs/CIDRs
+- **Correct client IP resolution** — With `TRUST_PROXY` enabled, Express reads the real client IP from `X-Forwarded-For` headers
+- **Secure cookies** — When behind a TLS-terminating proxy, session cookies respect `X-Forwarded-Proto`
+- **Rate limiting accuracy** — Rate limits apply to the real client IP, not the proxy's IP
+- **WebSocket passthrough** — WebSocket connections work through reverse proxies with standard `Upgrade` header forwarding
+
+### Example Configurations
+
+**nginx:**
+
+```nginx
+location / {
+    proxy_pass http://localhost:3001;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+**Environment:**
+
+```bash
+TRUST_PROXY=true
+```
+
+---
+
 ## Storage & Architecture
 
 Abstract storage layer that decouples business logic from the filesystem.
@@ -1612,6 +1795,8 @@ Production-ready deployment and development tooling.
 - **Alpine-based** — Minimal `node:22-alpine` base image
 - **Layer caching** — Workspace config and lockfile copied first for optimal Docker layer caching
 - **Frozen lockfile** — `pnpm install --frozen-lockfile` for reproducible builds
+- **Path standardization** — Shared `paths.ts` utility ensures correct path resolution in containerized environments (v2.1.3)
+- **Runtime state persistence** — Auth/config state routed through `getRuntimeDir()` and migrated on startup (v3.2)
 
 ### CI/CD
 
@@ -1654,6 +1839,7 @@ Multi-layer testing strategy.
   - WebSocket origin validation
   - Prometheus metrics (counters, gauges, histograms, registry, collector middleware)
   - Environment variable validation
+  - Circuit breaker transitions (18 tests covering open/half-open/closed states — added in v3.3.2)
 - **Frontend (10 files, 110 tests):**
   - API client helpers and task operations
   - Custom hooks: useWebSocket, useKeyboard (keyboard shortcuts)
@@ -1696,4 +1882,4 @@ Working toward WCAG 2.1 AA compliance.
 
 ---
 
-_Last updated: 2026-02-17 · [Back to README](../README.md)_
+_Last updated: 2026-03-07 · [Back to README](../README.md)_

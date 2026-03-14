@@ -62,8 +62,9 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 20;
 
 function getDefaultWsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const base = import.meta.env.BASE_URL || '/';
-  return `${protocol}//${window.location.host}${base}ws`;
+  // Include base path for sub-path deployments (e.g., /kanban/ws)
+  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  return `${protocol}//${window.location.host}${basePath}/ws`;
 }
 
 /**

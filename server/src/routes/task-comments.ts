@@ -7,6 +7,7 @@ import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText, sanitizeAuthor } from '../utils/sanitize.js';
+import { broadcastTaskChange } from '../services/broadcast-service.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -61,6 +62,9 @@ router.post(
       task.agent
     );
 
+    // Broadcast update to all connected WebSocket clients
+    broadcastTaskChange('updated', task.id);
+
     // Outbound sync: post comment to linked GitHub issue (fire-and-forget)
     if (task.github) {
       getGitHubSyncService()
@@ -111,6 +115,10 @@ router.patch(
     };
 
     const updatedTask = await taskService.updateTask(req.params.id as string, { comments });
+
+    // Broadcast update to all connected WebSocket clients
+    broadcastTaskChange('updated', req.params.id as string);
+
     res.json(updatedTask);
   })
 );
@@ -146,6 +154,9 @@ router.delete(
       },
       task.agent
     );
+
+    // Broadcast update to all connected WebSocket clients
+    broadcastTaskChange('updated', task.id);
 
     res.json(updatedTask);
   })

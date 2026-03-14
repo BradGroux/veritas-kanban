@@ -459,6 +459,38 @@ These are set in `server/.env`, not in the MCP client config:
 
 </details>
 
+#### Force Delete Behavior
+
+The `delete_sprint` tool supports a `force` flag that controls how deletion handles referenced items.
+
+**Default behavior (`force: false` or omitted):**
+
+When a sprint is referenced by one or more tasks (i.e., tasks have `sprint: "sprint-id"`), the delete is **blocked**. The server checks for references via `can_delete_sprint` internally and returns a response indicating the item cannot be deleted along with the reference count. This prevents accidental data loss — tasks would lose their sprint assignment.
+
+**Recommended workflow:**
+
+1. Call `can_delete_sprint` first to check if any tasks reference the sprint.
+2. If `referenceCount > 0`, either reassign those tasks to another sprint or use `force: true`.
+3. Call `delete_sprint` with or without `force` based on the check.
+
+```json
+// Step 1: Check
+{ "name": "can_delete_sprint", "arguments": { "id": "sprint-3" } }
+// → { "allowed": true, "referenceCount": 0 }  OR  { "allowed": false, "referenceCount": 5 }
+
+// Step 2: Delete (safe)
+{ "name": "delete_sprint", "arguments": { "id": "sprint-3" } }
+
+// Step 2 alt: Force delete (skips reference check)
+{ "name": "delete_sprint", "arguments": { "id": "sprint-3", "force": true } }
+```
+
+**Force behavior (`force: true`):**
+
+The reference check is **skipped entirely**. The sprint is deleted regardless of how many tasks reference it. Tasks that referenced the deleted sprint will retain their `sprint` field value, but it will point to a non-existent sprint (orphaned reference). This is useful for cleanup scenarios where you know the references are stale or the tasks will be updated separately.
+
+**This applies to all managed lists** (sprints, projects, task-types) — they all use the same `ManagedListService` base class with identical force delete semantics. The MCP server currently only exposes sprint management tools, but the server REST API supports force delete on `/api/projects/:id?force=true` and `/api/task-types/:id?force=true` as well.
+
 ---
 
 ## Resources

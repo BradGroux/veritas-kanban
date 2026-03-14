@@ -15,6 +15,7 @@ const viteAllowedHosts =
     : undefined;
 
 export default defineConfig({
+  // Support deployment under a sub-path (e.g., VITE_BASE_PATH=/kanban/)
   base: process.env.VITE_BASE_PATH || '/',
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   plugins: [react(), tailwindcss() as any],

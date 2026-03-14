@@ -50,15 +50,14 @@ router.post(
 
     // Validation: Sanity check for run.completed durationMs
     // Cap at 7 days (604,800,000 ms) to prevent corrupt data
-    if (eventInput.type === 'run.completed' && 'durationMs' in eventInput) {
-      const durationMs = (eventInput as any).durationMs;
+    if (eventInput.type === 'run.completed') {
       const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-      if (typeof durationMs === 'number' && durationMs > MAX_DURATION_MS) {
+      if (eventInput.durationMs !== undefined && eventInput.durationMs > MAX_DURATION_MS) {
         log.warn(
-          { taskId: eventInput.taskId, durationMs, maxMs: MAX_DURATION_MS },
+          { taskId: eventInput.taskId, durationMs: eventInput.durationMs, maxMs: MAX_DURATION_MS },
           '[Telemetry] Capping excessive durationMs'
         );
-        (eventInput as any).durationMs = MAX_DURATION_MS;
+        eventInput.durationMs = MAX_DURATION_MS;
       }
     }
 

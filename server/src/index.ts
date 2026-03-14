@@ -295,9 +295,10 @@ const buildDefaultDevOrigins = (): string[] => {
     hosts.add(configuredHost);
   }
 
+  const serverPort = process.env.PORT || '3001';
   const origins: string[] = [];
   for (const host of hosts) {
-    origins.push(`http://${host}:5173`, `http://${host}:3000`);
+    origins.push(`http://${host}:5173`, `http://${host}:3000`, `http://${host}:${serverPort}`);
   }
 
   return origins;
@@ -323,10 +324,26 @@ const corsOptions: cors.CorsOptions = {
 
     if (ALLOWED_ORIGINS.includes(normalizeOrigin(origin))) {
       callback(null, true);
-    } else {
-      log.warn({ origin }, 'CORS blocked request from disallowed origin');
-      callback(new AppError(403, 'Origin not allowed by CORS', 'CORS_REJECTED'));
+      return;
     }
+
+    // In dev mode, allow any localhost/127.0.0.1 origin (any port).
+    // Mirrors the WebSocket origin validation logic in auth.ts
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev) {
+      try {
+        const url = new URL(origin);
+        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        // invalid origin URL — fall through to rejection
+      }
+    }
+
+    log.warn({ origin }, 'CORS blocked request from disallowed origin');
+    callback(new AppError(403, 'Origin not allowed by CORS', 'CORS_REJECTED'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { authorize } from '../middleware/auth.js';
 import { statusHistoryService } from '../services/status-history-service.js';
+import { qStr, qNumD } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 
@@ -11,8 +12,8 @@ const router: RouterType = Router();
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const limit = parseInt(req.query.limit as string) || 100;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = qNumD(req.query.limit, 100);
+    const offset = qNumD(req.query.offset, 0);
 
     const history = await statusHistoryService.getHistory(limit, offset);
     res.json(history);
@@ -23,7 +24,7 @@ router.get(
 router.get(
   '/summary/daily',
   asyncHandler(async (req, res) => {
-    const date = req.query.date as string | undefined;
+    const date = qStr(req.query.date);
 
     // Validate date format if provided
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -54,10 +55,12 @@ router.get(
       throw new ValidationError('startDate and endDate are required', {});
     }
 
-    const entries = await statusHistoryService.getHistoryByDateRange(
-      startDate as string,
-      endDate as string
-    );
+    const start = qStr(startDate);
+    const end = qStr(endDate);
+    if (!start || !end) {
+      throw new ValidationError('startDate and endDate are required', {});
+    }
+    const entries = await statusHistoryService.getHistoryByDateRange(start, end);
     res.json(entries);
   })
 );
