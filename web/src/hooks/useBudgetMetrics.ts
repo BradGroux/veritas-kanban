@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFeatureSettings } from './useFeatureSettings';
 import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE } from '@/lib/config';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 
 export interface BudgetMetrics {
@@ -31,8 +32,6 @@ export interface BudgetMetrics {
 
   status: 'ok' | 'warning' | 'danger';
 }
-
-const API_BASE = '/api';
 
 async function fetchBudgetMetrics(
   tokenBudget: number,

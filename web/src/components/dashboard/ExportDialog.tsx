@@ -58,18 +58,18 @@ export function ExportDialog({
 
   const handleExport = async () => {
     setIsExporting(true);
-    
+
     try {
       // Build query params
       const params = new URLSearchParams();
       params.set('format', format);
-      
+
       if (scope === 'task' && taskId) {
         params.set('taskId', taskId);
       } else if (scope === 'project' && project) {
         params.set('project', project);
       }
-      
+
       if (fromDate) {
         params.set('from', new Date(fromDate).toISOString());
       }
@@ -79,14 +79,14 @@ export function ExportDialog({
         toDateTime.setHours(23, 59, 59, 999);
         params.set('to', toDateTime.toISOString());
       }
-      
+
       // Fetch the export
       const response = await fetch(`${API_BASE}/telemetry/export?${params}`);
-      
+
       if (!response.ok) {
         throw new Error('Export failed');
       }
-      
+
       // Get filename from Content-Disposition header or generate one
       const disposition = response.headers.get('Content-Disposition');
       let filename = `telemetry-export.${format}`;
@@ -96,7 +96,7 @@ export function ExportDialog({
           filename = match[1];
         }
       }
-      
+
       // Create blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -107,7 +107,7 @@ export function ExportDialog({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       onOpenChange(false);
     } catch (error) {
       console.error('Export error:', error);
@@ -190,7 +190,9 @@ export function ExportDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -254,9 +256,11 @@ export function ExportDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleExport} 
-            disabled={isExporting || (scope === 'task' && !taskId) || (scope === 'project' && !project)}
+          <Button
+            onClick={handleExport}
+            disabled={
+              isExporting || (scope === 'task' && !taskId) || (scope === 'project' && !project)
+            }
           >
             {isExporting ? (
               <>

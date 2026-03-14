@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE } from '@/lib/config';
 import type {
   AnyTelemetryEvent,
   RunStartedEvent,
@@ -7,8 +8,6 @@ import type {
   RunErrorEvent,
   TokenTelemetryEvent,
 } from '@veritas-kanban/shared';
-
-const API_BASE = '/api';
 
 export interface AttemptMetrics {
   attemptId: string;

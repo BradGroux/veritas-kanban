@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
+import { API_BASE } from '@/lib/config';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 
 export type VelocityTrend = 'accelerating' | 'steady' | 'slowing';
@@ -26,8 +27,6 @@ export interface VelocityMetrics {
   trend: VelocityTrend; // Current trend indicator
   currentSprint?: CurrentSprintProgress; // Progress on current/active sprint
 }
-
-const API_BASE = '/api';
 
 async function fetchVelocity(project?: string, limit = 10): Promise<VelocityMetrics> {
   const params = new URLSearchParams();
