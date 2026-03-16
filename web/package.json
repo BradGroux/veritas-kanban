@@ -58,7 +58,7 @@
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.27",
     "eslint": "^9.17.0",
-    "jsdom": "^28.1.0",
+    "jsdom": "^29.0.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.7.0",
