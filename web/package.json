@@ -30,13 +30,13 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toast": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query": "^5.91.2",
     "@veritas-kanban/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.3.3",
     "lucide-react": "^0.577.0",
-    "nanoid": "^5.0.9",
+    "nanoid": "^5.1.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
@@ -48,7 +48,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.1",
+    "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -60,10 +60,10 @@
     "eslint": "^9.17.0",
     "jsdom": "^29.0.0",
     "postcss": "^8.5.8",
-    "tailwindcss": "^4.2.1",
+    "tailwindcss": "^4.2.2",
     "typescript": "^5.7.0",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",
