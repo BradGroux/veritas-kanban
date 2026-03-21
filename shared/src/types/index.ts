@@ -19,3 +19,4 @@ export * from './decision.types.js';
 export * from './evaluation.types.js';
 export * from './policy.types.js';
 export * from './prompt-registry.types.js';
+export * from './feedback.types.js';
