@@ -408,7 +408,7 @@ export class DriftService {
           }
         })
     );
-    return rows.filter((row): row is T => row !== null);
+    return rows.filter((row) => row !== null) as T[];
   }
 
   private async writeJson(filePath: string, value: unknown): Promise<void> {
