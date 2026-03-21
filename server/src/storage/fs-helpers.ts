@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import type { FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { access } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
 // Synchronous helpers (used by security config, agent status persistence)
@@ -72,3 +72,5 @@ export async function fileExists(filePath: string): Promise<boolean> {
     return false;
   }
 }
+
+export { mkdir, readdir, readFile, rm, writeFile };

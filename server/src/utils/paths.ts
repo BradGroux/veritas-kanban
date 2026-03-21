@@ -200,3 +200,13 @@ export function getWorkflowRunsDir(): string {
 export function getToolPoliciesDir(): string {
   return path.join(getRuntimeDir(), 'tool-policies');
 }
+
+/** Directory for drift alert records. */
+export function getDriftAlertsDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'drift', 'alerts');
+}
+
+/** Directory for drift baseline records. */
+export function getDriftBaselinesDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'drift', 'baselines');
+}

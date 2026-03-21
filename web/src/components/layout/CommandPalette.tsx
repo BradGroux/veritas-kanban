@@ -13,6 +13,7 @@ import {
   Moon,
   Sun,
   Keyboard,
+  Activity,
 } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
@@ -84,6 +85,14 @@ export function CommandPalette() {
         category: 'Navigation',
         action: () => setView('backlog'),
         keywords: ['someday', 'maybe', 'later'],
+      },
+      {
+        id: 'go-drift',
+        label: 'Go to Drift Monitor',
+        icon: <Activity className="h-4 w-4" />,
+        category: 'Navigation',
+        action: () => setView('drift'),
+        keywords: ['behavior', 'anomaly', 'z-score', 'alerts'],
       },
       {
         id: 'go-archive',
@@ -183,7 +192,10 @@ export function CommandPalette() {
         seen.add(cmd.category);
         groups.push({ category: cmd.category, items: [] });
       }
-      groups.find((g) => g.category === cmd.category)!.items.push(cmd);
+      const group = groups.find((g) => g.category === cmd.category);
+      if (group) {
+        group.items.push(cmd);
+      }
     }
     return groups;
   }, [filtered]);
