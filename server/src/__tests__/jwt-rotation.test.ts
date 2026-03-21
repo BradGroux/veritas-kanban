@@ -7,9 +7,11 @@ const mockFs: Record<string, string> = vi.hoisted(() => ({}));
 
 vi.mock('node:fs/promises', () => {
   const access = vi.fn().mockResolvedValue(undefined);
+  const mkdir = vi.fn().mockResolvedValue(undefined);
   return {
     access,
-    default: { access },
+    mkdir,
+    default: { access, mkdir },
   };
 });
 
