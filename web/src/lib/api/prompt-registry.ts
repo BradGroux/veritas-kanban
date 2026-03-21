@@ -9,7 +9,6 @@ import type {
   PromptStats,
   CreatePromptTemplateInput,
   UpdatePromptTemplateInput,
-  RenderPreviewRequest,
   RenderPreviewResponse,
 } from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers.js';

@@ -5,11 +5,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { promptRegistryApi } from '../lib/api/prompt-registry.js';
 import type {
-  PromptUsage,
-  PromptStats,
   CreatePromptTemplateInput,
   UpdatePromptTemplateInput,
-  RenderPreviewResponse,
 } from '@veritas-kanban/shared';
 
 // Query key factory

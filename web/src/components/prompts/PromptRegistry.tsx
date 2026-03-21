@@ -4,7 +4,7 @@
  * Tabs: Templates, Versions, Usage, Stats, Preview
  */
 import { useState } from 'react';
-import { usePromptTemplates, usePromptTemplate, useCreatePromptTemplate, useUpdatePromptTemplate, useDeletePromptTemplate, usePromptVersionHistory, usePromptUsageRecords, usePromptStatsAll, useRenderPromptPreview } from '../../hooks/usePromptRegistry.js';
+import { usePromptTemplates, usePromptTemplate, useCreatePromptTemplate, useDeletePromptTemplate, usePromptVersionHistory, usePromptUsageRecords, usePromptStatsAll, useRenderPromptPreview } from '../../hooks/usePromptRegistry.js';
 import type { CreatePromptTemplateInput, PromptCategory } from '@veritas-kanban/shared';
 import styles from './PromptRegistry.module.css';
 
@@ -308,11 +308,7 @@ function PreviewTab() {
   const { data: template } = usePromptTemplate(selectedId);
   const { data: preview } = useRenderPromptPreview(selectedId, sampleVariables);
 
-  const _handleAddVariable = (varName: string) => {
-    setSampleVariables({ ...sampleVariables, [varName]: '' });
-  };
-
-  return (
+    return (
     <div className={styles.tab}>
       <div className={styles.header}>
         <h3>Template Preview</h3>
