@@ -79,6 +79,8 @@ import { systemHealthRouter } from '../system-health.js';
 import { transcriptRoutes } from '../transcripts.js';
 import { decisionRoutes } from '../decisions.js';
 import { scoringRoutes } from '../scoring.js';
+import { feedbackRoutes } from '../feedback.js';
+import promptRegistryRoutes from '../prompt-registry.js';
 
 const v1Router: IRouter = Router();
 
@@ -173,5 +175,7 @@ v1Router.use('/transcripts', transcriptRoutes);
 v1Router.use('/scoring', scoringRoutes);
 v1Router.use('/system/health', systemHealthRouter);
 v1Router.use('/decisions', decisionRoutes);
+v1Router.use('/feedback', feedbackRoutes);
+v1Router.use('/prompt-registry', promptRegistryRoutes);
 
 export { v1Router };

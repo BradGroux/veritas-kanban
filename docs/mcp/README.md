@@ -489,7 +489,131 @@ When a sprint is referenced by one or more tasks (i.e., tasks have `sprint: "spr
 
 The reference check is **skipped entirely**. The sprint is deleted regardless of how many tasks reference it. Tasks that referenced the deleted sprint will retain their `sprint` field value, but it will point to a non-existent sprint (orphaned reference). This is useful for cleanup scenarios where you know the references are stale or the tasks will be updated separately.
 
-**This applies to all managed lists** (sprints, projects, task-types) — they all use the same `ManagedListService` base class with identical force delete semantics. The MCP server currently only exposes sprint management tools, but the server REST API supports force delete on `/api/projects/:id?force=true` and `/api/task-types/:id?force=true` as well.
+**This applies to all managed lists** (sprints, projects, task-types) — they all use the same `ManagedListService` base class with identical force delete semantics. The MCP server supports force delete on `/api/projects/:id?force=true` and `/api/task-types/:id?force=true` as well.
+
+---
+
+### Project Management (7 tools) <small>_New in v4.0_</small>
+
+Full project lifecycle management from MCP — create, organize, and track projects without leaving your agent context.
+
+| Tool                  | Description                          | Required Inputs | Key Options                  |
+| --------------------- | ------------------------------------ | --------------- | ---------------------------- |
+| `list_projects`       | List all projects                    | _(none)_        | `includeHidden`              |
+| `get_project`         | Get a project by ID                  | `id`            | —                            |
+| `create_project`      | Create a new project                 | `label`         | `description`, `color`       |
+| `update_project`      | Update project fields                | `id`            | `label`, `description`, `isHidden` |
+| `delete_project`      | Delete a project                     | `id`            | `force`                      |
+| `get_project_stats`   | Task counts and status breakdown     | `id`            | —                            |
+| `reorder_projects`    | Reorder projects in the sidebar      | `orderedIds`    | —                            |
+
+<details>
+<summary><strong>Examples</strong></summary>
+
+**Create a project:**
+
+```json
+{
+  "name": "create_project",
+  "arguments": { "label": "Rubicon", "description": "Industrial safety AI platform", "color": "#8B5CF6" }
+}
+```
+
+**Get project task breakdown:**
+
+```json
+{
+  "name": "get_project_stats",
+  "arguments": { "id": "rubicon" }
+}
+```
+
+→ Returns:
+
+```json
+{
+  "id": "rubicon",
+  "label": "Rubicon",
+  "total": 24,
+  "byStatus": { "todo": 8, "in-progress": 5, "blocked": 2, "done": 9 }
+}
+```
+
+**Reorder projects:**
+
+```json
+{
+  "name": "reorder_projects",
+  "arguments": { "orderedIds": ["rubicon", "brainmeld", "dealmeld"] }
+}
+```
+
+**Force-delete a project with tasks still assigned:**
+
+```json
+{
+  "name": "delete_project",
+  "arguments": { "id": "old-project", "force": true }
+}
+```
+
+</details>
+
+---
+
+### Comment Management (5 tools) <small>_New in v4.0_</small>
+
+Full CRUD for task and sprint comments, enabling agents to participate in async review threads.
+
+| Tool             | Description              | Required Inputs             | Key Options  |
+| ---------------- | ------------------------ | --------------------------- | ------------ |
+| `add_comment`    | Add a comment to a task  | `taskId`, `content`         | `author`     |
+| `list_comments`  | List comments for a task | `taskId`                    | `limit`      |
+| `get_comment`    | Get a single comment     | `taskId`, `commentId`       | —            |
+| `update_comment` | Edit a comment           | `taskId`, `commentId`, `content` | —       |
+| `delete_comment` | Delete a comment         | `taskId`, `commentId`       | —            |
+
+<details>
+<summary><strong>Examples</strong></summary>
+
+**Add a code review comment:**
+
+```json
+{
+  "name": "add_comment",
+  "arguments": {
+    "taskId": "task_20260321_abc",
+    "content": "Auth token refresh looks good. One nit: the 5-minute buffer could be configurable.",
+    "author": "TARS"
+  }
+}
+```
+
+**List comments on a task:**
+
+```json
+{
+  "name": "list_comments",
+  "arguments": { "taskId": "task_20260321_abc" }
+}
+```
+
+→ Returns array of `{ id, content, author, createdAt, updatedAt }`.
+
+**Update a comment:**
+
+```json
+{
+  "name": "update_comment",
+  "arguments": {
+    "taskId": "task_20260321_abc",
+    "commentId": "cmt_xyz789",
+    "content": "Auth token refresh looks good — marking as approved."
+  }
+}
+```
+
+</details>
 
 ---
 
@@ -594,7 +718,7 @@ Configure telemetry retention in `server/.env`:
 
 | Component          | Version      | Notes                       |
 | ------------------ | ------------ | --------------------------- |
-| MCP server package | `3.3.3`      | Matches VK server version   |
+| MCP server package | `4.0.0`      | Matches VK server version   |
 | MCP SDK            | `1.27.1`     | `@modelcontextprotocol/sdk` |
 | MCP protocol       | `2024-11-05` | Latest stable spec          |
 | Node.js            | `≥ 18`       | ES modules required         |
@@ -638,4 +762,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-03-02 · VK v3.3.3 · 26 tools / 6 categories_
+_Last updated: 2026-03-21 · VK v4.0.0 · 33 tools / 7 categories_

@@ -11,10 +11,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Mass archive failure caused by missing `/api/tasks/bulk-archive-by-ids` endpoint
 
+## [4.0.0] - 2026-03-21
+
+### ✨ Highlights
+
+**Veritas Kanban 4.0 is the agent governance release.** This release adds a complete Agent Governance Layer — configurable policies, behavioral drift detection, decision audit trails, output evaluation, and user feedback analytics — alongside a fully customizable dashboard widget grid, a Prompt Template Registry with version control, and a real-time Global System Health Status Bar.
+
+All shadcn/ui components have been upgraded to v4 with Tailwind v4 integration. This release also adds MCP comment CRUD tools and project management tools, wires lifecycle hooks to the notification service, and ships seven new SOP guides plus updated API documentation.
+
 ### Added
+
+- **Agent Policy & Guard Engine (#178)** — Configurable tool/action policies with guard rules
+  - Define policies with `allow`/`deny`/`require-approval` guard rules per tool and action
+  - Policy evaluation engine with configurable precedence (deny-first or allow-first)
+  - REST API: `GET/POST /api/policies`, `GET/PUT/DELETE /api/policies/:id`, `POST /api/policies/:id/evaluate`
+  - Per-agent and per-project policy scoping
+  - Built-in audit log for every policy decision
+
+- **Decision Audit Trail with Assumption Tracking (#179)** — Log agent decisions with assumptions and outcomes
+  - Structured decision records: decision text, confidence score, supporting evidence, assumptions
+  - Outcome tracking: record what happened after a decision and whether assumptions held
+  - Full-text search and filtering by agent, task, confidence range
+  - REST API: `GET/POST /api/decisions`, `GET/PUT/DELETE /api/decisions/:id`, `POST /api/decisions/:id/outcome`
+
+- **Agent Output Evaluation & Scoring Framework (#180)** — Quality scoring for agent outputs
+  - Scoring profiles with weighted criteria: `RegexMatch`, `KeywordContains`, `NumericRange`, `CustomExpression`
+  - Composite scoring methods: `weightedAvg`, `minimum`, `geometricMean`
+  - Evaluation history with per-scorer breakdown and per-dimension explanations
+  - REST API: `GET/POST /api/scoring/profiles`, `GET/PUT/DELETE /api/scoring/profiles/:id`, `POST /api/scoring/evaluate`, `GET /api/scoring/history`
+
+- **Behavioral Drift Detection & Alerting (#181)** — Detect and alert on agent behavior changes
+  - Metric tracking with configurable baselines and alert thresholds
+  - Drift status lifecycle: `ok` → `warning` → `alert` → `resolved`
+  - Automatic timestamp of detection and resolution events
+  - REST API: `GET/POST /api/drift`, `GET/PUT/DELETE /api/drift/:id`, `POST /api/drift/:id/resolve`
+
+- **User Feedback Loop with Sentiment Analytics (#182)** — Collect and analyze user feedback on agent outputs
+  - Feedback collection with sentiment (`positive`/`neutral`/`negative`) and category tagging
+  - Aggregate analytics: sentiment breakdowns, trends over time, category distributions
+  - REST API: `GET/POST /api/feedback`, `GET/DELETE /api/feedback/:id`, `GET /api/feedback/analytics`
+
+- **Draggable & Resizable Dashboard Widget Grid (#183)** — Customizable dashboard layouts
+  - Drag-and-drop widget repositioning with smooth animations
+  - Resizable widgets with snap-to-grid behavior
+  - Layout persistence via `settings.json`
+  - Add/remove widgets from the widget library
+
+- **Prompt Template Registry with Version Control (#184)** — Manage and version prompt templates
+  - Template CRUD with variable extraction (e.g., `{{agent_name}}`, `{{task_context}}`)
+  - Full version history with changelog entries; rollback to any version
+  - Usage tracking: model, tokens, rendered output (optional)
+  - Preview rendering with sample variable injection
+  - REST API: `GET/POST /api/prompt-registry/templates`, `GET/PUT/DELETE /api/prompt-registry/templates/:id`, `GET /api/prompt-registry/templates/:id/versions`, `POST /api/prompt-registry/templates/:id/versions`, `GET /api/prompt-registry/templates/:id/versions/:versionId`, `POST /api/prompt-registry/templates/:id/preview`, `GET /api/prompt-registry/templates/:id/stats`, `POST /api/prompt-registry/templates/:id/usage`
+
+- **Global System Health Status Bar (#185)** — Real-time system health monitoring
+  - Five health levels: `stable` → `reviewing` → `drifting` → `elevated` → `alert`
+  - Three signal categories: `system` (storage/disk/memory), `agents` (online/offline counts), `operations` (success rate, recent runs)
+  - Persistent header bar with expand/collapse for detail panel
+  - REST API: `GET /api/v1/system/health`
+
+- **MCP comment CRUD tools (PR #206)** — Full comment lifecycle from MCP
+  - New MCP tools: `add_comment`, `list_comments`, `get_comment`, `update_comment`, `delete_comment`
+  - Works with both task-level and sprint-level comments
+
+- **MCP project management tools (PR #227)** — Full project lifecycle from MCP
+  - New MCP tools: `list_projects`, `get_project`, `create_project`, `update_project`, `delete_project`, `get_project_stats`, `reorder_projects`
+
+- **Lifecycle hooks wired to notification service (PR #201)** — Hook outcomes now trigger real-time notifications
+  - Hooks with `notify: true` push events through the notification service
+  - Integrates with @mention notification system for addressable hook alerts
 
 - Comprehensive MCP server documentation at `docs/mcp/README.md` — architecture, quickstart, full tool catalog with examples, security model, troubleshooting playbook, and FAQ
 - Condensed root README MCP section with link to dedicated docs
+
+### Changed
+
+- **Upgraded shadcn/ui components to v4 (#186, PR #219)** — All UI components updated for shadcn/ui v4 compatibility with Tailwind v4 integration; breaking prop changes resolved across the component tree
+
+### Fixed
+
+- **Squad chat panel scroll (PR #225, #224)** — Panel now properly scrolls to latest message; overflow clipping bug in nested flex containers resolved
+- **False cycle detection in dependency API (PR #208, #188)** — DFS algorithm no longer flags valid multi-path dependencies as cycles when two nodes share a common ancestor
+- **TypeScript build errors (PR #207, #177)** — Resolved type mismatches introduced by shadcn/ui v4 and Zod 4 type inference changes
+- **SystemHealthBar successRate percentage display (PR #212, #211)** — `successRate` is now correctly formatted as a percentage (0–100) instead of a decimal (0–1)
 
 ## [3.3.3] - 2026-03-01
 
@@ -1269,7 +1348,9 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v1.4.1...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v3.3.3...v4.0.0
+[3.3.3]: https://github.com/BradGroux/veritas-kanban/compare/v3.3.2...v3.3.3
 [1.4.1]: https://github.com/BradGroux/veritas-kanban/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/BradGroux/veritas-kanban/compare/v1.2.0...v1.3.0

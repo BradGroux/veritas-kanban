@@ -47,7 +47,7 @@ When completing a task that changes user-facing behavior:
 Each doc should include a freshness header:
 
 ```markdown
-<!-- doc-freshness: 2026-03-02 | v3.3.3 | @tars -->
+<!-- doc-freshness: 2026-03-21 | v4.0.0 | @tars -->
 ```
 
 Format: `date | version | last-updater`

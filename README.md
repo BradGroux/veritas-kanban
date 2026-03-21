@@ -10,7 +10,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -100,11 +100,23 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## ✨ Feature Highlights
 
+### 🛡️ Agent Governance (New in v4.0)
+
+**Policy Engine** — Define what agents can and can't do. Configurable tool/action policies with `allow`, `deny`, and `require-approval` guard rules. Every policy decision is logged. **Decision Audit Trail** — Log agent decisions with confidence scores, supporting evidence, and stated assumptions. Record outcomes afterward to see whether assumptions held. **Behavioral Drift Detection** — Set metric baselines and thresholds; get alerted when an agent's behavior deviates. **User Feedback Loop** — Collect feedback on agent outputs with sentiment tagging and category analytics. **Output Evaluation** — Score agent outputs against weighted criteria profiles (regex, keyword, numeric range, custom expressions).
+
 ### 🤖 Agent Orchestration
 
 Spawn autonomous coding agents on tasks. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
 ![Agent orchestration](assets/demo-overview.gif)
+
+### 📊 Customizable Dashboard (New in v4.0)
+
+**Draggable & Resizable Widget Grid** — Rearrange and resize dashboard widgets via drag-and-drop. Layouts persist across sessions. Add widgets from the library or remove ones you don't need. **Global System Health Bar** — Persistent header status bar with five health levels (stable → alert) across three signal categories: system resources, agent availability, and operation success rate.
+
+### 📝 Prompt Template Registry (New in v4.0)
+
+Version-controlled prompt templates with variable extraction, full version history with rollback, usage tracking, and preview rendering with sample variable injection. Manage your prompt library the same way you manage code.
 
 ### ⚡ Workflow Engine
 
@@ -126,7 +138,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ### 🔌 Three Integration Surfaces
 
-- **MCP Server** — 26 tools across 6 categories via Model Context Protocol
+- **MCP Server** — 33+ tools across 7 categories via Model Context Protocol (v4.0 adds project management and comment CRUD tools)
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 

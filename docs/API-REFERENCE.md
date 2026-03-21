@@ -1765,6 +1765,686 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/integrations`              | External integrations                         |
 | `/api/settings/transition-hooks` | Status transition hooks                       |
 
+| `/api/feedback`                  | User feedback & sentiment analytics           |
+| `/api/decisions`                 | Decision audit trail                          |
+| `/api/drift`                     | Behavioral drift detection                    |
+| `/api/policies`                  | Agent policy & guard engine                   |
+| `/api/scoring/profiles`          | Output evaluation profiles                    |
+| `/api/scoring/evaluate`          | Run an output evaluation                      |
+| `/api/scoring/history`           | Evaluation history                            |
+| `/api/prompt-registry`           | Prompt template registry                      |
+| `/api/v1/system/health`          | Global system health                          |
+
+---
+
+## v4.0 API Reference
+
+### User Feedback (`/api/feedback`)
+
+Collect feedback on agent outputs and query aggregate sentiment analytics.
+
+#### List Feedback
+
+```
+GET /api/feedback
+```
+
+Query params: `agent`, `taskId`, `sentiment` (`positive` | `neutral` | `negative`), `since` (ISO timestamp), `limit` (default 50), `offset`.
+
+**Response:** Array of feedback objects.
+
+```json
+[
+  {
+    "id": "fb_abc123",
+    "content": "The summary was concise and accurate.",
+    "sentiment": "positive",
+    "category": "output-quality",
+    "agent": "TARS",
+    "taskId": "task_20260321_abc",
+    "createdAt": "2026-03-21T14:00:00.000Z"
+  }
+]
+```
+
+#### Submit Feedback
+
+```
+POST /api/feedback
+```
+
+```json
+{
+  "content": "The response missed the key point.",
+  "sentiment": "negative",
+  "category": "accuracy",
+  "agent": "CASE",
+  "taskId": "task_20260321_xyz"
+}
+```
+
+**Response:** `201` with created feedback object.
+
+#### Get Feedback Item
+
+```
+GET /api/feedback/:id
+```
+
+**Response:** Single feedback object.
+
+#### Delete Feedback
+
+```
+DELETE /api/feedback/:id
+```
+
+**Response:** `204 No Content`.
+
+#### Feedback Analytics
+
+```
+GET /api/feedback/analytics
+```
+
+Query params: `agent`, `since`, `until`.
+
+**Response:**
+
+```json
+{
+  "total": 42,
+  "sentimentBreakdown": {
+    "positive": 30,
+    "neutral": 8,
+    "negative": 4
+  },
+  "topCategories": [
+    { "category": "output-quality", "count": 18 },
+    { "category": "accuracy", "count": 12 }
+  ],
+  "trend": [
+    { "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }
+  ]
+}
+```
+
+---
+
+### Decision Audit Trail (`/api/decisions`)
+
+Log agent decisions with assumptions and record outcomes.
+
+#### List Decisions
+
+```
+GET /api/decisions
+```
+
+Query params: `agent`, `taskId`, `minConfidence` (0–1), `maxConfidence` (0–1), `since`, `until`, `limit`, `offset`.
+
+**Response:** Array of decision objects.
+
+```json
+[
+  {
+    "id": "dec_abc123",
+    "decision": "Use Redis for session caching",
+    "confidence": 0.85,
+    "reasoning": "Redis has sub-ms latency and supports TTL natively.",
+    "evidence": ["benchmark results", "existing infra"],
+    "assumptions": ["Redis cluster is available", "TTL of 1h is sufficient"],
+    "agent": "VERITAS",
+    "taskId": "task_20260321_abc",
+    "createdAt": "2026-03-21T14:00:00.000Z",
+    "outcome": null
+  }
+]
+```
+
+#### Log a Decision
+
+```
+POST /api/decisions
+```
+
+```json
+{
+  "decision": "Refactor auth to use JWT instead of sessions",
+  "confidence": 0.9,
+  "reasoning": "Sessions require sticky routing; JWT is stateless.",
+  "evidence": ["architecture review notes"],
+  "assumptions": ["Clients will store tokens securely"],
+  "agent": "VERITAS",
+  "taskId": "task_20260321_abc"
+}
+```
+
+**Response:** `201` with created decision object.
+
+#### Get Decision
+
+```
+GET /api/decisions/:id
+```
+
+#### Update an Assumption
+
+```
+PATCH /api/decisions/:id/assumptions/:idx
+```
+
+Update a specific assumption by its zero-based index.
+
+```json
+{
+  "text": "Clients will store tokens securely (confirmed via security review)",
+  "held": true
+}
+```
+
+**Response:** Updated decision object with the assumption patched.
+
+---
+
+### Behavioral Drift Detection (`/api/drift`)
+
+Track agent metric baselines and detect behavioral deviations.
+
+#### List Drift Alerts
+
+```
+GET /api/drift/alerts
+```
+
+Query params: `agent`, `acknowledged` (boolean), `since`, `limit`.
+
+**Response:** Array of drift alert objects.
+
+```json
+[
+  {
+    "id": "drift_abc123",
+    "agent": "TARS",
+    "metric": "task_completion_rate",
+    "baseline": 0.92,
+    "current": 0.71,
+    "deviation": 0.21,
+    "threshold": 0.1,
+    "severity": "high",
+    "acknowledged": false,
+    "detectedAt": "2026-03-21T14:00:00.000Z"
+  }
+]
+```
+
+#### Acknowledge Drift Alert
+
+```
+POST /api/drift/alerts/:id/acknowledge
+```
+
+```json
+{
+  "notes": "Agent was rate-limited by upstream API — not a behavior change."
+}
+```
+
+**Response:** Updated alert with `acknowledged: true`.
+
+#### List Baselines
+
+```
+GET /api/drift/baselines
+```
+
+Query params: `agent`, `metric`.
+
+**Response:** Array of baseline records showing current metric norms per agent.
+
+#### Reset Baselines
+
+```
+POST /api/drift/baselines/reset
+```
+
+```json
+{
+  "agent": "TARS",
+  "metric": "task_completion_rate"
+}
+```
+
+**Response:** `200` with updated baseline record.
+
+#### Run Drift Analysis
+
+```
+POST /api/drift/analyze
+```
+
+```json
+{
+  "agent": "TARS"
+}
+```
+
+Compares current metrics against baselines and creates alerts for any out-of-threshold deviations.
+
+**Response:** `200` with analysis summary including number of alerts created.
+
+---
+
+### Agent Policy Engine (`/api/policies`)
+
+Define configurable guard rules for agent tool and action access.
+
+#### List Policies
+
+```
+GET /api/policies
+```
+
+Query params: `agent`, `project`, `enabled` (boolean).
+
+**Response:** Array of policy objects.
+
+```json
+[
+  {
+    "id": "pol_abc123",
+    "name": "No web access for Intern agents",
+    "description": "Intern-level agents cannot use browser or fetch tools.",
+    "enabled": true,
+    "scope": { "agentLevel": "intern" },
+    "rules": [
+      {
+        "tool": "browser",
+        "action": "*",
+        "effect": "deny"
+      }
+    ],
+    "precedence": "deny-first",
+    "createdAt": "2026-03-21T14:00:00.000Z"
+  }
+]
+```
+
+#### Create Policy
+
+```
+POST /api/policies
+```
+
+```json
+{
+  "name": "Require approval for file deletion",
+  "enabled": true,
+  "scope": { "global": true },
+  "rules": [
+    {
+      "tool": "exec",
+      "action": "rm",
+      "effect": "require-approval"
+    }
+  ],
+  "precedence": "deny-first"
+}
+```
+
+**Response:** `201` with created policy object.
+
+#### Get Policy
+
+```
+GET /api/policies/:id
+```
+
+#### Update Policy
+
+```
+PUT /api/policies/:id
+```
+
+#### Delete Policy
+
+```
+DELETE /api/policies/:id
+```
+
+**Response:** `204 No Content`.
+
+#### Evaluate Policy
+
+```
+POST /api/policies/:id/evaluate
+```
+
+```json
+{
+  "agent": "TARS",
+  "tool": "browser",
+  "action": "navigate",
+  "metadata": { "url": "https://example.com" }
+}
+```
+
+**Response:**
+
+```json
+{
+  "allowed": false,
+  "effect": "deny",
+  "matchedRule": { "tool": "browser", "action": "*", "effect": "deny" },
+  "policyId": "pol_abc123",
+  "auditId": "audit_xyz789"
+}
+```
+
+---
+
+### Output Evaluation & Scoring (`/api/scoring`)
+
+Create scoring profiles and evaluate agent outputs against weighted criteria.
+
+#### List Scoring Profiles
+
+```
+GET /api/scoring/profiles
+```
+
+Query params: `limit`, `offset`.
+
+**Response:** Array of scoring profile objects.
+
+#### Create Scoring Profile
+
+```
+POST /api/scoring/profiles
+```
+
+```json
+{
+  "name": "Code Quality Baseline",
+  "description": "Checks for common quality indicators in generated code.",
+  "compositeMethod": "weightedAvg",
+  "scorers": [
+    {
+      "id": "s1",
+      "name": "No hardcoded secrets",
+      "type": "RegexMatch",
+      "pattern": "(password|secret|api_key)\\s*=\\s*['\"][^'\"]+['\"]",
+      "flags": "i",
+      "invert": true,
+      "weight": 2,
+      "scoreOnMatch": 0,
+      "scoreOnMiss": 1
+    },
+    {
+      "id": "s2",
+      "name": "Has error handling",
+      "type": "KeywordContains",
+      "keywords": ["try", "catch", "error"],
+      "matchMode": "any",
+      "weight": 1
+    }
+  ]
+}
+```
+
+**Response:** `201` with created profile.
+
+#### Get Scoring Profile
+
+```
+GET /api/scoring/profiles/:id
+```
+
+#### Update Scoring Profile
+
+```
+PUT /api/scoring/profiles/:id
+```
+
+#### Delete Scoring Profile
+
+```
+DELETE /api/scoring/profiles/:id
+```
+
+**Response:** `204 No Content`.
+
+#### Evaluate Output
+
+```
+POST /api/scoring/evaluate
+```
+
+```json
+{
+  "profileId": "prof_abc123",
+  "output": "function getUser(id) {\n  try {\n    return db.find(id);\n  } catch (e) {\n    throw e;\n  }\n}",
+  "action": "generate_function",
+  "agent": "TARS",
+  "taskId": "task_20260321_abc"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "eval_xyz789",
+  "profileId": "prof_abc123",
+  "score": 0.88,
+  "compositeMethod": "weightedAvg",
+  "scorerResults": [
+    { "id": "s1", "name": "No hardcoded secrets", "score": 1.0, "weight": 2 },
+    { "id": "s2", "name": "Has error handling", "score": 1.0, "weight": 1 }
+  ],
+  "agent": "TARS",
+  "taskId": "task_20260321_abc",
+  "evaluatedAt": "2026-03-21T14:00:00.000Z"
+}
+```
+
+#### Evaluation History
+
+```
+GET /api/scoring/history
+```
+
+Query params: `profileId`, `agent`, `taskId`, `since`, `limit`, `offset`.
+
+**Response:** Array of past evaluation results.
+
+---
+
+### Prompt Template Registry (`/api/prompt-registry`)
+
+Manage version-controlled prompt templates with variable extraction and usage tracking.
+
+#### List Templates
+
+```
+GET /api/prompt-registry
+```
+
+Query params: `tag`, `search`, `limit`, `offset`.
+
+**Response:** Array of template summaries (without full content for performance).
+
+#### Create Template
+
+```
+POST /api/prompt-registry
+```
+
+```json
+{
+  "name": "Task Completion Summary",
+  "description": "Generates a completion summary for a finished task.",
+  "content": "You completed task {{task_title}}. Summarize what was done in 2-3 sentences, referencing the acceptance criteria: {{acceptance_criteria}}",
+  "tags": ["completion", "summary"],
+  "changelog": "Initial version"
+}
+```
+
+**Response:** `201` with created template including auto-extracted variables (`task_title`, `acceptance_criteria`).
+
+#### Get Template
+
+```
+GET /api/prompt-registry/:id
+```
+
+**Response:** Full template with current content, version number, variables list, and metadata.
+
+#### Update Template
+
+```
+PATCH /api/prompt-registry/:id
+```
+
+Body: Partial template fields. Triggers automatic version creation.
+
+```json
+{
+  "content": "You completed task {{task_title}} (ID: {{task_id}}). Summarize...",
+  "changelog": "Added task_id variable"
+}
+```
+
+#### Delete Template
+
+```
+DELETE /api/prompt-registry/:id
+```
+
+**Response:** `204 No Content`.
+
+#### List Versions
+
+```
+GET /api/prompt-registry/:id/versions
+```
+
+**Response:** Array of version objects (id, versionNumber, changelog, createdAt). Does not include full content for performance.
+
+#### Get Usage History
+
+```
+GET /api/prompt-registry/:id/usage
+```
+
+Query params: `limit`, `offset`.
+
+**Response:** Array of usage records with model, token counts, and timestamps.
+
+#### Template Stats
+
+```
+GET /api/prompt-registry/:id/stats
+```
+
+**Response:**
+
+```json
+{
+  "totalUses": 42,
+  "averageInputTokens": 312,
+  "averageOutputTokens": 128,
+  "lastUsedAt": "2026-03-21T14:00:00.000Z"
+}
+```
+
+#### Aggregate Stats (All Templates)
+
+```
+GET /api/prompt-registry/stats/all
+```
+
+**Response:** Aggregate usage stats across all templates.
+
+#### Preview Template
+
+```
+POST /api/prompt-registry/:id/render-preview
+```
+
+```json
+{
+  "variables": {
+    "task_title": "Add OAuth login",
+    "acceptance_criteria": "Users can log in with Google."
+  }
+}
+```
+
+**Response:** `{ "rendered": "You completed task Add OAuth login. Summarize..." }`
+
+#### Record Usage
+
+```
+POST /api/prompt-registry/:id/record-usage
+```
+
+```json
+{
+  "model": "anthropic/claude-sonnet-4-6",
+  "inputTokens": 320,
+  "outputTokens": 145,
+  "renderedOutput": "You completed task Add OAuth login...",
+  "variables": { "task_title": "Add OAuth login" }
+}
+```
+
+**Response:** `201` with logged usage record.
+
+---
+
+### System Health (`/api/v1/system/health`)
+
+Get a real-time snapshot of system health across resources, agents, and operations.
+
+```
+GET /api/v1/system/health
+```
+
+No query params required.
+
+**Response:**
+
+```json
+{
+  "status": "stable",
+  "level": 0,
+  "signals": {
+    "system": {
+      "status": "stable",
+      "storageUsedPercent": 42,
+      "diskFreeGb": 120,
+      "memoryUsedPercent": 58
+    },
+    "agents": {
+      "status": "stable",
+      "online": 3,
+      "offline": 0,
+      "total": 3
+    },
+    "operations": {
+      "status": "stable",
+      "successRate": 0.97,
+      "recentRuns": 50,
+      "recentFailures": 1
+    }
+  },
+  "timestamp": "2026-03-21T14:00:00.000Z"
+}
+```
+
+**Health levels:** `stable` (0) · `reviewing` (1) · `drifting` (2) · `elevated` (3) · `alert` (4)
+
 ---
 
 _For workflow engine endpoints, see [API-WORKFLOWS.md](API-WORKFLOWS.md)._  

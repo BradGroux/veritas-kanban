@@ -1882,4 +1882,216 @@ Working toward WCAG 2.1 AA compliance.
 
 ---
 
-_Last updated: 2026-03-07 · [Back to README](../README.md)_
+---
+
+## v4.0 Features
+
+### Agent Policy & Guard Engine
+
+Define what agents are allowed to do. The Policy Engine lets you create configurable tool/action policies with guard rules, evaluated at runtime before any agent executes a tool or action. Every evaluation decision is logged for audit.
+
+**Key capabilities:**
+
+- Define policies scoped to a specific agent, project, or globally
+- Guard rule actions: `allow`, `deny`, `require-approval`
+- Configurable precedence: `deny-first` (default) or `allow-first`
+- Policy conditions: match by tool name, action type, agent, project, or arbitrary metadata
+- Every policy evaluation is logged in the built-in audit log
+- `POST /api/policies/:id/evaluate` for programmatic pre-flight checks
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/policies` | List all policies |
+| `POST` | `/api/policies` | Create a policy |
+| `GET` | `/api/policies/:id` | Get a single policy |
+| `PUT` | `/api/policies/:id` | Update a policy |
+| `DELETE` | `/api/policies/:id` | Delete a policy |
+| `POST` | `/api/policies/:id/evaluate` | Evaluate a policy against an action |
+
+**Related:** `server/src/routes/policies.ts` · `shared/src/types/policy.types.ts` · `docs/SOP-agent-policy-engine.md`
+
+---
+
+### Decision Audit Trail with Assumption Tracking
+
+Log structured decision records for every significant agent choice. Each decision captures the rationale, confidence score, supporting evidence, and stated assumptions. After execution, record the outcome to see whether the decision was sound and whether assumptions held.
+
+**Key capabilities:**
+
+- Structured records: decision text, confidence (0–1), evidence array, assumptions array
+- Outcome recording: what happened, whether assumptions held, a retrospective rating
+- Full-text search and filtering by agent, task, confidence range, and date range
+- Queryable from MCP for agent self-review
+- Aggregate analysis: frequency, confidence trends, assumption hit rate
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/decisions` | List decisions (filterable by agent, task, confidence) |
+| `POST` | `/api/decisions` | Log a new decision |
+| `GET` | `/api/decisions/:id` | Get a single decision |
+| `PATCH` | `/api/decisions/:id/assumptions/:idx` | Update an assumption by index |
+
+**Related:** `server/src/routes/decisions.ts` · `shared/src/types/decision.types.ts` · `docs/SOP-decision-audit-trail.md`
+
+---
+
+### Agent Output Evaluation & Scoring Framework
+
+Define scoring profiles with weighted criteria and evaluate agent outputs against them. Get a composite score, per-scorer breakdown, and per-dimension explanations that make quality regressions auditable.
+
+**Key capabilities:**
+
+- Four scorer types: `RegexMatch`, `KeywordContains`, `NumericRange`, `CustomExpression`
+- Weighted scorers with optional `target`: `action`, `output`, or `combined`
+- Composite scoring methods: `weightedAvg`, `minimum`, `geometricMean`
+- Per-evaluation history with scorer-level breakdowns
+- Attach evaluations to a task (`taskId`) or agent (`agent`) for trend analysis
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/scoring/profiles` | List scoring profiles |
+| `POST` | `/api/scoring/profiles` | Create a profile |
+| `GET` | `/api/scoring/profiles/:id` | Get a profile |
+| `PUT` | `/api/scoring/profiles/:id` | Update a profile |
+| `DELETE` | `/api/scoring/profiles/:id` | Delete a profile |
+| `POST` | `/api/scoring/evaluate` | Evaluate an output against a profile |
+| `GET` | `/api/scoring/history` | Get evaluation history |
+
+**Related:** `server/src/routes/scoring.ts` · `docs/SOP-output-evaluation.md`
+
+---
+
+### Behavioral Drift Detection & Alerting
+
+Define metric baselines for agents and get alerted when behavior deviates beyond configured thresholds. Drift records track status lifecycle (`ok` → `warning` → `alert` → `resolved`) and timestamps for detection and resolution events.
+
+**Key capabilities:**
+
+- Track any numeric metric with a name, baseline, current value, and threshold
+- Alert types: `z-score`, `percentage-change`, `absolute-deviation`
+- Drift status lifecycle with automatic timestamp tracking
+- Manual or programmatic resolution with notes
+- Queryable by agent, status, and date range
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/drift/alerts` | List drift alerts |
+| `POST` | `/api/drift/alerts/:id/acknowledge` | Acknowledge a drift alert |
+| `GET` | `/api/drift/baselines` | List agent metric baselines |
+| `POST` | `/api/drift/baselines/reset` | Reset baselines for an agent/metric |
+| `POST` | `/api/drift/analyze` | Trigger drift analysis for an agent |
+
+**Related:** `server/src/routes/drift.ts` · `shared/src/types/drift.types.ts` · `docs/SOP-behavioral-drift-detection.md`
+
+---
+
+### User Feedback Loop with Sentiment Analytics
+
+Collect feedback on agent outputs from users, tag it with sentiment and categories, and query aggregate analytics to identify patterns and improvement areas.
+
+**Key capabilities:**
+
+- Feedback items: content text, sentiment (`positive`/`neutral`/`negative`), category tags
+- Link feedback to a task (`taskId`) and/or agent (`agent`)
+- Analytics endpoint: sentiment breakdowns, trends over time, top categories
+- Filter by agent, task, sentiment, date range
+- Soft-delete support (feedback can be removed without breaking analytics history)
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/feedback` | List feedback items |
+| `POST` | `/api/feedback` | Submit feedback |
+| `GET` | `/api/feedback/:id` | Get a single item |
+| `DELETE` | `/api/feedback/:id` | Delete a feedback item |
+| `GET` | `/api/feedback/analytics` | Get aggregate sentiment analytics |
+
+**Related:** `server/src/routes/feedback.ts` · `shared/src/types/feedback.types.ts` · `docs/SOP-user-feedback.md`
+
+---
+
+### Draggable & Resizable Dashboard Widget Grid
+
+The dashboard is now fully customizable. Widgets can be repositioned via drag-and-drop and resized to fit your workflow. Layouts persist to `settings.json` so your arrangement survives page reloads and server restarts.
+
+**Key capabilities:**
+
+- Drag widgets to any grid position; snap-to-grid keeps layouts clean
+- Resize handles on every widget; minimum and maximum size constraints per widget type
+- Layout persistence via the settings API — no extra config needed
+- Widget library: add/remove widgets from a catalog panel
+- All existing widgets (task metrics, agent status, recent activity, squad chat) supported
+
+**Related:** `web/src/components/DraggableWidgetGrid` · `docs/FEATURES.md` (this file)
+
+---
+
+### Prompt Template Registry with Version Control
+
+A centralized library for managing prompt templates used across your agent fleet. Templates are versioned, variable-extracted, and usage-tracked. Roll back to any previous version with a single API call.
+
+**Key capabilities:**
+
+- Template CRUD with variable extraction: `{{variable_name}}` syntax auto-detected
+- Full version history — every save creates an immutable version entry with optional changelog
+- Rollback: promote any historical version to current
+- Preview rendering: POST sample variable values and get the rendered prompt back
+- Usage tracking: log which model, how many tokens, and the rendered output (optional)
+- Stats endpoint: total uses, average tokens, most recent use
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/prompt-registry` | List all templates |
+| `POST` | `/api/prompt-registry` | Create a new template |
+| `GET` | `/api/prompt-registry/:id` | Get a template |
+| `PATCH` | `/api/prompt-registry/:id` | Update a template (auto-versions) |
+| `DELETE` | `/api/prompt-registry/:id` | Delete a template |
+| `GET` | `/api/prompt-registry/:id/versions` | List all versions of a template |
+| `GET` | `/api/prompt-registry/:id/usage` | Get usage history |
+| `GET` | `/api/prompt-registry/:id/stats` | Get usage statistics |
+| `GET` | `/api/prompt-registry/stats/all` | Aggregate stats across all templates |
+| `POST` | `/api/prompt-registry/:id/render-preview` | Render a preview with variable injection |
+| `POST` | `/api/prompt-registry/:id/record-usage` | Record a usage event |
+| `POST` | `/api/prompt-registry/templates/:id/usage` | Log a template usage |
+
+**Related:** `server/src/routes/prompt-registry.ts` · `shared/src/types/prompt-registry.types.ts` · `docs/SOP-prompt-registry.md`
+
+---
+
+### Global System Health Status Bar
+
+A persistent header status bar that gives you a real-time overview of system health across three signal categories: system resources, agent availability, and operation success rate. Five health levels from `stable` to `alert` tell you at a glance when something needs attention.
+
+**Key capabilities:**
+
+- Five health levels: `stable` · `reviewing` · `drifting` · `elevated` · `alert`
+- Three signal categories:
+  - **System:** storage usage, disk space, memory
+  - **Agents:** online vs offline agent counts
+  - **Operations:** success rate, recent run counts
+- Expand/collapse detail panel inline in the header
+- Configurable thresholds via settings
+- REST API for programmatic polling or external monitoring
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/system/health` | Get current system health snapshot |
+
+**Related:** `server/src/routes/system-health.ts` · `shared/src/types/system-health.types.ts` · `web/src/components/SystemHealthBar` · `docs/SOP-system-health-monitoring.md`
+
+---
+
+_Last updated: 2026-03-21 · [Back to README](../README.md)_
