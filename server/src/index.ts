@@ -699,7 +699,46 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   let subscribedTaskId: string | null = null;
   let subscribedChatSession: string | null = null;
 
+  // Track current emitter listeners for cleanup on re-subscribe or close
+  let currentEmitter: import('events').EventEmitter | null = null;
+  let currentOutputHandler: ((output: AgentOutput) => void) | null = null;
+  let currentCompleteHandler:
+    | ((result: { code: number; signal: string | null; status: string }) => void)
+    | null = null;
+  let currentErrorHandler: ((error: Error) => void) | null = null;
+
+  const cleanupEmitterListeners = () => {
+    if (currentEmitter && currentOutputHandler) {
+      currentEmitter.off('output', currentOutputHandler);
+      currentEmitter.off('complete', currentCompleteHandler!);
+      currentEmitter.off('error', currentErrorHandler!);
+      currentEmitter = null;
+      currentOutputHandler = null;
+      currentCompleteHandler = null;
+      currentErrorHandler = null;
+    }
+  };
+
+  // ---- Message rate limiting ----
+  let messageCount = 0;
+  let messageWindowStart = Date.now();
+  const WS_MESSAGE_RATE_LIMIT = 30; // messages per window
+  const WS_MESSAGE_RATE_WINDOW_MS = 10_000; // 10 second window
+
   ws.on('message', (data) => {
+    // Rate limit check
+    const now = Date.now();
+    if (now - messageWindowStart > WS_MESSAGE_RATE_WINDOW_MS) {
+      messageCount = 0;
+      messageWindowStart = now;
+    }
+    messageCount++;
+    if (messageCount > WS_MESSAGE_RATE_LIMIT) {
+      log.warn({ count: messageCount }, 'WebSocket message rate limit exceeded');
+      ws.close(4008, 'Rate limit exceeded');
+      return;
+    }
+
     try {
       const message = JSON.parse(data.toString());
 
@@ -759,17 +798,20 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         }
         agentSubscriptions.get(newTaskId)!.add(ws);
 
+        // Clean up previous emitter listeners before subscribing to new task
+        cleanupEmitterListeners();
+
         // Set up listener for agent output
         const emitter = agentService.getAgentEmitter(newTaskId);
         if (emitter) {
-          const currentTaskId = newTaskId;
+          const taskIdForHandlers = newTaskId;
 
-          const outputHandler = (output: AgentOutput) => {
+          currentOutputHandler = (output: AgentOutput) => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
                 JSON.stringify({
                   type: 'agent:output',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   outputType: output.type,
                   content: output.content,
                   timestamp: output.timestamp,
@@ -778,7 +820,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
             }
           };
 
-          const completeHandler = (result: {
+          currentCompleteHandler = (result: {
             code: number;
             signal: string | null;
             status: string;
@@ -787,35 +829,29 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
               ws.send(
                 JSON.stringify({
                   type: 'agent:complete',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   ...result,
                 })
               );
             }
           };
 
-          const errorHandler = (error: Error) => {
+          currentErrorHandler = (error: Error) => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
                 JSON.stringify({
                   type: 'agent:error',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   error: error.message,
                 })
               );
             }
           };
 
-          emitter.on('output', outputHandler);
-          emitter.on('complete', completeHandler);
-          emitter.on('error', errorHandler);
-
-          // Clean up listeners when WebSocket closes
-          ws.on('close', () => {
-            emitter.off('output', outputHandler);
-            emitter.off('complete', completeHandler);
-            emitter.off('error', errorHandler);
-          });
+          currentEmitter = emitter;
+          emitter.on('output', currentOutputHandler);
+          emitter.on('complete', currentCompleteHandler);
+          emitter.on('error', currentErrorHandler);
         }
 
         // Send confirmation
@@ -840,6 +876,9 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
       clearTimeout(ws.heartbeatTimer);
       ws.heartbeatTimer = undefined;
     }
+
+    // Clean up emitter listeners
+    cleanupEmitterListeners();
 
     // Clean up agent subscriptions
     if (subscribedTaskId) {
