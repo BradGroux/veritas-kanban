@@ -134,6 +134,7 @@ export class ConfigService {
   private cacheTimestamp: number = 0;
   private lastWriteTime: number = 0;
   private watcher: FSWatcher | null = null;
+  private pendingRead: Promise<AppConfig> | null = null;
 
   constructor(options: ConfigServiceOptions = {}) {
     this.configDir = options.configDir || CONFIG_DIR;
@@ -191,6 +192,17 @@ export class ConfigService {
   async getConfig(): Promise<AppConfig> {
     if (this.isCacheValid()) return this.config!;
 
+    // Prevent cache stampede: coalesce concurrent reads into a single disk read
+    if (this.pendingRead) return this.pendingRead;
+
+    this.pendingRead = this.readConfigFromDisk().finally(() => {
+      this.pendingRead = null;
+    });
+
+    return this.pendingRead;
+  }
+
+  private async readConfigFromDisk(): Promise<AppConfig> {
     await this.ensureConfigDir();
 
     try {

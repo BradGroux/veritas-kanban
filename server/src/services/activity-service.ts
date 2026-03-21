@@ -174,8 +174,8 @@ export class ActivityService {
         try {
           const content = await readFile(this.activityFile, 'utf-8');
           activities = JSON.parse(content);
-        } catch {
-          // Intentionally silent: corrupted file — reset to empty list
+        } catch (err) {
+          log.warn({ err }, 'Corrupted activity file — resetting to empty list');
           activities = [];
         }
       }
