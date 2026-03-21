@@ -1,0 +1,483 @@
+import { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import {
+  useMetrics,
+  useTaskCost,
+  useUtilization,
+  formatTokens,
+  formatDuration,
+  type MetricsPeriod,
+  type TrendDirection,
+} from '@/hooks/useMetrics';
+import { useTasks } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ExportDialog } from './ExportDialog';
+import { DashboardFilterBar } from './DashboardFilterBar';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
+import type { DashboardWidgetSettings } from '@veritas-kanban/shared';
+import { cn } from '@/lib/utils';
+import { DrillDownPanel, type DrillDownType } from './DrillDownPanel';
+import { TasksDrillDown } from './TasksDrillDown';
+import { ErrorsDrillDown } from './ErrorsDrillDown';
+import { TokensDrillDown } from './TokensDrillDown';
+import { DurationDrillDown } from './DurationDrillDown';
+import { TrendsCharts } from './TrendsCharts';
+import { StatusTimeline } from './StatusTimeline';
+import { AgentComparison } from './AgentComparison';
+import { WhereTimeWent } from './WhereTimeWent';
+import { ActivityClock } from './ActivityClock';
+import { HourlyActivityChart } from './HourlyActivityChart';
+import { WallTimeToggle } from './WallTimeToggle';
+import { SessionMetrics } from './SessionMetrics';
+import { EnforcementIndicator } from './EnforcementIndicator';
+import { WidgetGrid, type GridWidgetConfig } from './WidgetGrid';
+import { WidgetWrapper } from './WidgetWrapper';
+
+// ---------------------------------------------------------------------------
+// Shared sub-components (copied from Dashboard.tsx to keep this file standalone)
+// ---------------------------------------------------------------------------
+
+function TrendIndicator({ direction, change }: { direction: TrendDirection; change: number }) {
+  if (direction === 'flat') {
+    return (
+      <span className="inline-flex items-center text-muted-foreground text-xs">
+        <Minus className="h-3 w-3 mr-0.5" />
+        <span>—</span>
+      </span>
+    );
+  }
+  const isGood = direction === 'up';
+  const colorClass = isGood ? 'text-green-500' : 'text-red-500';
+  const valueWentUp = change > 0;
+  const Icon = valueWentUp ? TrendingUp : TrendingDown;
+  return (
+    <span className={cn('inline-flex items-center text-xs', colorClass)}>
+      <Icon className="h-3 w-3 mr-0.5" />
+      <span>{Math.abs(change)}%</span>
+    </span>
+  );
+}
+
+interface StatCardProps {
+  title: React.ReactNode;
+  children: React.ReactNode;
+  onClick?: () => void;
+  clickable?: boolean;
+}
+
+function StatCard({ title, children, onClick, clickable }: StatCardProps) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg bg-card',
+        clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all'
+      )}
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+    >
+      <h4 className="text-sm font-medium text-muted-foreground mb-3">{title}</h4>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+interface StatRowProps {
+  label: string;
+  value: string | number;
+  subLabel?: string;
+  highlight?: boolean;
+}
+
+function StatRow({ label, value, subLabel, highlight }: StatRowProps) {
+  return (
+    <div className="flex justify-between items-baseline">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="text-right">
+        <span className={cn('font-semibold', highlight && 'text-primary')}>{value}</span>
+        {subLabel && <span className="text-xs text-muted-foreground ml-1">({subLabel})</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DashboardPage — main export
+// ---------------------------------------------------------------------------
+
+export function DashboardPage() {
+  const [period, setPeriod] = useState<MetricsPeriod>('7d');
+  const [customFrom, setCustomFrom] = useState<string | undefined>();
+  const [customTo, setCustomTo] = useState<string | undefined>();
+  const [project, setProject] = useState<string | undefined>(undefined);
+  const [drillDown, setDrillDown] = useState<DrillDownType>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+  const { settings } = useFeatureSettings();
+  const widgets: DashboardWidgetSettings = settings.board.dashboardWidgets ?? {
+    showTokenUsage: true,
+    showRunDuration: true,
+    showAgentComparison: true,
+    showStatusTimeline: true,
+    showCostPerTask: true,
+    showAgentUtilization: true,
+    showWallTime: true,
+    showSessionMetrics: true,
+    showActivityClock: true,
+    showWhereTimeWent: true,
+    showHourlyActivity: true,
+    showTrendsCharts: true,
+  };
+
+  const {
+    data: metrics,
+    isLoading,
+    isFetching,
+    error,
+    dataUpdatedAt,
+  } = useMetrics(period, project, customFrom, customTo);
+  const { data: taskCost } = useTaskCost(period, project, customFrom, customTo);
+  const { data: utilization } = useUtilization(period, customFrom, customTo);
+  const { data: tasks } = useTasks();
+  const { data: projectsList = [] } = useProjects();
+
+  const projectIds = tasks
+    ? [...new Set(tasks.filter((t) => t.project).map((t) => t.project!))]
+    : [];
+  const projects = projectsList.filter((p) => projectIds.includes(p.id));
+
+  const handleTaskClick = (taskId: string) => {
+    setDrillDown(null);
+    window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
+  };
+
+  const getDrillDownTitle = () => {
+    switch (drillDown) {
+      case 'tasks': return 'Task Details';
+      case 'errors': return 'Failed Runs';
+      case 'tokens': return 'Token Usage Breakdown';
+      case 'duration': return 'Run Duration Breakdown';
+      default: return '';
+    }
+  };
+
+  if (error) {
+    return <div className="p-4 text-center text-destructive">Failed to load metrics</div>;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Widget definitions
+  // ---------------------------------------------------------------------------
+
+  const noRunsYet = !isLoading && metrics && metrics.runs.runs === 0;
+
+  const tokenUsageContent = isLoading ? (
+    <Skeleton className="h-32" />
+  ) : noRunsYet ? null : metrics ? (
+    <StatCard
+      title={
+        <div className="flex items-center justify-between">
+          <span>Token Usage</span>
+          <TrendIndicator direction={metrics.trends.tokensTrend} change={metrics.trends.tokensChange} />
+        </div>
+      }
+      onClick={() => setDrillDown('tokens')}
+      clickable
+    >
+      <StatRow label="Total" value={formatTokens(metrics.tokens.totalTokens)} />
+      <StatRow label="Input" value={formatTokens(metrics.tokens.inputTokens)} />
+      <StatRow label="Output" value={formatTokens(metrics.tokens.outputTokens)} />
+      {metrics.tokens.cacheTokens > 0 && (
+        <StatRow label="Cache" value={formatTokens(metrics.tokens.cacheTokens)} />
+      )}
+      <div className="pt-2 border-t mt-2">
+        <div className="text-xs text-muted-foreground mb-1">Per Run</div>
+        <div className="flex justify-between text-sm">
+          <span>p50: {formatTokens(metrics.tokens.perSuccessfulRun.p50)}</span>
+          <span>p95: {formatTokens(metrics.tokens.perSuccessfulRun.p95)}</span>
+        </div>
+      </div>
+    </StatCard>
+  ) : null;
+
+  const runDurationContent = isLoading ? (
+    <Skeleton className="h-32" />
+  ) : noRunsYet ? null : metrics ? (
+    <StatCard
+      title={
+        <div className="flex items-center justify-between">
+          <span>Run Duration</span>
+          <TrendIndicator direction={metrics.trends.durationTrend} change={metrics.trends.durationChange} />
+        </div>
+      }
+      onClick={() => setDrillDown('duration')}
+      clickable
+    >
+      <StatRow label="Runs" value={metrics.duration.runs} />
+      <StatRow label="Average" value={formatDuration(metrics.duration.avgMs)} />
+      <div className="pt-2 border-t mt-2">
+        <div className="flex justify-between text-sm">
+          <div><span className="text-muted-foreground">p50: </span><span className="font-medium">{formatDuration(metrics.duration.p50Ms)}</span></div>
+          <div><span className="text-muted-foreground">p95: </span><span className="font-medium">{formatDuration(metrics.duration.p95Ms)}</span></div>
+        </div>
+      </div>
+    </StatCard>
+  ) : null;
+
+  const costPerTaskContent = taskCost ? (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Total Cost</span>
+        <span className="font-bold text-lg">${taskCost.totalCost.toFixed(2)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Avg per Task</span>
+        <span className="font-semibold">${taskCost.avgCostPerTask.toFixed(2)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm pb-2 border-b">
+        <span className="text-muted-foreground">Tasks with Cost</span>
+        <span className="font-semibold">{taskCost.tasks.length}</span>
+      </div>
+      <div className="space-y-1.5 overflow-y-auto">
+        {taskCost.tasks.slice(0, 10).map((t) => (
+          <button
+            key={t.taskId}
+            className="group flex items-center justify-between w-full text-left text-sm hover:bg-primary/10 rounded px-2 py-1.5 transition-colors cursor-pointer border border-transparent hover:border-primary/20"
+            onClick={() => handleTaskClick(t.taskId)}
+          >
+            <span className="truncate flex-1 mr-2 text-muted-foreground group-hover:text-foreground transition-colors">
+              {t.taskTitle || t.taskId}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="font-mono font-medium">${t.estimatedCost.toFixed(2)}</span>
+              <span className="text-muted-foreground/0 group-hover:text-primary transition-colors text-xs">→</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <Skeleton className="h-[200px]" />
+  );
+
+  const agentUtilizationContent = utilization ? (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground text-sm">Overall</span>
+        <span className={cn(
+          'font-bold text-lg',
+          utilization.utilizationPercent > 50 ? 'text-green-500' :
+          utilization.utilizationPercent > 20 ? 'text-yellow-500' : 'text-muted-foreground'
+        )}>
+          {utilization.utilizationPercent.toFixed(1)}%
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Active Time</span>
+        <span className="font-semibold">{formatDuration(utilization.totalActiveMs)}</span>
+      </div>
+      <div className="border-t pt-2 space-y-1.5 overflow-y-auto">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Daily</div>
+        {utilization.daily.map((d) => (
+          <div key={d.date} className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground w-20 shrink-0 text-xs">{d.date.slice(5)}</span>
+            <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
+              <div className="h-full bg-green-500 rounded-sm transition-all" style={{ width: `${Math.min(100, d.utilizationPercent)}%` }} />
+            </div>
+            <span className="font-mono text-xs w-12 text-right shrink-0">{d.utilizationPercent.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <Skeleton className="h-[200px]" />
+  );
+
+  // Build grid widget array
+  const gridWidgets: GridWidgetConfig[] = [
+    {
+      id: 'token-usage',
+      visible: widgets.showTokenUsage,
+      content: (
+        <WidgetWrapper title="Token Usage" onViewAll={() => setDrillDown('tokens')}>
+          {tokenUsageContent ?? <span className="text-muted-foreground text-sm">No data</span>}
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'run-duration',
+      visible: widgets.showRunDuration,
+      content: (
+        <WidgetWrapper title="Run Duration" onViewAll={() => setDrillDown('duration')}>
+          {runDurationContent ?? <span className="text-muted-foreground text-sm">No data</span>}
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'agent-comparison',
+      visible: widgets.showAgentComparison,
+      content: (
+        <WidgetWrapper title="Agent Comparison">
+          <AgentComparison project={project} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'status-timeline',
+      visible: widgets.showStatusTimeline,
+      content: (
+        <WidgetWrapper title="Agent Activity">
+          <StatusTimeline />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'cost-per-task',
+      visible: widgets.showCostPerTask,
+      content: (
+        <WidgetWrapper title="Cost per Task">
+          {costPerTaskContent}
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'agent-utilization',
+      visible: widgets.showAgentUtilization,
+      content: (
+        <WidgetWrapper title="Agent Utilization">
+          {agentUtilizationContent}
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'wall-time',
+      visible: widgets.showWallTime,
+      content: (
+        <WidgetWrapper title="Wall Time">
+          <WallTimeToggle period={period} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'session-metrics',
+      visible: widgets.showSessionMetrics,
+      content: (
+        <WidgetWrapper title="Session Metrics">
+          <SessionMetrics period={period} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'activity-clock',
+      visible: widgets.showActivityClock,
+      content: (
+        <WidgetWrapper title="Activity Clock">
+          <ActivityClock period={period} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'where-time-went',
+      visible: widgets.showWhereTimeWent,
+      content: (
+        <WidgetWrapper title="Where Time Went">
+          <WhereTimeWent period={period} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'hourly-activity',
+      visible: widgets.showHourlyActivity,
+      content: (
+        <WidgetWrapper title="Hourly Activity">
+          <HourlyActivityChart period={period} />
+        </WidgetWrapper>
+      ),
+    },
+    {
+      id: 'trends-charts',
+      visible: widgets.showTrendsCharts,
+      content: (
+        <WidgetWrapper title="Historical Trends">
+          <TrendsCharts project={project} />
+        </WidgetWrapper>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Filter Bar */}
+      <DashboardFilterBar
+        period={period}
+        onPeriodChange={(p, from, to) => {
+          setPeriod(p);
+          setCustomFrom(from);
+          setCustomTo(to);
+        }}
+        project={project}
+        onProjectChange={setProject}
+        projects={projects}
+        onExportClick={() => setExportDialogOpen(true)}
+      />
+
+      {/* Status bar */}
+      <div className="flex items-center justify-between -mt-2">
+        <EnforcementIndicator />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+          {isFetching ? 'Refreshing...' : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`}
+        </div>
+      </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        project={project}
+        projects={projects}
+      />
+
+      {/* No data state */}
+      {noRunsYet && (
+        <div className="rounded-lg border bg-muted/20 p-8 text-center">
+          <p className="text-muted-foreground">No agent runs recorded in this period</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Runs will appear here once telemetry data is collected
+          </p>
+        </div>
+      )}
+
+      {/* Draggable/resizable widget grid */}
+      <WidgetGrid widgets={gridWidgets} />
+
+      {/* Drill-Down Panel */}
+      <DrillDownPanel
+        type={drillDown}
+        title={getDrillDownTitle()}
+        onClose={() => setDrillDown(null)}
+      >
+        {drillDown === 'tasks' && (
+          <TasksDrillDown project={project} onTaskClick={handleTaskClick} />
+        )}
+        {drillDown === 'errors' && (
+          <ErrorsDrillDown period={period} project={project} onTaskClick={handleTaskClick} />
+        )}
+        {drillDown === 'tokens' && <TokensDrillDown period={period} project={project} />}
+        {drillDown === 'duration' && <DurationDrillDown period={period} project={project} />}
+      </DrillDownPanel>
+    </div>
+  );
+}
