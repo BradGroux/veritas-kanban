@@ -247,7 +247,7 @@ export class PromptRegistryService {
         templateId: id,
         versionNumber: nextVersionNumber,
         content: input.content,
-        changelog: input.changelog,
+        changelog: input.changelog ?? '',
         createdAt: now,
       };
 
