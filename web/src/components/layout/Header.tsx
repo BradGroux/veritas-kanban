@@ -11,6 +11,7 @@ import {
   Users,
   Workflow,
   Activity,
+  Scale,
   ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -138,6 +139,15 @@ export function Header() {
               title="Drift Monitor"
             >
               <Activity className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'scoring' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'scoring' ? 'board' : 'scoring')}
+              aria-label="Scoring"
+              title="Scoring"
+            >
+              <Scale className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant={view === 'policies' ? 'secondary' : 'ghost'}
