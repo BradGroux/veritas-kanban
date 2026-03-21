@@ -49,9 +49,12 @@ async function enqueue(key: string, timeout: number): Promise<() => void> {
 
   if (result === timedOut) {
     // We timed out. We can't just disappear — the next waiter is chained
-    // on `myTurn`. Pass through: when `previous` resolves, immediately
+    // on `myTurn`. Pass through: when `previous` settles, immediately
     // release so the chain doesn't stall.
-    previous.then(() => release());
+    previous.then(
+      () => release(),
+      () => release()
+    );
     throw new Error('in-process queue timeout');
   }
 

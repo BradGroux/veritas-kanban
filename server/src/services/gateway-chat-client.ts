@@ -49,6 +49,7 @@ export async function sendGatewayChat(
 
   return new Promise((resolve, reject) => {
     let connected = false;
+    let settled = false;
     let responseText = '';
     let responseUsage: Record<string, unknown> | undefined;
     let connectTimer: ReturnType<typeof setTimeout>;
@@ -66,21 +67,33 @@ export async function sendGatewayChat(
       }
     };
 
+    const safeReject = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+
+    const safeResolve = (value: ChatResponse) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
     connectTimer = setTimeout(() => {
       if (!connected) {
-        cleanup();
         const err = 'Gateway connection timeout';
         callbacks?.onError?.(err);
-        reject(new Error(err));
+        safeReject(new Error(err));
       }
     }, CONNECT_TIMEOUT_MS);
 
     ws.on('error', (err) => {
       log.error({ err: err.message }, 'Gateway WebSocket error');
-      cleanup();
       const errMsg = `Gateway connection failed: ${err.message}`;
       callbacks?.onError?.(errMsg);
-      reject(new Error(errMsg));
+      safeReject(new Error(errMsg));
     });
 
     ws.on('message', (data) => {
@@ -123,10 +136,9 @@ export async function sendGatewayChat(
 
         // Start response timeout
         responseTimer = setTimeout(() => {
-          cleanup();
           const err = 'Gateway response timeout';
           callbacks?.onError?.(err);
-          reject(new Error(err));
+          safeReject(new Error(err));
         }, RESPONSE_TIMEOUT_MS);
 
         ws.send(
@@ -152,11 +164,10 @@ export async function sendGatewayChat(
 
       // Handle errors
       if (msg.type === 'res' && !msg.ok) {
-        cleanup();
         const errMsg = msg.error?.message || 'Unknown gateway error';
         log.error({ error: msg.error }, 'Gateway error');
         callbacks?.onError?.(errMsg);
-        reject(new Error(errMsg));
+        safeReject(new Error(errMsg));
         return;
       }
 
@@ -206,27 +217,24 @@ export async function sendGatewayChat(
           };
 
           log.info({ sessionKey, textLength: responseText.length }, 'Chat response complete');
-          cleanup();
           callbacks?.onFinal?.(response);
-          resolve(response);
+          safeResolve(response);
           return;
         }
 
         if (payload.state === 'error') {
-          cleanup();
           const errMsg = payload.errorMessage || 'Chat error';
           callbacks?.onError?.(errMsg);
-          reject(new Error(errMsg));
+          safeReject(new Error(errMsg));
           return;
         }
 
         if (payload.state === 'aborted') {
-          cleanup();
           const response: ChatResponse = {
             text: responseText || '(response aborted)',
           };
           callbacks?.onFinal?.(response);
-          resolve(response);
+          safeResolve(response);
           return;
         }
       }
@@ -234,7 +242,7 @@ export async function sendGatewayChat(
 
     ws.on('close', () => {
       if (!connected) {
-        reject(new Error('Gateway WebSocket closed before connecting'));
+        safeReject(new Error('Gateway WebSocket closed before connecting'));
       }
     });
   });

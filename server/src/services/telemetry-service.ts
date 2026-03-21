@@ -147,14 +147,12 @@ export class TelemetryService {
       );
     }
 
+    // Capture the event to write — don't rely on queue ordering at execution time
+    const eventToWrite = this.pendingWrites.shift()!;
+
     // Queue the write to prevent concurrent file access issues
     const writePromise = this.writeQueue
-      .then(() => {
-        const eventToWrite = this.pendingWrites.shift();
-        if (eventToWrite) {
-          return this.writeEvent(eventToWrite);
-        }
-      })
+      .then(() => this.writeEvent(eventToWrite))
       .catch((err) => {
         log.error({ err: err }, '[Telemetry] Failed to write event');
       });

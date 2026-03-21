@@ -40,11 +40,16 @@ export class StatusHistoryService {
   private historyFile: string;
   private readonly MAX_ENTRIES = 5000; // Keep more entries for historical analysis
   private lastEntry: StatusHistoryEntry | null = null;
+  private initPromise: Promise<void>;
 
   constructor() {
     this.historyFile = join(process.cwd(), '.veritas-kanban', 'status-history.json');
-    this.ensureDir();
-    this.loadLastEntry();
+    this.initPromise = this.init();
+  }
+
+  private async init(): Promise<void> {
+    await this.ensureDir();
+    await this.loadLastEntry();
   }
 
   private async ensureDir(): Promise<void> {
@@ -65,7 +70,7 @@ export class StatusHistoryService {
   }
 
   async getHistory(limit: number = 100, offset: number = 0): Promise<StatusHistoryEntry[]> {
-    await this.ensureDir();
+    await this.initPromise;
 
     if (!(await fileExists(this.historyFile))) {
       return [];
@@ -88,7 +93,7 @@ export class StatusHistoryService {
     taskTitle?: string,
     subAgentCount?: number
   ): Promise<StatusHistoryEntry> {
-    await this.ensureDir();
+    await this.initPromise;
 
     const now = new Date();
     const timestamp = now.toISOString();
@@ -269,7 +274,7 @@ export class StatusHistoryService {
   }
 
   async clearHistory(): Promise<void> {
-    await this.ensureDir();
+    await this.initPromise;
     await writeFile(this.historyFile, '[]', 'utf-8');
     this.lastEntry = null;
   }
