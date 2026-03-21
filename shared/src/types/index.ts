@@ -18,4 +18,5 @@ export * from './drift.types.js';
 export * from './decision.types.js';
 export * from './evaluation.types.js';
 export * from './policy.types.js';
+export * from './system-health.types.js';
 export * from './feedback.types.js';
