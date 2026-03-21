@@ -1,6 +1,16 @@
 # shadcn/ui CLI v4 — Veritas Kanban
 
-> Upgraded 2026-03-08. CLI version: **4.0.0**
+> Upgraded 2026-03-09. CLI version: **4.0.2** | Style: **radix-nova** | Color format: **oklch**
+
+## What Changed in v4 Upgrade
+
+- **Style**: `new-york` -> `radix-nova` (v4 naming: `base-preset`)
+- **Color format**: HSL (`0 0% 3.9%`) -> oklch (`oklch(0.145 0 0)`)
+- **Imports**: `@radix-ui/react-*` -> `radix-ui` (unified package)
+- **Components**: All 16 registry components updated to v4 API (function components, `data-slot` attributes)
+- **CSS**: Added `@theme inline` block for Tailwind v4 integration, `tw-animate-css`, `shadcn/tailwind.css`
+- **Font**: Preserved original system font stack (`system-ui, Roboto, sans-serif`)
+- **New fields in `components.json`**: `rtl`, `menuColor`, `menuAccent`
 
 ## New CLI Commands (v4)
 
@@ -10,7 +20,7 @@
 | `shadcn docs <component>`           | Get API references, usage examples, and docs for components                  |
 | `shadcn view <item>`                | View items from the registry                                                 |
 | `shadcn search <registry>`          | Search/list items from registries                                            |
-| `shadcn migrate [migration] [path]` | Run migrations (e.g., Tailwind v3 → v4)                                      |
+| `shadcn migrate [migration] [path]` | Run migrations (e.g., Tailwind v3 -> v4)                                     |
 | `shadcn build [registry]`           | Build components for a custom shadcn registry                                |
 | `shadcn mcp`                        | MCP server and configuration commands                                        |
 | `shadcn registry add`               | Add external registries to your project                                      |
@@ -23,7 +33,7 @@
 | `--dry-run`       | `add <component>` | Preview what would be added without writing files |
 | `--view`          | `add <component>` | View component source code                        |
 | `--force`         | `init`            | Force overwrite existing configuration            |
-| `--preset <name>` | `init`            | Use a preset configuration (e.g., `base-nova`)    |
+| `--preset <name>` | `init`            | Use a preset configuration (nova, vega, etc.)     |
 | `--reinstall`     | `init`            | Re-install existing UI components                 |
 | `--base <base>`   | `init`            | Choose component library base (`radix` or `base`) |
 
@@ -31,7 +41,7 @@
 
 ```
 framework:       Vite (vite)
-style:           new-york
+style:           radix-nova
 base:            radix
 tailwindVersion: v4
 tailwindConfig:  tailwind.config.js
@@ -39,86 +49,83 @@ tailwindCss:     src/globals.css
 iconLibrary:     lucide
 typescript:      Yes
 rsc:             No
+rtl:             No
+menuColor:       default
+menuAccent:      subtle
 ```
 
 ## VK Design Preset
 
-VK uses the **neutral** base color with a custom dark-mode primary at **270° 50% 40%** (purple accent). This is not a built-in shadcn preset — it's our custom theme encoded in CSS variables.
+VK uses the **neutral** base color with a custom dark-mode primary at **oklch(0.389 0.15 303.5)** (purple accent, equivalent to HSL 270 50% 40%). This is applied on top of the `nova` preset.
 
-### Light Mode
+### Light Mode (oklch)
 
 ```css
 :root {
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
-  --primary: 0 0% 9%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
-  --muted: 0 0% 96.1%;
-  --accent: 0 0% 96.1%;
-  --destructive: 0 84.2% 60.2%;
-  --border: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --muted: oklch(0.97 0 0);
+  --accent: oklch(0.97 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  --border: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
   --radius: 0.5rem;
 }
 ```
 
-### Dark Mode (VK default)
+### Dark Mode (VK default, oklch)
 
 ```css
 .dark {
-  --background: 0 0% 3.9%;
-  --foreground: 0 0% 98%;
-  --primary: 270 50% 40%; /* Purple accent — VK brand */
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 14.9%;
-  --muted: 0 0% 14.9%;
-  --accent: 0 0% 14.9%;
-  --destructive: 0 62.8% 30.6%;
-  --border: 0 0% 14.9%;
-  --ring: 270 50% 40%; /* Matches primary */
-}
-```
-
-### Chart Colors (Dark)
-
-```css
-.dark {
-  --chart-1: 220 70% 50%; /* Blue */
-  --chart-2: 160 60% 45%; /* Teal */
-  --chart-3: 30 80% 55%; /* Orange */
-  --chart-4: 280 65% 60%; /* Purple */
-  --chart-5: 340 75% 55%; /* Pink */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.389 0.15 303.5); /* Purple accent — VK brand */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --muted: oklch(0.269 0 0);
+  --accent: oklch(0.269 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.269 0 0);
+  --ring: oklch(0.389 0.15 303.5); /* Matches primary */
 }
 ```
 
 ### To recreate this theme on a fresh `shadcn init`:
 
 ```bash
-pnpm dlx shadcn@latest init --template=vite --force
-# Then replace CSS variables in src/globals.css with the values above
+pnpm dlx shadcn@latest init --template=vite --force --base radix --preset nova
+# Then replace dark mode --primary and --ring in src/globals.css with oklch(0.389 0.15 303.5)
 ```
 
 ## Installed Components (16)
 
-All components are current with upstream as of 2026-03-08:
+All components updated to v4 as of 2026-03-09:
 
 - alert-dialog, badge, button, checkbox, dialog, input, label, popover
 - scroll-area, select, sheet, skeleton, switch, tabs, textarea, tooltip
 
-Plus 2 custom components (not from shadcn registry):
+Plus 4 non-registry components:
 
-- `MarkdownEditor.tsx`
-- `MarkdownRenderer.tsx`
+- `MarkdownEditor.tsx` (custom)
+- `MarkdownRenderer.tsx` (custom)
+- `toast.tsx` (customized, uses `@radix-ui/react-toast`)
+- `toaster.tsx` (customized)
 
 ### Checking for upstream changes
 
 ```bash
 cd web
-pnpm dlx shadcn@latest diff          # Check all components
-pnpm dlx shadcn@latest add button --diff  # Check specific component
+pnpm dlx shadcn@latest diff                    # Check all components
+pnpm dlx shadcn@latest add button --diff        # Check specific component
 ```
 
 ## Dark Mode
 
-VK uses class-based dark mode (`darkMode: ['class']` in tailwind.config.js). The `<html>` element has `class="dark"` by default. All CSS variables have both `:root` (light) and `.dark` (dark) variants defined in `src/globals.css`.
+VK uses class-based dark mode (`darkMode: ['class']` in tailwind.config.js). The `<html>` element has `class="dark"` by default. All CSS variables have both `:root` (light) and `.dark` (dark) variants defined in `src/globals.css` using oklch color format.
+
+## Tailwind v4 Integration
+
+The `@theme inline` block in `globals.css` maps CSS custom properties to Tailwind utility classes. This replaces the old `tailwind.config.js` `theme.extend.colors` pattern. The `shadcn/tailwind.css` import provides base component styles.
