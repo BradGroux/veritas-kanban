@@ -17,6 +17,7 @@ export type AppView =
   | 'workflows'
   | 'policies'
   | 'drift'
+  | 'decisions'
   | 'scoring';
 
 const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -30,6 +31,7 @@ const VIEW_PATHS: Record<AppView, string> = {
   workflows: '/workflows',
   policies: '/policies',
   drift: '/drift',
+  decisions: '/decisions',
   scoring: '/scoring',
 };
 

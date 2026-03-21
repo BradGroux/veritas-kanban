@@ -14,6 +14,7 @@ import {
   Sun,
   Keyboard,
   Activity,
+  GitBranch,
 } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,14 @@ export function CommandPalette() {
         category: 'Navigation',
         action: () => setView('archive'),
         keywords: ['done', 'completed', 'old'],
+      },
+      {
+        id: 'go-decisions',
+        label: 'Go to Decisions',
+        icon: <GitBranch className="h-4 w-4" />,
+        category: 'Navigation',
+        action: () => setView('decisions'),
+        keywords: ['audit', 'reasoning', 'assumptions'],
       },
 
       // Board shortcuts
