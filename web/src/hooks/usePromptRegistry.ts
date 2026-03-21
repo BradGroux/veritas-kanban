@@ -5,8 +5,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { promptRegistryApi } from '../lib/api/prompt-registry.js';
 import type {
-  PromptTemplate,
-  PromptVersion,
   PromptUsage,
   PromptStats,
   CreatePromptTemplateInput,

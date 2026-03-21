@@ -3,9 +3,9 @@
  * Multi-tab interface for managing prompt templates, versions, usage, and statistics
  * Tabs: Templates, Versions, Usage, Stats, Preview
  */
-import React, { useState } from 'react';
-import { usePromptTemplates, usePromptTemplate, useCreatePromptTemplate, useUpdatePromptTemplate, useDeletePromptTemplate, usePromptVersionHistory, usePromptUsageRecords, usePromptStatsAll, useRecordPromptUsage, useRenderPromptPreview } from '../../hooks/usePromptRegistry.js';
-import type { PromptTemplate, CreatePromptTemplateInput, UpdatePromptTemplateInput, PromptCategory } from '@veritas-kanban/shared';
+import { useState } from 'react';
+import { usePromptTemplates, usePromptTemplate, useCreatePromptTemplate, useUpdatePromptTemplate, useDeletePromptTemplate, usePromptVersionHistory, usePromptUsageRecords, usePromptStatsAll, useRenderPromptPreview } from '../../hooks/usePromptRegistry.js';
+import type { CreatePromptTemplateInput, PromptCategory } from '@veritas-kanban/shared';
 import styles from './PromptRegistry.module.css';
 
 type TabType = 'templates' | 'versions' | 'usage' | 'stats' | 'preview';
@@ -16,7 +16,6 @@ type TabType = 'templates' | 'versions' | 'usage' | 'stats' | 'preview';
 function TemplatesTab() {
   const { data: templates, isLoading } = usePromptTemplates();
   const createMutation = useCreatePromptTemplate();
-  const updateMutation = useUpdatePromptTemplate('');
   const deleteMutation = useDeletePromptTemplate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -309,7 +308,7 @@ function PreviewTab() {
   const { data: template } = usePromptTemplate(selectedId);
   const { data: preview } = useRenderPromptPreview(selectedId, sampleVariables);
 
-  const handleAddVariable = (varName: string) => {
+  const _handleAddVariable = (varName: string) => {
     setSampleVariables({ ...sampleVariables, [varName]: '' });
   };
 
