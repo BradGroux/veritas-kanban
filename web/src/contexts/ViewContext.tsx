@@ -15,7 +15,10 @@ export type AppView =
   | 'archive'
   | 'templates'
   | 'workflows'
+  | 'policies'
   | 'scoring';
+
+const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 
 const VIEW_PATHS: Record<AppView, string> = {
   board: '/',
@@ -24,35 +27,22 @@ const VIEW_PATHS: Record<AppView, string> = {
   archive: '/archive',
   templates: '/templates',
   workflows: '/workflows',
+  policies: '/policies',
   scoring: '/scoring',
 };
 
-function getBasePath() {
-  return (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '';
+function normalizeAppPath(pathname: string): string {
+  const normalized = pathname.startsWith(basePath)
+    ? pathname.slice(basePath.length) || '/'
+    : pathname;
+  return normalized === '' ? '/' : normalized.replace(/\/+$/, '') || '/';
 }
 
-function normalizePath(pathname: string) {
-  const base = getBasePath();
-  if (base && pathname.startsWith(base)) {
-    return pathname.slice(base.length) || '/';
-  }
-  return pathname || '/';
-}
-
-function viewFromPathname(pathname: string): AppView {
-  const normalized = normalizePath(pathname);
-  const match = Object.entries(VIEW_PATHS).find(([, path]) => path === normalized);
-  return (match?.[0] as AppView | undefined) || 'board';
-}
-
-function syncBrowserPath(view: AppView) {
-  if (typeof window === 'undefined') return;
-  const base = getBasePath();
-  const targetPath = `${base}${VIEW_PATHS[view] === '/' ? '' : VIEW_PATHS[view]}` || '/';
-  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  if (current !== targetPath) {
-    window.history.pushState({}, '', targetPath);
-  }
+function getViewFromLocation(): AppView {
+  if (typeof window === 'undefined') return 'board';
+  const path = normalizeAppPath(window.location.pathname);
+  const entry = Object.entries(VIEW_PATHS).find(([, value]) => value === path);
+  return (entry?.[0] as AppView | undefined) || 'board';
 }
 
 interface ViewContextValue {
@@ -74,42 +64,47 @@ const ViewContext = createContext<ViewContextValue>({
 });
 
 export function ViewProvider({ children }: { children: ReactNode }) {
-  const [view, setViewState] = useState<AppView>(() =>
-    typeof window === 'undefined' ? 'board' : viewFromPathname(window.location.pathname)
-  );
+  const [view, setViewState] = useState<AppView>(() => getViewFromLocation());
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
 
   const setView = useCallback((nextView: AppView) => {
     setViewState(nextView);
-    syncBrowserPath(nextView);
+
+    if (typeof window === 'undefined') return;
+
+    const nextPath = `${basePath}${VIEW_PATHS[nextView]}`.replace(/\/+/g, '/');
+    const nextUrl = nextView === 'board' ? `${nextPath}${window.location.search}` : nextPath;
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    if (currentPath !== nextUrl) {
+      window.history.pushState({}, '', nextUrl);
+    }
   }, []);
 
   const navigateToTask = useCallback(
     (taskId: string) => {
       setPendingTaskId(taskId);
-      setViewState('board');
-      syncBrowserPath('board');
+      setView('board');
     },
-    [setViewState]
+    [setView]
   );
 
   const clearPendingTask = useCallback(() => {
     setPendingTaskId(null);
   }, []);
 
+  const value = useMemo(
+    () => ({ view, setView, navigateToTask, pendingTaskId, clearPendingTask }),
+    [view, setView, navigateToTask, pendingTaskId, clearPendingTask]
+  );
+
   useEffect(() => {
     const handlePopState = () => {
-      setViewState(viewFromPathname(window.location.pathname));
+      setViewState(getViewFromLocation());
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-
-  const value = useMemo(
-    () => ({ view, setView, navigateToTask, pendingTaskId, clearPendingTask }),
-    [view, setView, navigateToTask, pendingTaskId, clearPendingTask]
-  );
 
   return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
 }
