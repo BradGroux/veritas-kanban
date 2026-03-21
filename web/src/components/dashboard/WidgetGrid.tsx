@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
 import type { ReactNode } from 'react';
-import type { ResponsiveLayouts, Layout } from 'react-grid-layout';
+import type { ResponsiveLayouts, Layout, LayoutItem } from 'react-grid-layout';
 
 // Import react-grid-layout styles locally (not globally)
 import 'react-grid-layout/css/styles.css';
@@ -41,7 +41,8 @@ function WidgetGridInner({
   const filteredLayouts = useMemo(() => {
     const result: ResponsiveLayouts = {};
     for (const bp of Object.keys(DEFAULT_LAYOUTS) as Array<keyof typeof DEFAULT_LAYOUTS>) {
-      result[bp] = (layouts[bp] ?? DEFAULT_LAYOUTS[bp]).filter((item: Layout) =>
+      const bpLayout: Layout = layouts[bp] ?? DEFAULT_LAYOUTS[bp] ?? [];
+      result[bp] = bpLayout.filter((item: LayoutItem) =>
         visibleIds.has(item.i)
       );
     }
