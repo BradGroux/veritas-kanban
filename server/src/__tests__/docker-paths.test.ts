@@ -8,6 +8,7 @@ vi.mock('node:fs/promises', () => {
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     unlink: vi.fn().mockResolvedValue(undefined),
+    rm: vi.fn().mockResolvedValue(undefined),
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 0 }),
   };
   return { ...mod, default: mod };
