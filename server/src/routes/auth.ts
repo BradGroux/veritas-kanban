@@ -126,7 +126,9 @@ router.get(
     const token = req.cookies?.veritas_session;
     if (token && !needsSetup) {
       try {
-        const decoded = jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+        const decoded = jwt.verify(token, getJwtSecret(), {
+          algorithms: ['HS256'],
+        }) as jwt.JwtPayload;
         authenticated = true;
         if (decoded.exp) {
           sessionExpiry = new Date(decoded.exp * 1000).toISOString();

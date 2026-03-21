@@ -244,7 +244,7 @@ function verifyJwtToken(token: string): { valid: boolean; error?: string } {
 
   for (const secret of secrets) {
     try {
-      jwt.verify(token, secret);
+      jwt.verify(token, secret, { algorithms: ['HS256'] });
       return { valid: true };
     } catch (err) {
       lastError = err as Error;

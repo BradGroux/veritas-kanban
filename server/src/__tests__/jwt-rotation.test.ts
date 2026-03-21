@@ -334,7 +334,7 @@ describe('JWT Secret Rotation', () => {
       let verified = false;
       for (const secret of secrets) {
         try {
-          jwt.verify(token, secret);
+          jwt.verify(token, secret, { algorithms: ['HS256'] });
           verified = true;
           break;
         } catch {
@@ -364,7 +364,7 @@ describe('JWT Secret Rotation', () => {
 
       // Token signed with current secret should verify with it
       const token = jwt.sign({ type: 'session' }, signingSecret, { expiresIn: '24h' });
-      const decoded = jwt.verify(token, 'new-secret');
+      const decoded = jwt.verify(token, 'new-secret', { algorithms: ['HS256'] });
       expect(decoded).toBeDefined();
     });
   });
