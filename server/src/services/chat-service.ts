@@ -361,6 +361,7 @@ export class ChatService {
       event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status';
       taskTitle?: string;
       duration?: string;
+      card?: Record<string, unknown>;
     },
     displayName?: string
   ): Promise<SquadMessage> {
@@ -379,6 +380,7 @@ export class ChatService {
       event: input.event,
       taskTitle: input.taskTitle,
       duration: input.duration,
+      ...(input.card && { card: input.card }),
     };
 
     // Store as daily markdown file: squad/YYYY-MM-DD.md
