@@ -27,7 +27,10 @@ function buildQuery(filters: Record<string, string | boolean | undefined>) {
 export function useDriftAlerts(filters: DriftAlertFilters = {}) {
   return useQuery({
     queryKey: ['drift-alerts', filters],
-    queryFn: () => apiFetch<DriftAlert[]>(`${API_BASE}/drift/alerts${buildQuery(filters)}`),
+    queryFn: () =>
+      apiFetch<DriftAlert[]>(
+        `${API_BASE}/drift/alerts${buildQuery(filters as Record<string, string | boolean | undefined>)}`
+      ),
     refetchInterval: 30_000,
   });
 }

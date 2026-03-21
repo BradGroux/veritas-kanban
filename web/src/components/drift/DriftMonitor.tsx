@@ -273,7 +273,10 @@ function DriftChart({ alerts, baselines }: { alerts: DriftAlert[]; baselines: Dr
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
             />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(2)}`, 'Z-Score']}
+              formatter={(value) => [
+                typeof value === 'number' ? value.toFixed(2) : String(value ?? ''),
+                'Z-Score',
+              ]}
               contentStyle={{ borderRadius: 12, borderColor: 'hsl(var(--border))' }}
             />
             <Bar dataKey="zScore" radius={[0, 6, 6, 0]}>
