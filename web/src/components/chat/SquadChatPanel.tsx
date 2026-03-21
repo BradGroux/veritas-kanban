@@ -204,7 +204,7 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 px-4" onScrollCapture={handleScroll} ref={scrollAreaRef}>
+        <ScrollArea className="flex-1 min-h-0 px-4" onScrollCapture={handleScroll} ref={scrollAreaRef}>
           <div className="py-4 space-y-3">
             {isLoading && (
               <div className="text-center text-muted-foreground py-8">
