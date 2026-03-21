@@ -39,6 +39,7 @@ export * from './useTaskTypes';
 export * from './useTasks';
 export * from './useTemplateForm';
 export * from './useTemplates';
+export * from './useDecisions';
 // Note: useTimeTracking also exports formatDuration - import directly to avoid conflict with useMetrics
 export {
   useTimeSummary,

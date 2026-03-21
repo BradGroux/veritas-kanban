@@ -1,29 +1,27 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
-// Mock node:fs/promises while preserving the real module shape for Vitest
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  const mocked: typeof actual = {
-    ...actual,
+vi.mock('node:fs/promises', () => {
+  const mod = {
+    access: vi.fn().mockResolvedValue(undefined),
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
-    stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 0 }),
-    access: vi.fn().mockResolvedValue(undefined),
-    copyFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
-    rename: vi.fn().mockResolvedValue(undefined),
-    statfs: vi.fn().mockResolvedValue({ bfree: 1024 * 1024, bsize: 1024 }),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 0 }),
   };
-  return {
-    ...mocked,
-    default: mocked, // Vitest requires a default export when mocking ESM
-  };
+  return { ...mod, default: mod };
 });
 
 // Mock node:fs to prevent filesystem reads
 vi.mock('node:fs', () => {
+  const mockPromises = {
+    readFile: vi.fn().mockResolvedValue(''),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    readdir: vi.fn().mockResolvedValue([]),
+    unlink: vi.fn().mockResolvedValue(undefined),
+  };
   const mockFs = {
     existsSync: vi.fn((path: string) => {
       if (typeof path === 'string' && path.includes('pnpm-workspace.yaml')) {
@@ -34,6 +32,7 @@ vi.mock('node:fs', () => {
     readFileSync: vi.fn(() => ''),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
+    promises: mockPromises,
   };
   return {
     ...mockFs,

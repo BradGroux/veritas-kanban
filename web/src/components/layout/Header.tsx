@@ -10,6 +10,7 @@ import {
   FileText,
   Users,
   Workflow,
+  GitBranch,
   Scale,
   ShieldAlert,
 } from 'lucide-react';
@@ -129,6 +130,15 @@ export function Header() {
               title="Workflows"
             >
               <Workflow className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'decisions' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'decisions' ? 'board' : 'decisions')}
+              aria-label="Decisions"
+              title="Decision Audit Trail"
+            >
+              <GitBranch className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant={view === 'scoring' ? 'secondary' : 'ghost'}

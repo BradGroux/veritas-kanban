@@ -171,6 +171,11 @@ export function getBroadcastsDir(): string {
   return path.join(getRuntimeDir(), 'broadcasts');
 }
 
+/** Directory for decision audit trail files (storage/decisions). */
+export function getDecisionsDir(): string {
+  return path.join(getStorageRoot(), 'storage', 'decisions');
+}
+
 /** Directory for reports configuration and generated reports metadata. */
 export function getReportsConfigDir(): string {
   return getRuntimeDir();
