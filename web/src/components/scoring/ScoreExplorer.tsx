@@ -48,7 +48,13 @@ export function ScoreExplorer({ profiles }: ScoreExplorerProps) {
   });
 
   const availableAgents = useMemo(() => {
-    return [...new Set(history.map((result) => result.agent).filter(Boolean))].sort();
+    return [
+      ...new Set(
+        history
+          .map((result) => result.agent)
+          .filter((agentName): agentName is string => typeof agentName === 'string')
+      ),
+    ].sort();
   }, [history]);
 
   const chartSeries = useMemo(() => {
@@ -151,7 +157,11 @@ export function ScoreExplorer({ profiles }: ScoreExplorerProps) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" minTickGap={28} />
                 <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} width={42} />
-                <Tooltip formatter={(value: number) => `${value}%`} />
+                <Tooltip
+                  formatter={(value) =>
+                    typeof value === 'number' ? `${value}%` : String(value ?? '')
+                  }
+                />
                 <Line
                   type="monotone"
                   dataKey="composite"
@@ -179,7 +189,11 @@ export function ScoreExplorer({ profiles }: ScoreExplorerProps) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" minTickGap={28} />
                 <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} width={42} />
-                <Tooltip formatter={(value: number) => `${value}%`} />
+                <Tooltip
+                  formatter={(value) =>
+                    typeof value === 'number' ? `${value}%` : String(value ?? '')
+                  }
+                />
                 <Legend />
                 {availableAgents.map((agentName, index) => (
                   <Line
