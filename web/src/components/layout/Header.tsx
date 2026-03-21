@@ -11,6 +11,7 @@ import {
   Users,
   Workflow,
   Activity,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
@@ -137,6 +138,15 @@ export function Header() {
               title="Drift Monitor"
             >
               <Activity className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'policies' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'policies' ? 'board' : 'policies')}
+              aria-label="Policies"
+              title="Policies"
+            >
+              <ShieldAlert className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"

@@ -15,3 +15,4 @@ export * from './agent-registry.types.js';
 export * from './shared-resources.types.js';
 export * from './doc-freshness.types.js';
 export * from './drift.types.js';
+export * from './policy.types.js';

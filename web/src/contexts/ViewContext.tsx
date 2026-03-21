@@ -3,8 +3,8 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   useMemo,
+  useEffect,
   type ReactNode,
 } from 'react';
 
@@ -15,7 +15,35 @@ export type AppView =
   | 'archive'
   | 'templates'
   | 'workflows'
+  | 'policies'
   | 'drift';
+
+const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+
+const VIEW_PATHS: Record<AppView, string> = {
+  board: '/',
+  activity: '/activity',
+  backlog: '/backlog',
+  archive: '/archive',
+  templates: '/templates',
+  workflows: '/workflows',
+  policies: '/policies',
+  drift: '/drift',
+};
+
+function normalizeAppPath(pathname: string): string {
+  const normalized = pathname.startsWith(basePath)
+    ? pathname.slice(basePath.length) || '/'
+    : pathname;
+  return normalized === '' ? '/' : normalized.replace(/\/+$/, '') || '/';
+}
+
+function getViewFromLocation(): AppView {
+  if (typeof window === 'undefined') return 'board';
+  const path = normalizeAppPath(window.location.pathname);
+  const entry = Object.entries(VIEW_PATHS).find(([, value]) => value === path);
+  return (entry?.[0] as AppView | undefined) || 'board';
+}
 
 interface ViewContextValue {
   view: AppView;
@@ -27,8 +55,6 @@ interface ViewContextValue {
   clearPendingTask: () => void;
 }
 
-const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-
 const ViewContext = createContext<ViewContextValue>({
   view: 'board',
   setView: () => {},
@@ -37,44 +63,21 @@ const ViewContext = createContext<ViewContextValue>({
   clearPendingTask: () => {},
 });
 
-function pathToView(pathname: string): AppView {
-  const stripped =
-    BASE_PATH && pathname.startsWith(BASE_PATH)
-      ? pathname.slice(BASE_PATH.length) || '/'
-      : pathname;
-  if (stripped === '/activity') return 'activity';
-  if (stripped === '/backlog') return 'backlog';
-  if (stripped === '/archive') return 'archive';
-  if (stripped === '/templates') return 'templates';
-  if (stripped === '/workflows') return 'workflows';
-  if (stripped === '/drift') return 'drift';
-  return 'board';
-}
-
-function viewToPath(view: AppView): string {
-  const localPath = view === 'board' ? '/' : `/${view}`;
-  return `${BASE_PATH}${localPath}` || '/';
-}
-
 export function ViewProvider({ children }: { children: ReactNode }) {
-  const [viewState, setViewState] = useState<AppView>(() => pathToView(window.location.pathname));
+  const [view, setViewState] = useState<AppView>(() => getViewFromLocation());
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
 
   const setView = useCallback((nextView: AppView) => {
     setViewState(nextView);
-    const nextPath = viewToPath(nextView);
-    if (window.location.pathname !== nextPath) {
-      window.history.replaceState(null, '', nextPath);
+
+    if (typeof window === 'undefined') return;
+
+    const nextPath = `${basePath}${VIEW_PATHS[nextView]}`.replace(/\/+/g, '/');
+    const nextUrl = nextView === 'board' ? `${nextPath}${window.location.search}` : nextPath;
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    if (currentPath !== nextUrl) {
+      window.history.pushState({}, '', nextUrl);
     }
-  }, []);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setViewState(pathToView(window.location.pathname));
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const navigateToTask = useCallback(
@@ -90,9 +93,18 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ view: viewState, setView, navigateToTask, pendingTaskId, clearPendingTask }),
-    [viewState, setView, navigateToTask, pendingTaskId, clearPendingTask]
+    () => ({ view, setView, navigateToTask, pendingTaskId, clearPendingTask }),
+    [view, setView, navigateToTask, pendingTaskId, clearPendingTask]
   );
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setViewState(getViewFromLocation());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
 }

@@ -210,3 +210,8 @@ export function getDriftAlertsDir(): string {
 export function getDriftBaselinesDir(): string {
   return path.join(getRuntimeDir(), 'storage', 'drift', 'baselines');
 }
+
+/** Directory for agent action policies (.veritas-kanban/storage/policies). */
+export function getPoliciesDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'policies');
+}
