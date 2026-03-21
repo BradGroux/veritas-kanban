@@ -29,6 +29,7 @@ import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
+import { getPolicyService } from './services/policy-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
 import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -566,6 +567,7 @@ let configService: ConfigService | null = null;
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
+    await getPolicyService().waitForInit();
   } catch (err) {
     log.error({ err }, 'Failed to initialize services');
   }

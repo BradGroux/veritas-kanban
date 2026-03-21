@@ -1,6 +1,15 @@
 export type TaskType = string;
 export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+/** Run mode controls the review/QA strategy for a task. */
+export type RunMode = 'strategy' | 'eng-review' | 'paranoid-review' | 'qa';
+/** QA gate state — tracks whether a QA review is required and whether it has passed. */
+export interface QaGateState {
+  required: boolean;
+  passed: boolean;
+  passedAt?: string;
+  passedBy?: string;
+}
 /** Built-in agent types. Custom agents use any string slug. */
 export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
@@ -140,6 +149,8 @@ export interface Task {
   actualCost?: number;
   lessonsLearned?: string;
   lessonTags?: string[];
+  runMode?: RunMode | null;
+  qaGate?: QaGateState | null;
 }
 export interface ReviewComment {
   id: string;
@@ -199,6 +210,8 @@ export interface UpdateTaskInput {
   position?: number;
   lessonsLearned?: string;
   lessonTags?: string[];
+  runMode?: RunMode | null;
+  qaGate?: QaGateState | null;
 }
 export interface TaskFilters {
   status?: TaskStatus | TaskStatus[];

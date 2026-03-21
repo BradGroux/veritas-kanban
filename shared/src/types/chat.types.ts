@@ -56,6 +56,7 @@ export interface SquadMessage {
   event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status'; // Event type for system messages
   taskTitle?: string; // Task title for system messages
   duration?: string; // Duration string for completed/failed events (e.g., "2m 44s")
+  card?: Record<string, unknown>; // Adaptive Card v1.5 JSON for rich Teams rendering
 }
 
 /**
@@ -70,4 +71,5 @@ export interface SquadMessageInput {
   event?: 'agent.spawned' | 'agent.completed' | 'agent.failed' | 'agent.status';
   taskTitle?: string;
   duration?: string;
+  card?: Record<string, unknown>; // Adaptive Card v1.5 JSON for rich Teams rendering
 }
