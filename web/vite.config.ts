@@ -34,18 +34,33 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-dom/client'],
-          'vendor-radix': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-tooltip',
-            '@radix-ui/react-slot',
-          ],
-          'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
-          'vendor-query': ['@tanstack/react-query'],
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/')
+          ) {
+            return 'vendor-react';
+          }
+          if (
+            id.includes('node_modules/@radix-ui/react-dialog/') ||
+            id.includes('node_modules/@radix-ui/react-popover/') ||
+            id.includes('node_modules/@radix-ui/react-select/') ||
+            id.includes('node_modules/@radix-ui/react-tabs/') ||
+            id.includes('node_modules/@radix-ui/react-tooltip/') ||
+            id.includes('node_modules/@radix-ui/react-slot/')
+          ) {
+            return 'vendor-radix';
+          }
+          if (
+            id.includes('node_modules/@dnd-kit/core/') ||
+            id.includes('node_modules/@dnd-kit/sortable/') ||
+            id.includes('node_modules/@dnd-kit/utilities/')
+          ) {
+            return 'vendor-dnd';
+          }
+          if (id.includes('node_modules/@tanstack/react-query/')) {
+            return 'vendor-query';
+          }
         },
       },
     },
