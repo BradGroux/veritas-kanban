@@ -13,6 +13,8 @@ import {
   Moon,
   Sun,
   Keyboard,
+  Activity,
+  GitBranch,
 } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
@@ -86,12 +88,28 @@ export function CommandPalette() {
         keywords: ['someday', 'maybe', 'later'],
       },
       {
+        id: 'go-drift',
+        label: 'Go to Drift Monitor',
+        icon: <Activity className="h-4 w-4" />,
+        category: 'Navigation',
+        action: () => setView('drift'),
+        keywords: ['behavior', 'anomaly', 'z-score', 'alerts'],
+      },
+      {
         id: 'go-archive',
         label: 'Go to Archive',
         icon: <Archive className="h-4 w-4" />,
         category: 'Navigation',
         action: () => setView('archive'),
         keywords: ['done', 'completed', 'old'],
+      },
+      {
+        id: 'go-decisions',
+        label: 'Go to Decisions',
+        icon: <GitBranch className="h-4 w-4" />,
+        category: 'Navigation',
+        action: () => setView('decisions'),
+        keywords: ['audit', 'reasoning', 'assumptions'],
       },
 
       // Board shortcuts
@@ -183,7 +201,10 @@ export function CommandPalette() {
         seen.add(cmd.category);
         groups.push({ category: cmd.category, items: [] });
       }
-      groups.find((g) => g.category === cmd.category)!.items.push(cmd);
+      const group = groups.find((g) => g.category === cmd.category);
+      if (group) {
+        group.items.push(cmd);
+      }
     }
     return groups;
   }, [filtered]);

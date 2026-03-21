@@ -29,6 +29,7 @@ import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
+import { getPolicyService } from './services/policy-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
 import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -58,6 +59,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { taskCommentRoutes } from './routes/task-comments.js';
 import { taskSubtaskRoutes } from './routes/task-subtasks.js';
 import attachmentRoutes from './routes/attachments.js';
+import { webhookN8nRouter } from './routes/webhook-n8n.js';
 import { configRoutes } from './routes/config.js';
 import { agentRoutes } from './routes/agents.js';
 import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js';
@@ -437,6 +439,9 @@ app.use('/api/auth', authRateLimit, authRoutes);
 // ============================================
 app.use('/api', apiRateLimit);
 
+// Unauthenticated webhook routes (registered BEFORE authenticate middleware)
+app.use('/api/webhook', webhookN8nRouter);
+
 // Apply authentication to all API routes (except /api/auth which is handled above)
 app.use('/api', authenticate);
 
@@ -562,6 +567,7 @@ let configService: ConfigService | null = null;
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
+    await getPolicyService().waitForInit();
   } catch (err) {
     log.error({ err }, 'Failed to initialize services');
   }

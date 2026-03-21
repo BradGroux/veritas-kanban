@@ -171,6 +171,11 @@ export function getBroadcastsDir(): string {
   return path.join(getRuntimeDir(), 'broadcasts');
 }
 
+/** Directory for decision audit trail files (storage/decisions). */
+export function getDecisionsDir(): string {
+  return path.join(getStorageRoot(), 'storage', 'decisions');
+}
+
 /** Directory for reports configuration and generated reports metadata. */
 export function getReportsConfigDir(): string {
   return getRuntimeDir();
@@ -199,4 +204,19 @@ export function getWorkflowRunsDir(): string {
 /** Directory for tool policies (.veritas-kanban/tool-policies). */
 export function getToolPoliciesDir(): string {
   return path.join(getRuntimeDir(), 'tool-policies');
+}
+
+/** Directory for drift alert records. */
+export function getDriftAlertsDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'drift', 'alerts');
+}
+
+/** Directory for drift baseline records. */
+export function getDriftBaselinesDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'drift', 'baselines');
+}
+
+/** Directory for agent action policies (.veritas-kanban/storage/policies). */
+export function getPoliciesDir(): string {
+  return path.join(getRuntimeDir(), 'storage', 'policies');
 }

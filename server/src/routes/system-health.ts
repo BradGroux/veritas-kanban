@@ -127,7 +127,8 @@ async function getOperationsSignal(): Promise<OperationsSignal> {
     const metrics = getMetricsService();
     const runMetrics = await metrics.getRunMetrics('24h');
     const recentRuns = runMetrics.runs;
-    const successRate = runMetrics.runs > 0 ? runMetrics.successRate : 100;
+    // runMetrics.successRate is 0-1 ratio; convert to 0-100 percentage
+    const successRate = runMetrics.runs > 0 ? Math.round(runMetrics.successRate * 100) : 100;
     const failedRuns = runMetrics.failures + runMetrics.errors;
 
     let status: 'ok' | 'warn' | 'critical';

@@ -41,6 +41,9 @@ describe('Security Hardening (#157 #158)', () => {
 
   afterEach(async () => {
     service.dispose();
+    // Allow any in-flight fire-and-forget ensureDirectories() to settle
+    // before removing the temp directory (prevents unhandled rejection on CI).
+    await new Promise((r) => setTimeout(r, 50));
     const registry = getAgentRegistryService();
     registry.deregister('test-agent');
     await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});

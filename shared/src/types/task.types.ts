@@ -3,6 +3,17 @@
 export type TaskType = string;
 export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+
+/** Run mode controls the review/QA strategy for a task. */
+export type RunMode = 'strategy' | 'eng-review' | 'paranoid-review' | 'qa';
+
+/** QA gate state — tracks whether a QA review is required and whether it has passed. */
+export interface QaGateState {
+  required: boolean;
+  passed: boolean;
+  passedAt?: string; // ISO timestamp when QA was approved
+  passedBy?: string; // Who approved (e.g. 'human', agent slug, user name)
+}
 /** Built-in agent types. Custom agents use any string slug. */
 export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
@@ -263,6 +274,12 @@ export interface Task {
     timestamp: string; // ISO timestamp when checkpoint was saved
     resumeCount?: number; // How many times this task has been resumed
   };
+
+  // Run mode — controls the review/QA strategy for the task
+  runMode?: RunMode | null;
+
+  // QA gate — requires a QA pass before the task can move to Done
+  qaGate?: QaGateState | null;
 }
 
 export interface ReviewComment {
@@ -343,6 +360,8 @@ export interface UpdateTaskInput {
     timestamp: string;
     resumeCount?: number;
   };
+  runMode?: RunMode | null;
+  qaGate?: QaGateState | null;
 }
 
 export interface TaskFilters {

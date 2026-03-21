@@ -27,7 +27,10 @@ import {
   CheckCircle,
   Archive,
   ExternalLink,
+  GitBranch,
+  ShieldAlert,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { BudgetCard } from '@/components/dashboard/BudgetCard';
 import { MultiAgentPanel } from './MultiAgentPanel';
 
@@ -446,6 +449,41 @@ export function BoardSidebar({ onTaskClick }: BoardSidebarProps) {
         onOpenActivityLog={() => setView('activity')}
         onTaskClick={onTaskClick}
       />
+
+      <div className="rounded-lg border bg-card p-3">
+        <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Audit Trail
+        </h3>
+        <Button
+          variant="outline"
+          className="w-full justify-between"
+          onClick={() => setView('decisions')}
+        >
+          <span className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4" />
+            Decision Explorer
+          </span>
+          <ExternalLink className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="rounded-lg border bg-card p-3">
+        <button
+          className="flex w-full items-center justify-between rounded-md border px-3 py-3 text-left transition-colors hover:bg-muted/40"
+          onClick={() => setView('policies')}
+        >
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Policy Engine
+            </div>
+            <div className="mt-1 text-sm font-medium">Manage guard policies</div>
+            <div className="text-xs text-muted-foreground">
+              Review policy packs, approvals, rate limits, and action blocks.
+            </div>
+          </div>
+          <ShieldAlert className="h-5 w-5 text-muted-foreground" />
+        </button>
+      </div>
 
       {/* Monthly Budget */}
       <BudgetCard />

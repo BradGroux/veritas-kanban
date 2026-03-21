@@ -44,6 +44,7 @@ const squadMessageSchema = z.object({
   event: z.enum(['agent.spawned', 'agent.completed', 'agent.failed', 'agent.status']).optional(),
   taskTitle: z.string().optional(),
   duration: z.string().optional(),
+  card: z.record(z.unknown()).optional(), // Adaptive Card v1.5 JSON
 });
 
 /**
@@ -271,6 +272,7 @@ router.post(
         event: validatedInput.event,
         taskTitle: validatedInput.taskTitle,
         duration: validatedInput.duration,
+        card: validatedInput.card,
       },
       displayName
     );

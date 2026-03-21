@@ -21,6 +21,7 @@ interface WebhookPayload {
     message: string;
     tags?: string[];
     timestamp: string;
+    card?: Record<string, unknown>;
   };
   isHuman: boolean;
 }
@@ -148,6 +149,7 @@ async function fireGenericWebhook(
       message: message.message,
       tags: message.tags,
       timestamp: message.timestamp,
+      ...(message.card && { card: message.card }),
     },
     isHuman,
   };

@@ -20,6 +20,7 @@ import { createLogger } from '../lib/logger.js';
 import { validateWebhookUrl } from '../utils/url-validation.js';
 import type { Task, EnforcementSettings } from '@veritas-kanban/shared';
 import { getChatService } from './chat-service.js';
+import { getNotificationService } from './notification-service.js';
 
 const log = createLogger('hooks');
 
@@ -150,10 +151,12 @@ export async function fireHook(
     });
   }
 
-  // TODO: Fire notification if configured (integrate with notification-service)
-  // if (hookConfig.notify) {
-  //   notifyHookEvent(event, payload);
-  // }
+  // Fire notification if configured
+  if (hookConfig.notify) {
+    fireNotification(event, payload).catch((err) => {
+      log.warn({ event, taskId: task.id, error: err.message }, 'Notification creation failed');
+    });
+  }
 
   // Activity logging is handled by the existing activity service
   // The logActivity flag could be used to suppress logging if needed
@@ -260,6 +263,32 @@ async function fireWebhook(url: string, payload: HookPayload): Promise<void> {
       }
     }, 2000);
   }
+}
+
+/**
+ * Create a notification for a lifecycle hook event.
+ */
+async function fireNotification(event: HookEvent, payload: HookPayload): Promise<void> {
+  const service = getNotificationService();
+
+  const messages: Record<HookEvent, string> = {
+    onCreated: `Task created: ${payload.taskTitle}`,
+    onStarted: `Task started: ${payload.taskTitle}`,
+    onBlocked: `Task blocked: ${payload.taskTitle}`,
+    onCompleted: `Task completed: ${payload.taskTitle}`,
+    onArchived: `Task archived: ${payload.taskTitle}`,
+  };
+
+  await service.createNotification({
+    type: 'lifecycle',
+    title: event,
+    message: messages[event],
+    taskId: payload.taskId,
+    taskTitle: payload.taskTitle,
+    project: payload.project,
+  });
+
+  log.debug({ event, taskId: payload.taskId }, 'Notification created');
 }
 
 // ---------------------------------------------------------------------------

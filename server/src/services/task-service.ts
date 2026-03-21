@@ -1301,20 +1301,30 @@ export class TaskService {
       throw new NotFoundError(`Target task ${targetId} not found`);
     }
 
-    // Initialize dependencies if needed
-    const dependencies = task.dependencies || { depends_on: [], blocks: [] };
-    const targetDependencies = targetTask.dependencies || { depends_on: [], blocks: [] };
+    // Deep-copy dependencies so we never mutate the cache entries in place.
+    // Mutating in-place before the final cycle check can corrupt the cache,
+    // causing checkForCycle to see the not-yet-committed edges and mis-detect cycles.
+    const dependencies = {
+      depends_on: [...(task.dependencies?.depends_on || [])],
+      blocks: [...(task.dependencies?.blocks || [])],
+    };
+    const targetDependencies = {
+      depends_on: [...(targetTask.dependencies?.depends_on || [])],
+      blocks: [...(targetTask.dependencies?.blocks || [])],
+    };
 
     // Check for cycle BEFORE any updates
     if (type === 'depends_on') {
-      // If we're adding A depends_on B, check if B (or its ancestors) already depend on A
-      const hasCycle = await this.checkForCycle(targetId, taskId);
+      // Adding A depends_on B: check if B already transitively depends_on A (would form a cycle).
+      const hasCycle = await this.checkForCycle(targetId, taskId, 'depends_on');
       if (hasCycle) {
         throw new ValidationError('Adding this dependency would create a cycle');
       }
     } else {
-      // If we're adding A blocks B, check if A (or its ancestors) already depend on B
-      const hasCycle = await this.checkForCycle(taskId, targetId);
+      // Adding A blocks B: check if B already transitively blocks A (would form a cycle).
+      // Both relationships form a directed graph in the same order, so the same DFS
+      // direction applies: start from target (B) and see if A is reachable via blocks edges.
+      const hasCycle = await this.checkForCycle(targetId, taskId, 'blocks');
       if (hasCycle) {
         throw new ValidationError('Adding this dependency would create a cycle');
       }
@@ -1356,8 +1366,8 @@ export class TaskService {
     // between our initial check and now
     const finalCycleCheck =
       type === 'depends_on'
-        ? await this.checkForCycle(targetId, taskId)
-        : await this.checkForCycle(taskId, targetId);
+        ? await this.checkForCycle(targetId, taskId, 'depends_on')
+        : await this.checkForCycle(targetId, taskId, 'blocks');
 
     if (finalCycleCheck) {
       // Rollback the target task update
@@ -1417,11 +1427,18 @@ export class TaskService {
   }
 
   /**
-   * Check if adding a dependency would create a cycle
-   * Performs DFS to detect cycles, traversing BOTH depends_on and blocks relationships
-   * Uses batch loading to avoid N+1 queries
+   * Check if adding a dependency would create a cycle.
+   * Performs DFS following only edges of `direction` type (depends_on or blocks).
+   * Mixing relationship types during traversal produces false positives — e.g.
+   * C depends_on D and D blocks E is a valid DAG, but traversing C→D→E through
+   * mixed edge types would incorrectly report a cycle when checking E depends_on C.
+   * Uses batch loading to avoid N+1 queries.
    */
-  private async checkForCycle(startId: string, targetId: string): Promise<boolean> {
+  private async checkForCycle(
+    startId: string,
+    targetId: string,
+    direction: 'depends_on' | 'blocks'
+  ): Promise<boolean> {
     // Load all tasks once for batch processing (performance optimization)
     const allTasks = await this.listTasks();
     const taskMap = new Map(allTasks.map((t) => [t.id, t]));
@@ -1448,12 +1465,9 @@ export class TaskService {
         continue;
       }
 
-      // Traverse BOTH depends_on and blocks relationships
-      // A cycle can occur through either relationship type
-      const nextIds = [
-        ...(currentTask.dependencies.depends_on || []),
-        ...(currentTask.dependencies.blocks || []),
-      ];
+      // Only follow edges of the same relationship type being added.
+      // This prevents false positives from mixed depends_on/blocks traversal.
+      const nextIds = currentTask.dependencies[direction] || [];
 
       for (const nextId of nextIds) {
         if (!visited.has(nextId)) {
