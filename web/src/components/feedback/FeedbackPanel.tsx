@@ -3,7 +3,6 @@ import {
   BarChart,
   Bar,
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -508,7 +507,7 @@ function AnalyticsTab() {
                 />
                 <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                 <Tooltip
-                  formatter={(val: number) => [val.toFixed(2), 'Avg Rating']}
+                  formatter={(val: number) => [val.toFixed(2), 'Avg Rating'] as [string, string]}
                   contentStyle={{ fontSize: 12 }}
                 />
                 <Line
