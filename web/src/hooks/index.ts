@@ -15,6 +15,7 @@ export * from './usePolling';
 export * from './useConflicts';
 export * from './useDebouncedSave';
 export * from './useDiff';
+export * from './useDrift';
 export * from './useFeatureSettings';
 export * from './useGitHub';
 // Real-time WebSocket-based global agent status
@@ -39,6 +40,7 @@ export * from './useTaskTypes';
 export * from './useTasks';
 export * from './useTemplateForm';
 export * from './useTemplates';
+export * from './useDecisions';
 // Note: useTimeTracking also exports formatDuration - import directly to avoid conflict with useMetrics
 export {
   useTimeSummary,
