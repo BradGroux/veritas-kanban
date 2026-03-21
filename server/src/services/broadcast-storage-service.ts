@@ -68,11 +68,19 @@ function parseBroadcastFile(content: string, id: string): Broadcast {
     } else if (trimmedKey === 'from') {
       frontmatter.from = value;
     } else if (trimmedKey === 'tags') {
-      frontmatter.tags = JSON.parse(value);
+      try {
+        frontmatter.tags = JSON.parse(value);
+      } catch {
+        frontmatter.tags = [];
+      }
     } else if (trimmedKey === 'createdAt') {
       frontmatter.createdAt = value;
     } else if (trimmedKey === 'readBy') {
-      frontmatter.readBy = JSON.parse(value);
+      try {
+        frontmatter.readBy = JSON.parse(value);
+      } catch {
+        frontmatter.readBy = [];
+      }
     }
   }
 

@@ -155,13 +155,9 @@ function isLocalhostRequest(req: Request | IncomingMessage): boolean {
     : undefined;
   let remoteAddr: string;
 
+  // In production, never allow localhost bypass regardless of config
   if (process.env.NODE_ENV === 'production') {
-    const config = getAuthConfig();
-    if (config.allowLocalhostBypass) {
-      log.warn(
-        'Localhost bypass is enabled in production; consider disabling VERITAS_AUTH_LOCALHOST_BYPASS.'
-      );
-    }
+    return false;
   }
 
   if ('socket' in req && req.socket) {
