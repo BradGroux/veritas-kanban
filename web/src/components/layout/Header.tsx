@@ -10,6 +10,7 @@ import {
   FileText,
   Users,
   Workflow,
+  Scale,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
@@ -127,6 +128,15 @@ export function Header() {
               title="Workflows"
             >
               <Workflow className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'scoring' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'scoring' ? 'board' : 'scoring')}
+              aria-label="Scoring"
+              title="Scoring"
+            >
+              <Scale className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
