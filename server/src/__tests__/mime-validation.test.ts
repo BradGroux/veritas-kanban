@@ -49,9 +49,21 @@ describe('MIME Validation', () => {
 
   describe('Binary files with magic bytes', () => {
     it('should accept PNG files with correct magic bytes', async () => {
-      // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
-      const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-      const buffer = Buffer.concat([pngHeader, Buffer.alloc(100)]);
+      // Minimal valid PNG: 8-byte signature + IHDR chunk (required for file-type 21.3.3+)
+      // PNG signature
+      const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      // IHDR chunk: length(4) + "IHDR"(4) + data(13) + CRC(4) = 25 bytes
+      const ihdrChunk = Buffer.from([
+        0x00, 0x00, 0x00, 0x0D,             // chunk length: 13
+        0x49, 0x48, 0x44, 0x52,             // "IHDR"
+        0x00, 0x00, 0x00, 0x01,             // width: 1
+        0x00, 0x00, 0x00, 0x01,             // height: 1
+        0x08,                               // bit depth: 8
+        0x02,                               // color type: 2 (RGB)
+        0x00, 0x00, 0x00,                   // compression, filter, interlace: 0
+        0x90, 0x77, 0x53, 0xDE,             // CRC32 of "IHDR" + data
+      ]);
+      const buffer = Buffer.concat([pngSignature, ihdrChunk, Buffer.alloc(64)]);
       const result = await validateMimeType(buffer, 'image.png', 'image/png', buffer.length);
       expect(result.valid).toBe(true);
       expect(result.detectedMime).toBe('image/png');
@@ -140,8 +152,19 @@ describe('MIME Validation', () => {
   describe('Extension mismatch detection', () => {
     it('should reject a PNG file disguised as .jpg if content mismatch is detected', async () => {
       // PNG magic bytes but with .jpg extension
-      const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-      const buffer = Buffer.concat([pngHeader, Buffer.alloc(100)]);
+      // Minimal valid PNG: signature + IHDR chunk (required for file-type 21.3.3+)
+      const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      const ihdrChunk = Buffer.from([
+        0x00, 0x00, 0x00, 0x0D,             // chunk length: 13
+        0x49, 0x48, 0x44, 0x52,             // "IHDR"
+        0x00, 0x00, 0x00, 0x01,             // width: 1
+        0x00, 0x00, 0x00, 0x01,             // height: 1
+        0x08,                               // bit depth: 8
+        0x02,                               // color type: 2 (RGB)
+        0x00, 0x00, 0x00,                   // compression, filter, interlace: 0
+        0x90, 0x77, 0x53, 0xDE,             // CRC32 of "IHDR" + data
+      ]);
+      const buffer = Buffer.concat([pngSignature, ihdrChunk, Buffer.alloc(64)]);
       const result = await validateMimeType(buffer, 'photo.jpg', 'image/jpeg', buffer.length);
       // Both are images, so this should still be allowed (same category)
       expect(result.valid).toBe(true);
