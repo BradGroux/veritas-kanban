@@ -569,7 +569,8 @@ let configService: ConfigService | null = null;
     await getTelemetryService().init();
     await getPolicyService().waitForInit();
   } catch (err) {
-    log.error({ err }, 'Failed to initialize services');
+    log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
+    process.exit(1);
   }
 })();
 
@@ -885,20 +886,37 @@ async function gracefulShutdown(signal: string) {
   });
 
   // Close the WebSocket server itself (stop accepting new connections)
-  await new Promise<void>((resolve) => {
-    wss.close((err) => {
-      if (err) log.error({ err }, 'Error closing WebSocket server');
-      else log.info('WebSocket server closed');
-      resolve();
-    });
-  });
+  // Timeout: if clients don't close within 3s, continue shutdown
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      wss.close((err) => {
+        if (err) log.error({ err }, 'Error closing WebSocket server');
+        else log.info('WebSocket server closed');
+        resolve();
+      });
+    }),
+    new Promise<void>((resolve) =>
+      setTimeout(() => {
+        log.warn('WebSocket server close timed out after 3s — continuing shutdown');
+        resolve();
+      }, 3000)
+    ),
+  ]);
 
   // 2. Dispose services (release file watchers, flush buffers)
   try {
     log.info('Disposing services');
 
-    // Flush pending telemetry writes
-    await getTelemetryService().flush();
+    // Flush pending telemetry writes (timeout: 5s)
+    await Promise.race([
+      getTelemetryService().flush(),
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          log.warn('Telemetry flush timed out after 5s — continuing shutdown');
+          resolve();
+        }, 5000)
+      ),
+    ]);
     log.info('Telemetry flushed');
 
     // Dispose task service (closes file watchers, clears cache)
