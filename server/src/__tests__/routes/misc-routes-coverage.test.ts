@@ -317,6 +317,65 @@ describe('Settings Routes', () => {
       .send({ telemetry: { enabled: false } });
     expect(res.status).toBe(500);
   });
+
+  it('PATCH /features should accept requireDeliverableForDone', async () => {
+    const fullSettings = {
+      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
+      tasks: {
+        enableTimeTracking: true,
+        enableSubtaskAutoComplete: true,
+        enableDependencies: true,
+        enableAttachments: true,
+        attachmentMaxFileSize: 10000000,
+        attachmentMaxPerTask: 20,
+        attachmentMaxTotalSize: 50000000,
+        enableComments: true,
+        defaultPriority: 'medium',
+        autoSaveDelayMs: 500,
+        requireDeliverableForDone: true,
+      },
+      hooks: { enabled: false },
+      enforcement: { squadChat: false },
+    };
+    mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(fullSettings);
+    const res = await request(app)
+      .patch('/api/settings/features')
+      .send({ tasks: { requireDeliverableForDone: true } });
+    expect(res.status).toBe(200);
+  });
+
+  it('PATCH /features should accept requireDeliverableForDone set to false', async () => {
+    const fullSettings = {
+      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
+      tasks: {
+        enableTimeTracking: true,
+        enableSubtaskAutoComplete: true,
+        enableDependencies: true,
+        enableAttachments: true,
+        attachmentMaxFileSize: 10000000,
+        attachmentMaxPerTask: 20,
+        attachmentMaxTotalSize: 50000000,
+        enableComments: true,
+        defaultPriority: 'medium',
+        autoSaveDelayMs: 500,
+        requireDeliverableForDone: false,
+      },
+      hooks: { enabled: false },
+      enforcement: { squadChat: false },
+    };
+    mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(fullSettings);
+    const res = await request(app)
+      .patch('/api/settings/features')
+      .send({ tasks: { requireDeliverableForDone: false } });
+    expect(res.status).toBe(200);
+  });
+
+  it('PATCH /features should reject unknown tasks fields (strict mode)', async () => {
+    const res = await request(app)
+      .patch('/api/settings/features')
+      .send({ tasks: { unknownField: true } });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('Digest Routes', () => {
