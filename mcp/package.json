@@ -15,11 +15,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@veritas-kanban/shared": "workspace:*",
-    "hono": "^4.12.5",
+    "hono": "^4.12.9",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/node": "^25.4.0",
+    "@types/node": "^25.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
