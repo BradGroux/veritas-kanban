@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { watch, type FSWatcher } from '../storage/fs-helpers.js';
+import { watch, batchedMap, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
@@ -130,16 +130,20 @@ export class TaskService {
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     this.cache.clear();
-    await Promise.all(
-      mdFiles.map(async (filename) => {
-        const filepath = path.join(this.tasksDir, filename);
-        const content = await fs.readFile(filepath, 'utf-8');
-        const task = this.parseTaskFile(content, filename);
-        if (task) {
-          this.cache.set(task.id, task);
-        }
-      })
-    );
+
+    // Bounded-concurrency batch read — 10 files at a time.
+    // Individual read failures produce null (logged but don't abort the load).
+    const tasks = await batchedMap(mdFiles, async (filename) => {
+      const filepath = path.join(this.tasksDir, filename);
+      const content = await fs.readFile(filepath, 'utf-8');
+      return this.parseTaskFile(content, filename);
+    });
+
+    for (const task of tasks) {
+      if (task) {
+        this.cache.set(task.id, task);
+      }
+    }
   }
 
   /**
@@ -1023,16 +1027,17 @@ export class TaskService {
     const files = await fs.readdir(this.archiveDir);
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
-    const results = await Promise.all(
-      mdFiles.map(async (filename) => {
-        const filepath = path.join(this.archiveDir, filename);
-        const content = await fs.readFile(filepath, 'utf-8');
-        return this.parseTaskFile(content, filename);
-      })
-    );
+    // Bounded-concurrency batch read — 10 files at a time.
+    // Individual read/parse failures produce null and are filtered out;
+    // one bad archive file never aborts the entire listing.
+    const results = await batchedMap(mdFiles, async (filename) => {
+      const filepath = path.join(this.archiveDir, filename);
+      const content = await fs.readFile(filepath, 'utf-8');
+      return this.parseTaskFile(content, filename);
+    });
 
-    // Filter out null values from failed parses
-    const tasks = results.filter((t: Task | null): t is Task => t !== null);
+    // Filter out nulls (failed reads or invalid task files)
+    const tasks = results.filter((t): t is Task => t !== null);
 
     // Sort by updated date, newest first
     return tasks.sort(

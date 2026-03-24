@@ -87,4 +87,59 @@ export async function fileExists(filePath: string): Promise<boolean> {
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Bounded-concurrency batch helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of concurrent file-read operations.
+ *
+ * Tuned for a single-process Node.js server: high enough to saturate the OS
+ * page cache on fast NVMe storage, low enough to avoid fd exhaustion or
+ * excessive memory pressure when the task directory is large.
+ */
+export const BATCH_CONCURRENCY = 10;
+
+/**
+ * Run an array of async tasks with bounded concurrency.
+ *
+ * Works like `Promise.all(items.map(fn))` but limits the number of
+ * concurrently-running promises to `concurrency`.  Individual item errors
+ * are **not** propagated — failed items resolve to `null` so that one bad
+ * file never aborts the entire list operation.
+ *
+ * @param items       - Array of inputs to process
+ * @param fn          - Async function receiving each item (must not throw)
+ * @param concurrency - Max simultaneous tasks (default: BATCH_CONCURRENCY)
+ * @returns Array of results, with `null` in place of any failed items
+ */
+export async function batchedMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number = BATCH_CONCURRENCY
+): Promise<(R | null)[]> {
+  const results: (R | null)[] = new Array(items.length).fill(null);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      try {
+        results[index] = await fn(items[index]);
+      } catch {
+        // Individual failures become null — callers filter these out
+        results[index] = null;
+      }
+    }
+  }
+
+  // Spin up `concurrency` workers (or fewer if items.length is small)
+  const workerCount = Math.min(concurrency, items.length);
+  if (workerCount > 0) {
+    await Promise.all(Array.from({ length: workerCount }, worker));
+  }
+
+  return results;
+}
 // ci trigger
