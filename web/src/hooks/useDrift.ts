@@ -6,6 +6,7 @@ import type {
   DriftMetricSnapshot,
 } from '@veritas-kanban/shared';
 import { apiFetch, API_BASE } from '@/lib/api/helpers';
+import { normalizeArrayData } from '@/lib/query-data';
 
 interface DriftAlertFilters {
   agentId?: string;
@@ -28,9 +29,10 @@ export function useDriftAlerts(filters: DriftAlertFilters = {}) {
   return useQuery({
     queryKey: ['drift-alerts', filters],
     queryFn: () =>
-      apiFetch<DriftAlert[]>(
+      apiFetch<unknown>(
         `${API_BASE}/drift/alerts${buildQuery(filters as Record<string, string | boolean | undefined>)}`
       ),
+    select: (data) => normalizeArrayData<DriftAlert>(data),
     refetchInterval: 30_000,
   });
 }
@@ -38,7 +40,8 @@ export function useDriftAlerts(filters: DriftAlertFilters = {}) {
 export function useDriftBaselines(filters: { agentId?: string; metric?: string } = {}) {
   return useQuery({
     queryKey: ['drift-baselines', filters],
-    queryFn: () => apiFetch<DriftBaseline[]>(`${API_BASE}/drift/baselines${buildQuery(filters)}`),
+    queryFn: () => apiFetch<unknown>(`${API_BASE}/drift/baselines${buildQuery(filters)}`),
+    select: (data) => normalizeArrayData<DriftBaseline>(data),
     refetchInterval: 60_000,
   });
 }

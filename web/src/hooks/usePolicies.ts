@@ -5,13 +5,15 @@ import type {
   PolicyEvaluationResult,
 } from '@veritas-kanban/shared';
 import { apiFetch } from '@/lib/api/helpers';
+import { normalizeArrayData } from '@/lib/query-data';
 
 const POLICIES_QUERY_KEY = ['policies'];
 
 export function usePolicies() {
-  return useQuery<AgentPolicy[]>({
+  return useQuery({
     queryKey: POLICIES_QUERY_KEY,
-    queryFn: () => apiFetch<AgentPolicy[]>('/api/policies'),
+    queryFn: async (): Promise<unknown> => apiFetch<unknown>('/api/policies'),
+    select: (data) => normalizeArrayData<AgentPolicy>(data),
   });
 }
 
