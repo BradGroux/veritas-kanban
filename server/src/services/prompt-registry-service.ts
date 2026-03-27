@@ -15,6 +15,7 @@ import type {
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('prompt-registry-service');
 
@@ -24,9 +25,10 @@ export class PromptRegistryService {
   private usageDir: string;
 
   constructor() {
-    this.templatesDir = join(process.cwd(), '.veritas-kanban', 'prompt-templates');
-    this.versionsDir = join(process.cwd(), '.veritas-kanban', 'prompt-versions');
-    this.usageDir = join(process.cwd(), '.veritas-kanban', 'prompt-usage');
+    const runtimeDir = getRuntimeDir();
+    this.templatesDir = join(runtimeDir, 'prompt-templates');
+    this.versionsDir = join(runtimeDir, 'prompt-versions');
+    this.usageDir = join(runtimeDir, 'prompt-usage');
     this.ensureDirs();
   }
 
@@ -224,7 +226,10 @@ export class PromptRegistryService {
   /**
    * Update a prompt template
    */
-  async updateTemplate(id: string, input: UpdatePromptTemplateInput): Promise<PromptTemplate | null> {
+  async updateTemplate(
+    id: string,
+    input: UpdatePromptTemplateInput
+  ): Promise<PromptTemplate | null> {
     const existing = await this.getTemplate(id);
     if (!existing) return null;
 
@@ -411,7 +416,8 @@ export class PromptRegistryService {
     // Calculate stats
     const totalUsages = usageRecords.length;
     const totalVersions = versions.length;
-    const lastUsedAt = usageRecords.length > 0 ? usageRecords[usageRecords.length - 1].usedAt : undefined;
+    const lastUsedAt =
+      usageRecords.length > 0 ? usageRecords[usageRecords.length - 1].usedAt : undefined;
 
     // Find most frequent user
     const userMap = new Map<string, number>();
@@ -423,11 +429,15 @@ export class PromptRegistryService {
     const mostFrequentUser = Array.from(userMap.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
 
     // Calculate average tokens
-    const tokensRecords = usageRecords.filter((r) => r.inputTokens !== undefined || r.outputTokens !== undefined);
+    const tokensRecords = usageRecords.filter(
+      (r) => r.inputTokens !== undefined || r.outputTokens !== undefined
+    );
     const averageTokensPerUsage =
       tokensRecords.length > 0
-        ? tokensRecords.reduce((sum, r) => sum + ((r.inputTokens ?? 0) + (r.outputTokens ?? 0)), 0) /
-          tokensRecords.length
+        ? tokensRecords.reduce(
+            (sum, r) => sum + ((r.inputTokens ?? 0) + (r.outputTokens ?? 0)),
+            0
+          ) / tokensRecords.length
         : undefined;
 
     return {
