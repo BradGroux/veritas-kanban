@@ -106,6 +106,6 @@ jobs:
             done
 
             echo "=== Step 6: Verify API ==="
-            curl -sf http://localhost:3001/health | head -c 200
+            docker exec veritas-kanban wget -qO- http://localhost:3001/health | head -c 200
             echo ""
             echo "=== Deploy complete ==="
