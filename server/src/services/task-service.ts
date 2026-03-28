@@ -402,18 +402,50 @@ export class TaskService {
     return content;
   }
 
+  private parseReviewCommentsSection(
+    description: string,
+    fallbackCreated: string
+  ): { cleanDescription: string; reviewComments: ReviewComment[]; hasReviewSection: boolean } {
+    const reviewSection = description.indexOf('## Review Comments');
+    if (reviewSection === -1) {
+      return { cleanDescription: description.trim(), reviewComments: [], hasReviewSection: false };
+    }
+
+    const cleanDescription = description.slice(0, reviewSection).trim();
+    const reviewBody = description.slice(reviewSection + '## Review Comments'.length).trim();
+
+    const reviewComments = reviewBody
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line, index) => {
+        const match = line.match(/^- \*\*(.+):(\d+)\*\* - (.*)$/);
+        if (!match) return null;
+        const [, file, lineNumber, comment] = match;
+        return {
+          id: `review-${index + 1}`,
+          file,
+          line: Number.parseInt(lineNumber, 10),
+          content: comment,
+          created: fallbackCreated,
+        } as ReviewComment;
+      })
+      .filter((c): c is ReviewComment => c !== null);
+
+    return { cleanDescription, reviewComments, hasReviewSection: true };
+  }
+
   private parseTaskFile(content: string, filename: string): Task | null {
     try {
       const { data, content: description } = matter(content);
 
       // Extract review comments from description if present
-      let cleanDescription = description;
-      const reviewComments: Task['reviewComments'] = [];
-
-      const reviewSection = description.indexOf('## Review Comments');
-      if (reviewSection !== -1) {
-        cleanDescription = description.slice(0, reviewSection).trim();
-      }
+      const frontmatterReviewComments = Array.isArray(data.reviewComments)
+        ? (data.reviewComments as ReviewComment[])
+        : [];
+      const fallbackCreated = data.updated || data.created || new Date().toISOString();
+      const { cleanDescription, reviewComments, hasReviewSection } =
+        this.parseReviewCommentsSection(description, fallbackCreated);
 
       // Validate required fields
       const id = data.id || filename.split('-')[0];
@@ -425,7 +457,7 @@ export class TaskService {
       return {
         id,
         title: data.title || 'Untitled',
-        description: cleanDescription.trim(),
+        description: cleanDescription,
         type: data.type || 'code',
         status: data.status || 'todo',
         priority: data.priority || 'medium',
@@ -438,7 +470,7 @@ export class TaskService {
         github: data.github,
         attempt: data.attempt,
         attempts: data.attempts,
-        reviewComments,
+        reviewComments: hasReviewSection ? reviewComments : frontmatterReviewComments,
         reviewScores: data.reviewScores,
         review: data.review,
         subtasks: data.subtasks,
