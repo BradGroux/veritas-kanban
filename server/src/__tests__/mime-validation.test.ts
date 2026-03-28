@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  validateMimeType,
-  ALLOWED_TYPES,
-  getAllowedTypesDescription,
-} from '../services/mime-validation.js';
+import { validateMimeType, ALLOWED_TYPES, getAllowedTypesDescription } from '../services/mime-validation.js';
 
 describe('MIME Validation', () => {
   describe('Text-based files', () => {
@@ -28,12 +24,7 @@ describe('MIME Validation', () => {
 
     it('should accept JSON files', async () => {
       const buffer = Buffer.from('{"key":"value"}');
-      const result = await validateMimeType(
-        buffer,
-        'config.json',
-        'application/json',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'config.json', 'application/json', buffer.length);
       expect(result.valid).toBe(true);
     });
 
@@ -45,12 +36,7 @@ describe('MIME Validation', () => {
 
     it('should accept YAML files', async () => {
       const buffer = Buffer.from('key: value\nlist:\n  - item1');
-      const result = await validateMimeType(
-        buffer,
-        'config.yaml',
-        'application/yaml',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'config.yaml', 'application/yaml', buffer.length);
       expect(result.valid).toBe(true);
     });
 
@@ -63,36 +49,9 @@ describe('MIME Validation', () => {
 
   describe('Binary files with magic bytes', () => {
     it('should accept PNG files with correct magic bytes', async () => {
-      // PNG signature + valid IHDR chunk (required by file-type >=21.3.4)
-      const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-      const ihdrChunk = Buffer.from([
-        0x00,
-        0x00,
-        0x00,
-        0x0d, // chunk length: 13
-        0x49,
-        0x48,
-        0x44,
-        0x52, // 'IHDR'
-        0x00,
-        0x00,
-        0x00,
-        0x01, // width: 1
-        0x00,
-        0x00,
-        0x00,
-        0x01, // height: 1
-        0x08,
-        0x02, // bit depth: 8, color type: RGB
-        0x00,
-        0x00,
-        0x00, // compression, filter, interlace
-        0x90,
-        0x77,
-        0x53,
-        0xde, // CRC32
-      ]);
-      const buffer = Buffer.concat([pngHeader, ihdrChunk, Buffer.alloc(50)]);
+      // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+      const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      const buffer = Buffer.concat([pngHeader, Buffer.alloc(100)]);
       const result = await validateMimeType(buffer, 'image.png', 'image/png', buffer.length);
       expect(result.valid).toBe(true);
       expect(result.detectedMime).toBe('image/png');
@@ -100,7 +59,7 @@ describe('MIME Validation', () => {
 
     it('should accept JPEG files with correct magic bytes', async () => {
       // JPEG magic bytes: FF D8 FF
-      const jpegHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+      const jpegHeader = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
       const buffer = Buffer.concat([jpegHeader, Buffer.alloc(100)]);
       const result = await validateMimeType(buffer, 'photo.jpg', 'image/jpeg', buffer.length);
       expect(result.valid).toBe(true);
@@ -120,12 +79,7 @@ describe('MIME Validation', () => {
       // PDF magic bytes: 25 50 44 46 (%PDF)
       const pdfHeader = Buffer.from('%PDF-1.4');
       const buffer = Buffer.concat([pdfHeader, Buffer.alloc(100)]);
-      const result = await validateMimeType(
-        buffer,
-        'document.pdf',
-        'application/pdf',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'document.pdf', 'application/pdf', buffer.length);
       expect(result.valid).toBe(true);
       expect(result.detectedMime).toBe('application/pdf');
     });
@@ -134,12 +88,7 @@ describe('MIME Validation', () => {
   describe('Blocked extensions', () => {
     it('should reject .exe files', async () => {
       const buffer = Buffer.from('MZ'); // PE header
-      const result = await validateMimeType(
-        buffer,
-        'malware.exe',
-        'application/octet-stream',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'malware.exe', 'application/octet-stream', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('.exe');
       expect(result.error).toContain('not allowed');
@@ -147,12 +96,7 @@ describe('MIME Validation', () => {
 
     it('should reject .bat files', async () => {
       const buffer = Buffer.from('@echo off');
-      const result = await validateMimeType(
-        buffer,
-        'script.bat',
-        'application/x-bat',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'script.bat', 'application/x-bat', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('.bat');
     });
@@ -166,36 +110,21 @@ describe('MIME Validation', () => {
 
     it('should reject .js files', async () => {
       const buffer = Buffer.from('console.log("pwned")');
-      const result = await validateMimeType(
-        buffer,
-        'payload.js',
-        'application/javascript',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'payload.js', 'application/javascript', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('.js');
     });
 
     it('should reject .dll files', async () => {
       const buffer = Buffer.from('MZ');
-      const result = await validateMimeType(
-        buffer,
-        'library.dll',
-        'application/octet-stream',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'library.dll', 'application/octet-stream', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('.dll');
     });
 
     it('should reject .php files', async () => {
       const buffer = Buffer.from('<?php echo "hi"; ?>');
-      const result = await validateMimeType(
-        buffer,
-        'shell.php',
-        'application/x-httpd-php',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'shell.php', 'application/x-httpd-php', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('.php');
     });
@@ -210,36 +139,9 @@ describe('MIME Validation', () => {
 
   describe('Extension mismatch detection', () => {
     it('should reject a PNG file disguised as .jpg if content mismatch is detected', async () => {
-      // PNG signature + valid IHDR chunk but with .jpg extension
-      const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-      const ihdrChunk = Buffer.from([
-        0x00,
-        0x00,
-        0x00,
-        0x0d, // chunk length: 13
-        0x49,
-        0x48,
-        0x44,
-        0x52, // 'IHDR'
-        0x00,
-        0x00,
-        0x00,
-        0x01, // width: 1
-        0x00,
-        0x00,
-        0x00,
-        0x01, // height: 1
-        0x08,
-        0x02, // bit depth: 8, color type: RGB
-        0x00,
-        0x00,
-        0x00, // compression, filter, interlace
-        0x90,
-        0x77,
-        0x53,
-        0xde, // CRC32
-      ]);
-      const buffer = Buffer.concat([pngHeader, ihdrChunk, Buffer.alloc(50)]);
+      // PNG magic bytes but with .jpg extension
+      const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      const buffer = Buffer.concat([pngHeader, Buffer.alloc(100)]);
       const result = await validateMimeType(buffer, 'photo.jpg', 'image/jpeg', buffer.length);
       // Both are images, so this should still be allowed (same category)
       expect(result.valid).toBe(true);
@@ -247,7 +149,7 @@ describe('MIME Validation', () => {
 
     it('should reject executable content disguised with .txt extension', async () => {
       // ELF binary header disguised as .txt
-      const elfHeader = Buffer.from([0x7f, 0x45, 0x4c, 0x46]); // \x7FELF
+      const elfHeader = Buffer.from([0x7F, 0x45, 0x4C, 0x46]); // \x7FELF
       const buffer = Buffer.concat([elfHeader, Buffer.alloc(100)]);
       const result = await validateMimeType(buffer, 'notes.txt', 'text/plain', buffer.length);
       // file-type might detect this as application/x-elf or similar
@@ -264,24 +166,14 @@ describe('MIME Validation', () => {
   describe('Unrecognized extensions', () => {
     it('should reject files with unknown extensions', async () => {
       const buffer = Buffer.from('some data');
-      const result = await validateMimeType(
-        buffer,
-        'file.xyz',
-        'application/octet-stream',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'file.xyz', 'application/octet-stream', buffer.length);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('not recognized');
     });
 
     it('should reject files with no extension', async () => {
       const buffer = Buffer.from('some data');
-      const result = await validateMimeType(
-        buffer,
-        'noextension',
-        'application/octet-stream',
-        buffer.length
-      );
+      const result = await validateMimeType(buffer, 'noextension', 'application/octet-stream', buffer.length);
       expect(result.valid).toBe(false);
     });
   });
@@ -317,15 +209,9 @@ describe('MIME Validation', () => {
 
     it('should have entries for office document types', () => {
       expect(ALLOWED_TYPES['application/pdf']).toBeDefined();
-      expect(
-        ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      ).toBeDefined();
-      expect(
-        ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-      ).toBeDefined();
-      expect(
-        ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.presentationml.presentation']
-      ).toBeDefined();
+      expect(ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.wordprocessingml.document']).toBeDefined();
+      expect(ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']).toBeDefined();
+      expect(ALLOWED_TYPES['application/vnd.openxmlformats-officedocument.presentationml.presentation']).toBeDefined();
     });
 
     it('should have per-type size limits', () => {

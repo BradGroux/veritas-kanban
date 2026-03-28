@@ -2,17 +2,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type {
   CreateScoringProfileInput,
+  EvaluationResult,
   EvaluationRequest,
   ScoringProfile,
   UpdateScoringProfileInput,
 } from '@veritas-kanban/shared';
+import { normalizeArrayData } from '@/lib/query-data';
 
 export type { ScoringProfile, CreateScoringProfileInput, UpdateScoringProfileInput };
 
 export function useScoringProfiles() {
   return useQuery({
     queryKey: ['scoring', 'profiles'],
-    queryFn: api.scoring.listProfiles,
+    queryFn: async (): Promise<unknown> => api.scoring.listProfiles(),
+    select: (data) => normalizeArrayData<ScoringProfile>(data),
   });
 }
 
@@ -24,7 +27,8 @@ export function useScoringHistory(filters?: {
 }) {
   return useQuery({
     queryKey: ['scoring', 'history', filters],
-    queryFn: () => api.scoring.getHistory(filters),
+    queryFn: async (): Promise<unknown> => api.scoring.getHistory(filters),
+    select: (data) => normalizeArrayData<EvaluationResult>(data),
   });
 }
 

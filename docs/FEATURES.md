@@ -1,6 +1,6 @@
 # Features
 
-Complete feature reference for Veritas Kanban v4.0. Every feature, every API endpoint, every configuration option.
+Complete feature reference for Veritas Kanban v3.3. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different). For troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -1901,14 +1901,14 @@ Define what agents are allowed to do. The Policy Engine lets you create configur
 
 **API endpoints:**
 
-| Method   | Path                         | Description                         |
-| -------- | ---------------------------- | ----------------------------------- |
-| `GET`    | `/api/policies`              | List all policies                   |
-| `POST`   | `/api/policies`              | Create a policy                     |
-| `GET`    | `/api/policies/:id`          | Get a single policy                 |
-| `PUT`    | `/api/policies/:id`          | Update a policy                     |
-| `DELETE` | `/api/policies/:id`          | Delete a policy                     |
-| `POST`   | `/api/policies/:id/evaluate` | Evaluate a policy against an action |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/policies` | List all policies |
+| `POST` | `/api/policies` | Create a policy |
+| `GET` | `/api/policies/:id` | Get a single policy |
+| `PUT` | `/api/policies/:id` | Update a policy |
+| `DELETE` | `/api/policies/:id` | Delete a policy |
+| `POST` | `/api/policies/:id/evaluate` | Evaluate a policy against an action |
 
 **Related:** `server/src/routes/policies.ts` · `shared/src/types/policy.types.ts` · `docs/SOP-agent-policy-engine.md`
 
@@ -1928,12 +1928,12 @@ Log structured decision records for every significant agent choice. Each decisio
 
 **API endpoints:**
 
-| Method  | Path                                  | Description                                            |
-| ------- | ------------------------------------- | ------------------------------------------------------ |
-| `GET`   | `/api/decisions`                      | List decisions (filterable by agent, task, confidence) |
-| `POST`  | `/api/decisions`                      | Log a new decision                                     |
-| `GET`   | `/api/decisions/:id`                  | Get a single decision                                  |
-| `PATCH` | `/api/decisions/:id/assumptions/:idx` | Update an assumption by index                          |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/decisions` | List decisions (filterable by agent, task, confidence) |
+| `POST` | `/api/decisions` | Log a new decision |
+| `GET` | `/api/decisions/:id` | Get a single decision |
+| `PATCH` | `/api/decisions/:id/assumptions/:idx` | Update an assumption by index |
 
 **Related:** `server/src/routes/decisions.ts` · `shared/src/types/decision.types.ts` · `docs/SOP-decision-audit-trail.md`
 
@@ -1953,15 +1953,15 @@ Define scoring profiles with weighted criteria and evaluate agent outputs agains
 
 **API endpoints:**
 
-| Method   | Path                        | Description                          |
-| -------- | --------------------------- | ------------------------------------ |
-| `GET`    | `/api/scoring/profiles`     | List scoring profiles                |
-| `POST`   | `/api/scoring/profiles`     | Create a profile                     |
-| `GET`    | `/api/scoring/profiles/:id` | Get a profile                        |
-| `PUT`    | `/api/scoring/profiles/:id` | Update a profile                     |
-| `DELETE` | `/api/scoring/profiles/:id` | Delete a profile                     |
-| `POST`   | `/api/scoring/evaluate`     | Evaluate an output against a profile |
-| `GET`    | `/api/scoring/history`      | Get evaluation history               |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/scoring/profiles` | List scoring profiles |
+| `POST` | `/api/scoring/profiles` | Create a profile |
+| `GET` | `/api/scoring/profiles/:id` | Get a profile |
+| `PUT` | `/api/scoring/profiles/:id` | Update a profile |
+| `DELETE` | `/api/scoring/profiles/:id` | Delete a profile |
+| `POST` | `/api/scoring/evaluate` | Evaluate an output against a profile |
+| `GET` | `/api/scoring/history` | Get evaluation history |
 
 **Related:** `server/src/routes/scoring.ts` · `docs/SOP-output-evaluation.md`
 
@@ -1981,13 +1981,13 @@ Define metric baselines for agents and get alerted when behavior deviates beyond
 
 **API endpoints:**
 
-| Method | Path                                | Description                         |
-| ------ | ----------------------------------- | ----------------------------------- |
-| `GET`  | `/api/drift/alerts`                 | List drift alerts                   |
-| `POST` | `/api/drift/alerts/:id/acknowledge` | Acknowledge a drift alert           |
-| `GET`  | `/api/drift/baselines`              | List agent metric baselines         |
-| `POST` | `/api/drift/baselines/reset`        | Reset baselines for an agent/metric |
-| `POST` | `/api/drift/analyze`                | Trigger drift analysis for an agent |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/drift/alerts` | List drift alerts |
+| `POST` | `/api/drift/alerts/:id/acknowledge` | Acknowledge a drift alert |
+| `GET` | `/api/drift/baselines` | List agent metric baselines |
+| `POST` | `/api/drift/baselines/reset` | Reset baselines for an agent/metric |
+| `POST` | `/api/drift/analyze` | Trigger drift analysis for an agent |
 
 **Related:** `server/src/routes/drift.ts` · `shared/src/types/drift.types.ts` · `docs/SOP-behavioral-drift-detection.md`
 
@@ -2007,13 +2007,13 @@ Collect feedback on agent outputs from users, tag it with sentiment and categori
 
 **API endpoints:**
 
-| Method   | Path                      | Description                       |
-| -------- | ------------------------- | --------------------------------- |
-| `GET`    | `/api/feedback`           | List feedback items               |
-| `POST`   | `/api/feedback`           | Submit feedback                   |
-| `GET`    | `/api/feedback/:id`       | Get a single item                 |
-| `DELETE` | `/api/feedback/:id`       | Delete a feedback item            |
-| `GET`    | `/api/feedback/analytics` | Get aggregate sentiment analytics |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/feedback` | List feedback items |
+| `POST` | `/api/feedback` | Submit feedback |
+| `GET` | `/api/feedback/:id` | Get a single item |
+| `DELETE` | `/api/feedback/:id` | Delete a feedback item |
+| `GET` | `/api/feedback/analytics` | Get aggregate sentiment analytics |
 
 **Related:** `server/src/routes/feedback.ts` · `shared/src/types/feedback.types.ts` · `docs/SOP-user-feedback.md`
 
@@ -2050,20 +2050,20 @@ A centralized library for managing prompt templates used across your agent fleet
 
 **API endpoints:**
 
-| Method   | Path                                       | Description                              |
-| -------- | ------------------------------------------ | ---------------------------------------- |
-| `GET`    | `/api/prompt-registry`                     | List all templates                       |
-| `POST`   | `/api/prompt-registry`                     | Create a new template                    |
-| `GET`    | `/api/prompt-registry/:id`                 | Get a template                           |
-| `PATCH`  | `/api/prompt-registry/:id`                 | Update a template (auto-versions)        |
-| `DELETE` | `/api/prompt-registry/:id`                 | Delete a template                        |
-| `GET`    | `/api/prompt-registry/:id/versions`        | List all versions of a template          |
-| `GET`    | `/api/prompt-registry/:id/usage`           | Get usage history                        |
-| `GET`    | `/api/prompt-registry/:id/stats`           | Get usage statistics                     |
-| `GET`    | `/api/prompt-registry/stats/all`           | Aggregate stats across all templates     |
-| `POST`   | `/api/prompt-registry/:id/render-preview`  | Render a preview with variable injection |
-| `POST`   | `/api/prompt-registry/:id/record-usage`    | Record a usage event                     |
-| `POST`   | `/api/prompt-registry/templates/:id/usage` | Log a template usage                     |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/prompt-registry` | List all templates |
+| `POST` | `/api/prompt-registry` | Create a new template |
+| `GET` | `/api/prompt-registry/:id` | Get a template |
+| `PATCH` | `/api/prompt-registry/:id` | Update a template (auto-versions) |
+| `DELETE` | `/api/prompt-registry/:id` | Delete a template |
+| `GET` | `/api/prompt-registry/:id/versions` | List all versions of a template |
+| `GET` | `/api/prompt-registry/:id/usage` | Get usage history |
+| `GET` | `/api/prompt-registry/:id/stats` | Get usage statistics |
+| `GET` | `/api/prompt-registry/stats/all` | Aggregate stats across all templates |
+| `POST` | `/api/prompt-registry/:id/render-preview` | Render a preview with variable injection |
+| `POST` | `/api/prompt-registry/:id/record-usage` | Record a usage event |
+| `POST` | `/api/prompt-registry/templates/:id/usage` | Log a template usage |
 
 **Related:** `server/src/routes/prompt-registry.ts` · `shared/src/types/prompt-registry.types.ts` · `docs/SOP-prompt-registry.md`
 
@@ -2086,9 +2086,9 @@ A persistent header status bar that gives you a real-time overview of system hea
 
 **API endpoints:**
 
-| Method | Path                    | Description                        |
-| ------ | ----------------------- | ---------------------------------- |
-| `GET`  | `/api/v1/system/health` | Get current system health snapshot |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/system/health` | Get current system health snapshot |
 
 **Related:** `server/src/routes/system-health.ts` · `shared/src/types/system-health.types.ts` · `web/src/components/SystemHealthBar` · `docs/SOP-system-health-monitoring.md`
 

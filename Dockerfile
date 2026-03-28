@@ -44,7 +44,7 @@ FROM build-shared AS build-web
 
 # Optional: deploy under a sub-path (e.g., /kanban/) behind a reverse proxy.
 # When set, all client-side routes and API calls are prefixed automatically.
-ARG VITE_BASE_PATH=/
+ARG VITE_BASE_PATH=/kanban/
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 
 COPY web/ ./web/
@@ -63,7 +63,8 @@ RUN pnpm --filter @veritas-kanban/server build
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate && \
+    apk add --no-cache git
 
 # Security: run as non-root
 RUN addgroup -g 1001 -S nodejs && \

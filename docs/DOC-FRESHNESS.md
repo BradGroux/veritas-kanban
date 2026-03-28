@@ -47,19 +47,12 @@ When completing a task that changes user-facing behavior:
 Each doc should include a freshness header:
 
 ```markdown
-<!-- doc-freshness: 2026-03-25 | v4.0.0 | @veritas -->
+<!-- doc-freshness: 2026-03-21 | v4.0.0 | @tars -->
 ```
 
 Format: `date | version | last-updater`
 
 When a doc is older than the current version, it may need review.
-
-### Last Sweep
-
-| Date       | Scope                                                               | Agent   |
-| ---------- | ------------------------------------------------------------------- | ------- |
-| 2026-03-25 | Full v3→v4 version references, governance docs, CHANGELOG, examples | VERITAS |
-| 2026-03-21 | v4.0 release documentation                                          | TARS    |
 
 ## Automation Plan
 

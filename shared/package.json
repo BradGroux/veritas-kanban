@@ -9,18 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./types/governance": {
-      "types": "./dist/types/governance.d.ts",
-      "import": "./dist/types/governance.js"
-    },
-    "./types/policy": {
-      "types": "./dist/types/policy.d.ts",
-      "import": "./dist/types/policy.js"
-    },
-    "./types/workflow": {
-      "types": "./dist/types/workflow.d.ts",
-      "import": "./dist/types/workflow.js"
     }
   },
   "scripts": {

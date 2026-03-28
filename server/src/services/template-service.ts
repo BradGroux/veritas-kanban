@@ -9,13 +9,14 @@ import type {
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import { getTemplatesDir } from '../utils/paths.js';
 const log = createLogger('template-service');
 
 export class TemplateService {
   private templatesDir: string;
 
   constructor() {
-    this.templatesDir = join(process.cwd(), '.veritas-kanban', 'templates');
+    this.templatesDir = getTemplatesDir();
     this.ensureDir();
   }
 

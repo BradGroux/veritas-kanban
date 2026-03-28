@@ -246,7 +246,7 @@ System events render as divider lines in the UI — visually distinct from regul
 
 ---
 
-## Crash-Recovery Checkpointing
+## Crash-Recovery Checkpointing (v3.3)
 
 For long-running tasks, save agent state periodically so work can resume after crashes:
 
@@ -269,7 +269,7 @@ curl -X DELETE http://localhost:3001/api/tasks/<id>/checkpoint
 - Always clear checkpoints after `vk done`.
 - Checkpoint payloads are capped at 1MB with 24h auto-expiry.
 
-## Observational Memory
+## Observational Memory (v3.3)
 
 Capture important decisions, blockers, and insights as task observations:
 
@@ -290,7 +290,7 @@ curl "http://localhost:3001/api/observations/search?query=approach+X"
 - Surprising findings or gotchas (type: `insight`)
 - Context needed for future work (type: `context`)
 
-## Task Dependencies
+## Task Dependencies (v3.3)
 
 Before starting a task, check its dependency status:
 
@@ -300,16 +300,5 @@ curl http://localhost:3001/api/tasks/<id>/dependencies
 
 # If upstream blockers are incomplete, don't start — pick another task instead.
 ```
-
----
-
-## Governance Compliance (v4.0)
-
-When working on tasks with active policies:
-
-1. **Check applicable policies** before starting: `GET /api/policies?scope.project=<project>`
-2. **Evaluate before restricted actions**: `POST /api/policies/:id/evaluate` — if denied, do not proceed.
-3. **Log significant decisions**: `POST /api/decisions` with confidence, evidence, and assumptions.
-4. **Submit to output scoring** if the task type has a scoring profile configured.
 
 Follow this SOP and every task stays audit-friendly, searchable, and trustworthy.

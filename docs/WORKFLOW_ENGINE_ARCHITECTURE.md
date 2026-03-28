@@ -1,4 +1,4 @@
-# Workflow Engine Architecture — Veritas Kanban
+# Workflow Engine Architecture — Veritas Kanban v3.0
 
 **Author**: TARS (sub-agent)  
 **Created**: 2026-02-09  

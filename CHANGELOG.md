@@ -10,30 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Mass archive failure caused by missing `/api/tasks/bulk-archive-by-ids` endpoint
-- MIME validation test fixtures now use valid PNG IHDR chunks (#266)
-- Status history tests isolated from real state
-- Build order: shared package built before server and web (#244)
-
-### Changed
-
-- Batch file reads use bounded concurrency for improved task loading performance (#255)
-- Shared package exports governance, policy, and workflow types (#256)
-- Bumped pnpm/action-setup from v4 to v5 (#260)
-
-### Security
-
-- Hardened localhost bypass and broadcast frontmatter parsing (#242)
-- Startup init failures now fatal with shutdown timeouts (#241)
-- Config cache stampede prevention and corrupted activity file logging (#240)
-- WebSocket event listener leak fix and message rate limiting (#239)
-- Promise handling fixes preventing crashes and data loss (#238)
-- Enforced HS256 algorithm in JWT verification (#237)
-
-### Docs
-
-- v4.0 governance security audit (#265)
-- Comprehensive unit tests for v4.0 governance services (#263)
-- Feedback, chat, and system-health route tests (#257)
 
 ## [4.0.0] - 2026-03-21
 

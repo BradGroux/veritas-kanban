@@ -123,7 +123,7 @@ See [SQUAD-CHAT-PROTOCOL.md](SQUAD-CHAT-PROTOCOL.md) for full details.
 
 ---
 
-## Workflow Engine
+## Workflow Engine (v3.0)
 
 For repeatable multi-agent pipelines, consider using the **Workflow Engine** instead of manual orchestration:
 

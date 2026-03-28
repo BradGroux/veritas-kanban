@@ -95,7 +95,7 @@ Use these recipes as seeds for your own automation playbooks.
 
 ---
 
-## 7. Workflow Engine Pipeline
+## 7. Workflow Engine Pipeline (v3.0)
 
 **Goal:** Automate plan → implement → test → review with retry policies.
 
@@ -108,7 +108,7 @@ See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full YAML examples.
 
 ---
 
-## 8. Using Task Dependencies
+## 8. Using Task Dependencies (v3.3)
 
 **Goal:** Ensure backend API is complete before frontend work starts.
 
@@ -119,7 +119,7 @@ See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full YAML examples.
 
 ---
 
-## 9. Crash-Recovery Checkpointing
+## 9. Crash-Recovery Checkpointing (v3.3)
 
 **Goal:** Resume long-running agent work after a crash.
 
@@ -139,7 +139,7 @@ curl -X DELETE http://localhost:3001/api/tasks/US-42/checkpoint
 
 ---
 
-## 10. Observational Memory for Cross-Agent Learning
+## 10. Observational Memory for Cross-Agent Learning (v3.3)
 
 **Goal:** Capture architectural decisions so future agents don't repeat exploration.
 
@@ -151,75 +151,4 @@ curl -X POST http://localhost:3001/api/observations \
 
 # Future agent searches before making the same decision
 curl "http://localhost:3001/api/observations/search?query=websocket+vs+sse"
-```
-
----
-
-## 11. Agent Policy Evaluation (v4.0)
-
-**Goal:** Restrict an agent from deleting production tasks.
-
-```bash
-# Create a deny-first policy
-curl -X POST http://localhost:3001/api/policies \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "no-delete-production",
-    "description": "Prevent agents from deleting tasks in production projects",
-    "scope": {"project": "production"},
-    "rules": [{"tool": "task.delete", "action": "deny", "reason": "Production tasks require human approval for deletion"}],
-    "precedence": "deny-first"
-  }'
-
-# Test before deploying
-curl -X POST http://localhost:3001/api/policies/POLICY_ID/evaluate \
-  -H "Content-Type: application/json" \
-  -d '{"agent": "codex-1", "tool": "task.delete", "context": {"project": "production"}}'
-```
-
----
-
-## 12. Behavioral Drift Monitoring (v4.0)
-
-**Goal:** Detect when an agent's task completion rate drops.
-
-```bash
-# Configure a drift monitor
-curl -X POST http://localhost:3001/api/drift \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent": "TARS",
-    "metric": "completion_rate",
-    "baseline": 0.85,
-    "warningThreshold": 0.70,
-    "alertThreshold": 0.50
-  }'
-
-# Check drift status across all agents
-curl -s http://localhost:3001/api/drift | jq '.data[] | {agent, metric, status}'
-```
-
----
-
-## 13. Decision Audit Trail (v4.0)
-
-**Goal:** Log a significant architectural decision with assumptions for future reference.
-
-```bash
-# Record a decision
-curl -X POST http://localhost:3001/api/decisions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taskId": "US-200",
-    "agent": "VERITAS",
-    "decision": "Use file-based storage instead of SQLite for v4.0",
-    "confidence": 0.8,
-    "evidence": ["Current scale is <1000 tasks", "File ops are simpler to debug", "No migration path needed"],
-    "assumptions": ["Scale stays under 10k tasks", "Single-instance deployment"]
-  }'
-
-# Later: record what happened
-curl -X POST http://localhost:3001/api/decisions/DECISION_ID/outcome \
-  -H "Content-Type: application/json" \
-  -d '{"outcome": "File storage held up well through v4.0 launch. Assumption about scale still valid at ~350 tasks."}'
 ```

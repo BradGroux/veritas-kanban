@@ -2,7 +2,7 @@
 
 This file defines project-specific rules, context, and lessons learned for AI agents working on Veritas Kanban. Update it after every mistake, discovery, or workflow change.
 
-> **Last updated:** 2026-02-06 (v2.0.0)  
+> **Last updated:** 2026-03-27 (v4.0.0)
 > **Freshness check:** Review monthly or after major releases
 
 ---
@@ -106,13 +106,31 @@ This file defines project-specific rules, context, and lessons learned for AI ag
 - Commit: Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`)
 - PR: Always reference issue number
 
-### Task Workflow
+### Task Workflow — Veritas Protocol (MANDATORY)
 
-1. Start timer: `vk begin <id>`
-2. Update status: `vk status <id> in-progress`
-3. Work, commit, push
-4. Cross-model review
-5. Complete: `vk done <id> "summary"`
+Every agent working on this board MUST follow this lifecycle:
+
+1. **Start work**: `kanban begin <id>` — sets status to in-progress, starts timer, sets agent to busy
+2. **Assign yourself** (if not already): `kanban assign <id> <your-agent-name>`
+3. **Break into subtasks** (3-8 per task): `kanban add-subtask <id> "subtask title"`
+4. **Log decisions**: `kanban observe <id> decision "what was decided and why"`
+5. **Log blockers**: `kanban block <id> "reason"` — stops timer, sets agent idle
+6. **Complete work**: `kanban done <id> "summary of deliverables"` — stops timer, sets agent idle
+7. **Checkpoints on long tasks** (>30 min): `POST /api/v1/tasks/<id>/checkpoint {"state": {...}}`
+
+API base: `https://bot.srv929662.hstgr.cloud/kanban/api/v1`
+CLI: `~/.local/bin/kanban` (HTTP wrapper, auto-attributes to `$KANBAN_ACTOR`)
+Dashboard: https://bot.srv929662.hstgr.cloud/kanban/
+
+**Enforcement gates are ON**: assignedTo required, closing comments required, auto time-tracking enabled.
+
+### Additional Protocol Rules
+
+- **Sprint tagging**: Every new task MUST be tagged with the current sprint: `kanban sprint-assign <id> <sprint-id>`
+- **Dependencies**: If task B depends on task A, declare it at creation. Check `kanban deps <id>` before starting.
+- **Prompt templates**: 10 registered templates available via `GET /api/v1/prompt-registry`. Use them for worker handoffs, cross-model reviews, sprint planning, standup summaries.
+- **Efficient polling**: Use `GET /api/v1/changes?since=<ISO-timestamp>` instead of full task list scans. Supports ETag caching (304 responses are rate-limit-exempt).
+- **Feedback**: After completing a review, rate the work: `kanban rate <id> <1-5> "comment"`
 
 ---
 

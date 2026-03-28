@@ -232,6 +232,59 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(result).toBeNull();
     });
 
+    it('should round-trip review comments through markdown storage', async () => {
+      const task = await service.createTask({
+        title: 'Review Task',
+        description: 'Task description',
+      });
+
+      const updated = await service.updateTask(task.id, {
+        reviewComments: [
+          {
+            id: 'comment-1',
+            file: 'server/src/services/task-service.ts',
+            line: 411,
+            content: 'Parse stored markdown review comments',
+            created: '2026-01-26T12:00:00.000Z',
+          },
+          {
+            id: 'closing-codex',
+            file: 'summary',
+            line: 0,
+            content: 'Round-trip serialization verified.',
+            created: '2026-01-26T12:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(updated).not.toBeNull();
+
+      // Verify markdown file contains review comments section
+      const stored = await fs.readFile(path.join(tasksDir, `${task.id}-review-task.md`), 'utf-8');
+      expect(stored).toContain('## Review Comments');
+      expect(stored).toContain(
+        '- **server/src/services/task-service.ts:411** - Parse stored markdown review comments'
+      );
+      expect(stored).toContain('- **summary:0** - Round-trip serialization verified.');
+
+      // Re-create service to force re-read from disk
+      service.dispose();
+      service = new TaskService({
+        tasksDir,
+        archiveDir,
+      });
+
+      const roundTripped = await service.getTask(task.id);
+      expect(roundTripped?.reviewComments).toHaveLength(2);
+      expect(roundTripped?.reviewComments?.[0]?.file).toBe('server/src/services/task-service.ts');
+      expect(roundTripped?.reviewComments?.[0]?.line).toBe(411);
+      expect(roundTripped?.reviewComments?.[0]?.content).toBe(
+        'Parse stored markdown review comments'
+      );
+      expect(roundTripped?.reviewComments?.[1]?.file).toBe('summary');
+      expect(roundTripped?.reviewComments?.[1]?.content).toBe('Round-trip serialization verified.');
+    });
+
     it('should rename file when title changes', async () => {
       const task = await service.createTask({ title: 'Original Name' });
       const originalFiles = await fs.readdir(tasksDir);

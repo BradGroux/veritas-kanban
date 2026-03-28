@@ -9,9 +9,10 @@ import { promisify } from 'util';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('worktree-service');
 
+import { getStorageRoot, getWorktreesDir } from '../utils/paths.js';
 // Default paths
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const WORKTREES_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'worktrees');
+const PROJECT_ROOT = getStorageRoot();
+const WORKTREES_DIR = getWorktreesDir();
 
 export interface WorktreeInfo {
   path: string;

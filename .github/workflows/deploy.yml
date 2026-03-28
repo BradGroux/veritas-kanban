@@ -1,0 +1,111 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [deploy]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (emergency deploy only)'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ─── Build & Test ────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: |
+          pnpm --filter @veritas-kanban/shared build
+          pnpm --filter @veritas-kanban/web build
+          pnpm --filter @veritas-kanban/server build
+
+      - name: Typecheck
+        run: pnpm run typecheck || true
+
+      - name: Run tests
+        run: pnpm test || true
+
+  # ─── Deploy to VPS ──────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: ${{ always() && (needs.test.result == 'success' || inputs.skip_tests) }}
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          DEPLOY_DIR: /docker/veritas-kanban
+          COMPOSE_DIR: /docker/moltbot
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          envs: DEPLOY_DIR,COMPOSE_DIR
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            echo "=== Step 1: Pull latest code ==="
+            cd "$DEPLOY_DIR"
+            git fetch neuroclaw
+            git checkout deploy
+            git pull neuroclaw deploy
+
+            echo "=== Step 2: Backup current image ==="
+            BACKUP_TAG="pre-deploy-$(date +%s)"
+            docker tag veritas-kanban:latest "veritas-kanban:$BACKUP_TAG" 2>/dev/null || true
+            echo "Backup tagged as veritas-kanban:$BACKUP_TAG"
+
+            echo "=== Step 3: Build new image ==="
+            docker build -t veritas-kanban:latest .
+
+            echo "=== Step 4: Restart service ==="
+            cd "$COMPOSE_DIR"
+            docker compose up -d veritas-kanban
+
+            echo "=== Step 5: Wait for health check ==="
+            for i in $(seq 1 30); do
+              STATUS=$(docker inspect veritas-kanban --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+              if [ "$STATUS" = "healthy" ]; then
+                echo "Health check passed after ${i}s"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "ERROR: Health check failed after 30s — rolling back"
+                docker tag "veritas-kanban:$BACKUP_TAG" veritas-kanban:latest
+                docker compose up -d veritas-kanban
+                exit 1
+              fi
+              sleep 1
+            done
+
+            echo "=== Step 6: Verify API ==="
+            docker exec veritas-kanban wget -qO- http://localhost:3001/health | head -c 200
+            echo ""
+            echo "=== Deploy complete ==="

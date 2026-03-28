@@ -74,7 +74,7 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 
 ---
 
-## Advanced Features — Best Practices
+## v3.3.0 Features — Best Practices
 
 11. **Use task dependencies to enforce ordering**
     - Set `depends_on` / `blocks` relationships so agents don't start work before prerequisites are complete.
@@ -96,29 +96,5 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 15. **Use workflows for repeatable multi-agent pipelines**
     - If you're doing the same plan→implement→review cycle repeatedly, encode it as a YAML workflow.
     - Workflows provide retry policies, gate approvals, and real-time observability that ad-hoc scripts don't.
-
----
-
-## v4.0 Governance — Best Practices
-
-16. **Define policies before deploying agents**
-    - Set up tool/action policies (`/api/policies`) with guard rules before agents start work.
-    - Use `deny-first` precedence for production; `allow-first` for development.
-
-17. **Monitor behavioral drift proactively**
-    - Configure baselines and alert thresholds via `/api/drift` for key agent metrics.
-    - Review drift status regularly — `warning` → `alert` escalation means an agent is deviating.
-
-18. **Log decisions with assumptions**
-    - Every significant agent decision should include supporting evidence and explicit assumptions via `/api/decisions`.
-    - Record outcomes after the fact to build institutional knowledge about what works.
-
-19. **Score agent outputs consistently**
-    - Create scoring profiles with weighted criteria for repeatable evaluation.
-    - Use `geometricMean` composite scoring to penalize low scores in any single dimension.
-
-20. **Close the feedback loop**
-    - Collect user feedback on agent outputs with sentiment and category tags via `/api/feedback`.
-    - Review feedback analytics weekly to catch quality regressions before they compound.
 
 Stick to these rules and the board stays trustworthy even with dozens of agents in parallel.

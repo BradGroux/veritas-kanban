@@ -105,27 +105,12 @@ Combine MCP + prompt registry to let Claude act as your PM.
 
 ---
 
-## Workflow Engine
+## Workflow Engine (v3.0)
 
 - Define pipelines as YAML in `.veritas-kanban/workflows/`.
 - Start runs: `POST /api/workflows/:id/runs`.
 - Monitor live in the **Workflows** tab or Dashboard.
 - Use tool policies to restrict agent permissions per step.
 - See [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) for full details.
-
----
-
-## v4.0 Governance Quick Tips
-
-| Feature                | Quick Usage                                                                                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Policy Engine**      | `POST /api/policies` to define guard rules → `POST /api/policies/:id/evaluate` to test before deploying         |
-| **Decision Audit**     | `POST /api/decisions` with confidence + assumptions → `POST /api/decisions/:id/outcome` to record what happened |
-| **Output Scoring**     | Create profiles with `POST /api/scoring/profiles` → evaluate with `POST /api/scoring/evaluate`                  |
-| **Drift Detection**    | Configure baselines via `POST /api/drift` → check status with `GET /api/drift` for early warnings               |
-| **Feedback Analytics** | `POST /api/feedback` with sentiment tags → `GET /api/feedback/analytics` for trends                             |
-| **System Health Bar**  | `GET /api/v1/system/health` — five levels from `stable` to `alert`, auto-refreshes in the header                |
-| **Dashboard Widgets**  | Drag to reposition, resize handles on corners. Layout saves automatically.                                      |
-| **Prompt Registry**    | `POST /api/prompt-registry/templates` → version with `/versions` → preview with `/preview`                      |
 
 Know a trick that belongs here? Add it and mirror to the knowledge base so agents learn it too.

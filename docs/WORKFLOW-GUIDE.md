@@ -1,6 +1,6 @@
 # Veritas Kanban Workflow Engine — User Guide
 
-**Version**: v4.0  
+**Version**: v3.0  
 **Last Updated**: 2026-02-09  
 **Status**: Production Ready
 
@@ -62,7 +62,7 @@ Think of it as **GitHub Actions for AI agents** — YAML-defined pipelines that 
 
 ### Prerequisites
 
-- Veritas Kanban v4.0+ installed and running
+- Veritas Kanban v3.0+ installed and running
 - OpenClaw configured with agent models
 - Basic understanding of YAML syntax
 - Familiarity with VK task management
