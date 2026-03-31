@@ -31,10 +31,10 @@ export function getPeriodStart(period: MetricsPeriod, customFrom?: string): stri
       now.setHours(0, 0, 0, 0);
       break;
     case '24h':
-      now.setDate(now.getDate() - 1);
+      now.setTime(now.getTime() - 24 * 60 * 60 * 1000);
       break;
     case '3d':
-      now.setDate(now.getDate() - 3);
+      now.setTime(now.getTime() - 3 * 24 * 60 * 60 * 1000);
       break;
     case 'wtd': {
       // Start of current week (Monday 00:00:00)
@@ -55,10 +55,10 @@ export function getPeriodStart(period: MetricsPeriod, customFrom?: string): stri
       now.setHours(0, 0, 0, 0);
       break;
     case '7d':
-      now.setDate(now.getDate() - 7);
+      now.setTime(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       break;
     case '30d':
-      now.setDate(now.getDate() - 30);
+      now.setTime(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       break;
     case '3m':
       now.setMonth(now.getMonth() - 3);
