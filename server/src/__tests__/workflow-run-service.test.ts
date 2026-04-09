@@ -57,6 +57,7 @@ describe('WorkflowRunService', () => {
   beforeEach(async () => {
     vi.resetModules();
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workflow-run-'));
+    await fs.mkdir(path.join(tmpDir, '.veritas-kanban', 'workflows'), { recursive: true });
     mockLoadWorkflow.mockResolvedValue(makeWorkflow());
     mockListWorkflowsMetadata.mockResolvedValue([
       { id: 'wf-1', name: 'Workflow One' },
