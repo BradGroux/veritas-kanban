@@ -15,13 +15,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@veritas-kanban/shared": "workspace:*",
-    "hono": "^4.12.12",
+    "hono": "^4.12.14",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "tsx": "^4.19.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",
