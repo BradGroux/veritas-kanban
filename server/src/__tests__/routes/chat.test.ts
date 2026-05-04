@@ -10,7 +10,7 @@ import express from 'express';
 
 // ── Mock dependencies before importing route ─────────────────────────────────
 
-const { mockChatService } = vi.hoisted(() => ({
+const { mockChatService, mockSendGatewayChat, mockBuildContext } = vi.hoisted(() => ({
   mockChatService: {
     getSession: vi.fn(),
     getSessionForTask: vi.fn(),
@@ -21,6 +21,8 @@ const { mockChatService } = vi.hoisted(() => ({
     sendSquadMessage: vi.fn(),
     getSquadMessages: vi.fn(),
   },
+  mockSendGatewayChat: vi.fn().mockResolvedValue(undefined),
+  mockBuildContext: vi.fn(),
 }));
 
 vi.mock('../../services/chat-service.js', () => ({
@@ -28,8 +30,14 @@ vi.mock('../../services/chat-service.js', () => ({
 }));
 
 vi.mock('../../services/gateway-chat-client.js', () => ({
-  sendGatewayChat: vi.fn().mockResolvedValue(undefined),
+  sendGatewayChat: mockSendGatewayChat,
   loadGatewayToken: vi.fn().mockResolvedValue('token'),
+}));
+
+vi.mock('../../services/veritas-context-service.js', () => ({
+  getVeritasContextService: () => ({
+    buildContext: mockBuildContext,
+  }),
 }));
 
 vi.mock('../../services/broadcast-service.js', () => ({
@@ -111,6 +119,7 @@ describe('Chat Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBuildContext.mockResolvedValue({ contextBlock: '', results: [], degraded: false });
     app = buildApp(true);
   });
 
@@ -186,6 +195,41 @@ describe('Chat Routes', () => {
     it('accepts valid mode: build', async () => {
       const res = await request(app).post('/send').send({ message: 'hi', mode: 'build' });
       expect(res.status).toBe(200);
+    });
+
+    it('injects retrieval context for VERITAS gateway messages', async () => {
+      mockBuildContext.mockResolvedValue({
+        contextBlock: '<veritas_context>\nRelevant task\n</veritas_context>',
+        results: [],
+        degraded: false,
+      });
+
+      const res = await request(app).post('/send').send({ message: 'what overlaps?' });
+
+      expect(res.status).toBe(200);
+      expect(mockBuildContext).toHaveBeenCalledWith({
+        message: 'what overlaps?',
+        taskId: undefined,
+      });
+      expect(mockSendGatewayChat).toHaveBeenCalledWith(
+        'what overlaps?\n\n<veritas_context>\nRelevant task\n</veritas_context>',
+        'kanban-chat-sess_1',
+        expect.any(Object)
+      );
+    });
+
+    it('skips retrieval context when requested', async () => {
+      const res = await request(app)
+        .post('/send')
+        .send({ message: 'plain chat', includeContext: false });
+
+      expect(res.status).toBe(200);
+      expect(mockBuildContext).not.toHaveBeenCalled();
+      expect(mockSendGatewayChat).toHaveBeenCalledWith(
+        'plain chat',
+        'kanban-chat-sess_1',
+        expect.any(Object)
+      );
     });
 
     it('accepts optional taskId and sessionId', async () => {

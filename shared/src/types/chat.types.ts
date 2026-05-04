@@ -38,6 +38,7 @@ export interface ChatSendInput {
   agent?: string; // Override agent
   model?: string; // Override model
   mode?: 'ask' | 'build';
+  includeContext?: boolean; // Set false to skip retrieval context injection
 }
 
 /**

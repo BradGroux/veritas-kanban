@@ -11,6 +11,7 @@ import { sendGatewayChat, loadGatewayToken } from '../services/gateway-chat-clie
 import { broadcastChatMessage, broadcastSquadMessage } from '../services/broadcast-service.js';
 import { fireSquadWebhook } from '../services/squad-webhook-service.js';
 import { ConfigService } from '../services/config-service.js';
+import { getVeritasContextService } from '../services/veritas-context-service.js';
 import type { ChatSendInput } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -33,6 +34,7 @@ const chatSendSchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   mode: z.enum(['ask', 'build']).optional(),
+  includeContext: z.boolean().optional(),
 });
 
 const squadMessageSchema = z.object({
@@ -121,7 +123,22 @@ router.post(
     // Trigger async AI response via Clawdbot Gateway
     const gatewaySessionKey = `kanban-chat-${sessionId}`;
 
-    sendGatewayChat(input.message, gatewaySessionKey, {
+    const agent = input.agent || session.agent || 'veritas';
+    const shouldInjectContext =
+      input.includeContext !== false && agent.toLowerCase().includes('veritas');
+    let gatewayMessage = input.message;
+
+    if (shouldInjectContext) {
+      const context = await getVeritasContextService().buildContext({
+        message: input.message,
+        taskId: input.taskId || session.taskId || undefined,
+      });
+      if (context.contextBlock) {
+        gatewayMessage = `${input.message}\n\n${context.contextBlock}`;
+      }
+    }
+
+    sendGatewayChat(gatewayMessage, gatewaySessionKey, {
       onDelta: (text) => {
         // Broadcast streaming chunk to kanban WebSocket clients
         broadcastChatMessage(sessionId, {
