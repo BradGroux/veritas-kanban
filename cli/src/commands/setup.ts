@@ -36,7 +36,7 @@ export function registerSetupCommands(program: Command): void {
       // Step 1: Check Node version
       const nodeVersion = process.version;
       const nodeMajor = parseInt(nodeVersion.slice(1).split('.')[0], 10);
-      if (nodeMajor >= 18) {
+      if (nodeMajor >= 22) {
         results.push({
           step: 'node',
           status: 'pass',
@@ -47,10 +47,10 @@ export function registerSetupCommands(program: Command): void {
         results.push({
           step: 'node',
           status: 'fail',
-          message: `Node.js ${nodeVersion} (requires >=18)`,
+          message: `Node.js ${nodeVersion} (requires >=22)`,
         });
         if (!options.json)
-          console.log(chalk.red(`✗ Node.js ${nodeVersion} — requires v18 or higher`));
+          console.log(chalk.red(`✗ Node.js ${nodeVersion} — requires v22 or higher`));
       }
 
       // Step 2: Check if server is running

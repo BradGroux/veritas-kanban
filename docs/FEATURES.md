@@ -1802,7 +1802,7 @@ Production-ready deployment and development tooling.
 
 - **GitHub Actions** — CI pipeline on push to `main` and pull requests
 - **Concurrency control** — In-progress runs cancelled when new commits push
-- **Pipeline jobs** — Lint & type check, server unit tests, E2E tests (3 parallel jobs)
+- **Pipeline jobs** — Lint & type check, workspace unit tests, production build, and security audit
 - **pnpm caching** — Dependency cache for faster CI runs
 
 ### Development

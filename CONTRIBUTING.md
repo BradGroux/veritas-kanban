@@ -73,9 +73,10 @@ veritas-kanban/
 
 2. Make your changes — write code, add tests, update docs.
 
-3. Run linting and tests before committing:
+3. Run type checking, linting, and tests before committing:
 
    ```bash
+   pnpm typecheck
    pnpm lint
    pnpm test
    ```
@@ -160,6 +161,7 @@ These reviews are mandatory, not optional. They catch runtime issues that static
 Before merging any branch, verify:
 
 - [ ] **Type exports:** All new types added to `shared/` are exported in `shared/src/types/index.ts`
+- [ ] **Type checks pass:** `pnpm typecheck` succeeds for all workspace packages (shared, server, web, CLI, MCP)
 - [ ] **Builds pass:** `pnpm build` succeeds for all packages (shared, server, web)
 - [ ] **No hardcoded values:** No hardcoded ports, URLs, or timeouts in application code
 - [ ] **CSP/CORS configs:** Security policies work in both `NODE_ENV=development` AND `NODE_ENV=production`
