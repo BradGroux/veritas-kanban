@@ -29,7 +29,7 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",

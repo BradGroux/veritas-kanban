@@ -144,7 +144,28 @@ describe('DelegationService', () => {
       createdBy: 'brad',
     });
 
-    for (let i = 0; i < 1002; i++) {
+    const logFile = path.join(repoDir, '.veritas-kanban', 'delegation-log.json');
+    await fs.writeFile(
+      logFile,
+      JSON.stringify(
+        {
+          approvals: Array.from({ length: 999 }, (_, i) => ({
+            id: `approval-seed-${i}`,
+            taskId: `seed-${i}`,
+            taskTitle: `Seed ${i}`,
+            agent: 'CASE',
+            delegated: true,
+            timestamp: new Date(Date.now() - 2_000_000 + i).toISOString(),
+            originalDelegation: 'seed',
+          })),
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    for (let i = 0; i < 3; i++) {
       await service.logApproval({
         taskId: `task-${i % 2}`,
         taskTitle: `Task ${i}`,
@@ -159,7 +180,7 @@ describe('DelegationService', () => {
     );
 
     const filtered = await service.getApprovalLog({ taskId: 'task-1', agent: 'TARS', limit: 5 });
-    expect(filtered).toHaveLength(5);
+    expect(filtered).toHaveLength(1);
     expect(filtered.every((a: any) => a.taskId === 'task-1' && a.agent === 'TARS')).toBe(true);
   });
 });
