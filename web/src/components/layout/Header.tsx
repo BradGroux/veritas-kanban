@@ -22,6 +22,7 @@ import { SettingsDialog } from '@/components/settings/SettingsDialog';
 // ArchiveSidebar removed — replaced with full-page ArchivePage
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { SquadChatPanel } from '@/components/chat/SquadChatPanel';
+import { SearchDialog } from '@/components/search';
 import { UserMenu } from './UserMenu';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
 import { useState, useCallback } from 'react';
@@ -35,12 +36,13 @@ export function Header() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
+  const [searchOpen, setSearchOpen] = useState(false);
   // activityOpen removed — sidebar merged into feed (GH-66)
   // archiveOpen removed — archive is now a full page view
   const [chatOpen, setChatOpen] = useState(false);
   const [squadChatOpen, setSquadChatOpen] = useState(false);
   const { setOpenCreateDialog, setOpenChatPanel } = useKeyboard();
-  const { view, setView } = useView();
+  const { view, setView, navigateToTask } = useView();
   const { data: backlogCount = 0 } = useBacklogCount();
   const { theme, setTheme } = useTheme();
 
@@ -171,6 +173,15 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search"
+              title="Search"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setSquadChatOpen(true)}
               aria-label="Squad Chat"
               title="Squad Chat — Agent communication"
@@ -230,6 +241,7 @@ export function Header() {
       />
       <ChatPanel open={chatOpen} onOpenChange={setChatOpen} />
       <SquadChatPanel open={squadChatOpen} onOpenChange={setSquadChatOpen} />
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} onTaskOpen={navigateToTask} />
     </header>
   );
 }

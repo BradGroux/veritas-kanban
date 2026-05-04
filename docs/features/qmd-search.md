@@ -56,9 +56,14 @@ curl -X POST http://localhost:3001/api/search \
 
 The response includes `backend`, `degraded`, and optional `reason` fields so clients can show whether QMD or fallback search served the request.
 
+## App UI
+
+Open the search dialog from the header search icon or the command palette action named **Search Tasks and Docs**. The dialog can query active tasks, archived tasks, and docs, and it shows whether the response came from QMD or keyword fallback.
+
+Task results open directly in the board detail panel when the result path maps to a task markdown file.
+
 ## Next v4.1 PRs
 
-- Search UI
 - Duplicate detection hints during task creation
 - VERITAS context injection
 - Scheduled QMD update/embed maintenance

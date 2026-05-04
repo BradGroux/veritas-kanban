@@ -42,7 +42,13 @@ export const api = {
   search: searchApi,
 };
 
-export type { SearchRequest, SearchResponse, SearchResult } from './search';
+export type {
+  SearchBackend,
+  SearchCollection,
+  SearchRequest,
+  SearchResponse,
+  SearchResult,
+} from './search';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';
