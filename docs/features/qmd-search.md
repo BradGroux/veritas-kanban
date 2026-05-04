@@ -66,7 +66,12 @@ Task results open directly in the board detail panel when the result path maps t
 
 The create-task dialog checks active and archived task collections after the title has enough signal. Possible matches are shown inline and can be opened for inspection, but task creation remains available so intentional follow-up work is not blocked.
 
+## VERITAS Context Injection
+
+VERITAS chat sends retrieve compact supporting context from active tasks, archived tasks, and docs before calling the gateway. The original user message is still saved unchanged; retrieved context is appended only to the gateway prompt inside a `<veritas_context>` block with source paths.
+
+Clients can opt out per chat send by passing `includeContext: false`.
+
 ## Next v4.1 PRs
 
-- VERITAS context injection
 - Scheduled QMD update/embed maintenance
