@@ -95,4 +95,45 @@ describe('SearchService', () => {
       collection: 'tasks-active',
     });
   });
+
+  it('refreshes qmd index and embeddings', async () => {
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(null, '', '');
+    });
+
+    const result = await new SearchService().refreshIndex();
+
+    expect(result).toMatchObject({
+      backend: 'qmd',
+      updated: true,
+      embedded: true,
+      commands: ['update', 'embed'],
+    });
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      'qmd',
+      ['update'],
+      expect.objectContaining({ cwd: root }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'qmd',
+      ['embed'],
+      expect.objectContaining({ cwd: root }),
+      expect.any(Function)
+    );
+  });
+
+  it('can refresh qmd index without embedding', async () => {
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(null, '', '');
+    });
+
+    const result = await new SearchService().refreshIndex({ embed: false });
+
+    expect(result.embedded).toBe(false);
+    expect(result.commands).toEqual(['update']);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
 });

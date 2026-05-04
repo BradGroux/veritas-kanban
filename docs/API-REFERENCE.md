@@ -1472,9 +1472,10 @@ QMD-ready retrieval across task markdown and docs. The endpoint uses the configu
 
 Mounted at `/api/search`.
 
-| Method | Path          | Description                                     |
-| ------ | ------------- | ----------------------------------------------- |
-| `POST` | `/api/search` | Search task and docs collections with one query |
+| Method | Path                        | Description                                     |
+| ------ | --------------------------- | ----------------------------------------------- |
+| `POST` | `/api/search`               | Search task and docs collections with one query |
+| `POST` | `/api/search/index/refresh` | Refresh QMD collections and embeddings          |
 
 ### Search Collections
 
@@ -1520,8 +1521,36 @@ POST /api/search
 
 ```bash
 npm install -g @tobilu/qmd
-scripts/qmd/setup-veritas-qmd.sh
+pnpm qmd:setup
 VERITAS_SEARCH_BACKEND=qmd pnpm dev
+```
+
+### QMD Index Refresh
+
+```
+POST /api/search/index/refresh
+```
+
+**Body**:
+
+```json
+{
+  "embed": true
+}
+```
+
+Set `embed` to `false` to run only `qmd update`.
+
+**Response** `200`:
+
+```json
+{
+  "backend": "qmd",
+  "updated": true,
+  "embedded": true,
+  "elapsedMs": 982,
+  "commands": ["update", "embed"]
+}
 ```
 
 ---
