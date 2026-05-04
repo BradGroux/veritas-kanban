@@ -19,6 +19,12 @@ const SearchBodySchema = z.object({
   minScore: z.number().min(0).max(1).optional(),
 });
 
+const RefreshBodySchema = z
+  .object({
+    embed: z.boolean().optional(),
+  })
+  .optional();
+
 router.post(
   '/',
   asyncHandler(async (req, res) => {
@@ -42,6 +48,25 @@ router.post(
       backend: body.backend as SearchBackend | undefined,
       minScore: body.minScore,
     });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/index/refresh',
+  asyncHandler(async (req, res) => {
+    const parsed = RefreshBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError(
+        'Validation failed',
+        parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        }))
+      );
+    }
+
+    const result = await getSearchService().refreshIndex({ embed: parsed.data?.embed });
     res.json(result);
   })
 );

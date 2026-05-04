@@ -29,6 +29,8 @@
     "clean": "pnpm -r clean && rm -rf node_modules",
     "audit": "pnpm audit --prod",
     "audit:all": "pnpm audit",
+    "qmd:setup": "bash scripts/qmd/setup-veritas-qmd.sh",
+    "qmd:refresh": "bash scripts/qmd/refresh-veritas-qmd.sh",
     "seed": "bash scripts/seed.sh",
     "prepare": "husky",
     "demo": "docker compose -f demo/docker-compose.demo.yml up --build"

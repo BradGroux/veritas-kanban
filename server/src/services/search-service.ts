@@ -35,6 +35,14 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
+export interface SearchIndexRefreshResponse {
+  backend: 'qmd';
+  updated: boolean;
+  embedded: boolean;
+  elapsedMs: number;
+  commands: string[];
+}
+
 interface SearchSource {
   collection: SearchCollection;
   dir: string;
@@ -107,6 +115,33 @@ class SearchService {
     };
   }
 
+  async refreshIndex(options: { embed?: boolean } = {}): Promise<SearchIndexRefreshResponse> {
+    const started = Date.now();
+    const embed = options.embed ?? true;
+    const commands = ['update'];
+
+    await this.runQmdCommand(
+      ['update'],
+      Number(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS || 60_000)
+    );
+
+    if (embed) {
+      commands.push('embed');
+      await this.runQmdCommand(
+        ['embed'],
+        Number(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS || 60_000)
+      );
+    }
+
+    return {
+      backend: 'qmd',
+      updated: true,
+      embedded: embed,
+      elapsedMs: Date.now() - started,
+      commands,
+    };
+  }
+
   private defaultBackend(): SearchBackend {
     const configured = process.env.VERITAS_SEARCH_BACKEND;
     if (configured === 'qmd' || configured === 'auto' || configured === 'keyword') {
@@ -119,7 +154,6 @@ class SearchService {
     query: string,
     options: { limit: number; collections: SearchCollection[]; minScore?: number }
   ): Promise<SearchResult[]> {
-    const bin = process.env.VERITAS_QMD_BIN || 'qmd';
     const args = ['query', query, '--json', '-n', String(options.limit)];
 
     if (options.minScore !== undefined) {
@@ -130,13 +164,23 @@ class SearchService {
       args.push('--collections', options.collections.join(','));
     }
 
-    const stdout = await new Promise<string>((resolve, reject) => {
+    const stdout = await this.runQmdCommand(
+      args,
+      Number(process.env.VERITAS_QMD_TIMEOUT_MS || 10_000)
+    );
+
+    return this.normalizeQmdResults(stdout, options.limit);
+  }
+
+  private async runQmdCommand(args: string[], timeout: number): Promise<string> {
+    const bin = process.env.VERITAS_QMD_BIN || 'qmd';
+    return new Promise<string>((resolve, reject) => {
       execFile(
         bin,
         args,
         {
           cwd: this.projectRoot(),
-          timeout: Number(process.env.VERITAS_QMD_TIMEOUT_MS || 10_000),
+          timeout,
           maxBuffer: 2 * 1024 * 1024,
         },
         (error, stdoutValue) => {
@@ -148,8 +192,6 @@ class SearchService {
         }
       );
     });
-
-    return this.normalizeQmdResults(stdout, options.limit);
   }
 
   private normalizeQmdResults(stdout: string, limit: number): SearchResult[] {

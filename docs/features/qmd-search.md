@@ -32,7 +32,7 @@ Install QMD and create the initial collections:
 
 ```bash
 npm install -g @tobilu/qmd
-scripts/qmd/setup-veritas-qmd.sh
+pnpm qmd:setup
 ```
 
 Then start VK with QMD enabled:
@@ -40,6 +40,14 @@ Then start VK with QMD enabled:
 ```bash
 VERITAS_SEARCH_BACKEND=qmd pnpm dev
 ```
+
+Refresh the index after larger task/doc changes:
+
+```bash
+pnpm qmd:refresh
+```
+
+Set `VERITAS_QMD_SKIP_EMBED=true` to run `qmd update` without `qmd embed`.
 
 ## API
 
@@ -72,6 +80,10 @@ VERITAS chat sends retrieve compact supporting context from active tasks, archiv
 
 Clients can opt out per chat send by passing `includeContext: false`.
 
+## Index Maintenance
+
+The authenticated API exposes `POST /api/search/index/refresh` for operators and automation. Send `{ "embed": false }` to update collections without recomputing embeddings.
+
 ## Next v4.1 PRs
 
-- Scheduled QMD update/embed maintenance
+- Add deployment-specific schedules as needed with `pnpm qmd:refresh` or `POST /api/search/index/refresh`.
