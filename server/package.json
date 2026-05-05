@@ -26,7 +26,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.4.1",
+    "express-rate-limit": "^8.5.0",
     "file-type": "^22.0.1",
     "gray-matter": "^4.0.3",
     "helmet": "^8.1.0",
