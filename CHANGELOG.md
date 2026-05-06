@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-05-06
+
+### Added
+
+- OpenAI Codex integration roadmap for v4.2, covering local Codex CLI execution, Codex SDK sessions, Codex Cloud delegation, MCP setup, workflow-engine execution, telemetry, review automation, and release QA (#310)
+- Codex Integration SOP with operational guidance for CLI, SDK, Cloud, MCP, telemetry mapping, reviews, workflow steps, escalation, and release validation (#310)
+- Codex workflow examples for local feature work, Codex review, SDK follow-up sessions, workflow pipelines, Cloud delegation, MCP-first board maintenance, and release QA (#310)
+- Codex-specific AGENTS.md guidance and MCP setup instructions for Veritas-aware Codex work (#310)
+- Planned v4.2 Codex feature reference in `docs/FEATURES.md` (#310)
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.1.0` to `4.2.0` (#311)
+
 ## [4.1.0] - 2026-05-04
 
 ### Added
