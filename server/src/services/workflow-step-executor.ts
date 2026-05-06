@@ -90,6 +90,10 @@ export class WorkflowStepExecutor {
       'Agent step execution configured'
     );
 
+    if (this.isCodexAgent(agentDef, step.agent)) {
+      return this.executeCodexAgentStep(step, run, agentDef, prompt, sessionConfig);
+    }
+
     // TODO: OpenClaw integration (sessions_spawn)
     // This is the placeholder for actual session spawning.
     // When OpenClaw sessions API is integrated, replace this with:
@@ -151,6 +155,109 @@ export class WorkflowStepExecutor {
     };
   }
 
+  private async executeCodexAgentStep(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    agentDef: WorkflowAgent | null,
+    prompt: string,
+    sessionConfig: StepSessionConfig
+  ): Promise<StepExecutionResult> {
+    const { Codex } = await import('@openai/codex-sdk');
+    const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
+    const codex = new Codex({
+      codexPathOverride:
+        agentDef?.command && agentDef.command !== 'codex' ? agentDef.command : undefined,
+      env: this.buildCodexEnv(),
+    });
+
+    const sessionKey = step.agent || agentDef?.id || step.id;
+    const existingThreadId =
+      sessionConfig.mode === 'reuse'
+        ? (run.context._sessions as Record<string, string> | undefined)?.[sessionKey]
+        : undefined;
+    const thread = existingThreadId
+      ? codex.resumeThread(existingThreadId, {
+          workingDirectory,
+          sandboxMode: 'workspace-write',
+          approvalPolicy: 'never',
+          networkAccessEnabled: true,
+          model: agentDef?.model,
+        })
+      : codex.startThread({
+          workingDirectory,
+          skipGitRepoCheck: true,
+          sandboxMode: 'workspace-write',
+          approvalPolicy: 'never',
+          networkAccessEnabled: true,
+          model: agentDef?.model,
+        });
+
+    const streamed = await thread.runStreamed(prompt);
+    const events: unknown[] = [];
+    let threadId = existingThreadId || '';
+    let finalResponse = '';
+    let failureMessage = '';
+
+    for await (const event of streamed.events) {
+      events.push(event);
+      if (event.type === 'thread.started') {
+        threadId = event.thread_id;
+        run.context._sessions = {
+          ...((run.context._sessions as Record<string, string> | undefined) || {}),
+          [sessionKey]: threadId,
+        };
+      }
+      if (event.type === 'item.completed' && event.item.type === 'agent_message') {
+        finalResponse = event.item.text;
+      }
+      if (event.type === 'turn.failed') failureMessage = event.error.message;
+      if (event.type === 'error') failureMessage = event.message;
+    }
+
+    if (failureMessage) {
+      throw new Error(`Codex workflow step failed: ${failureMessage}`);
+    }
+
+    const result = [
+      `# Codex Workflow Step: ${step.name || step.id}`,
+      '',
+      `Agent: ${agentDef?.name || step.agent}`,
+      `Provider: ${agentDef?.provider || 'codex-sdk'}`,
+      `Model: ${agentDef?.model || 'default'}`,
+      `Thread: ${threadId || 'unknown'}`,
+      `Working directory: ${workingDirectory}`,
+      '',
+      '## Prompt',
+      '',
+      prompt,
+      '',
+      '## Final Response',
+      '',
+      finalResponse || 'Codex completed without a final response.',
+      '',
+      'STATUS: done',
+      `OUTPUT: ${finalResponse || 'Codex completed without a final response.'}`,
+      '',
+      '<details><summary>Codex events</summary>',
+      '',
+      '```json',
+      JSON.stringify(events, null, 2),
+      '```',
+      '',
+      '</details>',
+    ].join('\n');
+
+    const parsed = this.parseStepOutput(result, step);
+    await this.validateAcceptanceCriteria(step, result, parsed);
+    const outputPath = await this.saveStepOutput(run.id, step.id, result, step.output?.file);
+    await this.appendProgressFile(run.id, step.id, result);
+
+    return {
+      output: parsed,
+      outputPath,
+    };
+  }
+
   /**
    * Render a template string with context (simplified Jinja2-style)
    * Phase 1: Basic string interpolation
@@ -178,6 +285,33 @@ export class WorkflowStepExecutor {
       }
       return undefined;
     }, obj);
+  }
+
+  private isCodexAgent(agentDef: WorkflowAgent | null, agentId?: string): boolean {
+    const marker = `${agentDef?.provider || ''} ${agentDef?.id || ''} ${
+      agentDef?.name || ''
+    } ${agentDef?.role || ''} ${agentId || ''}`.toLowerCase();
+    return marker.includes('codex');
+  }
+
+  private getWorkflowWorkingDirectory(run: WorkflowRun): string {
+    const task = run.context.task as
+      | { git?: { worktreePath?: string; repo?: string }; repoPath?: string }
+      | undefined;
+    return task?.git?.worktreePath || task?.repoPath || process.cwd();
+  }
+
+  private expandPath(p: string): string {
+    return p.replace(/^~/, process.env.HOME || '');
+  }
+
+  private buildCodexEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === 'string') env[key] = value;
+    }
+    env.VK_API_URL = process.env.VK_API_URL || 'http://localhost:3001';
+    return env;
   }
 
   /**

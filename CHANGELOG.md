@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.3] - 2026-05-06
+
+### Added
+
+- Workflow-engine Codex agent steps for workflow agents configured with Codex provider metadata or Codex agent naming.
+- Codex SDK streaming execution inside workflow step runs, including worktree-aware execution, final response capture, and persisted step output files.
+- Workflow session tracking for Codex thread IDs through `run.context._sessions`, enabling reuse-mode workflows to resume the same Codex thread.
+- Unit coverage for Codex-backed workflow step execution.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.2` to `4.2.3`.
+- Documented Workflow Codex steps as implemented while review actions and richer Settings checks remain next in the v4.2 patch train.
+
 ## [4.2.2] - 2026-05-06
 
 ### Added

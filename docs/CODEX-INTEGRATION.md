@@ -2,7 +2,7 @@
 
 Release target: **Veritas Kanban v4.2**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, and GitHub-native Codex Cloud delegation. The remaining work expands that foundation into workflow-engine execution, review automation, and deeper Settings health checks.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, and Codex-backed workflow-engine steps. The remaining work expands that foundation into review automation and deeper Settings health checks.
 
 Companion docs:
 
@@ -107,14 +107,25 @@ Attempt logs should remain readable markdown, while raw JSONL can be retained wh
 
 ## Workflow Engine
 
-Workflow agent steps should execute through provider adapters. Codex-backed steps should support:
+Workflow agent steps execute through provider-aware step handling. Codex-backed steps support:
 
 - fresh sessions
 - resumable sessions when using SDK mode
-- parallel fan-out with limits
 - step output files
-- retry and failure handling
+- retry and failure handling through the workflow runner
 - tool-policy hints in prompt/config where direct enforcement is unavailable
+
+Workflow agents can opt into Codex with provider metadata:
+
+```yaml
+agents:
+  - id: codex
+    name: Codex
+    role: implementer
+    provider: codex-sdk
+    model: gpt-5.5
+    description: Codex workflow implementer
+```
 
 ## MCP And Project Instructions
 

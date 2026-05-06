@@ -127,6 +127,7 @@ agents:
   - id: codex
     name: Codex
     role: developer
+    provider: codex-sdk
     model: gpt-5.5
   - id: reviewer
     name: Reviewer
