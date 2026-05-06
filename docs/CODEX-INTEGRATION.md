@@ -2,7 +2,7 @@
 
 Release target: **Veritas Kanban v4.2**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. The goal is not to treat Codex as a generic custom command. v4.2 should make Codex a native Veritas agent provider across local task execution, workflow runs, reviews, telemetry, MCP, and release documentation.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes the first real runtime slice: a native `codex` agent backed by local `codex exec` execution. The remaining work expands that foundation into richer SDK sessions, cloud delegation, workflow-engine execution, review automation, and deeper UI.
 
 Companion docs:
 
@@ -26,7 +26,7 @@ Veritas Kanban should become the local-first command center for Codex-backed sof
 
 ### Codex CLI Provider
 
-The first implementation path should use `codex exec` because it is designed for automation and can emit JSONL events. Veritas should launch it inside the task worktree, stream progress into attempt logs, parse usage and file-change events, and complete the task from the final Codex result.
+The first implementation path uses `codex exec` because it is designed for automation and can emit JSONL events. Veritas launches it inside the task worktree, streams progress into attempt logs, parses usage events, and completes the task from the final Codex result.
 
 Recommended default shape:
 
@@ -36,7 +36,7 @@ codex exec --cwd <task-worktree> --sandbox workspace-write --json <prompt>
 
 ### Codex SDK Provider
 
-The SDK path should support long-lived local Codex threads, resumable sessions, and richer follow-up workflows. This should be a separate provider mode so the CLI path remains stable and easy to debug.
+The SDK path should support long-lived local Codex threads, resumable sessions, and richer follow-up workflows. This remains a planned provider mode so the CLI path stays stable and easy to debug.
 
 ### Codex Cloud Delegation
 
@@ -44,9 +44,9 @@ Cloud delegation should start through GitHub-native workflows: Veritas can creat
 
 ## Architecture Direction
 
-v4.2 should introduce an agent provider abstraction instead of expanding the current OpenClaw-specific service with Codex branches.
+v4.2 starts with a focused provider seam inside the existing agent service instead of a full rewrite. `codex` agents resolve to the local Codex CLI runner; existing agents keep the OpenClaw request-file behavior. A fuller provider abstraction is still tracked for the next implementation step.
 
-Expected provider capabilities:
+Expected long-term provider capabilities:
 
 - `start`
 - `stop`
@@ -134,7 +134,7 @@ The v4.2 docs should land with the implementation, not after it. Required docume
 
 v4.2 is done when:
 
-- Codex can complete a Veritas code task from the UI.
+- Codex can complete a Veritas code task from the UI or API through the local CLI provider.
 - Codex can run as a workflow-engine agent step.
 - Codex logs, final output, and token usage appear in Veritas attempt and telemetry surfaces.
 - Codex setup has first-class Settings UX and docs.

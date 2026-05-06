@@ -11,15 +11,27 @@
  */
 
 import { EventEmitter } from 'events';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { nanoid } from 'nanoid';
 import fs from 'fs/promises';
 import path from 'path';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
+import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getBreaker } from './circuit-registry.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
-import type { Task, AgentType, TaskAttempt, AttemptStatus } from '@veritas-kanban/shared';
+import type {
+  Task,
+  AgentType,
+  AgentConfig,
+  TaskAttempt,
+  AttemptStatus,
+  RunStartedEvent,
+  RunCompletedEvent,
+  RunErrorEvent,
+  TokenTelemetryEvent,
+} from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('clawdbot-agent-service');
 
@@ -51,6 +63,8 @@ const pendingAgents = new Map<
     agent: AgentType;
     startedAt: string;
     emitter: EventEmitter;
+    provider: 'openclaw' | 'codex-cli';
+    process?: ChildProcessWithoutNullStreams;
   }
 >();
 
@@ -114,6 +128,9 @@ export class ClawdbotAgentService {
       agent = agentType;
     }
 
+    const agentConfig = this.resolveAgentConfig(config.agents, agent);
+    const provider = this.resolveAgentProvider(agentConfig, agent);
+
     // Create attempt
     const attemptId = `attempt_${nanoid(8)}`;
     const startedAt = new Date().toISOString();
@@ -129,6 +146,7 @@ export class ClawdbotAgentService {
       agent,
       startedAt,
       emitter,
+      provider,
     });
 
     // Validate path segments for log file
@@ -149,12 +167,54 @@ export class ClawdbotAgentService {
       agent,
       status: 'running',
       started: startedAt,
+      provider,
+      model: agentConfig?.model,
     };
 
     await this.taskService.updateTask(taskId, {
       status: 'in-progress',
       attempt,
     });
+
+    const telemetry = getTelemetryService();
+    await telemetry.emit<RunStartedEvent>({
+      type: 'run.started',
+      taskId,
+      attemptId,
+      agent,
+      model: agentConfig?.model,
+      project: task.project,
+    });
+
+    if (provider === 'codex-cli') {
+      try {
+        this.startCodexCli(task, agentConfig, taskPrompt, logPath, attemptId, startedAt, emitter);
+      } catch (error: any) {
+        pendingAgents.delete(taskId);
+        await this.taskService.updateTask(taskId, {
+          status: 'todo',
+          attempt: { ...attempt, status: 'failed', ended: new Date().toISOString() },
+        });
+        await telemetry.emit<RunErrorEvent>({
+          type: 'run.error',
+          taskId,
+          attemptId,
+          agent,
+          project: task.project,
+          error: error.message || 'Failed to start Codex CLI',
+          stackTrace: error.stack,
+        });
+        throw new Error(`Failed to start agent via Codex CLI: ${error.message}`);
+      }
+
+      return {
+        taskId,
+        attemptId,
+        agent,
+        status: 'running',
+        startedAt,
+      };
+    }
 
     // Send request to Clawdbot main session (wrapped in circuit breaker)
     // This will be picked up by Veritas who will spawn the actual sub-agent
@@ -168,7 +228,16 @@ export class ClawdbotAgentService {
         status: 'todo',
         attempt: { ...attempt, status: 'failed', ended: new Date().toISOString() },
       });
-      throw new Error(`Failed to start agent via Clawdbot: ${error.message}`);
+      await telemetry.emit<RunErrorEvent>({
+        type: 'run.error',
+        taskId,
+        attemptId,
+        agent,
+        project: task.project,
+        error: error.message || 'Failed to start OpenClaw request',
+        stackTrace: error.stack,
+      });
+      throw new Error(`Failed to start agent via OpenClaw: ${error.message}`);
     }
 
     return {
@@ -234,6 +303,7 @@ export class ClawdbotAgentService {
     const { attemptId, emitter } = pending;
     const endedAt = new Date().toISOString();
     const status: AttemptStatus = result.success ? 'complete' : 'failed';
+    const durationMs = new Date(endedAt).getTime() - new Date(pending.startedAt).getTime();
 
     // Update task
     await this.taskService.updateTask(taskId, {
@@ -244,6 +314,7 @@ export class ClawdbotAgentService {
         status,
         started: pending.startedAt,
         ended: endedAt,
+        provider: pending.provider,
       },
     });
 
@@ -254,6 +325,18 @@ export class ClawdbotAgentService {
 
     // Emit completion
     emitter.emit('complete', { status, summary });
+
+    const task = await this.taskService.getTask(taskId);
+    await getTelemetryService().emit<RunCompletedEvent>({
+      type: 'run.completed',
+      taskId,
+      attemptId,
+      agent: pending.agent,
+      project: task?.project,
+      durationMs,
+      success: result.success,
+      error: result.error,
+    });
 
     // Clean up
     pendingAgents.delete(taskId);
@@ -283,11 +366,269 @@ export class ClawdbotAgentService {
       throw new Error('No agent running for this task');
     }
 
+    if (pending.provider === 'codex-cli' && pending.process && !pending.process.killed) {
+      pending.process.kill('SIGTERM');
+    }
+
     // Mark as failed/stopped
     await this.completeAgent(taskId, {
       success: false,
       error: 'Stopped by user',
     });
+  }
+
+  private resolveAgentConfig(agents: AgentConfig[], agent: AgentType): AgentConfig | undefined {
+    return agents.find((a) => a.type === agent);
+  }
+
+  private resolveAgentProvider(
+    agentConfig: AgentConfig | undefined,
+    agent: AgentType
+  ): 'openclaw' | 'codex-cli' {
+    if (agentConfig?.provider === 'codex-cli') return 'codex-cli';
+    if (agent === 'codex') return 'codex-cli';
+    if (agentConfig?.command === 'codex') return 'codex-cli';
+    return 'openclaw';
+  }
+
+  private startCodexCli(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    startedAt: string,
+    emitter: EventEmitter
+  ): void {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath) {
+      throw new Error('Task worktree path is required for Codex CLI');
+    }
+
+    const command = agentConfig?.command || 'codex';
+    const args = this.buildCodexArgs(agentConfig, prompt, logPath, attemptId);
+    const child = spawn(command, args, {
+      cwd: worktreePath,
+      env: {
+        ...process.env,
+        VK_API_URL: process.env.VK_API_URL || 'http://localhost:3001',
+      },
+      shell: false,
+    });
+
+    const pending = pendingAgents.get(task.id);
+    if (pending) {
+      pending.process = child;
+    }
+
+    void this.appendLog(
+      logPath,
+      `\n## Codex CLI\n\n**Command:** \`${[command, ...args.map((a) => (a === prompt ? '<prompt>' : a))].join(' ')}\`\n**PID:** ${child.pid ?? 'unknown'}\n\n`
+    );
+
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    let finalSummary = '';
+    let tokenUsage:
+      | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+      | undefined;
+
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (chunk: string) => {
+      stdoutBuffer += chunk;
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || '';
+      for (const line of lines) {
+        const parsed = this.handleCodexJsonLine(line, logPath);
+        if (parsed.summary) finalSummary = parsed.summary;
+        if (parsed.usage) tokenUsage = parsed.usage;
+      }
+    });
+
+    child.stderr.setEncoding('utf-8');
+    child.stderr.on('data', (chunk: string) => {
+      stderrBuffer += chunk;
+      void this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+    });
+
+    child.on('error', (error) => {
+      void this.appendLog(logPath, `\n## Codex Process Error\n\n${error.message}\n`);
+      emitter.emit('error', error);
+    });
+
+    child.on('close', (code, signal) => {
+      void (async () => {
+        if (stdoutBuffer.trim()) {
+          const parsed = this.handleCodexJsonLine(stdoutBuffer, logPath);
+          if (parsed.summary) finalSummary = parsed.summary;
+          if (parsed.usage) tokenUsage = parsed.usage;
+        }
+
+        const finalPath = this.getCodexFinalPath(logPath, attemptId);
+        finalSummary ||= await this.readOptionalFile(finalPath);
+        finalSummary ||=
+          code === 0 ? 'Codex completed without a final summary.' : stderrBuffer.trim();
+
+        if (tokenUsage) {
+          await getTelemetryService().emit<TokenTelemetryEvent>({
+            type: 'run.tokens',
+            taskId: task.id,
+            attemptId,
+            agent: agentConfig?.type || 'codex',
+            project: task.project,
+            inputTokens: tokenUsage.inputTokens,
+            outputTokens: tokenUsage.outputTokens,
+            totalTokens: tokenUsage.totalTokens,
+            model: tokenUsage.model || agentConfig?.model,
+          });
+        }
+
+        await this.appendLog(
+          logPath,
+          `\n## Codex Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n`
+        );
+
+        await this.completeAgent(task.id, {
+          success: code === 0,
+          summary: finalSummary,
+          error: code === 0 ? undefined : finalSummary || `Codex exited with code ${code}`,
+        });
+      })().catch((error) => {
+        log.error({ err: error, taskId: task.id }, 'Failed to finalize Codex attempt');
+      });
+    });
+  }
+
+  private buildCodexArgs(
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string
+  ): string[] {
+    const configured = agentConfig?.args?.length ? [...agentConfig.args] : ['exec'];
+    const args = configured.includes('exec') ? configured : ['exec', ...configured];
+    if (!args.includes('--sandbox')) args.push('--sandbox', 'workspace-write');
+    if (!args.includes('--json')) args.push('--json');
+    if (!args.includes('--output-last-message')) {
+      args.push('--output-last-message', this.getCodexFinalPath(logPath, attemptId));
+    }
+    args.push(prompt);
+    return args;
+  }
+
+  private getCodexFinalPath(logPath: string, attemptId: string): string {
+    return path.join(path.dirname(logPath), `${attemptId}.codex-final.md`);
+  }
+
+  private handleCodexJsonLine(
+    line: string,
+    logPath: string
+  ): {
+    summary?: string;
+    usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
+  } {
+    const trimmed = line.trim();
+    if (!trimmed) return {};
+
+    try {
+      const event = JSON.parse(trimmed) as Record<string, unknown>;
+      const type = String(event.type || event.event || 'codex.event');
+      const summary = this.extractCodexSummary(event);
+      const usage = this.extractCodexUsage(event);
+      void this.appendLog(
+        logPath,
+        `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\`\n\n</details>\n`
+      );
+      return { summary, usage };
+    } catch {
+      void this.appendLog(logPath, `\n### stdout\n\n\`\`\`\n${trimmed}\n\`\`\`\n`);
+      return { summary: trimmed };
+    }
+  }
+
+  private extractCodexSummary(event: unknown): string | undefined {
+    const seen = new Set<unknown>();
+    const visit = (value: unknown): string | undefined => {
+      if (!value || typeof value !== 'object') return undefined;
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+      const record = value as Record<string, unknown>;
+      for (const key of [
+        'final_response',
+        'finalMessage',
+        'final_message',
+        'message',
+        'text',
+        'output',
+      ]) {
+        const candidate = record[key];
+        if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+      }
+      for (const child of Object.values(record)) {
+        const result = visit(child);
+        if (result) return result;
+      }
+      return undefined;
+    };
+    return visit(event);
+  }
+
+  private extractCodexUsage(
+    event: unknown
+  ):
+    | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+    | undefined {
+    const seen = new Set<unknown>();
+    const visit = (value: unknown): Record<string, unknown> | undefined => {
+      if (!value || typeof value !== 'object') return undefined;
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+      const record = value as Record<string, unknown>;
+      const input =
+        record.input_tokens ?? record.inputTokens ?? record.prompt_tokens ?? record.promptTokens;
+      const output =
+        record.output_tokens ??
+        record.outputTokens ??
+        record.completion_tokens ??
+        record.completionTokens;
+      if (typeof input === 'number' && typeof output === 'number') return record;
+      for (const child of Object.values(record)) {
+        const result = visit(child);
+        if (result) return result;
+      }
+      return undefined;
+    };
+
+    const usage = visit(event);
+    if (!usage) return undefined;
+    const input = (usage.input_tokens ??
+      usage.inputTokens ??
+      usage.prompt_tokens ??
+      usage.promptTokens) as number;
+    const output = (usage.output_tokens ??
+      usage.outputTokens ??
+      usage.completion_tokens ??
+      usage.completionTokens) as number;
+    const total = usage.total_tokens ?? usage.totalTokens;
+    return {
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: typeof total === 'number' ? total : input + output,
+      model: typeof usage.model === 'string' ? usage.model : undefined,
+    };
+  }
+
+  private async appendLog(logPath: string, content: string): Promise<void> {
+    ensureWithinBase(this.logsDir, logPath);
+    await fs.appendFile(logPath, content, 'utf-8');
+  }
+
+  private async readOptionalFile(filePath: string): Promise<string> {
+    try {
+      return (await fs.readFile(filePath, 'utf-8')).trim();
+    } catch {
+      return '';
+    }
   }
 
   /**
@@ -424,7 +765,7 @@ If you encounter errors, call with \`success: false\` and include the error mess
     const header = `# Agent Log: ${task.title}
 
 **Task ID:** ${task.id}
-**Agent:** ${agent} (via Clawdbot)
+**Agent:** ${agent}
 **Started:** ${new Date().toISOString()}
 **Worktree:** ${task.git?.worktreePath}
 
@@ -436,7 +777,7 @@ ${prompt}
 
 ## Progress
 
-*Agent is working via Clawdbot sub-agent...*
+*Agent is working...*
 
 `;
     await fs.writeFile(logPath, header, 'utf-8');

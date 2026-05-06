@@ -22,6 +22,8 @@ export interface AgentConfig {
   command: string;
   args: string[];
   enabled: boolean;
+  provider?: 'openclaw' | 'codex-cli' | 'custom';
+  model?: string;
 }
 
 // ============ Agent Routing Types ============

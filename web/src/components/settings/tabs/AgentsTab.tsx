@@ -927,6 +927,8 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
         .split(/\s+/)
         .filter((a) => a),
       enabled: agent?.enabled ?? true,
+      provider: agent?.provider,
+      model: agent?.model,
     });
   };
 

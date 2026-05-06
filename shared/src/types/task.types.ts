@@ -15,7 +15,7 @@ export interface QaGateState {
   passedBy?: string; // Who approved (e.g. 'human', agent slug, user name)
 }
 /** Built-in agent types. Custom agents use any string slug. */
-export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
+export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'codex' | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';
 export type BlockedCategory = 'waiting-on-feedback' | 'technical-snag' | 'prerequisite' | 'other';
@@ -40,6 +40,8 @@ export interface TaskAttempt {
   status: AttemptStatus;
   started?: string;
   ended?: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface Subtask {

@@ -182,6 +182,24 @@ describe('Config Routes (actual module)', () => {
       expect(res.status).toBe(200);
     });
 
+    it('should accept Codex provider metadata', async () => {
+      const agents = [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--sandbox', 'workspace-write', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.5',
+        },
+      ];
+      mockConfigService.updateAgents.mockResolvedValue({ agents });
+      const res = await request(app).put('/api/config/agents').send(agents);
+      expect(res.status).toBe(200);
+      expect(mockConfigService.updateAgents).toHaveBeenCalledWith(agents);
+    });
+
     it('should reject invalid agent data', async () => {
       const res = await request(app)
         .put('/api/config/agents')

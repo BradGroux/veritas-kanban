@@ -1,6 +1,6 @@
 # SOP: OpenAI Codex Integration
 
-Use this playbook when Veritas Kanban delegates work to OpenAI Codex. It covers the intended v4.2 lifecycle for local Codex CLI runs, Codex SDK sessions, Codex Cloud delegation, telemetry, reviews, and workflow-engine execution.
+Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec`; SDK sessions, Cloud delegation, and workflow-engine execution remain part of the broader integration track.
 
 ---
 
@@ -25,7 +25,7 @@ Use this playbook when Veritas Kanban delegates work to OpenAI Codex. It covers 
 | **Codex Review**   | Review task branches, PR diffs, or failed changes | CLI/SDK review action                |
 | **Workflow Codex** | Pipeline steps in Veritas workflow definitions    | Provider-backed workflow step        |
 
-Default for v4.2 should be **Codex CLI**. It is easiest to install, debug, mock in CI, and observe through JSONL events.
+Default for v4.2 is **Codex CLI**. It is easiest to install, debug, mock in CI, and observe through JSONL events.
 
 ---
 
@@ -65,7 +65,7 @@ export VK_API_KEY="<agent-role-key-if-auth-required>"
 export CODEX_API_KEY="<optional-api-key-for-automation>"
 ```
 
-### Expected Veritas Behavior
+### Veritas Behavior
 
 1. Resolve the selected agent to a provider: `codex-cli`.
 2. Create an attempt with provider metadata:
@@ -94,7 +94,7 @@ export CODEX_API_KEY="<optional-api-key-for-automation>"
 
 ## Codex SDK Flow
 
-Use SDK mode when the user needs a durable local Codex thread across multiple prompts:
+Use SDK mode when the user needs a durable local Codex thread across multiple prompts. This mode is planned, not part of the initial CLI runner:
 
 ```ts
 import { Codex } from '@openai/codex-sdk';

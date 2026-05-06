@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex Integration SOP with operational guidance for CLI, SDK, Cloud, MCP, telemetry mapping, reviews, workflow steps, escalation, and release validation (#310)
 - Codex workflow examples for local feature work, Codex review, SDK follow-up sessions, workflow pipelines, Cloud delegation, MCP-first board maintenance, and release QA (#310)
 - Codex-specific AGENTS.md guidance and MCP setup instructions for Veritas-aware Codex work (#310)
-- Planned v4.2 Codex feature reference in `docs/FEATURES.md` (#310)
+- Codex feature reference in `docs/FEATURES.md`, updated to distinguish implemented CLI support from planned SDK, Cloud, review, and workflow modes (#310)
+- Built-in `codex` agent profile backed by local `codex exec --sandbox workspace-write --json`
+- Local Codex CLI execution path for code-task attempts, including process launch in the task worktree, attempt logs, final summary capture, completion handling, stop support, and run/token telemetry mapping
+- Config migration that appends missing built-in agents, including Codex, to existing configs without overwriting customized agents
 
 ### Changed
 

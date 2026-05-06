@@ -41,6 +41,17 @@ describe('ConfigService', () => {
       expect(config.repos).toEqual([]);
       expect(config.agents).toBeDefined();
       expect(config.agents.length).toBeGreaterThan(0);
+      expect(config.agents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'codex',
+            name: 'OpenAI Codex',
+            command: 'codex',
+            provider: 'codex-cli',
+            enabled: false,
+          }),
+        ])
+      );
     });
 
     it('should create config file with defaults when missing', async () => {
@@ -64,6 +75,37 @@ describe('ConfigService', () => {
       expect(config.repos).toHaveLength(1);
       expect(config.repos[0].name).toBe('test-repo');
       expect(config.defaultAgent).toBe('amp');
+    });
+
+    it('should add missing built-in agents to existing config', async () => {
+      await fs.writeFile(
+        configFile,
+        JSON.stringify({
+          repos: [],
+          agents: [
+            {
+              type: 'claude-code',
+              name: 'My Claude',
+              command: 'claude',
+              args: [],
+              enabled: true,
+            },
+          ],
+          defaultAgent: 'claude-code',
+        })
+      );
+
+      const config = await service.getConfig();
+      expect(config.agents.find((agent) => agent.type === 'claude-code')?.name).toBe('My Claude');
+      expect(config.agents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'codex',
+            command: 'codex',
+            provider: 'codex-cli',
+          }),
+        ])
+      );
     });
 
     it('should use cache on subsequent calls', async () => {

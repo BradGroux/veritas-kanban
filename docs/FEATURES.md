@@ -23,7 +23,7 @@ For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-d
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
-- [OpenAI Codex Integration](#openai-codex-integration-planned-v42)
+- [OpenAI Codex Integration](#openai-codex-integration-v42)
 - [Multi-Agent System](#multi-agent-system)
 - [Squad Chat](#squad-chat)
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
@@ -293,13 +293,18 @@ First-class support for autonomous coding agents.
 
 ---
 
-## OpenAI Codex Integration (Planned v4.2)
+## OpenAI Codex Integration (v4.2)
 
-v4.2 plans first-class OpenAI Codex support across local task execution, SDK-backed sessions, cloud delegation, MCP setup, workflow execution, review automation, and telemetry.
+v4.2 adds the first runtime slice of first-class OpenAI Codex support: a built-in `codex` agent that can run local `codex exec` attempts in a task worktree and report status, logs, completion, and telemetry through the existing Veritas agent lifecycle.
 
-Planned provider modes:
+Implemented:
 
-- **Codex CLI provider** — Runs `codex exec --json` in the task worktree, maps JSONL events into Veritas attempt logs, and records final summaries.
+- **Codex CLI provider** — Runs `codex exec --json` in the task worktree, maps JSONL/stdout/stderr into Veritas attempt logs, records final summaries, and emits run/token telemetry when available.
+- **Codex agent defaults** — Adds a disabled-by-default OpenAI Codex agent profile with `codex exec --sandbox workspace-write --json`.
+- **Config migration** — Existing configs receive the missing built-in Codex agent without overwriting customized agents.
+
+Still planned:
+
 - **Codex SDK provider** — Uses `@openai/codex-sdk` for durable local threads, follow-up prompts, and richer session control.
 - **Codex Cloud delegation** — Creates GitHub issue/PR delegation prompts for cloud Codex work and links GitHub artifacts back to Veritas tasks.
 - **Codex review actions** — Uses Codex to review task branches, PR diffs, and failed changes.
