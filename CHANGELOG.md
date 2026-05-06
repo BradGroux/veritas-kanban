@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.4] - 2026-05-06
+
+### Added
+
+- Codex review action for task branch diffs through `POST /api/diff/:taskId/codex-review`.
+- Codex SDK review runner that executes in read-only sandbox mode, asks for structured JSON findings, and maps findings to Veritas review comments.
+- Review summary/task comment persistence plus review decision metadata when review saving is enabled.
+- Frontend API and React Query hook support for triggering Codex reviews.
+- Route coverage for Codex review validation and service invocation.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.3` to `4.2.4`.
+- Documented Codex review actions as implemented while richer Settings health checks remain next in the v4.2 patch train.
+
 ## [4.2.3] - 2026-05-06
 
 ### Added

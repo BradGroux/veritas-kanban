@@ -2,7 +2,7 @@
 
 Release target: **Veritas Kanban v4.2**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, and Codex-backed workflow-engine steps. The remaining work expands that foundation into review automation and deeper Settings health checks.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, and Codex review actions. The remaining work expands that foundation into deeper Settings health checks.
 
 Companion docs:
 
@@ -125,6 +125,22 @@ agents:
     provider: codex-sdk
     model: gpt-5.5
     description: Codex workflow implementer
+```
+
+## Review Actions
+
+Codex review actions run against the task worktree diff in read-only SDK mode and map structured findings into Veritas review comments:
+
+```http
+POST /api/diff/<taskId>/codex-review
+```
+
+```json
+{
+  "model": "gpt-5.5",
+  "instructions": "Focus on regressions and missing tests.",
+  "save": true
+}
 ```
 
 ## MCP And Project Instructions

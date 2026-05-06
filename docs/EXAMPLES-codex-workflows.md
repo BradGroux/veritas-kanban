@@ -52,16 +52,15 @@ Use these recipes as starting points for v4.2 OpenAI Codex workflows in Veritas 
 **Goal:** Use Codex as the opposite-model reviewer for a Claude-authored branch.
 
 1. Keep the original implementation task `in-progress`.
-2. Create review task:
+2. Trigger a Codex review action:
 
    ```bash
-   vk create "Review: Provider abstraction branch" \
-     --project veritas-kanban \
-     --type code \
-     --priority high
+   curl -X POST http://localhost:3001/api/diff/<task-id>/codex-review \
+     -H "Content-Type: application/json" \
+     -d '{"instructions":"Apply docs/SOP-cross-model-code-review.md. Focus on regressions and missing tests."}'
    ```
 
-3. Prompt Codex:
+3. Codex reviews the task branch diff in read-only mode:
 
    ```text
    Review branch <branch> against main.
@@ -78,7 +77,7 @@ Use these recipes as starting points for v4.2 OpenAI Codex workflows in Veritas 
    ```
 
 4. Expected outputs:
-   - review findings as task comment
+   - review findings as Veritas review comments
    - verdict: approve or changes required
    - follow-up subtasks for confirmed issues
 
