@@ -91,6 +91,18 @@ export const githubApi = {
     return handleResponse<PRInfo>(response);
   },
 
+  delegateCodexCloud: async (
+    input: CodexCloudDelegationInput
+  ): Promise<CodexCloudDelegationResult> => {
+    const response = await fetch(`${API_BASE}/github/codex/delegate`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return handleResponse<CodexCloudDelegationResult>(response);
+  },
+
   openPR: async (taskId: string): Promise<void> => {
     const response = await fetch(`${API_BASE}/github/pr/${taskId}/open`, {
       credentials: 'include',
@@ -193,4 +205,24 @@ export interface CreatePRInput {
   body?: string;
   targetBranch?: string;
   draft?: boolean;
+}
+
+export type CodexCloudTarget = 'issue' | 'issue-comment' | 'pr-comment';
+
+export interface CodexCloudDelegationInput {
+  taskId: string;
+  target?: CodexCloudTarget;
+  title?: string;
+  prompt?: string;
+  model?: string;
+}
+
+export interface CodexCloudDelegationResult {
+  taskId: string;
+  attemptId: string;
+  target: CodexCloudTarget;
+  url: string;
+  number?: number;
+  repo: string;
+  prompt: string;
 }

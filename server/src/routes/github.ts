@@ -18,6 +18,14 @@ const createPRSchema = z.object({
   draft: z.boolean().optional(),
 });
 
+const codexCloudDelegateSchema = z.object({
+  taskId: z.string().min(1),
+  target: z.enum(['issue', 'issue-comment', 'pr-comment']).optional(),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  model: z.string().optional(),
+});
+
 const syncConfigSchema = z.object({
   enabled: z.boolean().optional(),
   repo: z.string().min(1).optional(),
@@ -61,6 +69,25 @@ router.post(
   asyncHandler(async (req, res) => {
     await githubService.openPRInBrowser(req.params.taskId as string);
     res.json({ success: true });
+  })
+);
+
+// POST /api/github/codex/delegate - Delegate a task to Codex Cloud through GitHub
+router.post(
+  '/codex/delegate',
+  asyncHandler(async (req, res) => {
+    let input;
+    try {
+      input = codexCloudDelegateSchema.parse(req.body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+
+    const delegation = await githubService.delegateToCodexCloud(input);
+    res.status(201).json(delegation);
   })
 );
 

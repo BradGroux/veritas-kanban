@@ -80,6 +80,9 @@ export type {
   GitHubStatus,
   PRInfo,
   CreatePRInput,
+  CodexCloudTarget,
+  CodexCloudDelegationInput,
+  CodexCloudDelegationResult,
 } from './diff';
 
 export type {

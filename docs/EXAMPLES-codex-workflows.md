@@ -189,6 +189,7 @@ Expected behavior:
    - provider mode `codex-cloud`
    - delegation timestamp
    - sync status
+   - cloud attempt metadata (`cloudTarget`, `cloudUrl`)
 
 5. Human reviews the Codex Cloud PR and links it back to the Veritas task.
 

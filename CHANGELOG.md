@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.2] - 2026-05-06
+
+### Added
+
+- Codex Cloud delegation through GitHub issue, issue-comment, and PR-comment workflows.
+- `POST /api/github/codex/delegate` for creating scoped `@codex` GitHub delegation prompts from Veritas tasks.
+- Disabled-by-default `codex-cloud` agent profile and `codex-cloud` provider metadata support.
+- Cloud delegation attempt metadata with `cloudUrl` and `cloudTarget` fields.
+- Task comments that link successful Codex Cloud delegations back to the GitHub artifact.
+- Frontend API hook for Codex Cloud delegation.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.1` to `4.2.2`.
+- Documented Codex Cloud delegation as implemented while workflow steps, review actions, and richer Settings checks remain next in the v4.2 patch train.
+
 ## [4.2.1] - 2026-05-06
 
 ### Added

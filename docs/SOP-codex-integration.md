@@ -1,6 +1,6 @@
 # SOP: OpenAI Codex Integration
 
-Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec` and SDK-backed local Codex sessions; Cloud delegation, workflow-engine execution, review actions, and richer Settings checks continue through the v4.2 patch train.
+Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec`, SDK-backed local Codex sessions, and GitHub-native Codex Cloud delegation; workflow-engine execution, review actions, and richer Settings checks continue through the v4.2 patch train.
 
 ---
 
@@ -133,6 +133,14 @@ Veritas persists the Codex thread ID in attempt metadata:
 
 Use cloud delegation when the desired output is a GitHub issue/PR workflow rather than direct local worktree execution.
 
+Veritas endpoint:
+
+```bash
+curl -X POST http://localhost:3001/api/github/codex/delegate \
+  -H "Content-Type: application/json" \
+  -d '{"taskId":"task_123","target":"issue"}'
+```
+
 Recommended prompt pattern:
 
 ```text
@@ -153,7 +161,19 @@ Veritas context:
 Please open a PR and include a concise implementation summary, tests run, and any follow-up risks.
 ```
 
-Veritas should link the GitHub artifact back to the task and track cloud delegation as a provider attempt, even if execution happens outside the local runtime.
+Veritas links the GitHub artifact back to the task and tracks cloud delegation as a provider attempt, even though execution happens outside the local runtime.
+
+Attempt metadata:
+
+```json
+{
+  "agent": "codex-cloud",
+  "provider": "codex-cloud",
+  "status": "pending",
+  "cloudTarget": "issue",
+  "cloudUrl": "https://github.com/owner/repo/issues/123"
+}
+```
 
 ---
 

@@ -295,18 +295,18 @@ First-class support for autonomous coding agents.
 
 ## OpenAI Codex Integration (v4.2)
 
-v4.2 adds first-class OpenAI Codex support: local `codex exec` attempts plus SDK-backed Codex sessions that run in task worktrees and report status, logs, completion, telemetry, and durable thread IDs through the existing Veritas agent lifecycle.
+v4.2 adds first-class OpenAI Codex support: local `codex exec` attempts, SDK-backed Codex sessions, and GitHub-native Codex Cloud delegation through the existing Veritas task lifecycle.
 
 Implemented:
 
 - **Codex CLI provider** — Runs `codex exec --json` in the task worktree, maps JSONL/stdout/stderr into Veritas attempt logs, records final summaries, and emits run/token telemetry when available.
 - **Codex agent defaults** — Adds a disabled-by-default OpenAI Codex agent profile with `codex exec --sandbox workspace-write --json`.
 - **Codex SDK provider** — Uses `@openai/codex-sdk` to start durable local Codex threads, stream SDK events into attempt logs, persist `threadId` on attempts, and emit token telemetry from completed turns.
+- **Codex Cloud delegation** — Creates scoped `@codex` GitHub issue/PR prompts, records cloud attempt metadata, and links the GitHub artifact back to the Veritas task.
 - **Config migration** — Existing configs receive the missing built-in Codex agent without overwriting customized agents.
 
 Still planned:
 
-- **Codex Cloud delegation** — Creates GitHub issue/PR delegation prompts for cloud Codex work and links GitHub artifacts back to Veritas tasks.
 - **Codex review actions** — Uses Codex to review task branches, PR diffs, and failed changes.
 - **Workflow Codex steps** — Executes workflow-engine agent steps through the same provider abstraction used by local task starts.
 - **Richer Settings health checks** — Detects Codex install, auth, SDK availability, and profile readiness from Settings.

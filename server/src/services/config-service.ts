@@ -70,6 +70,14 @@ const DEFAULT_CONFIG: AppConfig = {
       enabled: false,
       provider: 'codex-sdk',
     },
+    {
+      type: 'codex-cloud',
+      name: 'OpenAI Codex Cloud',
+      command: 'gh',
+      args: [],
+      enabled: false,
+      provider: 'codex-cloud',
+    },
   ],
   defaultAgent: 'claude-code',
 };
