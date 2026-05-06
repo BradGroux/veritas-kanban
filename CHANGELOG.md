@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-05-06
+
+### Added
+
+- Codex SDK session provider powered by `@openai/codex-sdk`, enabling durable local Codex threads for code-task attempts.
+- Disabled-by-default `codex-sdk` agent profile for teams that want SDK-backed sessions alongside the existing `codex` CLI profile.
+- Codex SDK attempt logging for streamed thread, turn, item, error, and usage events.
+- Codex SDK token telemetry mapping and stop support through abortable SDK turns.
+- `threadId` attempt metadata so SDK session IDs are preserved on active and completed attempts for follow-up workflows.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.0` to `4.2.1`.
+- Documented Codex SDK sessions as implemented while keeping Cloud delegation, workflow steps, review actions, and richer Settings checks in the v4.2 patch train.
+
 ## [4.2.0] - 2026-05-06
 
 ### Added

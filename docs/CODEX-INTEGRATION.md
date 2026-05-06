@@ -2,7 +2,7 @@
 
 Release target: **Veritas Kanban v4.2**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes the first real runtime slice: a native `codex` agent backed by local `codex exec` execution. The remaining work expands that foundation into richer SDK sessions, cloud delegation, workflow-engine execution, review automation, and deeper UI.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution and SDK-backed local Codex sessions. The remaining work expands that foundation into cloud delegation, workflow-engine execution, review automation, and deeper Settings health checks.
 
 Companion docs:
 
@@ -36,7 +36,18 @@ codex exec --cwd <task-worktree> --sandbox workspace-write --json <prompt>
 
 ### Codex SDK Provider
 
-The SDK path should support long-lived local Codex threads, resumable sessions, and richer follow-up workflows. This remains a planned provider mode so the CLI path stays stable and easy to debug.
+The SDK path supports long-lived local Codex threads, resumable session IDs, and richer follow-up workflows. Veritas starts `@openai/codex-sdk` threads in the task worktree, streams SDK events into attempt logs, emits token telemetry, and persists the SDK `threadId` on the active/completed attempt.
+
+Recommended default shape:
+
+```ts
+const thread = codex.startThread({
+  workingDirectory: '<task-worktree>',
+  sandboxMode: 'workspace-write',
+  approvalPolicy: 'never',
+  networkAccessEnabled: true,
+});
+```
 
 ### Codex Cloud Delegation
 
@@ -44,7 +55,7 @@ Cloud delegation should start through GitHub-native workflows: Veritas can creat
 
 ## Architecture Direction
 
-v4.2 starts with a focused provider seam inside the existing agent service instead of a full rewrite. `codex` agents resolve to the local Codex CLI runner; existing agents keep the OpenClaw request-file behavior. A fuller provider abstraction is still tracked for the next implementation step.
+v4.2 starts with a focused provider seam inside the existing agent service instead of a full rewrite. `codex` agents resolve to the local Codex CLI runner, `codex-sdk` agents resolve to the SDK session runner, and existing agents keep the OpenClaw request-file behavior. A fuller provider abstraction is still tracked for workflow and review execution.
 
 Expected long-term provider capabilities:
 
@@ -61,7 +72,7 @@ The provider abstraction should support:
 
 - OpenClaw compatibility through an OpenClaw provider adapter.
 - Codex CLI through a local process provider.
-- Codex SDK through a thread/session provider.
+- Codex SDK through the implemented thread/session provider.
 - Future providers without route-level branching.
 
 ## Telemetry And Logs

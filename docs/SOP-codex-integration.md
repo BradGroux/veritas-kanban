@@ -1,6 +1,6 @@
 # SOP: OpenAI Codex Integration
 
-Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec`; SDK sessions, Cloud delegation, and workflow-engine execution remain part of the broader integration track.
+Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec` and SDK-backed local Codex sessions; Cloud delegation, workflow-engine execution, review actions, and richer Settings checks continue through the v4.2 patch train.
 
 ---
 
@@ -25,7 +25,7 @@ Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 inclu
 | **Codex Review**   | Review task branches, PR diffs, or failed changes | CLI/SDK review action                |
 | **Workflow Codex** | Pipeline steps in Veritas workflow definitions    | Provider-backed workflow step        |
 
-Default for v4.2 is **Codex CLI**. It is easiest to install, debug, mock in CI, and observe through JSONL events.
+Default for v4.2 is **Codex CLI**. Use **Codex SDK** when a task needs a durable local thread ID for follow-up prompts or richer session continuity.
 
 ---
 
@@ -94,23 +94,37 @@ export CODEX_API_KEY="<optional-api-key-for-automation>"
 
 ## Codex SDK Flow
 
-Use SDK mode when the user needs a durable local Codex thread across multiple prompts. This mode is planned, not part of the initial CLI runner:
+Use SDK mode when the user needs a durable local Codex thread across multiple prompts:
 
 ```ts
 import { Codex } from '@openai/codex-sdk';
 
-const codex = new Codex();
-const thread = codex.startThread();
+const codex = new Codex({ env: { VK_API_URL: 'http://localhost:3001' } });
+const thread = codex.startThread({
+  workingDirectory: '<task-worktree>',
+  sandboxMode: 'workspace-write',
+  approvalPolicy: 'never',
+  networkAccessEnabled: true,
+});
 const result = await thread.run('Implement the Veritas task in the current worktree.');
 ```
 
-Veritas should persist the Codex thread ID in attempt provider metadata so follow-up task comments can continue the same Codex context.
+Veritas persists the Codex thread ID in attempt metadata:
+
+```json
+{
+  "agent": "codex-sdk",
+  "provider": "codex-sdk",
+  "model": "gpt-5.5",
+  "threadId": "thread_..."
+}
+```
 
 ### SDK Session Rules
 
 - Use fresh threads for independent task attempts.
 - Reuse a thread only when the task explicitly needs follow-up work.
-- Store thread IDs in Veritas runtime metadata, not task prose.
+- Store thread IDs in attempt metadata, not task prose.
 - Surface SDK availability errors clearly in Settings and attempt logs.
 
 ---

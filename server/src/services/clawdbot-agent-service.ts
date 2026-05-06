@@ -21,6 +21,7 @@ import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getBreaker } from './circuit-registry.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import type { ThreadEvent } from '@openai/codex-sdk';
 import type {
   Task,
   AgentType,
@@ -38,6 +39,7 @@ const log = createLogger('clawdbot-agent-service');
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const LOGS_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'logs');
 const CLAWDBOT_GATEWAY = process.env.CLAWDBOT_GATEWAY || 'http://127.0.0.1:18789';
+type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
 
 export interface AgentStatus {
   taskId: string;
@@ -63,7 +65,10 @@ const pendingAgents = new Map<
     agent: AgentType;
     startedAt: string;
     emitter: EventEmitter;
-    provider: 'openclaw' | 'codex-cli';
+    provider: AgentProvider;
+    model?: string;
+    threadId?: string;
+    abortController?: AbortController;
     process?: ChildProcessWithoutNullStreams;
   }
 >();
@@ -147,6 +152,7 @@ export class ClawdbotAgentService {
       startedAt,
       emitter,
       provider,
+      model: agentConfig?.model,
     });
 
     // Validate path segments for log file
@@ -206,6 +212,43 @@ export class ClawdbotAgentService {
         });
         throw new Error(`Failed to start agent via Codex CLI: ${error.message}`);
       }
+
+      return {
+        taskId,
+        attemptId,
+        agent,
+        status: 'running',
+        startedAt,
+      };
+    }
+
+    if (provider === 'codex-sdk') {
+      const abortController = new AbortController();
+      const pending = pendingAgents.get(taskId);
+      if (pending) {
+        pending.abortController = abortController;
+      }
+
+      void this.startCodexSdk(
+        task,
+        agentConfig,
+        taskPrompt,
+        logPath,
+        attemptId,
+        startedAt,
+        emitter,
+        abortController
+      ).catch(async (error: any) => {
+        if (!pendingAgents.has(task.id)) return;
+        await this.appendLog(
+          logPath,
+          `\n## Codex SDK Error\n\n${error.message || 'Codex SDK attempt failed'}\n`
+        );
+        await this.completeAgent(task.id, {
+          success: false,
+          error: error.message || 'Codex SDK attempt failed',
+        });
+      });
 
       return {
         taskId,
@@ -315,6 +358,8 @@ export class ClawdbotAgentService {
         started: pending.startedAt,
         ended: endedAt,
         provider: pending.provider,
+        model: pending.model,
+        threadId: pending.threadId,
       },
     });
 
@@ -369,6 +414,9 @@ export class ClawdbotAgentService {
     if (pending.provider === 'codex-cli' && pending.process && !pending.process.killed) {
       pending.process.kill('SIGTERM');
     }
+    if (pending.provider === 'codex-sdk') {
+      pending.abortController?.abort();
+    }
 
     // Mark as failed/stopped
     await this.completeAgent(taskId, {
@@ -384,7 +432,8 @@ export class ClawdbotAgentService {
   private resolveAgentProvider(
     agentConfig: AgentConfig | undefined,
     agent: AgentType
-  ): 'openclaw' | 'codex-cli' {
+  ): AgentProvider {
+    if (agentConfig?.provider === 'codex-sdk') return 'codex-sdk';
     if (agentConfig?.provider === 'codex-cli') return 'codex-cli';
     if (agent === 'codex') return 'codex-cli';
     if (agentConfig?.command === 'codex') return 'codex-cli';
@@ -520,6 +569,92 @@ export class ClawdbotAgentService {
     return path.join(path.dirname(logPath), `${attemptId}.codex-final.md`);
   }
 
+  private async startCodexSdk(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    startedAt: string,
+    emitter: EventEmitter,
+    abortController: AbortController
+  ): Promise<void> {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath) {
+      throw new Error('Task worktree path is required for Codex SDK');
+    }
+
+    const { Codex } = await import('@openai/codex-sdk');
+    const codex = new Codex({
+      codexPathOverride:
+        agentConfig?.command && agentConfig.command !== 'codex' ? agentConfig.command : undefined,
+      env: this.buildCodexEnv(),
+    });
+
+    const thread = codex.startThread({
+      workingDirectory: worktreePath,
+      skipGitRepoCheck: true,
+      sandboxMode: 'workspace-write',
+      approvalPolicy: 'never',
+      networkAccessEnabled: true,
+      model: agentConfig?.model,
+    });
+
+    await this.appendLog(
+      logPath,
+      `\n## Codex SDK\n\n**Worktree:** \`${worktreePath}\`\n**Model:** ${agentConfig?.model || 'default'}\n\n`
+    );
+
+    const streamed = await thread.runStreamed(prompt, { signal: abortController.signal });
+    let finalSummary = '';
+    let failureMessage = '';
+    let tokenUsage:
+      | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+      | undefined;
+
+    for await (const event of streamed.events) {
+      const parsed = this.handleCodexEvent(event, logPath);
+      if (parsed.summary) finalSummary = parsed.summary;
+      if (parsed.usage) tokenUsage = parsed.usage;
+
+      if (event.type === 'thread.started') {
+        await this.recordCodexThread(task, attemptId, event.thread_id);
+      }
+      if (event.type === 'turn.failed') {
+        failureMessage = event.error.message;
+      }
+      if (event.type === 'error') {
+        failureMessage = event.message;
+      }
+    }
+
+    if (tokenUsage) {
+      await getTelemetryService().emit<TokenTelemetryEvent>({
+        type: 'run.tokens',
+        taskId: task.id,
+        attemptId,
+        agent: agentConfig?.type || 'codex-sdk',
+        project: task.project,
+        inputTokens: tokenUsage.inputTokens,
+        outputTokens: tokenUsage.outputTokens,
+        totalTokens: tokenUsage.totalTokens,
+        model: tokenUsage.model || agentConfig?.model,
+      });
+    }
+
+    await this.appendLog(
+      logPath,
+      `\n## Codex SDK Complete\n\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n`
+    );
+
+    await this.completeAgent(task.id, {
+      success: !failureMessage,
+      summary: finalSummary || failureMessage || 'Codex SDK completed without a final summary.',
+      error: failureMessage || undefined,
+    });
+    emitter.emit('sdk.complete', { taskId: task.id, attemptId });
+  }
+
   private handleCodexJsonLine(
     line: string,
     logPath: string
@@ -532,18 +667,58 @@ export class ClawdbotAgentService {
 
     try {
       const event = JSON.parse(trimmed) as Record<string, unknown>;
-      const type = String(event.type || event.event || 'codex.event');
-      const summary = this.extractCodexSummary(event);
-      const usage = this.extractCodexUsage(event);
-      void this.appendLog(
-        logPath,
-        `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\`\n\n</details>\n`
-      );
-      return { summary, usage };
+      return this.handleCodexEvent(event, logPath);
     } catch {
       void this.appendLog(logPath, `\n### stdout\n\n\`\`\`\n${trimmed}\n\`\`\`\n`);
       return { summary: trimmed };
     }
+  }
+
+  private handleCodexEvent(
+    event: ThreadEvent | Record<string, unknown>,
+    logPath: string
+  ): {
+    summary?: string;
+    usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
+  } {
+    const record = event as Record<string, unknown>;
+    const type = String(record.type || record.event || 'codex.event');
+    const summary = this.extractCodexSummary(record);
+    const usage = this.extractCodexUsage(record);
+    void this.appendLog(
+      logPath,
+      `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n\n</details>\n`
+    );
+    return { summary, usage };
+  }
+
+  private async recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void> {
+    const pending = pendingAgents.get(task.id);
+    if (pending) {
+      pending.threadId = threadId;
+    }
+
+    await this.taskService.updateTask(task.id, {
+      status: 'in-progress',
+      attempt: {
+        id: attemptId,
+        agent: pending?.agent || 'codex-sdk',
+        status: 'running',
+        started: pending?.startedAt,
+        provider: pending?.provider || 'codex-sdk',
+        model: pending?.model,
+        threadId,
+      },
+    });
+  }
+
+  private buildCodexEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === 'string') env[key] = value;
+    }
+    env.VK_API_URL = process.env.VK_API_URL || 'http://localhost:3001';
+    return env;
   }
 
   private extractCodexSummary(event: unknown): string | undefined {

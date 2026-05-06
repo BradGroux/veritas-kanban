@@ -89,7 +89,7 @@ Use these recipes as starting points for v4.2 OpenAI Codex workflows in Veritas 
 **Goal:** Continue a Codex task after human feedback without losing context.
 
 1. Start the initial task in SDK provider mode.
-2. Store the Codex thread ID in attempt provider metadata.
+2. Veritas stores the Codex thread ID in attempt metadata as `threadId`.
 3. Human adds a task comment:
 
    ```text
@@ -108,7 +108,7 @@ Use these recipes as starting points for v4.2 OpenAI Codex workflows in Veritas 
 
 5. Expected outputs:
    - same Codex thread continues
-   - second attempt log references prior thread
+   - attempt log includes `thread.started`, item, turn, and usage events
    - final summary explains the delta from the first pass
 
 ---
@@ -233,7 +233,9 @@ Checklist:
 - [ ] Settings detects installed `codex`.
 - [ ] Settings reports missing/authenticated state correctly.
 - [ ] Mocked Codex CLI provider passes CI.
+- [ ] Mocked Codex SDK provider records `threadId` and token usage.
 - [ ] Real Codex CLI task completes locally.
+- [ ] Real Codex SDK task completes locally when SDK credentials are available.
 - [ ] Attempt log includes final summary and command/file events.
 - [ ] Token usage appears when Codex provides usage data.
 - [ ] Codex review produces findings on a known diff.

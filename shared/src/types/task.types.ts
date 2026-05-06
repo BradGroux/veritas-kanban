@@ -42,6 +42,7 @@ export interface TaskAttempt {
   ended?: string;
   provider?: string;
   model?: string;
+  threadId?: string;
 }
 
 export interface Subtask {

@@ -50,6 +50,13 @@ describe('ConfigService', () => {
             provider: 'codex-cli',
             enabled: false,
           }),
+          expect.objectContaining({
+            type: 'codex-sdk',
+            name: 'OpenAI Codex SDK',
+            command: 'codex',
+            provider: 'codex-sdk',
+            enabled: false,
+          }),
         ])
       );
     });
@@ -103,6 +110,11 @@ describe('ConfigService', () => {
             type: 'codex',
             command: 'codex',
             provider: 'codex-cli',
+          }),
+          expect.objectContaining({
+            type: 'codex-sdk',
+            command: 'codex',
+            provider: 'codex-sdk',
           }),
         ])
       );

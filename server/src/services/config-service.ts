@@ -62,6 +62,14 @@ const DEFAULT_CONFIG: AppConfig = {
       enabled: false,
       provider: 'codex-cli',
     },
+    {
+      type: 'codex-sdk',
+      name: 'OpenAI Codex SDK',
+      command: 'codex',
+      args: [],
+      enabled: false,
+      provider: 'codex-sdk',
+    },
   ],
   defaultAgent: 'claude-code',
 };

@@ -193,6 +193,15 @@ describe('Config Routes (actual module)', () => {
           provider: 'codex-cli',
           model: 'gpt-5.5',
         },
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
       ];
       mockConfigService.updateAgents.mockResolvedValue({ agents });
       const res = await request(app).put('/api/config/agents').send(agents);

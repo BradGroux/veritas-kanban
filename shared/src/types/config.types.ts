@@ -22,7 +22,7 @@ export interface AgentConfig {
   command: string;
   args: string[];
   enabled: boolean;
-  provider?: 'openclaw' | 'codex-cli' | 'custom';
+  provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'custom';
   model?: string;
 }
 
