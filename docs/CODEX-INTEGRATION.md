@@ -4,6 +4,13 @@ Release target: **Veritas Kanban v4.2**
 
 This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. The goal is not to treat Codex as a generic custom command. v4.2 should make Codex a native Veritas agent provider across local task execution, workflow runs, reviews, telemetry, MCP, and release documentation.
 
+Companion docs:
+
+- [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
+- [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
+- [SOP: Cross-Model Code Review](SOP-cross-model-code-review.md)
+- [AGENTS.md Template](AGENTS-TEMPLATE.md)
+
 ## Product Goal
 
 Veritas Kanban should become the local-first command center for Codex-backed software work:
@@ -107,6 +114,21 @@ The docs should also provide an `AGENTS.md` pattern that teaches Codex the Verit
 - [#307](https://github.com/BradGroux/veritas-kanban/issues/307) - Add Codex review and PR automation workflows
 - [#308](https://github.com/BradGroux/veritas-kanban/issues/308) - Write v4.2 Codex documentation, examples, and release notes
 - [#309](https://github.com/BradGroux/veritas-kanban/issues/309) - Create Codex test harness, mocked runners, E2E coverage, and v4.2 release QA checklist
+
+## Documentation Pass
+
+The v4.2 docs should land with the implementation, not after it. Required documentation updates:
+
+- Codex integration roadmap: architecture and release scope.
+- Codex SOP: operational playbook for CLI, SDK, Cloud, MCP, telemetry, reviews, and workflow execution.
+- Codex examples: copy/pasteable task, review, SDK, Cloud, MCP, and workflow recipes.
+- README documentation map.
+- FEATURES entry for Codex provider support.
+- MCP guide with Codex setup.
+- API reference for provider fields and Codex-specific routes.
+- CLI guide if a setup/check helper is added.
+- AGENTS.md template with Codex-specific lifecycle instructions and MCP commands.
+- Release notes with known limitations and QA evidence.
 
 ## Release Acceptance
 

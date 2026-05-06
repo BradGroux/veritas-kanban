@@ -117,6 +117,39 @@ When picking up a task:
 4. Complete: `POST /api/agents/:taskId/complete`
 5. Send heartbeat with `status: "idle"` and clear task
 
+## OpenAI Codex Notes
+
+When this template is used by Codex, add these project-specific instructions:
+
+```md
+## Veritas Kanban Protocol
+
+When working on Veritas Kanban tasks:
+
+1. Treat Veritas Kanban as the source of truth for task state.
+2. Before implementation, inspect the task, acceptance criteria, worktree, and related docs.
+3. Move the task to `in-progress` and ensure an attempt is tracked.
+4. Keep notes in task comments or progress files when findings affect future work.
+5. Run relevant tests/checks before completion.
+6. Report final summary, files changed, tests run, risks, and follow-ups.
+7. For code changes, request cross-model review before final completion.
+8. Use the Veritas MCP server when available instead of ad hoc HTTP calls.
+
+For OpenAI product/API questions, use the OpenAI developer documentation MCP server first.
+```
+
+Recommended Codex MCP setup:
+
+```bash
+codex mcp add veritas-kanban \
+  --env VK_API_URL=http://localhost:3001 \
+  -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
+
+codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
+```
+
+See [SOP-codex-integration.md](SOP-codex-integration.md) for the full Codex workflow.
+
 ## Telemetry Emission (MANDATORY)
 
 The dashboard's **Success Rate**, **Token Usage**, and **Average Run Duration** graphs require `run.*` telemetry events. These are **NOT auto-captured** — your agent must emit them.

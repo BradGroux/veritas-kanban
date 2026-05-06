@@ -23,6 +23,7 @@ For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-d
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
+- [OpenAI Codex Integration](#openai-codex-integration-planned-v42)
 - [Multi-Agent System](#multi-agent-system)
 - [Squad Chat](#squad-chat)
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
@@ -289,6 +290,26 @@ First-class support for autonomous coding agents.
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
 - **Failure alerts** — Dedicated failure alert service for agent run failures
+
+---
+
+## OpenAI Codex Integration (Planned v4.2)
+
+v4.2 plans first-class OpenAI Codex support across local task execution, SDK-backed sessions, cloud delegation, MCP setup, workflow execution, review automation, and telemetry.
+
+Planned provider modes:
+
+- **Codex CLI provider** — Runs `codex exec --json` in the task worktree, maps JSONL events into Veritas attempt logs, and records final summaries.
+- **Codex SDK provider** — Uses `@openai/codex-sdk` for durable local threads, follow-up prompts, and richer session control.
+- **Codex Cloud delegation** — Creates GitHub issue/PR delegation prompts for cloud Codex work and links GitHub artifacts back to Veritas tasks.
+- **Codex review actions** — Uses Codex to review task branches, PR diffs, and failed changes.
+- **Workflow Codex steps** — Executes workflow-engine agent steps through the same provider abstraction used by local task starts.
+
+Planned documentation:
+
+- [OpenAI Codex Integration Roadmap](CODEX-INTEGRATION.md)
+- [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
+- [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
 
 ---
 

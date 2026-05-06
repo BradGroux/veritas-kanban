@@ -154,6 +154,35 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
 # Expected output: 26
 ```
 
+### Codex
+
+OpenAI Codex can also use the Veritas Kanban MCP server. This is the recommended setup when Codex should update tasks, read board context, or coordinate through Veritas instead of making ad hoc HTTP calls.
+
+Local development:
+
+```bash
+codex mcp add veritas-kanban \
+  --env VK_API_URL=http://localhost:3001 \
+  -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
+```
+
+Production or API-key mode:
+
+```bash
+codex mcp add veritas-kanban \
+  --env VK_API_URL=https://kanban.yourdomain.com \
+  --env VK_API_KEY=your-agent-api-key \
+  -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
+```
+
+Recommended companion for OpenAI-related development work:
+
+```bash
+codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
+```
+
+Pair this with the Codex-specific instructions in [AGENTS-TEMPLATE.md](../AGENTS-TEMPLATE.md) and the v4.2 [Codex Integration SOP](../SOP-codex-integration.md).
+
 ### Production
 
 When running VK behind a reverse proxy (nginx/Caddy):
