@@ -60,6 +60,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 ## 📚 Documentation Map
 
 - [MCP Server Guide](docs/mcp/README.md) — 33+ tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — v4.2 plan for local Codex execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
