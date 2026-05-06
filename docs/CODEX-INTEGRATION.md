@@ -2,7 +2,7 @@
 
 Release target: **Veritas Kanban v4.2**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, and Codex review actions. The remaining work expands that foundation into deeper Settings health checks.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, and richer Settings health checks.
 
 Companion docs:
 
@@ -142,6 +142,16 @@ POST /api/diff/<taskId>/codex-review
   "save": true
 }
 ```
+
+## Settings Health
+
+Settings exposes Codex readiness through a dedicated health check:
+
+```http
+GET /api/settings/codex/health
+```
+
+The response reports Codex CLI install/version/auth state, SDK import availability, Codex agent profile readiness, enabled Codex profiles, and recommendations.
 
 ## MCP And Project Instructions
 

@@ -56,6 +56,7 @@ export { managedList } from './managed-list';
 // Re-export all types from each module
 export type { ArchiveSuggestion } from './tasks';
 export type { BacklogListResponse, BacklogFilterOptions } from './backlog';
+export type { CodexHealthStatus } from './config';
 
 export type {
   AgentStatus,

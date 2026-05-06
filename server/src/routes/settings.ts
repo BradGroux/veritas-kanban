@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { ConfigService } from '../services/config-service.js';
+import { CodexHealthService } from '../services/codex-health-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getAttachmentService } from '../services/attachment-service.js';
 import { setEnforcementSettings, setHooksSettings } from '../services/hook-service.js';
@@ -13,6 +14,7 @@ import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
+const codexHealthService = new CodexHealthService();
 
 /**
  * Sync feature settings to affected server-side services.
@@ -66,6 +68,15 @@ router.get(
   asyncHandler(async (_req, res) => {
     const features = await configService.getFeatureSettings();
     res.json(sanitizeFeatureSettings(features));
+  })
+);
+
+// GET /api/settings/codex/health — checks Codex install/auth/SDK/profile readiness
+router.get(
+  '/codex/health',
+  asyncHandler(async (_req, res) => {
+    const health = await codexHealthService.getHealth();
+    res.json(health);
   })
 );
 

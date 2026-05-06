@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useConfig, useUpdateAgents } from '@/hooks/useConfig';
+import { useCodexHealth, useConfig, useUpdateAgents } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
 import {
@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import type {
   AgentConfig,
@@ -43,12 +44,18 @@ import type {
   RoutingRule,
   AgentRoutingConfig,
 } from '@veritas-kanban/shared';
+import type { CodexHealthStatus } from '@/lib/api';
 import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
 
 export function AgentsTab() {
   const { data: config, isLoading } = useConfig();
+  const {
+    data: codexHealth,
+    isFetching: isCodexHealthFetching,
+    refetch: refetchCodexHealth,
+  } = useCodexHealth();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
   const updateAgents = useUpdateAgents();
@@ -147,6 +154,12 @@ export function AgentsTab() {
         )}
       </div>
 
+      <CodexHealthPanel
+        health={codexHealth}
+        isFetching={isCodexHealthFetching}
+        onRefresh={() => refetchCodexHealth()}
+      />
+
       {/* Agent Behavior */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -198,6 +211,76 @@ export function AgentsTab() {
 
       {/* Agent Routing Rules */}
       <RoutingRulesSection agents={config?.agents || []} />
+    </div>
+  );
+}
+
+function CodexHealthPanel({
+  health,
+  isFetching,
+  onRefresh,
+}: {
+  health?: CodexHealthStatus;
+  isFetching: boolean;
+  onRefresh: () => void;
+}) {
+  const statusBadge = (ready: boolean, label: string) => (
+    <Badge variant={ready ? 'default' : 'secondary'} className="gap-1">
+      {ready ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+      {label}
+    </Badge>
+  );
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Codex Health</h3>
+          <p className="text-xs text-muted-foreground">
+            {health?.checkedAt
+              ? `Checked ${new Date(health.checkedAt).toLocaleTimeString()}`
+              : 'Checking Codex readiness'}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onRefresh}
+          disabled={isFetching}
+          aria-label="Refresh Codex health"
+        >
+          {isFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {statusBadge(!!health?.cli.installed, 'CLI installed')}
+        {statusBadge(!!health?.cli.authenticated, 'Authenticated')}
+        {statusBadge(!!health?.sdk.available, 'SDK available')}
+        {statusBadge(!!health?.ready.cli, 'CLI profile')}
+        {statusBadge(!!health?.ready.sdk, 'SDK profile')}
+        {statusBadge(!!health?.ready.cloud, 'Cloud profile')}
+      </div>
+
+      {health?.cli.version && (
+        <div className="text-xs text-muted-foreground">
+          {health.cli.version}
+          {health.cli.authMode ? ` · ${health.cli.authMode}` : ''}
+        </div>
+      )}
+
+      {health?.recommendations.length ? (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {health.recommendations.map((recommendation) => (
+            <li key={recommendation}>{recommendation}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.5] - 2026-05-06
+
+### Added
+
+- Codex Settings health endpoint at `GET /api/settings/codex/health`.
+- Server-side checks for Codex CLI installation, CLI version, `codex login status`, Codex SDK import availability, and Codex CLI/SDK/Cloud agent profile readiness.
+- Settings Agents tab Codex Health panel with refresh, readiness badges, version/auth details, and actionable recommendations.
+- Frontend API and hook support for Codex health checks.
+- Route coverage for the Codex Settings health endpoint.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.4` to `4.2.5`.
+- Documented richer Codex Settings health checks as implemented, completing the requested v4.2 patch train.
+
 ## [4.2.4] - 2026-05-06
 
 ### Added
