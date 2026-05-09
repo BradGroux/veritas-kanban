@@ -20,6 +20,8 @@ import { TaskService } from './task-service.js';
 import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getBreaker } from './circuit-registry.js';
+import { activityService } from './activity-service.js';
+import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type {
@@ -28,6 +30,7 @@ import type {
   AgentConfig,
   TaskAttempt,
   AttemptStatus,
+  Deliverable,
   RunStartedEvent,
   RunCompletedEvent,
   RunErrorEvent,
@@ -39,7 +42,38 @@ const log = createLogger('clawdbot-agent-service');
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const LOGS_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'logs');
 const CLAWDBOT_GATEWAY = process.env.CLAWDBOT_GATEWAY || 'http://127.0.0.1:18789';
-type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
+export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
+
+export interface AgentProviderStartContext {
+  task: Task;
+  agentConfig?: AgentConfig;
+  prompt: string;
+  logPath: string;
+  attemptId: string;
+  startedAt: string;
+  emitter: EventEmitter;
+  attempt: TaskAttempt;
+}
+
+export interface AgentProviderStopContext {
+  taskId: string;
+  pending: PendingAgent;
+}
+
+export interface AgentProviderAdapter {
+  id: AgentProvider;
+  label: string;
+  capabilities: {
+    start: true;
+    stop: boolean;
+    status: true;
+    logs: boolean;
+    complete: true;
+    resume: boolean;
+  };
+  start(context: AgentProviderStartContext): Promise<void> | void;
+  stop(context: AgentProviderStopContext): Promise<void> | void;
+}
 
 export interface AgentStatus {
   taskId: string;
@@ -57,21 +91,20 @@ export interface AgentOutput {
 }
 
 // Track pending agent requests
-const pendingAgents = new Map<
-  string,
-  {
-    taskId: string;
-    attemptId: string;
-    agent: AgentType;
-    startedAt: string;
-    emitter: EventEmitter;
-    provider: AgentProvider;
-    model?: string;
-    threadId?: string;
-    abortController?: AbortController;
-    process?: ChildProcessWithoutNullStreams;
-  }
->();
+interface PendingAgent {
+  taskId: string;
+  attemptId: string;
+  agent: AgentType;
+  startedAt: string;
+  emitter: EventEmitter;
+  provider: AgentProvider;
+  model?: string;
+  threadId?: string;
+  abortController?: AbortController;
+  process?: ChildProcessWithoutNullStreams;
+}
+
+const pendingAgents = new Map<string, PendingAgent>();
 
 export class ClawdbotAgentService {
   private configService: ConfigService;
@@ -192,80 +225,19 @@ export class ClawdbotAgentService {
       project: task.project,
     });
 
-    if (provider === 'codex-cli') {
-      try {
-        this.startCodexCli(task, agentConfig, taskPrompt, logPath, attemptId, startedAt, emitter);
-      } catch (error: any) {
-        pendingAgents.delete(taskId);
-        await this.taskService.updateTask(taskId, {
-          status: 'todo',
-          attempt: { ...attempt, status: 'failed', ended: new Date().toISOString() },
-        });
-        await telemetry.emit<RunErrorEvent>({
-          type: 'run.error',
-          taskId,
-          attemptId,
-          agent,
-          project: task.project,
-          error: error.message || 'Failed to start Codex CLI',
-          stackTrace: error.stack,
-        });
-        throw new Error(`Failed to start agent via Codex CLI: ${error.message}`);
-      }
-
-      return {
-        taskId,
-        attemptId,
-        agent,
-        status: 'running',
-        startedAt,
-      };
-    }
-
-    if (provider === 'codex-sdk') {
-      const abortController = new AbortController();
-      const pending = pendingAgents.get(taskId);
-      if (pending) {
-        pending.abortController = abortController;
-      }
-
-      void this.startCodexSdk(
+    const adapter = this.resolveProviderAdapter(provider);
+    try {
+      await adapter.start({
         task,
         agentConfig,
-        taskPrompt,
+        prompt: taskPrompt,
         logPath,
         attemptId,
         startedAt,
         emitter,
-        abortController
-      ).catch(async (error: any) => {
-        if (!pendingAgents.has(task.id)) return;
-        await this.appendLog(
-          logPath,
-          `\n## Codex SDK Error\n\n${error.message || 'Codex SDK attempt failed'}\n`
-        );
-        await this.completeAgent(task.id, {
-          success: false,
-          error: error.message || 'Codex SDK attempt failed',
-        });
+        attempt,
       });
-
-      return {
-        taskId,
-        attemptId,
-        agent,
-        status: 'running',
-        startedAt,
-      };
-    }
-
-    // Send request to Clawdbot main session (wrapped in circuit breaker)
-    // This will be picked up by Veritas who will spawn the actual sub-agent
-    const agentBreaker = getBreaker('agent');
-    try {
-      await agentBreaker.execute(() => this.sendToClawdbot(taskPrompt, taskId, attemptId));
     } catch (error: any) {
-      // Clean up on failure
       pendingAgents.delete(taskId);
       await this.taskService.updateTask(taskId, {
         status: 'todo',
@@ -277,10 +249,10 @@ export class ClawdbotAgentService {
         attemptId,
         agent,
         project: task.project,
-        error: error.message || 'Failed to start OpenClaw request',
+        error: error.message || `Failed to start ${adapter.label}`,
         stackTrace: error.stack,
       });
-      throw new Error(`Failed to start agent via OpenClaw: ${error.message}`);
+      throw new Error(`Failed to start agent via ${adapter.label}: ${error.message}`);
     }
 
     return {
@@ -382,6 +354,20 @@ export class ClawdbotAgentService {
       success: result.success,
       error: result.error,
     });
+    await getTraceService().completeTrace(attemptId, result.success ? 'completed' : 'failed');
+    await activityService.logActivity(
+      'agent_completed',
+      taskId,
+      task?.title || taskId,
+      {
+        attemptId,
+        provider: pending.provider,
+        model: pending.model,
+        success: result.success,
+        summary,
+      },
+      pending.agent
+    );
 
     // Clean up
     pendingAgents.delete(taskId);
@@ -411,12 +397,7 @@ export class ClawdbotAgentService {
       throw new Error('No agent running for this task');
     }
 
-    if (pending.provider === 'codex-cli' && pending.process && !pending.process.killed) {
-      pending.process.kill('SIGTERM');
-    }
-    if (pending.provider === 'codex-sdk') {
-      pending.abortController?.abort();
-    }
+    await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
 
     // Mark as failed/stopped
     await this.completeAgent(taskId, {
@@ -438,6 +419,76 @@ export class ClawdbotAgentService {
     if (agent === 'codex') return 'codex-cli';
     if (agentConfig?.command === 'codex') return 'codex-cli';
     return 'openclaw';
+  }
+
+  private resolveProviderAdapter(provider: AgentProvider): AgentProviderAdapter {
+    const commonCapabilities = {
+      start: true as const,
+      status: true as const,
+      logs: true,
+      complete: true as const,
+    };
+
+    if (provider === 'codex-cli') {
+      return {
+        id: 'codex-cli',
+        label: 'Codex CLI',
+        capabilities: { ...commonCapabilities, stop: true, resume: false },
+        start: ({ task, agentConfig, prompt, logPath, attemptId, startedAt, emitter }) => {
+          this.startCodexCli(task, agentConfig, prompt, logPath, attemptId, startedAt, emitter);
+        },
+        stop: ({ pending }) => {
+          if (pending.process && !pending.process.killed) pending.process.kill('SIGTERM');
+        },
+      };
+    }
+
+    if (provider === 'codex-sdk') {
+      return {
+        id: 'codex-sdk',
+        label: 'Codex SDK',
+        capabilities: { ...commonCapabilities, stop: true, resume: true },
+        start: ({ task, agentConfig, prompt, logPath, attemptId, startedAt, emitter }) => {
+          const abortController = new AbortController();
+          const pending = pendingAgents.get(task.id);
+          if (pending) pending.abortController = abortController;
+          void this.startCodexSdk(
+            task,
+            agentConfig,
+            prompt,
+            logPath,
+            attemptId,
+            startedAt,
+            emitter,
+            abortController
+          ).catch(async (error: any) => {
+            if (!pendingAgents.has(task.id)) return;
+            await this.appendLog(
+              logPath,
+              `\n## Codex SDK Error\n\n${error.message || 'Codex SDK attempt failed'}\n`
+            );
+            await this.completeAgent(task.id, {
+              success: false,
+              error: error.message || 'Codex SDK attempt failed',
+            });
+          });
+        },
+        stop: ({ pending }) => {
+          pending.abortController?.abort();
+        },
+      };
+    }
+
+    return {
+      id: 'openclaw',
+      label: 'OpenClaw',
+      capabilities: { ...commonCapabilities, stop: false, resume: false },
+      start: async ({ prompt, task, attemptId }) => {
+        const agentBreaker = getBreaker('agent');
+        await agentBreaker.execute(() => this.sendToClawdbot(prompt, task.id, attemptId));
+      },
+      stop: () => {},
+    };
   }
 
   private startCodexCli(
@@ -474,6 +525,7 @@ export class ClawdbotAgentService {
       logPath,
       `\n## Codex CLI\n\n**Command:** \`${[command, ...args.map((a) => (a === prompt ? '<prompt>' : a))].join(' ')}\`\n**PID:** ${child.pid ?? 'unknown'}\n\n`
     );
+    void this.recordAgentStarted(task, attemptId, agentConfig?.type || 'codex', 'codex-cli');
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -488,7 +540,7 @@ export class ClawdbotAgentService {
       const lines = stdoutBuffer.split(/\r?\n/);
       stdoutBuffer = lines.pop() || '';
       for (const line of lines) {
-        const parsed = this.handleCodexJsonLine(line, logPath);
+        const parsed = this.handleCodexJsonLine(line, logPath, task, attemptId, agentConfig);
         if (parsed.summary) finalSummary = parsed.summary;
         if (parsed.usage) tokenUsage = parsed.usage;
       }
@@ -508,7 +560,13 @@ export class ClawdbotAgentService {
     child.on('close', (code, signal) => {
       void (async () => {
         if (stdoutBuffer.trim()) {
-          const parsed = this.handleCodexJsonLine(stdoutBuffer, logPath);
+          const parsed = this.handleCodexJsonLine(
+            stdoutBuffer,
+            logPath,
+            task,
+            attemptId,
+            agentConfig
+          );
           if (parsed.summary) finalSummary = parsed.summary;
           if (parsed.usage) tokenUsage = parsed.usage;
         }
@@ -604,6 +662,7 @@ export class ClawdbotAgentService {
       logPath,
       `\n## Codex SDK\n\n**Worktree:** \`${worktreePath}\`\n**Model:** ${agentConfig?.model || 'default'}\n\n`
     );
+    await this.recordAgentStarted(task, attemptId, agentConfig?.type || 'codex-sdk', 'codex-sdk');
 
     const streamed = await thread.runStreamed(prompt, { signal: abortController.signal });
     let finalSummary = '';
@@ -613,7 +672,7 @@ export class ClawdbotAgentService {
       | undefined;
 
     for await (const event of streamed.events) {
-      const parsed = this.handleCodexEvent(event, logPath);
+      const parsed = this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
       if (parsed.summary) finalSummary = parsed.summary;
       if (parsed.usage) tokenUsage = parsed.usage;
 
@@ -657,7 +716,10 @@ export class ClawdbotAgentService {
 
   private handleCodexJsonLine(
     line: string,
-    logPath: string
+    logPath: string,
+    task?: Task,
+    attemptId?: string,
+    agentConfig?: AgentConfig
   ): {
     summary?: string;
     usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
@@ -667,7 +729,7 @@ export class ClawdbotAgentService {
 
     try {
       const event = JSON.parse(trimmed) as Record<string, unknown>;
-      return this.handleCodexEvent(event, logPath);
+      return this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
     } catch {
       void this.appendLog(logPath, `\n### stdout\n\n\`\`\`\n${trimmed}\n\`\`\`\n`);
       return { summary: trimmed };
@@ -676,7 +738,10 @@ export class ClawdbotAgentService {
 
   private handleCodexEvent(
     event: ThreadEvent | Record<string, unknown>,
-    logPath: string
+    logPath: string,
+    task?: Task,
+    attemptId?: string,
+    agentConfig?: AgentConfig
   ): {
     summary?: string;
     usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
@@ -689,7 +754,186 @@ export class ClawdbotAgentService {
       logPath,
       `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n\n</details>\n`
     );
+    if (task && attemptId) {
+      void this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary);
+    }
     return { summary, usage };
+  }
+
+  private async recordAgentStarted(
+    task: Task,
+    attemptId: string,
+    agent: string,
+    provider: AgentProvider
+  ): Promise<void> {
+    getTraceService().startTrace(attemptId, task.id, agent as AgentType, task.project);
+    getTraceService().startStep(attemptId, 'init', { provider });
+    getTraceService().endStep(attemptId, 'init');
+    await activityService.logActivity(
+      'agent_started',
+      task.id,
+      task.title,
+      { attemptId, provider },
+      agent
+    );
+  }
+
+  private async recordCodexEvent(
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    type: string,
+    event: Record<string, unknown>,
+    summary?: string
+  ): Promise<void> {
+    const agent =
+      agentConfig?.type || (agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex');
+    getTraceService().startStep(attemptId, this.codexTraceStepType(type), {
+      provider: agentConfig?.provider || 'codex-cli',
+      eventType: type,
+      summary,
+    });
+    getTraceService().endStep(attemptId, this.codexTraceStepType(type));
+
+    if (this.shouldLogCodexActivity(type)) {
+      await activityService.logActivity(
+        'agent_event',
+        task.id,
+        task.title,
+        {
+          attemptId,
+          provider: agentConfig?.provider || 'codex-cli',
+          eventType: type,
+          summary,
+        },
+        agent
+      );
+    }
+
+    const files = this.extractCodexFiles(event);
+    if (files.length > 0) {
+      await this.attachCodexDeliverables(task, attemptId, agent, files);
+    }
+  }
+
+  private codexTraceStepType(type: string): 'execute' | 'complete' | 'error' {
+    if (type.includes('failed') || type === 'error') return 'error';
+    if (type.includes('completed')) return 'complete';
+    return 'execute';
+  }
+
+  private shouldLogCodexActivity(type: string): boolean {
+    return (
+      type.includes('command') ||
+      type.includes('tool') ||
+      type.includes('file') ||
+      type.includes('completed') ||
+      type.includes('failed') ||
+      type === 'error'
+    );
+  }
+
+  private extractCodexFiles(event: unknown): string[] {
+    const files = new Set<string>();
+    const seen = new Set<unknown>();
+    const fileKeys = new Set([
+      'file',
+      'file_path',
+      'filePath',
+      'path',
+      'relative_path',
+      'relativePath',
+      'absolute_path',
+      'absolutePath',
+    ]);
+
+    const visit = (value: unknown, key?: string): void => {
+      if (!value) return;
+      if (typeof value === 'string') {
+        if (key && fileKeys.has(key) && this.looksLikeFilePath(value)) files.add(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item, key);
+        return;
+      }
+      if (typeof value !== 'object' || seen.has(value)) return;
+      seen.add(value);
+      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+        visit(childValue, childKey);
+      }
+    };
+
+    visit(event);
+    return [...files].slice(0, 25);
+  }
+
+  private looksLikeFilePath(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.includes('\n')) return false;
+    if (/^https?:\/\//i.test(trimmed)) return true;
+    if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../'))
+      return true;
+    return /^[\w.-]+\/[\w./-]+$/.test(trimmed) || /\.[a-z0-9]{1,12}$/i.test(trimmed);
+  }
+
+  private async attachCodexDeliverables(
+    task: Task,
+    attemptId: string,
+    agent: string,
+    files: string[]
+  ): Promise<void> {
+    const freshTask = await this.taskService.getTask(task.id);
+    if (!freshTask) return;
+
+    const existing = freshTask.deliverables || [];
+    const existingKeys = new Set(
+      existing.map((deliverable) => `${deliverable.path || ''}:${deliverable.agent || ''}`)
+    );
+    const created = new Date().toISOString();
+    const additions: Deliverable[] = [];
+
+    for (const file of files) {
+      const key = `${file}:${agent}`;
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key);
+      additions.push({
+        id: `deliverable_${nanoid(8)}`,
+        title: path.basename(file) || file,
+        type: this.inferDeliverableType(file),
+        path: file,
+        status: 'attached',
+        agent,
+        created,
+        description: `Codex event artifact from attempt ${attemptId}`,
+      });
+    }
+
+    if (additions.length === 0) return;
+
+    await this.taskService.updateTask(task.id, {
+      deliverables: [...existing, ...additions],
+    });
+    await activityService.logActivity(
+      'deliverable_added',
+      task.id,
+      task.title,
+      {
+        attemptId,
+        provider: 'codex',
+        deliverableCount: additions.length,
+        paths: additions.map((deliverable) => deliverable.path),
+      },
+      agent
+    );
+  }
+
+  private inferDeliverableType(file: string): Deliverable['type'] {
+    const lower = file.toLowerCase();
+    if (/\.(ts|tsx|js|jsx|py|go|rs|java|cs|rb|php|css|scss|html)$/.test(lower)) return 'code';
+    if (/\.(md|txt|docx|pdf)$/.test(lower)) return 'document';
+    if (/\.(json|yaml|yml|xml|csv|png|jpg|jpeg|gif|svg)$/.test(lower)) return 'artifact';
+    return 'other';
   }
 
   private async recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void> {

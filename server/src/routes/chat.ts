@@ -46,7 +46,7 @@ const squadMessageSchema = z.object({
   event: z.enum(['agent.spawned', 'agent.completed', 'agent.failed', 'agent.status']).optional(),
   taskTitle: z.string().optional(),
   duration: z.string().optional(),
-  card: z.record(z.unknown()).optional(), // Adaptive Card v1.5 JSON
+  card: z.record(z.string(), z.unknown()).optional(), // Adaptive Card v1.5 JSON
 });
 
 /**

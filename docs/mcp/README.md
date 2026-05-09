@@ -1,8 +1,8 @@
 # MCP Server — Veritas Kanban
 
-> **26 tools · 6 categories · stdio transport · zero external dependencies**
+> **36 tools · 8 categories · stdio transport · zero external dependencies**
 
-The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcontextprotocol.io/) client — Claude Desktop, OpenClaw, Cursor, Cline, or your own tooling — manage tasks, sprints, agents, automation, notifications, and summaries through a single stdio process.
+The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcontextprotocol.io/) client — Claude Desktop, OpenClaw, Cursor, Cline, Codex, or your own tooling — manage tasks, sprints, projects, comments, agents, automation, notifications, and summaries through a single stdio process.
 
 ---
 
@@ -21,6 +21,8 @@ The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcon
   - [Notifications (3 tools)](#notifications-3-tools)
   - [Summaries (2 tools)](#summaries-2-tools)
   - [Sprint Management (9 tools)](#sprint-management-9-tools)
+  - [Project Management (7 tools)](#project-management-7-tools)
+  - [Comment Management (3 tools)](#comment-management-3-tools)
 - [Resources](#resources)
 - [Security Model](#security-model)
 - [Error Handling & Troubleshooting](#error-handling--troubleshooting)
@@ -35,7 +37,7 @@ The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcon
 Use the MCP server when:
 
 - Your AI assistant (Claude Desktop, Cursor, etc.) needs **structured tool access** to VK — not raw HTTP calls.
-- You want **one process** that exposes all 26 VK operations with typed inputs and validated outputs.
+- You want **one process** that exposes all 36 VK operations with typed inputs and validated outputs.
 - You're building **agent orchestration** and need task/sprint/automation lifecycle management over MCP.
 
 Don't use it when:
@@ -60,7 +62,7 @@ Don't use it when:
 │  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
 │  │ Tool       │  │ Resource   │  │ Transport  │  │
 │  │ Registry   │  │ Provider   │  │ (stdio)    │  │
-│  │ (26 tools) │  │ (kanban:// │  │            │  │
+│  │ (36 tools) │  │ (kanban:// │  │            │  │
 │  │            │  │  URIs)     │  │            │  │
 │  └──────┬─────┘  └──────┬─────┘  └───────────┘  │
 │         │               │                        │
@@ -151,7 +153,7 @@ For **OpenClaw**, add to your OpenClaw MCP config:
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
   VK_API_URL=http://localhost:3001 node mcp/dist/index.js 2>/dev/null | \
   head -1 | jq '.result.tools | length'
-# Expected output: 26
+# Expected output: 36
 ```
 
 ### Codex
@@ -181,7 +183,7 @@ Recommended companion for OpenAI-related development work:
 codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
 ```
 
-Pair this with the Codex-specific instructions in [AGENTS-TEMPLATE.md](../AGENTS-TEMPLATE.md) and the v4.2 [Codex Integration SOP](../SOP-codex-integration.md).
+Pair this with the Codex-specific instructions in [AGENTS-TEMPLATE.md](../AGENTS-TEMPLATE.md), the v4.3 [Codex Integration SOP](../SOP-codex-integration.md), and the [Veritas Cutover Operating Guide](../VERITAS-CUTOVER.md) when Codex is coordinating with HermesAgent/Hermes Gateway.
 
 ### Production
 
@@ -594,17 +596,15 @@ Full project lifecycle management from MCP — create, organize, and track proje
 
 ---
 
-### Comment Management (5 tools) <small>_New in v4.0_</small>
+### Comment Management (3 tools) <small>_New in v4.0_</small>
 
-Full CRUD for task and sprint comments, enabling agents to participate in async review threads.
+Comment tools for task discussion threads, enabling agents to participate in async review notes.
 
-| Tool             | Description              | Required Inputs                  | Key Options |
-| ---------------- | ------------------------ | -------------------------------- | ----------- |
-| `add_comment`    | Add a comment to a task  | `taskId`, `content`              | `author`    |
-| `list_comments`  | List comments for a task | `taskId`                         | `limit`     |
-| `get_comment`    | Get a single comment     | `taskId`, `commentId`            | —           |
-| `update_comment` | Edit a comment           | `taskId`, `commentId`, `content` | —           |
-| `delete_comment` | Delete a comment         | `taskId`, `commentId`            | —           |
+| Tool             | Description                 | Required Inputs       | Key Options |
+| ---------------- | --------------------------- | --------------------- | ----------- |
+| `add_comment`    | Add a comment to a task     | `taskId`, `text`      | `agent`     |
+| `list_comments`  | List comments for a task    | `taskId`              | —           |
+| `delete_comment` | Delete a task comment by ID | `taskId`, `commentId` | —           |
 
 <details>
 <summary><strong>Examples</strong></summary>
@@ -616,8 +616,8 @@ Full CRUD for task and sprint comments, enabling agents to participate in async 
   "name": "add_comment",
   "arguments": {
     "taskId": "task_20260321_abc",
-    "content": "Auth token refresh looks good. One nit: the 5-minute buffer could be configurable.",
-    "author": "TARS"
+    "text": "Auth token refresh looks good. One nit: the 5-minute buffer could be configurable.",
+    "agent": "TARS"
   }
 }
 ```
@@ -633,15 +633,14 @@ Full CRUD for task and sprint comments, enabling agents to participate in async 
 
 → Returns array of `{ id, content, author, createdAt, updatedAt }`.
 
-**Update a comment:**
+**Delete a comment:**
 
 ```json
 {
-  "name": "update_comment",
+  "name": "delete_comment",
   "arguments": {
     "taskId": "task_20260321_abc",
-    "commentId": "cmt_xyz789",
-    "content": "Auth token refresh looks good — marking as approved."
+    "commentId": "cmt_xyz789"
   }
 }
 ```
@@ -795,4 +794,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-03-21 · VK v4.0.0 · 33 tools / 7 categories_
+_Last updated: 2026-05-09 · VK v4.3.0 · 36 tools / 8 categories_

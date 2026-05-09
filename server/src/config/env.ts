@@ -47,7 +47,7 @@ const booleanString = z
 export const envSchema = z.object({
   // ── Server ──────────────────────────────────────────────────────────
   /** HTTP port the server listens on */
-  PORT: portSchema.default('3001'),
+  PORT: portSchema.default(3001),
 
   /** Node environment: development | production | test */
   NODE_ENV: z.enum(['development', 'production', 'test']).optional().default('development'),
@@ -61,10 +61,10 @@ export const envSchema = z.object({
   VERITAS_JWT_SECRET: z.string().optional(),
 
   /** Enable/disable the auth middleware (default: true) */
-  VERITAS_AUTH_ENABLED: booleanString.default('true'),
+  VERITAS_AUTH_ENABLED: booleanString.default(true),
 
   /** Allow localhost requests to bypass authentication */
-  VERITAS_AUTH_LOCALHOST_BYPASS: booleanString.default('false'),
+  VERITAS_AUTH_LOCALHOST_BYPASS: booleanString.default(false),
 
   /** Role assigned to localhost-bypass connections */
   VERITAS_AUTH_LOCALHOST_ROLE: z
@@ -92,14 +92,14 @@ export const envSchema = z.object({
 
   // ── CSP ─────────────────────────────────────────────────────────────
   /** Use Content-Security-Policy-Report-Only instead of enforcing */
-  CSP_REPORT_ONLY: booleanString.default('false'),
+  CSP_REPORT_ONLY: booleanString.default(false),
 
   /** URL to receive CSP violation reports */
   CSP_REPORT_URI: z.string().url().optional(),
 
   // ── Rate Limiting ───────────────────────────────────────────────────
   /** Max requests per rate-limit window */
-  RATE_LIMIT_MAX: positiveIntString.default('300'),
+  RATE_LIMIT_MAX: positiveIntString.default(300),
 
   // ── Telemetry ───────────────────────────────────────────────────────
   /** Days to retain raw telemetry events */

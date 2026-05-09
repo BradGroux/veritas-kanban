@@ -13,6 +13,7 @@ export type ActivityType =
   | 'agent_started'
   | 'agent_stopped'
   | 'agent_completed'
+  | 'agent_event'
   | 'task_archived'
   | 'task_deleted'
   | 'task_promoted'

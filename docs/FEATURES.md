@@ -1,6 +1,6 @@
 # Features
 
-Complete feature reference for Veritas Kanban v4.0. Every feature, every API endpoint, every configuration option.
+Complete feature reference for Veritas Kanban v4.3. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different). For troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -23,7 +23,8 @@ For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-d
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
-- [OpenAI Codex Integration](#openai-codex-integration-v42)
+- [OpenAI Codex Integration](#openai-codex-integration-v43)
+- [Veritas Cutover & Hermes Support](#veritas-cutover--hermes-support)
 - [Multi-Agent System](#multi-agent-system)
 - [Squad Chat](#squad-chat)
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
@@ -196,14 +197,17 @@ Task integration: `vk list -S <sprint>`, `vk create -S <sprint>`, `vk update -S 
 
 Added in v3.3.2.
 
-| Tool                 | Description                         |
-| -------------------- | ----------------------------------- |
-| `list_sprints`       | List all sprints                    |
-| `create_sprint`      | Create a new sprint                 |
-| `update_sprint`      | Update sprint properties            |
-| `delete_sprint`      | Delete a sprint                     |
-| `close_sprint`       | Archive completed tasks in a sprint |
-| `sprint_suggestions` | Get sprints ready to archive        |
+| Tool                      | Description                         |
+| ------------------------- | ----------------------------------- |
+| `list_sprints`            | List all sprints                    |
+| `get_sprint`              | Get a sprint by ID                  |
+| `create_sprint`           | Create a new sprint                 |
+| `update_sprint`           | Update sprint properties            |
+| `delete_sprint`           | Delete a sprint                     |
+| `can_delete_sprint`       | Check whether a sprint is deletable |
+| `reorder_sprints`         | Reorder sprints                     |
+| `close_sprint`            | Archive completed tasks in a sprint |
+| `get_archive_suggestions` | Get sprints ready to archive        |
 
 Sprint field also surfaced on `list_tasks`, `create_task`, and `update_task` MCP tools.
 
@@ -287,15 +291,17 @@ First-class support for autonomous coding agents.
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
 - **Send message to agent** — Send text messages to running agents
 - **OpenClaw native support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL; sub-agent spawning via `sessions_spawn`
+- **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
+- **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, and MCP setup
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
 - **Failure alerts** — Dedicated failure alert service for agent run failures
 
 ---
 
-## OpenAI Codex Integration (v4.2)
+## OpenAI Codex Integration (v4.3)
 
-v4.2 adds first-class OpenAI Codex support: local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, and Settings health checks through the existing Veritas task lifecycle.
+v4.3 adds first-class OpenAI Codex support: local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
 
 Implemented:
 
@@ -307,12 +313,28 @@ Implemented:
 - **Codex review actions** — Reviews task branch diffs in read-only Codex SDK mode, maps structured findings to Veritas review comments, and stores review decisions.
 - **Codex Settings health** — Checks Codex CLI install/auth state, SDK availability, and Codex CLI/SDK/Cloud profile readiness from Settings.
 - **Config migration** — Existing configs receive the missing built-in Codex agent without overwriting customized agents.
+- **MCP setup guidance** — Documents `codex mcp add veritas-kanban` for local and API-key-backed deployments so Codex can use typed Veritas tools.
 
-Planned documentation:
+Documentation:
 
 - [OpenAI Codex Integration Roadmap](CODEX-INTEGRATION.md)
 - [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
 - [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
+
+---
+
+## Veritas Cutover & Hermes Support
+
+v4.3 adds an operating guide for the Veritas cutover model and HermesAgent workflows. The goal is simple: keep Veritas as the board of record, let HermesAgent/Hermes Gateway handle execution routing, and leave durable delivery evidence in GitHub.
+
+- **Authority model** — Veritas is the source of truth for tasks, status, audit trail, QA readiness, and release state. GitHub Issues/PRs/reviews/CI remain the implementation record.
+- **HermesAgent control plane** — HermesAgent/Hermes Gateway is documented as the active routing layer for the Hermes roster, while Mission Control remains display/control only.
+- **Active Hermes roster** — Documents the default roles for Hermes Ops, QA, Rex, Spark, Scout, Bolt, and on-demand Dan support.
+- **QA evidence gate** — Defines the required proof before closing cutover work: test commands, CI state, screenshots when UI behavior changes, linked PRs/issues, and release notes.
+- **GitHub-backed templates** — Adds copy/paste templates for product/spec work, research/revenue intake, approval-gated client work such as Medik8 Cyprus-only changes, and completion comments.
+- **Legacy routing boundary** — Records that Linear is historical-only and OpenClaw `.openclaw`/`:18789` routing should not be used for active Veritas cutover work.
+
+See [Veritas Cutover Operating Guide](VERITAS-CUTOVER.md) and [Agent Registry](AGENT-REGISTRY.md).
 
 ---
 
@@ -1443,7 +1465,7 @@ vk done <id> "Added OAuth2 with Google and GitHub providers"
 
 ## MCP Server
 
-Model Context Protocol server for AI assistant integration (Claude Desktop, etc.). 26 tools across task management, agent orchestration, sprint management, and notifications.
+Model Context Protocol server for AI assistant integration (Claude Desktop, OpenClaw, Cursor, Codex, etc.). 36 tools across task management, agent orchestration, automation, notifications, summaries, sprint management, comments, and projects.
 
 ### Tools
 
@@ -1454,6 +1476,7 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, etc.
 | `create_task`               | Create a new task (supports sprint field)                   |
 | `update_task`               | Update task fields (supports sprint field)                  |
 | `archive_task`              | Archive a task                                              |
+| `delete_task`               | Permanently delete a task                                   |
 | `start_agent`               | Start an AI agent on a code task                            |
 | `stop_agent`                | Stop a running agent                                        |
 | `list_pending_automation`   | List automation tasks awaiting execution                    |
@@ -1466,11 +1489,24 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, etc.
 | `get_summary`               | Overall kanban summary (status counts, projects)            |
 | `get_memory_summary`        | Task summary formatted for AI memory files                  |
 | `list_sprints`              | List all sprints                                            |
+| `get_sprint`                | Get a sprint by ID                                          |
 | `create_sprint`             | Create a new sprint                                         |
 | `update_sprint`             | Update sprint properties                                    |
 | `delete_sprint`             | Delete a sprint                                             |
+| `can_delete_sprint`         | Check whether a sprint can be safely deleted                |
+| `reorder_sprints`           | Reorder sprints                                             |
+| `get_archive_suggestions`   | Get sprints ready to archive                                |
 | `close_sprint`              | Archive completed tasks in a sprint                         |
-| `sprint_suggestions`        | Get sprints ready to archive                                |
+| `list_projects`             | List all projects                                           |
+| `get_project`               | Get a project by ID                                         |
+| `create_project`            | Create a project                                            |
+| `update_project`            | Update project fields                                       |
+| `delete_project`            | Delete a project                                            |
+| `get_project_stats`         | Get project task counts and status breakdown                |
+| `reorder_projects`          | Reorder projects                                            |
+| `add_comment`               | Add a task comment                                          |
+| `list_comments`             | List task comments                                          |
+| `delete_comment`            | Delete a task comment                                       |
 
 ### Resources
 

@@ -227,7 +227,7 @@ const SharedResourcesSettingsSchema = z
   .strict()
   .optional();
 
-export const FeatureSettingsPatchSchema = z
+const FeatureSettingsPatchObjectSchema = z
   .object({
     general: GeneralSettingsSchema,
     board: BoardSettingsSchema,
@@ -248,5 +248,10 @@ export const FeatureSettingsPatchSchema = z
   .refine((val) => !hasDangerousKeys(val), {
     message: 'Payload contains forbidden keys (__proto__, constructor, prototype)',
   });
+
+export const FeatureSettingsPatchSchema = z.preprocess((val) => {
+  if (!hasDangerousKeys(val)) return val;
+  return { __forbiddenPrototypePayload: true };
+}, FeatureSettingsPatchObjectSchema);
 
 export type FeatureSettingsPatch = z.infer<typeof FeatureSettingsPatchSchema>;

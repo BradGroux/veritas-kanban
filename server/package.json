@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/server",
-  "version": "4.2.5",
+  "version": "4.3.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -46,7 +46,7 @@
     "unpdf": "^1.6.2",
     "ws": "^8.20.0",
     "yaml": "^2.8.4",
-    "zod": "^3.24.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

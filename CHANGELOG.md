@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-05-09
+
+### Added
+
+- Veritas Cutover operating guide covering the authority model, HermesAgent roster, mandatory QA evidence gate, product/spec task template, research/revenue intake template, and Medik8 Cyprus-only task template.
+- Agent Registry references for active and on-demand Veritas Cutover HermesAgent owners.
+- Agent provider adapter contract for OpenClaw, Codex CLI, and Codex SDK start/stop/status/log/completion capabilities.
+- Codex event mapping into activity, trace, token telemetry, and task deliverable surfaces.
+- Mocked Codex JSONL fixture coverage for success, failure, malformed output, token usage, and file-change artifacts.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.5` to `4.3.0`.
+- Updated Codex roadmap docs from v4.2 tracking language to v4.3 completion language.
+- Bumped `zod` from v3 to v4.4.3 across the MCP, server, and web packages, including server schema compatibility updates.
+- Bumped safe chore dependencies: `@typescript-eslint/*` to `8.59.2`, `express-rate-limit` to `8.5.0`, `hono` to `4.12.18`, `postcss` to `8.5.14`, and `shadcn` to `4.7.0`.
+- Added dependency audit overrides for patched `fast-uri` and `ip-address` transitive versions.
+- Created the `dependencies` and `github-actions` GitHub labels expected by Dependabot.
+
+### Acknowledgements
+
+- Thanks to @asperty567 for the Veritas Cutover issue set and operating direction.
+
 ## [4.2.5] - 2026-05-06
 
 ### Added

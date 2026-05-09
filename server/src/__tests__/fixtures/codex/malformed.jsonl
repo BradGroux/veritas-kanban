@@ -1,0 +1,3 @@
+{"type":"thread.started","thread_id":"thread_fixture_malformed"}
+not-json but still useful stdout
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":2},"final_response":"Recovered from malformed output."}

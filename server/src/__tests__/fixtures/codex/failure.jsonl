@@ -1,0 +1,2 @@
+{"type":"thread.started","thread_id":"thread_fixture_failed"}
+{"type":"turn.failed","error":{"message":"Fixture failure"}}

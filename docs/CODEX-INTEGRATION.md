@@ -1,8 +1,8 @@
 # OpenAI Codex Integration Roadmap
 
-Release target: **Veritas Kanban v4.2**
+Release target: **Veritas Kanban v4.3**
 
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.2 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, and richer Settings health checks.
+This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.3 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, richer Settings health checks, provider adapters, Codex event mapping, and mocked runner coverage.
 
 Companion docs:
 
@@ -69,7 +69,7 @@ POST /api/github/codex/delegate
 
 ## Architecture Direction
 
-v4.2 starts with a focused provider seam inside the existing agent service instead of a full rewrite. `codex` agents resolve to the local Codex CLI runner, `codex-sdk` agents resolve to the SDK session runner, `codex-cloud` uses GitHub-native delegation, and existing agents keep the OpenClaw request-file behavior. A fuller provider abstraction is still tracked for workflow and review execution.
+v4.3 uses an explicit provider adapter contract inside the agent service. `codex` agents resolve to the local Codex CLI runner, `codex-sdk` agents resolve to the SDK session runner, `codex-cloud` uses GitHub-native delegation, and existing agents keep the OpenClaw request-file behavior.
 
 Expected long-term provider capabilities:
 
@@ -155,7 +155,7 @@ The response reports Codex CLI install/version/auth state, SDK import availabili
 
 ## MCP And Project Instructions
 
-v4.2 should make Veritas MCP setup easy for Codex:
+v4.3 makes Veritas MCP setup easy for Codex:
 
 ```bash
 codex mcp add veritas-kanban --env VK_API_URL=http://localhost:3001 -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
@@ -163,9 +163,9 @@ codex mcp add veritas-kanban --env VK_API_URL=http://localhost:3001 -- node /abs
 
 The docs should also provide an `AGENTS.md` pattern that teaches Codex the Veritas task lifecycle: begin work, update task state, log findings, report deliverables, run checks, summarize completion, and keep the board as source of truth.
 
-## v4.2 Issue Track
+## v4.3 Issue Track
 
-- [#298](https://github.com/BradGroux/veritas-kanban/issues/298) - v4.2 Epic: Build first-class OpenAI Codex support
+- [#298](https://github.com/BradGroux/veritas-kanban/issues/298) - v4.3 Epic: Build first-class OpenAI Codex support
 - [#299](https://github.com/BradGroux/veritas-kanban/issues/299) - Add agent provider abstraction for OpenClaw, Codex CLI, Codex SDK, and future agents
 - [#300](https://github.com/BradGroux/veritas-kanban/issues/300) - Implement local Codex CLI adapter using codex exec JSONL events
 - [#301](https://github.com/BradGroux/veritas-kanban/issues/301) - Add Codex SDK provider for long-lived local threads and richer session control
@@ -175,12 +175,12 @@ The docs should also provide an `AGENTS.md` pattern that teaches Codex the Verit
 - [#305](https://github.com/BradGroux/veritas-kanban/issues/305) - Make Veritas MCP and AGENTS.md setup first-class for Codex
 - [#306](https://github.com/BradGroux/veritas-kanban/issues/306) - Execute workflow engine agent steps through provider adapters including Codex
 - [#307](https://github.com/BradGroux/veritas-kanban/issues/307) - Add Codex review and PR automation workflows
-- [#308](https://github.com/BradGroux/veritas-kanban/issues/308) - Write v4.2 Codex documentation, examples, and release notes
-- [#309](https://github.com/BradGroux/veritas-kanban/issues/309) - Create Codex test harness, mocked runners, E2E coverage, and v4.2 release QA checklist
+- [#308](https://github.com/BradGroux/veritas-kanban/issues/308) - Write v4.3 Codex documentation, examples, and release notes
+- [#309](https://github.com/BradGroux/veritas-kanban/issues/309) - Create Codex test harness, mocked runners, E2E coverage, and v4.3 release QA checklist
 
 ## Documentation Pass
 
-The v4.2 docs should land with the implementation, not after it. Required documentation updates:
+The v4.3 docs should land with the implementation, not after it. Required documentation updates:
 
 - Codex integration roadmap: architecture and release scope.
 - Codex SOP: operational playbook for CLI, SDK, Cloud, MCP, telemetry, reviews, and workflow execution.
@@ -195,7 +195,7 @@ The v4.2 docs should land with the implementation, not after it. Required docume
 
 ## Release Acceptance
 
-v4.2 is done when:
+v4.3 is done when:
 
 - Codex can complete a Veritas code task from the UI or API through the local CLI provider.
 - Codex can run as a workflow-engine agent step.

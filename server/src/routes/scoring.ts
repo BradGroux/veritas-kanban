@@ -71,7 +71,7 @@ const evaluateSchema = z.object({
   output: z.string().min(1),
   agent: z.string().optional(),
   taskId: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const parseOrThrow = <T>(schema: z.ZodType<T>, value: unknown): T => {

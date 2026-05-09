@@ -97,7 +97,7 @@ export const policyEvaluationSchema = z.object({
   actionType: z.string().min(1),
   riskScore: z.number().min(0).max(100).optional(),
   preview: z.boolean().optional().default(false),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type PolicyInput = z.infer<typeof policySchema>;

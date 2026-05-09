@@ -1,6 +1,6 @@
 # SOP: OpenAI Codex Integration
 
-Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 includes local Codex CLI execution through `codex exec`, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, workflow-engine Codex steps, Codex review actions, and richer Settings health checks.
+Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.3 includes local Codex CLI execution through `codex exec`, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, workflow-engine Codex steps, Codex review actions, richer Settings health checks, provider adapters, Codex event mapping, and mocked runner coverage.
 
 ---
 
@@ -25,7 +25,7 @@ Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.2 inclu
 | **Codex Review**   | Review task branches, PR diffs, or failed changes | CLI/SDK review action                |
 | **Workflow Codex** | Pipeline steps in Veritas workflow definitions    | Provider-backed workflow step        |
 
-Default for v4.2 is **Codex CLI**. Use **Codex SDK** when a task needs a durable local thread ID for follow-up prompts or richer session continuity.
+Default for v4.3 is **Codex CLI**. Use **Codex SDK** when a task needs a durable local thread ID for follow-up prompts or richer session continuity.
 
 ---
 
@@ -299,7 +299,7 @@ steps:
 
 ## Release QA
 
-Before v4.2 ships:
+Before v4.3 ships:
 
 - Run one mocked CLI provider success case in CI.
 - Run one mocked CLI provider failure case in CI.

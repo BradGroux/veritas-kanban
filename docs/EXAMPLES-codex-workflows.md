@@ -1,6 +1,6 @@
 # Codex Workflow Examples
 
-Use these recipes as starting points for v4.2 OpenAI Codex workflows in Veritas Kanban. They follow the same pattern as the broader [agent workflow examples](EXAMPLES-agent-workflows.md): clear task, scoped prompt, observable execution, review, and durable output.
+Use these recipes as starting points for v4.3 OpenAI Codex workflows in Veritas Kanban. They follow the same pattern as the broader [agent workflow examples](EXAMPLES-agent-workflows.md): clear task, scoped prompt, observable execution, review, and durable output.
 
 ---
 
@@ -227,7 +227,7 @@ Expected behavior:
 
 ## 7. Release QA Smoke Test
 
-**Goal:** Prove the Codex integration is ready for v4.2.
+**Goal:** Prove the Codex integration is ready for v4.3.
 
 Checklist:
 
@@ -246,7 +246,7 @@ Checklist:
 Completion summary template:
 
 ```text
-Codex v4.2 QA complete.
+Codex v4.3 QA complete.
 
 Validated:
 - Local task execution:

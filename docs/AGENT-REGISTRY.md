@@ -31,6 +31,22 @@ The Agent Registry is a service discovery and liveness tracking system for AI ag
 | **Bishop**   | Specialist   | claude-sonnet-4-5 | backend, api-design, database, performance                        |
 | **Marvin**   | Intern       | claude-haiku-4-5  | testing, qa, bug-reproduction, grunt-work                         |
 
+### Veritas Cutover Roster
+
+The Veritas Cutover uses HermesAgent refs for active routing. Veritas remains the task source of truth, HermesAgent/Hermes Gateway provides the control plane, Mission Control is display/control only, and GitHub is the implementation, PR, review, and CI surface.
+
+| Owner | Ref            | Status    | Responsibility                              |
+| ----- | -------------- | --------- | ------------------------------------------- |
+| Ops   | `hermes:ops`   | Active    | Authority model, routing, release readiness |
+| QA    | `hermes:qa`    | Active    | QA gate, test evidence, reviewer approval   |
+| Rex   | `hermes:rex`   | Active    | Backend and integration implementation      |
+| Spark | `hermes:spark` | Active    | Product specs and acceptance criteria       |
+| Scout | `hermes:scout` | Active    | Research and revenue intake                 |
+| Bolt  | `hermes:bolt`  | Active    | Fast implementation chunks and automation   |
+| Dan   | `hermes:dan`   | On demand | Medik8 and customer-specific task templates |
+
+See [Veritas Cutover Operating Guide](VERITAS-CUTOVER.md) for the authority model, QA gate, and GitHub-backed templates.
+
 ### Role Hierarchy
 
 - **Orchestrator** — Coordinates all work, spawns sub-agents, makes decisions
