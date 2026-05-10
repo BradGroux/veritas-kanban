@@ -44,6 +44,13 @@ const agentNames: Record<string, string> = {
   gemini: 'Gemini',
   veritas: 'Veritas',
   aura: 'Aura',
+  blitz: 'Blitz',
+  forge: 'Forge',
+  hawk: 'Hawk',
+  helm: 'Helm',
+  midas: 'Midas',
+  orbit: 'Orbit',
+  signal: 'Signal',
 };
 
 function getAgentDisplayName(agent?: string): string {
@@ -55,6 +62,18 @@ function getAssignedProfiles(task: Task): string[] {
   if (task.agents && task.agents.length > 0) return task.agents;
   if (task.agent && task.agent !== 'auto') return [task.agent];
   return [];
+}
+
+function getRunningProfile(task: Task): string | undefined {
+  if (task.attempt?.status !== 'running') return undefined;
+
+  // The Veritas⇄Hermes bridge may be the coordinator, but the card should show
+  // the concrete Hermes profile doing the work: Aura, Hawk, Midas, Forge, etc.
+  if (task.attempt.agent && task.attempt.agent !== 'veritas') return task.attempt.agent;
+  if (task.claim?.agent && task.claim.agent !== 'veritas') return task.claim.agent;
+  if (task.agent && task.agent !== 'auto' && task.agent !== 'veritas') return task.agent;
+  if (task.agents?.length) return task.agents[0];
+  return task.attempt.agent;
 }
 
 const blockedCategoryInfo: Record<
@@ -114,6 +133,8 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     if (pt.timeTracking?.isRunning !== nt.timeTracking?.isRunning) return false;
     if (pt.attempt?.status !== nt.attempt?.status) return false;
     if (pt.attempt?.agent !== nt.attempt?.agent) return false;
+    if (pt.claim?.agent !== nt.claim?.agent) return false;
+    if (pt.claim?.sessionId !== nt.claim?.sessionId) return false;
     if (pt.blockedReason?.category !== nt.blockedReason?.category) return false;
     if (pt.blockedReason?.note !== nt.blockedReason?.note) return false;
     // Subtasks — compare count and completion state
@@ -240,7 +261,8 @@ export const TaskCard = memo(function TaskCard({
     toggleSelect(task.id);
   };
 
-  const isAgentRunning = task.attempt?.status === 'running';
+  const runningProfile = getRunningProfile(task);
+  const isAgentRunning = Boolean(runningProfile);
   const assignedProfiles = useMemo(() => getAssignedProfiles(task), [task.agent, task.agents]);
   const isAutoRouting = task.agent === 'auto' || (!task.agent && assignedProfiles.length === 0);
 
@@ -356,18 +378,16 @@ export const TaskCard = memo(function TaskCard({
                   <TooltipTrigger asChild>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1 animate-pulse">
                       <span className="sr-only">
-                        Agent {getAgentDisplayName(task.attempt?.agent)} is actively running on this
-                        task
+                        Agent {getAgentDisplayName(runningProfile)} is actively running on this task
                       </span>
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      {getAgentDisplayName(task.attempt?.agent)} running
+                      {getAgentDisplayName(runningProfile)} running
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="font-medium">Concrete profile active</p>
                     <p className="text-sm">
-                      Concrete profile {getAgentDisplayName(task.attempt?.agent)} is working on this
-                      task
+                      Concrete profile {getAgentDisplayName(runningProfile)} is working on this task
                     </p>
                   </TooltipContent>
                 </Tooltip>

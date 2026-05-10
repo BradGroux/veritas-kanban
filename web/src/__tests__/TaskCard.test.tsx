@@ -236,6 +236,28 @@ describe('TaskCard', () => {
     expect(screen.queryByText('Auto route')).toBeNull();
   });
 
+  it('shows Hermes profile instead of Veritas bridge owner for bridged execution', () => {
+    const task = createMockTask({
+      agent: 'aura',
+      attempt: {
+        id: 'claim_hermes-kanban:t_123',
+        agent: 'veritas',
+        status: 'running',
+        started: '2025-01-01T00:00:00Z',
+      },
+      claim: {
+        agent: 'aura',
+        sessionId: 'hermes-kanban:t_123',
+        claimedAt: '2025-01-01T00:00:00Z',
+        leaseExpiresAt: '2025-01-01T01:00:00Z',
+        routingRule: 'veritas-hermes-kanban-bridge',
+      },
+    });
+    renderCard(task);
+    expect(screen.getByText(/Aura running/)).toBeDefined();
+    expect(screen.queryByText(/Veritas running/)).toBeNull();
+  });
+
   it('shows subtask progress', () => {
     const task = createMockTask({
       subtasks: [
