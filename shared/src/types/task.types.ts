@@ -15,7 +15,14 @@ export interface QaGateState {
   passedBy?: string; // Who approved (e.g. 'human', agent slug, user name)
 }
 /** Built-in agent types. Custom agents use any string slug. */
-export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
+export type BuiltInAgentType =
+  | 'claude-code'
+  | 'amp'
+  | 'copilot'
+  | 'gemini'
+  | 'codex'
+  | 'codex-cloud'
+  | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';
 export type BlockedCategory = 'waiting-on-feedback' | 'technical-snag' | 'prerequisite' | 'other';
@@ -40,6 +47,11 @@ export interface TaskAttempt {
   status: AttemptStatus;
   started?: string;
   ended?: string;
+  provider?: string;
+  model?: string;
+  threadId?: string;
+  cloudUrl?: string;
+  cloudTarget?: string;
 }
 
 export interface TaskClaim {
@@ -172,6 +184,7 @@ export const ALLOWED_MIME_TYPES = [
 export interface TaskGitHub {
   issueNumber: number;
   repo: string;
+  url?: string;
 }
 
 export interface Task {

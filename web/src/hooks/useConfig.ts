@@ -9,6 +9,14 @@ export function useConfig() {
   });
 }
 
+export function useCodexHealth() {
+  return useQuery({
+    queryKey: ['settings', 'codex-health'],
+    queryFn: api.settings.getCodexHealth,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRepos() {
   return useQuery({
     queryKey: ['config', 'repos'],

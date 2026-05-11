@@ -20,6 +20,19 @@ export const diffApi = {
     const response = await fetch(`${API_BASE}/diff/${taskId}/full`);
     return handleResponse<FileDiff[]>(response);
   },
+
+  runCodexReview: async (
+    taskId: string,
+    input: CodexReviewInput = {}
+  ): Promise<CodexReviewResult> => {
+    const response = await fetch(`${API_BASE}/diff/${taskId}/codex-review`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return handleResponse<CodexReviewResult>(response);
+  },
 };
 
 export const conflictsApi = {
@@ -89,6 +102,18 @@ export const githubApi = {
       body: JSON.stringify(input),
     });
     return handleResponse<PRInfo>(response);
+  },
+
+  delegateCodexCloud: async (
+    input: CodexCloudDelegationInput
+  ): Promise<CodexCloudDelegationResult> => {
+    const response = await fetch(`${API_BASE}/github/codex/delegate`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return handleResponse<CodexCloudDelegationResult>(response);
   },
 
   openPR: async (taskId: string): Promise<void> => {
@@ -193,4 +218,54 @@ export interface CreatePRInput {
   body?: string;
   targetBranch?: string;
   draft?: boolean;
+}
+
+export interface CodexReviewInput {
+  model?: string;
+  instructions?: string;
+  save?: boolean;
+}
+
+export interface CodexReviewFinding {
+  file: string;
+  line: number;
+  severity: 'high' | 'medium' | 'low' | 'nit';
+  title: string;
+  message: string;
+}
+
+export interface CodexReviewResult {
+  taskId: string;
+  attemptId: string;
+  decision: 'approved' | 'changes-requested' | 'rejected';
+  summary: string;
+  findings: CodexReviewFinding[];
+  comments: Array<{
+    id: string;
+    file: string;
+    line: number;
+    content: string;
+    created: string;
+  }>;
+  threadId?: string;
+}
+
+export type CodexCloudTarget = 'issue' | 'issue-comment' | 'pr-comment';
+
+export interface CodexCloudDelegationInput {
+  taskId: string;
+  target?: CodexCloudTarget;
+  title?: string;
+  prompt?: string;
+  model?: string;
+}
+
+export interface CodexCloudDelegationResult {
+  taskId: string;
+  attemptId: string;
+  target: CodexCloudTarget;
+  url: string;
+  number?: number;
+  repo: string;
+  prompt: string;
 }

@@ -337,6 +337,7 @@ function RecentStatusChanges({
                     if (t === 'agent_started' || t === 'task_created') return '#22c55e';
                     if (t === 'agent_stopped' || t === 'agent_completed' || t === 'task_archived')
                       return '#6b7280';
+                    if (t === 'agent_event') return '#06b6d4';
                     if (t === 'task_demoted') return '#f59e0b';
                     if (t === 'task_promoted') return '#8b5cf6';
                     return '#3b82f6';
@@ -350,6 +351,7 @@ function RecentStatusChanges({
                     if (t === 'agent_started') return 'Agent Started';
                     if (t === 'agent_stopped') return 'Agent Stopped';
                     if (t === 'agent_completed') return 'Agent Completed';
+                    if (t === 'agent_event') return 'Agent Event';
                     if (t === 'status_changed')
                       return `→ ${String(activity.details?.status ?? '')}`;
                     if (t === 'task_created') return 'Created';

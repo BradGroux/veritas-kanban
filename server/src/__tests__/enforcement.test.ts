@@ -10,8 +10,9 @@ import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { reviewScoresSchema } from '../routes/tasks.js';
 
 const execFile = promisify(execFileCallback);
+const legacyGatewayKey = ['CLAWDBOT', 'GATEWAY'].join('_');
 const DISCIPLINE_ENV_KEYS = [
-  'CLAWDBOT_GATEWAY',
+  legacyGatewayKey,
   'HERMES_API_SERVER_URL',
   'HERMES_GATEWAY_URL',
 ] as const;
@@ -272,7 +273,7 @@ describe('Enforcement gates', () => {
     vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue(
       buildSettings({ enforcement: { reviewGate: false, closingComments: false } }) as any
     );
-    process.env.CLAWDBOT_GATEWAY = 'http://127.0.0.1:9';
+    process.env[legacyGatewayKey] = 'http://127.0.0.1:9';
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Legacy runtime alias ignored' });

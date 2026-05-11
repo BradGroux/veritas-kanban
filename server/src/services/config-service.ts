@@ -54,6 +54,30 @@ const DEFAULT_CONFIG: AppConfig = {
       args: [],
       enabled: false,
     },
+    {
+      type: 'codex',
+      name: 'OpenAI Codex',
+      command: 'codex',
+      args: ['exec', '--sandbox', 'workspace-write', '--json'],
+      enabled: false,
+      provider: 'codex-cli',
+    },
+    {
+      type: 'codex-sdk',
+      name: 'OpenAI Codex SDK',
+      command: 'codex',
+      args: [],
+      enabled: false,
+      provider: 'codex-sdk',
+    },
+    {
+      type: 'codex-cloud',
+      name: 'OpenAI Codex Cloud',
+      command: 'gh',
+      args: [],
+      enabled: false,
+      provider: 'codex-cloud',
+    },
   ],
   defaultAgent: 'claude-code',
 };
@@ -210,6 +234,7 @@ export class ConfigService {
       const raw = JSON.parse(content) as AppConfig;
       // Auto-merge feature defaults for backward compatibility
       raw.features = deepMergeDefaults(raw.features || {}, DEFAULT_FEATURE_SETTINGS);
+      raw.agents = this.mergeDefaultAgents(raw.agents || []);
       this.config = raw;
       this.cacheTimestamp = Date.now();
       this.setupWatcher();
@@ -223,6 +248,12 @@ export class ConfigService {
       }
       throw error;
     }
+  }
+
+  private mergeDefaultAgents(agents: AgentConfig[]): AgentConfig[] {
+    const existingTypes = new Set(agents.map((agent) => agent.type));
+    const missingDefaults = DEFAULT_CONFIG.agents.filter((agent) => !existingTypes.has(agent.type));
+    return [...agents, ...missingDefaults];
   }
 
   async getFeatureSettings(): Promise<FeatureSettings> {

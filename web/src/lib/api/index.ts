@@ -56,6 +56,7 @@ export { managedList } from './managed-list';
 // Re-export all types from each module
 export type { ArchiveSuggestion } from './tasks';
 export type { BacklogListResponse, BacklogFilterOptions } from './backlog';
+export type { CodexHealthStatus } from './config';
 
 export type {
   AgentStatus,
@@ -73,6 +74,9 @@ export type {
   DiffHunk,
   DiffLine,
   FileDiff,
+  CodexReviewInput,
+  CodexReviewFinding,
+  CodexReviewResult,
   ConflictStatus,
   ConflictMarker,
   ConflictFile,
@@ -80,6 +84,9 @@ export type {
   GitHubStatus,
   PRInfo,
   CreatePRInput,
+  CodexCloudTarget,
+  CodexCloudDelegationInput,
+  CodexCloudDelegationResult,
 } from './diff';
 
 export type {

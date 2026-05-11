@@ -16,6 +16,11 @@ export const settingsApi = {
     return handleResponse<FeatureSettings>(response);
   },
 
+  getCodexHealth: async (): Promise<CodexHealthStatus> => {
+    const response = await fetch(`${API_BASE}/settings/codex/health`);
+    return handleResponse<CodexHealthStatus>(response);
+  },
+
   updateFeatures: async (patch: Partial<FeatureSettings>): Promise<FeatureSettings> => {
     const response = await fetch(`${API_BASE}/settings/features`, {
       credentials: 'include',
@@ -26,6 +31,35 @@ export const settingsApi = {
     return handleResponse<FeatureSettings>(response);
   },
 };
+
+export interface CodexHealthStatus {
+  checkedAt: string;
+  cli: {
+    installed: boolean;
+    path?: string;
+    version?: string;
+    authenticated: boolean;
+    authMode?: string;
+    error?: string;
+  };
+  sdk: {
+    available: boolean;
+    error?: string;
+  };
+  agents: {
+    codexCli: boolean;
+    codexSdk: boolean;
+    codexCloud: boolean;
+    enabled: string[];
+  };
+  ready: {
+    cli: boolean;
+    sdk: boolean;
+    cloud: boolean;
+    overall: boolean;
+  };
+  recommendations: string[];
+}
 
 export const configApi = {
   get: async (): Promise<AppConfig> => {

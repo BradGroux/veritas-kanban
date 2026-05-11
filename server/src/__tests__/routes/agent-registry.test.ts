@@ -171,7 +171,7 @@ describe('Agent Registry Routes', () => {
       const res = await request(app).get('/api/agents/register');
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(9);
+      expect(res.body).toHaveLength(10);
       expect(res.body.map((agent: { id: string }) => agent.id)).toEqual([
         'default',
         'hawk',
@@ -182,6 +182,7 @@ describe('Agent Registry Routes', () => {
         'orbit',
         'signal',
         'helm',
+        'scops',
       ]);
       expect(res.body.find((agent: { id: string }) => agent.id === 'ops')).toBeUndefined();
     });
@@ -259,10 +260,10 @@ describe('Agent Registry Routes', () => {
       const res = await request(app).get('/api/agents/register/stats');
 
       expect(res.status).toBe(200);
-      expect(res.body.total).toBe(9);
+      expect(res.body.total).toBe(10);
       expect(res.body.busy).toBe(1);
       expect(res.body.online).toBe(2);
-      expect(res.body.offline).toBe(6);
+      expect(res.body.offline).toBe(7);
       expect(res.body.capabilities).toContain('ops');
       expect(res.body.capabilities).not.toContain('legacy');
     });

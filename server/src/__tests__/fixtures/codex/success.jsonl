@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread_fixture_123"}
+{"type":"item.completed","item":{"type":"agent_message","text":"Updated the implementation."}}
+{"type":"item.completed","item":{"type":"file_change","file_path":"server/src/services/example.ts"}}
+{"type":"turn.completed","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"model":"gpt-5.5"},"final_response":"Codex completed the task."}

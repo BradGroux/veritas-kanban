@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-05-09
+
+### Added
+
+- Veritas Cutover operating guide covering the authority model, HermesAgent roster, mandatory QA evidence gate, product/spec task template, research/revenue intake template, and Medik8 Cyprus-only task template.
+- Agent Registry references for active and on-demand Veritas Cutover HermesAgent owners.
+- Agent provider adapter contract for OpenClaw, Codex CLI, and Codex SDK start/stop/status/log/completion capabilities.
+- Codex event mapping into activity, trace, token telemetry, and task deliverable surfaces.
+- Mocked Codex JSONL fixture coverage for success, failure, malformed output, token usage, and file-change artifacts.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.5` to `4.3.0`.
+- Updated Codex roadmap docs from v4.2 tracking language to v4.3 completion language.
+- Bumped `zod` from v3 to v4.4.3 across the MCP, server, and web packages, including server schema compatibility updates.
+- Bumped safe chore dependencies: `@typescript-eslint/*` to `8.59.2`, `express-rate-limit` to `8.5.0`, `hono` to `4.12.18`, `postcss` to `8.5.14`, and `shadcn` to `4.7.0`.
+- Added dependency audit overrides for patched `fast-uri` and `ip-address` transitive versions.
+- Created the `dependencies` and `github-actions` GitHub labels expected by Dependabot.
+
+### Acknowledgements
+
+- Thanks to @asperty567 for the Veritas Cutover issue set and operating direction.
+
+## [4.2.5] - 2026-05-06
+
+### Added
+
+- Codex Settings health endpoint at `GET /api/settings/codex/health`.
+- Server-side checks for Codex CLI installation, CLI version, `codex login status`, Codex SDK import availability, and Codex CLI/SDK/Cloud agent profile readiness.
+- Settings Agents tab Codex Health panel with refresh, readiness badges, version/auth details, and actionable recommendations.
+- Frontend API and hook support for Codex health checks.
+- Route coverage for the Codex Settings health endpoint.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.4` to `4.2.5`.
+- Documented richer Codex Settings health checks as implemented, completing the requested v4.2 patch train.
+
+## [4.2.4] - 2026-05-06
+
+### Added
+
+- Codex review action for task branch diffs through `POST /api/diff/:taskId/codex-review`.
+- Codex SDK review runner that executes in read-only sandbox mode, asks for structured JSON findings, and maps findings to Veritas review comments.
+- Review summary/task comment persistence plus review decision metadata when review saving is enabled.
+- Frontend API and React Query hook support for triggering Codex reviews.
+- Route coverage for Codex review validation and service invocation.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.3` to `4.2.4`.
+- Documented Codex review actions as implemented while richer Settings health checks remain next in the v4.2 patch train.
+
+## [4.2.3] - 2026-05-06
+
+### Added
+
+- Workflow-engine Codex agent steps for workflow agents configured with Codex provider metadata or Codex agent naming.
+- Codex SDK streaming execution inside workflow step runs, including worktree-aware execution, final response capture, and persisted step output files.
+- Workflow session tracking for Codex thread IDs through `run.context._sessions`, enabling reuse-mode workflows to resume the same Codex thread.
+- Unit coverage for Codex-backed workflow step execution.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.2` to `4.2.3`.
+- Documented Workflow Codex steps as implemented while review actions and richer Settings checks remain next in the v4.2 patch train.
+
+## [4.2.2] - 2026-05-06
+
+### Added
+
+- Codex Cloud delegation through GitHub issue, issue-comment, and PR-comment workflows.
+- `POST /api/github/codex/delegate` for creating scoped `@codex` GitHub delegation prompts from Veritas tasks.
+- Disabled-by-default `codex-cloud` agent profile and `codex-cloud` provider metadata support.
+- Cloud delegation attempt metadata with `cloudUrl` and `cloudTarget` fields.
+- Task comments that link successful Codex Cloud delegations back to the GitHub artifact.
+- Frontend API hook for Codex Cloud delegation.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.1` to `4.2.2`.
+- Documented Codex Cloud delegation as implemented while workflow steps, review actions, and richer Settings checks remain next in the v4.2 patch train.
+
+## [4.2.1] - 2026-05-06
+
+### Added
+
+- Codex SDK session provider powered by `@openai/codex-sdk`, enabling durable local Codex threads for code-task attempts.
+- Disabled-by-default `codex-sdk` agent profile for teams that want SDK-backed sessions alongside the existing `codex` CLI profile.
+- Codex SDK attempt logging for streamed thread, turn, item, error, and usage events.
+- Codex SDK token telemetry mapping and stop support through abortable SDK turns.
+- `threadId` attempt metadata so SDK session IDs are preserved on active and completed attempts for follow-up workflows.
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.2.0` to `4.2.1`.
+- Documented Codex SDK sessions as implemented while keeping Cloud delegation, workflow steps, review actions, and richer Settings checks in the v4.2 patch train.
+
+## [4.2.0] - 2026-05-06
+
+### Added
+
+- OpenAI Codex integration roadmap for v4.2, covering local Codex CLI execution, Codex SDK sessions, Codex Cloud delegation, MCP setup, workflow-engine execution, telemetry, review automation, and release QA (#310)
+- Codex Integration SOP with operational guidance for CLI, SDK, Cloud, MCP, telemetry mapping, reviews, workflow steps, escalation, and release validation (#310)
+- Codex workflow examples for local feature work, Codex review, SDK follow-up sessions, workflow pipelines, Cloud delegation, MCP-first board maintenance, and release QA (#310)
+- Codex-specific AGENTS.md guidance and MCP setup instructions for Veritas-aware Codex work (#310)
+- Codex feature reference in `docs/FEATURES.md`, updated to distinguish implemented CLI support from planned SDK, Cloud, review, and workflow modes (#310)
+- Built-in `codex` agent profile backed by local `codex exec --sandbox workspace-write --json`
+- Local Codex CLI execution path for code-task attempts, including process launch in the task worktree, attempt logs, final summary capture, completion handling, stop support, and run/token telemetry mapping
+- Config migration that appends missing built-in agents, including Codex, to existing configs without overwriting customized agents
+
+### Changed
+
+- Updated workspace package versions and README badge from `4.1.0` to `4.2.0` (#311)
+
 ## [4.1.0] - 2026-05-04
 
 ### Added

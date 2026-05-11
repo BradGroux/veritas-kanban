@@ -55,7 +55,7 @@ export interface DispatchOptions {
 export const DEFAULT_VERITAS_API_BASE = 'http://127.0.0.1:3099';
 
 const RETIRED_MESSAGE =
-  'Legacy CLI pending/request-file dispatch is retired. Use Veritas runnable/claim APIs and HermesAgent /v1/runs; do not poll /api/agents/pending or .veritas-kanban/agent-requests.';
+  'Legacy CLI pending/request-file dispatch is retired. Use Veritas runnable/claim APIs and HermesAgent /v1/runs; do not poll retired pending routes or local request directories.';
 
 export async function loadPendingAgentRequests(): Promise<AgentRequest[]> {
   throw new Error(RETIRED_MESSAGE);

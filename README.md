@@ -10,7 +10,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.3.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -59,7 +59,10 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## 📚 Documentation Map
 
-- [MCP Server Guide](docs/mcp/README.md) — 33+ tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [MCP Server Guide](docs/mcp/README.md) — 36 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — v4.3 plan for local Codex execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
+- [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
+- [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
@@ -114,6 +117,14 @@ Spawn autonomous coding agents on tasks. Track them in real-time with the multi-
 
 ![Agent orchestration](assets/demo-overview.gif)
 
+### 🧭 Veritas Cutover + Hermes Support (New in v4.3)
+
+Veritas now documents the GitHub-backed operating model for Codex and HermesAgent work. The new cutover guide names Veritas as the source of truth, routes HermesAgent/Hermes Gateway as the control plane for agent execution, keeps Mission Control focused on display/control, and makes GitHub Issues/PRs/reviews/CI the implementation record. It also adds the active Hermes roster, required QA evidence gates, and copy/paste task templates for product specs, research/revenue intake, and approval-gated client workflows.
+
+### 🧠 OpenAI Codex Integration (New in v4.3)
+
+Codex can run as a first-class Veritas agent through local `codex exec`, SDK-backed sessions, GitHub-native `@codex` delegation, workflow-engine steps, review actions, Settings health checks, and MCP access to the board. The docs include a roadmap, SOP, workflow examples, and an AGENTS template so Codex work can be started, tracked, reviewed, and released through the same Veritas lifecycle as other agents.
+
 ### 📊 Customizable Dashboard (New in v4.0)
 
 **Draggable & Resizable Widget Grid** — Rearrange and resize dashboard widgets via drag-and-drop. Layouts persist across sessions. Add widgets from the library or remove ones you don't need. **Global System Health Bar** — Persistent header status bar with five health levels (stable → alert) across three signal categories: system resources, agent availability, and operation success rate.
@@ -142,7 +153,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ### 🔌 Three Integration Surfaces
 
-- **MCP Server** — 33+ tools across 7 categories via Model Context Protocol (v4.0 adds project management and comment CRUD)
+- **MCP Server** — 36 tools across 8 categories via Model Context Protocol (v4.0 adds project management and comment tools)
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 
@@ -170,6 +181,8 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Agent orchestration** — Spawn autonomous coding agents on tasks
 - **Custom agents** — Add your own agents with any name and command; not limited to built-in types
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
+- **HermesAgent support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
+- **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, and MCP setup
 - **Built-in OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw)
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
 - **@Mention notifications** — @agent-name parsing in comments, thread subscriptions
@@ -200,6 +213,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Run state management** — Persistent run state survives server restarts, retry with exponential backoff, resume blocked runs
 - **Tool policies** — Role-based tool restrictions (5 default roles: planner, developer, reviewer, tester, deployer) with custom role CRUD
 - **Session isolation** — Each workflow step runs in a fresh OpenClaw session with configurable context injection
+- **Veritas Cutover templates** — GitHub-backed product/spec, research/revenue, approval-gated client, and completion-comment templates
 - **Monitoring dashboard** — Summary cards, live active runs table, recent history, per-workflow health metrics
 - **Real-time updates** — WebSocket-primary with polling fallback; 75% reduction in API calls when connected
 - **Workflow API** — 9 CRUD endpoints for workflow definitions, runs, and control
@@ -261,7 +275,8 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 #### Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — 33+ tools across 7 categories via Model Context Protocol
+- **MCP Server** — 36 tools across 8 categories via Model Context Protocol
+- **Codex MCP setup** — documented `codex mcp add veritas-kanban` setup for local and API-key-backed deployments
 - **Notifications** — Teams integration for task updates
 
 </details>
@@ -298,7 +313,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 | **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
 | **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
 | **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
-| **MCP server**                  |            ✅ 33+ tools             |              ❌              |          ❌           |
+| **MCP server**                  |             ✅ 36 tools             |              ❌              |          ❌           |
 | **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
 | **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
 | **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
@@ -310,7 +325,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 
 **The bottom line:** Orchestration frameworks give you agent execution without visibility. Project boards give you visibility without agent execution. Veritas Kanban gives you both — plus the guardrails, telemetry, and audit trails that production agentic work demands.
 
-Built and battle-tested with [OpenClaw](https://github.com/openclaw/openclaw). Works with any platform that can make HTTP calls.
+Built and battle-tested with [OpenClaw](https://github.com/openclaw/openclaw), with v4.3 documentation for Codex and HermesAgent/Hermes Gateway workflows. Works with any platform that can make HTTP calls.
 
 ---
 
@@ -535,6 +550,13 @@ Veritas Kanban works with any agentic platform that can make HTTP calls. The RES
 
 Built and tested with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot), which provides native orchestration via `sessions_spawn`. The built-in agent service targets OpenClaw — PRs welcome for adapters to other platforms.
 
+v4.3 also documents the Codex and Hermes operating model:
+
+- **Veritas is the source of truth** for tasks, status, audit trail, release readiness, and GitHub-linked implementation history.
+- **HermesAgent/Hermes Gateway is the active control plane** for the named Hermes roster and execution routing.
+- **Mission Control is display/control only** in the cutover model, while GitHub Issues, PRs, review comments, and CI remain the durable delivery record.
+- **OpenAI Codex can be a first-class agent** through local CLI runs, SDK sessions, Codex Cloud delegation, workflow steps, review actions, and MCP access.
+
 ### How It Works
 
 1. **Start Agent** — Click "Start Agent" in the UI on a code task (or hit the API directly)
@@ -590,11 +612,17 @@ vk agents:pending
 # then call the completion endpoint automatically.
 ```
 
+### Codex + HermesAgent
+
+- Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when Codex should implement, review, or delegate Veritas tasks.
+- Use the [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) when routing work through the HermesAgent roster, enforcing QA evidence, or creating GitHub-backed task templates.
+- Configure Codex MCP access with the [MCP Server Guide](docs/mcp/README.md#codex) so Codex reads and updates Veritas through typed tools instead of one-off HTTP calls.
+
 ---
 
 ## 🔗 MCP Server
 
-33+ tools across 7 categories (tasks, agents, automation, notifications, summaries, sprints, projects) via [Model Context Protocol](https://modelcontextprotocol.io/).
+36 tools across 8 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects) via [Model Context Protocol](https://modelcontextprotocol.io/).
 
 **→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, and troubleshooting.
 
