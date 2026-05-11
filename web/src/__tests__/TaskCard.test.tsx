@@ -258,6 +258,29 @@ describe('TaskCard', () => {
     expect(screen.queryByText(/Veritas running/)).toBeNull();
   });
 
+  it('shows Hermes instead of raw default for default profile execution', () => {
+    const task = createMockTask({
+      agent: 'default',
+      attempt: {
+        id: 'claim_hermes-kanban:t_456',
+        agent: 'veritas',
+        status: 'running',
+        started: '2025-01-01T00:00:00Z',
+      },
+      claim: {
+        agent: 'default',
+        sessionId: 'hermes-kanban:t_456',
+        claimedAt: '2025-01-01T00:00:00Z',
+        leaseExpiresAt: '2025-01-01T01:00:00Z',
+        routingRule: 'veritas-hermes-kanban-bridge',
+      },
+    });
+    renderCard(task);
+    expect(screen.getByText(/Hermes running/)).toBeDefined();
+    expect(screen.queryByText(/default running/i)).toBeNull();
+    expect(screen.queryByText(/Veritas running/)).toBeNull();
+  });
+
   it('shows subtask progress', () => {
     const task = createMockTask({
       subtasks: [

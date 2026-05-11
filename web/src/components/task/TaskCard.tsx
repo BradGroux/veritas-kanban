@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HERMES_AGENT_DISPLAY_NAMES } from '@veritas-kanban/shared';
 import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
 import {
   Check,
@@ -38,19 +39,13 @@ import { type TaskCardMetrics, formatCompactDuration } from '@/hooks/useBulkTask
 import { sanitizeText } from '@/lib/sanitize';
 
 const agentNames: Record<string, string> = {
+  ...HERMES_AGENT_DISPLAY_NAMES,
   'claude-code': 'Claude',
   amp: 'Amp',
   copilot: 'Copilot',
   gemini: 'Gemini',
   veritas: 'Veritas',
-  aura: 'Aura',
-  blitz: 'Blitz',
-  forge: 'Forge',
-  hawk: 'Hawk',
   helm: 'Helm',
-  midas: 'Midas',
-  orbit: 'Orbit',
-  signal: 'Signal',
 };
 
 function getAgentDisplayName(agent?: string): string {
