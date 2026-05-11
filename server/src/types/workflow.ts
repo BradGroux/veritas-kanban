@@ -31,7 +31,7 @@ export interface WorkflowAgent {
   name: string;
   role: string; // maps to toolPolicy
   model?: string; // default model for this agent
-  provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | string;
+  provider?: 'hermes-agent' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | string;
   command?: string;
   description: string;
   tools?: string[]; // Phase 2: Tool restrictions (#110)
