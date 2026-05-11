@@ -16,6 +16,7 @@
  */
 import { Router, type IRouter, type Request } from 'express';
 import { readRateLimit, writeRateLimit, uploadRateLimit } from '../../middleware/rate-limit.js';
+import { authorizeAdmin } from '../../middleware/auth.js';
 
 // Task routes (order-sensitive — see note above)
 import { taskArchiveRoutes } from '../task-archive.js';
@@ -131,8 +132,8 @@ v1Router.use('/config', configRoutes);
 v1Router.use('/changes', changesRoutes); // Efficient agent polling endpoint
 v1Router.use('/chat', chatRoutes); // Chat interface - must be before agent routes
 v1Router.use('/agents/register', agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
-v1Router.use('/agents/permissions', agentPermissionRoutes);
-v1Router.use('/agents', agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
+v1Router.use('/agents/permissions', authorizeAdmin, agentPermissionRoutes);
+v1Router.use('/agents', authorizeAdmin, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
 v1Router.use('/agents', agentRoutes);
 v1Router.use('/diff', diffRoutes);
 v1Router.use('/automation', automationRoutes);
@@ -170,8 +171,8 @@ v1Router.use('/audit', auditRoutes);
 v1Router.use('/lessons', lessonsRoutes);
 v1Router.use('/delegation', delegationRoutes);
 v1Router.use('/workflows', workflowRoutes);
-v1Router.use('/tool-policies', toolPolicyRoutes);
-v1Router.use('/policies', policyRoutes);
+v1Router.use('/tool-policies', authorizeAdmin, toolPolicyRoutes);
+v1Router.use('/policies', authorizeAdmin, policyRoutes);
 v1Router.use('/integrations', integrationsRoutes);
 v1Router.use('/transcripts', transcriptRoutes);
 v1Router.use('/scoring', scoringRoutes);

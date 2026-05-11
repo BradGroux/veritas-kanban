@@ -395,6 +395,33 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
   });
 }
 
+/**
+ * Middleware that restricts write operations to admin role only.
+ * Agents cannot create, update, or delete governance controls
+ * (policies, agent routing, tool policies, agent permissions).
+ */
+export function authorizeAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  if (!req.auth) {
+    res.status(401).json({
+      code: 'AUTH_REQUIRED',
+      message: 'Authentication required',
+    });
+    return;
+  }
+
+  if (req.auth.role === 'admin') {
+    return next();
+  }
+
+  res.status(403).json({
+    code: 'ADMIN_REQUIRED',
+    message: 'Admin access required for this operation',
+    details: {
+      hint: 'Your API key does not have admin privileges',
+    },
+  });
+}
+
 // === WebSocket Authentication ===
 
 export interface WebSocketAuthResult {
