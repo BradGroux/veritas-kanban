@@ -10,6 +10,11 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import type { Task, TaskType } from '@veritas-kanban/shared';
+import {
+  HERMES_AGENT_DISPLAY_NAMES,
+  HERMES_AGENT_ROSTER,
+  isHermesAgentId,
+} from '@veritas-kanban/shared';
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useConfig } from '@/hooks/useConfig';
@@ -27,32 +32,15 @@ function normalizeAgentKey(agent: string): string {
   return agent.trim().toLowerCase();
 }
 
-const HERMES_AGENT_ROSTER = new Set([
-  'default',
-  'hawk',
-  'blitz',
-  'forge',
-  'midas',
-  'aura',
-  'orbit',
-  'signal',
-]);
+const HERMES_AGENT_ROSTER_SET = new Set<string>(HERMES_AGENT_ROSTER);
 
-const HERMES_AGENT_LABELS: Record<string, string> = {
-  default: 'Hermes',
-  hawk: 'Hawk',
-  blitz: 'Blitz',
-  forge: 'Forge',
-  midas: 'Midas',
-  aura: 'Aura',
-  orbit: 'Orbit',
-  signal: 'Signal',
-};
+const HERMES_AGENT_LABELS: Record<string, string> = HERMES_AGENT_DISPLAY_NAMES;
 
 function isHermesAgentRosterAgent(agent: string | null | undefined): agent is string {
   const trimmedValue = agent?.trim();
   if (!trimmedValue) return false;
-  return HERMES_AGENT_ROSTER.has(normalizeAgentKey(trimmedValue));
+  const key = normalizeAgentKey(trimmedValue);
+  return isHermesAgentId(key) && HERMES_AGENT_ROSTER_SET.has(key);
 }
 
 interface AgentOption {
