@@ -10,7 +10,7 @@ import type { IncomingMessage } from 'http';
 // Mock the security config module BEFORE importing auth
 vi.mock('../../config/security.js', () => ({
   getSecurityConfig: vi.fn(() => ({
-    authEnabled: false,
+    authEnabled: true,
     passwordHash: null,
     jwtSecret: 'test-secret-key',
   })),
@@ -23,6 +23,7 @@ import {
   authorize,
   authorizeWrite,
   authenticateWebSocket,
+  getSafeWebSocketCloseReason,
   validateWebSocketOrigin,
   generateApiKey,
   isAuthRequired,
@@ -74,7 +75,7 @@ describe('Auth Middleware', () => {
 
     // Reset mocks
     vi.mocked(getSecurityConfig).mockReturnValue({
-      authEnabled: false,
+      authEnabled: true,
       passwordHash: null,
     } as any);
   });
@@ -155,8 +156,22 @@ describe('Auth Middleware', () => {
 
   // === authenticate middleware ===
   describe('authenticate', () => {
-    it('should allow all requests when auth is disabled and no password auth', () => {
+    it('should allow all requests when auth is disabled by env and no password auth', () => {
       process.env.VERITAS_AUTH_ENABLED = 'false';
+      const req = mockRequest() as AuthenticatedRequest;
+      const res = mockResponse();
+      const next = mockNext();
+
+      authenticate(req, res, next);
+      expect(next).toHaveBeenCalled();
+      expect(req.auth?.role).toBe('admin');
+    });
+
+    it('should allow all requests when auth is disabled by security config and no password auth', () => {
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: false,
+        passwordHash: null,
+      } as any);
       const req = mockRequest() as AuthenticatedRequest;
       const res = mockResponse();
       const next = mockNext();
@@ -615,6 +630,28 @@ describe('Auth Middleware', () => {
       const result = authenticateWebSocket(req);
       expect(result.authenticated).toBe(false);
       expect(result.error).toBeDefined();
+    });
+
+    it('should make unauthenticated close reasons safe for ws.close', () => {
+      const req = {
+        headers: {},
+        url: '/ws',
+        socket: { remoteAddress: '192.168.1.100' },
+      } as unknown as IncomingMessage;
+
+      const result = authenticateWebSocket(req);
+      const closeReason = getSafeWebSocketCloseReason(result.error);
+
+      expect(result.authenticated).toBe(false);
+      expect(Buffer.byteLength(closeReason, 'utf8')).toBeLessThanOrEqual(123);
+      expect(closeReason).toContain('Authentication required');
+    });
+
+    it('should truncate arbitrary WebSocket close reasons without splitting utf8 characters', () => {
+      const closeReason = getSafeWebSocketCloseReason(`Authentication required ${'🔐'.repeat(80)}`);
+
+      expect(Buffer.byteLength(closeReason, 'utf8')).toBeLessThanOrEqual(123);
+      expect(closeReason).toContain('…');
     });
 
     it('should return error message mentioning login when password auth enabled', () => {

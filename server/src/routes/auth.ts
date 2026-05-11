@@ -117,7 +117,11 @@ router.get(
   '/status',
   asyncHandler(async (req: Request, res: Response) => {
     const config = getSecurityConfig();
-    const needsSetup = !config.passwordHash;
+    const authEnabled = config.authEnabled !== false;
+    // Setup is only required when password auth is actually enabled. A local
+    // board with auth explicitly disabled must render the app, not the
+    // first-run password screen.
+    const needsSetup = authEnabled && !config.passwordHash;
 
     // Check for existing JWT
     let authenticated = false;
@@ -142,7 +146,7 @@ router.get(
       needsSetup,
       authenticated,
       sessionExpiry,
-      authEnabled: config.authEnabled !== false,
+      authEnabled,
     });
   })
 );

@@ -31,10 +31,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           <div className="text-destructive text-6xl">⚠️</div>
           <h1 className="text-xl font-bold">Connection Error</h1>
           <p className="text-muted-foreground">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-primary hover:underline"
-          >
+          <button onClick={() => window.location.reload()} className="text-primary hover:underline">
             Try again
           </button>
         </div>
@@ -44,7 +41,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   // Auth not enabled (no password set up yet, and auth not required)
   // This allows the app to work without auth until setup is completed
-  if (status && !status.authEnabled && !status.needsSetup) {
+  if (status && !status.authEnabled) {
     return <>{children}</>;
   }
 

@@ -40,6 +40,7 @@ import {
   authorize,
   authorizeWrite,
   authenticateWebSocket,
+  getSafeWebSocketCloseReason,
   validateWebSocketOrigin,
   getAuthStatus,
   checkAdminKeyStrength,
@@ -670,8 +671,9 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   const authResult = authenticateWebSocket(req);
 
   if (!authResult.authenticated) {
-    log.warn({ error: authResult.error }, 'WebSocket connection rejected');
-    ws.close(4001, authResult.error || 'Authentication required');
+    const closeReason = getSafeWebSocketCloseReason(authResult.error);
+    log.warn({ error: authResult.error, closeReason }, 'WebSocket connection rejected');
+    ws.close(4001, closeReason);
     return;
   }
 

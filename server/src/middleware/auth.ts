@@ -278,11 +278,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
 
-  // If password auth not set up yet, check API key auth
-  const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
+  const securityAuthEnabled = securityConfig.authEnabled !== false;
+  const passwordAuthEnabled = securityAuthEnabled && !!securityConfig.passwordHash;
 
-  // Auth disabled via env var - allow all requests
-  if (!config.enabled && !passwordAuthEnabled) {
+  // Auth disabled via security config or env var - allow all requests.
+  if ((!securityAuthEnabled || !config.enabled) && !passwordAuthEnabled) {
     req.auth = { role: 'admin', isLocalhost };
     return next();
   }
@@ -405,6 +405,34 @@ export interface WebSocketAuthResult {
   error?: string;
 }
 
+/** Maximum UTF-8 byte length allowed for a WebSocket close reason. */
+const MAX_WEBSOCKET_CLOSE_REASON_BYTES = 123;
+
+/**
+ * ws.close() throws when the reason exceeds 123 UTF-8 bytes. Auth failures can
+ * include diagnostic details, so normalize them before passing to ws.close().
+ */
+export function getSafeWebSocketCloseReason(reason?: string): string {
+  const fallback = 'Authentication required';
+  const value = reason || fallback;
+
+  if (Buffer.byteLength(value, 'utf8') <= MAX_WEBSOCKET_CLOSE_REASON_BYTES) {
+    return value;
+  }
+
+  const suffix = '…';
+  const limit = MAX_WEBSOCKET_CLOSE_REASON_BYTES - Buffer.byteLength(suffix, 'utf8');
+  let result = '';
+
+  for (const char of value) {
+    const next = result + char;
+    if (Buffer.byteLength(next, 'utf8') > limit) break;
+    result = next;
+  }
+
+  return `${result}${suffix}`;
+}
+
 /**
  * Extract JWT from WebSocket request cookies
  */
@@ -432,10 +460,11 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
 
-  const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
+  const securityAuthEnabled = securityConfig.authEnabled !== false;
+  const passwordAuthEnabled = securityAuthEnabled && !!securityConfig.passwordHash;
 
-  // Auth disabled via env var
-  if (!config.enabled && !passwordAuthEnabled) {
+  // Auth disabled via security config or env var
+  if ((!securityAuthEnabled || !config.enabled) && !passwordAuthEnabled) {
     return { authenticated: true, role: 'admin', isLocalhost };
   }
 

@@ -26,7 +26,9 @@ vi.mock('../../config/security.js', () => {
       securityConfig = config;
     },
     getJwtSecret: () => securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678',
-    getValidJwtSecrets: () => [securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678'],
+    getValidJwtSecrets: () => [
+      securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678',
+    ],
     generateRecoveryKey: () => 'RECOVERY-KEY-12345678',
     hashRecoveryKey: async (key: string) => {
       return crypto.createHash('sha256').update(key).digest('hex');
@@ -68,11 +70,22 @@ describe('Auth Routes', () => {
   });
 
   describe('GET /api/auth/status', () => {
-    it('should indicate setup is needed when no password set', async () => {
+    it('should not require setup when auth is explicitly disabled', async () => {
+      const res = await request(app).get('/api/auth/status');
+      expect(res.status).toBe(200);
+      expect(res.body.needsSetup).toBe(false);
+      expect(res.body.authenticated).toBe(false);
+      expect(res.body.authEnabled).toBe(false);
+    });
+
+    it('should indicate setup is needed when auth is enabled and no password is set', async () => {
+      securityConfig.authEnabled = true;
+
       const res = await request(app).get('/api/auth/status');
       expect(res.status).toBe(200);
       expect(res.body.needsSetup).toBe(true);
       expect(res.body.authenticated).toBe(false);
+      expect(res.body.authEnabled).toBe(true);
     });
 
     it('should indicate setup complete when password exists', async () => {
@@ -93,7 +106,7 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .get('/api/auth/status')
         .set('Cookie', `veritas_session=${token}`);
-      
+
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(true);
       expect(res.body.sessionExpiry).toBeDefined();
@@ -106,7 +119,7 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .get('/api/auth/status')
         .set('Cookie', 'veritas_session=invalid-token');
-      
+
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(false);
     });
@@ -127,27 +140,21 @@ describe('Auth Routes', () => {
     it('should reject setup when password already exists', async () => {
       securityConfig.passwordHash = 'existing-hash';
 
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({ password: 'newpassword123' });
+      const res = await request(app).post('/api/auth/setup').send({ password: 'newpassword123' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('ALREADY_SETUP');
     });
 
     it('should reject missing password', async () => {
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({});
+      const res = await request(app).post('/api/auth/setup').send({});
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('MISSING_PASSWORD');
     });
 
     it('should reject short password', async () => {
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({ password: 'short' });
+      const res = await request(app).post('/api/auth/setup').send({ password: 'short' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('PASSWORD_TOO_SHORT');
@@ -161,9 +168,7 @@ describe('Auth Routes', () => {
     });
 
     it('should login with correct password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'correctpassword' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'correctpassword' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -173,18 +178,14 @@ describe('Auth Routes', () => {
     });
 
     it('should reject wrong password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'wrongpassword' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'wrongpassword' });
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBe('INVALID_PASSWORD');
     });
 
     it('should reject missing password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({});
+      const res = await request(app).post('/api/auth/login').send({});
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('MISSING_PASSWORD');
@@ -193,9 +194,7 @@ describe('Auth Routes', () => {
     it('should reject login when no password configured', async () => {
       securityConfig.passwordHash = null;
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'anything' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'anything' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('NOT_SETUP');
@@ -213,15 +212,11 @@ describe('Auth Routes', () => {
     it('should rate limit after too many failures', async () => {
       // Send 5 wrong passwords
       for (let i = 0; i < 5; i++) {
-        await request(app)
-          .post('/api/auth/login')
-          .send({ password: 'wrong' });
+        await request(app).post('/api/auth/login').send({ password: 'wrong' });
       }
 
       // 6th should be rate limited
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'wrong' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'wrong' });
 
       expect(res.status).toBe(429);
       expect(res.body.code).toBe('RATE_LIMITED');
