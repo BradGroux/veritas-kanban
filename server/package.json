@@ -16,7 +16,7 @@
     "reset-password": "tsx src/scripts/reset-password.ts"
   },
   "dependencies": {
-    "@openai/codex-sdk": "0.128.0",
+    "@openai/codex-sdk": "0.130.0",
     "@veritas-kanban/shared": "workspace:*",
     "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
@@ -27,7 +27,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.5.0",
+    "express-rate-limit": "^8.5.1",
     "file-type": "^22.0.1",
     "gray-matter": "^4.0.3",
     "helmet": "^8.1.0",
@@ -45,7 +45,7 @@
     "swagger-ui-express": "^5.0.1",
     "unpdf": "^1.6.2",
     "ws": "^8.20.0",
-    "yaml": "^2.8.4",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -64,7 +64,7 @@
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.5.13",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^9.17.0",
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
