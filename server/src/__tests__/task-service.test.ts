@@ -243,6 +243,53 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(newFiles.some((f) => f.includes('new-name'))).toBe(true);
       expect(newFiles.some((f) => f.includes('original-name'))).toBe(false);
     });
+
+    it('should finalize a running attempt when a task is marked done', async () => {
+      const task = await service.createTask({ title: 'Running Task' });
+      await service.updateTask(task.id, {
+        status: 'in-progress',
+        attempt: {
+          id: 'attempt-1',
+          agent: 'claude-code',
+          status: 'running',
+          started: '2026-01-26T11:00:00.000Z',
+        },
+        claim: {
+          agent: 'claude-code',
+          sessionId: 'session-1',
+          claimedAt: '2026-01-26T11:00:00.000Z',
+          leaseExpiresAt: '2026-01-26T11:30:00.000Z',
+        },
+      });
+
+      const updated = await service.updateTask(task.id, {
+        status: 'done',
+        deliverables: [
+          {
+            id: 'deliverable-1',
+            title: 'Completion evidence',
+            type: 'report',
+            status: 'accepted',
+            created: '2026-01-26T12:00:00.000Z',
+          },
+        ],
+        reviewScores: [10, 10, 10, 10],
+        reviewComments: [
+          {
+            id: 'review-1',
+            file: 'task-service',
+            line: 1,
+            content: 'Completion evidence accepted for task finalization regression.',
+            created: '2026-01-26T12:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(updated?.status).toBe('done');
+      expect(updated?.attempt?.status).toBe('complete');
+      expect(updated?.attempt?.ended).toBeDefined();
+      expect(updated?.claim).toBeUndefined();
+    });
   });
 
   describe('Task deletion', () => {

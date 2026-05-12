@@ -281,6 +281,29 @@ describe('TaskCard', () => {
     expect(screen.queryByText(/Veritas running/)).toBeNull();
   });
 
+  it('does not show a running badge for a done task with stale attempt metadata', () => {
+    const task = createMockTask({
+      status: 'done',
+      agent: 'hawk',
+      attempt: {
+        id: 'claim_mc-veritas-hawk-next-1',
+        agent: 'hawk',
+        status: 'running',
+        started: '2026-05-11T12:00:00Z',
+      },
+      claim: {
+        agent: 'hawk',
+        sessionId: 'mc-veritas-hawk-next-1',
+        claimedAt: '2026-05-11T12:00:00Z',
+        leaseExpiresAt: '2026-05-11T12:30:00Z',
+      },
+    });
+
+    renderCard(task);
+
+    expect(screen.queryByText(/Hawk running/)).toBeNull();
+  });
+
   it('shows subtask progress', () => {
     const task = createMockTask({
       subtasks: [

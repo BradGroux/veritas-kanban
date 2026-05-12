@@ -60,7 +60,9 @@ function getAssignedProfiles(task: Task): string[] {
 }
 
 function getRunningProfile(task: Task): string | undefined {
-  if (task.attempt?.status !== 'running') return undefined;
+  if (task.status === 'done' || task.status === 'blocked' || task.attempt?.status !== 'running') {
+    return undefined;
+  }
 
   // The Veritas⇄Hermes bridge may be the coordinator, but the card should show
   // the concrete Hermes profile doing the work: Aura, Hawk, Midas, Forge, etc.

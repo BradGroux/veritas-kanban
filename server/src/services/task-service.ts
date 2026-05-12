@@ -1068,6 +1068,27 @@ export class TaskService {
         }
       }
 
+      const shouldFinalizeAttempt =
+        (restInput.status === 'done' ||
+          restInput.status === 'blocked' ||
+          (!restInput.status && (freshTask.status === 'done' || freshTask.status === 'blocked'))) &&
+        (freshTask.attempt?.status === 'running' || freshTask.attempt?.status === 'pending') &&
+        restInput.attempt === undefined;
+      const updatedAt = new Date().toISOString();
+      const finalizedAttempt: Task['attempt'] = shouldFinalizeAttempt
+        ? {
+            ...freshTask.attempt!,
+            status: (restInput.status ?? freshTask.status) === 'done' ? 'complete' : 'failed',
+            ended: freshTask.attempt!.ended ?? updatedAt,
+          }
+        : (restInput.attempt ?? freshTask.attempt);
+      const hasExplicitClaimUpdate = Object.prototype.hasOwnProperty.call(restInput, 'claim');
+      const shouldClearClaim =
+        (restInput.status === 'done' ||
+          restInput.status === 'blocked' ||
+          (!restInput.status && (freshTask.status === 'done' || freshTask.status === 'blocked'))) &&
+        !hasExplicitClaimUpdate;
+
       updatedTask = {
         ...freshTask,
         ...restInput,
@@ -1078,9 +1099,11 @@ export class TaskService {
           blockedReasonUpdate === null
             ? undefined
             : (blockedReasonUpdate ?? freshTask.blockedReason),
+        attempt: finalizedAttempt,
+        claim: shouldClearClaim ? undefined : (restInput.claim ?? freshTask.claim),
         // Apply checkpoint update (resume count or clear)
         checkpoint: checkpointUpdate !== undefined ? checkpointUpdate : freshTask.checkpoint,
-        updated: new Date().toISOString(),
+        updated: updatedAt,
       };
 
       const content = this.taskToMarkdown(updatedTask);
