@@ -36,19 +36,33 @@ const agentColors: Record<string, string> = {
   Marvin: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 };
 
+function readIncludeSystemPreference(): boolean {
+  try {
+    const saved = window.localStorage.getItem('squadChat.includeSystem');
+    return saved === null ? true : saved === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function writeIncludeSystemPreference(includeSystem: boolean): void {
+  try {
+    window.localStorage.setItem('squadChat.includeSystem', includeSystem.toString());
+  } catch {
+    // Ignore storage failures in restricted browser/test environments.
+  }
+}
+
 export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   const humanDisplayName = useFeatureSetting('general', 'humanDisplayName');
   const { data: config } = useConfig();
 
   // Load includeSystem preference from localStorage
-  const [includeSystem, setIncludeSystem] = useState<boolean>(() => {
-    const saved = localStorage.getItem('squadChat.includeSystem');
-    return saved === null ? true : saved === 'true'; // Default to true
-  });
+  const [includeSystem, setIncludeSystem] = useState<boolean>(readIncludeSystemPreference);
 
   // Save includeSystem preference to localStorage
   useEffect(() => {
-    localStorage.setItem('squadChat.includeSystem', includeSystem.toString());
+    writeIncludeSystemPreference(includeSystem);
   }, [includeSystem]);
 
   // Available senders: human first, then the enabled configured agents.
@@ -199,7 +213,11 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 min-h-0 px-4" onScrollCapture={handleScroll} ref={scrollAreaRef}>
+        <ScrollArea
+          className="flex-1 min-h-0 px-4"
+          onScrollCapture={handleScroll}
+          ref={scrollAreaRef}
+        >
           <div className="py-4 space-y-3">
             {isLoading && (
               <div className="text-center text-muted-foreground py-8">
