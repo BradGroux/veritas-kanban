@@ -4,7 +4,7 @@ Real-time agent-to-agent communication panel with WebSocket updates and system m
 
 ## Overview
 
-Squad Chat provides a dedicated communication channel for AI agents working on your board. Agents can coordinate, share status updates, and post completion summaries. The panel includes system messages that automatically log agent events (spawned, completed, failed, status updates).
+Squad Chat provides a dedicated communication channel for AI agents working on your board. Agents can coordinate, share status updates, and post completion summaries. The panel includes system messages that automatically log agent events (spawned, completed, failed, status updates). Squad Chat is optional for first-run setup and does not require OpenClaw unless you want OpenClaw Direct wake behavior.
 
 ## Features
 
@@ -26,7 +26,8 @@ curl -X POST http://localhost:3001/api/chat/squad \
   -H "X-API-Key: YOUR_KEY" \
   -d '{
     "agent": "TARS",
-    "message": "Completed the API refactor. All tests passing."
+    "message": "Completed the API refactor. All tests passing.",
+    "model": "claude-sonnet-4.5"
   }'
 
 # System message (agent event)
@@ -121,7 +122,7 @@ Includes `X-VK-Signature` header with HMAC-SHA256 signature using the configured
 
 ### OpenClaw Direct Mode
 
-Calls the OpenClaw gateway's `/tools/invoke` endpoint to wake the main agent:
+Optional. Calls the OpenClaw gateway's `/tools/invoke` endpoint to wake the main agent:
 
 ```bash
 POST {gatewayUrl}/tools/invoke

@@ -432,14 +432,14 @@ Automated staleness detection for project documentation with real-time tracking 
 
 ## Squad Chat
 
-Real-time agent-to-agent communication channel for multi-agent collaboration. Shipped in v2.0.
+Real-time agent-to-agent communication channel for multi-agent collaboration. Shipped in v2.0. Optional for first-run setup.
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
 - **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
-- **Model attribution** — Each message tagged with the sending agent's model for provenance tracking
+- **Model attribution** — Messages can include the sending agent's model for provenance tracking
 - **Configurable display names** — Agents set custom display names for chat identity
-- **Squad Chat Webhook** — Configurable webhooks for external integration; supports generic HTTP and OpenClaw Direct modes
-- **OpenClaw Direct gateway wake** — Real-time squad chat notifications pushed to OpenClaw gateway for agent orchestration
+- **Squad Chat Webhook** — Optional webhooks for external integration; supports generic HTTP and OpenClaw Direct modes
+- **OpenClaw Direct gateway wake** — Optional real-time squad chat notifications pushed to OpenClaw gateway for agent orchestration
 - **Searchable history** — Browse and search past squad chat messages
 
 ### API Endpoints
@@ -1069,7 +1069,7 @@ Added in v3.3.3. At-a-glance enforcement status visible on the dashboard.
 
 ## Broadcast Notifications
 
-Priority-based persistent notification system with agent-specific delivery and read receipts. Shipped in v2.0.
+Notification and broadcast features provide local visibility and optional delivery channels. Shipped in v2.0.
 
 - **Priority levels** — Notifications carry priority (low, normal, high, urgent) for triage
 - **Agent-specific delivery** — Target notifications to specific agents or broadcast to all
@@ -1077,18 +1077,22 @@ Priority-based persistent notification system with agent-specific delivery and r
 - **Persistent storage** — Notifications persisted to disk, survive server restarts
 - **Notification queue** — Unsent notifications queued for batch delivery
 - **Per-event toggles** — Enable/disable notification types in Settings → Notifications
+- **Broadcast messages** — Durable system-wide messages at `/api/broadcasts` with `info`, `action-required`, and `urgent` priorities
 
 ### API Endpoints
 
-| Endpoint                      | Method | Description                             |
-| ----------------------------- | ------ | --------------------------------------- |
-| `/api/notifications`          | POST   | Create a notification                   |
-| `/api/notifications`          | GET    | List notifications (filterable)         |
-| `/api/notifications/:id/delivered` | POST   | Mark notification as delivered          |
-| `/api/notifications/delivered-all` | POST   | Mark all notifications delivered for an agent |
-| `/api/notifications/pending`       | GET    | Get undelivered notifications in Teams-compatible format |
-| `/api/notifications/mark-sent`     | POST   | Mark a batch of notifications delivered |
+| Endpoint                           | Method | Description                                                                        |
+| ---------------------------------- | ------ | ---------------------------------------------------------------------------------- |
+| `/api/notifications`               | POST   | Create a notification                                                              |
+| `/api/notifications`               | GET    | List notifications (filterable)                                                    |
+| `/api/notifications/:id/delivered` | POST   | Mark notification as delivered                                                     |
+| `/api/notifications/delivered-all` | POST   | Mark all notifications delivered for an agent                                      |
+| `/api/notifications/pending`       | GET    | Get undelivered notifications in Teams-compatible format                           |
+| `/api/notifications/mark-sent`     | POST   | Mark a batch of notifications delivered                                            |
 | `/api/notifications/check`         | POST   | Check for notifications; returns a safe no-op result when no scanner is configured |
+| `/api/broadcasts`                  | POST   | Create a durable broadcast message                                                 |
+| `/api/broadcasts`                  | GET    | List broadcast messages                                                            |
+| `/api/broadcasts/:id/read`         | PATCH  | Mark a broadcast read for an agent                                                 |
 
 ---
 

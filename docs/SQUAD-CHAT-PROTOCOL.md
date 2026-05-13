@@ -1,10 +1,10 @@
 # Squad Chat Protocol
 
-Squad chat is the **glass box** — the real-time visibility layer that lets humans see what agents are doing. If work is happening and squad chat is quiet, transparency has failed.
+Squad chat is the **glass box** — the real-time visibility layer that lets humans see what agents are doing. It is optional for first-run board setup, but when an agent workflow opts into squad chat, the chat log should stay current.
 
-## Rule: Every Agent Posts to Squad Chat
+## Rule: Participating Agents Post to Squad Chat
 
-**Non-negotiable.** Every agent (human or AI) posts to squad chat when:
+Every participating agent (human or AI) posts to squad chat when:
 
 1. **Starting work** — What you're about to do
 2. **Milestones** — Major progress (e.g., "Chapter 3 of 9 complete")
@@ -28,6 +28,7 @@ Squad chat is the **glass box** — the real-time visibility layer that lets hum
 ```bash
 curl -s -X POST "http://localhost:3001/api/chat/squad" \
   -H 'Content-Type: application/json' \
+  -H "X-API-Key: $VK_API_KEY" \
   -d '{
     "agent": "YOUR_NAME",
     "message": "Your update here",
@@ -40,10 +41,11 @@ curl -s -X POST "http://localhost:3001/api/chat/squad" \
 
 The script supports these env vars for non-default configurations:
 
-| Variable  | Default     | Description     |
-| --------- | ----------- | --------------- |
-| `VK_HOST` | `localhost` | Server hostname |
-| `VK_PORT` | `3001`      | Server port     |
+| Variable     | Default     | Description                                      |
+| ------------ | ----------- | ------------------------------------------------ |
+| `VK_HOST`    | `localhost` | Server hostname                                  |
+| `VK_PORT`    | `3001`      | Server port                                      |
+| `VK_API_KEY` | _(none)_    | API key for write-capable authenticated requests |
 
 ### API Details
 
@@ -51,7 +53,7 @@ The script supports these env vars for non-default configurations:
 - **Port:** 3001 (Express) or 3000 (Vite proxy)
 - **Body:** `{ "agent": string, "message": string, "tags"?: string[], "model"?: string }`
 - **Response:** `201 Created` with the message object `{ id, agent, message, tags, model, timestamp }`
-- **Auth:** None required (localhost only). If exposing externally, protect behind auth.
+- **Auth:** `X-API-Key` required for write access unless localhost bypass grants a write-capable role.
 
 ### Troubleshooting
 
@@ -97,6 +99,7 @@ SQUAD CHAT (mandatory): Post updates to squad chat as YOUR_NAME throughout your 
 Use this command for regular updates:
   curl -s -X POST "http://localhost:3001/api/chat/squad" \
     -H 'Content-Type: application/json' \
+    -H "X-API-Key: $VK_API_KEY" \
     -d '{"agent":"YOUR_NAME","message":"YOUR UPDATE","tags":["relevant","tags"],"model":"YOUR_MODEL"}'
 
 Post when you: (1) start work, (2) hit milestones, (3) complete, (4) find issues.

@@ -75,8 +75,9 @@ describe('Project MCP Tools', () => {
 
     it('should have force as optional on delete_project', () => {
       const tool = projectTools.find((t) => t.name === 'delete_project');
-      expect(tool?.inputSchema.properties.force).toBeDefined();
-      expect(tool?.inputSchema.properties.force.type).toBe('boolean');
+      const force = tool?.inputSchema.properties.force;
+      expect(force).toBeDefined();
+      expect(force?.type).toBe('boolean');
       expect(tool?.inputSchema.required).not.toContain('force');
     });
 

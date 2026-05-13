@@ -1,4 +1,4 @@
-import { api, API_BASE } from '../utils/api.js';
+import { api, API_BASE, buildApiHeaders } from '../utils/api.js';
 
 export const summaryTools = [
   {
@@ -11,7 +11,8 @@ export const summaryTools = [
   },
   {
     name: 'get_memory_summary',
-    description: 'Get task summary formatted for memory files (completed tasks, active high-priority, project progress)',
+    description:
+      'Get task summary formatted for memory files (completed tasks, active high-priority, project progress)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -35,7 +36,9 @@ export async function handleSummaryTool(name: string, args: any): Promise<any> {
 
     case 'get_memory_summary': {
       const hours = (args as { hours?: number })?.hours || 24;
-      const res = await fetch(`${API_BASE}/api/summary/memory?hours=${hours}`);
+      const res = await fetch(`${API_BASE}/api/summary/memory?hours=${hours}`, {
+        headers: buildApiHeaders(),
+      });
       const markdown = await res.text();
       return {
         content: [{ type: 'text', text: markdown }],

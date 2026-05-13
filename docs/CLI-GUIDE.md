@@ -51,14 +51,20 @@ cd veritas-kanban
 # Install dependencies
 pnpm install
 
-# Link the CLI globally
-cd cli && npm link
+# Build shared code and the CLI before linking
+pnpm --filter @veritas-kanban/shared build
+pnpm --filter @veritas-kanban/cli build
+
+# Link the CLI globally from the CLI package
+cd cli
+npm link
 ```
 
 After linking, the `vk` command is available globally in your terminal.
 
 ```bash
 vk --help
+vk setup
 ```
 
 > **Prerequisite:** The Veritas Kanban server must be running for CLI commands to work.
@@ -632,7 +638,7 @@ export VK_API_URL=https://kanban.example.com
 export VK_API_KEY=your-api-key-here
 ```
 
-If you're running locally with localhost auth bypass enabled (the default), you may not need an API key for most operations.
+If you're running locally with localhost auth bypass enabled, read commands may work without a key. Write commands need `VK_API_KEY` unless `VERITAS_AUTH_LOCALHOST_ROLE` is set to `agent` or `admin`. Prefer an `agent` role key for CLI automation.
 
 ---
 

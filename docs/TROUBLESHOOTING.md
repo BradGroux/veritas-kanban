@@ -393,6 +393,36 @@ docker compose up -d
    ```
 3. For agents running in Docker/containers, use `host.docker.internal:3001` instead of `localhost:3001`
 
+### `vk` command exists but fails to start
+
+The CLI depends on the built shared package. If `npm link` ran before the packages were built, rebuild and relink:
+
+```bash
+pnpm --filter @veritas-kanban/shared build
+pnpm --filter @veritas-kanban/cli build
+cd cli
+npm link
+```
+
+### CLI or MCP can read but cannot write
+
+Localhost bypass commonly grants `read-only` access. Create an agent key in `server/.env`, restart the server, and pass the key to the CLI or MCP client:
+
+```bash
+VERITAS_API_KEYS=local-agent:replace-with-a-long-secret:agent
+```
+
+```bash
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=replace-with-a-long-secret
+```
+
+For MCP, put `VK_API_KEY` in the MCP server env block. Avoid using the admin key unless you need admin-only endpoints.
+
+### Assistant says OpenClaw is required
+
+OpenClaw is optional. Use the board-only path in [Setup Paths](SETUP-PATHS.md), then add OpenClaw only if you want OpenClaw to execute tasks, use the browser relay, or receive Squad Chat wake events.
+
 ### Agent names/models — is it hardcoded?
 
 **No.** The agent system is platform-agnostic. The board doesn't call LLMs directly — it provides a REST API that any agent can call. Whether you're using Claude, GPT, Kimi, Gemini, Llama, or a custom model, if your agent can make HTTP requests, it can drive the board.
@@ -411,7 +441,7 @@ Verify the MCP server config in your Claude Desktop settings:
       "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
         "VK_API_URL": "http://localhost:3001",
-        "VK_API_KEY": "your-admin-key"
+        "VK_API_KEY": "your-agent-key"
       }
     }
   }
@@ -452,7 +482,7 @@ After restarting, confirm that Veritas Kanban was successfully discovered and al
 openclaw mcp list
 
 # Expected output should include:
-# veritas-kanban | 26 tools | http://localhost:3001
+# veritas-kanban | 36 tools | http://localhost:3001
 
 # View available tools from Veritas Kanban
 openclaw mcp tools veritas-kanban
@@ -468,12 +498,26 @@ openclaw mcp describe veritas-kanban vk_list_tasks
 - Build the MCP server if missing: `cd mcp && pnpm build`
 - Check OpenClaw logs for startup errors: `~/.openclaw/logs/mcp.log`
 
-**If the tool count is wrong (not 26 tools):**
+**If the tool count is wrong (not 36 tools):**
 
 - MCP server may have started but failed to initialize properly
 - Check VK API is accessible: `curl http://localhost:3001/api/health`
 - Verify API key is set in MCP config env vars
 - Review MCP server logs for initialization errors
+
+**If reads work but write tools return `401` or `403`:**
+
+- Confirm `VK_API_KEY` is set in the MCP client env block
+- Confirm the same key is present in `VERITAS_API_KEYS` with the `agent` role
+- Restart both `pnpm dev` and the MCP client after env changes
+
+### Squad Chat posts save but no agent wakes
+
+Squad Chat stores local messages and streams them to connected UI clients. It does not wake an external process by itself. Configure Settings -> Notifications -> Squad Chat Webhook only when you want outbound delivery through a generic webhook or OpenClaw Direct.
+
+### Notifications do not send externally
+
+Notification delivery channels are optional. Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled. Use `/api/broadcasts` for durable system-wide messages and verify delivery-specific settings before expecting an external wake or push.
 
 **3. Gather diagnostics bundle when reporting issues**
 

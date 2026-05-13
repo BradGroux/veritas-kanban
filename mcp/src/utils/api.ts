@@ -1,2 +1,2 @@
 // Re-export shared API client
-export { api, createApiClient, API_BASE } from '@veritas-kanban/shared';
+export { api, createApiClient, API_BASE, buildApiHeaders } from '@veritas-kanban/shared';

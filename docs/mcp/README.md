@@ -165,6 +165,7 @@ Local development:
 ```bash
 codex mcp add veritas-kanban \
   --env VK_API_URL=http://localhost:3001 \
+  --env VK_API_KEY=your-agent-api-key \
   -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
 ```
 
@@ -205,6 +206,7 @@ When running VK behind a reverse proxy (nginx/Caddy):
 ```
 
 > **Important:** In production, always set `VK_API_KEY` so the MCP server authenticates with the VK API. Without it, requests rely on localhost bypass (which won't work remotely).
+> **Local writes:** Read-only localhost calls may work without `VK_API_KEY`, but write tools need a key unless `VERITAS_AUTH_LOCALHOST_ROLE` is set to `agent` or `admin`.
 
 ---
 
@@ -676,7 +678,7 @@ Resources are useful for MCP clients that support resource browsing (e.g., Claud
 
 ### Token Boundaries
 
-- API keys are passed via the `Authorization: Bearer <key>` header.
+- API keys are passed via the `X-API-Key` header by the shared VK API client. The server also accepts `Authorization: Bearer <key>` for direct HTTP callers.
 - The MCP server reads `VK_API_KEY` from its environment and includes it in every HTTP request to VK.
 - Keys never appear in MCP tool inputs/outputs — they stay in the transport layer.
 
@@ -716,7 +718,7 @@ All tool errors return:
 
 ```bash
 # Run MCP server with stderr visible (it logs to stderr)
-VK_API_URL=http://localhost:3001 node mcp/dist/index.js
+VK_API_URL=http://localhost:3001 VK_API_KEY=your-agent-api-key node mcp/dist/index.js
 
 # Test a specific tool via stdin
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":{}}}' | \

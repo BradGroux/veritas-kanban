@@ -4,12 +4,14 @@
 
 Whether you are standing up the board for yourself or for a fleet of agents, this guide walks you from zero ➝ working board ➝ agents picking up work. Each section is short, copy/paste friendly, and mirrors how we run Veritas Kanban internally.
 
+If you are evaluating VK for the first time, start with the board-only path. MCP, OpenClaw, Squad Chat webhooks, notification delivery, workflow gates, and governance policies are optional layers. The setup paths are broken out in [Setup Paths](SETUP-PATHS.md).
+
 ---
 
 ## Table of Contents
 
 1. [Prerequisites (30 seconds)](#prerequisites-30-seconds)
-2. [Installation & Setup Wizard (manual today, guided tomorrow)](#installation--setup-wizard-manual-today-guided-tomorrow)
+2. [Installation & Setup Wizard](#installation--setup-wizard)
 3. [Create Your First Task (UI path)](#create-your-first-task-ui-path)
 4. [Create Your First Task (API/CLI path)](#create-your-first-task-apicli-path)
 5. [Connect an Agent + Agent Pickup Checklist](#connect-an-agent--agent-pickup-checklist)
@@ -39,7 +41,7 @@ That's it. No database, no extra services.
 
 ### Quick Start with `vk setup`
 
-After cloning and starting the server, run the setup wizard to verify your environment:
+After cloning and starting the server, run the setup wizard to verify your environment. If the `vk` command is not installed yet, finish the manual setup first and then build/link the CLI from the CLI guide.
 
 ```bash
 vk setup
@@ -130,11 +132,16 @@ curl -X POST http://localhost:3001/api/tasks \
 ### CLI (after `cd cli && npm link`)
 
 ```bash
+pnpm --filter @veritas-kanban/shared build
+pnpm --filter @veritas-kanban/cli build
+cd cli
+npm link
+export VK_API_URL=http://localhost:3001
 vk create "Wire up MCP server" --type feature --priority high
 vk list --status todo
 ```
 
-CLI commands fully mirror the API and are the fastest way to script agent workflows.
+CLI commands fully mirror the API and are the fastest way to script agent workflows. Write commands need `VK_API_KEY` unless localhost bypass grants an `agent` or `admin` role.
 
 ![CLI workflow demo](../assets/demo-drag_drop.gif)
 
@@ -149,16 +156,21 @@ Agents interact through HTTP + WebSocket; nothing is hard-coded to a particular 
    VERITAS_API_KEYS=my-agent:super-secret-key:agent,ops:another-key:admin
    ```
 2. **Restart** `pnpm dev` so the key loads.
-3. **Create an agent request** (UI → Start Agent) or drop a JSON file in `.veritas-kanban/agent-requests/`.
-4. **Watch pending agents** in the UI or via CLI:
+3. **Export the key** for CLI, MCP, or agent scripts:
+   ```bash
+   export VK_API_URL=http://localhost:3001
+   export VK_API_KEY=super-secret-key
+   ```
+4. **Create an agent request** (UI → Start Agent) or drop a JSON file in `.veritas-kanban/agent-requests/`.
+5. **Watch pending agents** in the UI or via CLI:
    ```bash
    vk agents:pending
    ```
-5. **Agent workflow** (example prompt to OpenClaw):
+6. **Agent workflow** (example prompt to an agent runner):
    ```
    Hey Veritas, pick up task <ID>. Set status to in-progress, start the timer, do the work, then call `vk done <id> "summary"` when finished. Use cross-model review if you wrote code.
    ```
-6. **Agent completion**
+7. **Agent completion**
    - Verify `tasks/active/...` reflects status/time tracking
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**

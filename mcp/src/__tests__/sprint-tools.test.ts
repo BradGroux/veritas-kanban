@@ -69,8 +69,9 @@ describe('Sprint MCP Tools', () => {
 
     it('should have force as optional on delete_sprint', () => {
       const tool = sprintTools.find((t) => t.name === 'delete_sprint');
-      expect(tool?.inputSchema.properties.force).toBeDefined();
-      expect(tool?.inputSchema.properties.force.type).toBe('boolean');
+      const force = tool?.inputSchema.properties.force;
+      expect(force).toBeDefined();
+      expect(force?.type).toBe('boolean');
       // force is NOT in required — it's optional
       expect(tool?.inputSchema.required).not.toContain('force');
     });

@@ -32,10 +32,12 @@ Created by **Brad Groux** — CEO of [Digital Meld](https://digitalmeld.io), and
 
 ## ⚡ Quickstart
 
-Want to take the easy way out? Ask your agent (like [OpenClaw](https://github.com/openclaw/openclaw)):
+Start with the local board. OpenClaw, MCP, Squad Chat webhooks, notifications, workflows, and governance gates are optional layers you can turn on later. See [Setup Paths](docs/SETUP-PATHS.md) for the board-only, CLI, MCP, OpenClaw, and self-hosted paths.
+
+Want to take the easy way out? Ask your agent:
 
 ```
-Clone and set up veritas-kanban locally. Install dependencies with pnpm, copy the .env.example, and start the dev server. Verify it's running at localhost:3000.
+Clone and set up veritas-kanban locally using the board-only setup path first. Install dependencies with pnpm, copy server/.env.example to server/.env, and start the dev server. Verify the UI at localhost:3000 and the API health endpoint at localhost:3001/api/health. Do not configure OpenClaw, MCP, Squad Chat webhooks, workflows, or notifications unless I explicitly ask for that layer.
 ```
 
 Want to do it yourself? Get up and running in under 5 minutes:
@@ -60,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 ## 📚 Documentation Map
 
 - [MCP Server Guide](docs/mcp/README.md) — 36 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [Setup Paths](docs/SETUP-PATHS.md) — board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — v4.3 plan for local Codex execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
@@ -112,7 +115,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ### 🤖 Agent Orchestration
 
-Spawn autonomous coding agents on tasks. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
+Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
 ![Agent orchestration](assets/demo-overview.gif)
 
@@ -182,7 +185,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
 - **HermesAgent support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, and MCP setup
-- **Built-in OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw)
+- **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
 - **@Mention notifications** — @agent-name parsing in comments, thread subscriptions
 - **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery
@@ -196,7 +199,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.)
 - **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling
 - **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing
-- **OpenClaw Integration** — Direct gateway wake for real-time squad chat notifications and agent orchestration
+- **OpenClaw Integration** — Optional direct gateway wake for real-time squad chat notifications and agent orchestration
 - **Reverse Proxy Ready** — Deploy behind nginx, Caddy, Traefik, or any reverse proxy with `TRUST_PROXY`
 - **Multiple attempts** — Retry with different agents, preserve history
 - **Running indicator** — Visual feedback when agents are working
@@ -545,9 +548,9 @@ All commands support `--json` for scripting and machine consumption.
 
 ## 🤖 Agent Integration
 
-Veritas Kanban works with any agentic platform that can make HTTP calls. The REST API covers the full task lifecycle — create, update, track time, complete.
+Veritas Kanban works with any agentic platform that can make HTTP calls. The REST API covers the full task lifecycle — create, update, track time, complete. No agent runner is required for board-only use.
 
-Built and tested with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot), which provides native orchestration via `sessions_spawn`. The built-in agent service targets OpenClaw — PRs welcome for adapters to other platforms.
+Built and tested with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot), which provides native orchestration via `sessions_spawn`. OpenClaw is optional. Use it when you want VK to hand work to OpenClaw or wake OpenClaw from Squad Chat events.
 
 v4.3 also documents the Codex and Hermes operating model:
 
@@ -634,14 +637,17 @@ vk agents:pending
       "command": "node",
       "args": ["/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
-        "VK_API_URL": "http://localhost:3001"
+        "VK_API_URL": "http://localhost:3001",
+        "VK_API_KEY": "your-agent-api-key"
       }
     }
   }
 }
 ```
 
-**After adding the config, restart OpenClaw:**
+`VK_API_KEY` is required for write tools unless localhost auth bypass grants an `agent` or `admin` role. Prefer an `agent` role key over the admin key.
+
+**After adding the config, restart your MCP client. For OpenClaw:**
 
 ```bash
 openclaw gateway restart
@@ -651,8 +657,8 @@ Verify discovery with `openclaw mcp list`. See [Troubleshooting](docs/TROUBLESHO
 
 **Troubleshooting MCP connection issues:**
 
-- **Always restart OpenClaw after MCP config changes** — MCP servers are discovered at startup
-- **Verify tools are available:** Run `openclaw mcp list` to confirm 26 Veritas Kanban tools appear
+- **Always restart the MCP client after MCP config changes** — MCP servers are discovered at startup
+- **Verify tools are available:** Run `openclaw mcp list` to confirm 36 Veritas Kanban tools appear
 - **When reporting issues, provide:**
   - OpenClaw version (`openclaw --version`)
   - VK version and health (`curl http://localhost:3001/api/health`)
