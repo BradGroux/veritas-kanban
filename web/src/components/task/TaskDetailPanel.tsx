@@ -90,7 +90,7 @@ export function TaskDetailPanel({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-[700px] sm:max-w-[700px] overflow-hidden flex flex-col p-0"
+        className="!w-[92vw] sm:!w-[min(92vw,1120px)] sm:!max-w-none overflow-hidden flex flex-col p-0"
         aria-label={`Task details: ${localTask.title}`}
       >
         <SheetHeader className="space-y-1 flex-shrink-0 border-b px-6 py-4 pr-12">
