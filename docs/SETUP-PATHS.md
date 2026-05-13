@@ -139,7 +139,7 @@ echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name
   head -1 | jq -e '.result.content[0].text | startswith("Task deleted: ")'
 ```
 
-If `tools/list` works but `create_task` fails, the MCP process is installed but does not have write-capable API auth. Put `VK_API_KEY` in the MCP client env block and restart the client.
+If the `list_tasks` read check works but `create_task` fails, the MCP process is installed but does not have write-capable API auth. Put `VK_API_KEY` in the MCP client env block and restart the client.
 
 ## Optional Layers
 
