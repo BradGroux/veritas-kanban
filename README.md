@@ -4,9 +4,9 @@
 
 _Veritas in actis — Truth in action._
 
-**Local-first task management and AI agent orchestration platform.**
+**Local-first task management board with optional AI agent orchestration.**
 
-Built for developers who want a visual Kanban board that works with autonomous coding agents.
+Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, workflows, or governance only when you need that layer.
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -20,7 +20,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 ⭐ **If you find this useful, star the repo — it helps others discover it!**
 
-[Quickstart](#-quickstart) · [Features](#-feature-highlights) · [Why VK](#-why-veritas-kanban) · [All Features](docs/FEATURES.md) · [Docs](docs/) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](#-api-versioning) · [Agent Integration](#-agent-integration) · [MCP Server](#-mcp-server) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Quickstart](#-quickstart) · [Features](#-feature-highlights) · [Why VK](#-why-veritas-kanban) · [All Features](docs/FEATURES.md) · [Docs](docs/) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](#-api-versioning) · [Agent Setup](#-optional-agent-integration) · [MCP Server](#-mcp-server) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -52,6 +52,16 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) — that's it. The board auto-seeds with example tasks on first run so you can explore right away.
 
+**Do not configure these on day one unless you already know you need them:**
+
+- OpenClaw gateway or browser relay
+- MCP write access
+- Squad Chat webhook or external wake behavior
+- Notification delivery channels
+- Workflow gates or governance policies
+
+When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the next layer and run the read/write smoke checks before handing the board to an assistant.
+
 > **Want a clean slate?** Delete the example tasks: `rm tasks/active/task_example_*.md` and refresh.
 > **Want to re-seed?** Run `pnpm seed` to restore the example tasks (only works when the board is empty).
 
@@ -61,14 +71,14 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## 📚 Documentation Map
 
-- [MCP Server Guide](docs/mcp/README.md) — 36 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
-- [Setup Paths](docs/SETUP-PATHS.md) — board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
-- [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — v4.3 plan for local Codex execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
+- [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
+- [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
+- [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 36 tools, architecture, tool catalog, security model, and read/write smoke checks.
+- [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
-- [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
 - [Sprint Planning SOP](docs/SOP-sprint-planning.md) — epic → sprint → task breakdown.
@@ -109,7 +119,7 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## ✨ Feature Highlights
 
-### 🛡️ Agent Governance (New in v4.0)
+### 🛡️ Agent Governance
 
 **Policy Engine** — Define what agents can and can't do. Configurable tool/action policies with `allow`, `deny`, and `require-approval` guard rules. Every policy decision is logged. **Decision Audit Trail** — Log agent decisions with confidence scores, supporting evidence, and stated assumptions. Record outcomes afterward to see whether assumptions held. **Behavioral Drift Detection** — Set metric baselines and thresholds; get alerted when an agent's behavior deviates. **User Feedback Loop** — Collect feedback on agent outputs with sentiment tagging and category analytics. **Output Evaluation** — Score agent outputs against weighted criteria profiles (regex, keyword, numeric range, custom expressions).
 
@@ -119,19 +129,19 @@ Spawn autonomous coding agents on tasks when you choose to connect an agent runn
 
 ![Agent orchestration](assets/demo-overview.gif)
 
-### 🧭 Veritas Cutover + Hermes Support (New in v4.3)
+### 🧭 Veritas Cutover + Hermes Support
 
 Veritas now documents the GitHub-backed operating model for Codex and HermesAgent work. The new cutover guide names Veritas as the source of truth, routes HermesAgent/Hermes Gateway as the control plane for agent execution, keeps Mission Control focused on display/control, and makes GitHub Issues/PRs/reviews/CI the implementation record. It also adds the active Hermes roster, required QA evidence gates, and copy/paste task templates for product specs, research/revenue intake, and approval-gated client workflows.
 
-### 🧠 OpenAI Codex Integration (New in v4.3)
+### 🧠 OpenAI Codex Integration
 
 Codex can run as a first-class Veritas agent through local `codex exec`, SDK-backed sessions, GitHub-native `@codex` delegation, workflow-engine steps, review actions, Settings health checks, and MCP access to the board. The docs include a roadmap, SOP, workflow examples, and an AGENTS template so Codex work can be started, tracked, reviewed, and released through the same Veritas lifecycle as other agents.
 
-### 📊 Customizable Dashboard (New in v4.0)
+### 📊 Customizable Dashboard
 
 **Draggable & Resizable Widget Grid** — Rearrange and resize dashboard widgets via drag-and-drop. Layouts persist across sessions. Add widgets from the library or remove ones you don't need. **Global System Health Bar** — Persistent header status bar with five health levels (stable → alert) across three signal categories: system resources, agent availability, and operation success rate.
 
-### 📝 Prompt Template Registry (New in v4.0)
+### 📝 Prompt Template Registry
 
 Version-controlled prompt templates with variable extraction, full version history with rollback, usage tracking, and preview rendering with sample variable injection. Manage your prompt library the same way you manage code.
 
@@ -153,9 +163,9 @@ Isolated worktrees per task — no branch switching, no conflicts. Built-in code
 
 Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no Redis, and no Docker required for local use. Clone, `pnpm install`, `pnpm dev` — done. Everything is `grep`-friendly, version-controllable, and human-readable. Back up your entire board with `git push`.
 
-### 🔌 Three Integration Surfaces
+### 🔌 Optional Integration Surfaces
 
-- **MCP Server** — 36 tools across 8 categories via Model Context Protocol (v4.0 adds project management and comment tools)
+- **MCP Server** — 36 tools across 8 categories via Model Context Protocol
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 
@@ -183,7 +193,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Agent orchestration** — Spawn autonomous coding agents on tasks
 - **Custom agents** — Add your own agents with any name and command; not limited to built-in types
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
-- **HermesAgent support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
+- **HermesAgent support** — documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, and MCP setup
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
@@ -327,7 +337,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 
 **The bottom line:** Orchestration frameworks give you agent execution without visibility. Project boards give you visibility without agent execution. Veritas Kanban gives you both — plus the guardrails, telemetry, and audit trails that production agentic work demands.
 
-Built and battle-tested with [OpenClaw](https://github.com/openclaw/openclaw), with v4.3 documentation for Codex and HermesAgent/Hermes Gateway workflows. Works with any platform that can make HTTP calls.
+Built and battle-tested with [OpenClaw](https://github.com/openclaw/openclaw), with docs for Codex and HermesAgent/Hermes Gateway workflows. OpenClaw is optional. VK works with any platform that can make HTTP calls.
 
 ---
 
@@ -432,8 +442,13 @@ Manage your entire task lifecycle with two commands.
 
 ```bash
 # Install globally
-cd cli && npm link
+pnpm --filter @veritas-kanban/shared build
+pnpm --filter @veritas-kanban/cli build
+cd cli
+npm link
 ```
+
+For read/write auth checks, use the smoke tests in the [CLI Guide](docs/CLI-GUIDE.md#readwrite-smoke-check).
 
 ### Setup & Onboarding
 
@@ -546,13 +561,13 @@ All commands support `--json` for scripting and machine consumption.
 
 ---
 
-## 🤖 Agent Integration
+## 🤖 Optional Agent Integration
 
 Veritas Kanban works with any agentic platform that can make HTTP calls. The REST API covers the full task lifecycle — create, update, track time, complete. No agent runner is required for board-only use.
 
 Built and tested with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot), which provides native orchestration via `sessions_spawn`. OpenClaw is optional. Use it when you want VK to hand work to OpenClaw or wake OpenClaw from Squad Chat events.
 
-v4.3 also documents the Codex and Hermes operating model:
+VK also documents the Codex and Hermes operating model:
 
 - **Veritas is the source of truth** for tasks, status, audit trail, release readiness, and GitHub-linked implementation history.
 - **HermesAgent/Hermes Gateway is the active control plane** for the named Hermes roster and execution routing.
@@ -566,7 +581,7 @@ v4.3 also documents the Codex and Hermes operating model:
 3. **Agent Picks Up** — Your agent reads the request and begins work
 4. **Work Happens** — Agent updates task status, tracks time, commits code
 5. **Completion** — Agent calls the completion endpoint with results
-6. **Task Updates** — Status moves to Review, notifications sent
+6. **Task Updates** — Status moves to Review; notifications are sent only when configured
 
 ### Any Platform (REST API)
 
@@ -604,7 +619,7 @@ curl http://localhost:3001/api/github/sync/status \
 
 Issues with the `kanban` label are imported as tasks. Status changes push back (done → close, reopen on todo/in-progress/blocked). Labels like `priority:high` and `type:story` map to task fields. Configure in `.veritas-kanban/integrations.json`.
 
-### OpenClaw (Native)
+### OpenClaw (Optional Native)
 
 ```bash
 # Check for pending agent requests
@@ -624,9 +639,9 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-36 tools across 8 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects) via [Model Context Protocol](https://modelcontextprotocol.io/).
+Optional. The MCP server exposes 36 tools across 8 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects) via [Model Context Protocol](https://modelcontextprotocol.io/). Skip this for board-only use.
 
-**→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, and troubleshooting.
+**→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, read/write smoke checks, and troubleshooting.
 
 **Quick config** (Claude Desktop / Cursor / OpenClaw):
 
@@ -778,65 +793,13 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 🗺️ Roadmap
 
-See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for what's next. Community contributions welcome!
+Current planning lives in GitHub, not in a stale README checklist:
 
-### Shipped in v4.0.0
+- [Open issues](https://github.com/BradGroux/veritas-kanban/issues)
+- [v5.0 roadmap issues](https://github.com/BradGroux/veritas-kanban/issues?q=is%3Aissue%20state%3Aopen%20label%3Arelease%3Av5.0)
+- [Release history](CHANGELOG.md)
 
-- ~~[#178](https://github.com/BradGroux/veritas-kanban/issues/178) — Agent Policy & Guard Engine~~ — Configurable tool/action policies with allow/deny/require-approval guard rules
-- ~~[#179](https://github.com/BradGroux/veritas-kanban/issues/179) — Decision Audit Trail with Assumption Tracking~~ — Log decisions with confidence scores, evidence, and outcome tracking
-- ~~[#180](https://github.com/BradGroux/veritas-kanban/issues/180) — Agent Output Evaluation & Scoring Framework~~ — Weighted criteria profiles with composite scoring
-- ~~[#181](https://github.com/BradGroux/veritas-kanban/issues/181) — Behavioral Drift Detection & Alerting~~ — Metric baselines with configurable alert thresholds
-- ~~[#182](https://github.com/BradGroux/veritas-kanban/issues/182) — User Feedback Loop with Sentiment Analytics~~ — Feedback collection with sentiment tagging and aggregate analytics
-- ~~[#183](https://github.com/BradGroux/veritas-kanban/issues/183) — Draggable & Resizable Dashboard Widget Grid~~ — Drag-and-drop layout with persistence
-- ~~[#184](https://github.com/BradGroux/veritas-kanban/issues/184) — Prompt Template Registry with Version Control~~ — Versioned templates with rollback and usage tracking
-- ~~[#185](https://github.com/BradGroux/veritas-kanban/issues/185) — Global System Health Status Bar~~ — Five health levels across system, agents, and operations signals
-- ~~[#186](https://github.com/BradGroux/veritas-kanban/issues/186) — Upgrade to shadcn/ui CLI v4.0~~ — All components updated with Tailwind v4 integration
-
-### Backlog
-
-- [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1) — Full keyboard navigation, screen reader support, color contrast
-- [Example video](https://github.com/BradGroux/veritas-kanban/issues/68) — Hosted walkthrough video on YouTube or Vimeo
-
-### Shipped in v3.3.x
-
-- ~~[Task Dependencies Graph](https://github.com/BradGroux/veritas-kanban/issues/122)~~ — Bidirectional dependency model with cycle detection, recursive tree API, visual badges
-- ~~[Crash-Recovery Checkpointing](https://github.com/BradGroux/veritas-kanban/issues/123)~~ — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry
-- ~~[Observational Memory](https://github.com/BradGroux/veritas-kanban/issues/124)~~ — Per-task observations with importance scoring (1-10), full-text search, timeline view
-- ~~[Agent Filter](https://github.com/BradGroux/veritas-kanban/issues/125)~~ — Query tasks by agent name with `?agent=name` parameter
-- ~~[Sprint Management CLI + MCP](https://github.com/BradGroux/veritas-kanban/issues/161)~~ — Full sprint CRUD from command line and MCP (list, create, update, delete, close, suggestions)
-- ~~[Task↔Agent State Sync](https://github.com/BradGroux/veritas-kanban/issues/155)~~ — Bi-directional sync engine keeping task state consistent with agent execution
-- ~~Orchestrator Delegation Enforcement~~ — Full enforcement gate with delegation violation reporting
-- ~~Express 5 + Vite 7 + Tailwind 4 + Zod 4 migration~~ — Major dependency upgrades
-- ~~[SSRF Webhook Protection](https://github.com/BradGroux/veritas-kanban/issues/165)~~ — Server-side request forgery safeguards
-- ~~[WebSocket Broadcast Batching](https://github.com/BradGroux/veritas-kanban/issues/167)~~ — Prevents event loop blocking under high-frequency updates
-
-### Shipped in v3.2.0
-
-- ~~[Markdown Editor](https://github.com/BradGroux/veritas-kanban/pull/118)~~ — Rich editing toolbar, live preview, keyboard shortcuts (Ctrl+B/I/K) for task descriptions and comments
-- ~~[Shared Resources Registry](https://github.com/BradGroux/veritas-kanban/pull/119)~~ — Reusable resources (prompts, guidelines, templates) mountable across projects
-- ~~[Documentation Freshness](https://github.com/BradGroux/veritas-kanban/pull/120)~~ — Staleness tracking with freshness scores, alerts, and auto-review task creation
-- ~~[Docker Auth Persistence](https://github.com/BradGroux/veritas-kanban/issues/116)~~ — Fixed auth state wiped on container rebuild; added automatic migration
-
-### Shipped in v2.1.2
-
-- ~~[Docker Path Resolution](https://github.com/BradGroux/veritas-kanban/issues/102)~~ — Fixed WORKDIR resolution for `.veritas-kanban` directory in containerized deployments
-
-### Shipped in v2.1.1
-
-- ~~[Reverse Proxy Support](https://github.com/BradGroux/veritas-kanban/issues/100)~~ — Added `TRUST_PROXY` environment variable for nginx, Caddy, Traefik, and other reverse proxies
-- ~~[Prompts Registry](https://github.com/BradGroux/veritas-kanban/issues/101)~~ — Centralized prompt templates with versioning and agent-specific customization
-
-### Shipped in v2.0.0
-
-- ~~[Dashboard widget toggles](https://github.com/BradGroux/veritas-kanban/issues/92)~~ · ~~[Multi-agent dashboard](https://github.com/BradGroux/veritas-kanban/issues/28)~~ · ~~[Multi-agent task assignment](https://github.com/BradGroux/veritas-kanban/issues/29)~~ · ~~[@Mention notifications](https://github.com/BradGroux/veritas-kanban/issues/30)~~ · ~~[Agent permission levels](https://github.com/BradGroux/veritas-kanban/issues/31)~~ · ~~[Agent self-reporting](https://github.com/BradGroux/veritas-kanban/issues/52)~~ · ~~[CLI usage reporting](https://github.com/BradGroux/veritas-kanban/issues/50)~~ · ~~[Markdown rendering](https://github.com/BradGroux/veritas-kanban/issues/63)~~ · ~~[Cost prediction](https://github.com/BradGroux/veritas-kanban/issues/54)~~ · ~~[Error learning](https://github.com/BradGroux/veritas-kanban/issues/91)~~ · ~~[Task lifecycle hooks](https://github.com/BradGroux/veritas-kanban/issues/72)~~ · ~~[Documentation freshness](https://github.com/BradGroux/veritas-kanban/issues/74)~~ · ~~[Where Time Went](https://github.com/BradGroux/veritas-kanban/issues/57)~~ · ~~[Activity Clock](https://github.com/BradGroux/veritas-kanban/issues/58)~~ · ~~[Hourly Activity](https://github.com/BradGroux/veritas-kanban/issues/59)~~ · ~~[Wall Time Toggle](https://github.com/BradGroux/veritas-kanban/issues/60)~~ · ~~[Session Metrics](https://github.com/BradGroux/veritas-kanban/issues/61)~~ · ~~[Production binding](https://github.com/BradGroux/veritas-kanban/issues/55)~~
-
-### Shipped in v1.6.0
-
-- ~~[Model Usage schema & API](https://github.com/BradGroux/veritas-kanban/issues/47)~~ · ~~[Global usage aggregation](https://github.com/BradGroux/veritas-kanban/issues/48)~~ · ~~[Dashboard Model Usage](https://github.com/BradGroux/veritas-kanban/issues/49)~~ · ~~[Standup with cost](https://github.com/BradGroux/veritas-kanban/issues/51)~~ · ~~[Per-model cost tables](https://github.com/BradGroux/veritas-kanban/issues/53)~~ · ~~[Dashboard filter bar](https://github.com/BradGroux/veritas-kanban/issues/56)~~ · ~~[Health endpoints](https://github.com/BradGroux/veritas-kanban/issues/82)~~
-
-### Shipped in v1.1.0–v1.3.0
-
-- ~~[API response envelope](https://github.com/BradGroux/veritas-kanban/issues/2)~~ · ~~[Circuit breaker](https://github.com/BradGroux/veritas-kanban/issues/3)~~ · ~~[Load testing (k6)](https://github.com/BradGroux/veritas-kanban/issues/4)~~ · ~~[Prometheus/OTel](https://github.com/BradGroux/veritas-kanban/issues/5)~~ · ~~[Storage abstraction](https://github.com/BradGroux/veritas-kanban/issues/6)~~ · ~~[GitHub Issues sync](https://github.com/BradGroux/veritas-kanban/issues/21)~~ · ~~[Activity feed](https://github.com/BradGroux/veritas-kanban/issues/33)~~ · ~~[Daily standup](https://github.com/BradGroux/veritas-kanban/issues/34)~~
+Use issues for current work and the changelog for shipped work.
 
 ---
 

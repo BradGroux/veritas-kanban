@@ -105,9 +105,9 @@ Don't use it when:
 cd veritas-kanban
 pnpm dev                          # Server on http://localhost:3001
 
-# 2. Build the MCP server
-cd mcp
-pnpm build                        # Outputs to mcp/dist/
+# 2. Build shared code and the MCP server
+pnpm --filter @veritas-kanban/shared build
+pnpm --filter @veritas-kanban/mcp build
 
 # 3. Configure your MCP client
 ```
@@ -121,7 +121,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
       "command": "node",
       "args": ["/absolute/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
-        "VK_API_URL": "http://localhost:3001"
+        "VK_API_URL": "http://localhost:3001",
+        "VK_API_KEY": "your-agent-api-key"
       }
     }
   }
@@ -139,14 +140,17 @@ For **OpenClaw**, add to your OpenClaw MCP config:
       "command": "node",
       "args": ["/absolute/path/to/veritas-kanban/mcp/dist/index.js"],
       "env": {
-        "VK_API_URL": "http://localhost:3001"
+        "VK_API_URL": "http://localhost:3001",
+        "VK_API_KEY": "your-agent-api-key"
       }
     }
   }
 }
 ```
 
-**Verify it works:**
+Omit `VK_API_KEY` only for read-only localhost checks. Write tools need a key unless localhost bypass grants an `agent` or `admin` role.
+
+**Verify discovery works:**
 
 ```bash
 # Quick smoke test — run the MCP server directly and send a tools/list request
@@ -155,6 +159,32 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
   head -1 | jq '.result.tools | length'
 # Expected output: 36
 ```
+
+**Verify read/write auth works:**
+
+Run this before giving an assistant MCP write access:
+
+```bash
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=your-agent-api-key
+
+# Read check: call list_tasks
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":{"status":"todo"}}}' | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -e '.result.content[0].text | fromjson | type == "array"'
+
+# Write check: create a temporary task
+MCP_TASK_ID=$(echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_task","arguments":{"title":"MCP auth smoke test","type":"automation","priority":"low","description":"Temporary task created by MCP auth smoke test."}}}' | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -r '.result.content[0].text | capture("Task created: (?<id>[^\\n]+)").id')
+
+# Cleanup
+echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"delete_task\",\"arguments\":{\"id\":\"$MCP_TASK_ID\"}}}" | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -e '.result.content[0].text | startswith("Task deleted: ")'
+```
+
+Expected result: the read command exits `0`, the write command captures a task ID, and cleanup returns `true`. If `tools/list` works but `create_task` fails with `401` or `403`, the MCP process is installed but does not have write-capable API auth. Put `VK_API_KEY` in the MCP client env block and restart the client.
 
 ### Codex
 

@@ -640,6 +640,26 @@ export VK_API_KEY=your-api-key-here
 
 If you're running locally with localhost auth bypass enabled, read commands may work without a key. Write commands need `VK_API_KEY` unless `VERITAS_AUTH_LOCALHOST_ROLE` is set to `agent` or `admin`. Prefer an `agent` role key for CLI automation.
 
+### Read/Write Smoke Check
+
+Use this check after linking `vk` and exporting `VK_API_URL`/`VK_API_KEY`. It proves the CLI can both read from and write to the configured VK server.
+
+```bash
+# Read check
+vk list --json | jq 'length'
+
+# Write check, then cleanup
+TASK_ID=$(vk create "CLI auth smoke test" \
+  --type automation \
+  --priority low \
+  --description "Temporary task created by CLI auth smoke test." \
+  --json | jq -r '.id')
+vk show "$TASK_ID" --json | jq -e --arg id "$TASK_ID" '.id == $id'
+vk delete "$TASK_ID" --json
+```
+
+Expected result: the read command prints a number, the show command exits `0`, and the delete command returns `{ "deleted": true }`. If read succeeds but write fails with `401` or `403`, confirm the exported `VK_API_KEY` matches an `agent` or `admin` role key in `VERITAS_API_KEYS`, then restart the server.
+
 ---
 
 ## Tips & Tricks

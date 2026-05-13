@@ -64,6 +64,29 @@ export VK_API_KEY=replace-with-a-long-secret
 vk setup
 ```
 
+### CLI Read/Write Smoke Check
+
+Run this before letting an agent use the CLI:
+
+```bash
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=replace-with-a-long-secret
+
+# Read check
+vk list --json | jq 'length'
+
+# Write check, then cleanup
+TASK_ID=$(vk create "CLI auth smoke test" \
+  --type automation \
+  --priority low \
+  --description "Temporary task created by CLI auth smoke test." \
+  --json | jq -r '.id')
+vk show "$TASK_ID" --json | jq -e --arg id "$TASK_ID" '.id == $id'
+vk delete "$TASK_ID" --json
+```
+
+If the read check succeeds but the write check returns `401` or `403`, the CLI is reaching VK but does not have write-capable auth. Recheck `VERITAS_API_KEYS`, restart the server, and confirm `VK_API_KEY` is exported in the same shell running `vk`.
+
 ## MCP Setup
 
 Build the MCP server:
@@ -91,6 +114,32 @@ Local MCP clients should pass both URL and key when the agent will write:
 ```
 
 Read-only localhost calls may work without `VK_API_KEY`. Write tools need `VK_API_KEY` unless `VERITAS_AUTH_LOCALHOST_ROLE` is set to `agent` or `admin`.
+
+### MCP Read/Write Smoke Check
+
+Run this before giving an assistant MCP write access:
+
+```bash
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=replace-with-a-long-secret
+
+# Read check: call list_tasks
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":{"status":"todo"}}}' | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -e '.result.content[0].text | fromjson | type == "array"'
+
+# Write check: create a temporary task
+MCP_TASK_ID=$(echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_task","arguments":{"title":"MCP auth smoke test","type":"automation","priority":"low","description":"Temporary task created by MCP auth smoke test."}}}' | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -r '.result.content[0].text | capture("Task created: (?<id>[^\\n]+)").id')
+
+# Cleanup
+echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"delete_task\",\"arguments\":{\"id\":\"$MCP_TASK_ID\"}}}" | \
+  node mcp/dist/index.js 2>/dev/null | \
+  head -1 | jq -e '.result.content[0].text | startswith("Task deleted: ")'
+```
+
+If `tools/list` works but `create_task` fails, the MCP process is installed but does not have write-capable API auth. Put `VK_API_KEY` in the MCP client env block and restart the client.
 
 ## Optional Layers
 
