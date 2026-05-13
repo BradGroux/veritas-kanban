@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import type { Router as RouterType } from 'express';
 import multer from 'multer';
-import contentDisposition from 'content-disposition';
+import { basename } from 'node:path';
+import { create as contentDisposition } from 'content-disposition';
 import { getTaskService } from '../services/task-service.js';
 import { getAttachmentService } from '../services/attachment-service.js';
 import { getTextExtractionService } from '../services/text-extraction-service.js';
@@ -159,11 +160,10 @@ router.get(
 
     const filepath = attachmentService.getAttachmentPath(taskId, attachment.filename);
 
+    const downloadName = basename(attachment.originalName.replace(/\\/g, '/'));
+
     res.setHeader('Content-Type', attachment.mimeType);
-    res.setHeader(
-      'Content-Disposition',
-      contentDisposition(attachment.originalName, { type: 'attachment' })
-    );
+    res.setHeader('Content-Disposition', contentDisposition(downloadName, { type: 'attachment' }));
     res.sendFile(filepath);
   })
 );
