@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Send, Loader2, Users, Filter, Settings2 } from 'lucide-react';
 import { useSquadMessages, useSendSquadMessage, useSquadStream } from '@/hooks/useChat';
+import { useConfig } from '@/hooks/useConfig';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { SquadMessage } from '@veritas-kanban/shared';
 
@@ -37,6 +38,7 @@ const agentColors: Record<string, string> = {
 
 export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   const humanDisplayName = useFeatureSetting('general', 'humanDisplayName');
+  const { data: config } = useConfig();
 
   // Load includeSystem preference from localStorage
   const [includeSystem, setIncludeSystem] = useState<boolean>(() => {
@@ -49,20 +51,13 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
     localStorage.setItem('squadChat.includeSystem', includeSystem.toString());
   }, [includeSystem]);
 
-  // Available agents for the selector (Human display name is dynamic)
-  const availableAgents = [
-    humanDisplayName, // Human user first (from settings)
-    'VERITAS',
-    'TARS',
-    'CASE',
-    'Ava',
-    'R2-D2',
-    'K-2SO',
-    'MAX',
-    'Johnny 5',
-    'Bishop',
-    'Marvin',
-  ];
+  // Available senders: human first, then the enabled configured agents.
+  const availableAgents = Array.from(
+    new Set([
+      humanDisplayName || 'Human',
+      ...(config?.agents ?? []).filter((agent) => agent.enabled).map((agent) => agent.name),
+    ])
+  );
 
   const [message, setMessage] = useState('');
   const [selectedAgent, setSelectedAgent] = useState(humanDisplayName || 'Human'); // Human user default (from settings)

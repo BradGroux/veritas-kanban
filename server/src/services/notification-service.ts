@@ -239,6 +239,33 @@ export class NotificationService {
   }
 
   /**
+   * Get notifications across all agents.
+   *
+   * Used by the CLI notification commands, which predate the agent-scoped
+   * route shape.
+   */
+  async getAllNotifications(filters: {
+    undelivered?: boolean;
+    limit?: number;
+  } = {}): Promise<Notification[]> {
+    await this.ensureLoaded();
+
+    let results = [...this.notifications];
+
+    if (filters.undelivered) {
+      results = results.filter((n) => !n.delivered);
+    }
+
+    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    if (filters.limit) {
+      results = results.slice(0, filters.limit);
+    }
+
+    return results;
+  }
+
+  /**
    * Mark a notification as delivered.
    */
   async markDelivered(notificationId: string): Promise<boolean> {
@@ -251,6 +278,27 @@ export class NotificationService {
     notification.deliveredAt = new Date().toISOString();
     await this.saveNotifications();
     return true;
+  }
+
+  /**
+   * Mark multiple notifications as delivered.
+   */
+  async markManyDelivered(notificationIds: string[]): Promise<number> {
+    await this.ensureLoaded();
+
+    const ids = new Set(notificationIds);
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const notification of this.notifications) {
+      if (ids.has(notification.id) && !notification.delivered) {
+        notification.delivered = true;
+        notification.deliveredAt = now;
+        count++;
+      }
+    }
+
+    if (count > 0) await this.saveNotifications();
+    return count;
   }
 
   /**
@@ -300,6 +348,18 @@ export class NotificationService {
     this.notifications.push(notification);
     await this.saveNotifications();
     return notification;
+  }
+
+  /**
+   * Clear all notifications.
+   */
+  async clearNotifications(): Promise<number> {
+    await this.ensureLoaded();
+
+    const count = this.notifications.length;
+    this.notifications = [];
+    if (count > 0) await this.saveNotifications();
+    return count;
   }
 
   /**

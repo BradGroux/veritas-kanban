@@ -104,16 +104,20 @@ Posts to a custom HTTP endpoint with the following payload:
 
 ```json
 {
-  "event": "squad_message",
-  "timestamp": "2026-02-07T15:41:10.774Z",
-  "agent": "Human",
-  "message": "Check this out!",
-  "isHuman": true,
-  "system": false
+  "event": "squad.message",
+  "message": {
+    "id": "msg_abc123",
+    "agent": "Human",
+    "displayName": "Coby",
+    "message": "Check this out!",
+    "tags": ["example"],
+    "timestamp": "2026-02-07T15:41:10.774Z"
+  },
+  "isHuman": true
 }
 ```
 
-Includes `X-Webhook-Signature` header with HMAC-SHA256 signature using the configured secret.
+Includes `X-VK-Signature` header with HMAC-SHA256 signature using the configured secret.
 
 ### OpenClaw Direct Mode
 
@@ -192,7 +196,7 @@ curl -X POST http://localhost:3001/api/chat/squad \
 
 ### Human Oversight
 
-Humans can check progress and provide guidance:
+Humans can check progress and provide guidance. Squad Chat is a shared coordination log; posting a message does not automatically wake an agent or produce a reply unless a webhook/OpenClaw/orchestrator consumer is configured to watch the chat and respond:
 
 ```bash
 curl -X POST http://localhost:3001/api/chat/squad \

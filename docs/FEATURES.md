@@ -1084,8 +1084,11 @@ Priority-based persistent notification system with agent-specific delivery and r
 | ----------------------------- | ------ | --------------------------------------- |
 | `/api/notifications`          | POST   | Create a notification                   |
 | `/api/notifications`          | GET    | List notifications (filterable)         |
-| `/api/notifications/:id/read` | POST   | Mark notification as read               |
-| `/api/notifications/pending`  | GET    | Get unsent notifications (Teams format) |
+| `/api/notifications/:id/delivered` | POST   | Mark notification as delivered          |
+| `/api/notifications/delivered-all` | POST   | Mark all notifications delivered for an agent |
+| `/api/notifications/pending`       | GET    | Get undelivered notifications in Teams-compatible format |
+| `/api/notifications/mark-sent`     | POST   | Mark a batch of notifications delivered |
+| `/api/notifications/check`         | POST   | Check for notifications; returns a safe no-op result when no scanner is configured |
 
 ---
 
