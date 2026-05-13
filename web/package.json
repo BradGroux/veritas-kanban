@@ -35,7 +35,7 @@
     "@veritas-kanban/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.3",
     "lucide-react": "^1.14.0",
     "nanoid": "^5.1.11",
     "radix-ui": "^1.4.3",
