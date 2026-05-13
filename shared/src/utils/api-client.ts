@@ -18,36 +18,41 @@ function getEnv(name: string): string | undefined {
 }
 
 function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+  const normalized: Record<string, string> = {};
+
   if (!headers) {
-    return {};
+    return normalized;
   }
 
   if (typeof Headers !== 'undefined' && headers instanceof Headers) {
-    const normalized: Record<string, string> = {};
     headers.forEach((value, key) => {
-      normalized[key] = value;
+      normalized[key.toLowerCase()] = value;
     });
     return normalized;
   }
 
   if (Array.isArray(headers)) {
-    return Object.fromEntries(headers);
+    for (const [key, value] of headers) {
+      normalized[key.toLowerCase()] = value;
+    }
+    return normalized;
   }
 
-  return { ...(headers as Record<string, string>) };
+  for (const [key, value] of Object.entries(headers as Record<string, string>)) {
+    normalized[key.toLowerCase()] = value;
+  }
+
+  return normalized;
 }
 
 export function buildApiHeaders(headers?: HeadersInit, apiKey = getEnv('VK_API_KEY')) {
   const normalized = normalizeHeaders(headers);
-  const hasAuthHeader = Object.keys(normalized).some((key) => {
-    const lower = key.toLowerCase();
-    return lower === 'authorization' || lower === 'x-api-key';
-  });
+  const hasAuthHeader = 'authorization' in normalized || 'x-api-key' in normalized;
 
   return {
-    'Content-Type': 'application/json',
+    'content-type': 'application/json',
     ...normalized,
-    ...(apiKey && !hasAuthHeader ? { 'X-API-Key': apiKey } : {}),
+    ...(apiKey && !hasAuthHeader ? { 'x-api-key': apiKey } : {}),
   };
 }
 

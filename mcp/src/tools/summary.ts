@@ -40,6 +40,9 @@ export async function handleSummaryTool(name: string, args: any): Promise<any> {
         headers: buildApiHeaders(),
       });
       const markdown = await res.text();
+      if (!res.ok) {
+        throw new Error(markdown || `API error: ${res.status}`);
+      }
       return {
         content: [{ type: 'text', text: markdown }],
       };

@@ -46,7 +46,7 @@ curl -s -X POST http://localhost:3001/api/broadcasts \
 
 ```json
 {
-  "id": "bcast_abc123",
+  "id": "4b5fb0b6-9b6e-47b3-bd24-2f088980ccf7",
   "message": "Deploy finished. Review RF-042 before closing the release.",
   "priority": "action-required",
   "from": "release-bot",
@@ -85,7 +85,7 @@ curl -s "http://localhost:3001/api/broadcasts?priority=urgent&since=2026-03-21T1
 ## Mark Read
 
 ```bash
-curl -s -X PATCH http://localhost:3001/api/broadcasts/bcast_abc123/read \
+curl -s -X PATCH http://localhost:3001/api/broadcasts/4b5fb0b6-9b6e-47b3-bd24-2f088980ccf7/read \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_KEY" \
   -d '{ "agent": "TARS" }'
