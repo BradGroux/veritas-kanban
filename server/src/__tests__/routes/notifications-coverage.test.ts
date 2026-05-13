@@ -30,17 +30,21 @@ import { errorHandler } from '../../middleware/error-handler.js';
 describe('Notification Routes', () => {
   let app: express.Express;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    app = express();
-    app.use(express.json());
-    // Simulate authenticated admin user for route tests
-    app.use((req: any, _res: any, next: any) => {
-      req.auth = { role: 'admin', keyName: 'test-admin', isLocalhost: true };
+  function buildApp(role: 'admin' | 'agent' = 'admin'): express.Express {
+    const testApp = express();
+    testApp.use(express.json());
+    testApp.use((req: any, _res: any, next: any) => {
+      req.auth = { role, keyName: `test-${role}`, isLocalhost: true };
       next();
     });
-    app.use('/api/notifications', notificationRoutes);
-    app.use(errorHandler);
+    testApp.use('/api/notifications', notificationRoutes);
+    testApp.use(errorHandler);
+    return testApp;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    app = buildApp();
   });
 
   describe('GET /api/notifications', () => {
@@ -203,9 +207,11 @@ describe('Notification Routes', () => {
     it('should mark pending notifications sent through the CLI alias', async () => {
       mockNotificationService.markManyDelivered.mockResolvedValue(2);
 
-      const res = await request(app).post('/api/notifications/mark-sent').send({
-        ids: ['n1', 'n2'],
-      });
+      const res = await request(app)
+        .post('/api/notifications/mark-sent')
+        .send({
+          ids: ['n1', 'n2'],
+        });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true, count: 2 });
@@ -232,6 +238,69 @@ describe('Notification Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true, count: 4 });
       expect(mockNotificationService.clearNotifications).toHaveBeenCalled();
+    });
+  });
+
+  describe('global notification authorization', () => {
+    beforeEach(() => {
+      app = buildApp('agent');
+    });
+
+    it('should allow agent-scoped notification reads for agent keys', async () => {
+      mockNotificationService.getNotifications.mockResolvedValue([
+        { id: 'n1', targetAgent: 'alice', delivered: false },
+      ]);
+
+      const res = await request(app).get('/api/notifications?agent=alice');
+
+      expect(res.status).toBe(200);
+      expect(mockNotificationService.getNotifications).toHaveBeenCalledWith({
+        agent: 'alice',
+        undelivered: false,
+        taskId: '',
+        limit: undefined,
+      });
+    });
+
+    it('should reject global notification reads for agent keys', async () => {
+      const res = await request(app).get('/api/notifications');
+
+      expect(res.status).toBe(403);
+      expect(mockNotificationService.getAllNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should reject global notification creation for agent keys', async () => {
+      const res = await request(app).post('/api/notifications').send({
+        message: 'Hello from CLI',
+      });
+
+      expect(res.status).toBe(403);
+      expect(mockNotificationService.createNotification).not.toHaveBeenCalled();
+    });
+
+    it('should reject pending notification export for agent keys', async () => {
+      const res = await request(app).get('/api/notifications/pending');
+
+      expect(res.status).toBe(403);
+      expect(mockNotificationService.getAllNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should reject global mark-sent for agent keys', async () => {
+      const res = await request(app)
+        .post('/api/notifications/mark-sent')
+        .send({
+          ids: ['n1'],
+        });
+
+      expect(res.status).toBe(403);
+      expect(mockNotificationService.markManyDelivered).not.toHaveBeenCalled();
+    });
+
+    it('should reject global notification clearing for agent keys', async () => {
+      const res = await request(app).delete('/api/notifications');
+
+      expect(res.status).toBe(403);
+      expect(mockNotificationService.clearNotifications).not.toHaveBeenCalled();
     });
   });
 

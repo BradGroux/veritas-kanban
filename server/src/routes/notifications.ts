@@ -14,13 +14,26 @@
  * GET    /api/notifications/subscriptions/:taskId — Thread subscriptions
  */
 
-import { Router, type Router as RouterType } from 'express';
+import { Router, type NextFunction, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getNotificationService } from '../services/notification-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router: RouterType = Router();
+const requireAdmin = authorize('admin');
+
+function requireAdminForGlobalNotifications(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (req.query.agent) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
+}
 
 /**
  * POST /api/notifications
@@ -28,6 +41,7 @@ const router: RouterType = Router();
  */
 router.post(
   '/',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const schema = z.object({
       type: z.string().optional(),
@@ -50,8 +64,9 @@ router.post(
  */
 router.get(
   '/',
+  requireAdminForGlobalNotifications,
   asyncHandler(async (req, res) => {
-    const agent = String(req.query.agent || "");
+    const agent = String(req.query.agent || '');
     if (!agent) {
       const service = getNotificationService();
       const notifications = await service.getAllNotifications({
@@ -65,7 +80,7 @@ router.get(
     const notifications = await service.getNotifications({
       agent,
       undelivered: req.query.undelivered === 'true',
-      taskId: String(req.query.taskId || ""),
+      taskId: String(req.query.taskId || ''),
       limit: req.query.limit ? Number(String(req.query.limit)) : undefined,
     });
 
@@ -92,6 +107,7 @@ router.post(
  */
 router.get(
   '/pending',
+  requireAdmin,
   asyncHandler(async (_req, res) => {
     const service = getNotificationService();
     const notifications = await service.getAllNotifications({ undelivered: true });
@@ -113,6 +129,7 @@ router.get(
  */
 router.post(
   '/mark-sent',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const schema = z.object({ ids: z.array(z.string().min(1)).min(1) });
     const { ids } = schema.parse(req.body);
@@ -128,6 +145,7 @@ router.post(
  */
 router.delete(
   '/',
+  requireAdmin,
   asyncHandler(async (_req, res) => {
     const service = getNotificationService();
     const count = await service.clearNotifications();
