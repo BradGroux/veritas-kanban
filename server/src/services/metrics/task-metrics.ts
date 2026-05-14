@@ -3,7 +3,7 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import type { TaskStatus, BlockedCategory } from '@veritas-kanban/shared';
+import type { BlockedCategory } from '@veritas-kanban/shared';
 import { TaskService } from '../task-service.js';
 import { PROJECT_ROOT } from './helpers.js';
 import type {
@@ -51,13 +51,7 @@ export async function computeTaskMetrics(
   }
 
   // Count by status
-  const byStatus: Record<TaskStatus, number> = {
-    todo: 0,
-    'in-progress': 0,
-    blocked: 0,
-    done: 0,
-    cancelled: 0,
-  };
+  const byStatus: Record<string, number> = {};
 
   // Count by blocked reason
   const byBlockedReason: Record<BlockedCategory | 'unspecified', number> = {
@@ -69,7 +63,7 @@ export async function computeTaskMetrics(
   };
 
   for (const task of filteredActive) {
-    byStatus[task.status]++;
+    byStatus[task.status] = (byStatus[task.status] ?? 0) + 1;
 
     // Count blocked reasons for blocked tasks
     if (task.status === 'blocked') {
@@ -83,7 +77,7 @@ export async function computeTaskMetrics(
 
   const archived = filteredArchived.length;
   const total = filteredActive.length + archived;
-  const completed = byStatus['done'] + archived;
+  const completed = (byStatus['done'] ?? 0) + archived;
 
   return {
     byStatus,

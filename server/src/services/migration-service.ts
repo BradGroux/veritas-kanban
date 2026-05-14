@@ -1,5 +1,5 @@
 import { TaskService } from './task-service.js';
-import type { TaskStatus } from '@veritas-kanban/shared';
+import type { BlockedReason, TaskStatus } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('migration-service');
 
@@ -7,6 +7,11 @@ const log = createLogger('migration-service');
  * One-time data migrations that run on server startup.
  * Each migration should be idempotent (safe to run multiple times).
  */
+const LEGACY_REVIEW_BLOCKED_REASON: BlockedReason = {
+  category: 'other',
+  note: 'Migrated from legacy review status after review column removal.',
+};
+
 export class MigrationService {
   private taskService: TaskService;
 
@@ -42,7 +47,10 @@ export class MigrationService {
     const activeTasks = await this.taskService.listTasks();
     for (const task of activeTasks) {
       if (isReviewStatus(task.status)) {
-        await this.taskService.updateTask(task.id, { status: 'blocked' });
+        await this.taskService.updateTask(task.id, {
+          status: 'blocked',
+          blockedReason: LEGACY_REVIEW_BLOCKED_REASON,
+        });
         migratedCount++;
       }
     }
@@ -77,7 +85,10 @@ export class MigrationService {
     await this.taskService.restoreTask(taskId);
 
     // Update status (restoreTask sets status to 'done', so we need to correct it)
-    await this.taskService.updateTask(taskId, { status: 'blocked' });
+    await this.taskService.updateTask(taskId, {
+      status: 'blocked',
+      blockedReason: LEGACY_REVIEW_BLOCKED_REASON,
+    });
 
     // Re-archive
     await this.taskService.archiveTask(taskId);

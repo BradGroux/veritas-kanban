@@ -2,7 +2,12 @@ import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/re
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { toast } from '@/hooks/useToast';
-import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
+import type {
+  BoardColumnConfig,
+  Task,
+  CreateTaskInput,
+  UpdateTaskInput,
+} from '@veritas-kanban/shared';
 
 /**
  * Patch a single task in both the list cache (['tasks']) and the individual
@@ -76,7 +81,7 @@ export function useCreateTask() {
         title: input.title,
         description: input.description || '',
         type: (input.type || 'code') as Task['type'],
-        status: 'todo',
+        status: input.status || 'triage',
         priority: input.priority || 'medium',
         project: input.project,
         sprint: input.sprint,
@@ -157,6 +162,39 @@ export function useUpdateTask() {
 
         // Map gate codes to user-friendly titles and actionable guidance
         const gateInfo: Record<string, { title: string; guidance: string }> = {
+          ASSIGNED_WORKER_REQUIRED: {
+            title: '🧭 Ready Gate Blocked',
+            guidance: 'Open the task → Details → Metadata → Assigned Worker.',
+          },
+          ACCEPTANCE_CRITERIA_REQUIRED: {
+            title: '🧭 Ready Gate Blocked',
+            guidance:
+              'Open the task → Details → Subtasks → Add Acceptance Criteria, or add a “Definition of Done” section in Description.',
+          },
+          BLOCKED_REASON_REQUIRED: {
+            title: '🚧 Blocked Reason Required',
+            guidance:
+              'Open the task → set status to Blocked → Details → Blocked Reason. Choose a category and add the blocker note, then retry the move if needed.',
+          },
+          BLOCKER_COMMENT_REQUIRED: {
+            title: '🚧 Blocked Reason Required',
+            guidance:
+              'Use the first-class Blocked Reason field: choose a category and add the blocker note.',
+          },
+          COMPLETION_COMMENT_REQUIRED: {
+            title: '✅ Done Gate Blocked',
+            guidance: 'Open the task → Details → Comments. Add a short completion summary.',
+          },
+          DELIVERABLE_REQUIRED: {
+            title: '📦 Deliverable Required',
+            guidance:
+              'Open the task → Details → Deliverables. Add the file, branch, PR, URL, or output location.',
+          },
+          VERIFICATION_NOTE_REQUIRED: {
+            title: '🧪 Verification Required',
+            guidance:
+              'Open the task → Details → Done Criteria and check a step, or add a verification note in Comments.',
+          },
           REVIEW_GATE: {
             title: '🔒 Review Gate Blocked',
             guidance: 'Add all four review scores (10/10/10/10) before completing this task.',
@@ -165,10 +203,6 @@ export function useUpdateTask() {
             title: '💬 Closing Comments Required',
             guidance:
               'Add a review comment with a deliverable summary (≥20 chars) before completing.',
-          },
-          DELIVERABLE_REQUIRED: {
-            title: '📦 Deliverable Required',
-            guidance: 'Attach at least one deliverable before marking this task as done.',
           },
           ORCHESTRATOR_DELEGATION: {
             title: '🤖 Delegation Required',
@@ -274,13 +308,8 @@ export function useBulkUpdate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      ids,
-      status,
-    }: {
-      ids: string[];
-      status: 'todo' | 'in-progress' | 'blocked' | 'done';
-    }) => api.tasks.bulkUpdate(ids, status),
+    mutationFn: ({ ids, status }: { ids: string[]; status: Task['status'] }) =>
+      api.tasks.bulkUpdate(ids, status),
     onMutate: async ({ ids, status }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
@@ -576,24 +605,24 @@ function sortByPosition(tasks: Task[]): Task[] {
   });
 }
 
-export function useTasksByStatus(tasks: Task[] | undefined) {
-  if (!tasks) {
-    return {
-      todo: [],
-      'in-progress': [],
-      blocked: [],
-      done: [],
-      cancelled: [],
-    };
-  }
+export function useTasksByStatus(tasks: Task[] | undefined, columns?: BoardColumnConfig[]) {
+  const statuses = columns?.map((column) => column.id) ?? [
+    'triage',
+    'todo',
+    'ready',
+    'in-progress',
+    'blocked',
+    'done',
+    'cancelled',
+  ];
 
-  return {
-    todo: sortByPosition(tasks.filter((t) => t.status === 'todo')),
-    'in-progress': sortByPosition(tasks.filter((t) => t.status === 'in-progress')),
-    blocked: sortByPosition(tasks.filter((t) => t.status === 'blocked')),
-    done: sortByPosition(tasks.filter((t) => t.status === 'done')),
-    cancelled: sortByPosition(tasks.filter((t) => t.status === 'cancelled')),
-  };
+  return statuses.reduce(
+    (grouped, status) => {
+      grouped[status] = sortByPosition((tasks ?? []).filter((t) => t.status === status));
+      return grouped;
+    },
+    {} as Record<Task['status'], Task[]>
+  );
 }
 
 // Check if a task is blocked by incomplete dependencies

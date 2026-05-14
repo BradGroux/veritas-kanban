@@ -17,34 +17,8 @@ import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDeleteTask, useBulkUpdate, useBulkArchiveByIds } from '@/hooks/useTasks';
 import { useBulkDemote } from '@/hooks/useBacklog';
 import { cn } from '@/lib/utils';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
-
-const STATUS_BUTTONS: { id: TaskStatus; label: string; color: string; activeColor: string }[] = [
-  {
-    id: 'todo',
-    label: 'Todo',
-    color: 'border-slate-400 text-slate-600',
-    activeColor: 'bg-slate-500 text-white border-slate-500',
-  },
-  {
-    id: 'in-progress',
-    label: 'In Progress',
-    color: 'border-blue-400 text-blue-600',
-    activeColor: 'bg-blue-500 text-white border-blue-500',
-  },
-  {
-    id: 'blocked',
-    label: 'Blocked',
-    color: 'border-red-400 text-red-600',
-    activeColor: 'bg-red-500 text-white border-red-500',
-  },
-  {
-    id: 'done',
-    label: 'Done',
-    color: 'border-green-400 text-green-600',
-    activeColor: 'bg-green-500 text-white border-green-500',
-  },
-];
+import { DEFAULT_FEATURE_SETTINGS, type Task, type TaskStatus } from '@veritas-kanban/shared';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 
 interface BulkActionsBarProps {
   tasks: Task[];
@@ -59,6 +33,10 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
   const deleteTask = useDeleteTask();
   const bulkArchiveByIds = useBulkArchiveByIds();
   const bulkDemote = useBulkDemote();
+  const { settings: featureSettings } = useFeatureSettings();
+  const columns = featureSettings.board.columns?.length
+    ? featureSettings.board.columns
+    : DEFAULT_FEATURE_SETTINGS.board.columns;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,20 +44,19 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
 
   // Group task IDs by status
   const taskIdsByStatus = useMemo(() => {
-    const map: Record<TaskStatus, string[]> = {
-      todo: [],
-      'in-progress': [],
-      blocked: [],
-      done: [],
-      cancelled: [],
-    };
+    const map = columns.reduce(
+      (acc, column) => {
+        acc[column.id] = [];
+        return acc;
+      },
+      {} as Record<TaskStatus, string[]>
+    );
     for (const task of tasks) {
-      if (map[task.status]) {
-        map[task.status].push(task.id);
-      }
+      if (!map[task.status]) map[task.status] = [];
+      map[task.status].push(task.id);
     }
     return map;
-  }, [tasks]);
+  }, [tasks, columns]);
 
   const allTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
   const selectedCount = selectedIds.size;
@@ -113,10 +90,9 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
     setIsProcessing(true);
     try {
       const ids = Array.from(selectedIds);
-      // Type assertion since BulkActionsBar only allows the 4 valid statuses
       const result = await bulkUpdate.mutateAsync({
         ids,
-        status: moveTarget as 'todo' | 'in-progress' | 'blocked' | 'done',
+        status: moveTarget,
       });
 
       if (result.failed.length > 0) {
@@ -265,8 +241,11 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
 
           {/* Status filter buttons */}
           <div className="flex items-center gap-1.5 ml-1">
-            {STATUS_BUTTONS.map(({ id, label, color, activeColor }) => {
-              const count = taskIdsByStatus[id].length;
+            {columns.map(({ id, title }) => {
+              const count = taskIdsByStatus[id]?.length ?? 0;
+              const label = title;
+              const color = 'border-slate-400 text-slate-600';
+              const activeColor = 'bg-slate-500 text-white border-slate-500';
               if (count === 0) return null;
               const fullySelected = isStatusFullySelected(id);
               const partiallySelected = isStatusPartiallySelected(id);
@@ -305,16 +284,17 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
                   <ArrowRight className="h-4 w-4" />
                   <span>
                     {moveTarget
-                      ? (STATUS_BUTTONS.find((s) => s.id === moveTarget)?.label ?? 'Move to...')
+                      ? (columns.find((s) => s.id === moveTarget)?.title ?? 'Move to...')
                       : 'Move to...'}
                   </span>
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todo">To Do</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
+                {columns.map((column) => (
+                  <SelectItem key={column.id} value={column.id}>
+                    {column.title}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 

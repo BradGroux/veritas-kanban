@@ -17,6 +17,7 @@ import {
   Zap,
   MessageSquare,
   Wrench,
+  UserRound,
   Link2,
   HelpCircle,
   Play,
@@ -238,6 +239,8 @@ export const TaskCard = memo(function TaskCard({
   }, [taskTypes, task.type]);
 
   // Memoize project info
+  const assignedWorker = task.assignedWorker ?? task.agent;
+
   const { projectColor, projectLabel } = useMemo(
     () => ({
       projectColor: task.project ? getProjectColor(projects, task.project) : 'bg-muted',
@@ -478,6 +481,12 @@ export const TaskCard = memo(function TaskCard({
                   )}
                 >
                   {task.priority}
+                </span>
+              )}
+              {assignedWorker && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 flex items-center gap-1">
+                  <UserRound className="h-3 w-3" />
+                  {assignedWorker}
                 </span>
               )}
               {/* Attachment indicator */}

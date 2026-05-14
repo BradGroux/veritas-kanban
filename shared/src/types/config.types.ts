@@ -1,6 +1,6 @@
 // Config Types
 
-import type { AgentType, TaskPriority } from './task.types.js';
+import type { AgentType, TaskPriority, TaskStatus } from './task.types.js';
 import type { TelemetryConfig } from './telemetry.types.js';
 
 export interface DevServerConfig {
@@ -181,6 +181,11 @@ export interface GeneralSettings {
 }
 
 /** Board display settings */
+export interface BoardColumnConfig {
+  id: TaskStatus;
+  title: string;
+}
+
 export interface BoardSettings {
   showDashboard: boolean;
   showArchiveSuggestions: boolean;
@@ -190,6 +195,8 @@ export interface BoardSettings {
   showSprintBadges: boolean;
   enableDragAndDrop: boolean;
   showDoneMetrics: boolean;
+  columns: BoardColumnConfig[];
+  defaultStatus: TaskStatus;
   dashboardWidgets: DashboardWidgetSettings;
 }
 
@@ -363,6 +370,15 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     showSprintBadges: true,
     enableDragAndDrop: true,
     showDoneMetrics: true,
+    columns: [
+      { id: 'triage', title: 'Triage' },
+      { id: 'todo', title: 'To Do' },
+      { id: 'ready', title: 'Ready' },
+      { id: 'in-progress', title: 'In Progress' },
+      { id: 'blocked', title: 'Blocked' },
+      { id: 'done', title: 'Done' },
+    ],
+    defaultStatus: 'triage',
     dashboardWidgets: {
       showTokenUsage: true,
       showRunDuration: true,

@@ -19,6 +19,17 @@ const GeneralSettingsSchema = z
   .strict()
   .optional();
 
+const BoardColumnSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .max(50)
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'Column ID must be lowercase alphanumeric with dashes'),
+    title: z.string().min(1).max(50),
+  })
+  .strict();
+
 const DashboardWidgetSettingsSchema = z
   .object({
     showTokenUsage: z.boolean().optional(),
@@ -47,6 +58,13 @@ const BoardSettingsSchema = z
     showSprintBadges: z.boolean().optional(),
     enableDragAndDrop: z.boolean().optional(),
     showDoneMetrics: z.boolean().optional(),
+    columns: z.array(BoardColumnSchema).min(1).max(12).optional(),
+    defaultStatus: z
+      .string()
+      .min(1)
+      .max(50)
+      .regex(/^[a-z0-9][a-z0-9-]*$/)
+      .optional(),
     dashboardWidgets: DashboardWidgetSettingsSchema,
   })
   .strict()

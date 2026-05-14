@@ -3,7 +3,7 @@ import { useBoardDragDrop } from '@/hooks/useBoardDragDrop';
 import { KanbanColumn } from './KanbanColumn';
 import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
-import type { TaskStatus, Task } from '@veritas-kanban/shared';
+import { DEFAULT_FEATURE_SETTINGS, type TaskStatus, type Task } from '@veritas-kanban/shared';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
@@ -32,13 +32,6 @@ const Dashboard = lazy(() =>
     default: mod.Dashboard,
   }))
 );
-
-const COLUMNS: { id: TaskStatus; title: string }[] = [
-  { id: 'todo', title: 'To Do' },
-  { id: 'in-progress', title: 'In Progress' },
-  { id: 'blocked', title: 'Blocked' },
-  { id: 'done', title: 'Done' },
-];
 
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
@@ -99,13 +92,21 @@ export function KanbanBoard() {
     window.history.replaceState({}, '', newUrl);
   }, [filters]);
 
+  const columns = featureSettings.board.columns?.length
+    ? featureSettings.board.columns
+    : DEFAULT_FEATURE_SETTINGS.board.columns;
+
+  const gridTemplateColumns = {
+    gridTemplateColumns: `repeat(${columns.length}, minmax(16rem, 1fr))`,
+  };
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks ? filterTasks(tasks, filters) : [];
   }, [tasks, filters]);
 
   // Group filtered tasks by status
-  const tasksByStatus = useTasksByStatus(filteredTasks);
+  const tasksByStatus = useTasksByStatus(filteredTasks, columns);
 
   // Register filtered tasks with keyboard context
   useEffect(() => {
@@ -155,11 +156,11 @@ export function KanbanBoard() {
   const handleMoveTask = useCallback(
     (taskId: string, status: TaskStatus) => {
       const task = filteredTasks.find((t) => t.id === taskId);
-      const columnName = COLUMNS.find((c) => c.id === status)?.title || status;
+      const columnName = columns.find((c) => c.id === status)?.title || status;
       updateTask.mutate({ id: taskId, input: { status } });
       announce(`Task ${task?.title || taskId} moved to ${columnName}`);
     },
-    [updateTask, filteredTasks, announce]
+    [updateTask, filteredTasks, announce, columns]
   );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
@@ -179,7 +180,7 @@ export function KanbanBoard() {
   } = useBoardDragDrop({
     tasks: filteredTasks,
     tasksByStatus,
-    columns: COLUMNS,
+    columns,
     onStatusChange: (taskId, status) => {
       updateTask.mutate({ id: taskId, input: { status } });
     },
@@ -202,7 +203,7 @@ export function KanbanBoard() {
     : null;
 
   if (isLoading) {
-    return <BoardLoadingSkeleton columns={COLUMNS} />;
+    return <BoardLoadingSkeleton columns={columns} />;
   }
 
   if (error) {
@@ -251,13 +252,18 @@ export function KanbanBoard() {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
               >
-                <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
-                  {COLUMNS.map((column) => (
+                <div
+                  className="grid gap-4 overflow-x-auto"
+                  style={gridTemplateColumns}
+                  role="group"
+                  aria-label="Kanban columns"
+                >
+                  {columns.map((column) => (
                     <KanbanColumn
                       key={column.id}
                       id={column.id}
                       title={column.title}
-                      tasks={liveTasksByStatus[column.id]}
+                      tasks={liveTasksByStatus[column.id] ?? []}
                       allTasks={filteredTasks}
                       onTaskClick={handleTaskClick}
                       selectedTaskId={selectedTaskId}
@@ -271,13 +277,18 @@ export function KanbanBoard() {
                 </DragOverlay>
               </DndContext>
             ) : (
-              <div className="grid grid-cols-4 gap-4" role="group" aria-label="Kanban columns">
-                {COLUMNS.map((column) => (
+              <div
+                className="grid gap-4 overflow-x-auto"
+                style={gridTemplateColumns}
+                role="group"
+                aria-label="Kanban columns"
+              >
+                {columns.map((column) => (
                   <KanbanColumn
                     key={column.id}
                     id={column.id}
                     title={column.title}
-                    tasks={tasksByStatus[column.id]}
+                    tasks={tasksByStatus[column.id] ?? []}
                     allTasks={filteredTasks}
                     onTaskClick={handleTaskClick}
                     selectedTaskId={selectedTaskId}

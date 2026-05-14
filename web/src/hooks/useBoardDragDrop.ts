@@ -11,12 +11,12 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
+import type { BoardColumnConfig, Task, TaskStatus } from '@veritas-kanban/shared';
 
 interface UseBoardDragDropOptions {
   tasks: Task[];
   tasksByStatus: Record<TaskStatus, Task[]>;
-  columns: { id: TaskStatus; title: string }[];
+  columns: BoardColumnConfig[];
   onStatusChange: (taskId: string, status: TaskStatus) => void;
   onReorder: (taskIds: string[], onSuccess?: () => void) => void;
 }
@@ -132,8 +132,8 @@ export function useBoardDragDrop({
         if (!overColumn || activeColumn === overColumn) return prev;
 
         // Move the task from source to destination
-        const sourceTasks = prev[activeColumn];
-        const destTasks = prev[overColumn];
+        const sourceTasks = prev[activeColumn] ?? [];
+        const destTasks = prev[overColumn] ?? [];
         const activeIndex = sourceTasks.findIndex((t) => t.id === activeId);
         if (activeIndex === -1) return prev;
 
@@ -188,8 +188,8 @@ export function useBoardDragDrop({
 
       if (originalColumn === finalColumn && !columnIds.includes(overId as TaskStatus)) {
         // Same column — check for reorder
-        const columnTasks = finalState[finalColumn];
-        const origColumnTasks = tasksByStatus[originalColumn];
+        const columnTasks = finalState[finalColumn] ?? [];
+        const origColumnTasks = tasksByStatus[originalColumn] ?? [];
         const oldIndex = origColumnTasks.findIndex((t: Task) => t.id === activeId);
         const newIndex = columnTasks.findIndex((t: Task) => t.id === activeId);
 
@@ -202,7 +202,7 @@ export function useBoardDragDrop({
         onStatusChange(activeId, finalColumn);
 
         // Send the new order for the destination column
-        const newOrder = finalState[finalColumn].map((t: Task) => t.id);
+        const newOrder = (finalState[finalColumn] ?? []).map((t: Task) => t.id);
         onReorder(newOrder);
       }
     },

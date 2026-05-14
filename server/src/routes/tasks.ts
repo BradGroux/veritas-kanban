@@ -35,6 +35,12 @@ const reviewCommentSchema = z.object({
 
 export const reviewScoresSchema = z.array(z.number().int().min(0).max(10)).length(4);
 
+const taskStatusSchema = z
+  .string()
+  .min(1)
+  .max(50)
+  .regex(/^[a-z0-9][a-z0-9-]*$/, 'Status must be lowercase alphanumeric with dashes');
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional().default(''),
@@ -43,8 +49,10 @@ const createTaskSchema = z.object({
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(), // "auto" | agent type slug
+  assignedWorker: z.string().max(100).optional(),
   reviewScores: reviewScoresSchema.optional(),
   reviewComments: z.array(reviewCommentSchema).optional(),
+  status: taskStatusSchema.optional(),
 });
 
 const gitSchema = z
@@ -133,11 +141,12 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
   type: z.string().optional(),
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
+  status: taskStatusSchema.optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(),
+  assignedWorker: z.string().max(100).optional(),
   git: gitSchema,
   github: githubSchema,
   attempt: attemptSchema,
@@ -148,6 +157,40 @@ const updateTaskSchema = z.object({
   autoCompleteOnSubtasks: z.boolean().optional(),
   blockedBy: z.array(z.string()).optional(),
   blockedReason: blockedReasonSchema,
+  comments: z
+    .array(
+      z.object({
+        id: z.string(),
+        author: z.string(),
+        text: z.string(),
+        timestamp: z.string(),
+      })
+    )
+    .optional(),
+  verificationSteps: z
+    .array(
+      z.object({
+        id: z.string(),
+        description: z.string(),
+        checked: z.boolean(),
+        checkedAt: z.string().optional(),
+      })
+    )
+    .optional(),
+  deliverables: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        type: z.enum(['document', 'code', 'report', 'artifact', 'other']),
+        path: z.string().optional(),
+        status: z.enum(['pending', 'attached', 'reviewed', 'accepted']),
+        agent: z.string().optional(),
+        created: z.string(),
+        description: z.string().optional(),
+      })
+    )
+    .optional(),
   plan: z.string().optional(),
   automation: automationSchema,
   position: z.number().optional(),
@@ -309,6 +352,8 @@ router.get(
           type: task.type,
           project: task.project,
           sprint: task.sprint,
+          agent: task.agent,
+          assignedWorker: task.assignedWorker,
           created: task.created,
           updated: task.updated,
           subtasks: task.subtasks,
@@ -419,20 +464,14 @@ router.get(
 
     // Get all active tasks and count by status
     const tasks = await taskService.listTasks();
-    const counts = {
+    const counts: Record<string, number> = {
       backlog: 0,
-      todo: 0,
-      'in-progress': 0,
-      blocked: 0,
-      done: 0,
       archived: 0,
     };
 
     // Count active tasks by status
     for (const task of tasks) {
-      if (task.status in counts) {
-        counts[task.status as keyof typeof counts]++;
-      }
+      counts[task.status] = (counts[task.status] ?? 0) + 1;
     }
 
     // Get backlog count
@@ -687,16 +726,6 @@ router.patch(
       }
       // If delegation check fails, no special handling — the request proceeds normally
       // (human users can still approve, or API keys with admin/agent role)
-    }
-
-    // Check if trying to move blocked task to in-progress
-    if (input.status === 'in-progress' && oldTask.status === 'todo' && oldTask.blockedBy?.length) {
-      const allTasks = await taskService.listTasks();
-      const { allowed, blockers } = blockingService.canMoveToInProgress(oldTask, allTasks);
-
-      if (!allowed) {
-        throw new ValidationError('Task is blocked', { blockedBy: blockers });
-      }
     }
 
     // Auto-clear blockedReason when task moves out of blocked status
@@ -978,7 +1007,7 @@ const bulkUpdateSchema = z.object({
     .array(z.string())
     .min(1, 'At least one task ID is required')
     .max(100, 'Maximum 100 tasks per bulk operation'),
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']),
+  status: taskStatusSchema,
 });
 
 const bulkArchiveSchema = z.object({
@@ -992,7 +1021,7 @@ const bulkArchiveSchema = z.object({
 router.post(
   '/bulk-update',
   asyncHandler(async (req, res) => {
-    let input: { ids: string[]; status: 'todo' | 'in-progress' | 'blocked' | 'done' };
+    let input: { ids: string[]; status: string };
     try {
       input = bulkUpdateSchema.parse(req.body);
     } catch (error) {

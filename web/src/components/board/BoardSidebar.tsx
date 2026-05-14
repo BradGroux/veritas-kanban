@@ -12,6 +12,7 @@ import { useRealtimeAgentStatus } from '@/hooks/useAgentStatus';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { api, Activity } from '@/lib/api';
 import { useTaskCounts } from '@/hooks/useTaskCounts';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useView } from '@/contexts/ViewContext';
 import {
   Clock,
@@ -22,9 +23,6 @@ import {
   Cpu,
   Inbox,
   ListTodo,
-  Play,
-  Ban,
-  CheckCircle,
   Archive,
   ExternalLink,
   GitBranch,
@@ -33,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { BudgetCard } from '@/components/dashboard/BudgetCard';
 import { MultiAgentPanel } from './MultiAgentPanel';
+import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 
 // ─── Agent State Types ───────────────────────────────────────────────
 
@@ -388,6 +387,10 @@ interface BoardSidebarProps {
 export function BoardSidebar({ onTaskClick }: BoardSidebarProps) {
   const { setView } = useView();
   const { data: counts } = useTaskCounts(); // Use new counts endpoint for sidebar counters
+  const { settings: featureSettings } = useFeatureSettings();
+  const columns = featureSettings.board.columns?.length
+    ? featureSettings.board.columns
+    : DEFAULT_FEATURE_SETTINGS.board.columns;
 
   return (
     <div className="flex flex-col gap-4">
@@ -402,29 +405,14 @@ export function BoardSidebar({ onTaskClick }: BoardSidebarProps) {
             value={counts?.backlog || 0}
             icon={<Inbox className="h-3.5 w-3.5" />}
           />
-          <Counter
-            label="To Do"
-            value={counts?.todo || 0}
-            icon={<ListTodo className="h-3.5 w-3.5" />}
-          />
-          <Counter
-            label="In Progress"
-            value={counts?.['in-progress'] || 0}
-            icon={<Play className="h-3.5 w-3.5" />}
-            color="text-blue-500"
-          />
-          <Counter
-            label="Blocked"
-            value={counts?.blocked || 0}
-            icon={<Ban className="h-3.5 w-3.5" />}
-            color="text-red-500"
-          />
-          <Counter
-            label="Done"
-            value={counts?.done || 0}
-            icon={<CheckCircle className="h-3.5 w-3.5" />}
-            color="text-green-500"
-          />
+          {columns.map((column) => (
+            <Counter
+              key={column.id}
+              label={column.title}
+              value={counts?.[column.id] || 0}
+              icon={<ListTodo className="h-3.5 w-3.5" />}
+            />
+          ))}
           <Counter
             label="Archived"
             value={counts?.archived || 0}

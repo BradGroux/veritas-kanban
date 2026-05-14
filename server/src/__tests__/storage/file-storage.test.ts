@@ -125,7 +125,7 @@ describe('FileStorageProvider', () => {
       expect(created).toBeDefined();
       expect(created.id).toMatch(/^task_/);
       expect(created.title).toBe('Created via storage');
-      expect(created.status).toBe('todo');
+      expect(created.status).toBe('triage');
     });
 
     it('findById returns the created task', async () => {

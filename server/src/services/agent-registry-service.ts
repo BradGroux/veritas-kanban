@@ -80,7 +80,7 @@ export interface TaskSyncUpdate {
   agentRef: string;
   taskId: string;
   taskTitle?: string;
-  taskStatus: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+  taskStatus: string;
 }
 
 export interface TaskSyncContext {
@@ -113,7 +113,7 @@ export function isValidSyncToken(context: TaskSyncContext): boolean {
 export interface TaskSyncSnapshot {
   id: string;
   title?: string;
-  status: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+  status: string;
   agent?: string;
 }
 

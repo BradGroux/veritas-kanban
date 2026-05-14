@@ -436,6 +436,7 @@ export class TaskService {
         project: data.project,
         sprint: data.sprint,
         agent: data.agent,
+        assignedWorker: data.assignedWorker,
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
@@ -471,7 +472,7 @@ export class TaskService {
   private syncAgentRegistryForStatusTransition(task: Task): void {
     if (!task.agent) return;
 
-    if (!['todo', 'in-progress', 'blocked', 'done', 'cancelled'].includes(task.status)) return;
+    if (!task.status) return;
 
     const registry = getAgentRegistryService();
     registry.syncFromTask(
@@ -557,17 +558,35 @@ export class TaskService {
 
   async createTask(input: CreateTaskInput): Promise<Task> {
     const now = new Date().toISOString();
+    const configService = new ConfigService();
+    const settings = await configService.getFeatureSettings();
+    const configuredStatuses = new Set(settings.board.columns.map((column) => column.id));
+    const defaultStatus = configuredStatuses.has(settings.board.defaultStatus)
+      ? settings.board.defaultStatus
+      : (settings.board.columns[0]?.id ?? 'todo');
+    const requestedStatus = input.status ?? defaultStatus;
+
+    if (!configuredStatuses.has(requestedStatus)) {
+      throw new ValidationError(`Unknown task status: ${requestedStatus}`, [
+        {
+          code: 'INVALID_STATUS',
+          message: `Status "${requestedStatus}" is not configured as a board column`,
+          path: ['status'],
+        },
+      ]);
+    }
 
     const task: Task = {
       id: this.generateId(),
       title: input.title,
       description: input.description || '',
       type: input.type || 'code',
-      status: 'todo',
+      status: requestedStatus,
       priority: input.priority || 'medium',
       project: input.project,
       sprint: input.sprint,
       agent: input.agent, // Pre-assigned agent (or "auto" for routing)
+      assignedWorker: input.assignedWorker,
       subtasks: input.subtasks, // Include subtasks from template
       blockedBy: input.blockedBy, // Include dependencies from blueprint
       created: now,
@@ -654,6 +673,129 @@ export class TaskService {
       if (statusChanged) {
         const configService = new ConfigService();
         settings = await configService.getFeatureSettings();
+        const configuredStatuses = new Set(settings.board.columns.map((column) => column.id));
+        if (input.status && !configuredStatuses.has(input.status)) {
+          throw new ValidationError(`Unknown task status: ${input.status}`, [
+            {
+              code: 'INVALID_STATUS',
+              message: `Status "${input.status}" is not configured as a board column`,
+              path: ['status'],
+            },
+          ]);
+        }
+      }
+
+      // Locked approval workflow gates before allowing status change.
+      // Keep these in the service so PATCH, bulk-update, CLI/MCP, and future board-manager
+      // paths enforce the same rules.
+      if (statusChanged && input.status) {
+        if (input.status === 'ready' && previousStatus === 'todo') {
+          const nextAssignedWorker =
+            input.assignedWorker ?? freshTask.assignedWorker ?? freshTask.agent;
+          const nextDescription = input.description ?? freshTask.description ?? '';
+          const nextSubtasks = input.subtasks ?? freshTask.subtasks ?? [];
+          const hasAcceptanceCriteria =
+            /(?:acceptance criteria|definition of done)\s*:?/i.test(nextDescription) ||
+            nextSubtasks.some((subtask) =>
+              (subtask.acceptanceCriteria ?? []).some((criterion) => criterion.trim().length > 0)
+            );
+          const readyGateDetails = [];
+
+          if (!nextAssignedWorker?.trim()) {
+            readyGateDetails.push({
+              code: 'ASSIGNED_WORKER_REQUIRED',
+              message: 'Add Assigned Worker in Details → Metadata → Assigned Worker.',
+              path: ['assignedWorker'],
+            });
+          }
+
+          if (!hasAcceptanceCriteria) {
+            readyGateDetails.push({
+              code: 'ACCEPTANCE_CRITERIA_REQUIRED',
+              message:
+                'Add acceptance criteria in Details → Subtasks → Add Acceptance Criteria, or add a “Definition of Done” section in Description.',
+              path: ['subtasks'],
+            });
+          }
+
+          if (readyGateDetails.length > 0) {
+            throw new ValidationError(
+              'To Do → Ready requires an assigned worker and acceptance criteria/definition of done',
+              readyGateDetails
+            );
+          }
+        }
+
+        if (input.status === 'blocked' && previousStatus !== 'blocked') {
+          const nextBlockedReason = input.blockedReason ?? freshTask.blockedReason;
+          const hasBlockedReason =
+            !!nextBlockedReason?.category && !!nextBlockedReason.note?.trim();
+
+          if (!hasBlockedReason) {
+            throw new ValidationError('Blocked tasks require a first-class blocked reason', [
+              {
+                code: 'BLOCKED_REASON_REQUIRED',
+                message:
+                  'Add Blocked Reason in Details → Blocked Reason: choose a category and write the blocker note. If the UI cannot show the field until after the failed move, retry the move after adding the note.',
+                path: ['blockedReason'],
+              },
+            ]);
+          }
+        }
+
+        if (input.status === 'done' && previousStatus !== 'done') {
+          const nextComments = input.comments ?? freshTask.comments ?? [];
+          const nextDeliverables = input.deliverables ?? freshTask.deliverables ?? [];
+          const nextVerification = input.verificationSteps ?? freshTask.verificationSteps ?? [];
+          const hasCompletionComment = nextComments.some((comment) =>
+            /complete|completed|done|delivered|summary|handoff/i.test(comment.text)
+          );
+          const hasVerificationNote =
+            nextVerification.some((step) => step.checked) ||
+            nextComments.some((comment) =>
+              /verified|verification|tested|validated|checked|not run|not tested/i.test(
+                comment.text
+              )
+            );
+
+          if (!hasCompletionComment || nextDeliverables.length === 0 || !hasVerificationNote) {
+            throw new ValidationError(
+              'Done requires a completion comment, deliverable/artifact, and verification note/check',
+              [
+                ...(!hasCompletionComment
+                  ? [
+                      {
+                        code: 'COMPLETION_COMMENT_REQUIRED',
+                        message:
+                          'Add a completion comment in Details → Comments summarizing what was completed.',
+                        path: ['comments'],
+                      },
+                    ]
+                  : []),
+                ...(nextDeliverables.length === 0
+                  ? [
+                      {
+                        code: 'DELIVERABLE_REQUIRED',
+                        message:
+                          'Add a deliverable/artifact in Details → Deliverables with the file, branch, PR, URL, or output location.',
+                        path: ['deliverables'],
+                      },
+                    ]
+                  : []),
+                ...(!hasVerificationNote
+                  ? [
+                      {
+                        code: 'VERIFICATION_NOTE_REQUIRED',
+                        message:
+                          'Add a verification note in Details → Comments, or check a step in Details → Done Criteria.',
+                        path: ['verificationSteps'],
+                      },
+                    ]
+                  : []),
+              ]
+            );
+          }
+        }
       }
 
       // Validate transition hooks (quality gates) before allowing status change

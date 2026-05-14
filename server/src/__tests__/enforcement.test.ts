@@ -5,7 +5,41 @@ import os from 'os';
 import { TaskService } from '../services/task-service.js';
 import { ConfigService } from '../services/config-service.js';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
+import type { UpdateTaskInput } from '@veritas-kanban/shared';
 import { reviewScoresSchema } from '../routes/tasks.js';
+
+const DONE_EVIDENCE = {
+  comments: [
+    {
+      id: 'comment_done_evidence',
+      author: 'test-agent',
+      text: 'Completed implementation summary and handoff for this test task.',
+      timestamp: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+  deliverables: [
+    {
+      id: 'deliverable_done_evidence',
+      title: 'Test artifact',
+      type: 'artifact',
+      path: 'server/src/__tests__/enforcement.test.ts',
+      status: 'attached',
+      created: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+  verificationSteps: [
+    {
+      id: 'verification_done_evidence',
+      description: 'Evidence fixture checked',
+      checked: true,
+      checkedAt: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+} as const;
+
+function doneInput(overrides: Partial<UpdateTaskInput> = {}): UpdateTaskInput {
+  return { status: 'done', ...DONE_EVIDENCE, ...overrides };
+}
 
 function buildSettings(overrides: Partial<typeof DEFAULT_FEATURE_SETTINGS> = {}) {
   return {
@@ -49,7 +83,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Review gate disabled' });
-    const updated = await service.updateTask(task.id, { status: 'done' });
+    const updated = await service.updateTask(task.id, doneInput());
 
     expect(updated.status).toBe('done');
   });
@@ -62,7 +96,7 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Review gate enabled', type: 'code' });
 
-    await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
+    await expect(service.updateTask(task.id, doneInput())).rejects.toThrow(
       /Review Gate.*requires all four review scores/
     );
   });
@@ -83,8 +117,8 @@ describe('Enforcement gates', () => {
     });
 
     // Should complete without review scores
-    const updatedContent = await service.updateTask(contentTask.id, { status: 'done' });
-    const updatedResearch = await service.updateTask(researchTask.id, { status: 'done' });
+    const updatedContent = await service.updateTask(contentTask.id, doneInput());
+    const updatedResearch = await service.updateTask(researchTask.id, doneInput());
 
     expect(updatedContent.status).toBe('done');
     expect(updatedResearch.status).toBe('done');
@@ -97,7 +131,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Closing comments disabled' });
-    const updated = await service.updateTask(task.id, { status: 'done' });
+    const updated = await service.updateTask(task.id, doneInput());
 
     expect(updated.status).toBe('done');
   });
@@ -110,9 +144,7 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Closing comments enabled' });
 
-    await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
-      /Closing Comments:/
-    );
+    await expect(service.updateTask(task.id, doneInput())).rejects.toThrow(/Closing Comments:/);
   });
 
   it('skips enforcement when enforcement settings are missing', async () => {
@@ -123,7 +155,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'No enforcement settings' });
-    const updated = await service.updateTask(task.id, { status: 'done' });
+    const updated = await service.updateTask(task.id, doneInput());
 
     expect(updated.status).toBe('done');
   });
@@ -137,7 +169,7 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Auto telemetry enabled' });
     await service.updateTask(task.id, { status: 'in-progress' });
-    await service.updateTask(task.id, { status: 'done' });
+    await service.updateTask(task.id, doneInput());
 
     expect(telemetry.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'run.started', taskId: task.id })
@@ -177,10 +209,10 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Auto time tracking enabled' });
     await service.updateTask(task.id, { status: 'in-progress' });
-    await service.updateTask(task.id, {
-      status: 'done',
-      timeTracking: { entries: [], totalSeconds: 0, isRunning: true },
-    });
+    await service.updateTask(
+      task.id,
+      doneInput({ timeTracking: { entries: [], totalSeconds: 0, isRunning: true } })
+    );
 
     expect(startSpy).toHaveBeenCalled();
     expect(stopSpy).toHaveBeenCalled();

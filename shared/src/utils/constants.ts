@@ -16,7 +16,9 @@ export const PRIORITY_LABELS: Record<string, string> = {
  * Task status labels
  */
 export const STATUS_LABELS: Record<string, string> = {
+  triage: 'Triage',
   todo: 'To Do',
+  ready: 'Ready',
   'in-progress': 'In Progress',
   done: 'Done',
   blocked: 'Blocked',

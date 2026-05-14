@@ -5,8 +5,42 @@ import os from 'os';
 import { MigrationService } from '../services/migration-service.js';
 import { TaskService } from '../services/task-service.js';
 import { ConfigService } from '../services/config-service.js';
-import type { TaskStatus } from '@veritas-kanban/shared';
+import type { BlockedReason, TaskStatus, UpdateTaskInput } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
+
+const BLOCKED_REASON: BlockedReason = {
+  category: 'other',
+  note: 'Blocked in migration test fixture.',
+};
+
+const DONE_EVIDENCE: Pick<UpdateTaskInput, 'comments' | 'deliverables' | 'verificationSteps'> = {
+  comments: [
+    {
+      id: 'comment_done_evidence',
+      author: 'test-agent',
+      text: 'Completed migration test task and verification summary.',
+      timestamp: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+  deliverables: [
+    {
+      id: 'deliverable_done_evidence',
+      title: 'Migration test artifact',
+      type: 'artifact',
+      path: 'server/src/__tests__/migration-service.test.ts',
+      status: 'attached',
+      created: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+  verificationSteps: [
+    {
+      id: 'verification_done_evidence',
+      description: 'Migration test evidence checked',
+      checked: true,
+      checkedAt: '2026-05-13T12:00:00.000Z',
+    },
+  ],
+};
 
 describe('MigrationService', () => {
   let taskService: TaskService;
@@ -94,6 +128,10 @@ This task has the legacy review status.
       const tasks = await taskService.listTasks();
       expect(tasks).toHaveLength(1);
       expect(tasks[0].status).toBe('blocked');
+      expect(tasks[0].blockedReason).toEqual({
+        category: 'other',
+        note: 'Migrated from legacy review status after review column removal.',
+      });
     });
 
     it('should not modify tasks with non-review statuses', async () => {
@@ -105,10 +143,13 @@ This task has the legacy review status.
       await taskService.updateTask(inProgressTask.id, { status: 'in-progress' });
 
       const blockedTask = await taskService.createTask({ title: 'Blocked Task' });
-      await taskService.updateTask(blockedTask.id, { status: 'blocked' });
+      await taskService.updateTask(blockedTask.id, {
+        status: 'blocked',
+        blockedReason: BLOCKED_REASON,
+      });
 
       const doneTask = await taskService.createTask({ title: 'Done Task' });
-      await taskService.updateTask(doneTask.id, { status: 'done' });
+      await taskService.updateTask(doneTask.id, { status: 'done', ...DONE_EVIDENCE });
 
       // Run migrations
       await migrationService.runMigrations();
@@ -218,6 +259,10 @@ This archived task has the legacy review status.
       const archivedTasks = await taskService.listArchivedTasks();
       expect(archivedTasks).toHaveLength(1);
       expect(archivedTasks[0].status).toBe('blocked');
+      expect(archivedTasks[0].blockedReason).toEqual({
+        category: 'other',
+        note: 'Migrated from legacy review status after review column removal.',
+      });
     });
   });
 });
