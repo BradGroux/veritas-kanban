@@ -8,8 +8,14 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  type BoardColumnConfig,
+  type Task,
+  type TaskStatus,
+} from '@veritas-kanban/shared';
 import { toast } from './useToast';
+import { useFeatureSettings } from './useFeatureSettings';
 
 interface KeyboardContextValue {
   // Dialog triggers
@@ -36,19 +42,21 @@ interface KeyboardContextValue {
   setOnMoveTask: (fn: (taskId: string, status: TaskStatus) => void) => void;
 }
 
-const KeyboardContext = createContext<KeyboardContextValue | null>(null);
+function getColumnForShortcut(key: string, columns: BoardColumnConfig[]): TaskStatus | null {
+  const index = Number.parseInt(key, 10) - 1;
+  return Number.isInteger(index) && index >= 0 && index < columns.length ? columns[index].id : null;
+}
 
-const STATUS_MAP: Record<string, TaskStatus> = {
-  '1': 'todo',
-  '2': 'in-progress',
-  '3': 'blocked',
-  '4': 'done',
-};
+const KeyboardContext = createContext<KeyboardContextValue | null>(null);
 
 export function KeyboardProvider({ children }: { children: ReactNode }) {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const { settings: featureSettings } = useFeatureSettings();
+  const columns = featureSettings.board.columns?.length
+    ? featureSettings.board.columns
+    : DEFAULT_FEATURE_SETTINGS.board.columns;
 
   // Use refs for callbacks to avoid re-render loops
   const openCreateDialogRef = useRef<(() => void) | null>(null);
@@ -90,14 +98,14 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
 
   // Get flat list of tasks sorted by column then position
   const getTaskList = useCallback(() => {
-    const statusOrder: TaskStatus[] = ['todo', 'in-progress', 'blocked', 'done'];
+    const statusOrder = columns.map((column) => column.id);
     return [...tasks].sort((a, b) => {
       const aIndex = statusOrder.indexOf(a.status);
       const bIndex = statusOrder.indexOf(b.status);
       if (aIndex !== bIndex) return aIndex - bIndex;
       return a.title.localeCompare(b.title);
     });
-  }, [tasks]);
+  }, [tasks, columns]);
 
   // Keyboard event handler
   useEffect(() => {
@@ -177,9 +185,21 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         case '2':
         case '3':
         case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9': {
           e.preventDefault();
+          const newStatus = getColumnForShortcut(e.key, columns);
+          if (!newStatus) {
+            toast({
+              title: 'No column for shortcut',
+              description: `Column ${e.key} is not configured on this board`,
+            });
+            return;
+          }
           if (selectedTaskId && onMoveTaskRef.current) {
-            const newStatus = STATUS_MAP[e.key];
             onMoveTaskRef.current(selectedTaskId, newStatus);
           } else {
             // Show toast when no task is selected
@@ -189,12 +209,13 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
             });
           }
           break;
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [getTaskList, selectedTaskId, isHelpOpen, openCreateDialog, openChatPanel]);
+  }, [getTaskList, selectedTaskId, isHelpOpen, openCreateDialog, openChatPanel, columns]);
 
   const value = useMemo<KeyboardContextValue>(
     () => ({

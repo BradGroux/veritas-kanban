@@ -17,39 +17,43 @@ interface BlockedReasonSectionProps {
   readOnly?: boolean;
 }
 
-const BLOCKED_CATEGORIES: { value: BlockedCategory; label: string; icon: React.ReactNode; description: string }[] = [
-  { 
-    value: 'waiting-on-feedback', 
-    label: 'Waiting on Feedback', 
+const BLOCKED_CATEGORIES: {
+  value: BlockedCategory;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}[] = [
+  {
+    value: 'waiting-on-feedback',
+    label: 'Waiting on Feedback',
     icon: <MessageSquare className="h-4 w-4" />,
     description: 'Blocked waiting for input from someone',
   },
-  { 
-    value: 'technical-snag', 
-    label: 'Technical Snag', 
+  {
+    value: 'technical-snag',
+    label: 'Technical Snag',
     icon: <Wrench className="h-4 w-4" />,
     description: 'Blocked by a technical issue or bug',
   },
-  { 
-    value: 'prerequisite', 
-    label: 'Prerequisite', 
+  {
+    value: 'prerequisite',
+    label: 'Prerequisite',
     icon: <Link2 className="h-4 w-4" />,
     description: 'Blocked by another task that must complete first',
   },
-  { 
-    value: 'other', 
-    label: 'Other', 
+  {
+    value: 'other',
+    label: 'Other',
     icon: <HelpCircle className="h-4 w-4" />,
     description: 'Blocked for another reason',
   },
 ];
 
-export function BlockedReasonSection({ task, onUpdate, readOnly = false }: BlockedReasonSectionProps) {
-  // Only show when status is blocked
-  if (task.status !== 'blocked') {
-    return null;
-  }
-
+export function BlockedReasonSection({
+  task,
+  onUpdate,
+  readOnly = false,
+}: BlockedReasonSectionProps) {
   const currentCategory = task.blockedReason?.category;
   const currentNote = task.blockedReason?.note || '';
 
@@ -76,7 +80,7 @@ export function BlockedReasonSection({ task, onUpdate, readOnly = false }: Block
   };
 
   const getCategoryInfo = (category: BlockedCategory) => {
-    return BLOCKED_CATEGORIES.find(c => c.value === category);
+    return BLOCKED_CATEGORIES.find((c) => c.value === category);
   };
 
   return (
@@ -85,6 +89,11 @@ export function BlockedReasonSection({ task, onUpdate, readOnly = false }: Block
         <Ban className="h-4 w-4 text-red-500" />
         <Label className="text-muted-foreground font-medium">Blocked Reason</Label>
       </div>
+      {task.status !== 'blocked' && !readOnly && (
+        <p className="text-xs text-muted-foreground">
+          Required before moving to Blocked. Choose a category and add the concrete blocker note.
+        </p>
+      )}
 
       {readOnly ? (
         <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3 space-y-2">
@@ -109,7 +118,7 @@ export function BlockedReasonSection({ task, onUpdate, readOnly = false }: Block
             onValueChange={(value) => handleCategoryChange(value as BlockedCategory)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Why is this task blocked?" />
+              <SelectValue placeholder="Choose blocker category..." />
             </SelectTrigger>
             <SelectContent>
               {BLOCKED_CATEGORIES.map((cat) => (
@@ -126,7 +135,7 @@ export function BlockedReasonSection({ task, onUpdate, readOnly = false }: Block
           <Textarea
             value={currentNote}
             onChange={(e) => handleNoteChange(e.target.value)}
-            placeholder="Add details about what's blocking this task..."
+            placeholder="What exactly is blocking this, and what is needed next?"
             rows={2}
             className="resize-none text-sm"
           />

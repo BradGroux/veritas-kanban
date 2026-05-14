@@ -13,21 +13,19 @@ import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints } from '@/hooks/useSprints';
 import { useConfig } from '@/hooks/useConfig';
-import type { Task, TaskStatus, TaskPriority, AgentType } from '@veritas-kanban/shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  type Task,
+  type TaskStatus,
+  type TaskPriority,
+  type AgentType,
+} from '@veritas-kanban/shared';
 
 interface TaskMetadataSectionProps {
   task: Task;
   onUpdate: <K extends keyof Task>(field: K, value: Task[K]) => void;
   readOnly?: boolean;
 }
-
-const statusLabels: Record<TaskStatus, string> = {
-  todo: 'To Do',
-  'in-progress': 'In Progress',
-  blocked: 'Blocked',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
 
 const priorityLabels: Record<TaskPriority, string> = {
   low: 'Low',
@@ -46,6 +44,13 @@ export function TaskMetadataSection({
   const { data: sprints = [] } = useSprints();
   const { data: config } = useConfig();
   const enabledAgents = config?.agents.filter((a) => a.enabled) || [];
+  const columns = config?.features?.board?.columns?.length
+    ? config.features.board.columns
+    : DEFAULT_FEATURE_SETTINGS.board.columns;
+  const currentStatusLabel =
+    columns.find((column) => column.id === task.status)?.title ?? task.status;
+  const currentWorker = task.assignedWorker ?? task.agent ?? '';
+  const workerOptions = ['librarian', 'implementer', 'researcher', 'writer', 'ops'];
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
 
@@ -61,7 +66,7 @@ export function TaskMetadataSection({
           <Label className="text-muted-foreground">Status</Label>
           {readOnly ? (
             <div className="text-sm font-medium px-3 py-2 bg-muted/30 rounded-md">
-              {statusLabels[task.status]}
+              {currentStatusLabel}
             </div>
           ) : (
             <Select value={task.status} onValueChange={(v) => onUpdate('status', v as TaskStatus)}>
@@ -69,9 +74,9 @@ export function TaskMetadataSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
+                {columns.map((column) => (
+                  <SelectItem key={column.id} value={column.id}>
+                    {column.title}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -213,8 +218,8 @@ export function TaskMetadataSection({
         )}
       </div>
 
-      {/* Sprint & Agent */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Sprint, Assignment & Agent */}
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label className="text-muted-foreground">Sprint</Label>
           {readOnly ? (
@@ -238,6 +243,37 @@ export function TaskMetadataSection({
                     {s.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-muted-foreground">Assigned Worker</Label>
+          {readOnly ? (
+            <div className="text-sm font-medium px-3 py-2 bg-muted/30 rounded-md">
+              {currentWorker || 'Unassigned'}
+            </div>
+          ) : (
+            <Select
+              value={currentWorker || '__none__'}
+              onValueChange={(value) =>
+                onUpdate('assignedWorker', value === '__none__' ? undefined : value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Unassigned</SelectItem>
+                {workerOptions.map((worker) => (
+                  <SelectItem key={worker} value={worker}>
+                    {worker}
+                  </SelectItem>
+                ))}
+                {currentWorker && !workerOptions.includes(currentWorker) && (
+                  <SelectItem value={currentWorker}>{currentWorker}</SelectItem>
+                )}
               </SelectContent>
             </Select>
           )}

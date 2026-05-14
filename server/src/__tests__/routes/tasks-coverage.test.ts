@@ -231,7 +231,7 @@ describe('Tasks Routes (actual module)', () => {
       );
     });
 
-    it('should check blocking when moving to in-progress', async () => {
+    it('should allow moving to in-progress through task service', async () => {
       const oldTask = { id: 't1', status: 'todo', title: 'Task', blockedBy: ['t2'] };
       mockTaskService.getTask.mockResolvedValue(oldTask);
       mockTaskService.listTasks.mockResolvedValue([oldTask]);
@@ -242,7 +242,7 @@ describe('Tasks Routes (actual module)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should reject blocked task moving to in-progress', async () => {
+    it('should delegate dependency validation to task service when moving to in-progress', async () => {
       const oldTask = { id: 't1', status: 'todo', title: 'Task', blockedBy: ['t2'] };
       mockTaskService.getTask.mockResolvedValue(oldTask);
       mockTaskService.listTasks.mockResolvedValue([oldTask]);
@@ -252,7 +252,8 @@ describe('Tasks Routes (actual module)', () => {
       });
 
       const res = await request(app).patch('/api/tasks/t1').send({ status: 'in-progress' });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith('t1', { status: 'in-progress' });
     });
 
     it('should auto-clear blockedReason when moving out of blocked', async () => {

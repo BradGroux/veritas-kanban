@@ -1,18 +1,16 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import type { TaskStatus } from '@veritas-kanban/shared';
-
-interface Column {
-  id: TaskStatus;
-  title: string;
-}
+import type { BoardColumnConfig } from '@veritas-kanban/shared';
 
 interface BoardLoadingSkeletonProps {
-  columns: Column[];
+  columns: BoardColumnConfig[];
 }
 
 export function BoardLoadingSkeleton({ columns }: BoardLoadingSkeletonProps) {
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div
+      className="grid gap-4 overflow-x-auto"
+      style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(16rem, 1fr))` }}
+    >
       {columns.map((column) => (
         <div
           key={column.id}

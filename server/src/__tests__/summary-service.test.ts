@@ -33,10 +33,7 @@ describe('SummaryService', () => {
     it('should return empty summary for empty task list', () => {
       const result = service.getOverallSummary([]);
       expect(result.total).toBe(0);
-      expect(result.byStatus.todo).toBe(0);
-      expect(result.byStatus['in-progress']).toBe(0);
-      expect(result.byStatus.blocked).toBe(0);
-      expect(result.byStatus.done).toBe(0);
+      expect(result.byStatus).toEqual({});
       expect(result.highPriority).toHaveLength(0);
       expect(Object.keys(result.byProject)).toHaveLength(0);
     });

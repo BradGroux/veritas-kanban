@@ -174,7 +174,7 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(task.title).toBe('New Task');
       expect(task.description).toBe('Task description here');
       expect(task.type).toBe('research');
-      expect(task.status).toBe('todo');
+      expect(task.status).toBe('triage');
       expect(task.priority).toBe('high');
       expect(task.project).toBe('my-project');
       expect(task.sprint).toBe('US-900');
@@ -192,7 +192,7 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(task.title).toBe('Minimal');
       expect(task.type).toBe('code'); // default
       expect(task.priority).toBe('medium'); // default
-      expect(task.status).toBe('todo'); // default
+      expect(task.status).toBe('triage'); // configured default
     });
 
     it('should generate proper slugs for filenames', async () => {

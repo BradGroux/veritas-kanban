@@ -3,7 +3,6 @@
  * All metric interfaces and type aliases used across the metrics modules.
  */
 import type {
-  TaskStatus,
   BlockedCategory,
   TelemetryEventType,
   AnyTelemetryEvent,
@@ -27,7 +26,7 @@ export type MetricsPeriod =
   | 'custom';
 
 export interface TaskMetrics {
-  byStatus: Record<TaskStatus, number>;
+  byStatus: Record<string, number>;
   byBlockedReason: Record<BlockedCategory | 'unspecified', number>;
   total: number;
   completed: number; // done + archived

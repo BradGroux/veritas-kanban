@@ -283,7 +283,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
               value={text}
               onChange={setText}
               onKeyDown={handleKeyDown}
-              placeholder="Add a comment... (supports Markdown, Cmd/Ctrl+Enter to submit)"
+              placeholder="Add a comment... For Done, include completion summary and verification note. Cmd/Ctrl+Enter to submit."
               minHeight={100}
               maxHeight={240}
               disabled={isAdding}
@@ -293,7 +293,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Add a comment... (Cmd/Ctrl+Enter to submit)"
+              placeholder="Add a comment... For Done, include completion summary and verification note. Cmd/Ctrl+Enter to submit."
               className="text-sm min-h-[80px] resize-none"
               disabled={isAdding}
             />

@@ -111,18 +111,16 @@ export function TaskDetailsTab({
       {/* Metadata Section */}
       <TaskMetadataSection task={task} onUpdate={onUpdate} readOnly={readOnly} />
 
-      {/* Blocked Reason (shown when status is blocked) */}
-      {task.status === 'blocked' && (
-        <div className="border-t pt-4">
-          <BlockedReasonSection
-            task={task}
-            onUpdate={(blockedReason: BlockedReason | undefined) =>
-              onUpdate('blockedReason', blockedReason)
-            }
-            readOnly={readOnly}
-          />
-        </div>
-      )}
+      {/* Blocked Reason */}
+      <div className="border-t pt-4">
+        <BlockedReasonSection
+          task={task}
+          onUpdate={(blockedReason: BlockedReason | undefined) =>
+            onUpdate('blockedReason', blockedReason)
+          }
+          readOnly={readOnly}
+        />
+      </div>
 
       {/* Checkpoint Status (shown when checkpoint exists) */}
       {task.checkpoint && (
@@ -175,6 +173,10 @@ export function TaskDetailsTab({
 
       {/* Subtasks */}
       <div className="border-t pt-4">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Ready gate: add acceptance criteria here, or add a “Definition of Done” section in the
+          description.
+        </p>
         <SubtasksSection
           task={task}
           onAutoCompleteChange={(value) => onUpdate('autoCompleteOnSubtasks', value || undefined)}
@@ -183,6 +185,9 @@ export function TaskDetailsTab({
 
       {/* Verification / Done Criteria */}
       <div className="border-t pt-4">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Done gate: check a verification step here, or add a verification note in Comments.
+        </p>
         <VerificationSection task={task} />
       </div>
 
@@ -205,12 +210,19 @@ export function TaskDetailsTab({
 
       {/* Deliverables */}
       <div className="border-t pt-4">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Done gate: record the branch, PR, file path, URL, or output location before moving to
+          Done.
+        </p>
         <DeliverablesSection task={task} />
       </div>
 
       {/* Comments */}
       {taskSettings.enableComments && (
         <div className="border-t pt-4">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Done gate: add a completion summary and, if needed, a verification note here.
+          </p>
           <CommentsSection task={task} />
         </div>
       )}

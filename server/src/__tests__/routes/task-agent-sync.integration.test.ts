@@ -76,7 +76,7 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
     expect(created.status).toBe(201);
     const createdTask = unwrap<{ id: string; status: string }>(created.body);
     expect(createdTask.id).toMatch(/^task_/);
-    expect(createdTask.status).toBe('todo');
+    expect(createdTask.status).toBe('triage');
 
     // 3) Move task to in-progress => registry should reflect busy + currentTaskId.
     const toInProgress = await request(app)
@@ -94,7 +94,35 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
     // Test forces flap guard to 0ms (VERITAS_TASK_SYNC_FLAP_GUARD_MS) for deterministic timing.
     const toDone = await request(app)
       .patch(`/api/tasks/${createdTask.id}`)
-      .send({ status: 'done' });
+      .send({
+        status: 'done',
+        comments: [
+          {
+            id: 'comment_done_evidence',
+            author: agentId,
+            text: 'Completed route sync smoke task and handoff summary.',
+            timestamp: '2026-05-13T12:00:00.000Z',
+          },
+        ],
+        deliverables: [
+          {
+            id: 'deliverable_done_evidence',
+            title: 'Route sync smoke artifact',
+            type: 'artifact',
+            path: 'server/src/__tests__/routes/task-agent-sync.integration.test.ts',
+            status: 'attached',
+            created: '2026-05-13T12:00:00.000Z',
+          },
+        ],
+        verificationSteps: [
+          {
+            id: 'verification_done_evidence',
+            description: 'Route sync smoke task verified',
+            checked: true,
+            checkedAt: '2026-05-13T12:00:00.000Z',
+          },
+        ],
+      });
     expect(toDone.status).toBe(200);
 
     const agentIdle = await request(app).get(`/api/agents/register/${agentId}`);

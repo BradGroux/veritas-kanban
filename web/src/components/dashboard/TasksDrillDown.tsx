@@ -14,7 +14,7 @@ interface TasksDrillDownProps {
 }
 
 const statusConfig: Record<
-  TaskStatus,
+  string,
   {
     icon: React.ReactNode;
     color: string;
@@ -79,14 +79,10 @@ export function TasksDrillDown({
 
   // Group by status for summary
   const statusCounts = useMemo(() => {
-    const counts: Record<TaskStatus, number> = {
-      todo: 0,
-      'in-progress': 0,
-      blocked: 0,
-      done: 0,
-      cancelled: 0,
-    };
-    filteredTasks.forEach((t) => counts[t.status]++);
+    const counts: Record<string, number> = {};
+    filteredTasks.forEach((t) => {
+      counts[t.status] = (counts[t.status] ?? 0) + 1;
+    });
     return counts;
   }, [filteredTasks]);
 
@@ -105,7 +101,11 @@ export function TasksDrillDown({
       {/* Summary Stats */}
       <div className="flex gap-2 flex-wrap">
         {Object.entries(statusCounts).map(([status, count]) => {
-          const config = statusConfig[status as TaskStatus];
+          const config = statusConfig[status] ?? {
+            icon: <ListTodo className="h-4 w-4" />,
+            color: 'text-muted-foreground',
+            label: status,
+          };
           return (
             <Badge
               key={status}
@@ -147,7 +147,11 @@ function TaskRow({
   projects?: Array<{ id: string; label: string }>;
   onClick?: () => void;
 }) {
-  const config = statusConfig[task.status];
+  const config = statusConfig[task.status] ?? {
+    icon: <ListTodo className="h-4 w-4" />,
+    color: 'text-muted-foreground',
+    label: task.status,
+  };
   const projectLabel = task.project
     ? projects.find((p) => p.id === task.project)?.label || task.project
     : null;

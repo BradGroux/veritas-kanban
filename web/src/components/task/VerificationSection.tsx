@@ -146,7 +146,7 @@ export function VerificationSection({ task }: VerificationSectionProps) {
           value={newDescription}
           onChange={(e) => setNewDescription(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Add verification step..."
+          placeholder="Add verification step or note (e.g., web build passed, smoke test not run — reason)..."
           className="text-sm"
           disabled={isAdding}
         />

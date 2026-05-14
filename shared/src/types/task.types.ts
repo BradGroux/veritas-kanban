@@ -1,7 +1,15 @@
 // Task Types
 
 export type TaskType = string;
-export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+export type TaskStatus =
+  | 'triage'
+  | 'todo'
+  | 'ready'
+  | 'in-progress'
+  | 'blocked'
+  | 'done'
+  | 'cancelled'
+  | (string & {});
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 /** Run mode controls the review/QA strategy for a task. */
@@ -191,6 +199,8 @@ export interface Task {
 
   // Agent assignment — "auto" uses routing engine, or a specific agent slug
   agent?: AgentType | 'auto';
+  // Optional visible worker assignment used when agent routing is unavailable or unsuitable
+  assignedWorker?: string;
   // Multi-agent assignment — multiple agents collaborating on a task
   agents?: AgentType[];
 
@@ -321,11 +331,13 @@ export interface CreateTaskInput {
   project?: string;
   sprint?: string;
   agent?: AgentType | 'auto'; // Pre-assign an agent (or "auto" for routing engine)
+  assignedWorker?: string; // Optional visible worker assignment used by board-manager workflows
   agents?: AgentType[]; // Multi-agent assignment
   subtasks?: Subtask[]; // Can be provided when creating from a template
   blockedBy?: string[]; // Can be provided when creating from a blueprint
   reviewScores?: [number, number, number, number]; // Optional 4x10 scores
   reviewComments?: ReviewComment[]; // Optional review comments
+  status?: TaskStatus; // Optional initial board column/status (defaults to configured default)
 }
 
 export interface UpdateTaskInput {
@@ -337,6 +349,7 @@ export interface UpdateTaskInput {
   project?: string;
   sprint?: string;
   agent?: AgentType | 'auto';
+  assignedWorker?: string;
   agents?: AgentType[];
   git?: Partial<TaskGit>;
   github?: TaskGitHub;
@@ -397,6 +410,7 @@ export interface TaskSummary {
   project?: string;
   sprint?: string;
   agent?: AgentType | 'auto';
+  assignedWorker?: string;
   created: string;
   updated: string;
   subtasks?: Subtask[];

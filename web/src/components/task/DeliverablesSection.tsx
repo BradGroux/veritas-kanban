@@ -335,7 +335,7 @@ export function DeliverablesSection({ task }: DeliverablesSectionProps) {
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., API Documentation"
+              placeholder="e.g., PR #123, branch name, report, exported file"
               className="text-sm h-8"
               autoFocus
             />
@@ -356,11 +356,11 @@ export function DeliverablesSection({ task }: DeliverablesSectionProps) {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Path / URL (optional)</Label>
+            <Label className="text-xs">Path / URL / branch / PR (optional)</Label>
             <Input
               value={path}
               onChange={(e) => setPath(e.target.value)}
-              placeholder="https://... or /path/to/file"
+              placeholder="https://..., /path/to/file, branch-name, or PR #"
               className="text-sm h-8"
             />
           </div>
@@ -369,7 +369,7 @@ export function DeliverablesSection({ task }: DeliverablesSectionProps) {
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add details about this deliverable..."
+              placeholder="What output should the operator/reviewer inspect?"
               className="text-sm min-h-[60px] resize-none"
             />
           </div>
