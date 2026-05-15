@@ -96,6 +96,13 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
       .patch(`/api/tasks/${createdTask.id}`)
       .send({
         status: 'done',
+        git: {
+          repo: 'repo',
+          branch: 'feature/route-sync-smoke',
+          baseBranch: 'main',
+          commitHash: '145b24b602fd1111111111111111111111111111',
+          remoteRef: 'origin/feature/route-sync-smoke',
+        },
         reviewScores: [10, 10, 10, 10],
         reviewComments: [
           {

@@ -37,8 +37,14 @@ export interface TaskGit {
   branch: string;
   baseBranch: string;
   worktreePath?: string;
+  commitHash?: string;
+  remoteRef?: string;
+  pushedAt?: string;
+  patchArtifactPath?: string;
   prUrl?: string;
   prNumber?: number;
+  prScreenshotPath?: string;
+  prScreenshotUrl?: string;
 }
 
 export interface TaskAttempt {

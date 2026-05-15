@@ -264,6 +264,13 @@ updated: '2026-01-26T10:00:00.000Z'
 
       const updated = await service.updateTask(task.id, {
         status: 'done',
+        git: {
+          repo: 'repo',
+          branch: 'feature/test',
+          baseBranch: 'main',
+          commitHash: '145b24b602fd1111111111111111111111111111',
+          remoteRef: 'origin/feature/test',
+        },
         deliverables: [
           {
             id: 'deliverable-1',

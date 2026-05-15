@@ -44,6 +44,19 @@ async function createCommittedGitRepo(root: string): Promise<string> {
   return repoPath;
 }
 
+function gitEvidence(overrides: Record<string, unknown> = {}) {
+  return {
+    git: {
+      repo: 'repo',
+      branch: 'feature/test',
+      baseBranch: 'main',
+      commitHash: '145b24b602fd1111111111111111111111111111',
+      remoteRef: 'origin/feature/test',
+      ...overrides,
+    } as any,
+  };
+}
+
 function restoreEnvSnapshot(snapshot: Record<string, string | undefined>) {
   for (const key of DISCIPLINE_ENV_KEYS) {
     const original = snapshot[key];
@@ -95,6 +108,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Review gate disabled' });
+    await service.updateTask(task.id, gitEvidence());
     const updated = await service.updateTask(task.id, { status: 'done' });
 
     expect(updated.status).toBe('done');
@@ -107,6 +121,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Review gate enabled', type: 'code' });
+    await service.updateTask(task.id, gitEvidence());
 
     await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
       /Review Gate.*requires all four review scores/
@@ -143,6 +158,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Closing comments disabled' });
+    await service.updateTask(task.id, gitEvidence());
     const updated = await service.updateTask(task.id, { status: 'done' });
 
     expect(updated.status).toBe('done');
@@ -155,6 +171,7 @@ describe('Enforcement gates', () => {
     service = new TaskService({ tasksDir, archiveDir });
 
     const task = await service.createTask({ title: 'Closing comments enabled' });
+    await service.updateTask(task.id, gitEvidence());
 
     await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
       /Closing Comments:/
@@ -168,7 +185,7 @@ describe('Enforcement gates', () => {
     } as any);
     service = new TaskService({ tasksDir, archiveDir });
 
-    const task = await service.createTask({ title: 'No enforcement settings' });
+    const task = await service.createTask({ title: 'No enforcement settings', type: 'content' });
     const updated = await service.updateTask(task.id, { status: 'done' });
 
     expect(updated.status).toBe('done');
@@ -183,6 +200,7 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Auto telemetry enabled' });
     await service.updateTask(task.id, { status: 'in-progress' });
+    await service.updateTask(task.id, gitEvidence());
     await service.updateTask(task.id, { status: 'done' });
 
     expect(telemetry.emit).toHaveBeenCalledWith(
@@ -223,6 +241,7 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Auto time tracking enabled' });
     await service.updateTask(task.id, { status: 'in-progress' });
+    await service.updateTask(task.id, gitEvidence());
     await service.updateTask(task.id, {
       status: 'done',
       timeTracking: { entries: [], totalSeconds: 0, isRunning: true },
@@ -261,12 +280,101 @@ describe('Enforcement gates', () => {
 
     const task = await service.createTask({ title: 'Dirty worktree task', type: 'code' });
     await service.updateTask(task.id, {
-      git: { repo: repoPath, branch: 'feature/test', baseBranch: 'main', worktreePath: repoPath },
+      git: {
+        repo: repoPath,
+        branch: 'feature/test',
+        baseBranch: 'main',
+        worktreePath: repoPath,
+        commitHash: '145b24b602fd1111111111111111111111111111',
+        remoteRef: 'origin/feature/test',
+      },
     });
 
     await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
       /Git Discipline Gate.*dirty worktree/
     );
+  });
+
+  it('injects mandatory git-discipline dependencies into code task briefs on creation', async () => {
+    service = new TaskService({ tasksDir, archiveDir });
+
+    const task = await service.createTask({
+      title: 'Implement coding work',
+      type: 'code',
+      description: 'Ship the feature.',
+    });
+
+    expect(task.description).toContain('Skills dependency: github-pr-workflow');
+    expect(task.description).toContain('Skills dependency: github-auth');
+    expect(task.description).toContain('PR screenshot proof');
+  });
+
+  it('auto-patches legacy code task briefs before runnable dispatch', async () => {
+    service = new TaskService({ tasksDir, archiveDir });
+    await fs.writeFile(
+      path.join(tasksDir, 'task_20260126_legacy-legacy-code.md'),
+      `---
+id: task_20260126_legacy
+title: Legacy Code Task
+type: code
+status: todo
+priority: high
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+---
+Legacy brief without dependencies.
+`,
+      'utf-8'
+    );
+
+    const runnable = await service.selectRunnableTasks({ taskId: 'task_20260126_legacy' });
+    const patched = await service.getTask('task_20260126_legacy');
+
+    expect(runnable).toHaveLength(1);
+    expect(patched?.description).toContain('Skills dependency: github-pr-workflow');
+    expect(patched?.description).toContain('Skills dependency: github-auth');
+  });
+
+  it('blocks code task completion without commit and remote-preservation evidence', async () => {
+    vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue(
+      buildSettings({ enforcement: { reviewGate: false, closingComments: false } }) as any
+    );
+    service = new TaskService({ tasksDir, archiveDir });
+
+    const task = await service.createTask({ title: 'Missing git evidence', type: 'code' });
+
+    await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
+      /Git Discipline Gate.*commit hash/i
+    );
+  });
+
+  it('requires PR screenshot proof before completing code tasks with a PR URL', async () => {
+    vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue(
+      buildSettings({ enforcement: { reviewGate: false, closingComments: false } }) as any
+    );
+    service = new TaskService({ tasksDir, archiveDir });
+
+    const task = await service.createTask({ title: 'PR screenshot required', type: 'code' });
+    await service.updateTask(task.id, {
+      git: {
+        repo: 'repo',
+        branch: 'feature/test',
+        baseBranch: 'main',
+        commitHash: '145b24b602fd1111111111111111111111111111',
+        remoteRef: 'origin/feature/test',
+        prUrl: 'https://github.com/acme/repo/pull/42',
+      } as any,
+    });
+
+    await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
+      /Git Discipline Gate.*screenshot/i
+    );
+
+    const completed = await service.updateTask(task.id, {
+      status: 'done',
+      git: { prScreenshotPath: '/tmp/pr-42-checks.png' } as any,
+    });
+    expect(completed?.status).toBe('done');
   });
 
   it('ignores legacy gateway env aliases so they cannot become runtime authority', async () => {
@@ -276,7 +384,10 @@ describe('Enforcement gates', () => {
     process.env[legacyGatewayKey] = 'http://127.0.0.1:9';
     service = new TaskService({ tasksDir, archiveDir });
 
-    const task = await service.createTask({ title: 'Legacy runtime alias ignored' });
+    const task = await service.createTask({
+      title: 'Legacy runtime alias ignored',
+      type: 'content',
+    });
     const updated = await service.updateTask(task.id, { status: 'done' });
 
     expect(updated.status).toBe('done');

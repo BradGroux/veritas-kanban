@@ -25,26 +25,26 @@ describe('Tasks Routes', () => {
     testRoot = path.join(os.tmpdir(), `veritas-test-routes-${uniqueSuffix}`);
     tasksDir = path.join(testRoot, 'active');
     archiveDir = path.join(testRoot, 'archive');
-    
+
     await fs.mkdir(tasksDir, { recursive: true });
     await fs.mkdir(archiveDir, { recursive: true });
-    
+
     // Create TaskService with test directories
     taskService = new TaskService({ tasksDir, archiveDir });
-    
+
     // Create app with mocked routes
     app = express();
     app.use(express.json());
-    
+
     // Create a router that uses our test TaskService
     const router = express.Router();
-    
+
     // GET /api/tasks - List all tasks
     router.get('/', async (_req, res) => {
       const tasks = await taskService.listTasks();
       res.json(tasks);
     });
-    
+
     // POST /api/tasks - Create task
     router.post('/', async (req, res) => {
       try {
@@ -54,7 +54,7 @@ describe('Tasks Routes', () => {
         res.status(400).json({ error: error.message });
       }
     });
-    
+
     // GET /api/tasks/:id - Get single task
     router.get('/:id', async (req, res) => {
       const task = await taskService.getTask(req.params.id);
@@ -63,7 +63,7 @@ describe('Tasks Routes', () => {
       }
       res.json(task);
     });
-    
+
     // PATCH /api/tasks/:id - Update task
     router.patch('/:id', async (req, res) => {
       const task = await taskService.updateTask(req.params.id, req.body);
@@ -72,7 +72,7 @@ describe('Tasks Routes', () => {
       }
       res.json(task);
     });
-    
+
     // DELETE /api/tasks/:id - Delete task
     router.delete('/:id', async (req, res) => {
       const success = await taskService.deleteTask(req.params.id);
@@ -81,7 +81,7 @@ describe('Tasks Routes', () => {
       }
       res.status(204).send();
     });
-    
+
     // POST /api/tasks/reorder - Reorder tasks
     router.post('/reorder', async (req, res) => {
       const { orderedIds } = req.body;
@@ -91,7 +91,7 @@ describe('Tasks Routes', () => {
       const updated = await taskService.reorderTasks(orderedIds);
       res.json({ updated: updated.length });
     });
-    
+
     app.use('/api/tasks', router);
     app.use(errorHandler);
   });
@@ -105,7 +105,7 @@ describe('Tasks Routes', () => {
   describe('GET /api/tasks', () => {
     it('should return empty array when no tasks exist', async () => {
       const res = await request(app).get('/api/tasks');
-      
+
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
     });
@@ -113,9 +113,9 @@ describe('Tasks Routes', () => {
     it('should return all tasks', async () => {
       await taskService.createTask({ title: 'Task 1' });
       await taskService.createTask({ title: 'Task 2' });
-      
+
       const res = await request(app).get('/api/tasks');
-      
+
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(2);
       expect(res.body.map((t: any) => t.title)).toContain('Task 1');
@@ -125,10 +125,8 @@ describe('Tasks Routes', () => {
 
   describe('POST /api/tasks', () => {
     it('should create a task with minimal fields', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({ title: 'New Task' });
-      
+      const res = await request(app).post('/api/tasks').send({ title: 'New Task' });
+
       expect(res.status).toBe(201);
       expect(res.body.title).toBe('New Task');
       expect(res.body.id).toMatch(/^task_/);
@@ -138,17 +136,15 @@ describe('Tasks Routes', () => {
     });
 
     it('should create a task with all fields', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({
-          title: 'Full Task',
-          description: 'Detailed description',
-          type: 'research',
-          priority: 'high',
-          project: 'test-project',
-          sprint: 'US-100',
-        });
-      
+      const res = await request(app).post('/api/tasks').send({
+        title: 'Full Task',
+        description: 'Detailed description',
+        type: 'research',
+        priority: 'high',
+        project: 'test-project',
+        sprint: 'US-100',
+      });
+
       expect(res.status).toBe(201);
       expect(res.body.title).toBe('Full Task');
       expect(res.body.description).toBe('Detailed description');
@@ -162,9 +158,9 @@ describe('Tasks Routes', () => {
   describe('GET /api/tasks/:id', () => {
     it('should return a task by id', async () => {
       const task = await taskService.createTask({ title: 'Fetch Me' });
-      
+
       const res = await request(app).get(`/api/tasks/${task.id}`);
-      
+
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(task.id);
       expect(res.body.title).toBe('Fetch Me');
@@ -172,7 +168,7 @@ describe('Tasks Routes', () => {
 
     it('should return 404 for non-existent task', async () => {
       const res = await request(app).get('/api/tasks/nonexistent_id');
-      
+
       expect(res.status).toBe(404);
     });
   });
@@ -180,15 +176,13 @@ describe('Tasks Routes', () => {
   describe('PATCH /api/tasks/:id', () => {
     it('should update task fields', async () => {
       const task = await taskService.createTask({ title: 'Original' });
-      
-      const res = await request(app)
-        .patch(`/api/tasks/${task.id}`)
-        .send({
-          title: 'Updated',
-          status: 'in-progress',
-          priority: 'high',
-        });
-      
+
+      const res = await request(app).patch(`/api/tasks/${task.id}`).send({
+        title: 'Updated',
+        status: 'in-progress',
+        priority: 'high',
+      });
+
       expect(res.status).toBe(200);
       expect(res.body.title).toBe('Updated');
       expect(res.body.status).toBe('in-progress');
@@ -199,7 +193,7 @@ describe('Tasks Routes', () => {
       const res = await request(app)
         .patch('/api/tasks/nonexistent_id')
         .send({ title: 'Will Fail' });
-      
+
       expect(res.status).toBe(404);
     });
 
@@ -207,13 +201,12 @@ describe('Tasks Routes', () => {
       const task = await taskService.createTask({
         title: 'Original Title',
         description: 'Original Desc',
+        type: 'content',
         priority: 'low',
       });
-      
-      const res = await request(app)
-        .patch(`/api/tasks/${task.id}`)
-        .send({ priority: 'high' });
-      
+
+      const res = await request(app).patch(`/api/tasks/${task.id}`).send({ priority: 'high' });
+
       expect(res.status).toBe(200);
       expect(res.body.title).toBe('Original Title');
       expect(res.body.description).toBe('Original Desc');
@@ -224,11 +217,11 @@ describe('Tasks Routes', () => {
   describe('DELETE /api/tasks/:id', () => {
     it('should delete a task', async () => {
       const task = await taskService.createTask({ title: 'Delete Me' });
-      
+
       const res = await request(app).delete(`/api/tasks/${task.id}`);
-      
+
       expect(res.status).toBe(204);
-      
+
       // Verify task is gone
       const tasks = await taskService.listTasks();
       expect(tasks).toHaveLength(0);
@@ -236,7 +229,7 @@ describe('Tasks Routes', () => {
 
     it('should return 404 for non-existent task', async () => {
       const res = await request(app).delete('/api/tasks/nonexistent_id');
-      
+
       expect(res.status).toBe(404);
     });
   });
@@ -246,35 +239,31 @@ describe('Tasks Routes', () => {
       const task1 = await taskService.createTask({ title: 'Task 1' });
       const task2 = await taskService.createTask({ title: 'Task 2' });
       const task3 = await taskService.createTask({ title: 'Task 3' });
-      
+
       const res = await request(app)
         .post('/api/tasks/reorder')
         .send({ orderedIds: [task3.id, task1.id, task2.id] });
-      
+
       expect(res.status).toBe(200);
       expect(res.body.updated).toBe(3);
-      
+
       // Verify positions
       const tasks = await taskService.listTasks();
-      const taskMap = new Map(tasks.map(t => [t.id, t]));
+      const taskMap = new Map(tasks.map((t) => [t.id, t]));
       expect(taskMap.get(task3.id)?.position).toBe(0);
       expect(taskMap.get(task1.id)?.position).toBe(1);
       expect(taskMap.get(task2.id)?.position).toBe(2);
     });
 
     it('should reject empty orderedIds', async () => {
-      const res = await request(app)
-        .post('/api/tasks/reorder')
-        .send({ orderedIds: [] });
-      
+      const res = await request(app).post('/api/tasks/reorder').send({ orderedIds: [] });
+
       expect(res.status).toBe(400);
     });
 
     it('should reject missing orderedIds', async () => {
-      const res = await request(app)
-        .post('/api/tasks/reorder')
-        .send({});
-      
+      const res = await request(app).post('/api/tasks/reorder').send({});
+
       expect(res.status).toBe(400);
     });
   });

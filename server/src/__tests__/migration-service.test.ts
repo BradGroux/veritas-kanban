@@ -98,16 +98,19 @@ This task has the legacy review status.
 
     it('should not modify tasks with non-review statuses', async () => {
       // Create tasks with various valid statuses
-      const todoTask = await taskService.createTask({ title: 'Todo Task' });
+      const todoTask = await taskService.createTask({ title: 'Todo Task', type: 'content' });
       await taskService.updateTask(todoTask.id, { status: 'todo' });
 
-      const inProgressTask = await taskService.createTask({ title: 'In Progress Task' });
+      const inProgressTask = await taskService.createTask({
+        title: 'In Progress Task',
+        type: 'content',
+      });
       await taskService.updateTask(inProgressTask.id, { status: 'in-progress' });
 
-      const blockedTask = await taskService.createTask({ title: 'Blocked Task' });
+      const blockedTask = await taskService.createTask({ title: 'Blocked Task', type: 'content' });
       await taskService.updateTask(blockedTask.id, { status: 'blocked' });
 
-      const doneTask = await taskService.createTask({ title: 'Done Task' });
+      const doneTask = await taskService.createTask({ title: 'Done Task', type: 'content' });
       await taskService.updateTask(doneTask.id, { status: 'done' });
 
       // Run migrations

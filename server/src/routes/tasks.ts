@@ -60,6 +60,14 @@ const gitSchema = z
     branch: z.string().optional(),
     baseBranch: z.string().optional(),
     worktreePath: z.string().optional(),
+    commitHash: z.string().optional(),
+    remoteRef: z.string().optional(),
+    pushedAt: z.string().optional(),
+    patchArtifactPath: z.string().optional(),
+    prUrl: z.string().optional(),
+    prNumber: z.number().int().positive().optional(),
+    prScreenshotPath: z.string().optional(),
+    prScreenshotUrl: z.string().optional(),
   })
   .optional();
 
