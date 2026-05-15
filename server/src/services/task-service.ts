@@ -18,6 +18,7 @@ import type {
   TaskPriority,
 } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
+import { alertTaskBlocked } from './blocked-alert-service.js';
 import { ConfigService } from './config-service.js';
 import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
@@ -1135,6 +1136,12 @@ export class TaskService {
         if (hookEvent) {
           fireHook(hookEvent, updatedTask, previousStatus).catch((err) => {
             log.warn({ taskId: updatedTask.id, hookEvent }, 'Hook execution failed: %s', err);
+          });
+        }
+
+        if (updatedTask.status === 'blocked' && previousStatus !== 'blocked') {
+          alertTaskBlocked(updatedTask, previousStatus).catch((err) => {
+            log.warn({ taskId: updatedTask.id }, 'Blocked task alert failed: %s', err);
           });
         }
 

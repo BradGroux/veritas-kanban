@@ -10,7 +10,10 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { withFileLock } from './file-lock.js';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+const DATA_DIR =
+  process.env.VERITAS_DATA_DIR ||
+  process.env.DATA_DIR ||
+  path.join(process.cwd(), '..', '.veritas-kanban');
 
 const log = createLogger('notifications');
 
@@ -207,6 +210,54 @@ export class NotificationService {
     }
 
     await this.saveNotifications();
+  }
+
+  /**
+   * Create status-change notifications for one or more agents.
+   */
+  async notifyStatusChange(params: {
+    taskId: string;
+    targetAgents: string[];
+    fromAgent: string;
+    content: string;
+  }): Promise<Notification[]> {
+    await this.ensureLoaded();
+
+    const created: Notification[] = [];
+    const targets = [
+      ...new Set(params.targetAgents.map((agent) => agent.toLowerCase()).filter(Boolean)),
+    ];
+
+    for (const target of targets) {
+      const alreadyQueued = this.notifications.some(
+        (notification) =>
+          notification.taskId === params.taskId &&
+          notification.targetAgent === target &&
+          notification.type === 'status_change' &&
+          !notification.delivered &&
+          notification.content === params.content.slice(0, 500)
+      );
+      if (alreadyQueued) continue;
+
+      const notification: Notification = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        taskId: params.taskId,
+        targetAgent: target,
+        fromAgent: params.fromAgent,
+        content: params.content.slice(0, 500),
+        type: 'status_change',
+        delivered: false,
+        createdAt: new Date().toISOString(),
+      };
+      this.notifications.push(notification);
+      created.push(notification);
+    }
+
+    if (created.length > 0) {
+      await this.saveNotifications();
+    }
+
+    return created;
   }
 
   /**
