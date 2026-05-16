@@ -102,6 +102,7 @@ curl -X PATCH http://localhost:3001/api/settings/features \
 
 - Squad chat endpoint configured
 - Agent context available
+- No per-hook `squadChat` flag. This is controlled by the global `enforcement.squadChat` setting.
 
 **Example:**
 When a task moves to `in-progress`, squad chat automatically receives:

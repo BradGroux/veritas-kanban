@@ -35,7 +35,6 @@ export interface HookConfig {
   webhook?: string;
   notify?: boolean;
   logActivity?: boolean;
-  squadChat?: boolean;
 }
 
 export interface HooksSettings {
@@ -112,15 +111,18 @@ export async function fireHook(
   previousStatus?: string
 ): Promise<void> {
   const settings = cachedSettings;
+  const squadChatEnabled = cachedEnforcement?.squadChat === true;
+  const hooksEnabled = settings?.enabled === true;
 
-  // Check if hooks are globally enabled
-  if (!settings?.enabled) {
+  // Nothing to do if both lifecycle hooks and squad chat enforcement are disabled.
+  if (!hooksEnabled && !squadChatEnabled) {
     return;
   }
 
   // Get the specific hook config
-  const hookConfig = settings[event];
-  if (!hookConfig?.enabled) {
+  const hookConfig = settings?.[event];
+  const hookEnabled = hooksEnabled && hookConfig?.enabled === true;
+  if (!hookEnabled && !squadChatEnabled) {
     return;
   }
 
@@ -138,21 +140,23 @@ export async function fireHook(
   log.info({ event, taskId: task.id }, 'Firing hook');
 
   // Fire webhook if configured
-  if (hookConfig.webhook) {
+  if (hookEnabled && hookConfig?.webhook) {
     fireWebhook(hookConfig.webhook, payload).catch((err) => {
       log.warn({ event, taskId: task.id, error: err.message }, 'Webhook delivery failed');
     });
   }
 
-  // Fire squad chat if configured
-  if (hookConfig.squadChat && (cachedEnforcement?.squadChat ?? true)) {
+  // Fire squad chat when the enforcement toggle is enabled. This is intentionally
+  // independent of per-hook settings because enforcement.squadChat is the public
+  // setting documented for lifecycle squad-chat posts.
+  if (squadChatEnabled) {
     fireSquadChat(event, task, previousStatus).catch((err) => {
       log.warn({ event, taskId: task.id, error: err.message }, 'Squad chat post failed');
     });
   }
 
   // Fire notification if configured
-  if (hookConfig.notify) {
+  if (hookEnabled && hookConfig?.notify) {
     fireNotification(event, payload).catch((err) => {
       log.warn({ event, taskId: task.id, error: err.message }, 'Notification creation failed');
     });
