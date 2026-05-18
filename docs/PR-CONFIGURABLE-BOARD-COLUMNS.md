@@ -145,6 +145,7 @@ Potentially breaking behavior:
 Add before PR submission:
 
 - [ ] Settings -> Board & Display -> Board Columns editor
+- [ ] Settings -> Board & Display remains vertically scrollable; lower controls such as Drag & Drop and Done Column Metrics are reachable after the Board Columns editor is visible
 - [ ] Board showing six configured columns
 - [ ] Drag/drop or keyboard move into a configured column
 - [ ] Validation error for an invalid or gated move

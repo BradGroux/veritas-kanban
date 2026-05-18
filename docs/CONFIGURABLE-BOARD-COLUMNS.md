@@ -90,6 +90,8 @@ The board renders from the configured column list:
 
 Settings -> Board & Display includes a **Board Columns** section for editing visible workflow columns. The current UI supports adding columns before/after existing columns and editing column titles/status IDs. Existing task statuses are not automatically rewritten when a column ID is changed.
 
+Because the Board & Display tab can become taller than the viewport once dashboard toggles and column editing controls are shown together, the settings dialog itself must remain vertically scrollable. Do not wrap this tab in a fixed-height clipped container without a working scroll path; otherwise lower controls such as Drag & Drop and Done Column Metrics can become unreachable.
+
 ## Server Validation
 
 The task service treats configured columns as the authoritative set of active task statuses.
@@ -153,6 +155,7 @@ Current limitations / follow-ups:
 
 - Workflow gates are not yet fully configurable; the current gates target the `todo` -> `ready` and `blocked` transitions.
 - The board settings UI does not automatically migrate task statuses when a column ID changes.
+- The board settings UI depends on the settings dialog preserving vertical scroll for long tabs.
 - Removing or renaming a column can hide tasks with the old status from the visible board until migrated or reconfigured.
 - Some documentation and examples may still mention the historical four-column workflow and should be updated as part of final upstream polish.
 - External integrations should discover configured columns from settings rather than assuming a fixed status list.

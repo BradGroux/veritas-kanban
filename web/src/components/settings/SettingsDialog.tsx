@@ -18,7 +18,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useToast } from '@/hooks/useToast';
@@ -356,11 +355,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px] h-[85vh] p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[800px] max-h-[85vh] p-0 overflow-y-auto">
         <ErrorBoundary level="section">
-          <div className="flex h-full min-h-0">
+          <div className="flex min-h-0">
             {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
-            <div className="hidden sm:flex flex-col w-48 border-r bg-muted/30 py-4">
+            <div className="hidden sm:sticky sm:top-0 sm:flex flex-col w-48 shrink-0 self-start max-h-[85vh] border-r bg-muted/30 py-4">
               <div className="px-4 pb-3">
                 <h2 className="text-sm font-semibold">Settings</h2>
               </div>
@@ -468,22 +467,22 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             </div>
 
             {/* Content */}
-            <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="flex-1 flex flex-col min-w-0">
               <DialogHeader className="px-6 py-4 border-b sm:hidden">
                 <DialogTitle>Settings</DialogTitle>
               </DialogHeader>
-              <ScrollArea className="flex-1 min-h-0">
+              <div className="min-w-0">
                 <div
                   id="settings-tab-content"
                   ref={contentAreaRef}
-                  className="px-6 py-4"
+                  className="px-6 pt-4 pb-8 min-w-0"
                   role="tabpanel"
                   tabIndex={-1}
                   aria-labelledby={`tab-${activeTab}`}
                 >
                   {renderTab()}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           </div>
         </ErrorBoundary>
