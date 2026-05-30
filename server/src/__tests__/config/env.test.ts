@@ -175,6 +175,7 @@ describe('envSchema', () => {
         expect(result.data.VERITAS_AUTH_LOCALHOST_BYPASS).toBe(false);
         expect(result.data.VERITAS_AUTH_LOCALHOST_ROLE).toBe('read-only');
         expect(result.data.VERITAS_API_KEYS).toBe('');
+        expect(result.data.VERITAS_STORAGE).toBe('file');
         expect(result.data.RATE_LIMIT_MAX).toBe(300);
         expect(result.data.CSP_REPORT_ONLY).toBe(false);
         expect(result.data.CLAWDBOT_GATEWAY).toBe('http://127.0.0.1:18789');
@@ -275,6 +276,40 @@ describe('envSchema', () => {
     });
   });
 
+  describe('VERITAS_STORAGE', () => {
+    it('should accept file storage', () => {
+      const result = envSchema.safeParse({
+        VERITAS_ADMIN_KEY: 'test-key',
+        VERITAS_STORAGE: 'file',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.VERITAS_STORAGE).toBe('file');
+      }
+    });
+
+    it('should accept sqlite storage and path override', () => {
+      const result = envSchema.safeParse({
+        VERITAS_ADMIN_KEY: 'test-key',
+        VERITAS_STORAGE: 'sqlite',
+        VERITAS_SQLITE_PATH: '/tmp/veritas-test.db',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.VERITAS_STORAGE).toBe('sqlite');
+        expect(result.data.VERITAS_SQLITE_PATH).toBe('/tmp/veritas-test.db');
+      }
+    });
+
+    it('should reject unsupported storage backends', () => {
+      const result = envSchema.safeParse({
+        VERITAS_ADMIN_KEY: 'test-key',
+        VERITAS_STORAGE: 'postgres',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('CLAWDBOT_GATEWAY', () => {
     it('should accept a valid URL', () => {
       const result = envSchema.safeParse({
@@ -320,9 +355,9 @@ describe('validateEnv', () => {
   beforeEach(() => {
     // Save and clear process.env
     originalEnv = { ...process.env };
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((_code?: number | string | null) => {
       throw new Error('process.exit called');
-    }) as any);
+    }) as typeof process.exit);
   });
 
   afterEach(() => {

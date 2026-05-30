@@ -79,6 +79,12 @@ export const envSchema = z.object({
   /** Root directory for data storage */
   VERITAS_DATA_DIR: z.string().optional(),
 
+  /** Storage backend: file remains the default until the v5 migration completes */
+  VERITAS_STORAGE: z.enum(['file', 'sqlite']).optional().default('file'),
+
+  /** SQLite database file path when VERITAS_STORAGE=sqlite */
+  VERITAS_SQLITE_PATH: z.string().optional(),
+
   // ── CORS ────────────────────────────────────────────────────────────
   /** Comma-separated list of allowed CORS origins */
   CORS_ORIGINS: z.string().optional(),

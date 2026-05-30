@@ -58,6 +58,7 @@ import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
+import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
 
 const log = createLogger('server');
 
@@ -526,6 +527,7 @@ app.use(errorHandler);
 
 // Module-level config service instance (shared with shutdown handler)
 let configService: ConfigService | null = null;
+let storageInitialized = false;
 
 // Initialize services on startup
 (async () => {
@@ -560,6 +562,13 @@ let configService: ConfigService | null = null;
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
     await getPolicyService().waitForInit();
+
+    const storageType = getStorageTypeFromEnv();
+    if (storageType === 'sqlite') {
+      await initStorage('sqlite');
+      storageInitialized = true;
+      log.info('SQLite storage initialized');
+    }
   } catch (err) {
     log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
     process.exit(1);
@@ -966,6 +975,12 @@ async function gracefulShutdown(signal: string) {
       configService.dispose();
       configService = null;
       log.info('Config service disposed');
+    }
+
+    if (storageInitialized) {
+      await shutdownStorage();
+      storageInitialized = false;
+      log.info('Storage provider shut down');
     }
   } catch (err) {
     log.error({ err }, 'Error during service disposal');

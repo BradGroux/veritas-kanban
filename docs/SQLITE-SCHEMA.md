@@ -827,6 +827,26 @@ CREATE VIRTUAL TABLE docs_search USING fts5(
 Search rows are maintained by repository writes in the first implementation. SQL
 triggers can be added later if repository-level maintenance becomes fragile.
 
+## Runtime Foundation
+
+The v5 foundation uses Node's built-in `node:sqlite` `DatabaseSync` API for the
+server runtime. That keeps SQLite support dependency-free on the required Node
+22.22+ runtime and avoids native package installation during local setup,
+Docker builds, and CI.
+
+Runtime settings:
+
+| Setting               | Default                   | Purpose                                          |
+| --------------------- | ------------------------- | ------------------------------------------------ |
+| `VERITAS_STORAGE`     | `file`                    | Selects `file` or `sqlite` storage mode.         |
+| `VERITAS_SQLITE_PATH` | `{runtimeDir}/veritas.db` | Overrides the SQLite database file location.     |
+| `VERITAS_DATA_DIR`    | project/runtime default   | Controls the runtime directory used by defaults. |
+
+SQLite mode currently owns database open/close, PRAGMAs, and migration
+tracking while repository parity is implemented in the following provider
+issues. File storage remains the default until the migration/import path is
+complete.
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:
