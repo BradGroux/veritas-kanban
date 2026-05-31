@@ -15,6 +15,7 @@ import { SqliteTemplateRepository } from '../storage/sqlite/template-repository.
 const log = createLogger('template-service');
 
 export interface TemplateServiceOptions {
+  templatesDir?: string;
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
@@ -26,7 +27,7 @@ export class TemplateService {
   private sqliteDatabase: SqliteDatabase | null = null;
 
   constructor(options: TemplateServiceOptions = {}) {
-    this.templatesDir = join(process.cwd(), '.veritas-kanban', 'templates');
+    this.templatesDir = options.templatesDir || join(process.cwd(), '.veritas-kanban', 'templates');
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

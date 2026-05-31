@@ -469,6 +469,7 @@ export class TaskService {
         project: data.project,
         sprint: data.sprint,
         agent: data.agent,
+        agents: data.agents,
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
@@ -488,12 +489,16 @@ export class TaskService {
         observations: data.observations,
         attachments: data.attachments,
         position: data.position,
+        costPrediction: data.costPrediction,
+        actualCost: data.actualCost,
         lessonsLearned: data.lessonsLearned,
         lessonTags: data.lessonTags,
         checkpoint: data.checkpoint,
         verificationSteps: data.verificationSteps,
         deliverables: data.deliverables,
         dependencies: data.dependencies,
+        runMode: data.runMode,
+        qaGate: data.qaGate,
       };
     } catch (error) {
       log.error({ err: error, filename }, 'Failed to parse task file');
