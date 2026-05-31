@@ -4,6 +4,9 @@ import { join } from 'path';
 import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
 import { getDataDir } from '../utils/paths.js';
+import type { ActivityRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteActivityRepository } from '../storage/sqlite/activity-repository.js';
 const log = createLogger('activity-service');
 
 export type ActivityType =
@@ -51,13 +54,32 @@ export interface ActivityFilters {
   until?: string;
 }
 
+export interface ActivityServiceOptions {
+  activityFile?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
+
 export class ActivityService {
   private activityFile: string;
   private readonly MAX_ACTIVITIES = 5000; // Increased from 1000 for longer history
+  private repository: ActivityRepository | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
+  private ownsSqliteDatabase = false;
 
-  constructor() {
-    this.activityFile = join(getDataDir(), 'activity.json');
-    this.ensureDir();
+  constructor(options: ActivityServiceOptions = {}) {
+    this.activityFile = options.activityFile || join(getDataDir(), 'activity.json');
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteActivityRepository(this.sqliteDatabase);
+    }
   }
 
   private async ensureDir() {
@@ -69,6 +91,10 @@ export class ActivityService {
    * Load all activities from disk (already sorted newest-first).
    */
   private async loadAll(): Promise<Activity[]> {
+    if (this.repository) {
+      return this.repository.getActivities(this.MAX_ACTIVITIES);
+    }
+
     await this.ensureDir();
 
     if (!(await fileExists(this.activityFile))) {
@@ -156,6 +182,10 @@ export class ActivityService {
     details?: Record<string, unknown>,
     agent?: string
   ): Promise<Activity> {
+    if (this.repository) {
+      return this.repository.logActivity(type, taskId, taskTitle, details, agent);
+    }
+
     await this.ensureDir();
 
     const activity: Activity = {
@@ -197,8 +227,21 @@ export class ActivityService {
   }
 
   async clearActivities(): Promise<void> {
+    if (this.repository) {
+      await this.repository.clearActivities();
+      return;
+    }
+
     await this.ensureDir();
     await writeFile(this.activityFile, '[]', 'utf-8');
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+    this.sqliteDatabase = null;
+    this.repository = null;
   }
 }
 

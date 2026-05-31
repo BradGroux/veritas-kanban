@@ -843,9 +843,9 @@ Runtime settings:
 | `VERITAS_DATA_DIR`    | project/runtime default   | Controls the runtime directory used by defaults. |
 
 SQLite mode owns database open/close, PRAGMAs, migration tracking, task
-persistence, settings, managed lists, task templates, and prompt registry
-persistence. File storage remains the default until the migration/import path is
-complete.
+persistence, settings, managed lists, task templates, prompt registry,
+activity/status history, and telemetry persistence. File storage remains the
+default until the migration/import path is complete.
 
 ## Task Repository Implementation
 
@@ -887,6 +887,24 @@ children into the broader target schema above.
 `VERITAS_STORAGE=sqlite`, so the existing REST/UI routes continue to use the
 same service contracts in both storage modes. File-backed behavior remains
 unchanged when `VERITAS_STORAGE=file`.
+
+## Operational Repository Implementation
+
+The first operational repository pass moves append-heavy runtime data into
+SQLite tables with JSON payload columns plus query indexes. This keeps the v4
+service contracts intact while preventing SQLite mode from writing operational
+state back to `.veritas-kanban/*.json` or telemetry NDJSON files.
+
+| Runtime table      | Stored data                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `activity_events`  | Complete activity entries plus type, task, agent, and created-time columns.              |
+| `status_history`   | Complete status transition entries plus previous/new status and task columns.            |
+| `telemetry_events` | Complete telemetry events plus type, task, project, token, duration, and result columns. |
+
+`ActivityService`, `StatusHistoryService`, and `TelemetryService` select these
+SQLite repositories when `VERITAS_STORAGE=sqlite`. File storage still forces the
+file-backed services to `storageType='file'`, so explicit file mode cannot be
+accidentally flipped by the environment.
 
 ## Migration Numbering
 

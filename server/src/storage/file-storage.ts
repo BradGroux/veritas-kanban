@@ -42,7 +42,12 @@ import type {
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
-import { ActivityService, type Activity, type ActivityType } from '../services/activity-service.js';
+import {
+  ActivityService,
+  type Activity,
+  type ActivityType,
+  type ActivityServiceOptions,
+} from '../services/activity-service.js';
 import { TemplateService, type TemplateServiceOptions } from '../services/template-service.js';
 import {
   PromptRegistryService,
@@ -53,6 +58,7 @@ import {
   type StatusHistoryEntry,
   type DailySummary,
   type AgentStatusState,
+  type StatusHistoryServiceOptions,
 } from '../services/status-history-service.js';
 import { ManagedListService } from '../services/managed-list-service.js';
 import { TelemetryService, type TelemetryServiceOptions } from '../services/telemetry-service.js';
@@ -397,7 +403,9 @@ export class FileTelemetryRepository implements TelemetryRepository {
     return this.service.init();
   }
 
-  async emit<T extends TelemetryEvent>(event: Omit<T, 'id' | 'timestamp'>): Promise<T> {
+  async emit<T extends TelemetryEvent>(
+    event: Omit<T, 'id' | 'timestamp'> & { timestamp?: string }
+  ): Promise<T> {
     return this.service.emit(event);
   }
 
@@ -409,8 +417,11 @@ export class FileTelemetryRepository implements TelemetryRepository {
     return this.service.getTaskEvents(taskId);
   }
 
-  async getBulkTaskEvents(taskIds: string[]): Promise<Map<string, AnyTelemetryEvent[]>> {
-    return this.service.getBulkTaskEvents(taskIds);
+  async getBulkTaskEvents(
+    taskIds: string[],
+    perTaskLimit?: number
+  ): Promise<Map<string, AnyTelemetryEvent[]>> {
+    return this.service.getBulkTaskEvents(taskIds, perTaskLimit);
   }
 
   async getEventsSince(since: string): Promise<AnyTelemetryEvent[]> {
@@ -461,8 +472,10 @@ export class FileTelemetryRepository implements TelemetryRepository {
 export interface FileStorageOptions {
   taskServiceOptions?: TaskServiceOptions;
   configServiceOptions?: ConfigServiceOptions;
+  activityServiceOptions?: ActivityServiceOptions;
   templateServiceOptions?: TemplateServiceOptions;
   promptRegistryServiceOptions?: PromptRegistryServiceOptions;
+  statusHistoryServiceOptions?: StatusHistoryServiceOptions;
   telemetryServiceOptions?: TelemetryServiceOptions;
 }
 
@@ -485,7 +498,10 @@ export class FileStorageProvider implements StorageProvider {
   private telemetryService: TelemetryService;
 
   constructor(options: FileStorageOptions = {}) {
-    this.telemetryService = new TelemetryService(options.telemetryServiceOptions);
+    this.telemetryService = new TelemetryService({
+      ...(options.telemetryServiceOptions || {}),
+      storageType: 'file',
+    });
 
     this.taskService = new TaskService({
       ...(options.taskServiceOptions || {}),
@@ -496,7 +512,10 @@ export class FileStorageProvider implements StorageProvider {
       ...(options.configServiceOptions || {}),
       storageType: 'file',
     });
-    this.activityService = new ActivityService();
+    this.activityService = new ActivityService({
+      ...(options.activityServiceOptions || {}),
+      storageType: 'file',
+    });
     this.templateService = new TemplateService({
       ...(options.templateServiceOptions || {}),
       storageType: 'file',
@@ -505,7 +524,10 @@ export class FileStorageProvider implements StorageProvider {
       ...(options.promptRegistryServiceOptions || {}),
       storageType: 'file',
     });
-    this.statusHistoryService = new StatusHistoryService();
+    this.statusHistoryService = new StatusHistoryService({
+      ...(options.statusHistoryServiceOptions || {}),
+      storageType: 'file',
+    });
 
     this.tasks = new FileTaskRepository(this.taskService);
     this.settings = new FileSettingsRepository(this.configService);
@@ -527,5 +549,8 @@ export class FileStorageProvider implements StorageProvider {
     await this.telemetry.flush().catch(() => {});
     this.taskService.dispose();
     this.configService.dispose();
+    this.activityService.dispose();
+    this.statusHistoryService.dispose();
+    this.telemetryService.dispose();
   }
 }

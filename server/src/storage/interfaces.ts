@@ -230,7 +230,9 @@ export interface TelemetryRepository {
   init(): Promise<void>;
 
   /** Emit a telemetry event. */
-  emit<T extends TelemetryEvent>(event: Omit<T, 'id' | 'timestamp'>): Promise<T>;
+  emit<T extends TelemetryEvent>(
+    event: Omit<T, 'id' | 'timestamp'> & { timestamp?: string }
+  ): Promise<T>;
 
   /** Query events with optional filters. */
   getEvents(options?: TelemetryQueryOptions): Promise<AnyTelemetryEvent[]>;
@@ -239,7 +241,10 @@ export interface TelemetryRepository {
   getTaskEvents(taskId: string): Promise<AnyTelemetryEvent[]>;
 
   /** Batch-query events for multiple tasks. */
-  getBulkTaskEvents(taskIds: string[]): Promise<Map<string, AnyTelemetryEvent[]>>;
+  getBulkTaskEvents(
+    taskIds: string[],
+    perTaskLimit?: number
+  ): Promise<Map<string, AnyTelemetryEvent[]>>;
 
   /** Get events since a given timestamp. */
   getEventsSince(since: string): Promise<AnyTelemetryEvent[]>;

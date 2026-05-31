@@ -178,6 +178,90 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON prompt_usage(template_id, used_at);
     `,
   },
+  {
+    version: 5,
+    name: '0005_operational_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS activity_events (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        task_id TEXT,
+        task_title TEXT,
+        agent TEXT,
+        details_json TEXT,
+        activity_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_activity_workspace_created
+        ON activity_events(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_activity_task_created
+        ON activity_events(task_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_activity_type_created
+        ON activity_events(type, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS status_history (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        previous_status TEXT NOT NULL,
+        new_status TEXT NOT NULL,
+        task_id TEXT,
+        task_title TEXT,
+        sub_agent_count INTEGER,
+        duration_ms INTEGER,
+        entry_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_status_history_workspace_created
+        ON status_history(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_status_history_task_created
+        ON status_history(task_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS telemetry_events (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        task_id TEXT,
+        project_id TEXT,
+        agent TEXT,
+        model TEXT,
+        attempt_id TEXT,
+        success INTEGER,
+        duration_ms INTEGER,
+        exit_code INTEGER,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        cache_tokens INTEGER,
+        total_tokens INTEGER,
+        cost REAL,
+        error TEXT,
+        stack_trace TEXT,
+        session_key TEXT,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_telemetry_workspace_created
+        ON telemetry_events(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_telemetry_type_created
+        ON telemetry_events(workspace_id, type, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_telemetry_task_created
+        ON telemetry_events(task_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_telemetry_project_created
+        ON telemetry_events(project_id, created_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

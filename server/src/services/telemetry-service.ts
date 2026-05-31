@@ -14,6 +14,9 @@ import type {
   AnyTelemetryEvent,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import type { TelemetryRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteTelemetryRepository } from '../storage/sqlite/telemetry-repository.js';
 const log = createLogger('telemetry-service');
 
 // Default paths - resolve via shared paths helper (respects DATA_DIR/VERITAS_DATA_DIR)
@@ -28,6 +31,9 @@ const DEFAULT_CONFIG: TelemetryConfig = {
 export interface TelemetryServiceOptions {
   telemetryDir?: string;
   config?: Partial<TelemetryConfig>;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 /**
@@ -44,6 +50,9 @@ export class TelemetryService {
   private writeQueue: Promise<void> = Promise.resolve();
   private pendingWrites: Array<TelemetryEvent> = [];
   private readonly MAX_QUEUE_SIZE = 10000;
+  private repository: TelemetryRepository | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
+  private ownsSqliteDatabase = false;
 
   constructor(options: TelemetryServiceOptions = {}) {
     this.telemetryDir = options.telemetryDir || TELEMETRY_DIR;
@@ -66,6 +75,19 @@ export class TelemetryService {
         ? { retention: envRetentionParsed }
         : {}),
     };
+
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteTelemetryRepository(this.sqliteDatabase, {
+        config: this.config,
+      });
+    }
   }
 
   /**
@@ -73,6 +95,12 @@ export class TelemetryService {
    */
   async init(): Promise<void> {
     if (this.initialized) return;
+
+    if (this.repository) {
+      await this.repository.init();
+      this.initialized = true;
+      return;
+    }
 
     await fs.mkdir(this.telemetryDir, { recursive: true });
     await this.cleanupOldEvents();
@@ -84,12 +112,17 @@ export class TelemetryService {
    */
   configure(config: Partial<TelemetryConfig>): void {
     this.config = { ...this.config, ...config };
+    this.repository?.configure(config);
   }
 
   /**
    * Get current configuration
    */
   getConfig(): TelemetryConfig {
+    if (this.repository) {
+      return this.repository.getConfig();
+    }
+
     return { ...this.config };
   }
 
@@ -97,6 +130,10 @@ export class TelemetryService {
    * Check if telemetry is enabled
    */
   isEnabled(): boolean {
+    if (this.repository) {
+      return this.repository.isEnabled();
+    }
+
     return this.config.enabled;
   }
 
@@ -109,6 +146,11 @@ export class TelemetryService {
   async emit<T extends TelemetryEvent>(
     event: Omit<T, 'id' | 'timestamp'> & { timestamp?: string }
   ): Promise<T> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.emit(event);
+    }
+
     if (!this.config.enabled) {
       // Return a fake event when disabled
       return {
@@ -169,6 +211,11 @@ export class TelemetryService {
    * Wait for any pending writes to complete
    */
   async flush(): Promise<void> {
+    if (this.repository) {
+      await this.repository.flush();
+      return;
+    }
+
     await this.writeQueue;
   }
 
@@ -176,6 +223,11 @@ export class TelemetryService {
    * Query events with optional filters
    */
   async getEvents(options: TelemetryQueryOptions = {}): Promise<AnyTelemetryEvent[]> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.getEvents(options);
+    }
+
     await this.init();
 
     const { type, since, until, taskId, project, limit } = options;
@@ -219,6 +271,11 @@ export class TelemetryService {
    * Get events for a specific task
    */
   async getTaskEvents(taskId: string): Promise<AnyTelemetryEvent[]> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.getTaskEvents(taskId);
+    }
+
     return this.getEvents({ taskId });
   }
 
@@ -230,6 +287,11 @@ export class TelemetryService {
     taskIds: string[],
     perTaskLimit: number = 200
   ): Promise<Map<string, AnyTelemetryEvent[]>> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.getBulkTaskEvents(taskIds, perTaskLimit);
+    }
+
     if (taskIds.length === 0) {
       return new Map();
     }
@@ -275,6 +337,11 @@ export class TelemetryService {
    * Get events within a time period
    */
   async getEventsSince(since: string): Promise<AnyTelemetryEvent[]> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.getEventsSince(since);
+    }
+
     return this.getEvents({ since });
   }
 
@@ -286,6 +353,11 @@ export class TelemetryService {
     since?: string,
     until?: string
   ): Promise<number> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.countEvents(type, since, until);
+    }
+
     const events = await this.getEvents({ type, since, until });
     return events.length;
   }
@@ -294,6 +366,11 @@ export class TelemetryService {
    * Delete all events (for testing/reset)
    */
   async clear(): Promise<void> {
+    if (this.repository) {
+      await this.repository.clear();
+      return;
+    }
+
     await this.init();
     const files = await fs.readdir(this.telemetryDir);
 
@@ -308,6 +385,11 @@ export class TelemetryService {
    * Export events as JSON
    */
   async exportAsJson(options: TelemetryQueryOptions = {}): Promise<string> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.exportAsJson(options);
+    }
+
     const events = await this.getEvents(options);
     return JSON.stringify(events, null, 2);
   }
@@ -316,6 +398,11 @@ export class TelemetryService {
    * Export events as CSV
    */
   async exportAsCsv(options: TelemetryQueryOptions = {}): Promise<string> {
+    if (this.repository) {
+      await this.init();
+      return this.repository.exportAsCsv(options);
+    }
+
     const events = await this.getEvents(options);
 
     if (events.length === 0) {
@@ -565,6 +652,15 @@ export class TelemetryService {
     const gzPath = filepath + '.gz';
     await pipeline(createReadStream(filepath), createGzip(), createWriteStream(gzPath));
     await fs.unlink(filepath);
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+    this.sqliteDatabase = null;
+    this.repository = null;
+    this.initialized = false;
   }
 }
 

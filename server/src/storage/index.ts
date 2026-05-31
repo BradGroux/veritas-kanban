@@ -58,6 +58,9 @@ export {
 } from './sqlite/managed-list-repository.js';
 export { SqliteTemplateRepository } from './sqlite/template-repository.js';
 export { SqlitePromptRegistryRepository } from './sqlite/prompt-registry-repository.js';
+export { SqliteActivityRepository } from './sqlite/activity-repository.js';
+export { SqliteStatusHistoryRepository } from './sqlite/status-history-repository.js';
+export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

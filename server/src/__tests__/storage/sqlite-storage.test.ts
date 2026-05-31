@@ -8,6 +8,9 @@ import {
   initStorage,
   shutdownStorage,
   SqliteStorageProvider,
+  SqliteActivityRepository,
+  SqliteStatusHistoryRepository,
+  SqliteTelemetryRepository,
   type FileStorageOptions,
 } from '../../storage/index.js';
 
@@ -23,6 +26,12 @@ function fileStorageOptionsFor(testRoot: string): FileStorageOptions {
     },
     telemetryServiceOptions: {
       telemetryDir: path.join(testRoot, '.veritas-kanban', 'telemetry'),
+    },
+    activityServiceOptions: {
+      activityFile: path.join(testRoot, '.veritas-kanban', 'activity.json'),
+    },
+    statusHistoryServiceOptions: {
+      historyFile: path.join(testRoot, '.veritas-kanban', 'status-history.json'),
     },
   };
 }
@@ -58,6 +67,9 @@ describe('SqliteStorageProvider', () => {
     expect(provider.getDatabase().isOpen()).toBe(true);
     expect(localWorkspace.id).toBe('local');
     expect(Array.isArray(tasks)).toBe(true);
+    expect(provider.activities).toBeInstanceOf(SqliteActivityRepository);
+    expect(provider.statusHistory).toBeInstanceOf(SqliteStatusHistoryRepository);
+    expect(provider.telemetry).toBeInstanceOf(SqliteTelemetryRepository);
 
     await provider.shutdown();
     expect(provider.getDatabase().isOpen()).toBe(false);

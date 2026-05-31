@@ -3,6 +3,9 @@ import { fileExists } from '../storage/fs-helpers.js';
 import { dirname, join } from 'path';
 import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
+import type { StatusHistoryRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteStatusHistoryRepository } from '../storage/sqlite/status-history-repository.js';
 const log = createLogger('status-history-service');
 
 export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
@@ -38,6 +41,9 @@ export interface StatusPeriod {
 
 export interface StatusHistoryServiceOptions {
   historyFile?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 export class StatusHistoryService {
@@ -45,11 +51,26 @@ export class StatusHistoryService {
   private readonly MAX_ENTRIES = 5000; // Keep more entries for historical analysis
   private lastEntry: StatusHistoryEntry | null = null;
   private initPromise: Promise<void>;
+  private repository: StatusHistoryRepository | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
+  private ownsSqliteDatabase = false;
 
   constructor(options: StatusHistoryServiceOptions = {}) {
     this.historyFile =
       options.historyFile || join(process.cwd(), '.veritas-kanban', 'status-history.json');
-    this.initPromise = this.ensureDir();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteStatusHistoryRepository(this.sqliteDatabase);
+      this.initPromise = Promise.resolve();
+    } else {
+      this.initPromise = this.ensureDir();
+    }
   }
 
   private async ensureDir(): Promise<void> {
@@ -73,6 +94,10 @@ export class StatusHistoryService {
   }
 
   async getHistory(limit: number = 100, offset: number = 0): Promise<StatusHistoryEntry[]> {
+    if (this.repository) {
+      return this.repository.getHistory(limit, offset);
+    }
+
     await this.initPromise;
 
     if (!(await fileExists(this.historyFile))) {
@@ -96,6 +121,22 @@ export class StatusHistoryService {
     taskTitle?: string,
     subAgentCount?: number
   ): Promise<StatusHistoryEntry> {
+    if (this.repository) {
+      const entry = await this.repository.logStatusChange(
+        previousStatus,
+        newStatus,
+        taskId,
+        taskTitle,
+        subAgentCount
+      );
+
+      log.info(
+        `[StatusHistory] ${previousStatus} → ${newStatus}${taskId ? ` (task: ${taskId})` : ''}`
+      );
+
+      return entry;
+    }
+
     await this.initPromise;
 
     const now = new Date();
@@ -149,6 +190,10 @@ export class StatusHistoryService {
   }
 
   async getHistoryByDateRange(startDate: string, endDate: string): Promise<StatusHistoryEntry[]> {
+    if (this.repository) {
+      return this.repository.getHistoryByDateRange(startDate, endDate);
+    }
+
     const entries = await this.getHistory(this.MAX_ENTRIES);
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
@@ -160,6 +205,10 @@ export class StatusHistoryService {
   }
 
   async getDailySummary(date?: string): Promise<DailySummary> {
+    if (this.repository) {
+      return this.repository.getDailySummary(date);
+    }
+
     const targetDate = date || new Date().toISOString().split('T')[0];
     const startOfDay = new Date(`${targetDate}T00:00:00.000Z`);
     const endOfDay = new Date(`${targetDate}T23:59:59.999Z`);
@@ -264,6 +313,10 @@ export class StatusHistoryService {
   }
 
   async getWeeklySummary(): Promise<DailySummary[]> {
+    if (this.repository) {
+      return this.repository.getWeeklySummary();
+    }
+
     const summaries: DailySummary[] = [];
     const today = new Date();
 
@@ -278,8 +331,23 @@ export class StatusHistoryService {
   }
 
   async clearHistory(): Promise<void> {
+    if (this.repository) {
+      await this.repository.clearHistory();
+      this.lastEntry = null;
+      return;
+    }
+
     await this.initPromise;
     await writeFile(this.historyFile, '[]', 'utf-8');
+    this.lastEntry = null;
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+    this.sqliteDatabase = null;
+    this.repository = null;
     this.lastEntry = null;
   }
 }
