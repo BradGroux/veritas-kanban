@@ -256,6 +256,28 @@ describe('Mantine-backed shared UI primitives', () => {
     expect(screen.getByTestId('scroll-area').getAttribute('data-slot')).toBe('scroll-area');
   });
 
+  it('applies legacy text field classes to the native input slot', () => {
+    renderWithProviders(
+      <div>
+        <Label htmlFor="password">Password</Label>
+        <Input id="password" className="pr-10" placeholder="Password" type="password" />
+        <Textarea aria-label="Notes" className="min-h-24" placeholder="Notes" />
+      </div>
+    );
+
+    const input = screen.getByLabelText('Password');
+    const inputWrapper = input.parentElement;
+    const textarea = screen.getByLabelText('Notes');
+
+    expect(input.getAttribute('data-slot')).toBe('input');
+    expect(input.className).toContain('border-input');
+    expect(input.className).toContain('pr-10');
+    expect(inputWrapper?.className).not.toContain('border-input');
+    expect(inputWrapper?.className).not.toContain('pr-10');
+    expect(textarea.className).toContain('border-input');
+    expect(textarea.className).toContain('min-h-24');
+  });
+
   it('preserves checkbox and switch onCheckedChange compatibility', () => {
     renderWithProviders(<ToggleProbe />);
 

@@ -133,6 +133,7 @@ if (trustProxy !== undefined && trustProxy !== '') {
 }
 
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST?.trim() || undefined;
 
 // ============================================
 // Performance: ETag Generation
@@ -1052,7 +1053,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server
-server.listen(PORT, () => {
+server.listen(Number(PORT), HOST, () => {
   const authStatus = getAuthStatus();
   const localhostInfo = authStatus.localhostBypass
     ? `, localhost bypass [${authStatus.localhostRole}]`
@@ -1065,8 +1066,9 @@ server.listen(PORT, () => {
   log.info(
     {
       port: PORT,
-      api: `http://localhost:${PORT}`,
-      ws: `ws://localhost:${PORT}/ws`,
+      host: HOST || 'default',
+      api: `http://${HOST || 'localhost'}:${PORT}`,
+      ws: `ws://${HOST || 'localhost'}:${PORT}/ws`,
       auth: authLine,
       cors: corsLine,
       helmet: true,

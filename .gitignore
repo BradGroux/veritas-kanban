@@ -1,9 +1,11 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build outputs
 dist/
 build/
+out/
 .next/
 
 # IDE
@@ -44,6 +46,7 @@ tasks/attachments/
 tasks/archive-attachments/
 .veritas-kanban/*
 !.veritas-kanban/.gitkeep
+.veritas-desktop-dev/
 
 # Historical broken config data (should never have been tracked)
 .veritas-kanban.broken/

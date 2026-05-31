@@ -1,6 +1,7 @@
 packages:
-  - "server"
-  - "web"
-  - "shared"
-  - "cli"
-  - "mcp"
+  - 'server'
+  - 'web'
+  - 'shared'
+  - 'cli'
+  - 'mcp'
+  - 'desktop'

@@ -49,6 +49,9 @@ export const envSchema = z.object({
   /** HTTP port the server listens on */
   PORT: portSchema.default(3001),
 
+  /** Optional HTTP host/bind address */
+  HOST: z.string().optional(),
+
   /** Node environment: development | production | test */
   NODE_ENV: z.enum(['development', 'production', 'test']).optional().default('development'),
 

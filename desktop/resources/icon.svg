@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Veritas Kanban">
+  <rect width="512" height="512" rx="96" fill="#111318" />
+  <path d="M128 154h256v44H128zM128 234h174v44H128zM128 314h218v44H128z" fill="#eef1f7" />
+  <circle cx="382" cy="326" r="34" fill="#2f9e44" />
+</svg>

@@ -1,0 +1,40 @@
+{
+  "name": "@veritas-kanban/desktop",
+  "version": "4.3.2",
+  "private": true,
+  "description": "Veritas Kanban native desktop shell",
+  "author": "Brad Groux <brad@digitalmeld.io>",
+  "license": "MIT",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:fresh": "VERITAS_DESKTOP_PROFILE=fresh electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src electron.vite.config.ts --ext .ts",
+    "test": "vitest run --config vitest.config.ts",
+    "clean": "rm -rf dist out .veritas-desktop-dev"
+  },
+  "dependencies": {
+    "@veritas-kanban/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "electron": "^39.2.6",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.2.7",
+    "vitest": "^4.1.6"
+  },
+  "build": {
+    "appId": "io.digitalmeld.veritas-kanban",
+    "productName": "Veritas Kanban",
+    "directories": {
+      "buildResources": "resources"
+    },
+    "mac": {
+      "category": "public.app-category.productivity"
+    }
+  }
+}

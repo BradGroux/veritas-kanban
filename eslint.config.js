@@ -9,9 +9,11 @@ export default [
   {
     ignores: [
       '**/dist/**',
+      '**/out/**',
       '**/node_modules/**',
       '**/*.d.ts',
       '.veritas-kanban/**',
+      '.veritas-desktop-dev/**',
       // Config files (CommonJS tooling)
       'web/tailwind.config.js',
       'web/vite.config.js',
@@ -22,9 +24,17 @@ export default [
   // Base JS config
   js.configs.recommended,
 
-  // TypeScript files (server, shared, cli, mcp)
+  // TypeScript files (server, shared, cli, mcp, desktop)
   {
-    files: ['server/src/**/*.ts', 'shared/src/**/*.ts', 'cli/src/**/*.ts', 'mcp/src/**/*.ts'],
+    files: [
+      'server/src/**/*.ts',
+      'shared/src/**/*.ts',
+      'cli/src/**/*.ts',
+      'mcp/src/**/*.ts',
+      'desktop/src/**/*.ts',
+      'desktop/electron.vite.config.ts',
+      'desktop/vitest.config.ts',
+    ],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
