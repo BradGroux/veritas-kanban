@@ -16,7 +16,8 @@ import { fileExists, mkdir, readdir, readFile, unlink, writeFile } from '../stor
 import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
-import { NotFoundError } from '../middleware/error-handler.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteFeedbackRepository } from '../storage/sqlite/governance-repositories.js';
 
 const log = createLogger('feedback-service');
 
@@ -118,10 +119,35 @@ export function detectSentiment(text: string): Sentiment {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
+export interface FeedbackServiceOptions {
+  feedbackDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
+
 export class FeedbackService {
-  private readonly feedbackDir = join(process.cwd(), 'storage', 'feedback');
+  private readonly feedbackDir: string;
+  private readonly repository: SqliteFeedbackRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
+
+  constructor(options: FeedbackServiceOptions = {}) {
+    this.feedbackDir = options.feedbackDir ?? join(process.cwd(), 'storage', 'feedback');
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteFeedbackRepository(this.sqliteDatabase);
+    }
+  }
 
   private async ensureDirs(): Promise<void> {
+    if (this.repository) return;
     await mkdir(this.feedbackDir, { recursive: true });
   }
 
@@ -142,6 +168,10 @@ export class FeedbackService {
   }
 
   async list(query: FeedbackQuery = {}): Promise<Feedback[]> {
+    if (this.repository) {
+      return this.repository.list(query);
+    }
+
     await this.ensureDirs();
 
     const files = await readdir(this.feedbackDir);
@@ -167,6 +197,10 @@ export class FeedbackService {
   }
 
   async get(id: string): Promise<Feedback | null> {
+    if (this.repository) {
+      return this.repository.get(id);
+    }
+
     await this.ensureDirs();
     const filePath = this.feedbackPath(id);
     if (!(await fileExists(filePath))) return null;
@@ -193,10 +227,14 @@ export class FeedbackService {
       updatedAt: now,
     };
 
-    const filePath = this.feedbackPath(id);
-    await withFileLock(filePath, async () => {
-      await writeFile(filePath, JSON.stringify(feedback, null, 2), 'utf-8');
-    });
+    if (this.repository) {
+      await this.repository.save(feedback);
+    } else {
+      const filePath = this.feedbackPath(id);
+      await withFileLock(filePath, async () => {
+        await writeFile(filePath, JSON.stringify(feedback, null, 2), 'utf-8');
+      });
+    }
 
     log.info({ id, taskId: input.taskId, sentiment }, 'Feedback created');
     return feedback;
@@ -216,21 +254,26 @@ export class FeedbackService {
       createdAt: existing.createdAt,
       updatedAt: new Date().toISOString(),
       // Re-run sentiment if comment changed
-      sentiment:
-        input.comment !== undefined
-          ? detectSentiment(input.comment)
-          : existing.sentiment,
+      sentiment: input.comment !== undefined ? detectSentiment(input.comment) : existing.sentiment,
     };
 
-    const filePath = this.feedbackPath(id);
-    await withFileLock(filePath, async () => {
-      await writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
-    });
+    if (this.repository) {
+      await this.repository.save(updated);
+    } else {
+      const filePath = this.feedbackPath(id);
+      await withFileLock(filePath, async () => {
+        await writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      });
+    }
 
     return updated;
   }
 
   async delete(id: string): Promise<boolean> {
+    if (this.repository) {
+      return this.repository.delete(id);
+    }
+
     await this.ensureDirs();
     const filePath = this.feedbackPath(id);
     if (!(await fileExists(filePath))) return false;
@@ -243,9 +286,7 @@ export class FeedbackService {
 
     const totalFeedback = allItems.length;
     const averageRating =
-      totalFeedback > 0
-        ? allItems.reduce((sum, item) => sum + item.rating, 0) / totalFeedback
-        : 0;
+      totalFeedback > 0 ? allItems.reduce((sum, item) => sum + item.rating, 0) / totalFeedback : 0;
 
     // Rating distribution (1–5)
     const ratingCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -341,6 +382,12 @@ export class FeedbackService {
 
   async listUnresolved(limit = 100): Promise<Feedback[]> {
     return this.list({ resolved: false, limit });
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
   }
 }
 

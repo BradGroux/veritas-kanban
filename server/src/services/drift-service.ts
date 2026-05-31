@@ -15,6 +15,8 @@ import { fileExists, mkdir, readdir, readFile, rm, writeFile } from '../storage/
 import { getDriftAlertsDir, getDriftBaselinesDir } from '../utils/paths.js';
 import { getTelemetryService } from './telemetry-service.js';
 import { createLogger } from '../lib/logger.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteDriftRepository } from '../storage/sqlite/governance-repositories.js';
 
 const log = createLogger('drift-service');
 
@@ -51,22 +53,39 @@ interface DailyAggregate {
   errors: number;
 }
 
-interface DriftServiceOptions {
+export interface DriftServiceOptions {
   alertsDir?: string;
   baselinesDir?: string;
   configs?: DriftConfig[];
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 export class DriftService {
   private readonly alertsDir: string;
   private readonly baselinesDir: string;
   private readonly configs: Map<DriftMetric, DriftConfig>;
+  private readonly repository: SqliteDriftRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
   constructor(options: DriftServiceOptions = {}) {
     this.alertsDir = options.alertsDir ?? getDriftAlertsDir();
     this.baselinesDir = options.baselinesDir ?? getDriftBaselinesDir();
     const configs = options.configs ?? DEFAULT_CONFIGS;
     this.configs = new Map(configs.map((config) => [config.metric, config]));
+
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteDriftRepository(this.sqliteDatabase);
+    }
   }
 
   async listAlerts(
@@ -77,6 +96,10 @@ export class DriftService {
       acknowledged?: boolean;
     } = {}
   ): Promise<DriftAlert[]> {
+    if (this.repository) {
+      return this.repository.listAlerts(filters);
+    }
+
     const alerts = await this.readCollection<DriftAlert>(this.alertsDir);
     return alerts
       .filter((alert) => {
@@ -92,6 +115,15 @@ export class DriftService {
   }
 
   async acknowledgeAlert(id: string): Promise<DriftAlert | null> {
+    if (this.repository) {
+      const alert = await this.repository.getAlert(id);
+      if (!alert) return null;
+
+      const updated: DriftAlert = { ...alert, acknowledged: true };
+      await this.repository.saveAlert(updated);
+      return updated;
+    }
+
     const filePath = path.join(this.alertsDir, `${id}.json`);
     if (!(await fileExists(filePath))) {
       return null;
@@ -106,6 +138,10 @@ export class DriftService {
   async listBaselines(
     filters: { agentId?: string; metric?: DriftMetric } = {}
   ): Promise<DriftBaseline[]> {
+    if (this.repository) {
+      return this.repository.listBaselines(filters);
+    }
+
     const baselines = await this.readCollection<DriftBaseline>(this.baselinesDir);
     return baselines
       .filter((baseline) => {
@@ -117,6 +153,10 @@ export class DriftService {
   }
 
   async resetBaselines(agentId: string, metric?: DriftMetric): Promise<{ deleted: number }> {
+    if (this.repository) {
+      return this.repository.resetBaselines(agentId, metric);
+    }
+
     await mkdir(this.baselinesDir, { recursive: true });
     const files = await readdir(this.baselinesDir).catch(() => [] as string[]);
     const matching = files.filter((file) => {
@@ -379,11 +419,21 @@ export class DriftService {
   }
 
   private async saveAlert(alert: DriftAlert): Promise<void> {
+    if (this.repository) {
+      await this.repository.saveAlert(alert);
+      return;
+    }
+
     await mkdir(this.alertsDir, { recursive: true });
     await this.writeJson(path.join(this.alertsDir, `${alert.id}.json`), alert);
   }
 
   private async saveBaseline(baseline: DriftBaseline): Promise<void> {
+    if (this.repository) {
+      await this.repository.saveBaseline(baseline);
+      return;
+    }
+
     await mkdir(this.baselinesDir, { recursive: true });
     const file = `${this.toFileSegment(baseline.agentId)}__${baseline.metric}.json`;
     await this.writeJson(path.join(this.baselinesDir, file), baseline);
@@ -413,6 +463,12 @@ export class DriftService {
 
   private async writeJson(filePath: string, value: unknown): Promise<void> {
     await writeFile(filePath, JSON.stringify(value, null, 2), 'utf-8');
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
   }
 }
 

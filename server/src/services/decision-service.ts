@@ -11,13 +11,40 @@ import { BadRequestError, NotFoundError } from '../middleware/error-handler.js';
 import { fileExists, mkdir, readFile, readdir, writeFile } from '../storage/fs-helpers.js';
 import { getDecisionsDir } from '../utils/paths.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteDecisionRepository } from '../storage/sqlite/governance-repositories.js';
 
 const log = createLogger('decision-service');
 
+export interface DecisionServiceOptions {
+  decisionsDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
+
 export class DecisionService {
-  private readonly decisionsDir = getDecisionsDir();
+  private readonly decisionsDir: string;
+  private readonly repository: SqliteDecisionRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
+
+  constructor(options: DecisionServiceOptions = {}) {
+    this.decisionsDir = options.decisionsDir ?? getDecisionsDir();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteDecisionRepository(this.sqliteDatabase);
+    }
+  }
 
   private async ensureDir(): Promise<void> {
+    if (this.repository) return;
     await mkdir(this.decisionsDir, { recursive: true });
   }
 
@@ -39,6 +66,10 @@ export class DecisionService {
   }
 
   private async readDecision(id: string): Promise<DecisionRecord | null> {
+    if (this.repository) {
+      return this.repository.getById(id);
+    }
+
     const filePath = this.getDecisionPath(id);
     if (!(await fileExists(filePath))) {
       return null;
@@ -49,6 +80,11 @@ export class DecisionService {
   }
 
   private async writeDecision(decision: DecisionRecord): Promise<void> {
+    if (this.repository) {
+      await this.repository.save(decision);
+      return;
+    }
+
     await this.ensureDir();
     await writeFile(this.getDecisionPath(decision.id), JSON.stringify(decision, null, 2), 'utf8');
   }
@@ -81,6 +117,10 @@ export class DecisionService {
   }
 
   async list(filters: DecisionListFilters = {}): Promise<DecisionRecord[]> {
+    if (this.repository) {
+      return this.repository.list(filters);
+    }
+
     await this.ensureDir();
     const files = await readdir(this.decisionsDir);
     const decisions = await Promise.all(
@@ -168,6 +208,12 @@ export class DecisionService {
 
     await this.writeDecision(decision);
     return decision;
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
   }
 }
 

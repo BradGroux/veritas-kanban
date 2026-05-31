@@ -61,6 +61,12 @@ export { SqlitePromptRegistryRepository } from './sqlite/prompt-registry-reposit
 export { SqliteActivityRepository } from './sqlite/activity-repository.js';
 export { SqliteStatusHistoryRepository } from './sqlite/status-history-repository.js';
 export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
+export {
+  SqliteDecisionRepository,
+  SqliteDriftRepository,
+  SqliteFeedbackRepository,
+  SqliteScoringRepository,
+} from './sqlite/governance-repositories.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

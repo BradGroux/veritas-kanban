@@ -18,6 +18,8 @@ import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteScoringRepository } from '../storage/sqlite/governance-repositories.js';
 
 const log = createLogger('scoring-service');
 
@@ -172,14 +174,42 @@ const BUILT_IN_PROFILES: Array<Omit<ScoringProfile, 'created' | 'updated'>> = [
   },
 ];
 
+export interface ScoringServiceOptions {
+  profilesDir?: string;
+  evaluationsDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
+
 export class ScoringService {
-  private readonly profilesDir = join(process.cwd(), 'storage', 'scoring');
-  private readonly evaluationsDir = join(process.cwd(), 'storage', 'evaluations');
+  private readonly profilesDir: string;
+  private readonly evaluationsDir: string;
+  private readonly repository: SqliteScoringRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
   private builtInsSeeded = false;
 
+  constructor(options: ScoringServiceOptions = {}) {
+    this.profilesDir = options.profilesDir ?? join(process.cwd(), 'storage', 'scoring');
+    this.evaluationsDir = options.evaluationsDir ?? join(process.cwd(), 'storage', 'evaluations');
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteScoringRepository(this.sqliteDatabase);
+    }
+  }
+
   private async ensureDirs(): Promise<void> {
-    await mkdir(this.profilesDir, { recursive: true });
-    await mkdir(this.evaluationsDir, { recursive: true });
+    if (!this.repository) {
+      await mkdir(this.profilesDir, { recursive: true });
+      await mkdir(this.evaluationsDir, { recursive: true });
+    }
     await this.seedBuiltIns();
   }
 
@@ -187,15 +217,25 @@ export class ScoringService {
     if (this.builtInsSeeded) return;
 
     for (const profile of BUILT_IN_PROFILES) {
-      const filePath = this.profilePath(profile.id);
-      if (await fileExists(filePath)) continue;
+      const existing = this.repository
+        ? await this.repository.getProfile(profile.id)
+        : await fileExists(this.profilePath(profile.id));
+      if (existing) continue;
 
       const now = new Date().toISOString();
-      await writeFile(
-        filePath,
-        JSON.stringify({ ...profile, created: now, updated: now }, null, 2),
-        'utf-8'
-      );
+      const seededProfile: ScoringProfile = {
+        ...profile,
+        created: now,
+        updated: now,
+      };
+
+      if (this.repository) {
+        await this.repository.saveProfile(seededProfile);
+        continue;
+      }
+
+      const filePath = this.profilePath(profile.id);
+      await writeFile(filePath, JSON.stringify(seededProfile, null, 2), 'utf-8');
     }
 
     this.builtInsSeeded = true;
@@ -236,6 +276,10 @@ export class ScoringService {
   async listProfiles(): Promise<ScoringProfile[]> {
     await this.ensureDirs();
 
+    if (this.repository) {
+      return this.repository.listProfiles();
+    }
+
     const files = await readdir(this.profilesDir);
     const profiles = await Promise.all(
       files
@@ -255,6 +299,10 @@ export class ScoringService {
 
   async getProfile(id: string): Promise<ScoringProfile | null> {
     await this.ensureDirs();
+
+    if (this.repository) {
+      return this.repository.getProfile(id);
+    }
 
     const filePath = this.profilePath(id);
     if (!(await fileExists(filePath))) return null;
@@ -277,10 +325,14 @@ export class ScoringService {
       updated: now,
     };
 
-    const filePath = this.profilePath(id);
-    await withFileLock(filePath, async () => {
-      await writeFile(filePath, JSON.stringify(profile, null, 2), 'utf-8');
-    });
+    if (this.repository) {
+      await this.repository.saveProfile(profile);
+    } else {
+      const filePath = this.profilePath(id);
+      await withFileLock(filePath, async () => {
+        await writeFile(filePath, JSON.stringify(profile, null, 2), 'utf-8');
+      });
+    }
 
     return profile;
   }
@@ -305,10 +357,14 @@ export class ScoringService {
       updated: new Date().toISOString(),
     };
 
-    const filePath = this.profilePath(id);
-    await withFileLock(filePath, async () => {
-      await writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
-    });
+    if (this.repository) {
+      await this.repository.saveProfile(updated);
+    } else {
+      const filePath = this.profilePath(id);
+      await withFileLock(filePath, async () => {
+        await writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      });
+    }
 
     return updated;
   }
@@ -320,6 +376,10 @@ export class ScoringService {
     if (!existing) return false;
     if (existing.builtIn) {
       throw new Error('Built-in scoring profiles cannot be deleted');
+    }
+
+    if (this.repository) {
+      return this.repository.deleteProfile(id);
     }
 
     await unlink(this.profilePath(id));
@@ -538,16 +598,24 @@ export class ScoringService {
       created: new Date().toISOString(),
     };
 
-    const filePath = this.evaluationPath(result.id);
-    await withFileLock(filePath, async () => {
-      await writeFile(filePath, JSON.stringify(result, null, 2), 'utf-8');
-    });
+    if (this.repository) {
+      await this.repository.saveEvaluation(result);
+    } else {
+      const filePath = this.evaluationPath(result.id);
+      await withFileLock(filePath, async () => {
+        await writeFile(filePath, JSON.stringify(result, null, 2), 'utf-8');
+      });
+    }
 
     return result;
   }
 
   async getHistory(query: EvaluationHistoryQuery = {}): Promise<EvaluationResult[]> {
     await this.ensureDirs();
+
+    if (this.repository) {
+      return this.repository.getHistory(query);
+    }
 
     const files = await readdir(this.evaluationsDir);
     const limit = query.limit ?? 200;
@@ -564,6 +632,12 @@ export class ScoringService {
       .filter((result) => !query.taskId || result.taskId === query.taskId)
       .sort((a, b) => b.created.localeCompare(a.created))
       .slice(0, limit);
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
   }
 }
 

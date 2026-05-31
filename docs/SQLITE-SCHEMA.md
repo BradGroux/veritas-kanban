@@ -906,6 +906,22 @@ SQLite repositories when `VERITAS_STORAGE=sqlite`. File storage still forces the
 file-backed services to `storageType='file'`, so explicit file mode cannot be
 accidentally flipped by the environment.
 
+## Governance Repository Implementation
+
+The first governance repository pass moves JSON-backed decisions, feedback,
+scoring, and drift data into SQLite document tables with indexed query columns.
+The domain services keep their existing APIs, validation, and analytics logic;
+only the persistence backend switches when `VERITAS_STORAGE=sqlite`.
+
+| Runtime table         | Stored data                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| `decision_records`    | Complete `DecisionRecord` JSON plus agent, task, parent, confidence, and risk columns. |
+| `feedback_records`    | Complete `Feedback` JSON plus task, agent, rating, sentiment, and resolved columns.    |
+| `scoring_profiles`    | Complete `ScoringProfile` JSON plus name and built-in metadata.                        |
+| `scoring_evaluations` | Complete `EvaluationResult` JSON plus profile, agent, task, and score columns.         |
+| `drift_alerts`        | Complete `DriftAlert` JSON plus agent, metric, severity, and acknowledged columns.     |
+| `drift_baselines`     | Complete `DriftBaseline` JSON plus agent and metric columns.                           |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

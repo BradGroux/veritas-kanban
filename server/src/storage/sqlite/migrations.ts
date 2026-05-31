@@ -262,6 +262,132 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON telemetry_events(project_id, created_at DESC);
     `,
   },
+  {
+    version: 6,
+    name: '0006_governance_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS decision_records (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        agent_id TEXT,
+        task_id TEXT,
+        parent_decision_id TEXT,
+        confidence_level REAL NOT NULL,
+        risk_score REAL NOT NULL,
+        decision_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_decision_records_workspace_created
+        ON decision_records(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_decision_records_agent_created
+        ON decision_records(agent_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_decision_records_task_created
+        ON decision_records(task_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS feedback_records (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        agent TEXT,
+        rating INTEGER NOT NULL,
+        sentiment TEXT NOT NULL,
+        resolved INTEGER NOT NULL DEFAULT 0,
+        categories_json TEXT NOT NULL,
+        feedback_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_records_workspace_created
+        ON feedback_records(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_records_task_created
+        ON feedback_records(task_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_records_agent_created
+        ON feedback_records(agent, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_records_sentiment_created
+        ON feedback_records(sentiment, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS scoring_profiles (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        built_in INTEGER NOT NULL DEFAULT 0,
+        profile_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scoring_profiles_workspace_name
+        ON scoring_profiles(workspace_id, name);
+
+      CREATE TABLE IF NOT EXISTS scoring_evaluations (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        profile_id TEXT NOT NULL,
+        agent TEXT,
+        task_id TEXT,
+        composite_score REAL NOT NULL,
+        evaluation_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scoring_evaluations_profile_created
+        ON scoring_evaluations(profile_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_scoring_evaluations_agent_created
+        ON scoring_evaluations(agent, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_scoring_evaluations_task_created
+        ON scoring_evaluations(task_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS drift_alerts (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        agent_id TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        acknowledged INTEGER NOT NULL DEFAULT 0,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_drift_alerts_workspace_created
+        ON drift_alerts(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_drift_alerts_agent_created
+        ON drift_alerts(agent_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_drift_alerts_metric_created
+        ON drift_alerts(metric, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS drift_baselines (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        agent_id TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (workspace_id, agent_id, metric)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_drift_baselines_agent_metric
+        ON drift_baselines(agent_id, metric);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
