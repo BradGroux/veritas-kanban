@@ -4,6 +4,7 @@ import { DESKTOP_APP_ID, DESKTOP_APP_NAME } from './app-metadata.js';
 import type { DesktopCommandDispatcher } from './commands.js';
 import type { DesktopAppInfo } from './types.js';
 import type { DesktopRuntime } from './runtime.js';
+import type { DesktopUpdateService } from './updates.js';
 import {
   createDesktopSetupDiagnostics,
   createDesktopSupportSnapshot,
@@ -36,7 +37,8 @@ export function createDesktopBridgeHandlers(
   runtime: DesktopRuntime,
   shell: Shell,
   packaged: boolean,
-  commandDispatcher?: DesktopCommandDispatcher
+  commandDispatcher?: DesktopCommandDispatcher,
+  updateService?: DesktopUpdateService
 ): DesktopBridgeHandlerMap {
   const appInfo = (): DesktopAppInfo => ({
     name: DESKTOP_APP_NAME,
@@ -65,13 +67,14 @@ export function createDesktopBridgeHandlers(
       return runtime.restartLocalServer();
     },
     getSupportSnapshot: () => createDesktopSupportSnapshot(runtime.snapshot()),
-    getUpdateStatus: () => ({
-      state: 'unsupported',
-      currentVersion: appInfo().version,
-      channel: packaged ? 'stable' : 'dev',
-      checkedAt: new Date().toISOString(),
-      detail: 'Updater implementation is tracked in the desktop release pipeline issue.',
-    }),
+    getUpdateStatus: () =>
+      updateService?.snapshot() ?? {
+        state: 'unsupported',
+        currentVersion: appInfo().version,
+        channel: packaged ? 'stable' : 'dev',
+        checkedAt: new Date().toISOString(),
+        detail: 'Updater service is not initialized.',
+      },
     dispatchCommand: (request) => {
       const command = validateDesktopCommandDispatchRequest(request);
       return commandDispatcher
@@ -128,9 +131,16 @@ export function registerDesktopBridge(
   runtime: DesktopRuntime,
   shell: Shell,
   packaged: boolean,
-  commandDispatcher?: DesktopCommandDispatcher
+  commandDispatcher?: DesktopCommandDispatcher,
+  updateService?: DesktopUpdateService
 ): void {
-  const handlers = createDesktopBridgeHandlers(runtime, shell, packaged, commandDispatcher);
+  const handlers = createDesktopBridgeHandlers(
+    runtime,
+    shell,
+    packaged,
+    commandDispatcher,
+    updateService
+  );
 
   for (const method of DESKTOP_BRIDGE_METHOD_NAMES) {
     const definition = DESKTOP_BRIDGE_METHODS[method];

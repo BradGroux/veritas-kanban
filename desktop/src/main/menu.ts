@@ -6,11 +6,15 @@ import {
   type DesktopCommandDispatcher,
 } from './commands.js';
 import type { DesktopStatusSnapshot } from './types.js';
-import type { DesktopCommandName } from '../shared/desktop-bridge-contracts.js';
+import type {
+  DesktopCommandName,
+  DesktopUpdateStatus,
+} from '../shared/desktop-bridge-contracts.js';
 
 export interface ConfigureDesktopMenuOptions {
   dispatch(command: DesktopCommandName): void;
   status: DesktopStatusSnapshot;
+  updateStatus?: DesktopUpdateStatus;
 }
 
 export function configureDesktopMenu(options: ConfigureDesktopMenuOptions): void {
@@ -25,7 +29,7 @@ export function createDesktopMenuTemplate(
     return {
       label: definition.label,
       accelerator: definition.accelerator,
-      enabled: isCommandEnabled(name, options.status),
+      enabled: isCommandEnabled(name, options.status, options.updateStatus),
       click: () => options.dispatch(name),
     };
   };
@@ -38,6 +42,8 @@ export function createDesktopMenuTemplate(
         command('communication-health'),
         { type: 'separator' },
         command('check-for-updates'),
+        command('download-update'),
+        command('install-update'),
         { type: 'separator' },
         command('quit'),
       ],
@@ -78,7 +84,11 @@ export function dispatchDesktopMenuCommand(
   void dispatcher.dispatch(createDesktopCommandRequest(command, 'menu'));
 }
 
-function isCommandEnabled(command: DesktopCommandName, status: DesktopStatusSnapshot): boolean {
+function isCommandEnabled(
+  command: DesktopCommandName,
+  status: DesktopStatusSnapshot,
+  updateStatus?: DesktopUpdateStatus
+): boolean {
   if (command === 'restart-local-server') {
     return status.mode === 'local-dev' || status.mode === 'local-production';
   }
@@ -87,6 +97,12 @@ function isCommandEnabled(command: DesktopCommandName, status: DesktopStatusSnap
   }
   if (command === 'test-squad-webhook') {
     return status.server.state === 'ready';
+  }
+  if (command === 'download-update') {
+    return updateStatus?.state === 'available';
+  }
+  if (command === 'install-update') {
+    return updateStatus?.state === 'ready';
   }
   return true;
 }

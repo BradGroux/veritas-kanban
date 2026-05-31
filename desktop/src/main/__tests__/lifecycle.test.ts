@@ -47,9 +47,28 @@ describe('desktop lifecycle config', () => {
     expect(env.VERITAS_ADMIN_KEY).toBe('desktop-keychain-admin-key');
     expect(env.VERITAS_JWT_SECRET).toBe('desktop-keychain-jwt-secret');
     expect(env.VERITAS_STORAGE).toBe('sqlite');
+    expect(env.VERITAS_DESKTOP_RUNTIME).toBe('0');
+    expect(env.DATA_DIR).toBe('/tmp/veritas-desktop/data');
     expect(env.VERITAS_DATA_DIR).toBe('/tmp/veritas-desktop/data');
     expect(env.VERITAS_AUTH_ENABLED).toBe('false');
     expect(env.CORS_ORIGINS).toContain('http://127.0.0.1:39124');
+  });
+
+  it('runs packaged server with the Electron binary in Node mode from resources', () => {
+    const configs = createManagedProcessConfigs({
+      ...options(),
+      isPackaged: true,
+      resourcesPath: '/Applications/Veritas Kanban.app/Contents/Resources',
+    });
+
+    expect(configs).toHaveLength(1);
+    expect(configs[0]?.args).toEqual([
+      '/Applications/Veritas Kanban.app/Contents/Resources/server/dist/index.js',
+    ]);
+    expect(configs[0]?.cwd).toBe('/Applications/Veritas Kanban.app/Contents/Resources/server');
+    expect(configs[0]?.env.ELECTRON_RUN_AS_NODE).toBe('1');
+    expect(configs[0]?.env.VERITAS_DESKTOP_RUNTIME).toBe('1');
+    expect(configs[0]?.env.VERITAS_AUTH_ENABLED).toBe('true');
   });
 
   it('points web dev proxies at the selected server port', () => {

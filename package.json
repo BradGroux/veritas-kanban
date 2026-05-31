@@ -16,6 +16,9 @@
     "desktop:dev": "pnpm --filter @veritas-kanban/desktop dev",
     "desktop:dev:fresh": "pnpm --filter @veritas-kanban/desktop dev:fresh",
     "desktop:build": "pnpm --filter @veritas-kanban/desktop build",
+    "desktop:package:mac:dir": "pnpm build && pnpm --filter @veritas-kanban/desktop package:mac:dir",
+    "desktop:package:mac:unsigned": "pnpm build && pnpm --filter @veritas-kanban/desktop package:mac:unsigned",
+    "desktop:release:mac": "pnpm build && pnpm --filter @veritas-kanban/desktop release:mac",
     "desktop:test": "pnpm --filter @veritas-kanban/desktop test",
     "dev:clean": "bash scripts/dev-clean.sh",
     "dev:watchdog": "bash scripts/dev-watchdog.sh",
@@ -64,19 +67,6 @@
     "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
-  },
-  "pnpm": {
-    "overrides": {
-      "@xmldom/xmldom": ">=0.8.13",
-      "fast-uri": ">=3.1.2",
-      "hono": ">=4.12.18",
-      "ip-address": ">=10.1.1",
-      "postcss": ">=8.5.10",
-      "qs": "^6.14.2",
-      "minimatch": ">=10.2.3",
-      "path-to-regexp": ">=8.4.0",
-      "tmp": ">=0.2.6"
-    }
   },
   "repository": {
     "type": "git",

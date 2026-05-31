@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, ipcMain, Notification, safeStorage, shell } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME, DESKTOP_MIN_WINDOW } from './app-metadata.js';
 import { registerDesktopBridge } from './bridge.js';
@@ -14,8 +15,14 @@ import { DesktopRuntime } from './runtime.js';
 import { DesktopSecretStore } from './secrets.js';
 import { statusPageUrl } from './status-page.js';
 import {
+  DesktopUpdateService,
+  ElectronAutoUpdaterAdapter,
+  resolveDesktopUpdateChannel,
+} from './updates.js';
+import {
   DESKTOP_BRIDGE_EVENTS,
   redactDesktopBridgeValue,
+  type DesktopUpdateStatus,
 } from '../shared/desktop-bridge-contracts.js';
 import {
   applyDesktopWindowState,
@@ -25,9 +32,13 @@ import {
   type DesktopWindowState,
 } from './window-state.js';
 
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require('electron-updater') as typeof import('electron-updater');
+
 let mainWindow: BrowserWindow | null = null;
 let runtime: DesktopRuntime | null = null;
 let commandDispatcher: DesktopCommandDispatcher | null = null;
+let updateService: DesktopUpdateService | null = null;
 let windowStatePaths: ReturnType<typeof createDesktopPaths> | null = null;
 let quitting = false;
 let shutdownStarted = false;
@@ -133,6 +144,32 @@ function flushPendingDeepLinks(): void {
   }
 }
 
+function refreshDesktopMenu(): void {
+  if (!runtime || !commandDispatcher) {
+    return;
+  }
+
+  configureDesktopMenu({
+    status: runtime.snapshot(),
+    updateStatus: updateService?.snapshot(),
+    dispatch: (command) => {
+      if (commandDispatcher) {
+        dispatchDesktopMenuCommand(commandDispatcher, command);
+      }
+    },
+  });
+}
+
+function updateServiceFallback(packaged: boolean): DesktopUpdateStatus {
+  return {
+    state: 'unsupported',
+    currentVersion: app.getVersion(),
+    channel: packaged ? 'stable' : 'dev',
+    checkedAt: new Date().toISOString(),
+    detail: 'Updater service is not initialized.',
+  };
+}
+
 async function boot(): Promise<void> {
   app.setName(DESKTOP_APP_NAME);
   app.setAppUserModelId(DESKTOP_APP_ID);
@@ -182,6 +219,7 @@ async function boot(): Promise<void> {
 
   runtime = new DesktopRuntime({
     repoRoot,
+    resourcesPath: process.resourcesPath,
     paths,
     serverPort,
     webPort,
@@ -198,6 +236,21 @@ async function boot(): Promise<void> {
       mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.notificationAction.channel, request);
     }
   );
+  updateService = new DesktopUpdateService({
+    adapter: new ElectronAutoUpdaterAdapter(autoUpdater),
+    packaged,
+    currentVersion: app.getVersion(),
+    channel: resolveDesktopUpdateChannel(
+      process.env.VERITAS_UPDATE_CHANNEL,
+      app.getVersion(),
+      packaged
+    ),
+    forceDevUpdateConfig: process.env.VERITAS_DESKTOP_UPDATER_FORCE_DEV === 'true',
+    emitStatus: (status) => {
+      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
+      refreshDesktopMenu();
+    },
+  });
 
   commandDispatcher = new DesktopCommandDispatcher({
     runtime,
@@ -206,9 +259,11 @@ async function boot(): Promise<void> {
     sendRendererCommand: (command) => {
       mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.menuCommand.channel, command);
     },
-    sendUpdateStatus: (status) => {
-      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
-    },
+    checkForUpdates: () =>
+      updateService?.checkForUpdates() ?? Promise.resolve(updateServiceFallback(packaged)),
+    downloadUpdate: () =>
+      updateService?.downloadUpdate() ?? Promise.resolve(updateServiceFallback(packaged)),
+    installUpdate: () => updateService?.installUpdate() ?? updateServiceFallback(packaged),
     showTestNotification: () => {
       notifications.show({
         id: `setup-test-${Date.now()}`,
@@ -224,25 +279,11 @@ async function boot(): Promise<void> {
     },
   });
 
-  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher);
-  configureDesktopMenu({
-    status: runtime.snapshot(),
-    dispatch: (command) => {
-      if (commandDispatcher) {
-        dispatchDesktopMenuCommand(commandDispatcher, command);
-      }
-    },
-  });
+  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher, updateService);
+  refreshDesktopMenu();
   runtime.on('status', (status) => {
     mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
-    configureDesktopMenu({
-      status,
-      dispatch: (command) => {
-        if (commandDispatcher) {
-          dispatchDesktopMenuCommand(commandDispatcher, command);
-        }
-      },
-    });
+    refreshDesktopMenu();
   });
 
   try {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createDesktopMenuTemplate } from '../menu.js';
 import type { DesktopStatusSnapshot } from '../types.js';
+import type { DesktopUpdateStatus } from '../../shared/desktop-bridge-contracts.js';
 
 function status(state: DesktopStatusSnapshot['server']['state'] = 'ready'): DesktopStatusSnapshot {
   return {
@@ -27,6 +28,15 @@ function status(state: DesktopStatusSnapshot['server']['state'] = 'ready'): Desk
     secretsBackedByKeychain: true,
     warnings: [],
     lastError: null,
+  };
+}
+
+function updateStatus(state: DesktopUpdateStatus['state']): DesktopUpdateStatus {
+  return {
+    state,
+    currentVersion: '4.3.2',
+    channel: 'stable',
+    checkedAt: '2026-05-31T00:00:00.000Z',
   };
 }
 
@@ -64,5 +74,22 @@ describe('desktop native menu', () => {
       : null;
 
     expect(externalTest?.enabled).toBe(false);
+  });
+
+  it('keeps update install actions tied to updater state', () => {
+    const appMenu = createDesktopMenuTemplate({
+      status: status(),
+      updateStatus: updateStatus('available'),
+      dispatch: vi.fn(),
+    }).find((item) => item.label === 'Veritas Kanban');
+    const downloadUpdate = Array.isArray(appMenu?.submenu)
+      ? appMenu.submenu.find((item) => item.label === 'Download Update')
+      : null;
+    const installUpdate = Array.isArray(appMenu?.submenu)
+      ? appMenu.submenu.find((item) => item.label === 'Install Update')
+      : null;
+
+    expect(downloadUpdate?.enabled).toBe(true);
+    expect(installUpdate?.enabled).toBe(false);
   });
 });

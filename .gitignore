@@ -47,6 +47,8 @@ tasks/archive-attachments/
 .veritas-kanban/*
 !.veritas-kanban/.gitkeep
 .veritas-desktop-dev/
+desktop/.desktop-release/
+desktop/release/
 
 # Historical broken config data (should never have been tracked)
 .veritas-kanban.broken/

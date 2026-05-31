@@ -95,6 +95,8 @@ export const DESKTOP_COMMAND_NAMES = [
   'show-diagnostics',
   'create-debug-bundle',
   'check-for-updates',
+  'download-update',
+  'install-update',
   'test-notification',
   'test-squad-webhook',
   'copy-redacted-diagnostics',
@@ -161,6 +163,7 @@ export interface DesktopDiagnosticsBundleResult {
 export interface DesktopUpdateStatus {
   state: 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'failed';
   currentVersion: string;
+  availableVersion?: string;
   channel: 'dev' | 'beta' | 'stable';
   checkedAt: string;
   detail?: string;

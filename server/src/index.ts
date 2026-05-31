@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import { readFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -196,6 +197,7 @@ app.set('etag', 'weak');
 // Set CSP_REPORT_URI to a URL to receive violation reports (e.g.,
 // https://your-domain.com/csp-report or a service like report-uri.com).
 const isDev = process.env.NODE_ENV !== 'production';
+const isDesktopRuntime = process.env.VERITAS_DESKTOP_RUNTIME === '1';
 const cspReportOnly = process.env.CSP_REPORT_ONLY === 'true';
 const cspReportUri = process.env.CSP_REPORT_URI || null;
 
@@ -245,7 +247,9 @@ app.use(
         frameSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
-        upgradeInsecureRequests: isDev ? null : [],
+        // The packaged desktop app serves the SPA over loopback HTTP. Do not
+        // upgrade those local asset requests to HTTPS.
+        upgradeInsecureRequests: isDev || isDesktopRuntime ? null : [],
 
         // CSP violation reporting — only included when CSP_REPORT_URI is set.
         // Works with both enforced and report-only modes.
@@ -486,6 +490,22 @@ app.use('/api', v1Router);
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const webDistPath = path.resolve(__dirname, '../../web/dist');
+  const indexHtmlPath = path.join(webDistPath, 'index.html');
+  const injectScriptNonce = (html: string, nonce: string | undefined): string =>
+    nonce ? html.replace(/<script(\s|>)/g, `<script nonce="${nonce}"$1`) : html;
+  const sendSpaIndex = async (
+    _req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    try {
+      const html = await readFile(indexHtmlPath, 'utf-8');
+      res.set('Cache-Control', 'no-cache');
+      res.type('html').send(injectScriptNonce(html, res.locals.cspNonce));
+    } catch (error) {
+      next(error);
+    }
+  };
 
   // Hashed assets (JS/CSS/images in /assets/) — immutable, 1 year cache
   app.use(
@@ -501,6 +521,7 @@ if (process.env.NODE_ENV === 'production') {
   // All other static files (index.html, favicon, manifest) — always revalidate
   app.use(
     express.static(webDistPath, {
+      index: false,
       maxAge: 0,
       etag: true,
       lastModified: true,
@@ -513,6 +534,8 @@ if (process.env.NODE_ENV === 'production') {
     })
   );
 
+  app.get('/', sendSpaIndex);
+
   // SPA fallback: serve index.html for any non-API route
   // Express 5 / path-to-regexp v8+ requires named wildcards (fixes #150)
   app.get('{*path}', (_req, res, next) => {
@@ -520,8 +543,7 @@ if (process.env.NODE_ENV === 'production') {
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();
     }
-    res.set('Cache-Control', 'no-cache');
-    res.sendFile(path.join(webDistPath, 'index.html'));
+    void sendSpaIndex(_req, res, next);
   });
 }
 

@@ -1,0 +1,78 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Update channel to publish.
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+          - dev
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  VERITAS_UPDATE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+
+jobs:
+  mac-signed:
+    name: Signed and Notarized macOS Artifact
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Verify signing secrets are configured
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required for signed/notarized desktop releases"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Prepare desktop runtime payload
+        run: pnpm --filter @veritas-kanban/desktop package:prepare
+
+      - name: Build, sign, notarize, and publish macOS artifacts
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm exec electron-builder --mac dmg zip --publish always

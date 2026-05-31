@@ -4,6 +4,7 @@ import type { DesktopPaths, DesktopRuntimeSecrets, ManagedProcessConfig } from '
 
 export interface DesktopLifecycleOptions {
   repoRoot: string;
+  resourcesPath?: string;
   paths: DesktopPaths;
   serverPort: number;
   webPort: number;
@@ -22,13 +23,16 @@ export function buildServerEnvironment(options: DesktopLifecycleOptions): NodeJS
   return {
     ...process.env,
     NODE_ENV: options.isPackaged ? 'production' : 'development',
+    ...(options.isPackaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     HOST: '127.0.0.1',
     PORT: String(options.serverPort),
     VERITAS_ADMIN_KEY: options.secrets.adminKey,
     VERITAS_JWT_SECRET: options.secrets.jwtSecret,
     VERITAS_AUTH_ENABLED: options.isPackaged ? 'true' : 'false',
     VERITAS_AUTH_LOCALHOST_BYPASS: 'false',
+    VERITAS_DESKTOP_RUNTIME: options.isPackaged ? '1' : '0',
     VERITAS_STORAGE: 'sqlite',
+    DATA_DIR: options.paths.dataDir,
     VERITAS_DATA_DIR: options.paths.dataDir,
     VERITAS_DISABLE_WATCHERS: '1',
     CORS_ORIGINS: `${serverOrigin},${webOrigin},http://localhost:${options.webPort}`,
@@ -49,15 +53,18 @@ export function buildWebEnvironment(options: DesktopLifecycleOptions): NodeJS.Pr
 export function createManagedProcessConfigs(
   options: DesktopLifecycleOptions
 ): ManagedProcessConfig[] {
+  const packagedServerRoot = options.resourcesPath
+    ? path.join(options.resourcesPath, 'server')
+    : path.join(options.repoRoot, 'server');
+  const packagedServerEntry =
+    process.env.VERITAS_DESKTOP_SERVER_ENTRY || path.join(packagedServerRoot, 'dist', 'index.js');
+
   const serverConfig: ManagedProcessConfig = options.isPackaged
     ? {
         name: 'server',
         command: process.execPath,
-        args: [
-          process.env.VERITAS_DESKTOP_SERVER_ENTRY ||
-            path.join(options.repoRoot, 'server/dist/index.js'),
-        ],
-        cwd: options.repoRoot,
+        args: [packagedServerEntry],
+        cwd: packagedServerRoot,
         env: buildServerEnvironment(options),
         logFile: path.join(options.paths.logsDir, 'server.log'),
         readyUrl: `http://127.0.0.1:${options.serverPort}/api/health`,

@@ -19,6 +19,8 @@ export type DesktopCommandNativeAction =
   | 'show-diagnostics'
   | 'create-debug-bundle'
   | 'check-updates'
+  | 'download-update'
+  | 'install-update'
   | 'test-notification'
   | 'test-external-delivery'
   | 'copy-diagnostics'
@@ -74,6 +76,10 @@ function commandLabel(name: DesktopCommandName): string {
       return 'Create Debug Bundle';
     case 'check-for-updates':
       return 'Check for Updates';
+    case 'download-update':
+      return 'Download Update';
+    case 'install-update':
+      return 'Install Update';
     case 'test-notification':
       return 'Test Local Notification';
     case 'test-squad-webhook':
@@ -116,6 +122,10 @@ function commandNativeAction(name: DesktopCommandName): DesktopCommandNativeActi
       return 'create-debug-bundle';
     case 'check-for-updates':
       return 'check-updates';
+    case 'download-update':
+      return 'download-update';
+    case 'install-update':
+      return 'install-update';
     case 'test-notification':
       return 'test-notification';
     case 'test-squad-webhook':
@@ -138,7 +148,9 @@ export interface DesktopCommandDispatcherOptions {
   shell: Shell;
   quit(): void;
   sendRendererCommand(command: DesktopCommandDispatchRequest): void;
-  sendUpdateStatus(status: DesktopUpdateStatus): void;
+  checkForUpdates(): Promise<DesktopUpdateStatus>;
+  downloadUpdate(): Promise<DesktopUpdateStatus>;
+  installUpdate(): DesktopUpdateStatus;
   showTestNotification(): void;
   copyRedactedDiagnostics(status: DesktopStatusSnapshot): void;
 }
@@ -166,13 +178,13 @@ export class DesktopCommandDispatcher {
         this.options.sendRendererCommand(request);
         return accepted(request, 'renderer');
       case 'check-updates':
-        this.options.sendUpdateStatus({
-          state: 'unsupported',
-          currentVersion: process.env.npm_package_version || '0.0.0',
-          channel: 'dev',
-          checkedAt: new Date().toISOString(),
-          detail: 'Updater implementation is tracked in the desktop release pipeline issue.',
-        });
+        await this.options.checkForUpdates();
+        return accepted(request, 'desktop');
+      case 'download-update':
+        await this.options.downloadUpdate();
+        return accepted(request, 'desktop');
+      case 'install-update':
+        this.options.installUpdate();
         return accepted(request, 'desktop');
       case 'test-notification':
         this.options.showTestNotification();

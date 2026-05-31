@@ -11,17 +11,23 @@
     "dev": "electron-vite dev",
     "dev:fresh": "VERITAS_DESKTOP_PROFILE=fresh electron-vite dev",
     "build": "electron-vite build",
+    "package:prepare": "node ../scripts/prepare-desktop-release.mjs",
+    "package:mac:dir": "pnpm package:prepare && electron-builder --mac dir --publish never --config.mac.identity=null --config.mac.notarize=false",
+    "package:mac:unsigned": "pnpm package:prepare && electron-builder --mac dmg zip --publish never --config.mac.identity=null --config.mac.notarize=false",
+    "release:mac": "pnpm package:prepare && electron-builder --mac dmg zip --publish always",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src electron.vite.config.ts --ext .ts",
     "test": "vitest run --config vitest.config.ts",
     "clean": "rm -rf dist out .veritas-desktop-dev"
   },
   "dependencies": {
-    "@veritas-kanban/shared": "workspace:*"
+    "@veritas-kanban/shared": "workspace:*",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
     "electron": "^39.2.6",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
     "vite": "^7.2.7",
@@ -30,11 +36,73 @@
   "build": {
     "appId": "io.digitalmeld.veritas-kanban",
     "productName": "Veritas Kanban",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "afterPack": "../scripts/desktop-after-pack.mjs",
     "directories": {
-      "buildResources": "resources"
+      "buildResources": "resources",
+      "output": "release"
     },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".desktop-release/server",
+        "to": "server"
+      },
+      {
+        "from": ".desktop-release/web",
+        "to": "web"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "Veritas Kanban",
+        "schemes": [
+          "veritas"
+        ],
+        "role": "Viewer"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": true,
     "mac": {
-      "category": "public.app-category.productivity"
-    }
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "resources/entitlements.mac.plist",
+      "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
+      "notarize": true
+    },
+    "dmg": {
+      "sign": false,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "BradGroux",
+        "repo": "veritas-kanban",
+        "releaseType": "draft"
+      }
+    ]
   }
 }

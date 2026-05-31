@@ -78,6 +78,15 @@ with generic copy while preserving the durable target for click-through.
 Window size, position, and maximized state are persisted per profile/workspace
 in `config/window-state.json`.
 
+## Release Packaging
+
+Unsigned PR artifacts, signed/notarized release artifacts, update metadata, and
+macOS smoke steps are documented in
+[`docs/DESKTOP-RELEASE.md`](../docs/DESKTOP-RELEASE.md). Use the root
+`desktop:package:mac:unsigned` script for local unsigned DMG/ZIP validation and
+`desktop:release:mac` only when Apple signing/notarization credentials are
+configured.
+
 ## Production Scaffold
 
 `pnpm desktop:build` compiles the Electron main, preload, and fallback renderer.

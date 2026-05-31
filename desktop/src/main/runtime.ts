@@ -9,6 +9,7 @@ import type { DesktopPaths, DesktopRuntimeSecrets, DesktopStatusSnapshot } from 
 
 export interface DesktopRuntimeOptions {
   repoRoot: string;
+  resourcesPath?: string;
   paths: DesktopPaths;
   serverPort: number;
   webPort: number;
@@ -75,12 +76,12 @@ export class DesktopRuntime extends EventEmitter {
     await this.ensureDirectories();
     await this.writeRuntimeState();
     await this.server.start();
-    await this.waitForReady(this.serverOrigin + '/api/health', 'server');
+    await this.waitForReady(this.serverOrigin + '/api/health', 'server', this.server);
     this.server.markReady();
 
     if (this.web) {
       await this.web.start();
-      await this.waitForReady(this.rendererOrigin, 'web');
+      await this.waitForReady(this.rendererOrigin, 'web', this.web);
       this.web.markReady();
     }
 
@@ -89,7 +90,7 @@ export class DesktopRuntime extends EventEmitter {
 
   async restartLocalServer(): Promise<DesktopStatusSnapshot> {
     await this.server.restart();
-    await this.waitForReady(this.serverOrigin + '/api/health', 'server');
+    await this.waitForReady(this.serverOrigin + '/api/health', 'server', this.server);
     this.server.markReady();
     this.emitStatus();
     return this.snapshot();
@@ -126,11 +127,23 @@ export class DesktopRuntime extends EventEmitter {
     );
   }
 
-  private async waitForReady(url: string, label: string): Promise<void> {
+  private async waitForReady(
+    url: string,
+    label: string,
+    supervisor: ProcessSupervisor
+  ): Promise<void> {
     const deadline = Date.now() + 45_000;
     let lastError: string | null = null;
 
     while (Date.now() < deadline) {
+      const processSnapshot = supervisor.snapshot();
+      if (processSnapshot.state === 'failed' || processSnapshot.state === 'stopped') {
+        const detail = processSnapshot.lastError ? `: ${processSnapshot.lastError}` : '';
+        this.lastError = `${label} stopped before becoming ready${detail}`;
+        this.emitStatus();
+        throw new Error(this.lastError);
+      }
+
       try {
         const response = await fetch(url);
         if (response.ok) {

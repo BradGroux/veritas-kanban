@@ -62,13 +62,17 @@ export class ProcessSupervisor extends EventEmitter {
     child.once('exit', (code, signal) => {
       this.exitedAt = new Date().toISOString();
       this.log(`[desktop] exited code=${code ?? 'null'} signal=${signal ?? 'null'}\n`);
+      const wasReady = this.state === 'ready';
       this.child = null;
       this.closeLogStream();
-      if (this.stopping || code === 0) {
+      if (this.stopping || (code === 0 && wasReady)) {
         this.setState('stopped');
         return;
       }
-      this.lastError = `${this.config.name} exited unexpectedly with code ${code ?? 'null'} signal ${signal ?? 'null'}`;
+      const exitDetail = `code ${code ?? 'null'} signal ${signal ?? 'null'}`;
+      this.lastError = wasReady
+        ? `${this.config.name} exited unexpectedly with ${exitDetail}`
+        : `${this.config.name} exited before becoming ready with ${exitDetail}`;
       this.setState('failed');
     });
   }
