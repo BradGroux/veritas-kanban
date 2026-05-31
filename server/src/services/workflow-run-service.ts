@@ -13,6 +13,8 @@ import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { broadcastWorkflowStatus } from './broadcast-service.js';
 import { getTaskService } from './task-service.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteWorkflowRunRepository } from '../storage/sqlite/workflow-repositories.js';
 
 const log = createLogger('workflow-run');
 
@@ -39,12 +41,30 @@ export class WorkflowRunService {
   private runsDir: string;
   private workflowService: ReturnType<typeof getWorkflowService>;
   private stepExecutor: WorkflowStepExecutor;
+  private readonly repository: SqliteWorkflowRunRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
-  constructor(runsDir?: string) {
-    this.runsDir = runsDir || getWorkflowRunsDir();
-    this.workflowService = getWorkflowService();
+  constructor(options: string | WorkflowRunServiceOptions = {}) {
+    const resolvedOptions = typeof options === 'string' ? { runsDir: options } : options;
+    this.runsDir = resolvedOptions.runsDir || getWorkflowRunsDir();
+    this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
     this.stepExecutor = new WorkflowStepExecutor();
-    this.ensureDirectories();
+    const storageType =
+      resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        resolvedOptions.sqliteDatabase ??
+        new SqliteDatabase(resolvedOptions.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !resolvedOptions.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteWorkflowRunRepository(this.sqliteDatabase);
+    }
+
+    if (!this.repository) {
+      this.ensureDirectories();
+    }
   }
 
   private async ensureDirectories(): Promise<void> {
@@ -343,6 +363,10 @@ export class WorkflowRunService {
    */
   async getRun(runId: string): Promise<WorkflowRun | null> {
     const safeRunId = this.normalizeRunId(runId);
+    if (this.repository) {
+      return this.repository.get(safeRunId);
+    }
+
     const runPath = path.join(this.runsDir, safeRunId, 'run.json');
 
     try {
@@ -362,6 +386,10 @@ export class WorkflowRunService {
     workflowId?: string;
     status?: string;
   }): Promise<WorkflowRun[]> {
+    if (this.repository) {
+      return this.repository.list(filters);
+    }
+
     const runDirs = await fs.readdir(this.runsDir).catch(() => []);
     const runs: WorkflowRun[] = [];
 
@@ -418,6 +446,12 @@ export class WorkflowRunService {
       >
     >
   > {
+    if (this.repository) {
+      const metadata = this.repository.listMetadata(filters);
+      log.info({ count: metadata.length }, 'Listed run metadata');
+      return metadata;
+    }
+
     const runDirs = await fs.readdir(this.runsDir).catch(() => []);
     const metadata: Array<
       Pick<
@@ -662,11 +696,16 @@ export class WorkflowRunService {
    * Phase 2: Updates lastCheckpoint timestamp on every save
    */
   private async saveRun(run: WorkflowRun): Promise<void> {
-    const runDir = path.join(this.runsDir, run.id);
-    await fs.mkdir(runDir, { recursive: true });
-
     // Update checkpoint timestamp
     run.lastCheckpoint = new Date().toISOString();
+
+    if (this.repository) {
+      this.repository.save(run);
+      return;
+    }
+
+    const runDir = path.join(this.runsDir, run.id);
+    await fs.mkdir(runDir, { recursive: true });
 
     const runPath = path.join(runDir, 'run.json');
     await fs.writeFile(runPath, JSON.stringify(run, null, 2), 'utf-8');
@@ -676,6 +715,11 @@ export class WorkflowRunService {
    * Snapshot workflow YAML into run directory (for version immutability)
    */
   private async snapshotWorkflow(runId: string, workflow: WorkflowDefinition): Promise<void> {
+    if (this.repository) {
+      this.repository.saveWorkflowSnapshot(runId, workflow);
+      return;
+    }
+
     const runDir = path.join(this.runsDir, runId);
     await fs.mkdir(runDir, { recursive: true });
 
@@ -683,6 +727,20 @@ export class WorkflowRunService {
     const yaml = await import('yaml');
     await fs.writeFile(snapshotPath, yaml.stringify(workflow), 'utf-8');
   }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+  }
+}
+
+export interface WorkflowRunServiceOptions {
+  runsDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+  workflowService?: ReturnType<typeof getWorkflowService>;
 }
 
 // Singleton

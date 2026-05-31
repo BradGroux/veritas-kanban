@@ -935,6 +935,20 @@ keep the same validation, preset seeding, and evaluation behavior.
 | `agent_policies` | Complete `AgentPolicy` JSON plus name, type, enabled, response, and preset data.  |
 | `tool_policies`  | Complete `ToolPolicy` JSON plus role and indexed allow/deny JSON columns.         |
 
+## Workflow Repository Implementation
+
+Workflow definitions, ACLs, audit events, run state, and workflow snapshots move
+into SQLite when `VERITAS_STORAGE=sqlite`. The workflow execution engine keeps
+its existing state machine and retry/block/resume behavior; SQLite replaces the
+YAML and `run.json` persistence layer while retaining file mode as the default.
+
+| Runtime table           | Stored data                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `workflow_definitions`  | Complete `WorkflowDefinition` JSON plus name, version, and description columns.      |
+| `workflow_acls`         | Complete `WorkflowACL` JSON keyed by workflow.                                       |
+| `workflow_audit_events` | Complete workflow audit event JSON plus workflow, action, user, and timestamp data.  |
+| `workflow_runs`         | Complete `WorkflowRun` JSON plus status, task, checkpoint, error, and snapshot JSON. |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

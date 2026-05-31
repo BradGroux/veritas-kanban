@@ -72,6 +72,10 @@ export {
   SqliteAuditRepository,
   SqliteToolPolicyRepository,
 } from './sqlite/audit-policy-repositories.js';
+export {
+  SqliteWorkflowDefinitionRepository,
+  SqliteWorkflowRunRepository,
+} from './sqlite/workflow-repositories.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

@@ -448,6 +448,77 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON tool_policies(workspace_id, role);
     `,
   },
+  {
+    version: 8,
+    name: '0008_workflow_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS workflow_definitions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        description TEXT,
+        workflow_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_definitions_workspace_name
+        ON workflow_definitions(workspace_id, name);
+
+      CREATE TABLE IF NOT EXISTS workflow_acls (
+        workflow_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        acl_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS workflow_audit_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        workflow_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        event_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_audit_events_workflow_created
+        ON workflow_audit_events(workflow_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS workflow_runs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        workflow_id TEXT NOT NULL,
+        workflow_version INTEGER NOT NULL,
+        task_id TEXT,
+        status TEXT NOT NULL,
+        current_step TEXT,
+        run_json TEXT NOT NULL,
+        workflow_snapshot_json TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        last_checkpoint TEXT,
+        error TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_runs_workspace_started
+        ON workflow_runs(workspace_id, started_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow_started
+        ON workflow_runs(workflow_id, started_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_runs_task_started
+        ON workflow_runs(task_id, started_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_workflow_runs_status_started
+        ON workflow_runs(status, started_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

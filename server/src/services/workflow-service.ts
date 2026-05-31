@@ -10,6 +10,8 @@ import type { WorkflowDefinition, WorkflowACL, WorkflowAuditEvent } from '../typ
 import { ValidationError } from '../types/workflow.js';
 import { getWorkflowsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteWorkflowDefinitionRepository } from '../storage/sqlite/workflow-repositories.js';
 
 const log = createLogger('workflow-service');
 const WORKFLOW_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -26,10 +28,28 @@ const MAX_RETRY_DELAY_MS = 300000; // 5 minutes max delay
 export class WorkflowService {
   private workflowsDir: string;
   private cache: Map<string, WorkflowDefinition> = new Map();
+  private readonly repository: SqliteWorkflowDefinitionRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
-  constructor(workflowsDir?: string) {
-    this.workflowsDir = workflowsDir || getWorkflowsDir();
-    this.ensureDirectories();
+  constructor(options: string | WorkflowServiceOptions = {}) {
+    const resolvedOptions = typeof options === 'string' ? { workflowsDir: options } : options;
+    this.workflowsDir = resolvedOptions.workflowsDir || getWorkflowsDir();
+    const storageType =
+      resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        resolvedOptions.sqliteDatabase ??
+        new SqliteDatabase(resolvedOptions.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !resolvedOptions.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteWorkflowDefinitionRepository(this.sqliteDatabase);
+    }
+
+    if (!this.repository) {
+      this.ensureDirectories();
+    }
   }
 
   private async ensureDirectories(): Promise<void> {
@@ -66,6 +86,16 @@ export class WorkflowService {
       return this.cache.get(normalizedId)!;
     }
 
+    if (this.repository) {
+      const workflow = this.repository.get(normalizedId);
+      if (workflow) {
+        this.validateWorkflow(workflow);
+        this.cache.set(normalizedId, workflow);
+        log.info({ workflowId: normalizedId, version: workflow.version }, 'Workflow loaded');
+      }
+      return workflow;
+    }
+
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
 
     try {
@@ -95,6 +125,15 @@ export class WorkflowService {
    * List all available workflows (full definitions)
    */
   async listWorkflows(): Promise<WorkflowDefinition[]> {
+    if (this.repository) {
+      const workflows = this.repository.list();
+      for (const workflow of workflows) {
+        this.cache.set(workflow.id, workflow);
+      }
+      log.info({ count: workflows.length }, 'Listed workflows');
+      return workflows;
+    }
+
     const files = await fs.readdir(this.workflowsDir).catch(() => []);
     const workflows: WorkflowDefinition[] = [];
 
@@ -119,6 +158,12 @@ export class WorkflowService {
   async listWorkflowsMetadata(): Promise<
     Array<Pick<WorkflowDefinition, 'id' | 'name' | 'version' | 'description'>>
   > {
+    if (this.repository) {
+      const metadata = this.repository.listMetadata();
+      log.info({ count: metadata.length }, 'Listed workflow metadata');
+      return metadata;
+    }
+
     const files = await fs.readdir(this.workflowsDir).catch(() => []);
     const metadata: Array<Pick<WorkflowDefinition, 'id' | 'name' | 'version' | 'description'>> = [];
 
@@ -155,6 +200,20 @@ export class WorkflowService {
     this.validateWorkflow(workflow);
 
     const normalizedId = this.normalizeWorkflowId(workflow.id);
+
+    if (this.repository) {
+      if (!this.repository.get(normalizedId) && this.repository.count() >= MAX_WORKFLOWS) {
+        throw new ValidationError(
+          `Maximum workflow limit (${MAX_WORKFLOWS}) reached. Delete unused workflows before creating new ones.`
+        );
+      }
+
+      this.repository.save(workflow);
+      this.cache.set(normalizedId, workflow);
+      log.info({ workflowId: normalizedId, version: workflow.version }, 'Workflow saved');
+      return;
+    }
+
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
 
     // Check if this is a new workflow (not an update)
@@ -187,6 +246,13 @@ export class WorkflowService {
    */
   async deleteWorkflow(id: string): Promise<void> {
     const normalizedId = this.normalizeWorkflowId(id);
+    if (this.repository) {
+      this.repository.delete(normalizedId);
+      this.cache.delete(normalizedId);
+      log.info({ workflowId: normalizedId }, 'Workflow deleted');
+      return;
+    }
+
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
     await fs.unlink(filePath);
     this.cache.delete(normalizedId);
@@ -311,6 +377,10 @@ export class WorkflowService {
    * Load workflow ACL (access control list)
    */
   async loadACL(workflowId: string): Promise<WorkflowACL | null> {
+    if (this.repository) {
+      return this.repository.getAcl(workflowId);
+    }
+
     const aclPath = path.join(this.workflowsDir, '.acl.json');
 
     try {
@@ -327,6 +397,12 @@ export class WorkflowService {
    * Save workflow ACL
    */
   async saveACL(acl: WorkflowACL): Promise<void> {
+    if (this.repository) {
+      this.repository.saveAcl(acl);
+      log.info({ workflowId: acl.workflowId }, 'Workflow ACL saved');
+      return;
+    }
+
     const aclPath = path.join(this.workflowsDir, '.acl.json');
 
     let acls: Record<string, WorkflowACL> = {};
@@ -349,6 +425,12 @@ export class WorkflowService {
    * Audit workflow changes
    */
   async auditChange(event: WorkflowAuditEvent): Promise<void> {
+    if (this.repository) {
+      this.repository.appendAuditEvent(event);
+      log.info({ event }, 'Workflow audit event logged');
+      return;
+    }
+
     const auditPath = path.join(this.workflowsDir, '.audit.jsonl');
     const line = JSON.stringify(event) + '\n';
     await fs.appendFile(auditPath, line, 'utf-8');
@@ -362,6 +444,19 @@ export class WorkflowService {
   clearCache(): void {
     this.cache.clear();
   }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+  }
+}
+
+export interface WorkflowServiceOptions {
+  workflowsDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 // Singleton
