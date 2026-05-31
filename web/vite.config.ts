@@ -39,6 +39,9 @@ export default defineConfig({
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
             return 'vendor-react';
           }
+          if (id.includes('node_modules/@mantine/')) {
+            return 'vendor-mantine';
+          }
           if (
             id.includes('node_modules/@radix-ui/react-dialog/') ||
             id.includes('node_modules/@radix-ui/react-popover/') ||

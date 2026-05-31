@@ -1,11 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <script>
-      // Apply theme immediately to prevent flash — default dark
-      (function() {
-        var t = localStorage.getItem('veritas-kanban-theme');
-        if (t !== 'light') document.documentElement.classList.add('dark');
+      // Apply theme immediately to prevent flash. Default dark.
+      (function () {
+        var value = null;
+        try {
+          value = localStorage.getItem('veritas-kanban-theme');
+        } catch (error) {
+          value = null;
+        }
+        var theme = value === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.mantineColorScheme = theme;
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
       })();
     </script>
     <meta charset="UTF-8" />

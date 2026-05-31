@@ -82,6 +82,18 @@ Mantine becomes the primary component system for v5.0:
 | Theme                | `MantineProvider`, CSS variables, color scheme manager                                                 | Keep Veritas tokens as the source of product color decisions                    |
 | Layout primitives    | `Stack`, `Group`, `Grid`, `SimpleGrid`, `Flex`, `Box`                                                  | Reduce repeated Tailwind layout strings in migrated surfaces                    |
 
+Foundation files:
+
+- `web/src/theme/MantineRoot.tsx` owns `MantineProvider`, `ModalsProvider`,
+  notifications, and the Veritas color-scheme bridge.
+- `web/src/theme/mantine-theme.ts` owns the Veritas Mantine theme, status
+  colors, density settings, breakpoints, focus behavior, radius, shadows, and
+  component defaults.
+- `web/src/theme/color-scheme.ts` keeps Mantine color scheme state and the
+  existing `.dark` class in sync while shadcn/Tailwind surfaces still exist.
+- `web/src/components/layout/mantine-shell.tsx` contains the first Mantine app
+  shell primitives for future desktop/mobile surfaces.
+
 Retained custom surfaces:
 
 - Kanban board column/card drag and drop built on `@dnd-kit`
@@ -133,6 +145,37 @@ Breakpoints:
 - Define Mantine breakpoints once in the Veritas theme.
 - Treat desktop app, browser, and mobile/PWA as supported layout modes.
 - Avoid viewport-scaled font sizes; use responsive layout changes instead.
+
+## Mantine Usage Conventions
+
+- New v5 surfaces should import Mantine components directly or use Veritas
+  Mantine wrappers from `web/src/components/layout/mantine-shell.tsx` when the
+  wrapper encodes a product layout convention.
+- Do not add new shadcn/Radix wrapper usage for new v5 surfaces unless a
+  migration PR explicitly needs a compatibility bridge.
+- Use Mantine `Stack`, `Group`, `Grid`, `SimpleGrid`, `Flex`, and `Box` for
+  new layout code before adding long Tailwind layout strings.
+- Use Mantine `ActionIcon` for icon-only commands and keep lucide icons inside
+  the control.
+- Use Mantine form controls and built-in error/description props for new forms.
+- Use Mantine `Modal`/`Drawer`/`Popover` for new overlays. Keep existing
+  shadcn overlays only until their containing surface is migrated.
+- Keep Veritas-specific board, diff, workflow timeline, chart, markdown, and
+  work product components custom.
+- Read status colors from `theme.other.statusColors` or from
+  `veritasStatusColors`; do not scatter new one-off status hex values.
+- Keep the app dark-mode first. Validate light mode, but do not let light-mode
+  defaults drive density or spacing decisions.
+- When adding a new Mantine dependency beyond core/hooks/forms/notifications/
+  modals, document why the package is needed in the PR.
+
+Foundation verification currently covers:
+
+- default dark color-scheme bridge to the existing `.dark` class
+- Mantine provider availability in the web app and test utility wrapper
+- required v5 status semantics: blocked, needs review, running, done, failed,
+  warning, policy denied, and destructive
+- reduced-motion, focus ring, auto contrast, and breakpoint defaults
 
 ## Migration Order
 

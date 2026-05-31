@@ -5,6 +5,7 @@ import React, { type ReactNode } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WebSocketStatusProvider } from '@/contexts/WebSocketContext';
+import { MantineRoot } from '@/theme/MantineRoot';
 import type { ConnectionState } from '@/hooks/useWebSocket';
 import type {
   Task,
@@ -46,6 +47,54 @@ const DEFAULT_WS_STATUS: TestWebSocketStatus = {
   reconnectAttempt: 0,
 };
 
+function createMemoryStorage(): Storage {
+  const storage = new Map<string, string>();
+
+  return {
+    get length() {
+      return storage.size;
+    },
+    clear: () => storage.clear(),
+    getItem: (key: string) => storage.get(key) ?? null,
+    key: (index: number) => Array.from(storage.keys())[index] ?? null,
+    removeItem: (key: string) => {
+      storage.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+  };
+}
+
+function ensureMantineBrowserApis() {
+  if (typeof window === 'undefined') return;
+
+  if (typeof window.matchMedia !== 'function') {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  }
+
+  try {
+    window.localStorage.getItem('__veritas_test_probe__');
+  } catch {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  }
+}
+
 // ── All Providers Wrapper ────────────────────────────────────
 
 interface AllProvidersProps {
@@ -55,18 +104,21 @@ interface AllProvidersProps {
 }
 
 function AllProviders({ children, queryClient, wsStatus }: AllProvidersProps) {
+  ensureMantineBrowserApis();
   const qc = queryClient ?? createTestQueryClient();
   const ws = { ...DEFAULT_WS_STATUS, ...wsStatus };
   return (
-    <QueryClientProvider client={qc}>
-      <WebSocketStatusProvider
-        isConnected={ws.isConnected}
-        connectionState={ws.connectionState}
-        reconnectAttempt={ws.reconnectAttempt}
-      >
-        {children}
-      </WebSocketStatusProvider>
-    </QueryClientProvider>
+    <MantineRoot env="test">
+      <QueryClientProvider client={qc}>
+        <WebSocketStatusProvider
+          isConnected={ws.isConnected}
+          connectionState={ws.connectionState}
+          reconnectAttempt={ws.reconnectAttempt}
+        >
+          {children}
+        </WebSocketStatusProvider>
+      </QueryClientProvider>
+    </MantineRoot>
   );
 }
 
