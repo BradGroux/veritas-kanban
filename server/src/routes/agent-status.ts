@@ -9,6 +9,7 @@ import {
   statusHistoryService,
   type AgentStatusState as HistoryStatusState,
 } from '../services/status-history-service.js';
+import { sendWebSocketEvent } from '../services/websocket-permissions.js';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('agent-status');
 
@@ -115,10 +116,7 @@ function broadcastAgentStatusChange(): void {
   const payload = JSON.stringify(message);
 
   wssRef.clients.forEach((client: WebSocket) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(payload);
-    }
+    sendWebSocketEvent(client, payload, { permissions: ['agent:read'] });
   });
 }
 
