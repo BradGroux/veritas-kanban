@@ -13,6 +13,8 @@ import path from 'path';
 import crypto from 'crypto';
 import readline from 'readline';
 import { createLogger } from '../lib/logger.js';
+import { SqliteDatabase } from '../storage/sqlite/database.js';
+import { SqliteAuditRepository } from '../storage/sqlite/audit-policy-repositories.js';
 
 const log = createLogger('audit');
 
@@ -54,6 +56,7 @@ export interface VerifyResult {
 import { getAuditDir } from '../utils/paths.js';
 
 const AUDIT_DIR = getAuditDir();
+const SQLITE_AUDIT_LOG_PATH = 'sqlite://audit/current';
 
 // ---------------------------------------------------------------------------
 // Internal State
@@ -68,6 +71,8 @@ let writeQueue: Promise<void> = Promise.resolve();
 /** Cached current log file path (invalidated on month change). */
 let currentMonth = '';
 let currentLogPath = '';
+let sqliteDatabase: SqliteDatabase | null = null;
+let auditRepository: SqliteAuditRepository | null = null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,6 +85,10 @@ function sha256(data: string): string {
 
 /** Build the log file path for a given date. */
 function logFilePath(date: Date = new Date()): string {
+  if (isSqliteAuditEnabled()) {
+    return SQLITE_AUDIT_LOG_PATH;
+  }
+
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const month = `${yyyy}-${mm}`;
@@ -97,11 +106,31 @@ async function ensureAuditDir(): Promise<void> {
   await fs.mkdir(AUDIT_DIR, { recursive: true });
 }
 
+function isSqliteAuditEnabled(): boolean {
+  return process.env.VERITAS_STORAGE === 'sqlite';
+}
+
+function getAuditRepository(): SqliteAuditRepository {
+  if (!auditRepository) {
+    sqliteDatabase = new SqliteDatabase();
+    sqliteDatabase.open();
+    auditRepository = new SqliteAuditRepository(sqliteDatabase);
+  }
+
+  return auditRepository;
+}
+
 /**
  * Read the last line of the current log file to seed `lastHash`.
  * Called once on first write (or after month rotation).
  */
 async function seedLastHash(filePath: string): Promise<void> {
+  if (isSqliteAuditEnabled() || filePath === SQLITE_AUDIT_LOG_PATH) {
+    const lastLine = getAuditRepository().getLastEntryLine();
+    lastHash = lastLine ? sha256(lastLine) : '';
+    return;
+  }
+
   try {
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.trimEnd().split('\n').filter(Boolean);
@@ -145,9 +174,10 @@ export function auditLog(event: AuditEvent): Promise<void> {
 }
 
 async function writeEntry(event: AuditEvent): Promise<void> {
-  await ensureAuditDir();
-
   const filePath = logFilePath();
+  if (!isSqliteAuditEnabled()) {
+    await ensureAuditDir();
+  }
 
   // Seed lastHash from disk on first write or month rotation
   if (seededForPath !== filePath) {
@@ -165,7 +195,11 @@ async function writeEntry(event: AuditEvent): Promise<void> {
   };
 
   const line = JSON.stringify(entry);
-  await fs.appendFile(filePath, line + '\n', 'utf8');
+  if (isSqliteAuditEnabled()) {
+    getAuditRepository().save(entry, line);
+  } else {
+    await fs.appendFile(filePath, line + '\n', 'utf8');
+  }
 
   // Update the running hash
   lastHash = sha256(line);
@@ -178,6 +212,10 @@ async function writeEntry(event: AuditEvent): Promise<void> {
  * Returns a result indicating whether the chain is intact.
  */
 export async function verifyAuditLog(filePath: string): Promise<VerifyResult> {
+  if (isSqliteAuditEnabled() || filePath === SQLITE_AUDIT_LOG_PATH) {
+    return getAuditRepository().verify();
+  }
+
   // Check if file exists
   try {
     await fs.access(filePath);
@@ -251,6 +289,10 @@ export async function verifyAuditLog(filePath: string): Promise<VerifyResult> {
  */
 export async function readRecentAuditEntries(limit = 100): Promise<AuditEntry[]> {
   const filePath = logFilePath();
+  if (isSqliteAuditEnabled()) {
+    return getAuditRepository().readRecent(limit) as AuditEntry[];
+  }
+
   let content: string;
   try {
     content = await fs.readFile(filePath, 'utf8');
@@ -284,4 +326,7 @@ export function _resetAuditState(): void {
   currentLogPath = '';
   seededForPath = '';
   writeQueue = Promise.resolve();
+  auditRepository = null;
+  sqliteDatabase?.close();
+  sqliteDatabase = null;
 }

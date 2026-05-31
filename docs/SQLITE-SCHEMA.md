@@ -922,6 +922,19 @@ only the persistence backend switches when `VERITAS_STORAGE=sqlite`.
 | `drift_alerts`        | Complete `DriftAlert` JSON plus agent, metric, severity, and acknowledged columns.     |
 | `drift_baselines`     | Complete `DriftBaseline` JSON plus agent and metric columns.                           |
 
+## Audit And Policy Repository Implementation
+
+The audit/policy repository pass moves immutable audit log entries, governance
+policies, and role-based tool policies into SQLite when `VERITAS_STORAGE=sqlite`.
+Audit entries retain the existing SHA-256 hash chain semantics; policy services
+keep the same validation, preset seeding, and evaluation behavior.
+
+| Runtime table    | Stored data                                                                       |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `audit_entries`  | Complete audit entry JSON plus action, actor, resource, integrity, and timestamp. |
+| `agent_policies` | Complete `AgentPolicy` JSON plus name, type, enabled, response, and preset data.  |
+| `tool_policies`  | Complete `ToolPolicy` JSON plus role and indexed allow/deny JSON columns.         |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

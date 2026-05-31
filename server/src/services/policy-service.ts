@@ -12,6 +12,8 @@ import { ConflictError, NotFoundError, ValidationError } from '../middleware/err
 import { policySchema } from '../schemas/policy-schemas.js';
 import { getPoliciesDir } from '../utils/paths.js';
 import { safeFetch } from '../utils/url-validation.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteAgentPolicyRepository } from '../storage/sqlite/audit-policy-repositories.js';
 
 const log = createLogger('policy-service');
 const PRESET_TIMESTAMP = new Date().toISOString();
@@ -83,22 +85,48 @@ const DECISION_PRIORITY: Record<PolicyEvaluationResult['decision'], number> = {
 
 export class PolicyService {
   private readonly policiesDir: string;
+  private readonly repository: SqliteAgentPolicyRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
   private readonly cache = new Map<string, AgentPolicy>();
   private readonly rateLimitState = new Map<string, number[]>();
   private initPromise: Promise<void> | null = null;
 
-  constructor(policiesDir = getPoliciesDir()) {
-    this.policiesDir = policiesDir;
+  constructor(options: string | PolicyServiceOptions = {}) {
+    const resolvedOptions = typeof options === 'string' ? { policiesDir: options } : options;
+    this.policiesDir = resolvedOptions.policiesDir ?? getPoliciesDir();
+    const storageType =
+      resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        resolvedOptions.sqliteDatabase ??
+        new SqliteDatabase(resolvedOptions.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !resolvedOptions.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteAgentPolicyRepository(this.sqliteDatabase);
+    }
+
     this.initPromise = this.init();
   }
 
   async init(): Promise<void> {
+    if (this.repository) {
+      for (const policy of DEFAULT_PRESET_POLICIES) {
+        if (!this.repository.get(policy.id)) {
+          this.repository.save(policy);
+        }
+      }
+      this.loadPoliciesFromRepository();
+      return;
+    }
+
     await mkdir(this.policiesDir, { recursive: true });
 
     const files = (await readdir(this.policiesDir)).filter((file) => file.endsWith('.json'));
     if (files.length === 0) {
       for (const policy of DEFAULT_PRESET_POLICIES) {
-        await this.writePolicyFile(policy);
+        await this.writePolicy(policy);
       }
     }
 
@@ -124,6 +152,15 @@ export class PolicyService {
       return cached;
     }
 
+    if (this.repository) {
+      this.validatePolicyId(id);
+      const policy = this.repository.get(id);
+      if (policy) {
+        this.cache.set(policy.id, policy);
+      }
+      return policy;
+    }
+
     const filePath = this.getPolicyFilePath(id);
     if (!(await fileExists(filePath))) {
       return null;
@@ -142,7 +179,7 @@ export class PolicyService {
     if (this.cache.has(normalized.id)) {
       throw new ConflictError(`Policy already exists: ${normalized.id}`);
     }
-    await this.writePolicyFile(normalized);
+    await this.writePolicy(normalized);
     this.cache.set(normalized.id, normalized);
     return normalized;
   }
@@ -167,7 +204,7 @@ export class PolicyService {
       false
     );
 
-    await this.writePolicyFile(normalized);
+    await this.writePolicy(normalized);
     this.cache.set(normalized.id, normalized);
     return normalized;
   }
@@ -179,10 +216,15 @@ export class PolicyService {
       throw new NotFoundError(`Policy not found: ${id}`);
     }
 
-    const filePath = this.getPolicyFilePath(id);
-    if (await fileExists(filePath)) {
-      await unlink(filePath);
+    if (this.repository) {
+      this.repository.delete(id);
+    } else {
+      const filePath = this.getPolicyFilePath(id);
+      if (await fileExists(filePath)) {
+        await unlink(filePath);
+      }
     }
+
     this.cache.delete(id);
     for (const key of Array.from(this.rateLimitState.keys())) {
       if (key.startsWith(`${id}:`)) {
@@ -238,6 +280,13 @@ export class PolicyService {
     }
   }
 
+  private loadPoliciesFromRepository(): void {
+    this.cache.clear();
+    for (const policy of this.repository?.list() ?? []) {
+      this.cache.set(policy.id, policy);
+    }
+  }
+
   private normalizePolicy(policy: AgentPolicy, isCreate: boolean): AgentPolicy {
     const now = new Date().toISOString();
     const normalized = policySchema.parse({
@@ -257,7 +306,13 @@ export class PolicyService {
     return normalized;
   }
 
-  private async writePolicyFile(policy: AgentPolicy): Promise<void> {
+  private async writePolicy(policy: AgentPolicy): Promise<void> {
+    if (this.repository) {
+      this.repository.save(policy);
+      log.info({ policyId: policy.id, type: policy.type }, 'Policy saved');
+      return;
+    }
+
     const filePath = this.getPolicyFilePath(policy.id);
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, `${JSON.stringify(policy, null, 2)}\n`, 'utf8');
@@ -265,10 +320,14 @@ export class PolicyService {
   }
 
   private getPolicyFilePath(id: string): string {
+    this.validatePolicyId(id);
+    return path.join(this.policiesDir, `${id}.json`);
+  }
+
+  private validatePolicyId(id: string): void {
     if (!/^[a-z0-9][a-z0-9-_]*$/.test(id)) {
       throw new ValidationError('Invalid policy id');
     }
-    return path.join(this.policiesDir, `${id}.json`);
   }
 
   private scopeMatches(policy: AgentPolicy, input: PolicyEvaluationRequest): boolean {
@@ -493,6 +552,19 @@ export class PolicyService {
     if (action === 'warn') return 'warn';
     return 'allow';
   }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+  }
+}
+
+export interface PolicyServiceOptions {
+  policiesDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 let policyService: PolicyService | null = null;

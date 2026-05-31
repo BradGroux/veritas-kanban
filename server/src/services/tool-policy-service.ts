@@ -12,6 +12,8 @@ import type { ToolPolicy } from '../types/workflow.js';
 import { ValidationError } from '../types/workflow.js';
 import { getToolPoliciesDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteToolPolicyRepository } from '../storage/sqlite/audit-policy-repositories.js';
 
 const log = createLogger('tool-policy-service');
 
@@ -124,9 +126,25 @@ export class ToolPolicyService {
   private policiesDir: string;
   private cache: Map<string, ToolPolicy> = new Map();
   private initPromise: Promise<void> | null = null;
+  private readonly repository: SqliteToolPolicyRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
-  constructor(policiesDir?: string) {
-    this.policiesDir = policiesDir || getToolPoliciesDir();
+  constructor(options: string | ToolPolicyServiceOptions = {}) {
+    const resolvedOptions = typeof options === 'string' ? { policiesDir: options } : options;
+    this.policiesDir = resolvedOptions.policiesDir || getToolPoliciesDir();
+    const storageType =
+      resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        resolvedOptions.sqliteDatabase ??
+        new SqliteDatabase(resolvedOptions.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !resolvedOptions.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteToolPolicyRepository(this.sqliteDatabase);
+    }
+
     // Load defaults into cache synchronously (no I/O)
     this.loadDefaultsToCache();
     // Initialize async operations (directory creation, file persistence)
@@ -149,6 +167,16 @@ export class ToolPolicyService {
    */
   private async initializeAsync(): Promise<void> {
     try {
+      if (this.repository) {
+        for (const policy of DEFAULT_POLICIES) {
+          if (!this.repository.get(policy.role)) {
+            this.repository.save(policy);
+          }
+        }
+        this.loadRepositoryPoliciesToCache();
+        return;
+      }
+
       // Ensure directory exists
       await fs.mkdir(this.policiesDir, { recursive: true });
 
@@ -182,12 +210,22 @@ export class ToolPolicyService {
    * Get policy for a specific role
    */
   async getToolPolicy(role: string): Promise<ToolPolicy | null> {
+    await this.waitForInit();
+
     const normalizedRole = role.trim().toLowerCase();
 
     // Check cache first
     if (this.cache.has(normalizedRole)) {
       const cachedPolicy = this.cache.get(normalizedRole);
       if (cachedPolicy) return cachedPolicy;
+    }
+
+    if (this.repository) {
+      const policy = this.repository.get(normalizedRole);
+      if (policy) {
+        this.cache.set(normalizedRole, policy);
+      }
+      return policy;
     }
 
     // Try loading from disk
@@ -219,6 +257,14 @@ export class ToolPolicyService {
    * List all tool policies
    */
   async listPolicies(): Promise<ToolPolicy[]> {
+    await this.waitForInit();
+
+    if (this.repository) {
+      const policies = this.repository.list();
+      log.info({ count: policies.length }, 'Listed tool policies');
+      return policies;
+    }
+
     const files = await fs.readdir(this.policiesDir).catch(() => []);
     const policies: ToolPolicy[] = [];
 
@@ -243,14 +289,17 @@ export class ToolPolicyService {
    * @throws ValidationError if policy validation fails or policy limit is reached
    */
   async savePolicy(policy: ToolPolicy): Promise<void> {
+    await this.waitForInit();
     this.validatePolicy(policy);
 
     const normalizedRole = policy.role.trim().toLowerCase();
 
     // Check if we're at the limit for custom policies
     if (!this.cache.has(normalizedRole)) {
-      const files = await fs.readdir(this.policiesDir).catch(() => []);
-      const policyCount = files.filter((f) => f.endsWith('.json')).length;
+      const policyCount = this.repository
+        ? this.repository.list().length
+        : (await fs.readdir(this.policiesDir).catch(() => [])).filter((f) => f.endsWith('.json'))
+            .length;
 
       if (policyCount >= MAX_POLICIES) {
         throw new ValidationError(
@@ -259,8 +308,12 @@ export class ToolPolicyService {
       }
     }
 
-    const filePath = path.join(this.policiesDir, `${normalizedRole}.json`);
-    await fs.writeFile(filePath, JSON.stringify(policy, null, 2), 'utf-8');
+    if (this.repository) {
+      this.repository.save(policy);
+    } else {
+      const filePath = path.join(this.policiesDir, `${normalizedRole}.json`);
+      await fs.writeFile(filePath, JSON.stringify(policy, null, 2), 'utf-8');
+    }
 
     // Update cache
     this.cache.set(normalizedRole, policy);
@@ -275,6 +328,7 @@ export class ToolPolicyService {
    * @throws ValidationError if attempting to delete a default policy
    */
   async deletePolicy(role: string): Promise<void> {
+    await this.waitForInit();
     const normalizedRole = role.trim().toLowerCase();
 
     // Prevent deletion of default policies
@@ -284,8 +338,12 @@ export class ToolPolicyService {
       );
     }
 
-    const filePath = path.join(this.policiesDir, `${normalizedRole}.json`);
-    await fs.unlink(filePath);
+    if (this.repository) {
+      this.repository.delete(normalizedRole);
+    } else {
+      const filePath = path.join(this.policiesDir, `${normalizedRole}.json`);
+      await fs.unlink(filePath);
+    }
     this.cache.delete(normalizedRole);
 
     log.info({ role: normalizedRole }, 'Tool policy deleted');
@@ -424,7 +482,29 @@ export class ToolPolicyService {
   clearCache(): void {
     this.cache.clear();
     this.loadDefaultsToCache();
+    if (this.repository) {
+      this.loadRepositoryPoliciesToCache();
+    }
   }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+  }
+
+  private loadRepositoryPoliciesToCache(): void {
+    for (const policy of this.repository?.list() ?? []) {
+      this.cache.set(policy.role.trim().toLowerCase(), policy);
+    }
+  }
+}
+
+export interface ToolPolicyServiceOptions {
+  policiesDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 // Singleton

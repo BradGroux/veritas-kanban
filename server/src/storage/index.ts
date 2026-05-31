@@ -67,6 +67,11 @@ export {
   SqliteFeedbackRepository,
   SqliteScoringRepository,
 } from './sqlite/governance-repositories.js';
+export {
+  SqliteAgentPolicyRepository,
+  SqliteAuditRepository,
+  SqliteToolPolicyRepository,
+} from './sqlite/audit-policy-repositories.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

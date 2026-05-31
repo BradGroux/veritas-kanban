@@ -388,6 +388,66 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON drift_baselines(agent_id, metric);
     `,
   },
+  {
+    version: 7,
+    name: '0007_audit_policy_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS audit_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        resource TEXT,
+        integrity TEXT NOT NULL,
+        entry_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audit_entries_workspace_created
+        ON audit_entries(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_audit_entries_actor_created
+        ON audit_entries(actor, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_audit_entries_action_created
+        ON audit_entries(action, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS agent_policies (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        response_action TEXT NOT NULL,
+        preset TEXT,
+        policy_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_agent_policies_workspace_name
+        ON agent_policies(workspace_id, name);
+
+      CREATE INDEX IF NOT EXISTS idx_agent_policies_type_enabled
+        ON agent_policies(type, enabled);
+
+      CREATE TABLE IF NOT EXISTS tool_policies (
+        role TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        allowed_json TEXT NOT NULL,
+        denied_json TEXT NOT NULL,
+        policy_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tool_policies_workspace_role
+        ON tool_policies(workspace_id, role);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
