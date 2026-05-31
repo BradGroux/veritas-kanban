@@ -1,6 +1,7 @@
 import type { IpcMain, Shell } from 'electron';
 
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME } from './app-metadata.js';
+import type { DesktopCommandDispatcher } from './commands.js';
 import type { DesktopAppInfo } from './types.js';
 import type { DesktopRuntime } from './runtime.js';
 import {
@@ -34,7 +35,8 @@ export type DesktopBridgeHandlerMap = {
 export function createDesktopBridgeHandlers(
   runtime: DesktopRuntime,
   shell: Shell,
-  packaged: boolean
+  packaged: boolean,
+  commandDispatcher?: DesktopCommandDispatcher
 ): DesktopBridgeHandlerMap {
   const appInfo = (): DesktopAppInfo => ({
     name: DESKTOP_APP_NAME,
@@ -72,12 +74,14 @@ export function createDesktopBridgeHandlers(
     }),
     dispatchCommand: (request) => {
       const command = validateDesktopCommandDispatchRequest(request);
-      return {
-        command: command.command,
-        accepted: false,
-        handledBy: 'unsupported',
-        message: 'Native command handling is reserved for the desktop menus issue.',
-      };
+      return commandDispatcher
+        ? commandDispatcher.dispatch(command)
+        : {
+            command: command.command,
+            accepted: false,
+            handledBy: 'unsupported',
+            message: 'Native command handling is reserved for the desktop menus issue.',
+          };
     },
     pickUploadFiles: (request) => {
       validateFilePickerRequest(request);
@@ -123,9 +127,10 @@ export function registerDesktopBridge(
   ipcMain: IpcMain,
   runtime: DesktopRuntime,
   shell: Shell,
-  packaged: boolean
+  packaged: boolean,
+  commandDispatcher?: DesktopCommandDispatcher
 ): void {
-  const handlers = createDesktopBridgeHandlers(runtime, shell, packaged);
+  const handlers = createDesktopBridgeHandlers(runtime, shell, packaged, commandDispatcher);
 
   for (const method of DESKTOP_BRIDGE_METHOD_NAMES) {
     const definition = DESKTOP_BRIDGE_METHODS[method];

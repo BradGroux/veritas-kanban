@@ -61,6 +61,23 @@ restart. The app will regenerate the desktop bootstrap secrets for that
 profile/workspace. Existing database files, exports, backups, and debug bundles
 remain on disk in the workspace app home.
 
+## Native Commands
+
+The desktop shell owns a single command registry for menu items, keyboard
+shortcuts, deep links, notification actions, and renderer bridge dispatch. Menu
+commands are forwarded to the renderer through typed bridge events when the web
+app owns the business logic, and handled in main only for native operations such
+as restarting the local server, opening logs, checking update status, showing a
+local notification test, copying redacted diagnostics, and quitting.
+
+Supported `veritas://` deep-link resources include task, workflow, run,
+invite/pairing, settings, command center, search, and work product destinations.
+Notification previews support a private mode that replaces task/run details
+with generic copy while preserving the durable target for click-through.
+
+Window size, position, and maximized state are persisted per profile/workspace
+in `config/window-state.json`.
+
 ## Production Scaffold
 
 `pnpm desktop:build` compiles the Electron main, preload, and fallback renderer.

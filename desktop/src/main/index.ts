@@ -1,20 +1,37 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Notification, safeStorage, shell } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME, DESKTOP_MIN_WINDOW } from './app-metadata.js';
 import { registerDesktopBridge } from './bridge.js';
+import { DesktopCommandDispatcher } from './commands.js';
+import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
+import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
+import { DesktopNotificationCenter, ElectronNotificationAdapter } from './notifications.js';
 import { createDesktopPaths, resolveRepoRoot } from './paths.js';
 import { findAvailablePort } from './ports.js';
 import { DesktopRuntime } from './runtime.js';
 import { DesktopSecretStore } from './secrets.js';
 import { statusPageUrl } from './status-page.js';
-import { DESKTOP_BRIDGE_EVENTS } from '../shared/desktop-bridge-contracts.js';
+import {
+  DESKTOP_BRIDGE_EVENTS,
+  redactDesktopBridgeValue,
+} from '../shared/desktop-bridge-contracts.js';
+import {
+  applyDesktopWindowState,
+  captureDesktopWindowState,
+  readDesktopWindowState,
+  writeDesktopWindowStateSync,
+  type DesktopWindowState,
+} from './window-state.js';
 
 let mainWindow: BrowserWindow | null = null;
 let runtime: DesktopRuntime | null = null;
+let commandDispatcher: DesktopCommandDispatcher | null = null;
+let windowStatePaths: ReturnType<typeof createDesktopPaths> | null = null;
 let quitting = false;
 let shutdownStarted = false;
+const pendingDeepLinks: string[] = [];
 
 function isPackagedRuntime(): boolean {
   return app.isPackaged || process.env.VERITAS_DESKTOP_PRODUCTION === 'true';
@@ -36,15 +53,19 @@ if (!launchPackaged) {
   app.setPath('userData', devUserDataPath);
 }
 
-function createMainWindow(): BrowserWindow {
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
+function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
   const preloadPath = path.join(__dirname, '../preload/index.mjs');
+  const windowBounds = applyDesktopWindowState(savedState);
 
   const window = new BrowserWindow({
     title: DESKTOP_APP_NAME,
     minWidth: DESKTOP_MIN_WINDOW.width,
     minHeight: DESKTOP_MIN_WINDOW.height,
-    width: 1360,
-    height: 900,
+    ...windowBounds,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     backgroundColor: '#111318',
     show: false,
@@ -57,6 +78,14 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.once('ready-to-show', () => window.show());
+  if (savedState.maximized) {
+    window.maximize();
+  }
+  window.on('close', () => {
+    if (windowStatePaths) {
+      writeDesktopWindowStateSync(windowStatePaths, captureDesktopWindowState(window));
+    }
+  });
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
@@ -79,6 +108,31 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+function handleDeepLink(url: string): void {
+  if (!commandDispatcher) {
+    pendingDeepLinks.push(url);
+    return;
+  }
+
+  try {
+    const deepLink = parseDesktopDeepLink(url);
+    void commandDispatcher.dispatch(deepLink.command);
+  } catch (error) {
+    mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.communicationCheck.channel, {
+      target: 'external',
+      state: 'failed',
+      detail: error instanceof Error ? error.message : String(error),
+      checkedAt: new Date().toISOString(),
+    });
+  }
+}
+
+function flushPendingDeepLinks(): void {
+  for (const deepLink of pendingDeepLinks.splice(0)) {
+    handleDeepLink(deepLink);
+  }
+}
+
 async function boot(): Promise<void> {
   app.setName(DESKTOP_APP_NAME);
   app.setAppUserModelId(DESKTOP_APP_ID);
@@ -94,13 +148,14 @@ async function boot(): Promise<void> {
     profile,
     workspace,
   });
+  windowStatePaths = paths;
 
   const serverPort = await findAvailablePort(
     Number(process.env.VERITAS_DESKTOP_SERVER_PORT || 3001)
   );
   const webPort = await findAvailablePort(Number(process.env.VERITAS_DESKTOP_WEB_PORT || 3000));
 
-  mainWindow = createMainWindow();
+  mainWindow = createMainWindow(await readDesktopWindowState(paths));
   await mainWindow.loadURL(statusPageUrl('Starting Veritas Kanban', 'Preparing the local app.'));
 
   const secretStore = new DesktopSecretStore({ safeStorage, paths });
@@ -137,13 +192,62 @@ async function boot(): Promise<void> {
     secretsBackedByKeychain: secretState.available,
   });
 
-  registerDesktopBridge(ipcMain, runtime, shell, packaged);
+  const notifications = new DesktopNotificationCenter(
+    new ElectronNotificationAdapter(Notification),
+    (request) => {
+      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.notificationAction.channel, request);
+    }
+  );
+
+  commandDispatcher = new DesktopCommandDispatcher({
+    runtime,
+    shell,
+    quit: () => app.quit(),
+    sendRendererCommand: (command) => {
+      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.menuCommand.channel, command);
+    },
+    sendUpdateStatus: (status) => {
+      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
+    },
+    showTestNotification: () => {
+      notifications.show({
+        id: `setup-test-${Date.now()}`,
+        kind: 'setup-test',
+        title: 'Veritas Kanban notification test',
+        body: 'Local desktop notifications are working.',
+        target: { type: 'settings' },
+        privacyMode: 'private',
+      });
+    },
+    copyRedactedDiagnostics: (status) => {
+      clipboard.writeText(JSON.stringify(redactDesktopBridgeValue(status), null, 2));
+    },
+  });
+
+  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher);
+  configureDesktopMenu({
+    status: runtime.snapshot(),
+    dispatch: (command) => {
+      if (commandDispatcher) {
+        dispatchDesktopMenuCommand(commandDispatcher, command);
+      }
+    },
+  });
   runtime.on('status', (status) => {
     mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
+    configureDesktopMenu({
+      status,
+      dispatch: (command) => {
+        if (commandDispatcher) {
+          dispatchDesktopMenuCommand(commandDispatcher, command);
+        }
+      },
+    });
   });
 
   try {
     await runtime.start();
+    flushPendingDeepLinks();
     await mainWindow.loadURL(runtime.getRendererOrigin());
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -154,7 +258,30 @@ async function boot(): Promise<void> {
 }
 
 app.on('ready', () => {
+  app.setAsDefaultProtocolClient('veritas');
+  const initialDeepLink = extractDeepLinkFromArgv(process.argv);
+  if (initialDeepLink) {
+    pendingDeepLinks.push(initialDeepLink);
+  }
   void boot();
+});
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
+app.on('second-instance', (_event, argv) => {
+  const deepLink = extractDeepLinkFromArgv(argv);
+  if (deepLink) {
+    handleDeepLink(deepLink);
+  }
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  }
 });
 
 app.on('before-quit', (event) => {

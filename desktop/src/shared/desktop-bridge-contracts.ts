@@ -82,12 +82,24 @@ export interface DesktopSetupDiagnostics {
 }
 
 export const DESKTOP_COMMAND_NAMES = [
+  'new-task',
+  'open-search',
   'open-settings',
   'open-command-center',
+  'import-data',
+  'export-data',
+  'create-backup',
+  'open-logs',
   'restart-local-server',
+  'communication-health',
   'show-diagnostics',
+  'create-debug-bundle',
   'check-for-updates',
+  'test-notification',
+  'test-squad-webhook',
+  'copy-redacted-diagnostics',
   'export-work-product',
+  'quit',
 ] as const;
 
 export type DesktopCommandName = (typeof DESKTOP_COMMAND_NAMES)[number];
