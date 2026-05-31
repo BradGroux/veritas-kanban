@@ -5,6 +5,9 @@ import { nanoid } from 'nanoid';
 import type { ManagedListItem } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
+import type { ManagedListRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteManagedListRepository } from '../storage/sqlite/managed-list-repository.js';
 const log = createLogger('managed-list-service');
 
 export interface ManagedListServiceConfig<T extends ManagedListItem> {
@@ -12,6 +15,9 @@ export interface ManagedListServiceConfig<T extends ManagedListItem> {
   configDir: string;
   defaults: T[];
   referenceCounter?: (id: string) => Promise<number>;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 export class ManagedListService<T extends ManagedListItem> {
@@ -19,17 +25,32 @@ export class ManagedListService<T extends ManagedListItem> {
   private filePath: string;
   private defaults: T[];
   private referenceCounter?: (id: string) => Promise<number>;
+  private repository: ManagedListRepository<T> | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
 
   constructor(config: ManagedListServiceConfig<T>) {
     this.filePath = join(config.configDir, config.filename);
     this.defaults = config.defaults;
     this.referenceCounter = config.referenceCounter;
+    const storageType =
+      config.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        config.sqliteDatabase ?? new SqliteDatabase(config.sqliteConnectionOptions);
+      this.sqliteDatabase.open();
+      this.repository = new SqliteManagedListRepository(this.sqliteDatabase, config);
+    }
   }
 
   /**
    * Initialize service: ensure config dir exists and seed file if missing
    */
   async init(): Promise<void> {
+    if (this.repository) {
+      return this.repository.init();
+    }
+
     const configDir = this.filePath.substring(0, this.filePath.lastIndexOf('/'));
 
     await mkdir(configDir, { recursive: true });
@@ -79,6 +100,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * List all items, optionally including hidden items
    */
   async list(includeHidden = false): Promise<T[]> {
+    if (this.repository) {
+      return this.repository.list(includeHidden);
+    }
+
     await this.init();
 
     let result = [...this.items];
@@ -94,6 +119,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Get a single item by ID
    */
   async get(id: string): Promise<T | null> {
+    if (this.repository) {
+      return this.repository.get(id);
+    }
+
     await this.init();
     return this.items.find((item) => item.id === id) || null;
   }
@@ -102,6 +131,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Create a new item
    */
   async create(input: Omit<T, 'order' | 'created' | 'updated'> & { id?: string }): Promise<T> {
+    if (this.repository) {
+      return this.repository.create(input);
+    }
+
     await this.init();
 
     const now = new Date().toISOString();
@@ -137,6 +170,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Skips ID generation — caller provides the full item
    */
   async seedItem(item: T): Promise<T> {
+    if (this.repository) {
+      return this.repository.seedItem(item);
+    }
+
     this.items.push(item);
     await this.save();
     return item;
@@ -146,6 +183,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Update an existing item
    */
   async update(id: string, patch: Partial<T>): Promise<T | null> {
+    if (this.repository) {
+      return this.repository.update(id, patch);
+    }
+
     await this.init();
 
     const index = this.items.findIndex((item) => item.id === id);
@@ -170,6 +211,10 @@ export class ManagedListService<T extends ManagedListItem> {
   async canDelete(
     id: string
   ): Promise<{ allowed: boolean; referenceCount: number; isDefault: boolean }> {
+    if (this.repository) {
+      return this.repository.canDelete(id);
+    }
+
     await this.init();
 
     const item = this.items.find((item) => item.id === id);
@@ -191,6 +236,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Delete an item
    */
   async delete(id: string, force = false): Promise<{ deleted: boolean; referenceCount?: number }> {
+    if (this.repository) {
+      return this.repository.delete(id, force);
+    }
+
     await this.init();
 
     const item = this.items.find((item) => item.id === id);
@@ -216,6 +265,10 @@ export class ManagedListService<T extends ManagedListItem> {
    * Reorder items by providing ordered IDs
    */
   async reorder(orderedIds: string[]): Promise<T[]> {
+    if (this.repository) {
+      return this.repository.reorder(orderedIds);
+    }
+
     await this.init();
 
     // Create a map of id -> new order

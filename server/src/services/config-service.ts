@@ -11,6 +11,8 @@ import type {
 } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { withFileLock } from './file-lock.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
 
 /** How long cached config stays valid before re-reading from disk */
 const CACHE_TTL_MS = 60_000; // 60 seconds
@@ -82,6 +84,30 @@ const DEFAULT_CONFIG: AppConfig = {
   defaultAgent: 'claude-code',
 };
 
+export function createDefaultConfig(): AppConfig {
+  return normalizeAppConfig({
+    ...cloneJson(DEFAULT_CONFIG),
+    features: cloneJson(DEFAULT_FEATURE_SETTINGS),
+  });
+}
+
+export function normalizeAppConfig(config: AppConfig): AppConfig {
+  const normalized = cloneJson(config);
+  normalized.features = deepMergeDefaults(normalized.features || {}, DEFAULT_FEATURE_SETTINGS);
+  normalized.agents = mergeDefaultAgents(normalized.agents || []);
+  return normalized;
+}
+
+function mergeDefaultAgents(agents: AgentConfig[]): AgentConfig[] {
+  const existingTypes = new Set(agents.map((agent) => agent.type));
+  const missingDefaults = DEFAULT_CONFIG.agents.filter((agent) => !existingTypes.has(agent.type));
+  return [...agents, ...cloneJson(missingDefaults)];
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /**
  * Keys that could lead to prototype pollution and must be rejected
  */
@@ -149,6 +175,9 @@ function deepMergeDefaults<T extends object>(target: Partial<T>, defaults: T): T
 export interface ConfigServiceOptions {
   configDir?: string;
   configFile?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 export class ConfigService {
@@ -159,10 +188,26 @@ export class ConfigService {
   private lastWriteTime: number = 0;
   private watcher: FSWatcher | null = null;
   private pendingRead: Promise<AppConfig> | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
+  private sqliteSettings: SqliteSettingsRepository | null = null;
+  private ownsSqliteDatabase = false;
 
   constructor(options: ConfigServiceOptions = {}) {
     this.configDir = options.configDir || CONFIG_DIR;
     this.configFile = options.configFile || CONFIG_FILE;
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.sqliteSettings = new SqliteSettingsRepository(this.sqliteDatabase, {
+        defaultConfig: createDefaultConfig(),
+        normalizeConfig: normalizeAppConfig,
+      });
+    }
   }
 
   /** Check whether the in-memory cache is still usable */
@@ -206,6 +251,11 @@ export class ConfigService {
   /** Release file-watcher and clear cache (call on shutdown) */
   dispose(): void {
     this.closeWatcher();
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+    this.sqliteDatabase = null;
+    this.sqliteSettings = null;
     this.invalidateCache();
   }
 
@@ -219,11 +269,24 @@ export class ConfigService {
     // Prevent cache stampede: coalesce concurrent reads into a single disk read
     if (this.pendingRead) return this.pendingRead;
 
-    this.pendingRead = this.readConfigFromDisk().finally(() => {
+    this.pendingRead = (
+      this.sqliteSettings ? this.readConfigFromSqlite() : this.readConfigFromDisk()
+    ).finally(() => {
       this.pendingRead = null;
     });
 
     return this.pendingRead;
+  }
+
+  private async readConfigFromSqlite(): Promise<AppConfig> {
+    if (!this.sqliteSettings) {
+      throw new Error('SQLite settings repository is not configured');
+    }
+
+    const config = await this.sqliteSettings.getConfig();
+    this.config = normalizeAppConfig(config);
+    this.cacheTimestamp = Date.now();
+    return this.config;
   }
 
   private async readConfigFromDisk(): Promise<AppConfig> {
@@ -233,27 +296,19 @@ export class ConfigService {
       const content = await fs.readFile(this.configFile, 'utf-8');
       const raw = JSON.parse(content) as AppConfig;
       // Auto-merge feature defaults for backward compatibility
-      raw.features = deepMergeDefaults(raw.features || {}, DEFAULT_FEATURE_SETTINGS);
-      raw.agents = this.mergeDefaultAgents(raw.agents || []);
-      this.config = raw;
+      this.config = normalizeAppConfig(raw);
       this.cacheTimestamp = Date.now();
       this.setupWatcher();
       return this.config;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         // Create default config with features
-        const config = { ...DEFAULT_CONFIG, features: DEFAULT_FEATURE_SETTINGS };
+        const config = createDefaultConfig();
         await this.saveConfig(config);
         return config;
       }
       throw error;
     }
-  }
-
-  private mergeDefaultAgents(agents: AgentConfig[]): AgentConfig[] {
-    const existingTypes = new Set(agents.map((agent) => agent.type));
-    const missingDefaults = DEFAULT_CONFIG.agents.filter((agent) => !existingTypes.has(agent.type));
-    return [...agents, ...missingDefaults];
   }
 
   async getFeatureSettings(): Promise<FeatureSettings> {
@@ -293,6 +348,14 @@ export class ConfigService {
   }
 
   async saveConfig(config: AppConfig): Promise<void> {
+    if (this.sqliteSettings) {
+      const normalized = normalizeAppConfig(config);
+      await this.sqliteSettings.saveConfig(normalized);
+      this.config = normalized;
+      this.cacheTimestamp = Date.now();
+      return;
+    }
+
     await this.ensureConfigDir();
     this.lastWriteTime = Date.now();
     await withFileLock(this.configFile, async () => {

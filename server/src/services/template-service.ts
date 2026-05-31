@@ -9,14 +9,33 @@ import type {
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import type { TemplateRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteTemplateRepository } from '../storage/sqlite/template-repository.js';
 const log = createLogger('template-service');
+
+export interface TemplateServiceOptions {
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
 
 export class TemplateService {
   private templatesDir: string;
+  private repository: TemplateRepository | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
 
-  constructor() {
+  constructor(options: TemplateServiceOptions = {}) {
     this.templatesDir = join(process.cwd(), '.veritas-kanban', 'templates');
-    this.ensureDir();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.sqliteDatabase.open();
+      this.repository = new SqliteTemplateRepository(this.sqliteDatabase);
+    }
   }
 
   private async ensureDir() {
@@ -96,6 +115,10 @@ export class TemplateService {
   }
 
   async getTemplates(): Promise<TaskTemplate[]> {
+    if (this.repository) {
+      return this.repository.getTemplates();
+    }
+
     await this.ensureDir();
 
     const files = await readdir(this.templatesDir);
@@ -118,6 +141,10 @@ export class TemplateService {
   }
 
   async getTemplate(id: string): Promise<TaskTemplate | null> {
+    if (this.repository) {
+      return this.repository.getTemplate(id);
+    }
+
     const path = this.templatePath(id);
 
     if (!(await fileExists(path))) {
@@ -135,6 +162,10 @@ export class TemplateService {
   }
 
   async createTemplate(input: CreateTemplateInput): Promise<TaskTemplate> {
+    if (this.repository) {
+      return this.repository.createTemplate(input);
+    }
+
     await this.ensureDir();
 
     const id = `template_${this.slugify(input.name)}_${Date.now()}`;
@@ -163,6 +194,10 @@ export class TemplateService {
   }
 
   async updateTemplate(id: string, input: UpdateTemplateInput): Promise<TaskTemplate | null> {
+    if (this.repository) {
+      return this.repository.updateTemplate(id, input);
+    }
+
     const existing = await this.getTemplate(id);
     if (!existing) return null;
 
@@ -191,6 +226,10 @@ export class TemplateService {
   }
 
   async deleteTemplate(id: string): Promise<boolean> {
+    if (this.repository) {
+      return this.repository.deleteTemplate(id);
+    }
+
     const path = this.templatePath(id);
 
     if (!(await fileExists(path))) {

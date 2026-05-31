@@ -842,9 +842,9 @@ Runtime settings:
 | `VERITAS_SQLITE_PATH` | `{runtimeDir}/veritas.db` | Overrides the SQLite database file location.     |
 | `VERITAS_DATA_DIR`    | project/runtime default   | Controls the runtime directory used by defaults. |
 
-SQLite mode currently owns database open/close, PRAGMAs, and migration
-tracking while repository parity is implemented in the following provider
-issues. File storage remains the default until the migration/import path is
+SQLite mode owns database open/close, PRAGMAs, migration tracking, task
+persistence, settings, managed lists, task templates, and prompt registry
+persistence. File storage remains the default until the migration/import path is
 complete.
 
 ## Task Repository Implementation
@@ -865,6 +865,28 @@ Task storage states replace filesystem moves:
 
 `task_search` is maintained by SQLite repository writes so title/description
 search can use FTS5 in SQLite mode.
+
+## Configuration Repository Implementation
+
+The first settings and registry repository pass uses JSON document tables with
+indexed metadata columns. This keeps v4 payloads lossless while the later
+multi-user work normalizes repositories, agents, integrations, and template
+children into the broader target schema above.
+
+| Runtime table          | Stored data                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `app_config_documents` | Full `AppConfig` document keyed by `app_config`, with default feature merge. |
+| `managed_list_items`   | Projects, sprints, task types, and other managed lists by `list_name`.       |
+| `task_templates`       | Complete `TaskTemplate` JSON plus name/category index columns.               |
+| `prompt_templates`     | Complete `PromptTemplate` JSON plus category/current-version columns.        |
+| `prompt_versions`      | Version snapshots for prompt template content and changelogs.                |
+| `prompt_usage`         | Usage records for prompt stats, token averages, and last-used timestamps.    |
+
+`ConfigService`, `ManagedListService`, `TemplateService`, and
+`PromptRegistryService` select these SQLite repositories when
+`VERITAS_STORAGE=sqlite`, so the existing REST/UI routes continue to use the
+same service contracts in both storage modes. File-backed behavior remains
+unchanged when `VERITAS_STORAGE=file`.
 
 ## Migration Numbering
 

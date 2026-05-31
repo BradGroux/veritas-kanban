@@ -15,19 +15,38 @@ import type {
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import type { PromptRegistryRepository } from '../storage/interfaces.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqlitePromptRegistryRepository } from '../storage/sqlite/prompt-registry-repository.js';
 
 const log = createLogger('prompt-registry-service');
+
+export interface PromptRegistryServiceOptions {
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
 
 export class PromptRegistryService {
   private templatesDir: string;
   private versionsDir: string;
   private usageDir: string;
+  private repository: PromptRegistryRepository | null = null;
+  private sqliteDatabase: SqliteDatabase | null = null;
 
-  constructor() {
+  constructor(options: PromptRegistryServiceOptions = {}) {
     this.templatesDir = join(process.cwd(), '.veritas-kanban', 'prompt-templates');
     this.versionsDir = join(process.cwd(), '.veritas-kanban', 'prompt-versions');
     this.usageDir = join(process.cwd(), '.veritas-kanban', 'prompt-usage');
-    this.ensureDirs();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.sqliteDatabase.open();
+      this.repository = new SqlitePromptRegistryRepository(this.sqliteDatabase);
+    }
   }
 
   private async ensureDirs() {
@@ -136,6 +155,10 @@ export class PromptRegistryService {
    * Get all templates
    */
   async getTemplates(): Promise<PromptTemplate[]> {
+    if (this.repository) {
+      return this.repository.getTemplates();
+    }
+
     await this.ensureDirs();
 
     const files = await readdir(this.templatesDir);
@@ -160,6 +183,10 @@ export class PromptRegistryService {
    * Get single template by ID
    */
   async getTemplate(id: string): Promise<PromptTemplate | null> {
+    if (this.repository) {
+      return this.repository.getTemplate(id);
+    }
+
     const path = this.templatePath(id);
 
     if (!(await fileExists(path))) {
@@ -180,6 +207,10 @@ export class PromptRegistryService {
    * Create a new prompt template
    */
   async createTemplate(input: CreatePromptTemplateInput): Promise<PromptTemplate> {
+    if (this.repository) {
+      return this.repository.createTemplate(input);
+    }
+
     await this.ensureDirs();
 
     const id = `prompt_${this.slugify(input.name)}_${Date.now()}`;
@@ -224,7 +255,14 @@ export class PromptRegistryService {
   /**
    * Update a prompt template
    */
-  async updateTemplate(id: string, input: UpdatePromptTemplateInput): Promise<PromptTemplate | null> {
+  async updateTemplate(
+    id: string,
+    input: UpdatePromptTemplateInput
+  ): Promise<PromptTemplate | null> {
+    if (this.repository) {
+      return this.repository.updateTemplate(id, input);
+    }
+
     const existing = await this.getTemplate(id);
     if (!existing) return null;
 
@@ -284,6 +322,10 @@ export class PromptRegistryService {
    * Delete a prompt template
    */
   async deleteTemplate(id: string): Promise<boolean> {
+    if (this.repository) {
+      return this.repository.deleteTemplate(id);
+    }
+
     const path = this.templatePath(id);
 
     if (!(await fileExists(path))) {
@@ -313,6 +355,10 @@ export class PromptRegistryService {
    * Get version history for a template
    */
   async getVersionHistory(templateId: string): Promise<PromptVersion[]> {
+    if (this.repository) {
+      return this.repository.getVersionHistory(templateId);
+    }
+
     await this.ensureDirs();
 
     const files = await readdir(this.versionsDir);
@@ -344,6 +390,17 @@ export class PromptRegistryService {
     inputTokens?: number,
     outputTokens?: number
   ): Promise<PromptUsage> {
+    if (this.repository) {
+      return this.repository.recordUsage(
+        templateId,
+        usedBy,
+        renderedPrompt,
+        model,
+        inputTokens,
+        outputTokens
+      );
+    }
+
     await this.ensureDirs();
 
     const now = new Date().toISOString();
@@ -383,6 +440,10 @@ export class PromptRegistryService {
    * Get usage records for a template
    */
   async getUsageRecords(templateId: string): Promise<PromptUsage[]> {
+    if (this.repository) {
+      return this.repository.getUsageRecords(templateId);
+    }
+
     const usageFile = this.usagePath(templateId);
 
     if (!(await fileExists(usageFile))) {
@@ -402,6 +463,10 @@ export class PromptRegistryService {
    * Get statistics for a template
    */
   async getStats(templateId: string): Promise<PromptStats | null> {
+    if (this.repository) {
+      return this.repository.getStats(templateId);
+    }
+
     const template = await this.getTemplate(templateId);
     if (!template) return null;
 
@@ -411,7 +476,8 @@ export class PromptRegistryService {
     // Calculate stats
     const totalUsages = usageRecords.length;
     const totalVersions = versions.length;
-    const lastUsedAt = usageRecords.length > 0 ? usageRecords[usageRecords.length - 1].usedAt : undefined;
+    const lastUsedAt =
+      usageRecords.length > 0 ? usageRecords[usageRecords.length - 1].usedAt : undefined;
 
     // Find most frequent user
     const userMap = new Map<string, number>();
@@ -423,11 +489,15 @@ export class PromptRegistryService {
     const mostFrequentUser = Array.from(userMap.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
 
     // Calculate average tokens
-    const tokensRecords = usageRecords.filter((r) => r.inputTokens !== undefined || r.outputTokens !== undefined);
+    const tokensRecords = usageRecords.filter(
+      (r) => r.inputTokens !== undefined || r.outputTokens !== undefined
+    );
     const averageTokensPerUsage =
       tokensRecords.length > 0
-        ? tokensRecords.reduce((sum, r) => sum + ((r.inputTokens ?? 0) + (r.outputTokens ?? 0)), 0) /
-          tokensRecords.length
+        ? tokensRecords.reduce(
+            (sum, r) => sum + ((r.inputTokens ?? 0) + (r.outputTokens ?? 0)),
+            0
+          ) / tokensRecords.length
         : undefined;
 
     return {
@@ -445,6 +515,10 @@ export class PromptRegistryService {
    * Get statistics for all templates
    */
   async getAllStats(): Promise<PromptStats[]> {
+    if (this.repository) {
+      return this.repository.getAllStats();
+    }
+
     const templates = await this.getTemplates();
     const stats: PromptStats[] = [];
 
@@ -462,6 +536,10 @@ export class PromptRegistryService {
    * Render preview with sample variables
    */
   async renderPreview(request: RenderPreviewRequest): Promise<RenderPreviewResponse> {
+    if (this.repository) {
+      return this.repository.renderPreview(request);
+    }
+
     const template = await this.getTemplate(request.templateId);
     if (!template) {
       throw new Error(`Template ${request.templateId} not found`);
