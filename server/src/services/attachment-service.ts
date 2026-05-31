@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import mime from 'mime-types';
 import type { Attachment, AttachmentLimits } from '@veritas-kanban/shared';
@@ -199,6 +200,12 @@ export class AttachmentService {
       mimeType: validatedMime,
       size: file.size,
       uploaded: new Date().toISOString(),
+      workspaceId: 'local',
+      sha256: createHash('sha256').update(file.buffer).digest('hex'),
+      storagePath: path.posix.join('tasks', 'attachments', this.sanitizeTaskId(taskId), filename),
+      validationStatus: 'valid',
+      retentionStatus: 'active',
+      cleanupEligible: false,
     };
 
     return attachment;

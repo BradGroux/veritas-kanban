@@ -710,6 +710,80 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         WHERE workflow_id IS NOT NULL;
     `,
   },
+  {
+    version: 12,
+    name: '0012_task_artifact_metadata',
+    up: `
+      CREATE TABLE IF NOT EXISTS task_attachments (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT,
+        storage_path TEXT NOT NULL,
+        uploaded_at TEXT NOT NULL,
+        uploaded_by TEXT,
+        session_id TEXT,
+        validation_status TEXT NOT NULL DEFAULT 'unknown',
+        validation_error TEXT,
+        retention_status TEXT NOT NULL DEFAULT 'active',
+        cleanup_eligible INTEGER NOT NULL DEFAULT 0,
+        attachment_json TEXT NOT NULL,
+        deleted_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_attachments_task_uploaded
+        ON task_attachments(task_id, uploaded_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace_cleanup
+        ON task_attachments(workspace_id, cleanup_eligible, uploaded_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_task_attachments_mime_uploaded
+        ON task_attachments(workspace_id, mime_type, uploaded_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS task_deliverables (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        path TEXT,
+        agent TEXT,
+        model TEXT,
+        source_run_id TEXT,
+        description TEXT,
+        version_number INTEGER NOT NULL DEFAULT 1,
+        redaction_json TEXT,
+        deliverable_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        deleted_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_deliverables_task_created
+        ON task_deliverables(task_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_task_deliverables_workspace_type_status
+        ON task_deliverables(workspace_id, type, status, created_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_task_deliverables_agent_created
+        ON task_deliverables(agent, created_at DESC)
+        WHERE agent IS NOT NULL AND deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_task_deliverables_source_run
+        ON task_deliverables(source_run_id)
+        WHERE source_run_id IS NOT NULL;
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

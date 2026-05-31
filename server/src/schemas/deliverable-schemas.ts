@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+const RedactionSchema = z.object({
+  level: z.enum(['none', 'standard', 'strict']).optional(),
+  containsSensitiveContent: z.boolean().optional(),
+  notes: z.array(z.string().max(500)).max(20).optional(),
+});
+
 /**
  * POST /api/tasks/:id/deliverables - Add a deliverable
  */
@@ -9,6 +15,9 @@ export const AddDeliverableBodySchema = z.object({
   path: z.string().max(500).optional(),
   description: z.string().max(1000).optional(),
   agent: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
+  sourceRunId: z.string().max(200).optional(),
+  redaction: RedactionSchema.optional(),
 });
 
 export type AddDeliverableBody = z.infer<typeof AddDeliverableBodySchema>;
@@ -23,6 +32,9 @@ export const UpdateDeliverableBodySchema = z.object({
   status: z.enum(['pending', 'attached', 'reviewed', 'accepted']).optional(),
   description: z.string().max(1000).optional(),
   agent: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
+  sourceRunId: z.string().max(200).optional(),
+  redaction: RedactionSchema.optional(),
 });
 
 export type UpdateDeliverableBody = z.infer<typeof UpdateDeliverableBodySchema>;

@@ -66,6 +66,8 @@ export interface Comment {
   text: string;
   timestamp: string;
 }
+export type AttachmentValidationStatus = 'valid' | 'invalid' | 'skipped' | 'unknown';
+export type AttachmentRetentionStatus = 'active' | 'archived' | 'deleted' | 'expired';
 export interface Attachment {
   id: string;
   filename: string;
@@ -73,9 +75,23 @@ export interface Attachment {
   mimeType: string;
   size: number;
   uploaded: string;
+  workspaceId?: string;
+  sessionId?: string;
+  uploadedBy?: string;
+  sha256?: string;
+  storagePath?: string;
+  validationStatus?: AttachmentValidationStatus;
+  validationError?: string;
+  retentionStatus?: AttachmentRetentionStatus;
+  cleanupEligible?: boolean;
 }
 export type DeliverableType = 'document' | 'code' | 'report' | 'artifact' | 'other';
 export type DeliverableStatus = 'pending' | 'attached' | 'reviewed' | 'accepted';
+export interface DeliverableRedaction {
+  level?: 'none' | 'standard' | 'strict';
+  containsSensitiveContent?: boolean;
+  notes?: string[];
+}
 export interface Deliverable {
   id: string;
   title: string;
@@ -83,8 +99,14 @@ export interface Deliverable {
   path?: string;
   status: DeliverableStatus;
   agent?: string;
+  model?: string;
+  workspaceId?: string;
+  sourceRunId?: string;
+  version?: number;
   created: string;
+  updated?: string;
   description?: string;
+  redaction?: DeliverableRedaction;
 }
 export interface AttachmentLimits {
   maxFileSize: number;

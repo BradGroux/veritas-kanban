@@ -3,6 +3,36 @@ import type { Task } from '@veritas-kanban/shared';
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteTaskRepository } from '../../storage/sqlite/task-repository.js';
 
+interface CountRow {
+  count: number;
+}
+
+interface AttachmentRow {
+  id: string;
+  task_id: string;
+  workspace_id: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string | null;
+  storage_path: string;
+  validation_status: string;
+  retention_status: string;
+  cleanup_eligible: number;
+}
+
+interface DeliverableRow {
+  id: string;
+  task_id: string;
+  workspace_id: string;
+  type: string;
+  status: string;
+  agent: string | null;
+  model: string | null;
+  source_run_id: string | null;
+  version_number: number;
+  redaction_json: string | null;
+}
+
 function makeTask(overrides: Partial<Task> = {}): Task {
   const now = new Date().toISOString();
   return {
@@ -86,6 +116,134 @@ describe('SqliteTaskRepository', () => {
 
       expect(await repo.findById(task.id)).toEqual(task);
       expect(await repo.findAll()).toEqual([task]);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('syncs attachment and deliverable metadata into normalized SQLite tables', async () => {
+    const fixture = createTestSqliteDatabase();
+    const task = makeTask({
+      title: 'Artifact metadata task',
+      attachments: [
+        {
+          id: 'att-1',
+          filename: 'att-1_report.pdf',
+          originalName: 'report.pdf',
+          mimeType: 'application/pdf',
+          size: 4096,
+          uploaded: '2026-05-30T12:00:00.000Z',
+          workspaceId: 'local',
+          sessionId: 'session-1',
+          uploadedBy: 'tester',
+          sha256: 'abc123',
+          storagePath: 'tasks/attachments/task-1/att-1_report.pdf',
+          validationStatus: 'valid',
+          retentionStatus: 'active',
+          cleanupEligible: false,
+        },
+      ],
+      deliverables: [
+        {
+          id: 'deliverable-1',
+          title: 'Completion packet',
+          type: 'report',
+          status: 'attached',
+          agent: 'codex',
+          model: 'gpt-5',
+          sourceRunId: 'run-1',
+          version: 3,
+          created: '2026-05-30T12:05:00.000Z',
+          updated: '2026-05-30T12:06:00.000Z',
+          description: 'Verified artifact',
+          redaction: {
+            level: 'standard',
+            containsSensitiveContent: false,
+            notes: ['paths redacted'],
+          },
+        },
+      ],
+    });
+
+    try {
+      fixture.database.open();
+      const repo = new SqliteTaskRepository(fixture.database);
+
+      await repo.create(task);
+
+      const db = fixture.database.getConnection();
+      const attachment = db
+        .prepare(
+          `
+            SELECT id, task_id, workspace_id, mime_type, size_bytes, sha256, storage_path,
+                   validation_status, retention_status, cleanup_eligible
+            FROM task_attachments
+            WHERE task_id = ?
+          `
+        )
+        .get(task.id) as AttachmentRow | undefined;
+      expect(attachment).toEqual({
+        id: 'att-1',
+        task_id: task.id,
+        workspace_id: 'local',
+        mime_type: 'application/pdf',
+        size_bytes: 4096,
+        sha256: 'abc123',
+        storage_path: 'tasks/attachments/task-1/att-1_report.pdf',
+        validation_status: 'valid',
+        retention_status: 'active',
+        cleanup_eligible: 0,
+      });
+
+      const deliverable = db
+        .prepare(
+          `
+            SELECT id, task_id, workspace_id, type, status, agent, model, source_run_id,
+                   version_number, redaction_json
+            FROM task_deliverables
+            WHERE task_id = ?
+          `
+        )
+        .get(task.id) as DeliverableRow | undefined;
+      expect(deliverable).toEqual({
+        id: 'deliverable-1',
+        task_id: task.id,
+        workspace_id: 'local',
+        type: 'report',
+        status: 'attached',
+        agent: 'codex',
+        model: 'gpt-5',
+        source_run_id: 'run-1',
+        version_number: 3,
+        redaction_json: JSON.stringify(task.deliverables?.[0]?.redaction),
+      });
+
+      await repo.update(task.id, {
+        attachments: [],
+        deliverables: [
+          {
+            ...(task.deliverables?.[0] as NonNullable<Task['deliverables']>[number]),
+            status: 'reviewed',
+            version: 4,
+          },
+        ],
+      });
+
+      const attachmentCount = db
+        .prepare('SELECT COUNT(*) AS count FROM task_attachments WHERE task_id = ?')
+        .get(task.id) as CountRow;
+      expect(attachmentCount.count).toBe(0);
+
+      const updatedDeliverable = db
+        .prepare(
+          `
+            SELECT status, version_number
+            FROM task_deliverables
+            WHERE task_id = ?
+          `
+        )
+        .get(task.id) as Pick<DeliverableRow, 'status' | 'version_number'> | undefined;
+      expect(updatedDeliverable).toEqual({ status: 'reviewed', version_number: 4 });
     } finally {
       fixture.cleanup();
     }

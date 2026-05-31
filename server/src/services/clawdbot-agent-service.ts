@@ -904,6 +904,9 @@ export class ClawdbotAgentService {
         path: file,
         status: 'attached',
         agent,
+        workspaceId: 'local',
+        sourceRunId: attemptId,
+        version: 1,
         created,
         description: `Codex event artifact from attempt ${attemptId}`,
       });

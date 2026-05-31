@@ -1,4 +1,4 @@
-import type { Task } from '@veritas-kanban/shared';
+import type { Attachment, Deliverable, Task } from '@veritas-kanban/shared';
 import type { TaskRepository } from '../interfaces.js';
 import type { SqliteDatabase } from './database.js';
 
@@ -116,6 +116,7 @@ export class SqliteTaskRepository implements TaskRepository {
   async deleteActive(id: string): Promise<boolean> {
     const db = this.database.getConnection();
     const result = this.transaction(() => {
+      this.deleteArtifactRows(id);
       this.deleteSearchRow(id);
       return db.prepare("DELETE FROM tasks WHERE id = ? AND storage_state = 'active';").run(id);
     });
@@ -272,7 +273,128 @@ export class SqliteTaskRepository implements TaskRepository {
       );
 
       this.upsertSearchRow(task, state);
+      this.syncArtifactRows(task);
     });
+  }
+
+  private syncArtifactRows(task: Task): void {
+    this.deleteArtifactRows(task.id);
+
+    const attachments = task.attachments ?? [];
+    if (attachments.length > 0) {
+      this.insertAttachmentRows(task, attachments);
+    }
+
+    const deliverables = task.deliverables ?? [];
+    if (deliverables.length > 0) {
+      this.insertDeliverableRows(task, deliverables);
+    }
+  }
+
+  private insertAttachmentRows(task: Task, attachments: Attachment[]): void {
+    const db = this.database.getConnection();
+    const statement = db.prepare(
+      `
+        INSERT INTO task_attachments (
+          id,
+          workspace_id,
+          task_id,
+          filename,
+          original_name,
+          mime_type,
+          size_bytes,
+          sha256,
+          storage_path,
+          uploaded_at,
+          uploaded_by,
+          session_id,
+          validation_status,
+          validation_error,
+          retention_status,
+          cleanup_eligible,
+          attachment_json,
+          deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+      `
+    );
+
+    for (const attachment of attachments) {
+      statement.run(
+        attachment.id,
+        this.workspaceIdFor(task, attachment.workspaceId),
+        task.id,
+        attachment.filename,
+        attachment.originalName,
+        attachment.mimeType,
+        attachment.size,
+        attachment.sha256 ?? null,
+        this.attachmentStoragePath(task.id, attachment),
+        attachment.uploaded,
+        attachment.uploadedBy ?? null,
+        attachment.sessionId ?? null,
+        attachment.validationStatus ?? 'unknown',
+        attachment.validationError ?? null,
+        attachment.retentionStatus ?? 'active',
+        attachment.cleanupEligible === true ? 1 : 0,
+        JSON.stringify(attachment)
+      );
+    }
+  }
+
+  private insertDeliverableRows(task: Task, deliverables: Deliverable[]): void {
+    const db = this.database.getConnection();
+    const statement = db.prepare(
+      `
+        INSERT INTO task_deliverables (
+          id,
+          workspace_id,
+          task_id,
+          title,
+          type,
+          status,
+          path,
+          agent,
+          model,
+          source_run_id,
+          description,
+          version_number,
+          redaction_json,
+          deliverable_json,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+      `
+    );
+
+    for (const deliverable of deliverables) {
+      statement.run(
+        deliverable.id,
+        this.workspaceIdFor(task, deliverable.workspaceId),
+        task.id,
+        deliverable.title,
+        deliverable.type,
+        deliverable.status,
+        deliverable.path ?? null,
+        deliverable.agent ?? null,
+        deliverable.model ?? null,
+        deliverable.sourceRunId ?? null,
+        deliverable.description ?? null,
+        this.deliverableVersion(deliverable),
+        this.optionalJson(deliverable.redaction),
+        JSON.stringify(deliverable),
+        deliverable.created,
+        deliverable.updated ?? null
+      );
+    }
+  }
+
+  private deleteArtifactRows(taskId: string): void {
+    const db = this.database.getConnection();
+    db.prepare('DELETE FROM task_deliverables WHERE task_id = ?;').run(taskId);
+    db.prepare('DELETE FROM task_attachments WHERE task_id = ?;').run(taskId);
   }
 
   private upsertSearchRow(task: Task, state: TaskStorageState): void {
@@ -299,6 +421,29 @@ export class SqliteTaskRepository implements TaskRepository {
 
   private parseTask(row: TaskRow): Task {
     return JSON.parse(row.task_json) as Task;
+  }
+
+  private workspaceIdFor(task: Task, explicitWorkspaceId?: string): string {
+    return explicitWorkspaceId ?? (task as Task & { workspaceId?: string }).workspaceId ?? 'local';
+  }
+
+  private attachmentStoragePath(taskId: string, attachment: Attachment): string {
+    if (attachment.storagePath && attachment.storagePath.trim().length > 0) {
+      return attachment.storagePath;
+    }
+
+    const taskPathSegment = taskId.replace(/[^a-zA-Z0-9_-]/g, '');
+    return ['tasks', 'attachments', taskPathSegment, attachment.filename].join('/');
+  }
+
+  private deliverableVersion(deliverable: Deliverable): number {
+    return Number.isInteger(deliverable.version) && (deliverable.version ?? 0) > 0
+      ? (deliverable.version as number)
+      : 1;
+  }
+
+  private optionalJson(value: unknown): string | null {
+    return value === undefined ? null : JSON.stringify(value);
   }
 
   private toFtsQuery(query: string): string {

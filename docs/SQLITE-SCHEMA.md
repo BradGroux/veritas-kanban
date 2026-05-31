@@ -233,6 +233,7 @@ CREATE TABLE task_observations (
 
 CREATE TABLE task_attachments (
   id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   filename TEXT NOT NULL,
   original_name TEXT NOT NULL,
@@ -242,18 +243,30 @@ CREATE TABLE task_attachments (
   storage_path TEXT NOT NULL,
   uploaded_at TEXT NOT NULL,
   uploaded_by TEXT,
+  session_id TEXT,
+  validation_status TEXT NOT NULL DEFAULT 'unknown',
+  validation_error TEXT,
+  retention_status TEXT NOT NULL DEFAULT 'active',
+  cleanup_eligible INTEGER NOT NULL DEFAULT 0,
+  attachment_json TEXT NOT NULL,
   deleted_at TEXT
 );
 
 CREATE TABLE task_deliverables (
   id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   type TEXT NOT NULL,
   status TEXT NOT NULL,
   path TEXT,
   agent TEXT,
+  model TEXT,
+  source_run_id TEXT,
   description TEXT,
+  version_number INTEGER NOT NULL DEFAULT 1,
+  redaction_json TEXT,
+  deliverable_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT,
   deleted_at TEXT
@@ -308,8 +321,23 @@ CREATE INDEX idx_tasks_github ON tasks(github_repo, github_issue_number);
 CREATE INDEX idx_task_attempts_task ON task_attempts(task_id, started_at DESC);
 CREATE INDEX idx_task_comments_task ON task_comments(task_id, created_at);
 CREATE INDEX idx_task_observations_task ON task_observations(task_id, created_at DESC);
-CREATE INDEX idx_task_attachments_task ON task_attachments(task_id, uploaded_at DESC);
-CREATE INDEX idx_task_deliverables_task ON task_deliverables(task_id, created_at DESC);
+CREATE INDEX idx_task_attachments_task_uploaded ON task_attachments(task_id, uploaded_at DESC);
+CREATE INDEX idx_task_attachments_workspace_cleanup
+  ON task_attachments(workspace_id, cleanup_eligible, uploaded_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_task_attachments_mime_uploaded
+  ON task_attachments(workspace_id, mime_type, uploaded_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_task_deliverables_task_created ON task_deliverables(task_id, created_at DESC);
+CREATE INDEX idx_task_deliverables_workspace_type_status
+  ON task_deliverables(workspace_id, type, status, created_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_task_deliverables_agent_created
+  ON task_deliverables(agent, created_at DESC)
+  WHERE agent IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_task_deliverables_source_run
+  ON task_deliverables(source_run_id)
+  WHERE source_run_id IS NOT NULL;
 CREATE INDEX idx_task_dependencies_depends ON task_dependencies(depends_on_task_id);
 ```
 
@@ -973,6 +1001,21 @@ assignment, delivery, and subscription behavior while replacing
 | `notifications`        | Complete notification JSON plus task, target, source, type, read state, target URL, and dedupe key. |
 | `thread_subscriptions` | Complete subscription JSON keyed by workspace, task, and subscribed agent.                          |
 
+## Task Artifact Metadata Implementation
+
+Task attachments and task deliverables keep their full JSON inside `tasks` for
+API parity, and SQLite mode mirrors high-value metadata into child tables during
+the same repository transaction. Attachments store validation, size, hash,
+retention, workspace, session, and cleanup fields while leaving binary blobs on
+disk. Deliverables store typed artifact metadata, source run/model provenance,
+redaction hints, and a current version number for task detail, timeline,
+completion packet, dashboard, and migration queries.
+
+| Runtime table       | Stored data                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| `task_attachments`  | File metadata, MIME validation result, hash/path, owner/session, retention, and cleanup data. |
+| `task_deliverables` | Typed work-product metadata, source run/model, redaction hints, and full deliverable JSON.    |
+
 ## Scheduled Deliverable Repository Implementation
 
 Scheduled deliverables and recurring run history move into SQLite when
@@ -1107,8 +1150,8 @@ workspace screens without destructive schema rewrites.
    migrations.
 2. Implement TaskRepository parity against this schema.
 3. Move settings, managed lists, templates, and prompt registry repositories.
-4. Move telemetry, activity, audit, workflow, chat, and notification
-   repositories.
+4. Move telemetry, activity, audit, workflow, chat, notification, attachment
+   metadata, and task deliverable metadata repositories.
 5. Add file-to-database migration, Markdown export/import, and rollback drills.
 6. Turn on SQLite as the default storage backend for fresh v5 installs after
    parity and migration tests pass.

@@ -53,8 +53,13 @@ router.post(
       path: body.path,
       status: 'pending',
       agent: body.agent,
+      model: body.model,
+      workspaceId: 'local',
+      sourceRunId: body.sourceRunId,
+      version: 1,
       created: new Date().toISOString(),
       description: body.description,
+      redaction: body.redaction,
     };
 
     const deliverables = [...(task.deliverables || []), deliverable];
@@ -115,9 +120,12 @@ router.patch(
     }
 
     // Update deliverable with provided fields
+    const currentDeliverable = deliverables[deliverableIndex] as Deliverable;
     deliverables[deliverableIndex] = {
-      ...deliverables[deliverableIndex],
+      ...currentDeliverable,
       ...body,
+      updated: new Date().toISOString(),
+      version: (currentDeliverable.version ?? 1) + 1,
     };
 
     const updatedTask = await taskService.updateTask(req.params.id as string, { deliverables });

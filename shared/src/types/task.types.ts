@@ -104,6 +104,9 @@ export interface Observation {
   agent?: string; // Which agent recorded this
 }
 
+export type AttachmentValidationStatus = 'valid' | 'invalid' | 'skipped' | 'unknown';
+export type AttachmentRetentionStatus = 'active' | 'archived' | 'deleted' | 'expired';
+
 export interface Attachment {
   id: string;
   filename: string; // Sanitized filename stored on disk
@@ -111,10 +114,25 @@ export interface Attachment {
   mimeType: string;
   size: number; // File size in bytes
   uploaded: string; // ISO timestamp
+  workspaceId?: string;
+  sessionId?: string;
+  uploadedBy?: string;
+  sha256?: string;
+  storagePath?: string;
+  validationStatus?: AttachmentValidationStatus;
+  validationError?: string;
+  retentionStatus?: AttachmentRetentionStatus;
+  cleanupEligible?: boolean;
 }
 
 export type DeliverableType = 'document' | 'code' | 'report' | 'artifact' | 'other';
 export type DeliverableStatus = 'pending' | 'attached' | 'reviewed' | 'accepted';
+
+export interface DeliverableRedaction {
+  level?: 'none' | 'standard' | 'strict';
+  containsSensitiveContent?: boolean;
+  notes?: string[];
+}
 
 export interface Deliverable {
   id: string;
@@ -123,8 +141,14 @@ export interface Deliverable {
   path?: string; // File path or URL
   status: DeliverableStatus;
   agent?: string; // Who produced it
+  model?: string;
+  workspaceId?: string;
+  sourceRunId?: string;
+  version?: number;
   created: string; // ISO timestamp
+  updated?: string;
   description?: string;
+  redaction?: DeliverableRedaction;
 }
 
 export interface AttachmentLimits {
