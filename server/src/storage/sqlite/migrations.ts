@@ -102,6 +102,82 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: '0004_configuration_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS app_config_documents (
+        key TEXT PRIMARY KEY,
+        document_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS managed_list_items (
+        list_name TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        item_json TEXT NOT NULL,
+        order_index INTEGER NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        is_hidden INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (list_name, item_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_managed_list_items_order
+        ON managed_list_items(list_name, order_index);
+
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT,
+        template_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_templates_name
+        ON task_templates(name);
+
+      CREATE TABLE IF NOT EXISTS prompt_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        current_version_id TEXT NOT NULL,
+        template_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_prompt_templates_category_name
+        ON prompt_templates(category, name);
+
+      CREATE TABLE IF NOT EXISTS prompt_versions (
+        id TEXT PRIMARY KEY,
+        template_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        version_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (template_id, version_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_prompt_versions_template
+        ON prompt_versions(template_id, version_number DESC);
+
+      CREATE TABLE IF NOT EXISTS prompt_usage (
+        id TEXT PRIMARY KEY,
+        template_id TEXT NOT NULL,
+        used_at TEXT NOT NULL,
+        used_by TEXT,
+        model TEXT,
+        usage_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_prompt_usage_template_used
+        ON prompt_usage(template_id, used_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

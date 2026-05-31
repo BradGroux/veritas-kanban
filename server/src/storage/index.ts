@@ -18,6 +18,7 @@ export type {
   SettingsRepository,
   ActivityRepository,
   TemplateRepository,
+  PromptRegistryRepository,
   StatusHistoryRepository,
   ManagedListRepository,
   ManagedListProvider,
@@ -30,6 +31,7 @@ export {
   FileSettingsRepository,
   FileActivityRepository,
   FileTemplateRepository,
+  FilePromptRegistryRepository,
   FileStatusHistoryRepository,
   FileManagedListRepository,
   FileManagedListProvider,
@@ -49,6 +51,13 @@ export { SqliteStorageProvider } from './sqlite/sqlite-storage.js';
 export type { SqliteStorageOptions } from './sqlite/sqlite-storage.js';
 export { SqliteTaskRepository } from './sqlite/task-repository.js';
 export type { TaskStorageState } from './sqlite/task-repository.js';
+export { SqliteSettingsRepository } from './sqlite/settings-repository.js';
+export {
+  SqliteManagedListProvider,
+  SqliteManagedListRepository,
+} from './sqlite/managed-list-repository.js';
+export { SqliteTemplateRepository } from './sqlite/template-repository.js';
+export { SqlitePromptRegistryRepository } from './sqlite/prompt-registry-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

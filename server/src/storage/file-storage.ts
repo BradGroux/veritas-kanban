@@ -14,6 +14,14 @@ import type {
   CreateTemplateInput,
   UpdateTemplateInput,
   ManagedListItem,
+  PromptStats,
+  PromptTemplate,
+  PromptUsage,
+  PromptVersion,
+  CreatePromptTemplateInput,
+  UpdatePromptTemplateInput,
+  RenderPreviewRequest,
+  RenderPreviewResponse,
   TelemetryEvent,
   TelemetryEventType,
   TelemetryConfig,
@@ -26,6 +34,7 @@ import type {
   StorageProvider,
   ActivityRepository,
   TemplateRepository,
+  PromptRegistryRepository,
   StatusHistoryRepository,
   ManagedListRepository,
   ManagedListProvider,
@@ -34,7 +43,11 @@ import type {
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
 import { ActivityService, type Activity, type ActivityType } from '../services/activity-service.js';
-import { TemplateService } from '../services/template-service.js';
+import { TemplateService, type TemplateServiceOptions } from '../services/template-service.js';
+import {
+  PromptRegistryService,
+  type PromptRegistryServiceOptions,
+} from '../services/prompt-registry-service.js';
 import {
   StatusHistoryService,
   type StatusHistoryEntry,
@@ -185,6 +198,75 @@ export class FileTemplateRepository implements TemplateRepository {
 
   async deleteTemplate(id: string): Promise<boolean> {
     return this.service.deleteTemplate(id);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FilePromptRegistryRepository
+// ---------------------------------------------------------------------------
+
+export class FilePromptRegistryRepository implements PromptRegistryRepository {
+  constructor(private readonly service: PromptRegistryService) {}
+
+  async getTemplates(): Promise<PromptTemplate[]> {
+    return this.service.getTemplates();
+  }
+
+  async getTemplate(id: string): Promise<PromptTemplate | null> {
+    return this.service.getTemplate(id);
+  }
+
+  async createTemplate(input: CreatePromptTemplateInput): Promise<PromptTemplate> {
+    return this.service.createTemplate(input);
+  }
+
+  async updateTemplate(
+    id: string,
+    input: UpdatePromptTemplateInput
+  ): Promise<PromptTemplate | null> {
+    return this.service.updateTemplate(id, input);
+  }
+
+  async deleteTemplate(id: string): Promise<boolean> {
+    return this.service.deleteTemplate(id);
+  }
+
+  async getVersionHistory(templateId: string): Promise<PromptVersion[]> {
+    return this.service.getVersionHistory(templateId);
+  }
+
+  async recordUsage(
+    templateId: string,
+    usedBy?: string,
+    renderedPrompt?: string,
+    model?: string,
+    inputTokens?: number,
+    outputTokens?: number
+  ): Promise<PromptUsage> {
+    return this.service.recordUsage(
+      templateId,
+      usedBy,
+      renderedPrompt,
+      model,
+      inputTokens,
+      outputTokens
+    );
+  }
+
+  async getUsageRecords(templateId: string): Promise<PromptUsage[]> {
+    return this.service.getUsageRecords(templateId);
+  }
+
+  async getStats(templateId: string): Promise<PromptStats | null> {
+    return this.service.getStats(templateId);
+  }
+
+  async getAllStats(): Promise<PromptStats[]> {
+    return this.service.getAllStats();
+  }
+
+  async renderPreview(request: RenderPreviewRequest): Promise<RenderPreviewResponse> {
+    return this.service.renderPreview(request);
   }
 }
 
@@ -379,6 +461,8 @@ export class FileTelemetryRepository implements TelemetryRepository {
 export interface FileStorageOptions {
   taskServiceOptions?: TaskServiceOptions;
   configServiceOptions?: ConfigServiceOptions;
+  templateServiceOptions?: TemplateServiceOptions;
+  promptRegistryServiceOptions?: PromptRegistryServiceOptions;
   telemetryServiceOptions?: TelemetryServiceOptions;
 }
 
@@ -387,6 +471,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly settings: FileSettingsRepository;
   readonly activities: FileActivityRepository;
   readonly templates: FileTemplateRepository;
+  readonly promptRegistry: FilePromptRegistryRepository;
   readonly statusHistory: FileStatusHistoryRepository;
   readonly managedLists: FileManagedListProvider;
   readonly telemetry: FileTelemetryRepository;
@@ -395,6 +480,7 @@ export class FileStorageProvider implements StorageProvider {
   private configService: ConfigService;
   private activityService: ActivityService;
   private templateService: TemplateService;
+  private promptRegistryService: PromptRegistryService;
   private statusHistoryService: StatusHistoryService;
   private telemetryService: TelemetryService;
 
@@ -403,17 +489,29 @@ export class FileStorageProvider implements StorageProvider {
 
     this.taskService = new TaskService({
       ...(options.taskServiceOptions || {}),
+      storageType: 'file',
       telemetryService: this.telemetryService,
     });
-    this.configService = new ConfigService(options.configServiceOptions);
+    this.configService = new ConfigService({
+      ...(options.configServiceOptions || {}),
+      storageType: 'file',
+    });
     this.activityService = new ActivityService();
-    this.templateService = new TemplateService();
+    this.templateService = new TemplateService({
+      ...(options.templateServiceOptions || {}),
+      storageType: 'file',
+    });
+    this.promptRegistryService = new PromptRegistryService({
+      ...(options.promptRegistryServiceOptions || {}),
+      storageType: 'file',
+    });
     this.statusHistoryService = new StatusHistoryService();
 
     this.tasks = new FileTaskRepository(this.taskService);
     this.settings = new FileSettingsRepository(this.configService);
     this.activities = new FileActivityRepository(this.activityService);
     this.templates = new FileTemplateRepository(this.templateService);
+    this.promptRegistry = new FilePromptRegistryRepository(this.promptRegistryService);
     this.statusHistory = new FileStatusHistoryRepository(this.statusHistoryService);
     this.managedLists = new FileManagedListProvider();
     this.telemetry = new FileTelemetryRepository(this.telemetryService);

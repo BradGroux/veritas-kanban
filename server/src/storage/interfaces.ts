@@ -19,6 +19,14 @@ import type {
   TelemetryConfig,
   TelemetryQueryOptions,
   AnyTelemetryEvent,
+  PromptTemplate,
+  PromptVersion,
+  PromptUsage,
+  PromptStats,
+  CreatePromptTemplateInput,
+  UpdatePromptTemplateInput,
+  RenderPreviewRequest,
+  RenderPreviewResponse,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -104,6 +112,41 @@ export interface TemplateRepository {
 
   /** Delete a template by ID. Returns true if deleted, false if not found. */
   deleteTemplate(id: string): Promise<boolean>;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt Registry Repository
+// ---------------------------------------------------------------------------
+
+export interface PromptRegistryRepository {
+  getTemplates(): Promise<PromptTemplate[]>;
+
+  getTemplate(id: string): Promise<PromptTemplate | null>;
+
+  createTemplate(input: CreatePromptTemplateInput): Promise<PromptTemplate>;
+
+  updateTemplate(id: string, input: UpdatePromptTemplateInput): Promise<PromptTemplate | null>;
+
+  deleteTemplate(id: string): Promise<boolean>;
+
+  getVersionHistory(templateId: string): Promise<PromptVersion[]>;
+
+  recordUsage(
+    templateId: string,
+    usedBy?: string,
+    renderedPrompt?: string,
+    model?: string,
+    inputTokens?: number,
+    outputTokens?: number
+  ): Promise<PromptUsage>;
+
+  getUsageRecords(templateId: string): Promise<PromptUsage[]>;
+
+  getStats(templateId: string): Promise<PromptStats | null>;
+
+  getAllStats(): Promise<PromptStats[]>;
+
+  renderPreview(request: RenderPreviewRequest): Promise<RenderPreviewResponse>;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +282,7 @@ export interface StorageProvider {
   readonly settings: SettingsRepository;
   readonly activities: ActivityRepository;
   readonly templates: TemplateRepository;
+  readonly promptRegistry: PromptRegistryRepository;
   readonly statusHistory: StatusHistoryRepository;
   readonly managedLists: ManagedListProvider;
   readonly telemetry: TelemetryRepository;
