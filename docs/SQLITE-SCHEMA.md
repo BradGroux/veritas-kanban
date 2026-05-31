@@ -973,6 +973,18 @@ assignment, delivery, and subscription behavior while replacing
 | `notifications`        | Complete notification JSON plus task, target, source, type, read state, target URL, and dedupe key. |
 | `thread_subscriptions` | Complete subscription JSON keyed by workspace, task, and subscribed agent.                          |
 
+## Scheduled Deliverable Repository Implementation
+
+Scheduled deliverables and recurring run history move into SQLite when
+`VERITAS_STORAGE=sqlite`. Run rows keep stable output snapshots separate from
+live workflow execution state so dashboards and completion packets can read
+bounded historical results without traversing workflow-run directories.
+
+| Runtime table                | Stored data                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `scheduled_deliverables`     | Complete scheduled deliverable JSON plus schedule, agent, output path, tags, and next run.   |
+| `scheduled_deliverable_runs` | Complete run JSON plus source workflow/run IDs, status, output, duration, and snapshot JSON. |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

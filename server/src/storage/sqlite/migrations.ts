@@ -648,6 +648,68 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON thread_subscriptions(task_id, agent);
     `,
   },
+  {
+    version: 11,
+    name: '0011_scheduled_deliverable_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS scheduled_deliverables (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        schedule TEXT NOT NULL,
+        cron_expr TEXT,
+        schedule_description TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        agent TEXT,
+        output_path TEXT,
+        tags_json TEXT NOT NULL,
+        deliverable_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_run_at TEXT,
+        next_run_at TEXT,
+        total_runs INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverables_enabled_next_run
+        ON scheduled_deliverables(enabled, next_run_at);
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverables_agent_enabled
+        ON scheduled_deliverables(agent, enabled);
+
+      CREATE TABLE IF NOT EXISTS scheduled_deliverable_runs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        deliverable_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        output_file TEXT,
+        summary TEXT,
+        duration_ms INTEGER,
+        error TEXT,
+        source_run_id TEXT,
+        workflow_id TEXT,
+        snapshot_json TEXT,
+        run_json TEXT NOT NULL,
+        run_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverable_runs_deliverable_run
+        ON scheduled_deliverable_runs(deliverable_id, run_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverable_runs_status_run
+        ON scheduled_deliverable_runs(status, run_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverable_runs_source_run
+        ON scheduled_deliverable_runs(source_run_id)
+        WHERE source_run_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_deliverable_runs_workflow_run
+        ON scheduled_deliverable_runs(workflow_id, run_at DESC)
+        WHERE workflow_id IS NOT NULL;
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

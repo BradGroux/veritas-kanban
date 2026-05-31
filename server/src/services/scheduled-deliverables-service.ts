@@ -3,13 +3,13 @@
  *
  * Manages recurring agent workflows and their outputs.
  * Think: daily pulses, weekly audits, scheduled reports.
- *
- * Inspired by @nateherk's Klouse scheduled deliverables view.
  */
 
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteScheduledDeliverablesRepository } from '../storage/sqlite/scheduled-deliverables-repository.js';
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
 
 const log = createLogger('deliverables');
@@ -61,39 +61,94 @@ export interface DeliverableRun {
   durationMs?: number;
   /** Error message if failed */
   error?: string;
+  /** Source workflow run captured into this scheduled result */
+  sourceRunId?: string;
+  /** Workflow definition that produced the result */
+  workflowId?: string;
+  /** Stable result snapshot for dashboards and completion packets */
+  snapshot?: DeliverableRunSnapshot;
   /** Run timestamp */
   runAt: string;
 }
 
+export interface DeliverableRunSnapshot {
+  status: DeliverableRun['status'];
+  capturedAt: string;
+  sourceRunId?: string;
+  workflowId?: string;
+  outputFile?: string;
+  summary?: string;
+  durationMs?: number;
+  error?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface ScheduledDeliverablesServiceOptions {
+  dataDir?: string;
+  deliverablesFile?: string;
+  runsFile?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+  runRetentionLimit?: number;
+}
+
 // ─── Service ─────────────────────────────────────────────────────
 
-class ScheduledDeliverablesService {
+export class ScheduledDeliverablesService {
   private deliverables: Deliverable[] = [];
   private runs: DeliverableRun[] = [];
   private loaded = false;
+  private readonly deliverablesFile: string;
+  private readonly runsFile: string;
+  private readonly runRetentionLimit: number;
+  private readonly repository: SqliteScheduledDeliverablesRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
-  private get deliverablesPath(): string {
-    return path.join(DATA_DIR, 'scheduled-deliverables.json');
-  }
+  constructor(options: ScheduledDeliverablesServiceOptions = {}) {
+    const dataDir = options.dataDir ?? DATA_DIR;
+    this.deliverablesFile =
+      options.deliverablesFile ?? path.join(dataDir, 'scheduled-deliverables.json');
+    this.runsFile = options.runsFile ?? path.join(dataDir, 'deliverable-runs.json');
+    this.runRetentionLimit = options.runRetentionLimit ?? 500;
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
-  private get runsPath(): string {
-    return path.join(DATA_DIR, 'deliverable-runs.json');
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteScheduledDeliverablesRepository(this.sqliteDatabase);
+    }
   }
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
+    if (this.repository) {
+      this.deliverables = this.repository.loadDeliverables();
+      this.runs = this.repository.loadRuns();
+      if (this.runs.length > this.runRetentionLimit) {
+        this.runs = this.runs.slice(-this.runRetentionLimit);
+        this.repository.saveRuns(this.runs);
+      }
+      this.loaded = true;
+      return;
+    }
+
     try {
-      const data = await fs.readFile(this.deliverablesPath, 'utf-8');
+      const data = await fs.readFile(this.deliverablesFile, 'utf-8');
       this.deliverables = JSON.parse(data);
     } catch {
       this.deliverables = [];
     }
     try {
-      const data = await fs.readFile(this.runsPath, 'utf-8');
+      const data = await fs.readFile(this.runsFile, 'utf-8');
       this.runs = JSON.parse(data);
       // Keep only last 500 runs
-      if (this.runs.length > 500) {
-        this.runs = this.runs.slice(-500);
+      if (this.runs.length > this.runRetentionLimit) {
+        this.runs = this.runs.slice(-this.runRetentionLimit);
       }
     } catch {
       this.runs = [];
@@ -102,11 +157,23 @@ class ScheduledDeliverablesService {
   }
 
   private async saveDeliverables(): Promise<void> {
-    await fs.writeFile(this.deliverablesPath, JSON.stringify(this.deliverables, null, 2));
+    if (this.repository) {
+      this.repository.saveDeliverables(this.deliverables);
+      return;
+    }
+
+    await fs.mkdir(path.dirname(this.deliverablesFile), { recursive: true });
+    await fs.writeFile(this.deliverablesFile, JSON.stringify(this.deliverables, null, 2));
   }
 
   private async saveRuns(): Promise<void> {
-    await fs.writeFile(this.runsPath, JSON.stringify(this.runs, null, 2));
+    if (this.repository) {
+      this.repository.saveRuns(this.runs);
+      return;
+    }
+
+    await fs.mkdir(path.dirname(this.runsFile), { recursive: true });
+    await fs.writeFile(this.runsFile, JSON.stringify(this.runs, null, 2));
   }
 
   /**
@@ -125,7 +192,8 @@ class ScheduledDeliverablesService {
   }): Promise<Deliverable> {
     await this.ensureLoaded();
 
-    const scheduleDesc = params.scheduleDescription || this.describeSchedule(params.schedule, params.cronExpr);
+    const scheduleDesc =
+      params.scheduleDescription || this.describeSchedule(params.schedule, params.cronExpr);
 
     const deliverable: Deliverable = {
       id: `del_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -151,14 +219,31 @@ class ScheduledDeliverablesService {
   /**
    * Update a deliverable.
    */
-  async update(id: string, update: Partial<Pick<Deliverable, 'name' | 'description' | 'schedule' | 'cronExpr' | 'scheduleDescription' | 'enabled' | 'agent' | 'outputPath' | 'tags'>>): Promise<Deliverable | null> {
+  async update(
+    id: string,
+    update: Partial<
+      Pick<
+        Deliverable,
+        | 'name'
+        | 'description'
+        | 'schedule'
+        | 'cronExpr'
+        | 'scheduleDescription'
+        | 'enabled'
+        | 'agent'
+        | 'outputPath'
+        | 'tags'
+      >
+    >
+  ): Promise<Deliverable | null> {
     await this.ensureLoaded();
     const del = this.deliverables.find((d) => d.id === id);
     if (!del) return null;
 
     Object.assign(del, update);
     if (update.schedule || update.cronExpr) {
-      del.scheduleDescription = update.scheduleDescription || this.describeSchedule(del.schedule, del.cronExpr);
+      del.scheduleDescription =
+        update.scheduleDescription || this.describeSchedule(del.schedule, del.cronExpr);
     }
 
     await this.saveDeliverables();
@@ -187,8 +272,23 @@ class ScheduledDeliverablesService {
     summary?: string;
     durationMs?: number;
     error?: string;
+    sourceRunId?: string;
+    workflowId?: string;
+    snapshotMetadata?: Record<string, string | number | boolean | null>;
   }): Promise<DeliverableRun> {
     await this.ensureLoaded();
+    const runAt = new Date().toISOString();
+    const snapshot: DeliverableRunSnapshot = {
+      status: params.status,
+      capturedAt: runAt,
+      sourceRunId: params.sourceRunId,
+      workflowId: params.workflowId,
+      outputFile: params.outputFile,
+      summary: params.summary,
+      durationMs: params.durationMs,
+      error: params.error,
+      metadata: params.snapshotMetadata,
+    };
 
     const run: DeliverableRun = {
       id: `run_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -198,7 +298,10 @@ class ScheduledDeliverablesService {
       summary: params.summary,
       durationMs: params.durationMs,
       error: params.error,
-      runAt: new Date().toISOString(),
+      sourceRunId: params.sourceRunId,
+      workflowId: params.workflowId,
+      snapshot,
+      runAt,
     };
 
     this.runs.push(run);
@@ -219,7 +322,11 @@ class ScheduledDeliverablesService {
   /**
    * List all deliverables.
    */
-  async list(filters?: { enabled?: boolean; agent?: string; tag?: string }): Promise<Deliverable[]> {
+  async list(filters?: {
+    enabled?: boolean;
+    agent?: string;
+    tag?: string;
+  }): Promise<Deliverable[]> {
     await this.ensureLoaded();
 
     let results = [...this.deliverables];
@@ -239,7 +346,9 @@ class ScheduledDeliverablesService {
   /**
    * Get a specific deliverable with its recent runs.
    */
-  async get(id: string): Promise<{ deliverable: Deliverable; recentRuns: DeliverableRun[] } | null> {
+  async get(
+    id: string
+  ): Promise<{ deliverable: Deliverable; recentRuns: DeliverableRun[] } | null> {
     await this.ensureLoaded();
     const deliverable = this.deliverables.find((d) => d.id === id);
     if (!deliverable) return null;
@@ -263,15 +372,26 @@ class ScheduledDeliverablesService {
       .slice(0, limit);
   }
 
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
+  }
+
   // ─── Private ─────────────────────────────────────────────────
 
   private describeSchedule(schedule: DeliverableSchedule, cronExpr?: string): string {
     switch (schedule) {
-      case 'daily': return 'Every day';
-      case 'weekly': return 'Every week';
-      case 'biweekly': return 'Every 2 weeks';
-      case 'monthly': return 'Every month';
-      case 'custom': return cronExpr ? `Cron: ${cronExpr}` : 'Custom schedule';
+      case 'daily':
+        return 'Every day';
+      case 'weekly':
+        return 'Every week';
+      case 'biweekly':
+        return 'Every 2 weeks';
+      case 'monthly':
+        return 'Every month';
+      case 'custom':
+        return cronExpr ? `Cron: ${cronExpr}` : 'Custom schedule';
     }
   }
 
@@ -280,11 +400,21 @@ class ScheduledDeliverablesService {
     const next = new Date(lastRun);
 
     switch (del.schedule) {
-      case 'daily': next.setDate(next.getDate() + 1); break;
-      case 'weekly': next.setDate(next.getDate() + 7); break;
-      case 'biweekly': next.setDate(next.getDate() + 14); break;
-      case 'monthly': next.setMonth(next.getMonth() + 1); break;
-      default: next.setDate(next.getDate() + 1); break;
+      case 'daily':
+        next.setDate(next.getDate() + 1);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7);
+        break;
+      case 'biweekly':
+        next.setDate(next.getDate() + 14);
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + 1);
+        break;
+      default:
+        next.setDate(next.getDate() + 1);
+        break;
     }
 
     return next.toISOString();

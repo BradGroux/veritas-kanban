@@ -78,6 +78,7 @@ export {
 } from './sqlite/workflow-repositories.js';
 export { SqliteChatRepository } from './sqlite/chat-repository.js';
 export { SqliteNotificationRepository } from './sqlite/notification-repository.js';
+export { SqliteScheduledDeliverablesRepository } from './sqlite/scheduled-deliverables-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

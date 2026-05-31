@@ -23,8 +23,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const service = getScheduledDeliverablesService();
     const deliverables = await service.list({
-      enabled: req.query.enabled === 'true' ? true : req.query.enabled === 'false' ? false : undefined,
-      agent: String(req.query.agent || ""),
+      enabled:
+        req.query.enabled === 'true' ? true : req.query.enabled === 'false' ? false : undefined,
+      agent: String(req.query.agent || ''),
       tag: req.query.tag as string,
     });
     res.json(deliverables);
@@ -103,6 +104,11 @@ router.post(
       summary: z.string().optional(),
       durationMs: z.number().optional(),
       error: z.string().optional(),
+      sourceRunId: z.string().optional(),
+      workflowId: z.string().optional(),
+      snapshotMetadata: z
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+        .optional(),
     });
     const data = schema.parse(req.body);
     const service = getScheduledDeliverablesService();
