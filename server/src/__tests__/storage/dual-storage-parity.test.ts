@@ -318,13 +318,18 @@ async function collectChatSnapshot(mode: StorageMode, fixture: DualStorageFixtur
 async function collectWorkflowSnapshot(mode: StorageMode, fixture: DualStorageFixture) {
   const root = await createTempRoot(mode);
   const sqliteDatabase = createOptionalSqlite(mode, root, 'workflow.db');
+  const workflowsDir = path.join(root, '.veritas-kanban', 'workflows');
+  const runsDir = path.join(root, '.veritas-kanban', 'workflow-runs');
+  await fs.mkdir(workflowsDir, { recursive: true });
+  await fs.mkdir(runsDir, { recursive: true });
+
   const workflowService = new WorkflowService({
-    workflowsDir: path.join(root, '.veritas-kanban', 'workflows'),
+    workflowsDir,
     storageType: mode,
     sqliteDatabase,
   });
   const runService = new WorkflowRunService({
-    runsDir: path.join(root, '.veritas-kanban', 'workflow-runs'),
+    runsDir,
     workflowService,
     storageType: mode,
     sqliteDatabase,
@@ -360,7 +365,7 @@ async function collectWorkflowSnapshot(mode: StorageMode, fixture: DualStorageFi
 
 async function waitForRun(service: WorkflowRunService, runId: string): Promise<WorkflowRun> {
   for (let attempt = 0; attempt < 50; attempt++) {
-    const run = await service.getRun(runId);
+    const run = await readRunWhenAvailable(service, runId);
     if (run && run.status !== 'running') {
       return run;
     }
@@ -368,6 +373,30 @@ async function waitForRun(service: WorkflowRunService, runId: string): Promise<W
   }
 
   throw new Error(`Workflow run ${runId} did not finish`);
+}
+
+async function readRunWhenAvailable(
+  service: WorkflowRunService,
+  runId: string
+): Promise<WorkflowRun | null> {
+  try {
+    return await service.getRun(runId);
+  } catch (error) {
+    if (error instanceof SyntaxError || isMissingFileError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'ENOENT'
+  );
 }
 
 function normalizeWorkflowRun(run: WorkflowRun) {
