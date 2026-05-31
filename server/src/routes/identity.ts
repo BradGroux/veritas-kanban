@@ -1,8 +1,17 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
+import {
+  authorizePermission,
+  type AuthenticatedRequest,
+  type AuthPermission,
+} from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error-handler.js';
+import {
+  getApiTokenService,
+  SCOPED_API_TOKEN_PERMISSIONS,
+  type ApiTokenService,
+} from '../services/api-token-service.js';
 import {
   getIdentityService,
   type IdentityActor,
@@ -28,9 +37,19 @@ const updateRoleSchema = z.object({
   role: roleSchema,
 });
 
-export function createIdentityRoutes(service?: IdentityService): RouterType {
+const createApiTokenSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  scopes: z.array(z.enum(SCOPED_API_TOKEN_PERMISSIONS)).min(1),
+  expiresAt: z.string().datetime().optional().nullable(),
+});
+
+export function createIdentityRoutes(
+  service?: IdentityService,
+  apiTokenService?: ApiTokenService
+): RouterType {
   const router: RouterType = Router();
   const serviceForRequest = () => service ?? getIdentityService();
+  const tokenServiceForRequest = () => apiTokenService ?? getApiTokenService();
 
   router.get(
     '/profile',
@@ -74,7 +93,7 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
 
   router.get(
     '/workspaces/:workspaceId/invitations',
-    authorize('admin'),
+    authorizePermission('admin:manage'),
     asyncHandler(async (req, res) => {
       res.json(
         serviceForRequest().listInvitations(
@@ -87,7 +106,7 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
 
   router.post(
     '/workspaces/:workspaceId/invitations',
-    authorize('admin'),
+    authorizePermission('admin:manage'),
     asyncHandler(async (req, res) => {
       const body = parseBody(createInvitationSchema, req.body);
       const result = await serviceForRequest().createInvitation(
@@ -114,7 +133,7 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
 
   router.post(
     '/invitations/:id/revoke',
-    authorize('admin'),
+    authorizePermission('admin:manage'),
     asyncHandler(async (req, res) => {
       const invitation = await serviceForRequest().revokeInvitation(
         String(req.params.id),
@@ -126,7 +145,7 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
 
   router.patch(
     '/workspaces/:workspaceId/members/:userId',
-    authorize('admin'),
+    authorizePermission('admin:manage'),
     asyncHandler(async (req, res) => {
       const body = parseBody(updateRoleSchema, req.body);
       const membership = await serviceForRequest().updateMemberRole(
@@ -141,7 +160,7 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
 
   router.delete(
     '/workspaces/:workspaceId/members/:userId',
-    authorize('admin'),
+    authorizePermission('admin:manage'),
     asyncHandler(async (req, res) => {
       const membership = await serviceForRequest().removeMember(
         String(req.params.workspaceId),
@@ -152,15 +171,74 @@ export function createIdentityRoutes(service?: IdentityService): RouterType {
     })
   );
 
+  router.get(
+    '/workspaces/:workspaceId/api-tokens',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        tokenServiceForRequest().listTokens(
+          String(req.params.workspaceId),
+          actorFromRequest(req as AuthenticatedRequest)
+        )
+      );
+    })
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/api-tokens',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const body = parseBody(createApiTokenSchema, req.body);
+      const result = await tokenServiceForRequest().createToken(
+        {
+          workspaceId: String(req.params.workspaceId),
+          name: body.name,
+          scopes: body.scopes as AuthPermission[],
+          expiresAt: body.expiresAt,
+        },
+        actorFromRequest(req as AuthenticatedRequest)
+      );
+      res.status(201).json(result);
+    })
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/api-tokens/:tokenId/revoke',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const token = await tokenServiceForRequest().revokeToken(
+        String(req.params.tokenId),
+        actorFromRequest(req as AuthenticatedRequest),
+        String(req.params.workspaceId)
+      );
+      res.json(token);
+    })
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/api-tokens/:tokenId/rotate',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const result = await tokenServiceForRequest().rotateToken(
+        String(req.params.tokenId),
+        actorFromRequest(req as AuthenticatedRequest),
+        String(req.params.workspaceId)
+      );
+      res.status(201).json(result);
+    })
+  );
+
   return router;
 }
 
 function actorFromRequest(req: AuthenticatedRequest): IdentityActor {
   const role = req.auth?.role;
+  const userId = req.auth?.userId ?? 'local-user';
   return {
-    userId: 'local-user',
+    userId,
     role: role === 'agent' ? 'agent' : role === 'read-only' ? 'read-only' : 'owner',
-    displayName: req.auth?.keyName ?? 'local-user',
+    displayName: req.auth?.tokenName ?? req.auth?.keyName ?? userId,
+    permissions: req.auth?.permissions,
   };
 }
 

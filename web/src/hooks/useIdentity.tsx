@@ -15,6 +15,7 @@ import {
 } from '@veritas-kanban/shared';
 import {
   identityApi,
+  type CreateApiTokenInput,
   type CreateInvitationInput,
   type IdentityProfile,
   type WorkspaceIdentity,
@@ -24,7 +25,7 @@ import {
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'veritas-kanban.active-workspace-id';
 
-const ALL_PERMISSIONS: readonly ClientAuthPermission[] = [
+export const ALL_PERMISSIONS: readonly ClientAuthPermission[] = [
   '*',
   'workspace:read',
   'task:read',
@@ -48,6 +49,10 @@ const ALL_PERMISSIONS: readonly ClientAuthPermission[] = [
   'backup:write',
   'admin:manage',
 ];
+
+export const SCOPED_API_TOKEN_PERMISSIONS = ALL_PERMISSIONS.filter(
+  (permission) => permission !== '*'
+);
 
 const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, readonly ClientAuthPermission[]> = {
   owner: ALL_PERMISSIONS,
@@ -271,6 +276,17 @@ export function useWorkspaceInvitations(
   });
 }
 
+export function useWorkspaceApiTokens(
+  workspaceId: string | null | undefined,
+  canManageApiTokens: boolean
+) {
+  return useQuery({
+    queryKey: ['identity', 'workspaces', workspaceId, 'api-tokens'],
+    queryFn: () => identityApi.listApiTokens(requireWorkspaceId(workspaceId)),
+    enabled: !!workspaceId && canManageApiTokens,
+  });
+}
+
 export function useCreateWorkspaceInvitation(workspaceId: string | null | undefined) {
   const queryClient = useQueryClient();
 
@@ -280,6 +296,48 @@ export function useCreateWorkspaceInvitation(workspaceId: string | null | undefi
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['identity', 'workspaces', workspaceId, 'invitations'],
+      });
+    },
+  });
+}
+
+export function useCreateWorkspaceApiToken(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateApiTokenInput) =>
+      identityApi.createApiToken(requireWorkspaceId(workspaceId), input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'api-tokens'],
+      });
+    },
+  });
+}
+
+export function useRevokeWorkspaceApiToken(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tokenId: string) =>
+      identityApi.revokeApiToken(requireWorkspaceId(workspaceId), tokenId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'api-tokens'],
+      });
+    },
+  });
+}
+
+export function useRotateWorkspaceApiToken(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tokenId: string) =>
+      identityApi.rotateApiToken(requireWorkspaceId(workspaceId), tokenId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'api-tokens'],
       });
     },
   });

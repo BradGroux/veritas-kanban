@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getSecurityConfig, getJwtSecret, getValidJwtSecrets } from '../config/security.js';
 import { createLogger } from '../lib/logger.js';
+import { validateScopedApiToken } from '../services/api-token-service.js';
 
 const log = createLogger('auth');
 
@@ -336,6 +337,27 @@ function validateApiKey(
   return { valid: false };
 }
 
+function validateDatabaseApiToken(
+  apiKey: string,
+  req: Request | IncomingMessage,
+  isLocalhost: boolean
+): AuthContext | null {
+  try {
+    const validation = validateScopedApiToken(apiKey, requestRemoteAddress(req));
+    return validation.valid && validation.auth ? { ...validation.auth, isLocalhost } : null;
+  } catch (error) {
+    log.warn({ err: error }, 'Scoped API token validation failed');
+    return null;
+  }
+}
+
+function requestRemoteAddress(req: Request | IncomingMessage): string | null {
+  if ('socket' in req && req.socket) {
+    return req.socket.remoteAddress ?? null;
+  }
+  return 'ip' in req ? ((req as Request).ip ?? null) : null;
+}
+
 // === JWT Verification ===
 
 /**
@@ -423,6 +445,12 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       });
       return next();
     }
+
+    const scopedAuth = validateDatabaseApiToken(apiKey, req, isLocalhost);
+    if (scopedAuth) {
+      req.auth = scopedAuth;
+      return next();
+    }
   }
 
   // 3. Localhost bypass (dev mode) — role is configurable (default: read-only)
@@ -463,6 +491,10 @@ export function authorize(...allowedRoles: AuthRole[]) {
 
     // Admin can do everything
     if (req.auth.role === 'admin') {
+      return next();
+    }
+
+    if (allowedRoles.includes('admin') && hasPermission(req.auth, 'admin:manage')) {
       return next();
     }
 
@@ -685,6 +717,14 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
           isLocalhost,
           authMethod: 'api-key',
         }),
+      };
+    }
+
+    const scopedAuth = validateDatabaseApiToken(apiKey, req, isLocalhost);
+    if (scopedAuth) {
+      return {
+        authenticated: true,
+        ...scopedAuth,
       };
     }
   }

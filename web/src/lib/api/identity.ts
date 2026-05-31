@@ -84,10 +84,29 @@ export interface CreateInvitationResult {
 }
 
 export interface ApiTokenSummary {
+  id: string;
+  workspaceId: string;
   name: string;
-  authMethod: string;
-  tokenName?: string;
-  permissions: ClientAuthPermission[];
+  tokenPrefix: string;
+  scopes: ClientAuthPermission[];
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+}
+
+export interface CreateApiTokenInput {
+  name: string;
+  scopes: ClientAuthPermission[];
+  expiresAt?: string | null;
+}
+
+export interface CreateApiTokenResult {
+  token: ApiTokenSummary;
+  secret: string;
 }
 
 export const identityApi = {
@@ -130,6 +149,41 @@ export const identityApi = {
   revokeInvitation: (invitationId: string) =>
     apiFetch<WorkspaceInvitation>(
       `/api/identity/invitations/${encodeURIComponent(invitationId)}/revoke`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  listApiTokens: (workspaceId: string) =>
+    apiFetch<ApiTokenSummary[]>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/api-tokens`
+    ),
+
+  createApiToken: (workspaceId: string, input: CreateApiTokenInput) =>
+    apiFetch<CreateApiTokenResult>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/api-tokens`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    ),
+
+  revokeApiToken: (workspaceId: string, tokenId: string) =>
+    apiFetch<ApiTokenSummary>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/api-tokens/${encodeURIComponent(
+        tokenId
+      )}/revoke`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  rotateApiToken: (workspaceId: string, tokenId: string) =>
+    apiFetch<CreateApiTokenResult>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/api-tokens/${encodeURIComponent(
+        tokenId
+      )}/rotate`,
       {
         method: 'POST',
       }

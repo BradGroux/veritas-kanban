@@ -949,6 +949,36 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON workspace_invitations(token_hash);
     `,
   },
+  {
+    version: 15,
+    name: '0015_scoped_api_tokens',
+    up: `
+      CREATE TABLE api_tokens (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        token_prefix TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        scopes_json TEXT NOT NULL,
+        created_by TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        revoked_at TEXT,
+        revoked_by TEXT REFERENCES users(id),
+        last_used_at TEXT,
+        last_used_ip TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_workspace_created
+        ON api_tokens(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_hash
+        ON api_tokens(token_hash);
+
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_active
+        ON api_tokens(workspace_id, revoked_at, expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

@@ -114,6 +114,24 @@ describe('MultiUserTab', () => {
             },
           ]);
         }
+        if (url.endsWith('/api/identity/workspaces/local/api-tokens')) {
+          return jsonResponse([
+            {
+              id: 'token_cli',
+              workspaceId: 'local',
+              name: 'CLI worker',
+              tokenPrefix: 'vk_pat_abcd1234',
+              scopes: ['workspace:read', 'task:read'],
+              createdBy: 'local-user',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              expiresAt: null,
+              revokedAt: null,
+              revokedBy: null,
+              lastUsedAt: null,
+              lastUsedIp: null,
+            },
+          ]);
+        }
         return jsonResponse({ error: `Unexpected ${url}` }, 404);
       })
     );
@@ -123,7 +141,9 @@ describe('MultiUserTab', () => {
     expect(await screen.findByText('Local Workspace')).toBeDefined();
     expect(await screen.findByText('Local User')).toBeDefined();
     expect(await screen.findByText('expired@example.com')).toBeDefined();
+    expect(await screen.findByText('CLI worker')).toBeDefined();
     expect(screen.getByText('Expired')).toBeDefined();
+    expect(screen.getByText('Active')).toBeDefined();
     expect(screen.getAllByText('session').length).toBeGreaterThan(0);
   });
 

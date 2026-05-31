@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { ForbiddenError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import type { AuthPermission } from '../middleware/auth.js';
 import { auditLog, type AuditEvent } from './audit-service.js';
 import { ActivityService } from './activity-service.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
@@ -20,6 +21,7 @@ export interface IdentityActor {
   userId: string;
   role: WorkspaceRole;
   displayName?: string;
+  permissions?: AuthPermission[];
 }
 
 export interface CreateInvitationResult {

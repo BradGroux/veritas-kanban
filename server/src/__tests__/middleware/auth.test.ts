@@ -35,6 +35,11 @@ import {
 } from '../../middleware/auth.js';
 import { getSecurityConfig, getValidJwtSecrets } from '../../config/security.js';
 import jwt from 'jsonwebtoken';
+import { ApiTokenService, resetApiTokenServiceForTests } from '../../services/api-token-service.js';
+import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
+import { SqliteApiTokenRepository } from '../../storage/sqlite/api-token-repository.js';
+import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
+import type { IdentityActor } from '../../services/identity-service.js';
 
 // Helper to create a mock Express request
 function mockRequest(overrides: Partial<Request> = {}): Request {
@@ -73,6 +78,7 @@ describe('Auth Middleware', () => {
     delete process.env.VERITAS_AUTH_LOCALHOST_ROLE;
     delete process.env.VERITAS_ADMIN_KEY;
     delete process.env.VERITAS_API_KEYS;
+    delete process.env.VERITAS_SQLITE_PATH;
     process.env.NODE_ENV = 'development';
 
     // Reset mocks
@@ -83,6 +89,7 @@ describe('Auth Middleware', () => {
   });
 
   afterEach(() => {
+    resetApiTokenServiceForTests();
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
   });
@@ -222,6 +229,56 @@ describe('Auth Middleware', () => {
       expect(req.auth?.workspaceId).toBe('local');
       expect(req.auth?.permissions).toContain('task:write');
       expect(req.auth?.permissions).not.toContain('admin:manage');
+    });
+
+    it('should authenticate via SQLite scoped API token', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      const identityRepository = new SqliteIdentityRepository(fixture.database);
+      const tokenRepository = new SqliteApiTokenRepository(fixture.database);
+      const service = new ApiTokenService({
+        identityRepository,
+        tokenRepository,
+        audit: vi.fn().mockResolvedValue(undefined),
+        activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+      });
+      const owner = identityRepository.ensureLocalOwner({ displayName: 'Owner' });
+      const ownerActor = {
+        userId: owner.user.id,
+        role: 'owner',
+        displayName: owner.user.displayName,
+        permissions: ['*'],
+      } satisfies IdentityActor;
+      const scoped = await service.createToken(
+        {
+          workspaceId: 'local',
+          name: 'Scoped worker',
+          scopes: ['workspace:read', 'task:read'],
+        },
+        ownerActor
+      );
+      resetApiTokenServiceForTests();
+
+      try {
+        const req = mockRequest({
+          headers: { authorization: `Bearer ${scoped.secret}` },
+          socket: { remoteAddress: '192.168.1.100' } as any,
+          ip: '192.168.1.100',
+        }) as AuthenticatedRequest;
+        const res = mockResponse();
+        const next = mockNext();
+
+        authenticate(req, res, next);
+        expect(next).toHaveBeenCalled();
+        expect(req.auth?.role).toBe('read-only');
+        expect(req.auth?.keyName).toBe('Scoped worker');
+        expect(req.auth?.workspaceId).toBe('local');
+        expect(req.auth?.permissions).toEqual(['workspace:read', 'task:read']);
+      } finally {
+        fixture.cleanup();
+      }
     });
 
     it('should allow localhost bypass with read-only role by default', () => {
@@ -688,6 +745,53 @@ describe('Auth Middleware', () => {
       expect(result.workspaceId).toBe('local');
       expect(result.permissions).toContain('task:write');
       expect(result.permissions).not.toContain('admin:manage');
+    });
+
+    it('should authenticate WebSocket scoped API tokens from the query parameter', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      const identityRepository = new SqliteIdentityRepository(fixture.database);
+      const tokenRepository = new SqliteApiTokenRepository(fixture.database);
+      const service = new ApiTokenService({
+        identityRepository,
+        tokenRepository,
+        audit: vi.fn().mockResolvedValue(undefined),
+        activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+      });
+      const owner = identityRepository.ensureLocalOwner({ displayName: 'Owner' });
+      const scoped = await service.createToken(
+        {
+          workspaceId: 'local',
+          name: 'WebSocket reader',
+          scopes: ['workspace:read', 'task:read'],
+        },
+        {
+          userId: owner.user.id,
+          role: 'owner',
+          displayName: owner.user.displayName,
+          permissions: ['*'],
+        }
+      );
+      resetApiTokenServiceForTests();
+
+      try {
+        const req = {
+          headers: { host: 'localhost:3001' },
+          url: `/ws?api_key=${encodeURIComponent(scoped.secret)}`,
+          socket: { remoteAddress: '192.168.1.100' },
+        } as unknown as IncomingMessage;
+
+        const result = authenticateWebSocket(req);
+        expect(result.authenticated).toBe(true);
+        expect(result.role).toBe('read-only');
+        expect(result.tokenName).toBe('WebSocket reader');
+        expect(result.workspaceId).toBe('local');
+        expect(result.permissions).toEqual(['workspace:read', 'task:read']);
+      } finally {
+        fixture.cleanup();
+      }
     });
 
     it('should authenticate via JWT cookie', () => {
