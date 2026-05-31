@@ -9,12 +9,16 @@ import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { withFileLock } from './file-lock.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteNotificationRepository } from '../storage/sqlite/notification-repository.js';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
 
 const log = createLogger('notifications');
 
 // ─── Types ───────────────────────────────────────────────────────
+
+export type NotificationSourceMetadata = Record<string, string | number | boolean | null>;
 
 export interface Notification {
   id: string;
@@ -27,7 +31,19 @@ export interface Notification {
   /** The comment/content containing the mention */
   content: string;
   /** Type of notification */
-  type: 'mention' | 'assignment' | 'status_change' | 'reply';
+  type: string;
+  /** Optional display title for direct notifications */
+  title?: string;
+  /** Optional human-readable task title */
+  taskTitle?: string;
+  /** Optional project or workspace label */
+  project?: string;
+  /** Optional link target for UI/API consumers */
+  targetUrl?: string;
+  /** Optional caller-provided dedupe key */
+  dedupeKey?: string;
+  /** Audit-safe source metadata, not raw event payloads */
+  source?: NotificationSourceMetadata;
   /** Has the notification been delivered/read? */
   delivered: boolean;
   /** ISO timestamp when delivered */
@@ -51,6 +67,15 @@ export interface NotificationStats {
   byType: Record<string, number>;
 }
 
+export interface NotificationServiceOptions {
+  dataDir?: string;
+  notificationsFile?: string;
+  subscriptionsFile?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
+}
+
 // ─── Mention Parser ──────────────────────────────────────────────
 
 /** Extract @mentions from text. Supports @agent-name and @all */
@@ -72,25 +97,46 @@ export class NotificationService {
   private notifications: Notification[] = [];
   private subscriptions: ThreadSubscription[] = [];
   private loaded = false;
+  private readonly notificationsFile: string;
+  private readonly subscriptionsFile: string;
+  private readonly repository: SqliteNotificationRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
-  private get notificationsPath(): string {
-    return path.join(DATA_DIR, 'notifications.json');
-  }
+  constructor(options: NotificationServiceOptions = {}) {
+    const dataDir = options.dataDir ?? DATA_DIR;
+    this.notificationsFile = options.notificationsFile ?? path.join(dataDir, 'notifications.json');
+    this.subscriptionsFile =
+      options.subscriptionsFile ?? path.join(dataDir, 'thread-subscriptions.json');
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
-  private get subscriptionsPath(): string {
-    return path.join(DATA_DIR, 'thread-subscriptions.json');
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteNotificationRepository(this.sqliteDatabase);
+    }
   }
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
+    if (this.repository) {
+      this.notifications = this.repository.loadNotifications();
+      this.subscriptions = this.repository.loadSubscriptions();
+      this.loaded = true;
+      return;
+    }
+
     try {
-      const nData = await fs.readFile(this.notificationsPath, 'utf-8');
+      const nData = await fs.readFile(this.notificationsFile, 'utf-8');
       this.notifications = JSON.parse(nData);
     } catch {
       this.notifications = [];
     }
     try {
-      const sData = await fs.readFile(this.subscriptionsPath, 'utf-8');
+      const sData = await fs.readFile(this.subscriptionsFile, 'utf-8');
       this.subscriptions = JSON.parse(sData);
     } catch {
       this.subscriptions = [];
@@ -99,14 +145,24 @@ export class NotificationService {
   }
 
   private async saveNotifications(): Promise<void> {
-    await withFileLock(this.notificationsPath, async () => {
-      await fs.writeFile(this.notificationsPath, JSON.stringify(this.notifications, null, 2));
+    if (this.repository) {
+      this.repository.saveNotifications(this.notifications);
+      return;
+    }
+
+    await withFileLock(this.notificationsFile, async () => {
+      await fs.writeFile(this.notificationsFile, JSON.stringify(this.notifications, null, 2));
     });
   }
 
   private async saveSubscriptions(): Promise<void> {
-    await withFileLock(this.subscriptionsPath, async () => {
-      await fs.writeFile(this.subscriptionsPath, JSON.stringify(this.subscriptions, null, 2));
+    if (this.repository) {
+      this.repository.saveSubscriptions(this.subscriptions);
+      return;
+    }
+
+    await withFileLock(this.subscriptionsFile, async () => {
+      await fs.writeFile(this.subscriptionsFile, JSON.stringify(this.subscriptions, null, 2));
     });
   }
 
@@ -244,10 +300,12 @@ export class NotificationService {
    * Used by the CLI notification commands, which predate the agent-scoped
    * route shape.
    */
-  async getAllNotifications(filters: {
-    undelivered?: boolean;
-    limit?: number;
-  } = {}): Promise<Notification[]> {
+  async getAllNotifications(
+    filters: {
+      undelivered?: boolean;
+      limit?: number;
+    } = {}
+  ): Promise<Notification[]> {
     await this.ensureLoaded();
 
     let results = [...this.notifications];
@@ -331,6 +389,9 @@ export class NotificationService {
     taskId?: string;
     taskTitle?: string;
     project?: string;
+    targetUrl?: string;
+    dedupeKey?: string;
+    source?: NotificationSourceMetadata;
   }): Promise<Notification> {
     await this.ensureLoaded();
 
@@ -340,7 +401,13 @@ export class NotificationService {
       targetAgent: 'system',
       fromAgent: 'system',
       content: params.message,
-      type: 'mention',
+      type: params.type || 'system',
+      title: params.title,
+      taskTitle: params.taskTitle,
+      project: params.project,
+      targetUrl: params.targetUrl,
+      dedupeKey: params.dedupeKey,
+      source: params.source,
       delivered: false,
       createdAt: new Date().toISOString(),
     };
@@ -419,6 +486,12 @@ export class NotificationService {
   async getSubscriptions(taskId: string): Promise<ThreadSubscription[]> {
     await this.ensureLoaded();
     return this.subscriptions.filter((s) => s.taskId === taskId);
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
+    }
   }
 }
 

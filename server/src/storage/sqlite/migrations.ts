@@ -591,6 +591,63 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON squad_messages(event, timestamp DESC);
     `,
   },
+  {
+    version: 10,
+    name: '0010_notification_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        target_agent TEXT NOT NULL,
+        from_agent TEXT NOT NULL,
+        type TEXT NOT NULL,
+        delivered INTEGER NOT NULL DEFAULT 0,
+        delivered_at TEXT,
+        content TEXT NOT NULL,
+        title TEXT,
+        task_title TEXT,
+        project TEXT,
+        target_url TEXT,
+        dedupe_key TEXT,
+        source_json TEXT,
+        notification_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_agent_delivered_created
+        ON notifications(target_agent, delivered, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_task_created
+        ON notifications(task_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_type_created
+        ON notifications(type, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_dedupe_key
+        ON notifications(dedupe_key)
+        WHERE dedupe_key IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_project_created
+        ON notifications(project, created_at DESC)
+        WHERE project IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS thread_subscriptions (
+        task_id TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        reason TEXT NOT NULL,
+        subscription_json TEXT NOT NULL,
+        subscribed_at TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, task_id, agent)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_thread_subscriptions_task
+        ON thread_subscriptions(task_id, agent);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

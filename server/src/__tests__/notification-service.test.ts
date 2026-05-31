@@ -292,6 +292,8 @@ describe('NotificationService', () => {
       expect(notif.targetAgent).toBe('system');
       expect(notif.fromAgent).toBe('system');
       expect(notif.content).toBe('The build failed on task ABC-123');
+      expect(notif.type).toBe('error');
+      expect(notif.title).toBe('Build Failed');
       expect(notif.delivered).toBe(false);
     });
   });

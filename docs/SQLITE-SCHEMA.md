@@ -961,6 +961,18 @@ Markdown format for existing local projects.
 | `chat_messages`  | Individual chat messages with session, task, role, agent, model, and timestamp. |
 | `squad_messages` | Squad channel messages with agent, system/event flags, tags, cards, and timing. |
 
+## Notification Repository Implementation
+
+Notification inbox records and thread subscriptions move into SQLite when
+`VERITAS_STORAGE=sqlite`. The notification service keeps the same mention,
+assignment, delivery, and subscription behavior while replacing
+`notifications.json` and `thread-subscriptions.json` in SQLite mode.
+
+| Runtime table          | Stored data                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `notifications`        | Complete notification JSON plus task, target, source, type, read state, target URL, and dedupe key. |
+| `thread_subscriptions` | Complete subscription JSON keyed by workspace, task, and subscribed agent.                          |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

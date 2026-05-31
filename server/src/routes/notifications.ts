@@ -50,6 +50,11 @@ router.post(
       taskId: z.string().optional(),
       taskTitle: z.string().optional(),
       project: z.string().optional(),
+      targetUrl: z.string().optional(),
+      dedupeKey: z.string().optional(),
+      source: z
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+        .optional(),
     });
 
     const data = schema.parse(req.body);
