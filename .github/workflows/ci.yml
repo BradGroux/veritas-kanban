@@ -40,6 +40,9 @@ jobs:
       - name: Enforce lint warning budget
         run: pnpm lint:budget
 
+      - name: Check permission coverage
+        run: node scripts/check-permission-coverage.mjs
+
       - name: Type check all packages
         run: pnpm typecheck
 

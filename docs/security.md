@@ -91,6 +91,13 @@ context for the v5 RBAC migration:
 New v5 endpoints should prefer explicit permission guards over broad role
 checks. Legacy role guards remain supported while route coverage is migrated.
 
+The v5 authority surface is tracked in
+[`docs/security/permission-coverage.json`](security/permission-coverage.json).
+Run `node scripts/check-permission-coverage.mjs` to fail when a REST route
+prefix, WebSocket event, CLI command, MCP tool, workflow step/action type,
+command palette action, or tracked background job is added without a permission
+classification.
+
 ## Configuration Reference
 
 ### Environment Variables
