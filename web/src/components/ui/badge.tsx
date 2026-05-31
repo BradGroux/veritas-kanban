@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Badge as MantineBadge, type BadgeProps as MantineBadgeProps } from '@mantine/core';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 
@@ -24,20 +25,42 @@ const badgeVariants = cva(
   }
 );
 
+const mantineBadgeVariant = {
+  default: 'filled',
+  secondary: 'light',
+  destructive: 'light',
+  outline: 'outline',
+  ghost: 'transparent',
+  link: 'transparent',
+} as const satisfies Record<
+  NonNullable<VariantProps<typeof badgeVariants>['variant']>,
+  MantineBadgeProps['variant']
+>;
+
 function Badge({
   className,
   variant = 'default',
   asChild = false,
   ...props
 }: React.ComponentProps<'span'> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : 'span';
+  const resolvedVariant = variant ?? 'default';
+  const classes = cn(badgeVariants({ variant: resolvedVariant }), className);
+  const color = resolvedVariant === 'destructive' ? 'red' : undefined;
+
+  if (asChild) {
+    return (
+      <Slot.Root data-slot="badge" data-variant={resolvedVariant} className={classes} {...props} />
+    );
+  }
 
   return (
-    <Comp
+    <MantineBadge
       data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
+      data-variant={resolvedVariant}
+      variant={mantineBadgeVariant[resolvedVariant]}
+      color={color}
+      className={classes}
+      {...(props as Omit<MantineBadgeProps, 'ref'>)}
     />
   );
 }

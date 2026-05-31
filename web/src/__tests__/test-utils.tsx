@@ -85,6 +85,17 @@ function ensureMantineBrowserApis() {
     });
   }
 
+  if (typeof window.ResizeObserver !== 'function') {
+    Object.defineProperty(window, 'ResizeObserver', {
+      configurable: true,
+      value: class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    });
+  }
+
   try {
     window.localStorage.getItem('__veritas_test_probe__');
   } catch {

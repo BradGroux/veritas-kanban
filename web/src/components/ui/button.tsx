@@ -1,4 +1,10 @@
 import * as React from 'react';
+import {
+  ActionIcon as MantineActionIcon,
+  Button as MantineButton,
+  type ActionIconProps as MantineActionIconProps,
+  type ButtonProps as MantineButtonProps,
+} from '@mantine/core';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 
@@ -41,6 +47,36 @@ const buttonVariants = cva(
   }
 );
 
+const mantineButtonVariant = {
+  default: 'filled',
+  outline: 'outline',
+  secondary: 'light',
+  ghost: 'subtle',
+  destructive: 'light',
+  link: 'transparent',
+} as const satisfies Record<
+  NonNullable<VariantProps<typeof buttonVariants>['variant']>,
+  MantineButtonProps['variant']
+>;
+
+const mantineButtonSize = {
+  default: 'sm',
+  xs: 'xs',
+  sm: 'xs',
+  lg: 'md',
+  icon: 'sm',
+  'icon-xs': 'xs',
+  'icon-sm': 'xs',
+  'icon-lg': 'md',
+} as const satisfies Record<NonNullable<VariantProps<typeof buttonVariants>['size']>, string>;
+
+const mantineActionIconSize = {
+  icon: 32,
+  'icon-xs': 24,
+  'icon-sm': 28,
+  'icon-lg': 36,
+} as const;
+
 function Button({
   className,
   variant = 'default',
@@ -51,15 +87,50 @@ function Button({
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : 'button';
+  const resolvedVariant = variant ?? 'default';
+  const resolvedSize = size ?? 'default';
+  const classes = cn(buttonVariants({ variant: resolvedVariant, size: resolvedSize, className }));
+  const color = resolvedVariant === 'destructive' ? 'red' : undefined;
+
+  if (asChild) {
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-variant={resolvedVariant}
+        data-size={resolvedSize}
+        className={classes}
+        {...props}
+      />
+    );
+  }
+
+  if (resolvedSize.startsWith('icon')) {
+    const actionIconProps = props as MantineActionIconProps & React.ComponentProps<'button'>;
+
+    return (
+      <MantineActionIcon
+        data-slot="button"
+        data-variant={resolvedVariant}
+        data-size={resolvedSize}
+        variant={mantineButtonVariant[resolvedVariant]}
+        color={color}
+        size={mantineActionIconSize[resolvedSize as keyof typeof mantineActionIconSize]}
+        className={classes}
+        {...actionIconProps}
+      />
+    );
+  }
 
   return (
-    <Comp
+    <MantineButton
       data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
+      data-variant={resolvedVariant}
+      data-size={resolvedSize}
+      variant={mantineButtonVariant[resolvedVariant]}
+      color={color}
+      size={mantineButtonSize[resolvedSize]}
+      className={classes}
+      {...(props as MantineButtonProps & React.ComponentProps<'button'>)}
     />
   );
 }

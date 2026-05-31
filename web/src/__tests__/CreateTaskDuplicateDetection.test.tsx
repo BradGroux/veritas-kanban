@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { api } from '@/lib/api';
+import { renderWithProviders } from './test-utils';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -85,7 +86,7 @@ describe('CreateTaskDialog duplicate detection', () => {
     });
 
     const onOpenChange = vi.fn();
-    render(<CreateTaskDialog open onOpenChange={onOpenChange} />);
+    renderWithProviders(<CreateTaskDialog open onOpenChange={onOpenChange} />);
 
     fireEvent.change(screen.getByLabelText('Title'), {
       target: { value: 'Search duplicate' },
@@ -123,7 +124,7 @@ describe('CreateTaskDialog duplicate detection', () => {
     });
 
     const onOpenChange = vi.fn();
-    render(<CreateTaskDialog open onOpenChange={onOpenChange} />);
+    renderWithProviders(<CreateTaskDialog open onOpenChange={onOpenChange} />);
 
     fireEvent.change(screen.getByLabelText('Title'), {
       target: { value: 'Search duplicate' },

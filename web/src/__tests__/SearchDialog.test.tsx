@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SearchDialog, extractTaskId } from '@/components/search';
 import { api } from '@/lib/api';
+import { renderWithProviders } from './test-utils';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -49,7 +50,7 @@ describe('SearchDialog', () => {
       ],
     });
 
-    render(<SearchDialog open onOpenChange={vi.fn()} />);
+    renderWithProviders(<SearchDialog open onOpenChange={vi.fn()} />);
 
     await userEvent.type(screen.getByPlaceholderText(/search task titles/i), 'qmd');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
@@ -86,7 +87,7 @@ describe('SearchDialog', () => {
       ],
     });
 
-    render(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
+    renderWithProviders(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
 
     await userEvent.type(screen.getByPlaceholderText(/search task titles/i), 'task');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));

@@ -4,10 +4,10 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, cleanup } from '@testing-library/react';
+import { QueryClient } from '@tanstack/react-query';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
-import { createMockTask } from './test-utils';
+import { createMockTask, renderWithProviders } from './test-utils';
 import type { Task } from '@veritas-kanban/shared';
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -168,11 +168,7 @@ function renderBoard() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <KanbanBoard />
-    </QueryClientProvider>
-  );
+  return renderWithProviders(<KanbanBoard />, { queryClient });
 }
 
 afterEach(() => {
