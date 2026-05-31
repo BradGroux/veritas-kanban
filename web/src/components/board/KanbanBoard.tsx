@@ -24,6 +24,7 @@ import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 import { useView } from '@/contexts/ViewContext';
+import { useIdentity } from '@/hooks/useIdentity';
 
 // Lazy-load Dashboard to split recharts + d3 (~800KB) out of main bundle
 const Dashboard = lazy(() =>
@@ -49,6 +50,8 @@ export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const { settings: featureSettings } = useFeatureSettings();
   const { announce } = useLiveAnnouncer();
+  const { hasPermission } = useIdentity();
+  const canWriteTasks = hasPermission('task:write');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailPanelMounted, setDetailPanelMounted] = useState(false);
@@ -167,10 +170,14 @@ export function KanbanBoard() {
     (taskId: string, status: TaskStatus) => {
       const task = filteredTasks.find((t) => t.id === taskId);
       const columnName = COLUMNS.find((c) => c.id === status)?.title || status;
+      if (!canWriteTasks) {
+        announce(`Task ${task?.title || taskId} cannot be moved with the current permissions`);
+        return;
+      }
       updateTask.mutate({ id: taskId, input: { status } });
       announce(`Task ${task?.title || taskId} moved to ${columnName}`);
     },
-    [updateTask, filteredTasks, announce]
+    [announce, canWriteTasks, filteredTasks, updateTask]
   );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
@@ -192,9 +199,11 @@ export function KanbanBoard() {
     tasksByStatus,
     columns: COLUMNS,
     onStatusChange: (taskId, status) => {
+      if (!canWriteTasks) return;
       updateTask.mutate({ id: taskId, input: { status } });
     },
     onReorder: (taskIds) => {
+      if (!canWriteTasks) return;
       reorderTasks.mutate(taskIds);
     },
   });
@@ -236,6 +245,8 @@ export function KanbanBoard() {
             variant="ghost"
             size="sm"
             onClick={toggleSelecting}
+            disabled={!canWriteTasks}
+            title={canWriteTasks ? 'Select tasks' : 'Task write permission required'}
             className="text-muted-foreground shrink-0"
           >
             <CheckSquare className="h-4 w-4 mr-1" />
@@ -254,7 +265,7 @@ export function KanbanBoard() {
             className="col-span-4"
             aria-label={`Kanban board, ${filteredTasks.length} tasks`}
           >
-            {featureSettings.board.enableDragAndDrop ? (
+            {featureSettings.board.enableDragAndDrop && canWriteTasks ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={collisionDetection}
@@ -335,6 +346,7 @@ export function KanbanBoard() {
             task={currentSelectedTask}
             open={detailOpen}
             onOpenChange={handleDetailClose}
+            readOnly={!canWriteTasks}
           />
         </Suspense>
       )}

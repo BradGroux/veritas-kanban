@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback, lazy, Suspense, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -21,6 +27,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
+import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
 import {
   Settings2,
@@ -39,8 +46,10 @@ import {
   CheckCircle2,
   Boxes,
   BookOpen,
+  UserCog,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
+import type { ClientAuthPermission } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { SettingsErrorBoundary } from './shared';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -79,6 +88,9 @@ const LazySharedResourcesTab = lazy(() =>
 const LazyDocFreshnessTab = lazy(() =>
   import('./tabs/DocFreshnessTab').then((m) => ({ default: m.DocFreshnessTab }))
 );
+const LazyMultiUserTab = lazy(() =>
+  import('./tabs/MultiUserTab').then((m) => ({ default: m.MultiUserTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -110,28 +122,36 @@ type TabId =
   | 'enforcement'
   | 'shared-resources'
   | 'doc-freshness'
+  | 'multi-user'
   | 'manage';
 
 interface TabDef {
   id: TabId;
   label: string;
   icon: React.ElementType;
+  requiredPermission?: ClientAuthPermission;
 }
 
 const TABS: TabDef[] = [
   { id: 'general', label: 'General', icon: Settings2 },
   { id: 'board', label: 'Board', icon: Layout },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
-  { id: 'agents', label: 'Agents', icon: Cpu },
-  { id: 'data', label: 'Data', icon: Database },
+  { id: 'agents', label: 'Agents', icon: Cpu, requiredPermission: 'agent:read' },
+  { id: 'data', label: 'Data', icon: Database, requiredPermission: 'backup:read' },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'security', label: 'Security', icon: Shield },
-  { id: 'delegation', label: 'Delegation', icon: Plane },
-  { id: 'tool-policies', label: 'Tool Policies', icon: Lock },
-  { id: 'enforcement', label: 'Enforcement', icon: CheckCircle2 },
+  { id: 'security', label: 'Security', icon: Shield, requiredPermission: 'settings:read' },
+  { id: 'multi-user', label: 'Multi-user', icon: UserCog, requiredPermission: 'workspace:read' },
+  { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
+  { id: 'tool-policies', label: 'Tool Policies', icon: Lock, requiredPermission: 'policy:read' },
+  {
+    id: 'enforcement',
+    label: 'Enforcement',
+    icon: CheckCircle2,
+    requiredPermission: 'policy:read',
+  },
   { id: 'shared-resources', label: 'Shared Resources', icon: Boxes },
   { id: 'doc-freshness', label: 'Doc Freshness', icon: BookOpen },
-  { id: 'manage', label: 'Manage', icon: Archive },
+  { id: 'manage', label: 'Manage', icon: Archive, requiredPermission: 'backup:read' },
 ];
 
 // ============ Settings Dialog Props ============
@@ -146,13 +166,27 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const { hasPermission } = useIdentity();
+  const canWriteSettings = hasPermission('settings:write');
+  const canUseTab = useCallback(
+    (tab: TabDef) => !tab.requiredPermission || hasPermission(tab.requiredPermission),
+    [hasPermission]
+  );
 
   // Set active tab when defaultTab changes
   useEffect(() => {
-    if (defaultTab && TABS.some((t) => t.id === defaultTab)) {
+    const requestedTab = TABS.find((t) => t.id === defaultTab);
+    if (requestedTab && canUseTab(requestedTab)) {
       setActiveTab(defaultTab as TabId);
     }
-  }, [defaultTab]);
+  }, [canUseTab, defaultTab]);
+
+  useEffect(() => {
+    const currentTab = TABS.find((tab) => tab.id === activeTab);
+    if (currentTab && !canUseTab(currentTab)) {
+      setActiveTab(TABS.find(canUseTab)?.id ?? 'general');
+    }
+  }, [activeTab, canUseTab]);
   const { settings: currentSettings } = useFeatureSettings();
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
@@ -224,7 +258,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           duration: Infinity,
         });
       }
-      const validPatch: Record<string, any> = {};
+      const validPatch: Record<string, unknown> = {};
       for (const key of importedKeys) {
         if (validSections.includes(key)) {
           validPatch[key] = imported[key];
@@ -268,18 +302,19 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const currentIndex = TABS.findIndex((t) => t.id === activeTab);
+      const availableTabs = TABS.filter(canUseTab);
+      const currentIndex = availableTabs.findIndex((t) => t.id === activeTab);
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
-        const next = (currentIndex + 1) % TABS.length;
-        setActiveTab(TABS[next].id);
+        const next = (currentIndex + 1) % availableTabs.length;
+        setActiveTab(availableTabs[next].id);
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        const prev = (currentIndex - 1 + TABS.length) % TABS.length;
-        setActiveTab(TABS[prev].id);
+        const prev = (currentIndex - 1 + availableTabs.length) % availableTabs.length;
+        setActiveTab(availableTabs[prev].id);
       }
     },
-    [activeTab]
+    [activeTab, canUseTab]
   );
 
   const renderTab = () => {
@@ -320,6 +355,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             <LazySecurityTab />
           </SettingsErrorBoundary>
         )}
+        {activeTab === 'multi-user' && (
+          <SettingsErrorBoundary tabName="Multi-user">
+            <LazyMultiUserTab />
+          </SettingsErrorBoundary>
+        )}
         {activeTab === 'delegation' && (
           <SettingsErrorBoundary tabName="Delegation">
             <LazyDelegationTab />
@@ -357,6 +397,9 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] h-[85vh] p-0 overflow-hidden">
+        <DialogDescription className="sr-only">
+          Manage board, task, data, security, and workspace settings.
+        </DialogDescription>
         <ErrorBoundary level="section">
           <div className="flex h-full min-h-0">
             {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
@@ -382,11 +425,16 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                       aria-controls="settings-tab-content"
                       tabIndex={activeTab === tab.id ? 0 : -1}
                       onClick={() => setActiveTab(tab.id)}
+                      disabled={!canUseTab(tab)}
+                      title={
+                        canUseTab(tab) ? tab.label : `${tab.requiredPermission} permission required`
+                      }
                       className={cn(
                         'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-left',
                         activeTab === tab.id
                           ? 'bg-background shadow-sm font-medium'
-                          : 'text-muted-foreground hover:bg-background/50 hover:text-foreground'
+                          : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
+                        !canUseTab(tab) && 'cursor-not-allowed opacity-45 hover:bg-transparent'
                       )}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -416,6 +464,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 </button>
                 <button
                   onClick={() => settingsFileInputRef.current?.click()}
+                  disabled={!canWriteSettings}
                   aria-label="Import settings from JSON file"
                   className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors text-left"
                 >
@@ -424,7 +473,10 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 </button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <button className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 transition-colors text-left">
+                    <button
+                      disabled={!canWriteSettings}
+                      className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-45 transition-colors text-left"
+                    >
                       <RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />
                       Reset All
                     </button>
@@ -459,7 +511,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 </SelectTrigger>
                 <SelectContent>
                   {TABS.map((tab) => (
-                    <SelectItem key={tab.id} value={tab.id}>
+                    <SelectItem key={tab.id} value={tab.id} disabled={!canUseTab(tab)}>
                       {tab.label}
                     </SelectItem>
                   ))}

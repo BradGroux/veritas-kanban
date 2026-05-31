@@ -5,6 +5,7 @@ import { GitBranch, Loader2, AlertCircle } from 'lucide-react';
 import type { Task, TaskGit } from '@veritas-kanban/shared';
 import { GitSelectionForm } from './git/GitSelectionForm';
 import { WorktreeStatus } from './git/WorktreeStatus';
+import { useIdentity } from '@/hooks/useIdentity';
 
 interface GitSectionProps {
   task: Task;
@@ -13,13 +14,15 @@ interface GitSectionProps {
 
 export function GitSection({ task, onGitChange }: GitSectionProps) {
   const { data: config, isLoading: configLoading } = useConfig();
+  const { hasPermission } = useIdentity();
+  const canEditTaskGit = hasPermission('task:write');
 
   const handleClearGit = () => {
     onGitChange(undefined);
   };
 
   // Don't allow editing if worktree exists
-  const isLocked = !!task.git?.worktreePath;
+  const isLocked = !!task.git?.worktreePath || !canEditTaskGit;
   const selectedRepo = task.git?.repo;
 
   if (configLoading) {
@@ -65,13 +68,19 @@ export function GitSection({ task, onGitChange }: GitSectionProps) {
             size="sm"
             className="h-6 text-xs"
             onClick={handleClearGit}
+            disabled={!canEditTaskGit}
           >
             Clear
           </Button>
         )}
       </div>
 
-      <GitSelectionForm task={task} onGitChange={onGitChange} />
+      {!canEditTaskGit && (
+        <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          Task write permission is required to change Git settings.
+        </div>
+      )}
+      <GitSelectionForm task={task} onGitChange={onGitChange} disabled={!canEditTaskGit} />
       <WorktreeStatus task={task} />
     </div>
   );

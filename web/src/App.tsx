@@ -10,6 +10,7 @@ import { TaskConfigProvider } from './contexts/TaskConfigContext';
 import { WebSocketStatusProvider } from './contexts/WebSocketContext';
 import { ViewProvider, useView } from './contexts/ViewContext';
 import { AuthProvider } from './hooks/useAuth';
+import { IdentityProvider } from './hooks/useIdentity';
 import { AuthGuard } from './components/auth';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { SkipToContent } from './components/shared/SkipToContent';
@@ -179,19 +180,21 @@ function AppContent() {
           <BulkActionsProvider>
             <TaskConfigProvider>
               <ViewProvider>
-                <div className="min-h-screen bg-background">
-                  <SkipToContent />
-                  <Header />
-                  <SystemHealthBar />
-                  <main id="main-content" className="mx-auto px-14 py-6" tabIndex={-1}>
-                    <ErrorBoundary level="section">
-                      <MainContent />
-                    </ErrorBoundary>
-                  </main>
-                  <Toaster />
-                  <CommandPalette />
-                  <FloatingChat />
-                </div>
+                <IdentityProvider>
+                  <div className="min-h-screen bg-background">
+                    <SkipToContent />
+                    <Header />
+                    <SystemHealthBar />
+                    <main id="main-content" className="mx-auto px-14 py-6" tabIndex={-1}>
+                      <ErrorBoundary level="section">
+                        <MainContent />
+                      </ErrorBoundary>
+                    </main>
+                    <Toaster />
+                    <CommandPalette />
+                    <FloatingChat />
+                  </div>
+                </IdentityProvider>
               </ViewProvider>
             </TaskConfigProvider>
           </BulkActionsProvider>

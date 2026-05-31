@@ -4,6 +4,7 @@ export { TasksTab } from './TasksTab';
 export { AgentsTab } from './AgentsTab';
 export { DataTab } from './DataTab';
 export { NotificationsTab } from './NotificationsTab';
+export { MultiUserTab } from './MultiUserTab';
 export { ManageTab } from './ManageTab';
 export { EnforcementTab } from './EnforcementTab';
 export { SharedResourcesTab } from './SharedResourcesTab';

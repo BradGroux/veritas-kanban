@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/useToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkflowRunList } from './WorkflowRunList';
 import { WorkflowDashboard } from './WorkflowDashboard';
+import { useIdentity } from '@/hooks/useIdentity';
 
 interface WorkflowsPageProps {
   onBack: () => void;
@@ -40,6 +41,8 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const { toast } = useToast();
+  const { hasPermission } = useIdentity();
+  const canExecuteWorkflows = hasPermission('workflow:execute');
 
   // Fetch workflows on mount
   useEffect(() => {
@@ -74,6 +77,9 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
 
   const handleStartRun = async (workflowId: string) => {
     try {
+      if (!canExecuteWorkflows) {
+        throw new Error('Workflow execute permission required');
+      }
       const response = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,6 +163,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
               workflow={workflow}
               onStartRun={() => handleStartRun(workflow.id)}
               onViewRuns={() => setSelectedWorkflowId(workflow.id)}
+              canStartRun={canExecuteWorkflows}
             />
           ))}
         </div>
@@ -169,9 +176,10 @@ interface WorkflowCardProps {
   workflow: Workflow;
   onStartRun: () => void;
   onViewRuns: () => void;
+  canStartRun: boolean;
 }
 
-function WorkflowCard({ workflow, onStartRun, onViewRuns }: WorkflowCardProps) {
+function WorkflowCard({ workflow, onStartRun, onViewRuns, canStartRun }: WorkflowCardProps) {
   return (
     <div className="p-6 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
       <div className="flex items-start justify-between gap-4">
@@ -205,7 +213,12 @@ function WorkflowCard({ workflow, onStartRun, onViewRuns }: WorkflowCardProps) {
         </div>
 
         <div className="flex flex-col gap-2 shrink-0">
-          <Button size="sm" onClick={onStartRun}>
+          <Button
+            size="sm"
+            onClick={onStartRun}
+            disabled={!canStartRun}
+            title={canStartRun ? 'Start run' : 'Workflow execute permission required'}
+          >
             <Play className="h-3 w-3 mr-1" />
             Start Run
           </Button>

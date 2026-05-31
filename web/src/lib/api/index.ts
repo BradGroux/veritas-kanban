@@ -15,6 +15,7 @@ import { chatApi } from './chat';
 import { decisionsApi } from './decisions';
 import { scoringApi } from './scoring';
 import { searchApi } from './search';
+import { identityApi } from './identity';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -40,6 +41,7 @@ export const api = {
   decisions: decisionsApi,
   scoring: scoringApi,
   search: searchApi,
+  identity: identityApi,
 };
 
 export type {
@@ -111,3 +113,14 @@ export type {
   DecisionWithChain,
   DecisionListFilters,
 } from '@veritas-kanban/shared';
+
+export type {
+  IdentityProfile,
+  IdentityUser,
+  WorkspaceIdentity,
+  WorkspaceInvitation,
+  WorkspaceMembership,
+  WorkspaceRole,
+  CreateInvitationInput,
+  CreateInvitationResult,
+} from './identity';

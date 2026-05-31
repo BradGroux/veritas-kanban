@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 interface GitSelectionFormProps {
   task: Task;
   onGitChange: (git: Partial<TaskGit> | undefined) => void;
+  disabled?: boolean;
 }
 
 function slugify(text: string): string {
@@ -26,7 +27,7 @@ function slugify(text: string): string {
     .slice(0, 40);
 }
 
-export function GitSelectionForm({ task, onGitChange }: GitSelectionFormProps) {
+export function GitSelectionForm({ task, onGitChange, disabled = false }: GitSelectionFormProps) {
   const { data: config } = useConfig();
   const [selectedRepo, setSelectedRepo] = useState<string>(task.git?.repo || '');
   const [baseBranch, setBaseBranch] = useState<string>(task.git?.baseBranch || '');
@@ -63,7 +64,7 @@ export function GitSelectionForm({ task, onGitChange }: GitSelectionFormProps) {
       setFeatureBranch(task.git.branch || '');
       setAutoGenerateBranch(!task.git.branch);
     }
-  }, [task.id, task.git?.repo, task.git?.baseBranch, task.git?.branch]); // Re-sync when task or git config changes
+  }, [task.id, task.git]); // Re-sync when task or git config changes
 
   // Update parent when values change
   const handleRepoChange = (repo: string) => {
@@ -99,7 +100,7 @@ export function GitSelectionForm({ task, onGitChange }: GitSelectionFormProps) {
   };
 
   // Don't allow editing if worktree exists
-  const isLocked = !!task.git?.worktreePath;
+  const isLocked = !!task.git?.worktreePath || disabled;
 
   return (
     <div className="grid gap-3 p-3 rounded-md border bg-muted/30">

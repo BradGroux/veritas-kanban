@@ -21,12 +21,14 @@ import { Button } from '@/components/ui/button';
 // ActivitySidebar removed — merged into ActivityFeed (GH-66)
 // ArchiveSidebar removed — replaced with full-page ArchivePage
 import { UserMenu } from './UserMenu';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
 import { lazy, Suspense, useState, useCallback } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import { useBacklogCount } from '@/hooks/useBacklog';
 import { useTheme } from '@/hooks/useTheme';
+import { useIdentity } from '@/hooks/useIdentity';
 import { Badge } from '@/components/ui/badge';
 import { NAVIGATION_VIEWS, type ViewIcon } from '@/lib/views';
 
@@ -89,6 +91,9 @@ export function Header() {
   const { view, setView, navigateToTask } = useView();
   const { data: backlogCount = 0 } = useBacklogCount();
   const { theme, setTheme } = useTheme();
+  const { hasPermission } = useIdentity();
+  const canCreateTask = hasPermission('task:write');
+  const canOpenSettings = hasPermission('settings:read') || hasPermission('admin:manage');
 
   const markPanelLoaded = useCallback((panel: LazyPanel) => {
     setLoadedPanels((current) => {
@@ -131,6 +136,12 @@ export function Header() {
     setSettingsOpen(true);
   }, [markPanelLoaded]);
 
+  const openIdentitySettings = useCallback(() => {
+    markPanelLoaded('settings');
+    setSettingsTab('multi-user');
+    setSettingsOpen(true);
+  }, [markPanelLoaded]);
+
   // Register the create dialog and chat panel openers with keyboard context (refs, no useEffect needed)
   setOpenCreateDialog(openCreateDialog);
   setOpenChatPanel(openChatPanel);
@@ -152,11 +163,19 @@ export function Header() {
               <h1 className="text-lg font-semibold">Veritas Kanban</h1>
             </button>
             <div className="h-4 w-px bg-border" aria-hidden="true" />
+            <WorkspaceSwitcher />
+            <div className="hidden md:block h-4 w-px bg-border" aria-hidden="true" />
             <WebSocketIndicator />
           </div>
 
           <div className="flex items-center gap-2" role="toolbar" aria-label="Board actions">
-            <Button variant="default" size="sm" onClick={openCreateDialog}>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={openCreateDialog}
+              disabled={!canCreateTask}
+              title={canCreateTask ? 'New Task' : 'Task write permission required'}
+            >
               <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
               New Task
             </Button>
@@ -208,8 +227,9 @@ export function Header() {
               variant="ghost"
               size="icon"
               onClick={openSettingsDialog}
+              disabled={!canOpenSettings}
               aria-label="Settings"
-              title="Settings"
+              title={canOpenSettings ? 'Settings' : 'Settings permission required'}
             >
               <Settings className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -226,7 +246,10 @@ export function Header() {
                 <Sun className="h-4 w-4" aria-hidden="true" />
               )}
             </Button>
-            <UserMenu onOpenSecuritySettings={openSecuritySettings} />
+            <UserMenu
+              onOpenSecuritySettings={openSecuritySettings}
+              onOpenIdentitySettings={openIdentitySettings}
+            />
             <Button
               variant="ghost"
               size="sm"
