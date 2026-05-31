@@ -57,6 +57,51 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
       VALUES ('local', 'local-user', 'owner');
     `,
   },
+  {
+    version: 3,
+    name: '0003_task_repository_foundation',
+    up: `
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        storage_state TEXT NOT NULL DEFAULT 'active'
+          CHECK (storage_state IN ('active', 'archived', 'backlog')),
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        project TEXT,
+        sprint TEXT,
+        position INTEGER,
+        task_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        archived_at TEXT,
+        deleted_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_workspace_state_updated
+        ON tasks(workspace_id, storage_state, updated_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status_position
+        ON tasks(status, position);
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_project
+        ON tasks(project);
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_sprint
+        ON tasks(sprint);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS task_search USING fts5(
+        task_id UNINDEXED,
+        title,
+        description,
+        tokenize='porter unicode61'
+      );
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

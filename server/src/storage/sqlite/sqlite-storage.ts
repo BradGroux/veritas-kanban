@@ -1,6 +1,7 @@
 import type { StorageProvider } from '../interfaces.js';
 import { FileStorageProvider, type FileStorageOptions } from '../file-storage.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from './database.js';
+import { SqliteTaskRepository } from './task-repository.js';
 
 export interface SqliteStorageOptions {
   database?: SqliteConnectionOptions;
@@ -8,7 +9,7 @@ export interface SqliteStorageOptions {
 }
 
 export class SqliteStorageProvider implements StorageProvider {
-  readonly tasks: StorageProvider['tasks'];
+  readonly tasks: SqliteTaskRepository;
   readonly settings: StorageProvider['settings'];
   readonly activities: StorageProvider['activities'];
   readonly templates: StorageProvider['templates'];
@@ -24,8 +25,8 @@ export class SqliteStorageProvider implements StorageProvider {
     this.fileProvider = new FileStorageProvider(options.fileStorageOptions);
 
     // Repository parity lands incrementally in #330+. Until then, SQLite mode
-    // owns the database lifecycle while delegating existing behavior to files.
-    this.tasks = this.fileProvider.tasks;
+    // owns task persistence while remaining repositories delegate to files.
+    this.tasks = new SqliteTaskRepository(this.sqlite);
     this.settings = this.fileProvider.settings;
     this.activities = this.fileProvider.activities;
     this.templates = this.fileProvider.templates;

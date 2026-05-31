@@ -31,6 +31,8 @@ import {
   type TaskSyncContext,
 } from './agent-registry-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteTaskRepository } from '../storage/sqlite/task-repository.js';
 
 const log = createLogger('task-cache');
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
@@ -71,6 +73,9 @@ export interface TaskServiceOptions {
   tasksDir?: string;
   archiveDir?: string;
   telemetryService?: TelemetryService;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 /** Ignore file-watcher events within this window after our own writes */
@@ -80,6 +85,9 @@ export class TaskService {
   private tasksDir: string;
   private archiveDir: string;
   private telemetry: TelemetryService;
+  private sqliteDatabase: SqliteDatabase | null = null;
+  private sqliteTasks: SqliteTaskRepository | null = null;
+  private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
 
   // ============ In-Memory Cache ============
   private cache: Map<string, Task> = new Map();
@@ -95,7 +103,18 @@ export class TaskService {
     this.tasksDir = options.tasksDir || DEFAULT_TASKS_DIR;
     this.archiveDir = options.archiveDir || DEFAULT_ARCHIVE_DIR;
     this.telemetry = options.telemetryService || getTelemetryService();
-    this.ensureDirectories();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.sqliteDatabase.open();
+      this.sqliteTasks = new SqliteTaskRepository(this.sqliteDatabase);
+    } else {
+      this.ensureDirectories();
+    }
+
     this.startTaskSyncReconciler();
   }
 
@@ -106,6 +125,8 @@ export class TaskService {
    * Safe to call multiple times; only the first call does work.
    */
   private async initCache(): Promise<void> {
+    if (this.sqliteTasks) return;
+
     if (this.cacheInitialized) return;
 
     // Prevent concurrent initialization (e.g. parallel listTasks + getTask)
@@ -209,6 +230,15 @@ export class TaskService {
     return deleted;
   }
 
+  private runSqliteMutation<T>(callback: () => Promise<T>): Promise<T> {
+    const run = this.sqliteMutationQueue.then(callback, callback);
+    this.sqliteMutationQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
   /** Get a task from the cache */
   private cacheGet(id: string): Task | undefined {
     const task = this.cache.get(id);
@@ -264,6 +294,9 @@ export class TaskService {
       clearInterval(this.taskSyncReconcileInterval);
       this.taskSyncReconcileInterval = null;
     }
+    this.sqliteDatabase?.close();
+    this.sqliteDatabase = null;
+    this.sqliteTasks = null;
     this.cache.clear();
     this.cacheInitialized = false;
     this.cacheLoading = null;
@@ -519,6 +552,10 @@ export class TaskService {
   }
 
   async listTasks(): Promise<Task[]> {
+    if (this.sqliteTasks) {
+      return this.sqliteTasks.findAll();
+    }
+
     await this.initCache();
     return this.cacheList();
   }
@@ -551,6 +588,10 @@ export class TaskService {
   }
 
   async getTask(id: string): Promise<Task | null> {
+    if (this.sqliteTasks) {
+      return this.sqliteTasks.findById(id);
+    }
+
     await this.initCache();
     return this.cacheGet(id) ?? null;
   }
@@ -589,17 +630,22 @@ export class TaskService {
       }
     }
 
-    const filename = this.taskToFilename(task);
-    const filepath = path.join(this.tasksDir, filename);
-    const content = this.taskToMarkdown(task);
+    if (this.sqliteTasks) {
+      const sqliteTasks = this.sqliteTasks;
+      await this.runSqliteMutation(() => sqliteTasks.create(task));
+    } else {
+      const filename = this.taskToFilename(task);
+      const filepath = path.join(this.tasksDir, filename);
+      const content = this.taskToMarkdown(task);
 
-    await withFileLock(filepath, async () => {
-      this.markWrite();
-      await fs.writeFile(filepath, content, 'utf-8');
-    });
+      await withFileLock(filepath, async () => {
+        this.markWrite();
+        await fs.writeFile(filepath, content, 'utf-8');
+      });
 
-    // Write-through: update cache immediately
-    this.cache.set(task.id, task);
+      // Write-through: update cache immediately
+      this.cache.set(task.id, task);
+    }
 
     // Emit telemetry event
     await this.telemetry.emit<TaskTelemetryEvent>({
@@ -640,12 +686,22 @@ export class TaskService {
     const filepath = path.join(this.tasksDir, newFilename);
 
     let updatedTask!: Task;
+    const runMutation = async (callback: () => Promise<void>): Promise<void> => {
+      if (this.sqliteTasks) {
+        await this.runSqliteMutation(callback);
+        return;
+      }
 
-    await withFileLock(filepath, async () => {
+      await withFileLock(filepath, callback);
+    };
+
+    await runMutation(async () => {
       // Re-read from cache inside the lock to get the latest state.
       // This prevents concurrent writes (e.g., debounced field save vs.
       // timer start) from overwriting each other's changes.
-      const freshTask = this.cacheGet(id) ?? task;
+      const freshTask = this.sqliteTasks
+        ? ((await this.sqliteTasks.findById(id)) ?? task)
+        : (this.cacheGet(id) ?? task);
 
       const previousStatus = freshTask.status;
       const statusChanged = input.status !== undefined && input.status !== previousStatus;
@@ -812,17 +868,21 @@ export class TaskService {
         updated: new Date().toISOString(),
       };
 
-      const content = this.taskToMarkdown(updatedTask);
-      this.markWrite();
+      if (this.sqliteTasks) {
+        await this.sqliteTasks.replaceActive(updatedTask);
+      } else {
+        const content = this.taskToMarkdown(updatedTask);
+        this.markWrite();
 
-      if (oldFilename !== newFilename) {
-        // Intentionally silent: old file may already be gone after rename
-        await fs.unlink(path.join(this.tasksDir, oldFilename)).catch(() => {});
+        if (oldFilename !== newFilename) {
+          // Intentionally silent: old file may already be gone after rename
+          await fs.unlink(path.join(this.tasksDir, oldFilename)).catch(() => {});
+        }
+        await fs.writeFile(filepath, content, 'utf-8');
+
+        // Write-through: update cache immediately (inside lock for consistency)
+        this.cache.set(updatedTask.id, updatedTask);
       }
-      await fs.writeFile(filepath, content, 'utf-8');
-
-      // Write-through: update cache immediately (inside lock for consistency)
-      this.cache.set(updatedTask.id, updatedTask);
 
       // Emit telemetry event if status changed
       if (statusChanged) {
@@ -944,6 +1004,11 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return false;
 
+    if (this.sqliteTasks) {
+      const sqliteTasks = this.sqliteTasks;
+      return this.runSqliteMutation(() => sqliteTasks.deleteActive(id));
+    }
+
     // Find ALL files on disk with this task ID (handles orphaned slug variations)
     const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
     if (allFilenames.length === 0) {
@@ -977,6 +1042,25 @@ export class TaskService {
   async archiveTask(id: string): Promise<boolean> {
     const task = await this.getTask(id);
     if (!task) return false;
+
+    if (this.sqliteTasks) {
+      const sqliteTasks = this.sqliteTasks;
+      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id));
+      if (!archived) return false;
+
+      await this.telemetry.emit<TaskTelemetryEvent>({
+        type: 'task.archived',
+        taskId: task.id,
+        project: task.project,
+        status: task.status,
+      });
+
+      fireHook('onArchived', task).catch((err) => {
+        log.warn({ taskId: task.id }, 'onArchived hook failed: %s', err);
+      });
+
+      return true;
+    }
 
     // Find ALL files on disk with this task ID (handles orphaned slug variations)
     const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
@@ -1028,6 +1112,10 @@ export class TaskService {
   }
 
   async listArchivedTasks(): Promise<Task[]> {
+    if (this.sqliteTasks) {
+      return this.sqliteTasks.listArchived();
+    }
+
     await this.ensureDirectories();
 
     const files = await fs.readdir(this.archiveDir);
@@ -1052,11 +1140,30 @@ export class TaskService {
   }
 
   async getArchivedTask(id: string): Promise<Task | null> {
+    if (this.sqliteTasks) {
+      return this.sqliteTasks.findArchivedById(id);
+    }
+
     const tasks = await this.listArchivedTasks();
     return tasks.find((t) => t.id === id) || null;
   }
 
   async restoreTask(id: string): Promise<Task | null> {
+    if (this.sqliteTasks) {
+      const sqliteTasks = this.sqliteTasks;
+      const restoredTask = await this.runSqliteMutation(() => sqliteTasks.restore(id));
+      if (!restoredTask) return null;
+
+      await this.telemetry.emit<TaskTelemetryEvent>({
+        type: 'task.restored',
+        taskId: restoredTask.id,
+        project: restoredTask.project,
+        status: restoredTask.status,
+      });
+
+      return restoredTask;
+    }
+
     const task = await this.getArchivedTask(id);
     if (!task) return null;
 

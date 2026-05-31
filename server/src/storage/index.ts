@@ -47,6 +47,8 @@ export { SQLITE_BASE_MIGRATIONS, sortedMigrations } from './sqlite/migrations.js
 export type { SqliteMigration } from './sqlite/migrations.js';
 export { SqliteStorageProvider } from './sqlite/sqlite-storage.js';
 export type { SqliteStorageOptions } from './sqlite/sqlite-storage.js';
+export { SqliteTaskRepository } from './sqlite/task-repository.js';
+export type { TaskStorageState } from './sqlite/task-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)

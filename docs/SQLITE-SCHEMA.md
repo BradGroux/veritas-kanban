@@ -847,6 +847,25 @@ tracking while repository parity is implemented in the following provider
 issues. File storage remains the default until the migration/import path is
 complete.
 
+## Task Repository Implementation
+
+The first SQLite task repository stores the complete shared `Task` payload as
+JSON while also maintaining indexed columns for board and API access patterns:
+`status`, `priority`, `type`, `project`, `sprint`, `position`, timestamps, and
+storage state. This keeps all existing task fields round-trippable while later
+migrations can normalize high-value child collections without losing data.
+
+Task storage states replace filesystem moves:
+
+| State      | Meaning                                      |
+| ---------- | -------------------------------------------- |
+| `active`   | Visible on the active board.                 |
+| `archived` | Hidden from active lists, restorable later.  |
+| `backlog`  | Reserved for the backlog provider migration. |
+
+`task_search` is maintained by SQLite repository writes so title/description
+search can use FTS5 in SQLite mode.
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:
