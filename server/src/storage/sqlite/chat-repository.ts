@@ -263,7 +263,7 @@ export class SqliteChatRepository {
           FROM chat_messages
           WHERE workspace_id = 'local'
             AND session_id = ?
-          ORDER BY datetime(created_at) ASC, id ASC
+          ORDER BY datetime(created_at) ASC, rowid ASC
         `
       )
       .all(sessionId) as unknown as ChatMessageRow[];

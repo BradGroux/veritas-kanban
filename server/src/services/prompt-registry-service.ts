@@ -22,6 +22,9 @@ import { SqlitePromptRegistryRepository } from '../storage/sqlite/prompt-registr
 const log = createLogger('prompt-registry-service');
 
 export interface PromptRegistryServiceOptions {
+  templatesDir?: string;
+  versionsDir?: string;
+  usageDir?: string;
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
@@ -35,9 +38,11 @@ export class PromptRegistryService {
   private sqliteDatabase: SqliteDatabase | null = null;
 
   constructor(options: PromptRegistryServiceOptions = {}) {
-    this.templatesDir = join(process.cwd(), '.veritas-kanban', 'prompt-templates');
-    this.versionsDir = join(process.cwd(), '.veritas-kanban', 'prompt-versions');
-    this.usageDir = join(process.cwd(), '.veritas-kanban', 'prompt-usage');
+    this.templatesDir =
+      options.templatesDir || join(process.cwd(), '.veritas-kanban', 'prompt-templates');
+    this.versionsDir =
+      options.versionsDir || join(process.cwd(), '.veritas-kanban', 'prompt-versions');
+    this.usageDir = options.usageDir || join(process.cwd(), '.veritas-kanban', 'prompt-usage');
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

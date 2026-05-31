@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "timestamps": {
+    "created": "2026-05-31T12:00:00.000Z",
+    "updated": "2026-05-31T12:05:00.000Z",
+    "completed": "2026-05-31T12:30:00.000Z"
+  },
+  "task": {
+    "title": "v5 parity-rich storage task",
+    "description": "Exercise v5 task metadata across both storage backends. Search token: parity-rich.",
+    "type": "feature",
+    "status": "blocked",
+    "priority": "critical",
+    "project": "v5",
+    "sprint": "v5.0",
+    "agents": ["codex", "veritas"],
+    "git": {
+      "repo": "BradGroux/veritas-kanban",
+      "branch": "v5-dual-storage-parity-tests",
+      "baseBranch": "main",
+      "worktreePath": "/tmp/veritas-parity",
+      "prNumber": 349,
+      "prUrl": "https://github.com/BradGroux/veritas-kanban/pull/349"
+    },
+    "github": {
+      "issueNumber": 349,
+      "repo": "BradGroux/veritas-kanban",
+      "url": "https://github.com/BradGroux/veritas-kanban/issues/349"
+    },
+    "attempt": {
+      "id": "attempt_v5_parity_1",
+      "agent": "codex",
+      "status": "running",
+      "started": "2026-05-31T12:01:00.000Z",
+      "provider": "openai",
+      "model": "gpt-5",
+      "threadId": "thread_v5_parity"
+    },
+    "attempts": [
+      {
+        "id": "attempt_v5_parity_0",
+        "agent": "veritas",
+        "status": "complete",
+        "started": "2026-05-31T11:30:00.000Z",
+        "ended": "2026-05-31T11:45:00.000Z",
+        "provider": "local",
+        "model": "veritas"
+      }
+    ],
+    "reviewScores": [10, 9, 10, 9],
+    "review": {
+      "decision": "changes-requested",
+      "decidedAt": "2026-05-31T12:10:00.000Z",
+      "summary": "Fixture keeps storage parity visible before SQLite becomes default."
+    },
+    "subtasks": [
+      {
+        "id": "subtask_parity_fixture",
+        "title": "Seed parity fixture",
+        "completed": true,
+        "created": "2026-05-31T12:00:00.000Z",
+        "acceptanceCriteria": ["fixture is versioned", "both storage modes reload it"],
+        "criteriaChecked": [true, true]
+      },
+      {
+        "id": "subtask_parity_ci",
+        "title": "Run parity gate in CI",
+        "completed": false,
+        "created": "2026-05-31T12:02:00.000Z",
+        "acceptanceCriteria": ["CI has explicit parity step"],
+        "criteriaChecked": [false]
+      }
+    ],
+    "autoCompleteOnSubtasks": true,
+    "verificationSteps": [
+      {
+        "id": "verify_parity_file",
+        "description": "File storage reload preserves rich metadata",
+        "checked": true,
+        "checkedAt": "2026-05-31T12:20:00.000Z"
+      },
+      {
+        "id": "verify_parity_sqlite",
+        "description": "SQLite storage reload preserves rich metadata",
+        "checked": true,
+        "checkedAt": "2026-05-31T12:21:00.000Z"
+      }
+    ],
+    "dependencies": {
+      "depends_on": ["task_v5_migration_fixture"],
+      "blocks": ["task_v5_sqlite_default"]
+    },
+    "blockedBy": ["task_v5_migration_fixture"],
+    "blockedReason": {
+      "category": "prerequisite",
+      "note": "Waiting for migration fixture comparison to stay green."
+    },
+    "automation": {
+      "sessionKey": "session_v5_parity",
+      "spawnedAt": "2026-05-31T12:04:00.000Z",
+      "completedAt": "2026-05-31T12:29:00.000Z",
+      "result": "Fixture executed without drift."
+    },
+    "timeTracking": {
+      "entries": [
+        {
+          "id": "time_v5_parity_1",
+          "startTime": "2026-05-31T12:00:00.000Z",
+          "endTime": "2026-05-31T12:25:00.000Z",
+          "duration": 1500,
+          "description": "Build parity fixture",
+          "manual": true
+        }
+      ],
+      "totalSeconds": 1500,
+      "isRunning": false
+    },
+    "comments": [
+      {
+        "id": "comment_v5_parity_1",
+        "author": "Brad",
+        "text": "Keep file and SQLite behavior identical until cutover.",
+        "timestamp": "2026-05-31T12:06:00.000Z"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs_v5_parity_1",
+        "type": "decision",
+        "content": "Use one fixture to exercise broad task metadata instead of narrow CRUD only.",
+        "score": 9,
+        "timestamp": "2026-05-31T12:07:00.000Z",
+        "agent": "codex"
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att_v5_parity_1",
+        "filename": "parity-report.md",
+        "originalName": "Parity Report.md",
+        "mimeType": "text/markdown",
+        "size": 2048,
+        "uploaded": "2026-05-31T12:08:00.000Z",
+        "workspaceId": "local",
+        "sessionId": "session_v5_parity",
+        "uploadedBy": "codex",
+        "sha256": "7df6f9f3f3f832b90e5f20cf44c0ce67a751d3b8b0f98c49bdac5fdc97359a72",
+        "storagePath": "tasks/attachments/task_v5_parity/parity-report.md",
+        "validationStatus": "valid",
+        "retentionStatus": "active",
+        "cleanupEligible": false
+      }
+    ],
+    "deliverables": [
+      {
+        "id": "deliverable_v5_parity_1",
+        "title": "Dual-storage parity report",
+        "type": "report",
+        "path": "docs/testing/dual-storage-parity.md",
+        "status": "attached",
+        "agent": "codex",
+        "model": "gpt-5",
+        "workspaceId": "local",
+        "sourceRunId": "run_v5_parity",
+        "version": 1,
+        "created": "2026-05-31T12:09:00.000Z",
+        "updated": "2026-05-31T12:10:00.000Z",
+        "description": "Documents the parity fixture and CI gate.",
+        "redaction": {
+          "level": "standard",
+          "containsSensitiveContent": false,
+          "notes": ["fixture-only data"]
+        }
+      }
+    ],
+    "position": 349,
+    "costPrediction": {
+      "estimatedCost": 4.25,
+      "confidence": "high",
+      "sampleSize": 12,
+      "factors": {
+        "baseCost": 2.5,
+        "typeMultiplier": 1.2,
+        "priorityMultiplier": 1.5,
+        "complexityMultiplier": 1.1,
+        "projectAdjustment": 0.25
+      },
+      "predictedAt": "2026-05-31T12:03:00.000Z"
+    },
+    "actualCost": 3.75,
+    "lessonsLearned": "Parity fixtures should fail before backend-specific drift reaches the UI.",
+    "lessonTags": ["sqlite", "parity", "v5"],
+    "checkpoint": {
+      "step": 2,
+      "state": {
+        "fixture": "v5-rich-metadata",
+        "storageModes": ["file", "sqlite"]
+      },
+      "timestamp": "2026-05-31T12:11:00.000Z",
+      "resumeCount": 1
+    },
+    "runMode": "qa",
+    "qaGate": {
+      "required": true,
+      "passed": false
+    }
+  },
+  "settingsPatch": {
+    "board": {
+      "showDashboard": true,
+      "cardDensity": "compact",
+      "showPriorityIndicators": true
+    },
+    "tasks": {
+      "enableDependencies": true,
+      "enableAttachments": true,
+      "enableComments": true,
+      "defaultPriority": "high",
+      "requireDeliverableForDone": false
+    },
+    "telemetry": {
+      "enabled": true,
+      "retentionDays": 45,
+      "enableTraces": true,
+      "enableActivityTracking": true
+    },
+    "enforcement": {
+      "reviewGate": false,
+      "closingComments": false,
+      "autoTelemetry": true,
+      "autoTimeTracking": false
+    }
+  },
+  "taskTemplate": {
+    "name": "v5 parity fixture template",
+    "description": "Creates a task with rich metadata for storage parity checks.",
+    "category": "qa",
+    "taskDefaults": {
+      "type": "feature",
+      "priority": "high",
+      "project": "v5",
+      "descriptionTemplate": "Use {{project}} parity fixture data.",
+      "agent": "codex"
+    },
+    "subtaskTemplates": [
+      {
+        "title": "Verify {{project}} storage reload",
+        "order": 1
+      }
+    ],
+    "blueprint": [
+      {
+        "refId": "parity-task",
+        "title": "Run {{project}} parity checks",
+        "taskDefaults": {
+          "type": "feature",
+          "priority": "high",
+          "project": "v5",
+          "descriptionTemplate": "Run both storage modes.",
+          "agent": "codex"
+        },
+        "subtaskTemplates": [
+          {
+            "title": "Collect snapshots",
+            "order": 1
+          }
+        ]
+      }
+    ]
+  },
+  "promptTemplate": {
+    "name": "v5 parity review prompt",
+    "description": "Summarizes parity drift for a task.",
+    "category": "evaluation",
+    "content": "Review {{task_title}} in {{project}} and report storage drift."
+  },
+  "workflow": {
+    "id": "v5-parity-workflow",
+    "name": "v5 Parity Workflow",
+    "version": 1,
+    "description": "Minimal workflow run used by the dual-storage parity gate.",
+    "variables": {
+      "ready": "true"
+    },
+    "agents": [
+      {
+        "id": "verifier",
+        "name": "Verifier",
+        "role": "qa",
+        "description": "Validates the storage parity gate."
+      }
+    ],
+    "steps": [
+      {
+        "id": "qa-gate",
+        "name": "QA Gate",
+        "type": "gate",
+        "condition": "ready == \"true\""
+      }
+    ]
+  },
+  "chatMessages": [
+    {
+      "role": "user",
+      "content": "Compare file and SQLite output for the parity fixture."
+    },
+    {
+      "role": "assistant",
+      "content": "Both storage modes should return the same normalized task, settings, chat, and workflow data.",
+      "agent": "codex",
+      "model": "gpt-5"
+    }
+  ]
+}
