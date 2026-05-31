@@ -1,0 +1,1271 @@
+{
+  "version": 1,
+  "lastReviewed": "2026-05-31",
+  "notes": "Authority surface manifest for v5.0. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
+  "surfaces": [
+    {
+      "id": "rest:v1-route-map",
+      "kind": "rest",
+      "classification": "authenticated-write",
+      "permissions": ["route-map"],
+      "source": "shared/src/utils/api-permissions.ts",
+      "denialReason": "REST requests are denied by explicit route permission guards or by the client preflight map."
+    },
+    {
+      "id": "websocket:task:changed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Task change events require task read access in the event workspace."
+    },
+    {
+      "id": "websocket:chat:delta",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Chat delta events require task read access in the event workspace."
+    },
+    {
+      "id": "websocket:chat:message",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Chat message events require task read access in the event workspace."
+    },
+    {
+      "id": "websocket:chat:error",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Chat error events require task read access in the event workspace."
+    },
+    {
+      "id": "websocket:squad:message",
+      "kind": "websocket",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Squad messages require agent read access."
+    },
+    {
+      "id": "websocket:telemetry:event",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["telemetry:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Telemetry events require telemetry read access."
+    },
+    {
+      "id": "websocket:broadcast:new",
+      "kind": "websocket",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Agent broadcast notifications require agent read access."
+    },
+    {
+      "id": "websocket:workflow:status",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["workflow:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Workflow status events require workflow read access."
+    },
+    {
+      "id": "websocket:agent:status",
+      "kind": "websocket",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "server/src/routes/agent-status.ts",
+      "denialReason": "Agent status events require agent read access."
+    },
+    {
+      "id": "websocket:agent:output",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Agent output subscriptions require task read access."
+    },
+    {
+      "id": "websocket:agent:complete",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Agent completion subscriptions require task read access."
+    },
+    {
+      "id": "websocket:agent:error",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Agent error subscriptions require task read access."
+    },
+    {
+      "id": "websocket:chat:subscribed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Chat subscription confirmations are only sent after task read authorization."
+    },
+    {
+      "id": "websocket:subscribed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Task output subscription confirmations are only sent after task read authorization."
+    },
+    {
+      "id": "websocket:error",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["workspace:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "WebSocket denial errors are only sent on an authenticated connection."
+    },
+    {
+      "id": "websocket-inbound:chat:subscribe",
+      "kind": "websocket-inbound",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Chat subscriptions require task read access in the requested workspace."
+    },
+    {
+      "id": "websocket-inbound:subscribe",
+      "kind": "websocket-inbound",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Agent output subscriptions require task read access in the requested workspace."
+    },
+    {
+      "id": "workflow-step:agent",
+      "kind": "workflow-step",
+      "classification": "agent-scoped",
+      "permissions": ["workflow:execute", "agent:read"],
+      "source": "shared/src/types/workflow.ts",
+      "denialReason": "Agent workflow steps require workflow execution permission and an allowed agent."
+    },
+    {
+      "id": "workflow-step:loop",
+      "kind": "workflow-step",
+      "classification": "agent-scoped",
+      "permissions": ["workflow:execute", "agent:read"],
+      "source": "shared/src/types/workflow.ts",
+      "denialReason": "Loop workflow steps require workflow execution permission and an allowed agent."
+    },
+    {
+      "id": "workflow-step:gate",
+      "kind": "workflow-step",
+      "classification": "authenticated-write",
+      "permissions": ["workflow:execute"],
+      "source": "shared/src/types/workflow.ts",
+      "denialReason": "Gate workflow steps require workflow execution permission."
+    },
+    {
+      "id": "workflow-step:parallel",
+      "kind": "workflow-step",
+      "classification": "agent-scoped",
+      "permissions": ["workflow:execute", "agent:read"],
+      "source": "shared/src/types/workflow.ts",
+      "denialReason": "Parallel workflow steps require workflow execution permission and allowed agents."
+    },
+    {
+      "id": "transition-gate:require-agent",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-plan",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-verification-complete",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-time-tracked",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-closing-comment",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-subtasks-complete",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-gate:require-blocker-reason",
+      "kind": "transition-gate",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition gates execute inside an already authorized task status change."
+    },
+    {
+      "id": "transition-action:auto-start-timer",
+      "kind": "transition-action",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition actions execute only after the initiating task transition is authorized."
+    },
+    {
+      "id": "transition-action:auto-stop-timer",
+      "kind": "transition-action",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition actions execute only after the initiating task transition is authorized."
+    },
+    {
+      "id": "transition-action:send-webhook",
+      "kind": "transition-action",
+      "classification": "workspace-admin",
+      "permissions": ["admin:manage"],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "denialReason": "Webhook transition actions can only be configured through admin-guarded transition hook settings."
+    },
+    {
+      "id": "transition-action:send-notification",
+      "kind": "transition-action",
+      "classification": "workspace-admin",
+      "permissions": ["admin:manage"],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "denialReason": "Notification transition actions can only be configured through admin-guarded transition hook settings."
+    },
+    {
+      "id": "transition-action:prompt-lessons-learned",
+      "kind": "transition-action",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition actions execute only after the initiating task transition is authorized."
+    },
+    {
+      "id": "transition-action:log-activity",
+      "kind": "transition-action",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "shared/src/types/transition-hooks.types.ts",
+      "justification": "Transition actions execute only after the initiating task transition is authorized."
+    },
+    {
+      "id": "command-palette:new-task",
+      "kind": "command-palette",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Creating a task through the command palette requires task write access."
+    },
+    {
+      "id": "command-palette:toggle-theme",
+      "kind": "command-palette",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "justification": "Theme switching is a client-local preference and does not call a privileged API."
+    },
+    {
+      "id": "command-palette:open-search",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "work_product:read"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Opening semantic search leads to task and work product read APIs."
+    },
+    {
+      "id": "command-palette:move-todo",
+      "kind": "command-palette",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Moving a task to To Do requires task write access."
+    },
+    {
+      "id": "command-palette:move-inprogress",
+      "kind": "command-palette",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Moving a task to In Progress requires task write access."
+    },
+    {
+      "id": "command-palette:move-blocked",
+      "kind": "command-palette",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Moving a task to Blocked requires task write access."
+    },
+    {
+      "id": "command-palette:move-done",
+      "kind": "command-palette",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Moving a task to Done requires task write access."
+    },
+    {
+      "id": "command-palette:nav-up",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Task selection shortcuts are only useful after task read access is granted."
+    },
+    {
+      "id": "command-palette:nav-down",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Task selection shortcuts are only useful after task read access is granted."
+    },
+    {
+      "id": "command-palette:open-task",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/components/layout/CommandPalette.tsx",
+      "denialReason": "Opening a selected task requires task read access."
+    },
+    {
+      "id": "command-palette:go-board",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Board navigation leads to task read APIs."
+    },
+    {
+      "id": "command-palette:go-activity",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["telemetry:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Activity navigation leads to activity and telemetry read APIs."
+    },
+    {
+      "id": "command-palette:go-backlog",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Backlog navigation leads to task read APIs."
+    },
+    {
+      "id": "command-palette:go-archive",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Archive navigation leads to task read APIs."
+    },
+    {
+      "id": "command-palette:go-templates",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Template navigation leads to settings read APIs."
+    },
+    {
+      "id": "command-palette:go-workflows",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["workflow:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Workflow navigation leads to workflow read APIs."
+    },
+    {
+      "id": "command-palette:go-drift",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["telemetry:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Drift navigation leads to telemetry read APIs."
+    },
+    {
+      "id": "command-palette:go-decisions",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Decision navigation leads to task-linked decision read APIs."
+    },
+    {
+      "id": "command-palette:go-scoring",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Scoring navigation leads to report read APIs."
+    },
+    {
+      "id": "command-palette:go-policies",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["policy:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Policy navigation leads to policy read APIs."
+    },
+    {
+      "id": "background-job:agent-registry-stale-check",
+      "kind": "background-job",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "server/src/services/agent-registry-service.ts",
+      "justification": "Agent stale checks are server-owned maintenance and are not caller-triggered."
+    },
+    {
+      "id": "background-job:github-sync-poll",
+      "kind": "background-job",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "server/src/services/github-sync-service.ts",
+      "justification": "GitHub sync polling runs from configured server state and is not caller-triggered."
+    },
+    {
+      "id": "background-job:prometheus-event-loop-lag",
+      "kind": "background-job",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "server/src/services/metrics/prometheus.ts",
+      "justification": "Event loop lag sampling records process metrics and is not caller-triggered."
+    },
+    {
+      "id": "background-job:task-github-reconcile",
+      "kind": "background-job",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "server/src/services/task-service.ts",
+      "justification": "Task GitHub reconciliation runs from configured server state and is not caller-triggered."
+    },
+    {
+      "id": "background-job:websocket-heartbeat",
+      "kind": "background-job",
+      "classification": "internal-only",
+      "permissions": [],
+      "source": "server/src/index.ts",
+      "justification": "WebSocket heartbeats maintain authenticated connections and do not expose data."
+    },
+    {
+      "id": "cli:agent-status:agent",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/agent-status.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:agent-status:status",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/agent-status.ts",
+      "denialReason": "Agent status reads require agent read access."
+    },
+    {
+      "id": "cli:agent-status:working",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["telemetry:write"],
+      "source": "cli/src/commands/agent-status.ts",
+      "denialReason": "Agent status writes require telemetry write access."
+    },
+    {
+      "id": "cli:agent-status:idle",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["telemetry:write"],
+      "source": "cli/src/commands/agent-status.ts",
+      "denialReason": "Agent status writes require telemetry write access."
+    },
+    {
+      "id": "cli:agent-status:sub-agent",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["telemetry:write"],
+      "source": "cli/src/commands/agent-status.ts",
+      "denialReason": "Agent status writes require telemetry write access."
+    },
+    {
+      "id": "cli:agents:start",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Starting an agent requires task read and task write access."
+    },
+    {
+      "id": "cli:agents:stop",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Stopping an agent requires task read and task write access."
+    },
+    {
+      "id": "cli:agents:agents:pending",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Listing pending agent requests requires agent read access."
+    },
+    {
+      "id": "cli:agents:agents:complete",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Completing an agent request requires task write access."
+    },
+    {
+      "id": "cli:agents:agents:status",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Agent request status requires agent read access."
+    },
+    {
+      "id": "cli:automation:automation:pending",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/automation.ts",
+      "denialReason": "Automation task reads require task read access."
+    },
+    {
+      "id": "cli:automation:automation:running",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/automation.ts",
+      "denialReason": "Automation task reads require task read access."
+    },
+    {
+      "id": "cli:automation:automation:start",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/automation.ts",
+      "denialReason": "Starting automation requires task read and task write access."
+    },
+    {
+      "id": "cli:automation:automation:complete",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/automation.ts",
+      "denialReason": "Completing automation requires task read and task write access."
+    },
+    {
+      "id": "cli:backlog:backlog",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/backlog.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:backlog:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Backlog reads require task read access."
+    },
+    {
+      "id": "cli:backlog:add",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Adding backlog items requires task write access."
+    },
+    {
+      "id": "cli:backlog:promote",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Promoting backlog items requires task write access."
+    },
+    {
+      "id": "cli:backlog:demote",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Demoting tasks requires task write access."
+    },
+    {
+      "id": "cli:backlog:delete",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Deleting backlog items requires task write access."
+    },
+    {
+      "id": "cli:backlog:count",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/backlog.ts",
+      "denialReason": "Backlog counts require task read access."
+    },
+    {
+      "id": "cli:comments:comment",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "comment:write"],
+      "source": "cli/src/commands/comments.ts",
+      "denialReason": "Adding comments requires task read and comment write access."
+    },
+    {
+      "id": "cli:github:github",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/github.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:github:sync",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/github.ts",
+      "denialReason": "GitHub sync mutates task state and requires task write access."
+    },
+    {
+      "id": "cli:github:status",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/github.ts",
+      "denialReason": "GitHub sync status requires task read access."
+    },
+    {
+      "id": "cli:github:config",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/github.ts",
+      "denialReason": "GitHub sync config reads and writes require task route access."
+    },
+    {
+      "id": "cli:github:mappings",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/github.ts",
+      "denialReason": "GitHub mappings require task read access."
+    },
+    {
+      "id": "cli:notifications:notify",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "cli/src/commands/notifications.ts",
+      "denialReason": "Creating notifications requires comment write access."
+    },
+    {
+      "id": "cli:notifications:notify:check",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "cli/src/commands/notifications.ts",
+      "denialReason": "Notification checks can create notifications and require comment write access."
+    },
+    {
+      "id": "cli:notifications:notify:pending",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/notifications.ts",
+      "denialReason": "Pending notification reads require agent read access."
+    },
+    {
+      "id": "cli:notifications:notify:list",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/notifications.ts",
+      "denialReason": "Notification lists require agent read access."
+    },
+    {
+      "id": "cli:notifications:notify:clear",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "cli/src/commands/notifications.ts",
+      "denialReason": "Clearing notifications requires comment write access."
+    },
+    {
+      "id": "cli:projects:project",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/projects.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:projects:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/projects.ts",
+      "denialReason": "Project reads require settings read access."
+    },
+    {
+      "id": "cli:projects:create",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "cli/src/commands/projects.ts",
+      "denialReason": "Project creation requires settings write access."
+    },
+    {
+      "id": "cli:setup:setup",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/setup.ts",
+      "denialReason": "Setup can create a sample task and requires task write access unless skipped."
+    },
+    {
+      "id": "cli:sprints:sprint",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/sprints.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:sprints:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Sprint reads require settings read access."
+    },
+    {
+      "id": "cli:sprints:create",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Sprint creation requires settings write access."
+    },
+    {
+      "id": "cli:sprints:update",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Sprint updates require settings write access."
+    },
+    {
+      "id": "cli:sprints:delete",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Sprint deletion requires settings write access."
+    },
+    {
+      "id": "cli:sprints:suggestions",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Archive suggestions require task read access."
+    },
+    {
+      "id": "cli:sprints:close",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/sprints.ts",
+      "denialReason": "Closing a sprint mutates tasks and requires task write access."
+    },
+    {
+      "id": "cli:summary:summary",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "cli/src/commands/summary.ts",
+      "denialReason": "Summary output requires report read access."
+    },
+    {
+      "id": "cli:summary:standup",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "cli/src/commands/summary.ts",
+      "denialReason": "Standup reports require report read access."
+    },
+    {
+      "id": "cli:summary:memory",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "cli/src/commands/summary.ts",
+      "denialReason": "Memory summaries require report read access."
+    },
+    {
+      "id": "cli:tasks:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task lists require task read access."
+    },
+    {
+      "id": "cli:tasks:show",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task details require task read access."
+    },
+    {
+      "id": "cli:tasks:create",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task creation requires task write access."
+    },
+    {
+      "id": "cli:tasks:update",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task updates require task read and task write access."
+    },
+    {
+      "id": "cli:tasks:archive",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task archive operations require task read and task write access."
+    },
+    {
+      "id": "cli:tasks:delete",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/tasks.ts",
+      "denialReason": "Task deletion requires task read and task write access."
+    },
+    {
+      "id": "cli:time:time",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/time.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:time:start",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/time.ts",
+      "denialReason": "Starting timers requires task read and task write access."
+    },
+    {
+      "id": "cli:time:stop",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/time.ts",
+      "denialReason": "Stopping timers requires task read and task write access."
+    },
+    {
+      "id": "cli:time:entry",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/time.ts",
+      "denialReason": "Manual time entries require task read and task write access."
+    },
+    {
+      "id": "cli:time:show",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "cli/src/commands/time.ts",
+      "denialReason": "Time entry display requires task read access."
+    },
+    {
+      "id": "cli:usage:usage",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "cli/src/commands/usage.ts",
+      "denialReason": "Usage reports require report read access."
+    },
+    {
+      "id": "cli:workflow:begin",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write", "telemetry:write"],
+      "source": "cli/src/commands/workflow.ts",
+      "denialReason": "Workflow begin mutates task, timer, and agent status state."
+    },
+    {
+      "id": "cli:workflow:done",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write", "comment:write", "telemetry:write"],
+      "source": "cli/src/commands/workflow.ts",
+      "denialReason": "Workflow completion mutates task, timer, comment, and agent status state."
+    },
+    {
+      "id": "cli:workflow:block",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write", "comment:write"],
+      "source": "cli/src/commands/workflow.ts",
+      "denialReason": "Blocking a task mutates task and comment state."
+    },
+    {
+      "id": "cli:workflow:unblock",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/workflow.ts",
+      "denialReason": "Unblocking a task requires task write access."
+    },
+    {
+      "id": "mcp:start_agent",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/agents.ts",
+      "denialReason": "Starting an agent requires task read and task write access."
+    },
+    {
+      "id": "mcp:stop_agent",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/agents.ts",
+      "denialReason": "Stopping an agent requires task read and task write access."
+    },
+    {
+      "id": "mcp:list_pending_automation",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/automation.ts",
+      "denialReason": "Listing pending automation requires task read access."
+    },
+    {
+      "id": "mcp:list_running_automation",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/automation.ts",
+      "denialReason": "Listing running automation requires task read access."
+    },
+    {
+      "id": "mcp:start_automation",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/automation.ts",
+      "denialReason": "Starting automation requires task read and task write access."
+    },
+    {
+      "id": "mcp:complete_automation",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/automation.ts",
+      "denialReason": "Completing automation requires task read and task write access."
+    },
+    {
+      "id": "mcp:add_comment",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "mcp/src/tools/comments.ts",
+      "denialReason": "Adding comments requires comment write access."
+    },
+    {
+      "id": "mcp:list_comments",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/comments.ts",
+      "denialReason": "Listing comments requires task read access."
+    },
+    {
+      "id": "mcp:delete_comment",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "mcp/src/tools/comments.ts",
+      "denialReason": "Deleting comments requires comment write access."
+    },
+    {
+      "id": "mcp:create_notification",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "mcp/src/tools/notifications.ts",
+      "denialReason": "Creating notifications requires comment write access."
+    },
+    {
+      "id": "mcp:get_pending_notifications",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "mcp/src/tools/notifications.ts",
+      "denialReason": "Pending notification reads require agent read access."
+    },
+    {
+      "id": "mcp:check_notifications",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["comment:write"],
+      "source": "mcp/src/tools/notifications.ts",
+      "denialReason": "Notification checks can create notifications and require comment write access."
+    },
+    {
+      "id": "mcp:list_projects",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Project listing requires settings read access."
+    },
+    {
+      "id": "mcp:get_project",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Project details require settings read access."
+    },
+    {
+      "id": "mcp:create_project",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Creating projects requires settings write access."
+    },
+    {
+      "id": "mcp:update_project",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Updating projects requires settings write access."
+    },
+    {
+      "id": "mcp:delete_project",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Deleting projects requires settings write access."
+    },
+    {
+      "id": "mcp:get_project_stats",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Project stats require task read access."
+    },
+    {
+      "id": "mcp:reorder_projects",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/projects.ts",
+      "denialReason": "Reordering projects requires settings write access."
+    },
+    {
+      "id": "mcp:list_sprints",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Sprint listing requires settings read access."
+    },
+    {
+      "id": "mcp:get_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Sprint details require settings read access."
+    },
+    {
+      "id": "mcp:create_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Creating sprints requires settings write access."
+    },
+    {
+      "id": "mcp:update_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Updating sprints requires settings write access."
+    },
+    {
+      "id": "mcp:delete_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Deleting sprints requires settings write access."
+    },
+    {
+      "id": "mcp:can_delete_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Sprint deletion checks require settings read access."
+    },
+    {
+      "id": "mcp:reorder_sprints",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Reordering sprints requires settings write access."
+    },
+    {
+      "id": "mcp:get_archive_suggestions",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Archive suggestions require task read access."
+    },
+    {
+      "id": "mcp:close_sprint",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "mcp/src/tools/sprints.ts",
+      "denialReason": "Closing a sprint mutates tasks and requires task write access."
+    },
+    {
+      "id": "mcp:get_summary",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "mcp/src/tools/summary.ts",
+      "denialReason": "Summary tools require report read access."
+    },
+    {
+      "id": "mcp:get_memory_summary",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["report:read"],
+      "source": "mcp/src/tools/summary.ts",
+      "denialReason": "Memory summary tools require report read access."
+    },
+    {
+      "id": "mcp:list_tasks",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task listing requires task read access."
+    },
+    {
+      "id": "mcp:get_task",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task details require task read access."
+    },
+    {
+      "id": "mcp:create_task",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:write"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task creation requires task write access."
+    },
+    {
+      "id": "mcp:update_task",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task updates require task read and task write access."
+    },
+    {
+      "id": "mcp:archive_task",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task archive operations require task read and task write access."
+    },
+    {
+      "id": "mcp:delete_task",
+      "kind": "mcp",
+      "classification": "authenticated-write",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/tasks.ts",
+      "denialReason": "Task deletion requires task read and task write access."
+    }
+  ]
+}
