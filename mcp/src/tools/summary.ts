@@ -1,4 +1,4 @@
-import { api, API_BASE, buildApiHeaders } from '../utils/api.js';
+import { api, API_BASE, assertApiPermissionForRequest, buildApiHeaders } from '../utils/api.js';
 
 export const summaryTools = [
   {
@@ -36,6 +36,7 @@ export async function handleSummaryTool(name: string, args: any): Promise<any> {
 
     case 'get_memory_summary': {
       const hours = (args as { hours?: number })?.hours || 24;
+      await assertApiPermissionForRequest(`/api/summary/memory?hours=${hours}`);
       const res = await fetch(`${API_BASE}/api/summary/memory?hours=${hours}`, {
         headers: buildApiHeaders(),
       });

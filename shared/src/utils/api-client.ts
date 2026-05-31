@@ -3,6 +3,19 @@
  */
 
 import type { Task } from '../types/task.types.js';
+import { createApiPermissionGuard, type ClientAuthContext } from './api-permissions.js';
+export {
+  ClientPermissionError,
+  createApiPermissionGuard,
+  getApiPermissionRequirement,
+  hasClientPermission,
+  type ApiPermissionRequirement,
+  type ClientAuthActorType,
+  type ClientAuthContext,
+  type ClientAuthMethod,
+  type ClientAuthPermission,
+  type ClientAuthRole,
+} from './api-permissions.js';
 
 const DEFAULT_BASE = 'http://localhost:3001';
 
@@ -116,6 +129,18 @@ export function createApiClient(baseUrl = DEFAULT_BASE, apiKey = getEnv('VK_API_
     }
 
     return body as T;
+  };
+}
+
+export function createGuardedApiClient(baseUrl = DEFAULT_BASE, apiKey = getEnv('VK_API_KEY')) {
+  const rawApi = createApiClient(baseUrl, apiKey);
+  const assertPermission = createApiPermissionGuard(() =>
+    rawApi<ClientAuthContext>('/api/auth/context')
+  );
+
+  return async function api<T>(path: string, options?: RequestInit): Promise<T> {
+    await assertPermission(path, options);
+    return rawApi<T>(path, options);
   };
 }
 

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { api, API_BASE, buildApiHeaders } from '../utils/api.js';
+import { api, API_BASE, assertApiPermissionForRequest, buildApiHeaders } from '../utils/api.js';
 
 export function registerSummaryCommands(program: Command): void {
   // Create summary parent command with subcommands
@@ -88,6 +88,9 @@ export function registerSummaryCommands(program: Command): void {
           const standup = await api<unknown>(`/api/summary/standup?date=${dateParam}&format=json`);
           console.log(JSON.stringify(standup, null, 2));
         } else {
+          await assertApiPermissionForRequest(
+            `/api/summary/standup?date=${dateParam}&format=${format}`
+          );
           // Fetch markdown or text directly
           const res = await fetch(
             `${API_BASE}/api/summary/standup?date=${dateParam}&format=${format}`,
@@ -121,6 +124,7 @@ export function registerSummaryCommands(program: Command): void {
           const recent = await api<unknown>(`/api/summary/recent?hours=${options.hours}`);
           console.log(JSON.stringify(recent, null, 2));
         } else {
+          await assertApiPermissionForRequest(`/api/summary/memory?hours=${options.hours}`);
           const res = await fetch(`${API_BASE}/api/summary/memory?hours=${options.hours}`, {
             headers: buildApiHeaders({ accept: 'text/markdown, text/plain, application/json' }),
           });

@@ -156,6 +156,37 @@ router.get(
 
 /**
  * @openapi
+ * /api/auth/context:
+ *   get:
+ *     summary: Return current authenticated API context
+ *     description: Returns non-secret auth metadata for CLI/MCP scoped token preflight.
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Current auth context
+ *       401:
+ *         description: Authentication required
+ */
+router.get(
+  '/context',
+  authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    res.json({
+      role: req.auth?.role,
+      keyName: req.auth?.keyName,
+      isLocalhost: req.auth?.isLocalhost,
+      userId: req.auth?.userId,
+      workspaceId: req.auth?.workspaceId,
+      actorType: req.auth?.actorType,
+      authMethod: req.auth?.authMethod,
+      tokenName: req.auth?.tokenName,
+      permissions: req.auth?.permissions ?? [],
+    });
+  })
+);
+
+/**
+ * @openapi
  * /api/auth/setup:
  *   post:
  *     summary: First-time password setup

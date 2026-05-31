@@ -645,6 +645,10 @@ automation should use an `agent` role key; read-only dashboards and reporting
 scripts should use `read-only`. Reserve the admin key for setup, migration,
 backup/import, and policy operations.
 
+The CLI preflights protected commands against `/api/auth/context` before it
+calls the target endpoint. If `VK_API_KEY` lacks the mapped permission, the
+command fails locally without sending the mutating request.
+
 ### Read/Write Smoke Check
 
 Use this check after linking `vk` and exporting `VK_API_URL`/`VK_API_KEY`. It proves the CLI can both read from and write to the configured VK server.
