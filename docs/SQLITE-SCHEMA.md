@@ -1106,6 +1106,22 @@ center search, and export flows.
 | `work_product_versions` | Bounded non-destructive version history for refine, regenerate, restore, and manual updates.                 |
 | `work_product_search`   | FTS index for command-center and search reachability without walking task/comment files.                     |
 
+## Operational Provenance Repository Implementation
+
+SQLite mode also exposes a lightweight operational provenance repository over
+the normalized runtime tables. The repository returns bounded metadata records
+for task or workflow-run context without exposing raw JSON payloads or walking
+legacy files. New v5 surfaces can use these records to populate command center
+results, task work views, run timelines, maintenance screens, and completion
+packets before those surfaces own their final UI.
+
+| Query                      | Indexed records returned                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `listForTask(taskId)`      | Work products, task deliverables, task attachments, workflow runs, notifications, and task chat messages.                             |
+| `listForRun(sourceRunId)`  | Work products, task deliverables, workflow run metadata, and scheduled deliverable snapshots tied to a source run.                    |
+| `listRecent({ limit })`    | Recent operational artifacts across work products, deliverables, attachments, workflow runs, scheduled runs, notifications, and chat. |
+| Returned provenance fields | Kind, ID, workspace, title, status/subtype, task/run/workflow IDs, agent/model, path/target URL, redaction, timestamps.               |
+
 ## Scheduled Deliverable Repository Implementation
 
 Scheduled deliverables and recurring run history move into SQLite when
