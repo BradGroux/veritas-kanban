@@ -5,6 +5,10 @@ import {
   notifyChatMessage,
   type TaskContext,
 } from './clawdbot-webhook-service.js';
+import {
+  canReceiveWebSocketEvent,
+  type WebSocketDeliveryOptions,
+} from './websocket-permissions.js';
 
 /**
  * Simple broadcast service that sends task change events to all connected WebSocket clients.
@@ -26,11 +30,13 @@ export function initBroadcast(wss: WebSocketServer): void {
  *
  * @param payload - Pre-serialized JSON string
  */
-function broadcastToClients(payload: string): void {
+function broadcastToClients(payload: string, options: WebSocketDeliveryOptions = {}): void {
   if (!wssRef) return;
 
   const clients = Array.from(wssRef.clients);
-  const openClients = clients.filter((c) => c.readyState === 1);
+  const openClients = clients.filter(
+    (client) => client.readyState === 1 && canReceiveWebSocketEvent(client, options)
+  );
 
   // For small client counts, send synchronously
   if (openClients.length <= BROADCAST_BATCH_SIZE) {
@@ -97,7 +103,7 @@ export function broadcastTaskChange(
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['task:read'] });
 
   // Also notify via webhook (fire-and-forget)
   notifyTaskChange(changeType, taskId, taskContext);
@@ -119,7 +125,7 @@ export function broadcastChatMessage(sessionId: string, event: ChatBroadcastEven
 
   const payload = JSON.stringify(event);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['task:read'] });
 
   // Also notify via webhook (fire-and-forget)
   notifyChatMessage(
@@ -147,7 +153,7 @@ export function broadcastSquadMessage(message: SquadMessage): void {
 
   const payload = JSON.stringify(event);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['agent:read'] });
 }
 
 /**
@@ -164,7 +170,7 @@ export function broadcastTelemetryEvent(event: AnyTelemetryEvent): void {
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['telemetry:read'] });
 }
 
 export interface BroadcastMessageEvent {
@@ -194,7 +200,7 @@ export function broadcastNewMessage(broadcast: BroadcastMessageEvent['broadcast'
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['agent:read'] });
 }
 
 export interface WorkflowStatusEvent {
@@ -282,5 +288,5 @@ export function broadcastWorkflowStatus(run: {
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload);
+  broadcastToClients(payload, { permissions: ['workflow:read'] });
 }

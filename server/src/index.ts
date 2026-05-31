@@ -40,6 +40,7 @@ import {
   authorize,
   authorizeWrite,
   authenticateWebSocket,
+  type AuthPermission,
   validateWebSocketOrigin,
   getAuthStatus,
   checkAdminKeyStrength,
@@ -59,6 +60,7 @@ import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js'
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
 import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
+import { canReceiveWebSocketEvent } from './services/websocket-permissions.js';
 
 const log = createLogger('server');
 
@@ -628,6 +630,32 @@ const agentSubscriptions = new Map<string, Set<WebSocket>>();
 // Track chat subscriptions: sessionId -> Set of WebSocket clients
 const chatSubscriptions = new Map<string, Set<WebSocket>>();
 
+function getMessageWorkspaceId(message: Record<string, unknown>): string {
+  return typeof message.workspaceId === 'string' && message.workspaceId.trim()
+    ? message.workspaceId
+    : 'local';
+}
+
+function sendWebSocketForbidden(
+  ws: HeartbeatWebSocket,
+  requestType: string,
+  permissions: AuthPermission[],
+  workspaceId: string
+): void {
+  if (ws.readyState !== WebSocket.OPEN) return;
+
+  ws.send(
+    JSON.stringify({
+      type: 'error',
+      requestType,
+      code: 'FORBIDDEN',
+      message: 'Insufficient permissions',
+      required: permissions,
+      workspaceId,
+    })
+  );
+}
+
 // ---- Heartbeat: server pings every WS_HEARTBEAT_INTERVAL_MS ----
 const heartbeatInterval = setInterval(() => {
   for (const client of wss.clients) {
@@ -758,6 +786,13 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
 
       // Handle subscription to chat session
       if (message.type === 'chat:subscribe' && message.sessionId) {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['task:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'chat:subscribe', permissions, workspaceId);
+          return;
+        }
+
         // Unsubscribe from previous chat session
         if (subscribedChatSession) {
           const subs = chatSubscriptions.get(subscribedChatSession);
@@ -792,6 +827,13 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
 
       // Handle subscription to agent output
       if (message.type === 'subscribe' && message.taskId) {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['task:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'subscribe', permissions, workspaceId);
+          return;
+        }
+
         // Unsubscribe from previous task
         if (subscribedTaskId) {
           const subs = agentSubscriptions.get(subscribedTaskId);
