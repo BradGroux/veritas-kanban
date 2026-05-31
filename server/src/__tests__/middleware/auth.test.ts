@@ -22,6 +22,7 @@ import {
   authenticate,
   authorize,
   authorizePermission,
+  authorizePermissionByMethod,
   authorizeWrite,
   authenticateWebSocket,
   validateWebSocketOrigin,
@@ -448,6 +449,57 @@ describe('Auth Middleware', () => {
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'FORBIDDEN' }));
+    });
+
+    it('should select read permissions for safe HTTP methods', () => {
+      const middleware = authorizePermissionByMethod({
+        read: 'settings:read',
+        write: 'settings:write',
+      });
+      const req = mockRequest({ method: 'GET' }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should select write permissions for mutating HTTP methods', () => {
+      const middleware = authorizePermissionByMethod({
+        read: 'settings:read',
+        write: 'settings:write',
+      });
+      const req = mockRequest({ method: 'PATCH' }) as AuthenticatedRequest;
+      req.auth = { role: 'agent', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      middleware(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({ required: ['settings:write'] }),
+        })
+      );
+    });
+
+    it('should honor method and path permission overrides', () => {
+      const middleware = authorizePermissionByMethod({
+        read: 'workflow:read',
+        write: 'workflow:write',
+        overrides: [
+          { methods: ['POST'], path: /^\/workflow-1\/runs\/?$/, permissions: 'workflow:execute' },
+        ],
+      });
+      const req = mockRequest({ method: 'POST', path: '/workflow-1/runs' }) as AuthenticatedRequest;
+      req.auth = { role: 'agent', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
     });
   });
 

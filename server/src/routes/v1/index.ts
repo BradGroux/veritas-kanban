@@ -16,6 +16,36 @@
  */
 import { Router, type IRouter, type Request } from 'express';
 import { readRateLimit, writeRateLimit, uploadRateLimit } from '../../middleware/rate-limit.js';
+import {
+  activityAccess,
+  adminAccess,
+  agentSelfServiceAccess,
+  agentStatusAccess,
+  agentTaskAccess,
+  backupAccess,
+  broadcastAccess,
+  configAccess,
+  costPredictionAccess,
+  delegationAccess,
+  feedbackAccess,
+  notificationAccess,
+  policyAccess,
+  promptRegistryAccess,
+  reportAccess,
+  reportRoutesAccess,
+  scoringAccess,
+  searchAccess,
+  settingsAccess,
+  statusHistoryAccess,
+  taskAccess,
+  taskCommentAccess,
+  taskReadAccess,
+  telemetryAccess,
+  transcriptAccess,
+  workflowAccess,
+  workProductAccess,
+  workspaceAccess,
+} from './permissions.js';
 
 // Task routes (order-sensitive — see note above)
 import { taskArchiveRoutes } from '../task-archive.js';
@@ -100,15 +130,15 @@ v1Router.use((req: Request, _res, next) => {
 });
 
 // ── Task routes (order-sensitive) ────────────────────────────
-v1Router.use('/tasks', taskArchiveRoutes);
-v1Router.use('/tasks', taskTimeRoutes);
-v1Router.use('/tasks', taskRoutes);
-v1Router.use('/tasks', taskCommentRoutes);
-v1Router.use('/tasks', taskObservationRoutes);
-v1Router.use('/tasks', taskSubtaskRoutes);
-v1Router.use('/tasks', taskVerificationRoutes);
-v1Router.use('/tasks', taskDeliverableRoutes);
-v1Router.use('/tasks', taskWorkProductRoutes);
+v1Router.use('/tasks', taskAccess, taskArchiveRoutes);
+v1Router.use('/tasks', taskAccess, taskTimeRoutes);
+v1Router.use('/tasks', taskAccess, taskRoutes);
+v1Router.use('/tasks', taskCommentAccess, taskCommentRoutes);
+v1Router.use('/tasks', taskAccess, taskObservationRoutes);
+v1Router.use('/tasks', taskAccess, taskSubtaskRoutes);
+v1Router.use('/tasks', taskAccess, taskVerificationRoutes);
+v1Router.use('/tasks', taskAccess, taskDeliverableRoutes);
+v1Router.use('/tasks', workProductAccess, taskWorkProductRoutes);
 
 // Attachment routes get the stricter upload rate limit (20 req/min)
 // applied BEFORE the route handler for upload (POST) requests.
@@ -121,70 +151,71 @@ v1Router.use(
     }
     next();
   },
+  taskAccess,
   attachmentRoutes
 );
 
 // ── Backlog routes ───────────────────────────────────────────
-v1Router.use('/backlog', backlogRoutes);
+v1Router.use('/backlog', taskAccess, backlogRoutes);
 
 // ── Observation search ───────────────────────────────────────
-v1Router.use('/observations', observationSearchRouter);
+v1Router.use('/observations', taskReadAccess, observationSearchRouter);
 
 // ── Feature routes ───────────────────────────────────────────
-v1Router.use('/config', configRoutes);
-v1Router.use('/changes', changesRoutes); // Efficient agent polling endpoint
-v1Router.use('/chat', chatRoutes); // Chat interface - must be before agent routes
-v1Router.use('/agents/register', agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
-v1Router.use('/agents/permissions', agentPermissionRoutes);
-v1Router.use('/agents', agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
-v1Router.use('/agents', agentRoutes);
-v1Router.use('/diff', diffRoutes);
-v1Router.use('/automation', automationRoutes);
-v1Router.use('/summary', summaryRoutes);
-v1Router.use('/notifications', notificationRoutes);
-v1Router.use('/broadcasts', broadcastRoutes);
-v1Router.use('/templates', templateRoutes);
-v1Router.use('/task-types', taskTypeRoutes);
-v1Router.use('/projects', projectRoutes);
-v1Router.use('/sprints', sprintRoutes);
-v1Router.use('/activity', activityRoutes);
-v1Router.use('/github', githubRoutes);
-v1Router.use('/preview', previewRoutes);
-v1Router.use('/conflicts', conflictRoutes);
-v1Router.use('/telemetry', telemetryRoutes);
-v1Router.use('/metrics', metricsRoutes);
-v1Router.use('/analytics', analyticsRoutes);
-v1Router.use('/traces', tracesRoutes);
-v1Router.use('/drift', driftRoutes);
-v1Router.use('/settings', settingsRoutes);
-v1Router.use('/settings/transition-hooks', transitionHooksRoutes);
-v1Router.use('/agent/status', agentStatusRoutes);
-v1Router.use('/cost-prediction', costPredictionRoutes);
-v1Router.use('/deliverables', scheduledDeliverablesRoutes);
-v1Router.use('/reports', reportRoutes);
-v1Router.use('/doc-freshness', docFreshnessRoutes);
-v1Router.use('/docs', docsRoutes);
-v1Router.use('/errors', errorLearningRoutes);
-v1Router.use('/search', searchRoutes);
-v1Router.use('/work-products', workProductRoutes);
-v1Router.use('/hooks', lifecycleHooksRoutes);
-v1Router.use('/shared-resources', sharedResourcesRoutes);
-v1Router.use('/status-history', statusHistoryRoutes);
-v1Router.use('/digest', digestRoutes);
-v1Router.use('/audit', auditRoutes);
-v1Router.use('/lessons', lessonsRoutes);
-v1Router.use('/delegation', delegationRoutes);
-v1Router.use('/workflows', workflowRoutes);
-v1Router.use('/tool-policies', toolPolicyRoutes);
-v1Router.use('/policies', policyRoutes);
-v1Router.use('/integrations', integrationsRoutes);
-v1Router.use('/transcripts', transcriptRoutes);
-v1Router.use('/scoring', scoringRoutes);
-v1Router.use('/system/health', systemHealthRouter);
-v1Router.use('/decisions', decisionRoutes);
-v1Router.use('/feedback', feedbackRoutes);
-v1Router.use('/prompt-registry', promptRegistryRoutes);
-v1Router.use('/sqlite', sqlitePortabilityRoutes);
-v1Router.use('/identity', identityRoutes);
+v1Router.use('/config', configAccess, configRoutes);
+v1Router.use('/changes', taskReadAccess, changesRoutes); // Efficient agent polling endpoint
+v1Router.use('/chat', taskCommentAccess, chatRoutes); // Chat interface - must be before agent routes
+v1Router.use('/agents/register', agentSelfServiceAccess, agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
+v1Router.use('/agents/permissions', agentSelfServiceAccess, agentPermissionRoutes);
+v1Router.use('/agents', agentSelfServiceAccess, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
+v1Router.use('/agents', agentTaskAccess, agentRoutes);
+v1Router.use('/diff', taskReadAccess, diffRoutes);
+v1Router.use('/automation', taskAccess, automationRoutes);
+v1Router.use('/summary', reportAccess, summaryRoutes);
+v1Router.use('/notifications', notificationAccess, notificationRoutes);
+v1Router.use('/broadcasts', broadcastAccess, broadcastRoutes);
+v1Router.use('/templates', settingsAccess, templateRoutes);
+v1Router.use('/task-types', settingsAccess, taskTypeRoutes);
+v1Router.use('/projects', settingsAccess, projectRoutes);
+v1Router.use('/sprints', settingsAccess, sprintRoutes);
+v1Router.use('/activity', activityAccess, activityRoutes);
+v1Router.use('/github', taskAccess, githubRoutes);
+v1Router.use('/preview', taskReadAccess, previewRoutes);
+v1Router.use('/conflicts', taskAccess, conflictRoutes);
+v1Router.use('/telemetry', telemetryAccess, telemetryRoutes);
+v1Router.use('/metrics', reportAccess, metricsRoutes);
+v1Router.use('/analytics', reportAccess, analyticsRoutes);
+v1Router.use('/traces', telemetryAccess, tracesRoutes);
+v1Router.use('/drift', telemetryAccess, driftRoutes);
+v1Router.use('/settings/transition-hooks', adminAccess, transitionHooksRoutes);
+v1Router.use('/settings', settingsAccess, settingsRoutes);
+v1Router.use('/agent/status', agentStatusAccess, agentStatusRoutes);
+v1Router.use('/cost-prediction', costPredictionAccess, costPredictionRoutes);
+v1Router.use('/deliverables', taskAccess, scheduledDeliverablesRoutes);
+v1Router.use('/reports', reportRoutesAccess, reportRoutes);
+v1Router.use('/doc-freshness', settingsAccess, docFreshnessRoutes);
+v1Router.use('/docs', settingsAccess, docsRoutes);
+v1Router.use('/errors', telemetryAccess, errorLearningRoutes);
+v1Router.use('/search', searchAccess, searchRoutes);
+v1Router.use('/work-products', workProductAccess, workProductRoutes);
+v1Router.use('/hooks', settingsAccess, lifecycleHooksRoutes);
+v1Router.use('/shared-resources', settingsAccess, sharedResourcesRoutes);
+v1Router.use('/status-history', statusHistoryAccess, statusHistoryRoutes);
+v1Router.use('/digest', reportAccess, digestRoutes);
+v1Router.use('/audit', adminAccess, auditRoutes);
+v1Router.use('/lessons', taskReadAccess, lessonsRoutes);
+v1Router.use('/delegation', delegationAccess, delegationRoutes);
+v1Router.use('/workflows', workflowAccess, workflowRoutes);
+v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
+v1Router.use('/policies', policyAccess, policyRoutes);
+v1Router.use('/integrations', settingsAccess, integrationsRoutes);
+v1Router.use('/transcripts', transcriptAccess, transcriptRoutes);
+v1Router.use('/scoring', scoringAccess, scoringRoutes);
+v1Router.use('/system/health', workspaceAccess, systemHealthRouter);
+v1Router.use('/decisions', taskAccess, decisionRoutes);
+v1Router.use('/feedback', feedbackAccess, feedbackRoutes);
+v1Router.use('/prompt-registry', promptRegistryAccess, promptRegistryRoutes);
+v1Router.use('/sqlite', backupAccess, sqlitePortabilityRoutes);
+v1Router.use('/identity', workspaceAccess, identityRoutes);
 
 export { v1Router };

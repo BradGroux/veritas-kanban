@@ -515,6 +515,57 @@ export function authorizePermission(...allowedPermissions: AuthPermission[]) {
   };
 }
 
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+type PermissionInput = AuthPermission | AuthPermission[];
+
+export interface MethodPermissionOverride {
+  methods?: string[];
+  path?: RegExp;
+  permissions: PermissionInput;
+}
+
+export interface MethodPermissionConfig {
+  read: PermissionInput;
+  write?: PermissionInput;
+  overrides?: MethodPermissionOverride[];
+}
+
+function normalizePermissions(permissions: PermissionInput): AuthPermission[] {
+  return Array.isArray(permissions) ? permissions : [permissions];
+}
+
+/**
+ * Authorization middleware factory - selects explicit permissions by method.
+ *
+ * REST route groups can use this at mount time to require read permissions for
+ * safe methods and write/execute permissions for mutating methods, with narrow
+ * path overrides for read-like POST endpoints.
+ */
+export function authorizePermissionByMethod(config: MethodPermissionConfig) {
+  const readPermissions = normalizePermissions(config.read);
+  const writePermissions = normalizePermissions(config.write ?? config.read);
+  const overrides = config.overrides ?? [];
+
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    const override = overrides.find((candidate) => {
+      const methodMatches =
+        !candidate.methods ||
+        candidate.methods.some((method) => method.toUpperCase() === req.method.toUpperCase());
+      const pathMatches = !candidate.path || candidate.path.test(req.path);
+      return methodMatches && pathMatches;
+    });
+
+    const requiredPermissions = override
+      ? normalizePermissions(override.permissions)
+      : READ_METHODS.has(req.method)
+        ? readPermissions
+        : writePermissions;
+
+    authorizePermission(...requiredPermissions)(req, res, next);
+  };
+}
+
 /**
  * Middleware that allows read operations for read-only users
  * but requires admin for write operations

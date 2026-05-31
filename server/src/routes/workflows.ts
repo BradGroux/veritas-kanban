@@ -26,7 +26,7 @@ function getStringParam(param: string | string[] | undefined): string {
 
 // Helper to get user ID from request
 function getUserId(req: AuthenticatedRequest): string {
-  return req.auth?.keyName || 'unknown';
+  return req.auth?.userId || req.auth?.keyName || 'unknown';
 }
 
 // Validation schemas
