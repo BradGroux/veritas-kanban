@@ -85,7 +85,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Multi-Agent Orchestration](docs/SOP-multi-agent-orchestration.md) — PM + worker handoffs.
 - [Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — enforce Claude ↔ GPT reviews.
 - [Agent Governance SOPs](docs/) — [Policy engine](docs/SOP-agent-policy-engine.md), [drift detection](docs/SOP-behavioral-drift-detection.md), [decision audit](docs/SOP-decision-audit-trail.md), [output evaluation](docs/SOP-output-evaluation.md), [user feedback](docs/SOP-user-feedback.md).
-- [Operational SOPs](docs/) — [Broadcasts](docs/SOP-broadcasts.md), [delegation](docs/SOP-delegation.md), [deliverables](docs/SOP-deliverables.md), [prompt registry](docs/SOP-prompt-registry.md), [squad chat](docs/SOP-squad-chat.md), [system health](docs/SOP-system-health-monitoring.md).
+- [Operational SOPs](docs/) — [Broadcasts](docs/SOP-broadcasts.md), [delegation](docs/SOP-delegation.md), [deliverables](docs/SOP-deliverables.md), [work products](docs/features/work-products.md), [prompt registry](docs/SOP-prompt-registry.md), [squad chat](docs/SOP-squad-chat.md), [system health](docs/SOP-system-health-monitoring.md).
 - [Best Practices](docs/BEST-PRACTICES.md) & [Tips + Tricks](docs/TIPS-AND-TRICKS.md) — patterns, shortcuts, integrations.
 - [Real-World Examples](docs/EXAMPLES-agent-workflows.md) — copy/pasteable agent recipes.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — deeper diagnostics when things wobble.
@@ -207,6 +207,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Error learning** — Structured failure analysis with similarity search
 - **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API
 - **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.)
+- **Durable Work Products** — Versioned generated reports, checklists, tables, and handoff artifacts with provenance and redacted previews
 - **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling
 - **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing
 - **OpenClaw Integration** — Optional direct gateway wake for real-time squad chat notifications and agent orchestration

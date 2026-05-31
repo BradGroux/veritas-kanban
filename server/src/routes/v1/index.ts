@@ -26,6 +26,7 @@ import { taskObservationRoutes, observationSearchRouter } from '../task-observat
 import { taskSubtaskRoutes } from '../task-subtasks.js';
 import { taskVerificationRoutes } from '../task-verification.js';
 import { taskDeliverableRoutes } from '../task-deliverables.js';
+import { taskWorkProductRoutes, workProductRoutes } from '../work-products.js';
 import attachmentRoutes from '../attachments.js';
 import { backlogRoutes } from '../backlog.js';
 
@@ -105,6 +106,7 @@ v1Router.use('/tasks', taskObservationRoutes);
 v1Router.use('/tasks', taskSubtaskRoutes);
 v1Router.use('/tasks', taskVerificationRoutes);
 v1Router.use('/tasks', taskDeliverableRoutes);
+v1Router.use('/tasks', taskWorkProductRoutes);
 
 // Attachment routes get the stricter upload rate limit (20 req/min)
 // applied BEFORE the route handler for upload (POST) requests.
@@ -162,6 +164,7 @@ v1Router.use('/doc-freshness', docFreshnessRoutes);
 v1Router.use('/docs', docsRoutes);
 v1Router.use('/errors', errorLearningRoutes);
 v1Router.use('/search', searchRoutes);
+v1Router.use('/work-products', workProductRoutes);
 v1Router.use('/hooks', lifecycleHooksRoutes);
 v1Router.use('/shared-resources', sharedResourcesRoutes);
 v1Router.use('/status-history', statusHistoryRoutes);

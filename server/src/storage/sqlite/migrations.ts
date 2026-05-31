@@ -784,6 +784,87 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         WHERE source_run_id IS NOT NULL;
     `,
   },
+  {
+    version: 13,
+    name: '0013_work_product_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS work_products (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'archived')),
+        task_id TEXT,
+        source_run_id TEXT,
+        agent TEXT,
+        model TEXT,
+        version_number INTEGER NOT NULL DEFAULT 1,
+        redaction_json TEXT,
+        source_links_json TEXT,
+        metadata_json TEXT,
+        render_json TEXT NOT NULL,
+        product_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        archived_at TEXT,
+        deleted_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_work_products_workspace_updated
+        ON work_products(workspace_id, updated_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_work_products_task_updated
+        ON work_products(task_id, updated_at DESC)
+        WHERE task_id IS NOT NULL AND deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_work_products_source_run
+        ON work_products(source_run_id, updated_at DESC)
+        WHERE source_run_id IS NOT NULL AND deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_work_products_kind_status
+        ON work_products(workspace_id, kind, status, updated_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_work_products_agent_updated
+        ON work_products(agent, updated_at DESC)
+        WHERE agent IS NOT NULL AND deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS work_product_versions (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL REFERENCES work_products(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL,
+        change_type TEXT NOT NULL,
+        change_summary TEXT,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        agent TEXT,
+        model TEXT,
+        redaction_json TEXT,
+        render_json TEXT NOT NULL,
+        version_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (product_id, version_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_work_product_versions_product
+        ON work_product_versions(product_id, version_number DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_work_product_versions_workspace_created
+        ON work_product_versions(workspace_id, created_at DESC);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS work_product_search USING fts5(
+        product_id UNINDEXED,
+        title,
+        body,
+        tokenize='porter unicode61'
+      );
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

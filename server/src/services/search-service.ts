@@ -2,11 +2,12 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '../lib/logger.js';
+import { getWorkProductService } from './work-product-service.js';
 
 const log = createLogger('search-service');
 
 export type SearchBackend = 'auto' | 'qmd' | 'keyword';
-export type SearchCollection = 'tasks-active' | 'tasks-archive' | 'docs';
+export type SearchCollection = 'tasks-active' | 'tasks-archive' | 'docs' | 'work-products';
 
 export interface SearchRequest {
   query: string;
@@ -49,7 +50,12 @@ interface SearchSource {
 }
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const DEFAULT_COLLECTIONS: SearchCollection[] = ['tasks-active', 'tasks-archive', 'docs'];
+const DEFAULT_COLLECTIONS: SearchCollection[] = [
+  'tasks-active',
+  'tasks-archive',
+  'docs',
+  'work-products',
+];
 const MAX_LIMIT = 50;
 
 class SearchService {
@@ -154,14 +160,28 @@ class SearchService {
     query: string,
     options: { limit: number; collections: SearchCollection[]; minScore?: number }
   ): Promise<SearchResult[]> {
+    const includeWorkProducts = options.collections.includes('work-products');
+    const qmdCollections = options.collections.filter(
+      (collection) => collection !== 'work-products'
+    );
+    const results: SearchResult[] = [];
+
+    if (includeWorkProducts) {
+      results.push(...(await this.searchWorkProducts(query, options.limit)));
+    }
+
+    if (qmdCollections.length === 0) {
+      return results.slice(0, options.limit);
+    }
+
     const args = ['query', query, '--json', '-n', String(options.limit)];
 
     if (options.minScore !== undefined) {
       args.push('--min-score', String(options.minScore));
     }
 
-    if (options.collections.length > 0) {
-      args.push('--collections', options.collections.join(','));
+    if (qmdCollections.length > 0) {
+      args.push('--collections', qmdCollections.join(','));
     }
 
     const stdout = await this.runQmdCommand(
@@ -169,7 +189,10 @@ class SearchService {
       Number(process.env.VERITAS_QMD_TIMEOUT_MS || 10_000)
     );
 
-    return this.normalizeQmdResults(stdout, options.limit);
+    results.push(...this.normalizeQmdResults(stdout, options.limit));
+    return results
+      .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
+      .slice(0, options.limit);
   }
 
   private async runQmdCommand(args: string[], timeout: number): Promise<string> {
@@ -247,6 +270,11 @@ class SearchService {
     if (terms.length === 0) return [];
 
     const results: SearchResult[] = [];
+    const selected = new Set(this.normalizeCollections(options.collections));
+    if (selected.has('work-products')) {
+      results.push(...(await this.searchWorkProducts(query, options.limit)));
+    }
+
     const sources = this.sources(options.collections);
 
     for (const source of sources) {
@@ -316,6 +344,32 @@ class SearchService {
     ];
 
     return candidates.filter((source) => selected.has(source.collection));
+  }
+
+  private async searchWorkProducts(query: string, limit: number): Promise<SearchResult[]> {
+    const service = getWorkProductService();
+    const products = await service.search(query, limit);
+    return products.map((product, index) => {
+      const preview = service.toPreview(product);
+      return {
+        id: product.id,
+        title: product.title,
+        path: `/work-products/${product.id}`,
+        collection: 'work-products',
+        snippet: preview.snippet,
+        score: limit - index,
+        metadata: {
+          kind: product.kind,
+          taskId: product.taskId,
+          sourceRunId: product.sourceRunId,
+          agent: product.agent,
+          model: product.model,
+          version: product.version,
+          updatedAt: product.updatedAt,
+          redacted: preview.redacted,
+        },
+      };
+    });
   }
 
   private normalizeCollections(collections?: SearchCollection[]): SearchCollection[] {

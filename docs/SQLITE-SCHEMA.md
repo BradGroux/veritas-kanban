@@ -272,6 +272,46 @@ CREATE TABLE task_deliverables (
   deleted_at TEXT
 );
 
+CREATE TABLE work_products (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  task_id TEXT,
+  source_run_id TEXT,
+  agent TEXT,
+  model TEXT,
+  version_number INTEGER NOT NULL DEFAULT 1,
+  redaction_json TEXT,
+  source_links_json TEXT,
+  metadata_json TEXT,
+  render_json TEXT NOT NULL,
+  product_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  archived_at TEXT,
+  deleted_at TEXT
+);
+
+CREATE TABLE work_product_versions (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES work_products(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  change_type TEXT NOT NULL,
+  change_summary TEXT,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  agent TEXT,
+  model TEXT,
+  redaction_json TEXT,
+  render_json TEXT NOT NULL,
+  version_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (product_id, version_number)
+);
+
 CREATE TABLE task_time_entries (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -338,6 +378,20 @@ CREATE INDEX idx_task_deliverables_agent_created
 CREATE INDEX idx_task_deliverables_source_run
   ON task_deliverables(source_run_id)
   WHERE source_run_id IS NOT NULL;
+CREATE INDEX idx_work_products_workspace_updated
+  ON work_products(workspace_id, updated_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_work_products_task_updated
+  ON work_products(task_id, updated_at DESC)
+  WHERE task_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_work_products_source_run
+  ON work_products(source_run_id, updated_at DESC)
+  WHERE source_run_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_work_products_kind_status
+  ON work_products(workspace_id, kind, status, updated_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_work_product_versions_product
+  ON work_product_versions(product_id, version_number DESC);
 CREATE INDEX idx_task_dependencies_depends ON task_dependencies(depends_on_task_id);
 ```
 
@@ -1021,6 +1075,21 @@ completion packet, dashboard, and migration queries.
 | `task_attachments`  | File metadata, MIME validation result, hash/path, owner/session, retention, and cleanup data. |
 | `task_deliverables` | Typed work-product metadata, source run/model, redaction hints, and full deliverable JSON.    |
 
+## Durable Work Product Repository Implementation
+
+Work products are a v5 first-class output model for generated reports,
+handoff notes, evidence summaries, checklists, tables, and lightweight
+dashboards. They are stored independently from task comments and task
+deliverables so they can survive archive, be refined without duplication, and
+be reached from task work views, run timelines, completion packets, command
+center search, and export flows.
+
+| Runtime table           | Stored data                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `work_products`         | Current typed render contract, source task/run, agent/model provenance, redaction metadata, links, and JSON. |
+| `work_product_versions` | Bounded non-destructive version history for refine, regenerate, restore, and manual updates.                 |
+| `work_product_search`   | FTS index for command-center and search reachability without walking task/comment files.                     |
+
 ## Scheduled Deliverable Repository Implementation
 
 Scheduled deliverables and recurring run history move into SQLite when
@@ -1084,6 +1153,7 @@ Rollback is safety-first because v5 upgrades existing file-backed projects.
 | `tasks/archive/*.md`                             | `tasks.archived_at`, task detail tables                                                | Archive status must remain restorable.                                                                                   |
 | `tasks/backlog/*.md`                             | `tasks.status` or backlog marker in `tasks`                                            | If backlog remains distinct, model it as a status or queue field before provider work.                                   |
 | `tasks/attachments/*`                            | `task_attachments` plus file blobs on disk                                             | v5 stores attachment metadata in SQLite, not binary blobs.                                                               |
+| `.veritas-kanban/work-products.json`             | `work_products`, `work_product_versions`, `work_product_search`                        | Preserve source task/run provenance, redaction metadata, typed render payload, and bounded versions.                     |
 | `.veritas-kanban/config.json`                    | `app_settings`, `repositories`, `agent_configs`, `agent_routing_rules`, `integrations` | Split security-sensitive integration secrets into `secret_refs_json`.                                                    |
 | `.veritas-kanban/activity.json`                  | `activity_events`                                                                      | Existing newest-first array becomes append/query table.                                                                  |
 | `.veritas-kanban/agent-status.json`              | `app_settings` and `status_history`                                                    | Current status can be a setting; transitions remain history records.                                                     |

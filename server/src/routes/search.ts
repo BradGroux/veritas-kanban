@@ -11,9 +11,9 @@ const SearchBodySchema = z.object({
   query: z.string().trim().min(1).max(500),
   limit: z.number().int().min(1).max(50).optional(),
   collections: z
-    .array(z.enum(['tasks-active', 'tasks-archive', 'docs']))
+    .array(z.enum(['tasks-active', 'tasks-archive', 'docs', 'work-products']))
     .min(1)
-    .max(3)
+    .max(4)
     .optional(),
   backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
   minScore: z.number().min(0).max(1).optional(),
