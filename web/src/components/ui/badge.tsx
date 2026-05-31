@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Badge as MantineBadge, type BadgeProps as MantineBadgeProps } from '@mantine/core';
+import { Slot as SlotRoot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
 
@@ -49,7 +49,7 @@ function Badge({
 
   if (asChild) {
     return (
-      <Slot.Root data-slot="badge" data-variant={resolvedVariant} className={classes} {...props} />
+      <SlotRoot data-slot="badge" data-variant={resolvedVariant} className={classes} {...props} />
     );
   }
 

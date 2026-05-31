@@ -48,6 +48,8 @@ Shared primitive migration progress:
 - No shared `components/ui` primitive wrapper remains backed by a Radix
   interaction primitive. Radix Slot can stay temporarily for `asChild`
   composition while migrated feature surfaces still depend on that contract.
+- The old direct Radix primitive package dependencies have been removed; only
+  `@radix-ui/react-slot` remains for `button`/`badge` `asChild` composition.
 - Feature surfaces still need visual and keyboard/focus checks before the final
   cleanup gate. New v5 surfaces should prefer Mantine primitives directly unless
   they need one of the compatibility wrappers above.
@@ -67,17 +69,16 @@ High-traffic feature surfaces:
 | Chat/activity        | chat sheets, floating chat, activity feed                                            | Mantine overlays     |
 | Archive/backlog      | archive and backlog list/filter pages                                                | Mantine tables/forms |
 
-Package dependencies currently tied to the old primitive layer:
+Package dependencies still tied to the old primitive layer:
 
-- Radix packages: alert dialog, checkbox, dialog, dropdown menu, label, popover,
-  scroll area, select, slot, switch, tabs, and toast
+- `@radix-ui/react-slot` for `button`/`badge` `asChild` composition
 - shadcn CLI/package
 - `class-variance-authority`
 - `tailwind-merge`
 - Tailwind animation helpers used by shadcn-style primitives
 
-These should not be removed in one commit. Removal happens only after import
-counts reach zero for the covered primitive group.
+Remaining removals should happen only after import counts reach zero for the
+covered helper group.
 
 ## Target Foundation
 
@@ -114,8 +115,10 @@ Retained custom surfaces:
 - Diff viewer and review comment anchoring
 - Recharts-based dashboard visualizations
 - Workflow run timelines and replay views
-- Work product previews and markdown rendering
-- Prompt/template markdown editing behavior
+- Work product previews and markdown rendering, including the retained custom
+  markdown renderer
+- Prompt/template markdown editing behavior, including the retained custom
+  markdown editor toolbar and preview flow
 - Git worktree/PR conflict-resolution logic
 
 ## Tailwind Strategy
@@ -203,6 +206,8 @@ Foundation verification currently covers:
   description/action/cancel coverage and modal focus/scroll/Escape behavior
 - Mantine-backed select compatibility wrapper with trigger/value/content/item
   coverage and legacy `onValueChange` behavior
+- direct Radix dependency cleanup, with only the scoped Slot helper retained for
+  compatibility `asChild` paths
 
 ## Migration Order
 
@@ -239,8 +244,8 @@ Migration batches:
    now routes through Mantine `Select` while preserving the legacy value API.
 3. Feedback: toast delivery now routes through Mantine notifications.
 4. Overlays: dialog/modal, sheet/drawer, alert dialog, popover, and tooltip now
-   use Mantine-backed compatibility wrappers. Destructive confirmation surfaces
-   still need visual QA before the cleanup gate.
+   use Mantine-backed compatibility wrappers. Destructive confirmation visual QA
+   moves to the Phase 4 cleanup gate.
 5. Navigation modes: tabs now use a Mantine-backed compatibility wrapper.
    Segmented controls and command/search shell remain surface-level work.
 
@@ -318,7 +323,7 @@ Target issue: `v5.0 QA: Mantine migration visual, accessibility, and cleanup gat
   primitives in the same PR that adds Mantine.
 - Migrate by primitive family or route-level surface, not by scattered one-off
   replacements.
-- Keep shadcn/Radix wrappers until the migrated surface is verified.
+- Keep compatibility wrappers until the migrated surface is verified.
 - If a surface regresses, revert that surface PR without reverting the Mantine
   provider foundation.
 - Keep dependency removals in the final cleanup phase so rollback does not

@@ -5,8 +5,8 @@ import {
   type ActionIconProps as MantineActionIconProps,
   type ButtonProps as MantineButtonProps,
 } from '@mantine/core';
+import { Slot as SlotRoot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
 
@@ -94,7 +94,7 @@ function Button({
 
   if (asChild) {
     return (
-      <Slot.Root
+      <SlotRoot
         data-slot="button"
         data-variant={resolvedVariant}
         data-size={resolvedSize}

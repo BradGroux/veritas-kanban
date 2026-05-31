@@ -220,7 +220,13 @@ describe('Mantine-backed shared UI primitives', () => {
         <Button size="icon" aria-label="Refresh">
           R
         </Button>
+        <Button asChild>
+          <a href="/tasks">Open tasks</a>
+        </Button>
         <Badge variant="secondary">Ready</Badge>
+        <Badge asChild>
+          <a href="/status">Status link</a>
+        </Badge>
         <Label htmlFor="name">Name</Label>
         <Input id="name" aria-label="Name" placeholder="Task name" />
         <NumberInput aria-label="Estimate" value={3} />
@@ -236,7 +242,13 @@ describe('Mantine-backed shared UI primitives', () => {
     expect(screen.getByRole('button', { name: 'Refresh' }).getAttribute('data-slot')).toBe(
       'button'
     );
+    expect(screen.getByRole('link', { name: 'Open tasks' }).getAttribute('data-slot')).toBe(
+      'button'
+    );
     expect(screen.getByText('Ready').closest('[data-slot="badge"]')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Status link' }).getAttribute('data-slot')).toBe(
+      'badge'
+    );
     expect(screen.getByLabelText('Name').getAttribute('data-slot')).toBe('input');
     expect(screen.getByLabelText('Estimate').closest('[data-slot="number-input"]')).toBeDefined();
     expect(screen.getByLabelText('Notes')).toBeDefined();
