@@ -8,6 +8,7 @@ import { createDesktopPaths, resolveRepoRoot } from './paths.js';
 import { findAvailablePort } from './ports.js';
 import { DesktopRuntime } from './runtime.js';
 import { statusPageUrl } from './status-page.js';
+import { DESKTOP_BRIDGE_EVENTS } from '../shared/desktop-bridge-contracts.js';
 
 let mainWindow: BrowserWindow | null = null;
 let runtime: DesktopRuntime | null = null;
@@ -109,7 +110,7 @@ async function boot(): Promise<void> {
 
   registerDesktopBridge(ipcMain, runtime, shell, packaged);
   runtime.on('status', (status) => {
-    mainWindow?.webContents.send('desktop:server-status', status);
+    mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
   });
 
   try {

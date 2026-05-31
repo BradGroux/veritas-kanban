@@ -28,9 +28,17 @@ can be tested without reusing the default development home.
   work.
 - The renderer uses the existing Veritas web app and has no Node, filesystem,
   process, or secret access.
-- The preload bridge exposes only typed desktop operations:
-  `getAppInfo`, `getConnectionStatus`, `restartLocalServer`, `openExternal`,
-  and `onServerStatus`.
+- The preload bridge exposes only typed desktop operations. The current v5
+  contract covers app/setup diagnostics, local server lifecycle, connection
+  validation, update status, native command dispatch, upload/import picking,
+  diagnostics bundles, notification actions, work product export, external URL
+  opening, and desktop event subscriptions.
+- Bridge methods, event channels, validation, and redaction live in the shared
+  desktop bridge contract module so main and preload cannot drift silently.
+- Dangerous bridge methods require typed request objects and contract validators
+  before native execution. Unsupported native features return explicit
+  placeholder results until their dedicated v5 issues implement the backing
+  behavior.
 - Local development mode disables app auth only for the supervised loopback
   runtime. The packaged app path keeps auth enabled and is expected to move to
   keychain-backed bootstrap credentials in the dedicated keychain issue.
