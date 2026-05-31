@@ -7,9 +7,19 @@ import fs from 'fs/promises';
 import path from 'path';
 import readline from 'readline';
 import { createGunzip } from 'zlib';
+import type { SQLInputValue } from 'node:sqlite';
 import type { AnyTelemetryEvent, TelemetryEventType, StreamEventHandler } from './types.js';
 import { createLogger } from '../../lib/logger.js';
+import { SqliteDatabase } from '../../storage/sqlite/database.js';
 const log = createLogger('telemetry-reader');
+
+interface SqliteTelemetryPayloadRow {
+  payload_json: string;
+}
+
+interface SqliteTelemetryStartRow {
+  first_date: string | null;
+}
 
 /**
  * Get list of event files within a date range (includes .ndjson and .ndjson.gz)
@@ -106,4 +116,154 @@ export async function streamEvents<T>(
   }
 
   return accumulator;
+}
+
+/**
+ * Visit telemetry events from the active storage backend.
+ * File mode streams NDJSON files; SQLite mode reads telemetry_events directly so
+ * dashboard metrics do not fall back to file reads after the v5 migration.
+ */
+export async function visitTelemetryEvents(
+  telemetryDir: string,
+  types: TelemetryEventType[],
+  since: string | null,
+  project: string | undefined,
+  until: string | undefined,
+  visitor: (event: AnyTelemetryEvent) => void
+): Promise<void> {
+  if (process.env.VERITAS_STORAGE === 'sqlite') {
+    visitSqliteTelemetryEvents(types, since, project, until, visitor);
+    return;
+  }
+
+  const files = await getEventFiles(telemetryDir, since);
+  for (const filePath of files) {
+    try {
+      const rl = createLineReader(filePath);
+
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+
+        try {
+          const event = JSON.parse(line) as AnyTelemetryEvent;
+
+          if (!types.includes(event.type)) continue;
+          if (since && event.timestamp < since) continue;
+          if (until && event.timestamp > until) continue;
+          if (project && event.project !== project) continue;
+
+          visitor(event);
+        } catch {
+          continue;
+        }
+      }
+    } catch (error: unknown) {
+      if (!isNodeError(error) || error.code !== 'ENOENT') {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error({ filePath, message }, '[Metrics] Error reading telemetry file');
+      }
+    }
+  }
+}
+
+export async function getTelemetryStartDate(telemetryDir: string): Promise<string | null> {
+  if (process.env.VERITAS_STORAGE === 'sqlite') {
+    const database = new SqliteDatabase();
+    try {
+      database.open();
+      const row = database
+        .getConnection()
+        .prepare(
+          `
+            SELECT MIN(substr(created_at, 1, 10)) AS first_date
+            FROM telemetry_events
+            WHERE workspace_id = 'local'
+          `
+        )
+        .get() as unknown as SqliteTelemetryStartRow;
+      return row.first_date;
+    } finally {
+      database.close();
+    }
+  }
+
+  const files = await getEventFiles(telemetryDir, null);
+  const dates = files
+    .map((filePath) => {
+      const match = filePath.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
+      return match?.[1];
+    })
+    .filter((date): date is string => Boolean(date))
+    .sort();
+
+  return dates[0] ?? null;
+}
+
+function visitSqliteTelemetryEvents(
+  types: TelemetryEventType[],
+  since: string | null,
+  project: string | undefined,
+  until: string | undefined,
+  visitor: (event: AnyTelemetryEvent) => void
+): void {
+  const database = new SqliteDatabase();
+
+  try {
+    database.open();
+    const clauses = ["workspace_id = 'local'"];
+    const params: SQLInputValue[] = [];
+
+    if (types.length > 0) {
+      clauses.push(`type IN (${types.map(() => '?').join(', ')})`);
+      params.push(...types);
+    }
+
+    if (since) {
+      clauses.push('created_at >= ?');
+      params.push(since);
+    }
+
+    if (until) {
+      clauses.push('created_at <= ?');
+      params.push(until);
+    }
+
+    if (project) {
+      clauses.push('project_id = ?');
+      params.push(project);
+    }
+
+    const rows = database
+      .getConnection()
+      .prepare(
+        `
+          SELECT payload_json
+          FROM telemetry_events
+          WHERE ${clauses.join(' AND ')}
+          ORDER BY datetime(created_at) ASC, id ASC
+        `
+      )
+      .all(...params) as unknown as SqliteTelemetryPayloadRow[];
+
+    for (const row of rows) {
+      try {
+        const event = JSON.parse(row.payload_json) as AnyTelemetryEvent;
+
+        if (!types.includes(event.type)) continue;
+        if (since && event.timestamp < since) continue;
+        if (until && event.timestamp > until) continue;
+        if (project && event.project !== project) continue;
+
+        visitor(event);
+      } catch {
+        continue;
+      }
+    }
+  } finally {
+    database.close();
+  }
+}
+
+function isNodeError(error: unknown): error is { code: string } {
+  return typeof error === 'object' && error !== null && 'code' in error;
 }

@@ -934,6 +934,11 @@ SQLite repositories when `VERITAS_STORAGE=sqlite`. File storage still forces the
 file-backed services to `storageType='file'`, so explicit file mode cannot be
 accidentally flipped by the environment.
 
+Dashboard metric aggregation uses the same active storage backend. In SQLite
+mode, `/metrics/all`, `/metrics/trends`, agent comparison, task cost, and
+utilization aggregations read `telemetry_events` directly instead of walking
+telemetry NDJSON files.
+
 ## Governance Repository Implementation
 
 The first governance repository pass moves JSON-backed decisions, feedback,

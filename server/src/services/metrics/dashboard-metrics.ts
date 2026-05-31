@@ -5,7 +5,7 @@
 import type {
   RunTelemetryEvent,
   TokenTelemetryEvent,
-  AnyTelemetryEvent,
+  TelemetryEventType,
 } from '@veritas-kanban/shared';
 import { TaskService } from '../task-service.js';
 import {
@@ -20,7 +20,7 @@ import {
   getTodayStr,
   getElapsedTodayMs,
 } from './helpers.js';
-import { getEventFiles, createLineReader } from './telemetry-reader.js';
+import { getTelemetryStartDate, visitTelemetryEvents } from './telemetry-reader.js';
 import { computeTaskMetrics } from './task-metrics.js';
 import type {
   MetricsPeriod,
@@ -38,8 +38,16 @@ import type {
   AgentRecommendation,
   AgentComparisonResult,
 } from './types.js';
-import { createLogger } from '../../lib/logger.js';
-const log = createLogger('dashboard-metrics');
+const RUN_TOKEN_EVENT_TYPES: TelemetryEventType[] = ['run.completed', 'run.error', 'run.tokens'];
+const DASHBOARD_TREND_EVENT_TYPES: TelemetryEventType[] = [
+  'task.created',
+  'task.status_changed',
+  'task.archived',
+  'run.completed',
+  'run.error',
+  'run.tokens',
+];
+const UTILIZATION_EVENT_TYPES: TelemetryEventType[] = ['run.started', 'run.completed'];
 
 /**
  * Get all metrics in one call (for dashboard).
@@ -60,7 +68,6 @@ export async function computeAllMetrics(
   trends: TrendComparison;
 }> {
   const since = getPeriodStart(period, from);
-  const files = await getEventFiles(telemetryDir, since);
 
   // Combined accumulator for single-pass processing
   const runAcc: RunAccumulator = {
@@ -80,97 +87,72 @@ export async function computeAllMetrics(
     byAgent: new Map(),
   };
 
-  // Single pass through all files
-  for (const filePath of files) {
-    try {
-      const rl = createLineReader(filePath);
+  await visitTelemetryEvents(telemetryDir, RUN_TOKEN_EVENT_TYPES, since, project, to, (event) => {
+    const eventType = event.type;
 
-      for await (const line of rl) {
-        if (!line.trim()) continue;
+    // Process run events
+    if (eventType === 'run.completed' || eventType === 'run.error') {
+      const runEvent = event as RunTelemetryEvent;
+      const agent = runEvent.agent || 'veritas';
 
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
+      if (!runAcc.byAgent.has(agent)) {
+        runAcc.byAgent.set(agent, { successes: 0, failures: 0, errors: 0, durations: [] });
+      }
+      const agentAcc = runAcc.byAgent.get(agent)!;
 
-          // Early timestamp filter
-          if (since && event.timestamp < since) continue;
-          if (to && event.timestamp > to) continue;
-          if (project && event.project !== project) continue;
-
-          const eventType = event.type;
-
-          // Process run events
-          if (eventType === 'run.completed' || eventType === 'run.error') {
-            const runEvent = event as RunTelemetryEvent;
-            const agent = runEvent.agent || 'veritas';
-
-            if (!runAcc.byAgent.has(agent)) {
-              runAcc.byAgent.set(agent, { successes: 0, failures: 0, errors: 0, durations: [] });
-            }
-            const agentAcc = runAcc.byAgent.get(agent)!;
-
-            if (eventType === 'run.error') {
-              runAcc.errors++;
-              agentAcc.errors++;
-            } else {
-              const isSuccess =
-                runEvent.success === true ||
-                (runEvent as unknown as Record<string, unknown>).status === 'success';
-              if (isSuccess) {
-                runAcc.successes++;
-                agentAcc.successes++;
-              } else {
-                runAcc.failures++;
-                agentAcc.failures++;
-              }
-              if (runEvent.durationMs && runEvent.durationMs > 0) {
-                runAcc.durations.push(runEvent.durationMs);
-                agentAcc.durations.push(runEvent.durationMs);
-              }
-            }
-          }
-
-          // Process token events
-          if (eventType === 'run.tokens') {
-            const tokenEvent = event as TokenTelemetryEvent;
-            const agent = tokenEvent.agent || 'veritas';
-            // Calculate totalTokens if not provided
-            const totalTokens =
-              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-            const cacheTokens = tokenEvent.cacheTokens ?? 0;
-
-            tokenAcc.totalTokens += totalTokens;
-            tokenAcc.inputTokens += tokenEvent.inputTokens;
-            tokenAcc.outputTokens += tokenEvent.outputTokens;
-            tokenAcc.cacheTokens += cacheTokens;
-            tokenAcc.tokensPerRun.push(totalTokens);
-
-            if (!tokenAcc.byAgent.has(agent)) {
-              tokenAcc.byAgent.set(agent, {
-                totalTokens: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                cacheTokens: 0,
-                runs: 0,
-              });
-            }
-            const agentTokenAcc = tokenAcc.byAgent.get(agent)!;
-            agentTokenAcc.totalTokens += totalTokens;
-            agentTokenAcc.inputTokens += tokenEvent.inputTokens;
-            agentTokenAcc.outputTokens += tokenEvent.outputTokens;
-            agentTokenAcc.cacheTokens += cacheTokens;
-            agentTokenAcc.runs++;
-          }
-        } catch {
-          // Skip malformed lines
-          continue;
+      if (eventType === 'run.error') {
+        runAcc.errors++;
+        agentAcc.errors++;
+      } else {
+        const isSuccess =
+          runEvent.success === true ||
+          (runEvent as unknown as Record<string, unknown>).status === 'success';
+        if (isSuccess) {
+          runAcc.successes++;
+          agentAcc.successes++;
+        } else {
+          runAcc.failures++;
+          agentAcc.failures++;
+        }
+        if (runEvent.durationMs && runEvent.durationMs > 0) {
+          runAcc.durations.push(runEvent.durationMs);
+          agentAcc.durations.push(runEvent.durationMs);
         }
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
-      }
     }
-  }
+
+    // Process token events
+    if (eventType === 'run.tokens') {
+      const tokenEvent = event as TokenTelemetryEvent;
+      const agent = tokenEvent.agent || 'veritas';
+      // Calculate totalTokens if not provided
+      const totalTokens =
+        tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+      const cacheTokens = tokenEvent.cacheTokens ?? 0;
+
+      tokenAcc.totalTokens += totalTokens;
+      tokenAcc.inputTokens += tokenEvent.inputTokens;
+      tokenAcc.outputTokens += tokenEvent.outputTokens;
+      tokenAcc.cacheTokens += cacheTokens;
+      tokenAcc.tokensPerRun.push(totalTokens);
+
+      if (!tokenAcc.byAgent.has(agent)) {
+        tokenAcc.byAgent.set(agent, {
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheTokens: 0,
+          runs: 0,
+        });
+      }
+      const agentTokenAcc = tokenAcc.byAgent.get(agent)!;
+      agentTokenAcc.totalTokens += totalTokens;
+      agentTokenAcc.inputTokens += tokenEvent.inputTokens;
+      agentTokenAcc.outputTokens += tokenEvent.outputTokens;
+      agentTokenAcc.cacheTokens += cacheTokens;
+      agentTokenAcc.runs++;
+    }
+  });
 
   // Get task metrics — always current state (not filtered by period).
   // Task status counts represent the current board state, not historical activity.
@@ -286,8 +268,6 @@ export async function computeAllMetrics(
     return { tasks, runs, tokens, duration, trends };
   }
 
-  const previousFiles = await getEventFiles(telemetryDir, previousRange.since);
-
   // Quick accumulator for previous period (runs, tokens, duration only)
   let prevRuns = 0,
     prevSuccesses = 0,
@@ -295,47 +275,34 @@ export async function computeAllMetrics(
     prevDurationSum = 0,
     prevDurationCount = 0;
 
-  for (const filePath of previousFiles) {
-    try {
-      const rl = createLineReader(filePath);
+  await visitTelemetryEvents(
+    telemetryDir,
+    RUN_TOKEN_EVENT_TYPES,
+    previousRange.since,
+    project,
+    previousRange.until,
+    (event) => {
+      if (event.timestamp < previousRange.since || event.timestamp >= previousRange.until) return;
 
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
-          if (event.timestamp < previousRange.since || event.timestamp >= previousRange.until)
-            continue;
-          if (project && event.project !== project) continue;
-
-          if (event.type === 'run.completed') {
-            const runEvent = event as RunTelemetryEvent;
-            prevRuns++;
-            const wasSuccess =
-              runEvent.success === true ||
-              (runEvent as unknown as Record<string, unknown>).status === 'success';
-            if (wasSuccess) prevSuccesses++;
-            if (runEvent.durationMs && runEvent.durationMs > 0) {
-              prevDurationSum += runEvent.durationMs;
-              prevDurationCount++;
-            }
-          } else if (event.type === 'run.error') {
-            prevRuns++;
-          } else if (event.type === 'run.tokens') {
-            const tokenEvent = event as TokenTelemetryEvent;
-            prevTokens +=
-              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-          }
-        } catch {
-          // Intentionally silent: skip malformed NDJSON line
-          continue;
+      if (event.type === 'run.completed') {
+        const runEvent = event as RunTelemetryEvent;
+        prevRuns++;
+        const wasSuccess =
+          runEvent.success === true ||
+          (runEvent as unknown as Record<string, unknown>).status === 'success';
+        if (wasSuccess) prevSuccesses++;
+        if (runEvent.durationMs && runEvent.durationMs > 0) {
+          prevDurationSum += runEvent.durationMs;
+          prevDurationCount++;
         }
-      }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
+      } else if (event.type === 'run.error') {
+        prevRuns++;
+      } else if (event.type === 'run.tokens') {
+        const tokenEvent = event as TokenTelemetryEvent;
+        prevTokens += tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
       }
     }
-  }
+  );
 
   const prevSuccessRate = prevRuns > 0 ? prevSuccesses / prevRuns : 0;
   const prevAvgDuration = prevDurationCount > 0 ? prevDurationSum / prevDurationCount : 0;
@@ -365,7 +332,6 @@ export async function computeTrends(
   to?: string
 ): Promise<TrendsData> {
   const since = getPeriodStart(period, from);
-  const files = await getEventFiles(telemetryDir, since);
 
   // Accumulator per day
   const dailyData = new Map<
@@ -395,16 +361,9 @@ export async function computeTrends(
   if (since) {
     startDate = new Date(since);
   } else {
-    // 'all' period: infer start from earliest telemetry file date
-    const dates = files
-      .map((f) => {
-        const match = f.match(/events-(\d{4}-\d{2}-\d{2})\.ndjson(\.gz)?$/);
-        return match?.[1];
-      })
-      .filter((d): d is string => Boolean(d))
-      .sort();
-
-    startDate = dates.length > 0 ? new Date(dates[0] + 'T00:00:00.000Z') : new Date();
+    // 'all' period: infer start from the active telemetry backend.
+    const firstDate = await getTelemetryStartDate(telemetryDir);
+    startDate = firstDate ? new Date(`${firstDate}T00:00:00.000Z`) : new Date();
   }
 
   const endDate = to ? new Date(to) : new Date();
@@ -426,91 +385,73 @@ export async function computeTrends(
     });
   }
 
-  // Process all files
-  for (const filePath of files) {
-    try {
-      const rl = createLineReader(filePath);
+  await visitTelemetryEvents(
+    telemetryDir,
+    DASHBOARD_TREND_EVENT_TYPES,
+    since,
+    project,
+    to,
+    (event) => {
+      const dateStr = event.timestamp.slice(0, 10);
+      if (!dailyData.has(dateStr)) {
+        dailyData.set(dateStr, {
+          runs: 0,
+          successes: 0,
+          failures: 0,
+          errors: 0,
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          durations: [],
+          costEstimate: 0,
+          tasksCreated: 0,
+          statusChanges: 0,
+          tasksArchived: 0,
+        });
+      }
+      const dayAcc = dailyData.get(dateStr)!;
 
-      for await (const line of rl) {
-        if (!line.trim()) continue;
+      // Count task activity events
+      if (event.type === 'task.created') {
+        dayAcc.tasksCreated++;
+      } else if (event.type === 'task.status_changed') {
+        dayAcc.statusChanges++;
+      } else if (event.type === 'task.archived') {
+        dayAcc.tasksArchived++;
+      }
 
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
-
-          // Early timestamp filter
-          if (since && event.timestamp < since) continue;
-          if (to && event.timestamp > to) continue;
-          if (project && event.project !== project) continue;
-
-          const dateStr = event.timestamp.slice(0, 10);
-          if (!dailyData.has(dateStr)) {
-            dailyData.set(dateStr, {
-              runs: 0,
-              successes: 0,
-              failures: 0,
-              errors: 0,
-              totalTokens: 0,
-              inputTokens: 0,
-              outputTokens: 0,
-              durations: [],
-              costEstimate: 0,
-              tasksCreated: 0,
-              statusChanges: 0,
-              tasksArchived: 0,
-            });
-          }
-          const dayAcc = dailyData.get(dateStr)!;
-
-          // Count task activity events
-          if (event.type === 'task.created') {
-            dayAcc.tasksCreated++;
-          } else if (event.type === 'task.status_changed') {
-            dayAcc.statusChanges++;
-          } else if (event.type === 'task.archived') {
-            dayAcc.tasksArchived++;
-          }
-
-          if (event.type === 'run.completed') {
-            const runEvent = event as RunTelemetryEvent;
-            dayAcc.runs++;
-            const isSuccess =
-              runEvent.success === true ||
-              (runEvent as unknown as Record<string, unknown>).status === 'success';
-            if (isSuccess) {
-              dayAcc.successes++;
-            } else {
-              dayAcc.failures++;
-            }
-            if (runEvent.durationMs && runEvent.durationMs > 0) {
-              dayAcc.durations.push(runEvent.durationMs);
-            }
-          } else if (event.type === 'run.error') {
-            dayAcc.runs++;
-            dayAcc.errors++;
-          } else if (event.type === 'run.tokens') {
-            const tokenEvent = event as TokenTelemetryEvent;
-            const totalTokens =
-              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-            dayAcc.totalTokens += totalTokens;
-            dayAcc.inputTokens += tokenEvent.inputTokens;
-            dayAcc.outputTokens += tokenEvent.outputTokens;
-            // Accumulate reported cost for daily cost estimates
-            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
-            if (typeof eventCost === 'number' && eventCost > 0) {
-              dayAcc.costEstimate = (dayAcc.costEstimate || 0) + eventCost;
-            }
-          }
-        } catch {
-          // Intentionally silent: skip malformed NDJSON line
-          continue;
+      if (event.type === 'run.completed') {
+        const runEvent = event as RunTelemetryEvent;
+        dayAcc.runs++;
+        const isSuccess =
+          runEvent.success === true ||
+          (runEvent as unknown as Record<string, unknown>).status === 'success';
+        if (isSuccess) {
+          dayAcc.successes++;
+        } else {
+          dayAcc.failures++;
+        }
+        if (runEvent.durationMs && runEvent.durationMs > 0) {
+          dayAcc.durations.push(runEvent.durationMs);
+        }
+      } else if (event.type === 'run.error') {
+        dayAcc.runs++;
+        dayAcc.errors++;
+      } else if (event.type === 'run.tokens') {
+        const tokenEvent = event as TokenTelemetryEvent;
+        const totalTokens =
+          tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+        dayAcc.totalTokens += totalTokens;
+        dayAcc.inputTokens += tokenEvent.inputTokens;
+        dayAcc.outputTokens += tokenEvent.outputTokens;
+        // Accumulate reported cost for daily cost estimates
+        const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
+        if (typeof eventCost === 'number' && eventCost > 0) {
+          dayAcc.costEstimate = (dayAcc.costEstimate || 0) + eventCost;
         }
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
-      }
     }
-  }
+  );
 
   // Convert to sorted array
   const daily: DailyTrendPoint[] = [];
@@ -555,7 +496,6 @@ export async function computeAgentComparison(
   minRuns = 3
 ): Promise<AgentComparisonResult> {
   const since = getPeriodStart(period);
-  const files = await getEventFiles(telemetryDir, since);
 
   // Per-agent accumulator
   const agentData = new Map<
@@ -573,104 +513,88 @@ export async function computeAgentComparison(
     }
   >();
 
-  // Process all files
-  for (const filePath of files) {
-    try {
-      const rl = createLineReader(filePath);
+  await visitTelemetryEvents(
+    telemetryDir,
+    RUN_TOKEN_EVENT_TYPES,
+    since,
+    project,
+    undefined,
+    (event) => {
+      const eventType = event.type;
 
-      for await (const line of rl) {
-        if (!line.trim()) continue;
+      // Process run events
+      if (eventType === 'run.completed' || eventType === 'run.error') {
+        const runEvent = event as RunTelemetryEvent;
+        const agent = runEvent.agent || 'veritas';
 
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
+        if (!agentData.has(agent)) {
+          agentData.set(agent, {
+            runs: 0,
+            successes: 0,
+            failures: 0,
+            errors: 0,
+            durations: [],
+            totalTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            costEstimate: 0,
+          });
+        }
+        const acc = agentData.get(agent)!;
 
-          if (since && event.timestamp < since) continue;
-          if (project && event.project !== project) continue;
-
-          const eventType = event.type;
-
-          // Process run events
-          if (eventType === 'run.completed' || eventType === 'run.error') {
-            const runEvent = event as RunTelemetryEvent;
-            const agent = runEvent.agent || 'veritas';
-
-            if (!agentData.has(agent)) {
-              agentData.set(agent, {
-                runs: 0,
-                successes: 0,
-                failures: 0,
-                errors: 0,
-                durations: [],
-                totalTokens: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                costEstimate: 0,
-              });
-            }
-            const acc = agentData.get(agent)!;
-
-            if (eventType === 'run.error') {
-              acc.runs++;
-              acc.errors++;
-            } else {
-              acc.runs++;
-              const isSuccess =
-                runEvent.success === true ||
-                (runEvent as unknown as Record<string, unknown>).status === 'success';
-              if (isSuccess) {
-                acc.successes++;
-              } else {
-                acc.failures++;
-              }
-              if (runEvent.durationMs && runEvent.durationMs > 0) {
-                acc.durations.push(runEvent.durationMs);
-              }
-            }
+        if (eventType === 'run.error') {
+          acc.runs++;
+          acc.errors++;
+        } else {
+          acc.runs++;
+          const isSuccess =
+            runEvent.success === true ||
+            (runEvent as unknown as Record<string, unknown>).status === 'success';
+          if (isSuccess) {
+            acc.successes++;
+          } else {
+            acc.failures++;
           }
-
-          // Process token events
-          if (eventType === 'run.tokens') {
-            const tokenEvent = event as TokenTelemetryEvent;
-            const agent = tokenEvent.agent || 'veritas';
-
-            if (!agentData.has(agent)) {
-              agentData.set(agent, {
-                runs: 0,
-                successes: 0,
-                failures: 0,
-                errors: 0,
-                durations: [],
-                totalTokens: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                costEstimate: 0,
-              });
-            }
-            const acc = agentData.get(agent)!;
-            const totalTokens =
-              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-
-            acc.totalTokens += totalTokens;
-            acc.inputTokens += tokenEvent.inputTokens;
-            acc.outputTokens += tokenEvent.outputTokens;
-            // Prefer reported cost; fall back to estimation ($0.01/1K in, $0.03/1K out)
-            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
-            acc.costEstimate +=
-              typeof eventCost === 'number' && eventCost > 0
-                ? eventCost
-                : (tokenEvent.inputTokens / 1000) * 0.01 + (tokenEvent.outputTokens / 1000) * 0.03;
+          if (runEvent.durationMs && runEvent.durationMs > 0) {
+            acc.durations.push(runEvent.durationMs);
           }
-        } catch {
-          // Intentionally silent: skip malformed NDJSON line
-          continue;
         }
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
+
+      // Process token events
+      if (eventType === 'run.tokens') {
+        const tokenEvent = event as TokenTelemetryEvent;
+        const agent = tokenEvent.agent || 'veritas';
+
+        if (!agentData.has(agent)) {
+          agentData.set(agent, {
+            runs: 0,
+            successes: 0,
+            failures: 0,
+            errors: 0,
+            durations: [],
+            totalTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            costEstimate: 0,
+          });
+        }
+        const acc = agentData.get(agent)!;
+        const totalTokens =
+          tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+
+        acc.totalTokens += totalTokens;
+        acc.inputTokens += tokenEvent.inputTokens;
+        acc.outputTokens += tokenEvent.outputTokens;
+        // Prefer reported cost; fall back to estimation ($0.01/1K in, $0.03/1K out)
+        const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
+        acc.costEstimate +=
+          typeof eventCost === 'number' && eventCost > 0
+            ? eventCost
+            : (tokenEvent.inputTokens / 1000) * 0.01 + (tokenEvent.outputTokens / 1000) * 0.03;
       }
     }
-  }
+  );
 
   // Build comparison data for agents meeting minimum runs threshold
   const agents: AgentComparisonData[] = [];
@@ -787,7 +711,6 @@ export async function computeTaskCost(
   to?: string
 ): Promise<import('./types.js').TaskCostMetrics> {
   const since = getPeriodStart(period, from);
-  const files = await getEventFiles(telemetryDir, since);
 
   const taskCosts = new Map<
     string,
@@ -801,69 +724,57 @@ export async function computeTaskCost(
     }
   >();
 
-  for (const filePath of files) {
-    try {
-      const rl = createLineReader(filePath);
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
-          if (since && event.timestamp < since) continue;
-          if (to && event.timestamp > to) continue;
-          if (project && event.project !== project) continue;
+  await visitTelemetryEvents(
+    telemetryDir,
+    ['run.tokens', 'run.completed'],
+    since,
+    project,
+    to,
+    (event) => {
+      if (event.type === 'run.tokens' && event.taskId) {
+        const tokenEvent = event as TokenTelemetryEvent;
+        const existing = taskCosts.get(event.taskId) || {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          cost: 0,
+          runs: 0,
+          totalDurationMs: 0,
+        };
+        existing.inputTokens += tokenEvent.inputTokens;
+        existing.outputTokens += tokenEvent.outputTokens;
+        existing.totalTokens +=
+          tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
+        const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
+        if (typeof eventCost === 'number' && eventCost > 0) {
+          existing.cost += eventCost;
+        } else {
+          // Estimate at Opus rates
+          existing.cost +=
+            tokenEvent.inputTokens * (15 / 1e6) + tokenEvent.outputTokens * (75 / 1e6);
+        }
+        existing.runs++;
+        taskCosts.set(event.taskId, existing);
+      }
 
-          if (event.type === 'run.tokens' && event.taskId) {
-            const tokenEvent = event as TokenTelemetryEvent;
-            const existing = taskCosts.get(event.taskId) || {
-              inputTokens: 0,
-              outputTokens: 0,
-              totalTokens: 0,
-              cost: 0,
-              runs: 0,
-              totalDurationMs: 0,
-            };
-            existing.inputTokens += tokenEvent.inputTokens;
-            existing.outputTokens += tokenEvent.outputTokens;
-            existing.totalTokens +=
-              tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
-            const eventCost = (tokenEvent as unknown as Record<string, unknown>).cost;
-            if (typeof eventCost === 'number' && eventCost > 0) {
-              existing.cost += eventCost;
-            } else {
-              // Estimate at Opus rates
-              existing.cost +=
-                tokenEvent.inputTokens * (15 / 1e6) + tokenEvent.outputTokens * (75 / 1e6);
-            }
-            existing.runs++;
-            taskCosts.set(event.taskId, existing);
-          }
-
-          // Capture duration from run.completed events
-          if (event.type === 'run.completed' && event.taskId) {
-            const durationMs = (event as unknown as Record<string, unknown>).durationMs;
-            if (typeof durationMs === 'number' && durationMs > 0) {
-              const existing = taskCosts.get(event.taskId) || {
-                inputTokens: 0,
-                outputTokens: 0,
-                totalTokens: 0,
-                cost: 0,
-                runs: 0,
-                totalDurationMs: 0,
-              };
-              existing.totalDurationMs += durationMs;
-              taskCosts.set(event.taskId, existing);
-            }
-          }
-        } catch {
-          continue;
+      // Capture duration from run.completed events
+      if (event.type === 'run.completed' && event.taskId) {
+        const durationMs = (event as unknown as Record<string, unknown>).durationMs;
+        if (typeof durationMs === 'number' && durationMs > 0) {
+          const existing = taskCosts.get(event.taskId) || {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            cost: 0,
+            runs: 0,
+            totalDurationMs: 0,
+          };
+          existing.totalDurationMs += durationMs;
+          taskCosts.set(event.taskId, existing);
         }
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
-      }
     }
-  }
+  );
 
   // Look up task titles and projects
   const allTasks = await taskService.listTasks();
@@ -912,45 +823,33 @@ export async function computeUtilization(
   utcOffsetHours?: number
 ): Promise<import('./types.js').UtilizationMetrics> {
   const since = getPeriodStart(period, from);
-  const files = await getEventFiles(telemetryDir, since);
 
   // Track time between run.started and run.completed events per day
   const dailyActive = new Map<string, number>();
   const runStarts = new Map<string, string>(); // agent → start timestamp
 
-  for (const filePath of files) {
-    try {
-      const rl = createLineReader(filePath);
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
-          if (since && event.timestamp < since) continue;
-          if (to && event.timestamp > to) continue;
-
-          if (event.type === 'run.started') {
-            const agent = event.agent || 'unknown';
-            runStarts.set(agent, event.timestamp);
-          } else if (event.type === 'run.completed') {
-            const runEvent = event as RunTelemetryEvent;
-            const agent = runEvent.agent || 'unknown';
-            const durationMs = runEvent.durationMs || 0;
-            if (durationMs > 0) {
-              const dateStr = toLocalDateStr(event.timestamp, utcOffsetHours);
-              dailyActive.set(dateStr, (dailyActive.get(dateStr) || 0) + durationMs);
-            }
-            runStarts.delete(agent);
-          }
-        } catch {
-          continue;
+  await visitTelemetryEvents(
+    telemetryDir,
+    UTILIZATION_EVENT_TYPES,
+    since,
+    undefined,
+    to,
+    (event) => {
+      if (event.type === 'run.started') {
+        const agent = event.agent || 'unknown';
+        runStarts.set(agent, event.timestamp);
+      } else if (event.type === 'run.completed') {
+        const runEvent = event as RunTelemetryEvent;
+        const agent = runEvent.agent || 'unknown';
+        const durationMs = runEvent.durationMs || 0;
+        if (durationMs > 0) {
+          const dateStr = toLocalDateStr(event.timestamp, utcOffsetHours);
+          dailyActive.set(dateStr, (dailyActive.get(dateStr) || 0) + durationMs);
         }
-      }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        log.error(`[Metrics] Error reading ${filePath}:`, error.message);
+        runStarts.delete(agent);
       }
     }
-  }
+  );
 
   // Build daily utilization
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
