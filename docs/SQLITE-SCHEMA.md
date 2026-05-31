@@ -1251,6 +1251,9 @@ membership: local-user owner of local
 This lets #334-#338 add identity, membership, RBAC, scoped API tokens, and
 workspace screens without destructive schema rewrites.
 
+The detailed v5 identity, workspace, role, route-permission, migration, and UX
+flow design is tracked in [v5 Identity, Workspace, and RBAC Model](IDENTITY-RBAC.md).
+
 ## Implementation Sequence
 
 1. Add the SQLite package, migration runner, connection lifecycle, and seed

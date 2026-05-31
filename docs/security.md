@@ -56,6 +56,11 @@ const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 
 ## Roles and Permissions
 
+> v5 planning note: the current role model is intentionally small. The planned
+> multi-user model expands this into workspace-scoped `owner`, `admin`,
+> `member`, `reviewer`, `read-only`, and `agent` roles with scoped agent tokens.
+> See [v5 Identity, Workspace, and RBAC Model](IDENTITY-RBAC.md).
+
 | Role        | Read | Write | Admin Actions |
 | ----------- | ---- | ----- | ------------- |
 | `admin`     | ✅   | ✅    | ✅            |
