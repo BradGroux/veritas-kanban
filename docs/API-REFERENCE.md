@@ -24,28 +24,29 @@
 11. [Chat & Squad](#chat--squad)
 12. [Agent Status](#agent-status)
 13. [Auth & Diagnostics](#auth--diagnostics)
-14. [Telemetry](#telemetry)
-15. [Health](#health)
-16. [WebSocket](#websocket)
-17. [Task Verification](#task-verification)
-18. [Task Comments](#task-comments)
-19. [Task Subtasks](#task-subtasks)
-20. [Task Deliverables](#task-deliverables)
-21. [Task Archive](#task-archive)
-22. [Attachments](#attachments)
-23. [Agent Permissions](#agent-permissions)
-24. [Agent Routing](#agent-routing)
-25. [Shared Resources](#shared-resources)
-26. [Doc Freshness](#doc-freshness)
-27. [Cost Prediction](#cost-prediction)
-28. [Error Learning](#error-learning)
-29. [Tool Policies](#tool-policies)
-30. [Traces](#traces)
-31. [Audit](#audit)
-32. [Common Workflows](#common-workflows)
-33. [Versioning & Deprecation](#versioning--deprecation)
-34. [Rate Limits](#rate-limits)
-35. [Additional Endpoint Groups](#additional-endpoint-groups)
+14. [Identity & Workspaces](#identity--workspaces)
+15. [Telemetry](#telemetry)
+16. [Health](#health)
+17. [WebSocket](#websocket)
+18. [Task Verification](#task-verification)
+19. [Task Comments](#task-comments)
+20. [Task Subtasks](#task-subtasks)
+21. [Task Deliverables](#task-deliverables)
+22. [Task Archive](#task-archive)
+23. [Attachments](#attachments)
+24. [Agent Permissions](#agent-permissions)
+25. [Agent Routing](#agent-routing)
+26. [Shared Resources](#shared-resources)
+27. [Doc Freshness](#doc-freshness)
+28. [Cost Prediction](#cost-prediction)
+29. [Error Learning](#error-learning)
+30. [Tool Policies](#tool-policies)
+31. [Traces](#traces)
+32. [Audit](#audit)
+33. [Common Workflows](#common-workflows)
+34. [Versioning & Deprecation](#versioning--deprecation)
+35. [Rate Limits](#rate-limits)
+36. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -569,6 +570,60 @@ POST /api/auth/login
   "expiresIn": "24h"
 }
 ```
+
+---
+
+## Identity & Workspaces
+
+v5 adds SQLite-backed identity management for users, workspaces, memberships,
+roles, and invitations. These endpoints are mounted at `/api/identity` and
+`/api/v1/identity`.
+
+| Method   | Path                                                | Description                                      |
+| -------- | --------------------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/identity/profile`                             | Current user profile plus workspace memberships. |
+| `GET`    | `/api/identity/workspaces`                          | Workspaces available to the current user.        |
+| `POST`   | `/api/identity/workspaces/switch`                   | Validate/select an active workspace membership.  |
+| `GET`    | `/api/identity/workspaces/:workspaceId/members`     | List active workspace members.                   |
+| `GET`    | `/api/identity/workspaces/:workspaceId/invitations` | List invitations. Requires admin.                |
+| `POST`   | `/api/identity/workspaces/:workspaceId/invitations` | Create an invitation. Requires admin.            |
+| `POST`   | `/api/identity/invitations/accept`                  | Accept an invitation.                            |
+| `POST`   | `/api/auth/invitations/accept`                      | Accept an invitation before login.               |
+| `POST`   | `/api/identity/invitations/:id/revoke`              | Revoke a pending invitation. Requires admin.     |
+| `PATCH`  | `/api/identity/workspaces/:workspaceId/members/:id` | Update a member role. Requires admin.            |
+| `DELETE` | `/api/identity/workspaces/:workspaceId/members/:id` | Remove a member. Requires admin.                 |
+
+### Create Invitation
+
+```http
+POST /api/identity/workspaces/local/invitations
+```
+
+```json
+{
+  "email": "reviewer@example.com",
+  "role": "reviewer"
+}
+```
+
+The response includes the plaintext invitation token once. SQLite stores only
+the token hash.
+
+### Accept Invitation
+
+```http
+POST /api/auth/invitations/accept
+```
+
+```json
+{
+  "token": "plaintext-token-from-invite",
+  "displayName": "Reviewer",
+  "email": "reviewer@example.com"
+}
+```
+
+Membership mutations are recorded in audit and activity history.
 
 ---
 

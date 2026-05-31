@@ -34,7 +34,8 @@ export type ActivityType =
   | 'observation_added'
   | 'observation_deleted'
   | 'dependency_added'
-  | 'dependency_removed';
+  | 'dependency_removed'
+  | 'membership_updated';
 
 export interface Activity {
   id: string;

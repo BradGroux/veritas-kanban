@@ -865,6 +865,90 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
       );
     `,
   },
+  {
+    version: 14,
+    name: '0014_multi_user_identity_foundation',
+    up: `
+      ALTER TABLE users ADD COLUMN handle TEXT;
+      ALTER TABLE users ADD COLUMN auth_subject TEXT;
+      ALTER TABLE users ADD COLUMN avatar_url TEXT;
+      ALTER TABLE users ADD COLUMN disabled_at TEXT;
+      ALTER TABLE users ADD COLUMN last_seen_at TEXT;
+
+      ALTER TABLE workspaces ADD COLUMN mode TEXT NOT NULL DEFAULT 'local';
+      ALTER TABLE workspaces ADD COLUMN created_by TEXT;
+      ALTER TABLE workspaces ADD COLUMN archived_at TEXT;
+
+      ALTER TABLE workspace_memberships RENAME TO workspace_memberships_legacy;
+
+      CREATE TABLE workspace_memberships (
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK (
+          role IN ('owner', 'admin', 'member', 'reviewer', 'read-only', 'agent')
+        ),
+        status TEXT NOT NULL DEFAULT 'active',
+        invited_by TEXT,
+        joined_at TEXT,
+        disabled_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        PRIMARY KEY (workspace_id, user_id)
+      );
+
+      INSERT INTO workspace_memberships (
+        workspace_id,
+        user_id,
+        role,
+        status,
+        joined_at,
+        created_at,
+        updated_at
+      )
+      SELECT
+        workspace_id,
+        user_id,
+        CASE role
+          WHEN 'viewer' THEN 'read-only'
+          ELSE role
+        END,
+        'active',
+        created_at,
+        created_at,
+        created_at
+      FROM workspace_memberships_legacy;
+
+      DROP TABLE workspace_memberships_legacy;
+
+      CREATE INDEX IF NOT EXISTS idx_workspace_memberships_user_id
+        ON workspace_memberships(user_id);
+
+      CREATE INDEX IF NOT EXISTS idx_workspace_memberships_user_status
+        ON workspace_memberships(user_id, status);
+
+      CREATE TABLE workspace_invitations (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        email TEXT,
+        role TEXT NOT NULL CHECK (
+          role IN ('owner', 'admin', 'member', 'reviewer', 'read-only', 'agent')
+        ),
+        token_hash TEXT NOT NULL UNIQUE,
+        invited_by TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        accepted_by TEXT REFERENCES users(id),
+        accepted_at TEXT,
+        revoked_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workspace_invitations_workspace_email
+        ON workspace_invitations(workspace_id, email, revoked_at, accepted_at);
+
+      CREATE INDEX IF NOT EXISTS idx_workspace_invitations_token_hash
+        ON workspace_invitations(token_hash);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

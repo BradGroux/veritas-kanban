@@ -46,6 +46,7 @@ const SQLITE_BACKUP_TABLES = [
   'workspaces',
   'users',
   'workspace_memberships',
+  'workspace_invitations',
   'app_config_documents',
   'tasks',
   'task_attachments',

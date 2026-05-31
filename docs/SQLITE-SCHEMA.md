@@ -94,6 +94,20 @@ CREATE TABLE workspace_memberships (
   PRIMARY KEY (workspace_id, user_id)
 );
 
+CREATE TABLE workspace_invitations (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  email TEXT,
+  role TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  invited_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  accepted_by TEXT REFERENCES users(id),
+  accepted_at TEXT,
+  revoked_at TEXT
+);
+
 CREATE TABLE api_tokens (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -112,6 +126,8 @@ Important indexes:
 
 ```sql
 CREATE INDEX idx_memberships_user ON workspace_memberships(user_id);
+CREATE INDEX idx_workspace_invitations_workspace_email
+  ON workspace_invitations(workspace_id, email, revoked_at, accepted_at);
 CREATE INDEX idx_api_tokens_workspace ON api_tokens(workspace_id, revoked_at);
 ```
 

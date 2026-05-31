@@ -16,6 +16,7 @@ import {
 } from '../config/security.js';
 import { authenticate, authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 import { auditLog } from '../services/audit-service.js';
+import { getIdentityService } from '../services/identity-service.js';
 
 const router: IRouter = Router();
 
@@ -45,6 +46,12 @@ const rotateSecretSchema = z
   })
   .optional()
   .default({});
+
+const acceptInvitationSchema = z.object({
+  token: z.string().min(32),
+  displayName: z.string().min(1).max(120).optional(),
+  email: z.string().email().optional(),
+});
 
 // Constants
 const SALT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12;
@@ -237,12 +244,41 @@ router.post(
     // Save config
     saveSecurityConfig(updatedConfig);
 
+    let identity: unknown;
+    if (process.env.VERITAS_STORAGE === 'sqlite') {
+      identity = getIdentityService().ensureOwnerSetup({
+        displayName: 'Local User',
+      });
+    }
+
     // Return recovery key (only time it's shown in plaintext)
     res.json({
       success: true,
       recoveryKey,
+      identity,
       message: 'Password set successfully. Save your recovery key!',
     });
+  })
+);
+
+router.post(
+  '/invitations/accept',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = acceptInvitationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: 'Invalid invitation request',
+        code: 'INVALID_INVITATION_REQUEST',
+        details: parsed.error.issues.map((e) => ({
+          path: e.path.join('.'),
+          message: e.message,
+        })),
+      });
+      return;
+    }
+
+    const result = await getIdentityService().acceptInvitation(parsed.data);
+    res.status(201).json(result);
   })
 );
 

@@ -84,6 +84,7 @@ import { scoringRoutes } from '../scoring.js';
 import { feedbackRoutes } from '../feedback.js';
 import promptRegistryRoutes from '../prompt-registry.js';
 import { sqlitePortabilityRoutes } from '../sqlite-portability.js';
+import { identityRoutes } from '../identity.js';
 
 const v1Router: IRouter = Router();
 
@@ -184,5 +185,6 @@ v1Router.use('/decisions', decisionRoutes);
 v1Router.use('/feedback', feedbackRoutes);
 v1Router.use('/prompt-registry', promptRegistryRoutes);
 v1Router.use('/sqlite', sqlitePortabilityRoutes);
+v1Router.use('/identity', identityRoutes);
 
 export { v1Router };

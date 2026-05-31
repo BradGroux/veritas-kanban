@@ -79,6 +79,14 @@ export {
 export { SqliteChatRepository } from './sqlite/chat-repository.js';
 export { SqliteNotificationRepository } from './sqlite/notification-repository.js';
 export { SqliteScheduledDeliverablesRepository } from './sqlite/scheduled-deliverables-repository.js';
+export { SqliteIdentityRepository, WORKSPACE_ROLES } from './sqlite/identity-repository.js';
+export type {
+  IdentityUser,
+  WorkspaceIdentity,
+  WorkspaceInvitation,
+  WorkspaceMembership,
+  WorkspaceRole,
+} from './sqlite/identity-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)
