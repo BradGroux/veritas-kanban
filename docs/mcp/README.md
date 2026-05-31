@@ -711,6 +711,7 @@ Resources are useful for MCP clients that support resource browsing (e.g., Claud
 - API keys are passed via the `X-API-Key` header by the shared VK API client. The server also accepts `Authorization: Bearer <key>` for direct HTTP callers.
 - The MCP server reads `VK_API_KEY` from its environment and includes it in every HTTP request to VK.
 - Keys never appear in MCP tool inputs/outputs — they stay in the transport layer.
+- v5 auth context classifies MCP calls with `actorType=agent`, `authMethod=api-key`, the configured token name, and role-derived permissions. Future MCP tools should request the narrowest server permission that matches the operation.
 
 ### What the MCP Server Cannot Do
 

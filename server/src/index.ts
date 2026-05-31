@@ -681,6 +681,12 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
     role: authResult.role,
     keyName: authResult.keyName,
     isLocalhost: authResult.isLocalhost,
+    userId: authResult.userId,
+    workspaceId: authResult.workspaceId,
+    actorType: authResult.actorType,
+    authMethod: authResult.authMethod,
+    tokenName: authResult.tokenName,
+    permissions: authResult.permissions,
   };
 
   // ---- Heartbeat: mark alive on connect and on pong ----

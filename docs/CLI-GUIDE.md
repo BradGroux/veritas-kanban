@@ -640,6 +640,11 @@ export VK_API_KEY=your-api-key-here
 
 If you're running locally with localhost auth bypass enabled, read commands may work without a key. Write commands need `VK_API_KEY` unless `VERITAS_AUTH_LOCALHOST_ROLE` is set to `agent` or `admin`. Prefer an `agent` role key for CLI automation.
 
+For v5, issue dedicated CLI keys instead of sharing the admin key. Routine
+automation should use an `agent` role key; read-only dashboards and reporting
+scripts should use `read-only`. Reserve the admin key for setup, migration,
+backup/import, and policy operations.
+
 ### Read/Write Smoke Check
 
 Use this check after linking `vk` and exporting `VK_API_URL`/`VK_API_KEY`. It proves the CLI can both read from and write to the configured VK server.

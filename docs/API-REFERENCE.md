@@ -70,6 +70,15 @@ VK supports three authentication methods. All are optional when running locally 
 | `agent`     | Read/write tasks, time tracking, observations, chat, telemetry   |
 | `read-only` | Read-only access to all GET endpoints                            |
 
+### v5 Permission Context
+
+Protected REST handlers and WebSocket connections receive a shared auth context:
+`role`, `userId`, `workspaceId`, `actorType`, `authMethod`, `tokenName`, and
+role-derived `permissions`. Existing endpoints still accept the compatibility
+roles above, but new v5 route work should declare the specific permission it
+requires, such as `task:read`, `task:write`, `workflow:execute`, or
+`admin:manage`.
+
 ### Localhost Bypass
 
 When `VERITAS_AUTH_LOCALHOST_BYPASS=true`, requests from `127.0.0.1` / `::1` are authenticated automatically with the role set by `VERITAS_AUTH_LOCALHOST_ROLE` (default: `read-only`).

@@ -21,10 +21,12 @@ vi.mock('../../config/security.js', () => ({
 import {
   authenticate,
   authorize,
+  authorizePermission,
   authorizeWrite,
   authenticateWebSocket,
   validateWebSocketOrigin,
   generateApiKey,
+  hasPermission,
   isAuthRequired,
   getAuthStatus,
   getAuthConfig,
@@ -164,6 +166,10 @@ describe('Auth Middleware', () => {
       authenticate(req, res, next);
       expect(next).toHaveBeenCalled();
       expect(req.auth?.role).toBe('admin');
+      expect(req.auth?.actorType).toBe('service');
+      expect(req.auth?.authMethod).toBe('disabled');
+      expect(req.auth?.workspaceId).toBe('local');
+      expect(req.auth?.permissions).toEqual(['*']);
     });
 
     it('should authenticate via API key in X-API-Key header', () => {
@@ -178,6 +184,9 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
       expect(req.auth?.role).toBe('admin');
       expect(req.auth?.keyName).toBe('admin');
+      expect(req.auth?.authMethod).toBe('api-key');
+      expect(req.auth?.tokenName).toBe('admin');
+      expect(req.auth?.actorType).toBe('service');
     });
 
     it('should authenticate via Bearer token in Authorization header', () => {
@@ -205,6 +214,13 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
       expect(req.auth?.role).toBe('agent');
       expect(req.auth?.keyName).toBe('myagent');
+      expect(req.auth?.actorType).toBe('agent');
+      expect(req.auth?.authMethod).toBe('api-key');
+      expect(req.auth?.tokenName).toBe('myagent');
+      expect(req.auth?.userId).toBe('local-user');
+      expect(req.auth?.workspaceId).toBe('local');
+      expect(req.auth?.permissions).toContain('task:write');
+      expect(req.auth?.permissions).not.toContain('admin:manage');
     });
 
     it('should allow localhost bypass with read-only role by default', () => {
@@ -220,6 +236,10 @@ describe('Auth Middleware', () => {
       expect(req.auth?.role).toBe('read-only');
       expect(req.auth?.keyName).toBe('localhost-bypass');
       expect(req.auth?.isLocalhost).toBe(true);
+      expect(req.auth?.actorType).toBe('localhost-bypass');
+      expect(req.auth?.authMethod).toBe('localhost-bypass');
+      expect(req.auth?.permissions).toContain('task:read');
+      expect(req.auth?.permissions).not.toContain('task:write');
     });
 
     it('should allow localhost bypass with admin role when explicitly configured', () => {
@@ -302,6 +322,9 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
       expect(req.auth?.role).toBe('admin');
       expect(req.auth?.keyName).toBe('session');
+      expect(req.auth?.actorType).toBe('user');
+      expect(req.auth?.authMethod).toBe('session');
+      expect(req.auth?.workspaceId).toBe('local');
     });
 
     it('should fall back to API key when JWT is invalid', () => {
@@ -386,6 +409,45 @@ describe('Auth Middleware', () => {
       authenticate(req, res, next);
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(401);
+    });
+  });
+
+  // === permission helpers ===
+  describe('permission helpers', () => {
+    it('should allow admin for any permission', () => {
+      expect(hasPermission({ role: 'admin' }, 'admin:manage')).toBe(true);
+      expect(hasPermission({ role: 'admin', permissions: [] }, 'task:write')).toBe(true);
+    });
+
+    it('should evaluate role-derived permissions when permissions are absent', () => {
+      expect(hasPermission({ role: 'agent' }, 'task:write')).toBe(true);
+      expect(hasPermission({ role: 'agent' }, 'admin:manage')).toBe(false);
+      expect(hasPermission({ role: 'read-only' }, 'task:read')).toBe(true);
+      expect(hasPermission({ role: 'read-only' }, 'task:write')).toBe(false);
+    });
+
+    it('should allow explicit permission middleware matches', () => {
+      const middleware = authorizePermission('task:write');
+      const req = mockRequest() as AuthenticatedRequest;
+      req.auth = { role: 'agent', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should reject explicit permission middleware misses', () => {
+      const middleware = authorizePermission('admin:manage');
+      const req = mockRequest() as AuthenticatedRequest;
+      req.auth = { role: 'agent', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      middleware(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'FORBIDDEN' }));
     });
   });
 
@@ -538,6 +600,8 @@ describe('Auth Middleware', () => {
       const result = authenticateWebSocket(req);
       expect(result.authenticated).toBe(true);
       expect(result.role).toBe('admin');
+      expect(result.authMethod).toBe('disabled');
+      expect(result.permissions).toEqual(['*']);
     });
 
     it('should authenticate via API key in query parameter', () => {
@@ -551,6 +615,27 @@ describe('Auth Middleware', () => {
       const result = authenticateWebSocket(req);
       expect(result.authenticated).toBe(true);
       expect(result.role).toBe('admin');
+      expect(result.authMethod).toBe('api-key');
+      expect(result.tokenName).toBe('admin');
+    });
+
+    it('should authenticate WebSocket API keys with v5 auth context', () => {
+      process.env.VERITAS_API_KEYS = 'myagent:ws-agent-key:agent';
+      const req = {
+        headers: { authorization: 'Bearer ws-agent-key', host: 'localhost:3001' },
+        url: '/ws',
+        socket: { remoteAddress: '192.168.1.100' },
+      } as unknown as IncomingMessage;
+
+      const result = authenticateWebSocket(req);
+      expect(result.authenticated).toBe(true);
+      expect(result.role).toBe('agent');
+      expect(result.actorType).toBe('agent');
+      expect(result.authMethod).toBe('api-key');
+      expect(result.tokenName).toBe('myagent');
+      expect(result.workspaceId).toBe('local');
+      expect(result.permissions).toContain('task:write');
+      expect(result.permissions).not.toContain('admin:manage');
     });
 
     it('should authenticate via JWT cookie', () => {
@@ -575,6 +660,8 @@ describe('Auth Middleware', () => {
       const result = authenticateWebSocket(req);
       expect(result.authenticated).toBe(true);
       expect(result.role).toBe('admin');
+      expect(result.authMethod).toBe('session');
+      expect(result.actorType).toBe('user');
     });
 
     it('should allow localhost bypass for WebSocket with read-only role by default', () => {
@@ -589,6 +676,8 @@ describe('Auth Middleware', () => {
       expect(result.authenticated).toBe(true);
       expect(result.role).toBe('read-only');
       expect(result.keyName).toBe('localhost-bypass');
+      expect(result.authMethod).toBe('localhost-bypass');
+      expect(result.actorType).toBe('localhost-bypass');
     });
 
     it('should allow WebSocket localhost bypass with admin when configured', () => {

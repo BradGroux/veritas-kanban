@@ -11,6 +11,31 @@ const log = createLogger('auth');
 // === Types ===
 
 export type AuthRole = 'admin' | 'read-only' | 'agent';
+export type AuthMethod = 'disabled' | 'session' | 'api-key' | 'localhost-bypass';
+export type AuthActorType = 'user' | 'agent' | 'service' | 'localhost-bypass';
+export type AuthPermission =
+  | '*'
+  | 'workspace:read'
+  | 'task:read'
+  | 'task:write'
+  | 'comment:write'
+  | 'workflow:read'
+  | 'workflow:write'
+  | 'workflow:execute'
+  | 'work_product:read'
+  | 'work_product:write'
+  | 'report:read'
+  | 'telemetry:read'
+  | 'telemetry:write'
+  | 'agent:read'
+  | 'agent:write'
+  | 'settings:read'
+  | 'settings:write'
+  | 'policy:read'
+  | 'policy:write'
+  | 'backup:read'
+  | 'backup:write'
+  | 'admin:manage';
 
 export interface AuthConfig {
   /** Enable authentication (default: true) */
@@ -37,11 +62,95 @@ export interface ApiKeyConfig {
 }
 
 export interface AuthenticatedRequest extends Request {
-  auth?: {
-    role: AuthRole;
-    keyName?: string;
-    isLocalhost: boolean;
+  auth?: AuthContext;
+}
+
+const DEFAULT_WORKSPACE_ID = 'local';
+const DEFAULT_USER_ID = 'local-user';
+
+export interface AuthContext {
+  role: AuthRole;
+  keyName?: string;
+  isLocalhost: boolean;
+  userId?: string;
+  workspaceId?: string;
+  actorType?: AuthActorType;
+  authMethod?: AuthMethod;
+  tokenName?: string;
+  permissions?: AuthPermission[];
+}
+
+const ROLE_PERMISSIONS: Record<AuthRole, readonly AuthPermission[]> = {
+  admin: ['*'],
+  agent: [
+    'workspace:read',
+    'task:read',
+    'task:write',
+    'comment:write',
+    'workflow:read',
+    'workflow:execute',
+    'work_product:read',
+    'work_product:write',
+    'report:read',
+    'telemetry:write',
+    'agent:read',
+  ],
+  'read-only': [
+    'workspace:read',
+    'task:read',
+    'workflow:read',
+    'work_product:read',
+    'report:read',
+    'telemetry:read',
+    'agent:read',
+    'settings:read',
+    'policy:read',
+    'backup:read',
+  ],
+};
+
+function permissionsForRole(role: AuthRole): AuthPermission[] {
+  return [...ROLE_PERMISSIONS[role]];
+}
+
+function actorTypeFor(role: AuthRole, authMethod: AuthMethod): AuthActorType {
+  if (authMethod === 'localhost-bypass') return 'localhost-bypass';
+  if (role === 'agent') return 'agent';
+  return authMethod === 'session' ? 'user' : 'service';
+}
+
+function buildAuthContext(input: {
+  role: AuthRole;
+  keyName?: string;
+  isLocalhost: boolean;
+  authMethod: AuthMethod;
+}): NonNullable<AuthenticatedRequest['auth']> {
+  return {
+    role: input.role,
+    keyName: input.keyName,
+    isLocalhost: input.isLocalhost,
+    userId: DEFAULT_USER_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    actorType: actorTypeFor(input.role, input.authMethod),
+    authMethod: input.authMethod,
+    tokenName: input.authMethod === 'api-key' ? input.keyName : undefined,
+    permissions: permissionsForRole(input.role),
   };
+}
+
+function permissionListFor(auth: Pick<AuthContext, 'role' | 'permissions'>): AuthPermission[] {
+  return auth.permissions ?? permissionsForRole(auth.role);
+}
+
+export function hasPermission(
+  auth: Pick<AuthContext, 'role' | 'permissions'> | undefined,
+  permission: AuthPermission
+): boolean {
+  if (!auth) return false;
+  if (auth.role === 'admin') return true;
+
+  const permissions = permissionListFor(auth);
+  return permissions.includes('*') || permissions.includes(permission);
 }
 
 // === Configuration ===
@@ -283,7 +392,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 
   // Auth disabled via env var - allow all requests
   if (!config.enabled && !passwordAuthEnabled) {
-    req.auth = { role: 'admin', isLocalhost };
+    req.auth = buildAuthContext({ role: 'admin', isLocalhost, authMethod: 'disabled' });
     return next();
   }
 
@@ -291,7 +400,12 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   if (passwordAuthEnabled) {
     const jwtResult = verifyJwtCookie(req);
     if (jwtResult.valid) {
-      req.auth = { role: 'admin', keyName: 'session', isLocalhost };
+      req.auth = buildAuthContext({
+        role: 'admin',
+        keyName: 'session',
+        isLocalhost,
+        authMethod: 'session',
+      });
       return next();
     }
   }
@@ -301,18 +415,24 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   if (apiKey) {
     const validation = validateApiKey(apiKey, config);
     if (validation.valid) {
-      req.auth = {
+      req.auth = buildAuthContext({
         role: validation.role!,
         keyName: validation.name,
         isLocalhost,
-      };
+        authMethod: 'api-key',
+      });
       return next();
     }
   }
 
   // 3. Localhost bypass (dev mode) — role is configurable (default: read-only)
   if (config.allowLocalhostBypass && isLocalhost) {
-    req.auth = { role: config.localhostRole, keyName: 'localhost-bypass', isLocalhost };
+    req.auth = buildAuthContext({
+      role: config.localhostRole,
+      keyName: 'localhost-bypass',
+      isLocalhost,
+      authMethod: 'localhost-bypass',
+    });
     return next();
   }
 
@@ -363,6 +483,39 @@ export function authorize(...allowedRoles: AuthRole[]) {
 }
 
 /**
+ * Authorization middleware factory - requires at least one specific permission.
+ *
+ * Existing callers can keep using role checks while v5 route work moves toward
+ * explicit permission requirements.
+ */
+export function authorizePermission(...allowedPermissions: AuthPermission[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    if (!req.auth) {
+      res.status(401).json({
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    if (!allowedPermissions.some((permission) => hasPermission(req.auth, permission))) {
+      res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Insufficient permissions',
+        details: {
+          required: allowedPermissions,
+          currentRole: req.auth.role,
+          currentPermissions: permissionListFor(req.auth),
+        },
+      });
+      return;
+    }
+
+    next();
+  };
+}
+
+/**
  * Middleware that allows read operations for read-only users
  * but requires admin for write operations
  */
@@ -402,6 +555,12 @@ export interface WebSocketAuthResult {
   role?: AuthRole;
   keyName?: string;
   isLocalhost: boolean;
+  userId?: string;
+  workspaceId?: string;
+  actorType?: AuthActorType;
+  authMethod?: AuthMethod;
+  tokenName?: string;
+  permissions?: AuthPermission[];
   error?: string;
 }
 
@@ -436,7 +595,10 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
 
   // Auth disabled via env var
   if (!config.enabled && !passwordAuthEnabled) {
-    return { authenticated: true, role: 'admin', isLocalhost };
+    return {
+      authenticated: true,
+      ...buildAuthContext({ role: 'admin', isLocalhost, authMethod: 'disabled' }),
+    };
   }
 
   // 1. Check JWT cookie (supports rotated secrets)
@@ -445,7 +607,15 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     if (token) {
       const result = verifyJwtToken(token);
       if (result.valid) {
-        return { authenticated: true, role: 'admin', keyName: 'session', isLocalhost };
+        return {
+          authenticated: true,
+          ...buildAuthContext({
+            role: 'admin',
+            keyName: 'session',
+            isLocalhost,
+            authMethod: 'session',
+          }),
+        };
       }
       // Token invalid or expired, continue to other auth methods
     }
@@ -458,9 +628,12 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     if (validation.valid) {
       return {
         authenticated: true,
-        role: validation.role,
-        keyName: validation.name,
-        isLocalhost,
+        ...buildAuthContext({
+          role: validation.role!,
+          keyName: validation.name,
+          isLocalhost,
+          authMethod: 'api-key',
+        }),
       };
     }
   }
@@ -469,9 +642,12 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
   if (config.allowLocalhostBypass && isLocalhost) {
     return {
       authenticated: true,
-      role: config.localhostRole,
-      keyName: 'localhost-bypass',
-      isLocalhost,
+      ...buildAuthContext({
+        role: config.localhostRole,
+        keyName: 'localhost-bypass',
+        isLocalhost,
+        authMethod: 'localhost-bypass',
+      }),
     };
   }
 
@@ -488,11 +664,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
  * Attach auth info to WebSocket for later use
  */
 export interface AuthenticatedWebSocket extends WebSocket {
-  auth?: {
-    role: AuthRole;
-    keyName?: string;
-    isLocalhost: boolean;
-  };
+  auth?: AuthContext;
 }
 
 // === Origin Validation ===

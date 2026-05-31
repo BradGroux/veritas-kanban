@@ -73,6 +73,24 @@ const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 - **agent**: Can read/write tasks, run agents, manage worktrees. Intended for AI agents like [OpenClaw](https://github.com/openclaw/openclaw)
 - **read-only**: Can only perform GET requests. Suitable for dashboards and monitoring
 
+### v5 Auth Context
+
+Authenticated REST requests and WebSocket connections now carry a shared auth
+context for the v5 RBAC migration:
+
+| Field         | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| `role`        | Current compatibility role: `admin`, `agent`, `read-only` |
+| `userId`      | Local fallback user ID until persisted users are enforced |
+| `workspaceId` | Local fallback workspace ID until workspace scoping lands |
+| `actorType`   | `user`, `agent`, `service`, or `localhost-bypass`         |
+| `authMethod`  | `disabled`, `session`, `api-key`, or `localhost-bypass`   |
+| `tokenName`   | API key name when authenticated with a configured key     |
+| `permissions` | Role-derived permission list used by new route guards     |
+
+New v5 endpoints should prefer explicit permission guards over broad role
+checks. Legacy role guards remain supported while route coverage is migrated.
+
 ## Configuration Reference
 
 ### Environment Variables
