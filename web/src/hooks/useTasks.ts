@@ -23,6 +23,67 @@ function patchTaskInCaches(queryClient: QueryClient, task: Task): void {
   queryClient.setQueryData(['tasks', task.id], task);
 }
 
+type ApiMutationError = Error & { code?: string; details?: unknown };
+
+function cachedTaskRevision(queryClient: QueryClient, taskId: string): number | undefined {
+  const detailTask = queryClient.getQueryData<Task>(['tasks', taskId]);
+  if (typeof detailTask?.revision === 'number') {
+    return detailTask.revision;
+  }
+
+  const listTask = queryClient.getQueryData<Task[]>(['tasks'])?.find((task) => task.id === taskId);
+  return typeof listTask?.revision === 'number' ? listTask.revision : undefined;
+}
+
+function conflictCurrentTask(error: ApiMutationError): Task | undefined {
+  const details = error.details as { current?: unknown } | undefined;
+  const current = details?.current;
+  if (
+    current &&
+    typeof current === 'object' &&
+    'id' in current &&
+    typeof (current as { id?: unknown }).id === 'string'
+  ) {
+    return current as Task;
+  }
+  return undefined;
+}
+
+export function isRevisionConflict(error: unknown): error is ApiMutationError {
+  return (
+    error instanceof Error &&
+    (error as ApiMutationError).code === 'CONFLICT' &&
+    typeof (error as ApiMutationError).details === 'object'
+  );
+}
+
+function handleRevisionConflict(
+  queryClient: QueryClient,
+  error: ApiMutationError,
+  taskId: string
+): boolean {
+  if (!isRevisionConflict(error)) {
+    return false;
+  }
+
+  const current = conflictCurrentTask(error);
+  if (current) {
+    patchTaskInCaches(queryClient, current);
+  }
+
+  queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  queryClient.invalidateQueries({ queryKey: ['tasks', taskId] });
+
+  toast({
+    title: 'Task changed elsewhere',
+    description: 'Loaded the latest task. Review your edit and save again.',
+    variant: 'destructive',
+    duration: 10000,
+  });
+
+  return true;
+}
+
 /**
  * Polling intervals based on WebSocket connection state.
  * - Connected: 60s safety-net polling (WS delivers real-time updates)
@@ -112,7 +173,7 @@ export function useUpdateTask() {
 
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateTaskInput }) =>
-      api.tasks.update(id, input),
+      api.tasks.update(id, input, cachedTaskRevision(queryClient, id)),
     // On success, merge the server response with the current cache.
     // Preserve timeTracking from the cache if it wasn't part of this update,
     // since concurrent timer mutations (start/stop) may have already patched
@@ -145,7 +206,11 @@ export function useUpdateTask() {
       }
     },
     // Handle validation errors with detailed toast messages
-    onError: (error: Error & { code?: string; details?: unknown }) => {
+    onError: (error: Error & { code?: string; details?: unknown }, { id }) => {
+      if (handleRevisionConflict(queryClient, error, id)) {
+        return;
+      }
+
       // Extract enforcement gate error details
       const details = error.details as
         | Array<{ code: string; message: string; path: string[] }>
@@ -483,9 +548,12 @@ export function useAddComment() {
 
   return useMutation({
     mutationFn: ({ taskId, author, text }: { taskId: string; author: string; text: string }) =>
-      api.tasks.addComment(taskId, author, text),
+      api.tasks.addComment(taskId, author, text, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
       patchTaskInCaches(queryClient, task);
+    },
+    onError: (error, { taskId }) => {
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
     },
   });
 }
@@ -502,9 +570,12 @@ export function useEditComment() {
       taskId: string;
       commentId: string;
       text: string;
-    }) => api.tasks.editComment(taskId, commentId, text),
+    }) => api.tasks.editComment(taskId, commentId, text, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
       patchTaskInCaches(queryClient, task);
+    },
+    onError: (error, { taskId }) => {
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
     },
   });
 }
@@ -514,9 +585,12 @@ export function useDeleteComment() {
 
   return useMutation({
     mutationFn: ({ taskId, commentId }: { taskId: string; commentId: string }) =>
-      api.tasks.deleteComment(taskId, commentId),
+      api.tasks.deleteComment(taskId, commentId, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
       patchTaskInCaches(queryClient, task);
+    },
+    onError: (error, { taskId }) => {
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
     },
   });
 }

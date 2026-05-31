@@ -161,6 +161,13 @@ curl http://localhost:3001/api/workflows/feature-dev
 - `404 Not Found` — Workflow not found
 - `403 Forbidden` — No view permission
 
+**Headers**:
+
+```http
+ETag: "workflow:feature-dev:2"
+X-Resource-Revision: 2
+```
+
 **Permissions**: Requires `view` permission.
 
 ---
@@ -242,6 +249,7 @@ Update an existing workflow (auto-increments version).
 ```bash
 curl -X PUT http://localhost:3001/api/workflows/hello-world \
   -H "Content-Type: application/json" \
+  -H 'If-Match: "workflow:hello-world:1"' \
   -d '{
     "id": "hello-world",
     "name": "Hello World Workflow v2",
@@ -296,14 +304,39 @@ curl -X PUT http://localhost:3001/api/workflows/hello-world \
 - `400 Bad Request` — Validation error or ID mismatch
 - `404 Not Found` — Workflow not found
 - `403 Forbidden` — No edit permission
+- `409 Conflict` — Workflow has changed since the supplied `If-Match` revision
 
 **Permissions**: Requires `edit` permission.
 
 **Notes**:
 
 - Version is auto-incremented (ignore `version` in request body)
+- Workflow `version` is also the optimistic-concurrency revision. Read the
+  workflow ETag, then send it back with `If-Match` on update.
+- Workflow definitions include `createdBy`, `updatedBy`, `createdAt`, and
+  `updatedAt` when saved through the API.
 - Active runs continue with their snapshotted version (no interruption)
 - Changes are logged to `.veritas-kanban/workflows/.audit.jsonl`
+
+**Conflict response**:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "workflow hello-world has changed since it was loaded. Reload and retry with the latest revision.",
+  "details": {
+    "resourceType": "workflow",
+    "resourceId": "hello-world",
+    "expectedRevision": 1,
+    "currentRevision": 2,
+    "current": {
+      "id": "hello-world",
+      "version": 2,
+      "description": "Latest workflow body"
+    }
+  }
+}
+```
 
 ---
 

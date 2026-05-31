@@ -30,12 +30,17 @@ export const tasksApi = {
     return handleResponse<Task>(response);
   },
 
-  update: async (id: string, input: UpdateTaskInput): Promise<Task> => {
+  update: async (id: string, input: UpdateTaskInput, expectedRevision?: number): Promise<Task> => {
+    const { expectedRevision: bodyExpectedRevision, ...body } = input;
+    const revision = expectedRevision ?? bodyExpectedRevision;
     const response = await fetch(`${API_BASE}/tasks/${id}`, {
       credentials: 'include',
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof revision === 'number' ? { 'If-Match': `"task:${id}:${revision}"` } : {}),
+      },
+      body: JSON.stringify(body),
     });
     return handleResponse<Task>(response);
   },
@@ -170,30 +175,58 @@ export const tasksApi = {
     return handleResponse<Task>(response);
   },
 
-  addComment: async (taskId: string, author: string, text: string): Promise<Task> => {
+  addComment: async (
+    taskId: string,
+    author: string,
+    text: string,
+    expectedRevision?: number
+  ): Promise<Task> => {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/comments`, {
       credentials: 'include',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof expectedRevision === 'number'
+          ? { 'If-Match': `"task:${taskId}:${expectedRevision}"` }
+          : {}),
+      },
       body: JSON.stringify({ author, text }),
     });
     return handleResponse<Task>(response);
   },
 
-  editComment: async (taskId: string, commentId: string, text: string): Promise<Task> => {
+  editComment: async (
+    taskId: string,
+    commentId: string,
+    text: string,
+    expectedRevision?: number
+  ): Promise<Task> => {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
       credentials: 'include',
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof expectedRevision === 'number'
+          ? { 'If-Match': `"task:${taskId}:${expectedRevision}"` }
+          : {}),
+      },
       body: JSON.stringify({ text }),
     });
     return handleResponse<Task>(response);
   },
 
-  deleteComment: async (taskId: string, commentId: string): Promise<Task> => {
+  deleteComment: async (
+    taskId: string,
+    commentId: string,
+    expectedRevision?: number
+  ): Promise<Task> => {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
       credentials: 'include',
       method: 'DELETE',
+      headers:
+        typeof expectedRevision === 'number'
+          ? { 'If-Match': `"task:${taskId}:${expectedRevision}"` }
+          : undefined,
     });
     return handleResponse<Task>(response);
   },

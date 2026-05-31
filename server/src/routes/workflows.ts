@@ -13,6 +13,7 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError, BadRequestError } from '../middleware/error-handler.js';
 import { checkWorkflowPermission, assertWorkflowPermission } from '../middleware/workflow-auth.js';
 import { diffWorkflows } from '../utils/workflow-diff.js';
+import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 
 const router = Router();
 const workflowService = getWorkflowService();
@@ -50,6 +51,10 @@ const workflowCreateSchema = z.object({
   steps: z.array(z.unknown()).min(1).max(50),
   variables: z.record(z.string(), z.unknown()).optional(),
   schemas: z.record(z.string(), z.unknown()).optional(),
+  createdBy: z.string().optional(),
+  updatedBy: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 
 // ==================== Workflow CRUD Routes ====================
@@ -97,6 +102,7 @@ router.get(
     // Check view permission
     await assertWorkflowPermission(workflowId, userId, 'view');
 
+    setRevisionHeaders(res, 'workflow', workflow.id, workflow.version);
     res.json(workflow);
   })
 );
@@ -108,9 +114,15 @@ router.post(
   '/',
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const userId = getUserId(req);
+    const actor = actorFromRequest(req);
+    const now = new Date().toISOString();
 
     // Validate input
     const workflow = workflowCreateSchema.parse(req.body) as WorkflowDefinition;
+    workflow.createdBy = workflow.createdBy ?? actor;
+    workflow.updatedBy = actor;
+    workflow.createdAt = workflow.createdAt ?? now;
+    workflow.updatedAt = now;
 
     // Save workflow
     await workflowService.saveWorkflow(workflow);
@@ -135,6 +147,7 @@ router.post(
       workflowVersion: workflow.version,
     });
 
+    setRevisionHeaders(res, 'workflow', workflow.id, workflow.version);
     res.status(201).json({ success: true, workflowId: workflow.id });
   })
 );
@@ -147,6 +160,8 @@ router.put(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const urlWorkflowId = getStringParam(req.params.id);
     const userId = getUserId(req);
+    const actor = actorFromRequest(req);
+    const now = new Date().toISOString();
 
     // Validate input
     const workflow = workflowCreateSchema.parse(req.body) as WorkflowDefinition;
@@ -163,7 +178,16 @@ router.put(
 
     // Load previous version for versioning and change tracking
     const previousVersion = await workflowService.loadWorkflow(workflow.id);
+    if (!previousVersion) {
+      throw new NotFoundError(`Workflow ${workflow.id} not found`);
+    }
+    assertFreshRevision(req, 'workflow', workflow.id, previousVersion, previousVersion);
+
     workflow.version = (previousVersion?.version || 0) + 1;
+    workflow.createdBy = previousVersion.createdBy;
+    workflow.createdAt = previousVersion.createdAt;
+    workflow.updatedBy = actor;
+    workflow.updatedAt = now;
 
     // Save workflow
     await workflowService.saveWorkflow(workflow);
@@ -178,6 +202,7 @@ router.put(
       changes: diffWorkflows(previousVersion, workflow),
     });
 
+    setRevisionHeaders(res, 'workflow', workflow.id, workflow.version);
     res.json({ success: true, version: workflow.version });
   })
 );

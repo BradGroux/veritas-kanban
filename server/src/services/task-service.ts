@@ -618,6 +618,9 @@ export class TaskService {
       blockedBy: input.blockedBy, // Include dependencies from blueprint
       created: now,
       updated: now,
+      revision: 1,
+      createdBy: input.createdBy,
+      updatedBy: input.updatedBy ?? input.createdBy,
     };
 
     // Validate agent ref against registry (#157)
@@ -680,6 +683,7 @@ export class TaskService {
       git: gitUpdate,
       github: githubUpdate,
       blockedReason: blockedReasonUpdate,
+      expectedRevision: _expectedRevision,
       ...restInput
     } = input;
 
@@ -870,6 +874,7 @@ export class TaskService {
           : checkpointUpdate !== undefined
             ? checkpointUpdate
             : freshTask.checkpoint,
+        revision: (typeof freshTask.revision === 'number' ? freshTask.revision : 1) + 1,
         updated: new Date().toISOString(),
       };
 

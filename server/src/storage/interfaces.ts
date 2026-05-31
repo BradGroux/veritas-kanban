@@ -86,7 +86,8 @@ export interface ActivityRepository {
     taskId: string,
     taskTitle: string,
     details?: Record<string, unknown>,
-    agent?: string
+    agent?: string,
+    actor?: string
   ): Promise<Activity>;
 
   /** Delete all activity entries. */

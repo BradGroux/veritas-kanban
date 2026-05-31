@@ -165,9 +165,10 @@ export class FileActivityRepository implements ActivityRepository {
     taskId: string,
     taskTitle: string,
     details?: Record<string, unknown>,
-    agent?: string
+    agent?: string,
+    actor?: string
   ): Promise<Activity> {
-    return this.service.logActivity(type, taskId, taskTitle, details, agent);
+    return this.service.logActivity(type, taskId, taskTitle, details, agent, actor);
   }
 
   async clearActivities(): Promise<void> {

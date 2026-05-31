@@ -122,23 +122,57 @@ All errors return a consistent JSON envelope:
 
 ### Status Codes
 
-| Code  | Meaning                                    |
-| ----- | ------------------------------------------ |
-| `200` | Success                                    |
-| `201` | Created                                    |
-| `400` | Bad request — invalid body, missing fields |
-| `401` | Not authenticated                          |
-| `403` | Forbidden — insufficient role              |
-| `404` | Resource not found                         |
-| `409` | Conflict — duplicate, state violation      |
-| `429` | Rate limited                               |
-| `503` | Service degraded (health checks)           |
+| Code  | Meaning                                               |
+| ----- | ----------------------------------------------------- |
+| `200` | Success                                               |
+| `201` | Created                                               |
+| `400` | Bad request — invalid body, missing fields            |
+| `401` | Not authenticated                                     |
+| `403` | Forbidden — insufficient role                         |
+| `404` | Resource not found                                    |
+| `409` | Conflict — duplicate, state violation, stale revision |
+| `429` | Rate limited                                          |
+| `503` | Service degraded (health checks)                      |
 
 ---
 
 ## Tasks
 
 All task routes are mounted at `/api/tasks`.
+
+### Task Revisions and Conflict Handling
+
+Task reads and writes include optimistic-concurrency metadata:
+
+- `GET /api/tasks/:id`, `POST /api/tasks`, and successful task mutations return
+  `ETag: "task:<taskId>:<revision>"`.
+- The same revision is also returned as `X-Resource-Revision`.
+- Clients that edit a loaded task should send `If-Match` with the last ETag, or
+  `X-Resource-Revision` with the last numeric revision.
+- Tasks include `revision`, `createdBy`, and `updatedBy`. Comments include
+  `revision`, `createdBy`, and `updatedBy` when created or edited through the
+  v5 routes.
+
+When the supplied revision is stale, the API returns `409 CONFLICT` and includes
+the latest resource so the client can reload or reapply the edit:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "task task_20260531_abcd has changed since it was loaded. Reload and retry with the latest revision.",
+  "details": {
+    "resourceType": "task",
+    "resourceId": "task_20260531_abcd",
+    "expectedRevision": 3,
+    "currentRevision": 4,
+    "current": {
+      "id": "task_20260531_abcd",
+      "title": "Latest task title",
+      "revision": 4
+    }
+  }
+}
+```
 
 ### List Tasks
 
@@ -207,6 +241,15 @@ PATCH /api/tasks/:id
 ```
 
 **Body**: Partial task fields to update (title, description, status, priority, assignee, etc.).
+
+**Headers**:
+
+```http
+If-Match: "task:task_20260531_abcd:3"
+```
+
+If the task has been updated since revision `3`, the API returns `409 CONFLICT`
+with the latest task in `details.current`.
 
 ### Delete Task
 
@@ -846,6 +889,11 @@ DELETE /api/tasks/:id/verification/:stepId
 ## Task Comments
 
 Comment threads on tasks — supports adding, editing, and deleting comments. Comments auto-sync to linked GitHub issues.
+
+Comment mutations use the parent task revision. Send the latest task `ETag` in
+`If-Match` when adding, editing, or deleting comments. A stale comment edit
+returns the same `409 CONFLICT` shape documented in [Tasks](#tasks), with the
+latest task and comments in `details.current`.
 
 Mounted at `/api/tasks`.
 

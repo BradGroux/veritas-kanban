@@ -83,6 +83,24 @@ describe('handleResponse', () => {
     await expect(handleResponse(jsonResponse(body, 500))).rejects.toThrow('Internal Server Error');
   });
 
+  it('preserves code and details for non-envelope errors', async () => {
+    const body = {
+      code: 'CONFLICT',
+      message: 'Task changed',
+      details: { currentRevision: 4 },
+    };
+
+    try {
+      await handleResponse(jsonResponse(body, 409));
+      expect.fail('Should have thrown');
+    } catch (err: unknown) {
+      const e = err as Error & { code?: string; details?: unknown };
+      expect(e.message).toBe('Task changed');
+      expect(e.code).toBe('CONFLICT');
+      expect(e.details).toEqual({ currentRevision: 4 });
+    }
+  });
+
   it('uses HTTP status for non-ok non-envelope response without error string', async () => {
     const body = { some: 'data' };
     await expect(handleResponse(jsonResponse(body, 502))).rejects.toThrow('HTTP 502');

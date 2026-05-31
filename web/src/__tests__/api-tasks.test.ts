@@ -113,6 +113,40 @@ describe('tasksApi', () => {
     expect(result.status).toBe('done');
   });
 
+  it('update() sends If-Match and strips expectedRevision from the JSON body', async () => {
+    const updated = createMockTask({ id: 'u1', title: 'Updated' });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => envelope(updated),
+    } as Response);
+
+    await tasksApi.update('u1', { title: 'Updated', expectedRevision: 7 });
+    expect(fetch).toHaveBeenCalledWith('http://test-api/tasks/u1', {
+      credentials: 'include',
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"task:u1:7"' },
+      body: JSON.stringify({ title: 'Updated' }),
+    });
+  });
+
+  it('addComment() sends the parent task revision when provided', async () => {
+    const updated = createMockTask({ id: 'task-1' });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => envelope(updated),
+    } as Response);
+
+    await tasksApi.addComment('task-1', 'Tester', 'Comment body', 3);
+    expect(fetch).toHaveBeenCalledWith('http://test-api/tasks/task-1/comments', {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"task:task-1:3"' },
+      body: JSON.stringify({ author: 'Tester', text: 'Comment body' }),
+    });
+  });
+
   it('delete() calls DELETE /tasks/:id', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,

@@ -59,10 +59,18 @@ export async function handleResponse<T>(response: Response): Promise<T> {
   // Non-envelope response (e.g., legacy or non-API endpoint)
   if (!response.ok) {
     const errBody = body as Record<string, unknown> | null;
-    throw new Error(
+    const err = new Error(
       (errBody && typeof errBody.error === 'string' ? errBody.error : null) ||
+        (errBody && typeof errBody.message === 'string' ? errBody.message : null) ||
         `HTTP ${response.status}`
-    );
+    ) as Error & { code?: string; details?: unknown };
+    if (errBody && typeof errBody.code === 'string') {
+      err.code = errBody.code;
+    }
+    if (errBody && 'details' in errBody) {
+      err.details = errBody.details;
+    }
+    throw err;
   }
 
   return body as T;

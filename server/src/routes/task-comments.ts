@@ -8,6 +8,8 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText, sanitizeAuthor } from '../utils/sanitize.js';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -39,16 +41,27 @@ router.post(
     if (!task) {
       throw new NotFoundError('Task not found');
     }
+    assertFreshRevision(req, 'task', task.id, task);
+    const actor = actorFromRequest(req as AuthenticatedRequest);
 
     const comment = {
       id: `comment_${randomUUID()}`,
       author,
       text,
       timestamp: new Date().toISOString(),
+      revision: 1,
+      createdBy: actor,
+      updatedBy: actor,
     };
 
     const comments = [...(task.comments || []), comment];
-    const updatedTask = await taskService.updateTask(req.params.id as string, { comments });
+    const updatedTask = await taskService.updateTask(req.params.id as string, {
+      comments,
+      updatedBy: actor,
+    });
+    if (!updatedTask) {
+      throw new NotFoundError('Task not found');
+    }
 
     // Log activity
     await activityService.logActivity(
@@ -58,8 +71,10 @@ router.post(
       {
         author,
         preview: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+        actor,
       },
-      task.agent
+      task.agent,
+      actor
     );
 
     // Broadcast update to all connected WebSocket clients
@@ -74,6 +89,7 @@ router.post(
         });
     }
 
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.status(201).json(updatedTask);
   })
 );
@@ -98,8 +114,10 @@ router.patch(
     if (!task) {
       throw new NotFoundError('Task not found');
     }
+    assertFreshRevision(req, 'task', task.id, task);
+    const actor = actorFromRequest(req as AuthenticatedRequest);
 
-    const comments = task.comments || [];
+    const comments = [...(task.comments || [])];
     const commentIndex = comments.findIndex(
       (c: { id: string; author: string; text: string; timestamp: string }) =>
         c.id === (req.params.commentId as string)
@@ -112,13 +130,23 @@ router.patch(
       ...comments[commentIndex],
       text,
       timestamp: comments[commentIndex].timestamp, // preserve original timestamp
+      updated: new Date().toISOString(),
+      updatedBy: actor,
+      revision: (comments[commentIndex]?.revision ?? 1) + 1,
     };
 
-    const updatedTask = await taskService.updateTask(req.params.id as string, { comments });
+    const updatedTask = await taskService.updateTask(req.params.id as string, {
+      comments,
+      updatedBy: actor,
+    });
+    if (!updatedTask) {
+      throw new NotFoundError('Task not found');
+    }
 
     // Broadcast update to all connected WebSocket clients
     broadcastTaskChange('updated', req.params.id as string);
 
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.json(updatedTask);
   })
 );
@@ -131,6 +159,8 @@ router.delete(
     if (!task) {
       throw new NotFoundError('Task not found');
     }
+    assertFreshRevision(req, 'task', task.id, task);
+    const actor = actorFromRequest(req as AuthenticatedRequest);
 
     const comments = task.comments || [];
     const filtered = comments.filter(
@@ -143,7 +173,11 @@ router.delete(
 
     const updatedTask = await taskService.updateTask(req.params.id as string, {
       comments: filtered,
+      updatedBy: actor,
     });
+    if (!updatedTask) {
+      throw new NotFoundError('Task not found');
+    }
 
     await activityService.logActivity(
       'comment_deleted',
@@ -151,13 +185,16 @@ router.delete(
       task.title,
       {
         commentId: req.params.commentId as string,
+        actor,
       },
-      task.agent
+      task.agent,
+      actor
     );
 
     // Broadcast update to all connected WebSocket clients
     broadcastTaskChange('updated', task.id);
 
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.json(updatedTask);
   })
 );

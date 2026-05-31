@@ -34,7 +34,8 @@ export class SqliteActivityRepository implements ActivityRepository {
     taskId: string,
     taskTitle: string,
     details?: Record<string, unknown>,
-    agent?: string
+    agent?: string,
+    actor?: string
   ): Promise<Activity> {
     const activity: Activity = {
       id: `activity_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
@@ -42,6 +43,7 @@ export class SqliteActivityRepository implements ActivityRepository {
       taskId,
       taskTitle,
       ...(agent && { agent }),
+      ...(actor && { actor }),
       details,
       timestamp: new Date().toISOString(),
     };

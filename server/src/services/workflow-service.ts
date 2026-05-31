@@ -468,3 +468,11 @@ export function getWorkflowService(): WorkflowService {
   }
   return workflowServiceInstance;
 }
+
+/** Dispose and reset the singleton (useful for tests and shutdown). */
+export function disposeWorkflowService(): void {
+  if (workflowServiceInstance) {
+    workflowServiceInstance.dispose();
+    workflowServiceInstance = null;
+  }
+}

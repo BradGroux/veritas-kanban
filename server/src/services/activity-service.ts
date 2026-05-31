@@ -43,6 +43,7 @@ export interface Activity {
   taskId: string;
   taskTitle: string;
   agent?: string;
+  actor?: string;
   details?: Record<string, unknown>;
   timestamp: string;
 }
@@ -181,10 +182,11 @@ export class ActivityService {
     taskId: string,
     taskTitle: string,
     details?: Record<string, unknown>,
-    agent?: string
+    agent?: string,
+    actor?: string
   ): Promise<Activity> {
     if (this.repository) {
-      return this.repository.logActivity(type, taskId, taskTitle, details, agent);
+      return this.repository.logActivity(type, taskId, taskTitle, details, agent, actor);
     }
 
     await this.ensureDir();
@@ -195,6 +197,7 @@ export class ActivityService {
       taskId,
       taskTitle,
       ...(agent && { agent }),
+      ...(actor && { actor }),
       details,
       timestamp: new Date().toISOString(),
     };

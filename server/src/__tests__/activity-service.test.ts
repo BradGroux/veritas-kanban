@@ -52,13 +52,17 @@ describe('ActivityService', () => {
         'task_created',
         'task_20260128_abc123',
         'New Feature',
-        { type: 'code', priority: 'high' }
+        { type: 'code', priority: 'high' },
+        'codex',
+        'agent:codex'
       );
 
       expect(activity.id).toMatch(/^activity_/);
       expect(activity.type).toBe('task_created');
       expect(activity.taskId).toBe('task_20260128_abc123');
       expect(activity.taskTitle).toBe('New Feature');
+      expect(activity.agent).toBe('codex');
+      expect(activity.actor).toBe('agent:codex');
       expect(activity.details).toEqual({ type: 'code', priority: 'high' });
       expect(activity.timestamp).toBeDefined();
     });

@@ -15,6 +15,10 @@ export interface WorkflowDefinition {
   steps: WorkflowStep[];
   variables?: Record<string, unknown>;
   schemas?: Record<string, unknown>;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface WorkflowConfig {

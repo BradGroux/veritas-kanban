@@ -58,9 +58,16 @@ const options: swaggerJsdoc.Options = {
             sprint: { type: 'string', example: 'Sprint 3' },
             created: { type: 'string', format: 'date-time' },
             updated: { type: 'string', format: 'date-time' },
+            revision: { type: 'number', example: 3 },
+            createdBy: { type: 'string', example: 'user:local-user' },
+            updatedBy: { type: 'string', example: 'agent:planner' },
             subtasks: {
               type: 'array',
               items: { $ref: '#/components/schemas/Subtask' },
+            },
+            comments: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Comment' },
             },
             blockedBy: {
               type: 'array',
@@ -144,6 +151,7 @@ const options: swaggerJsdoc.Options = {
             priority: { type: 'string', enum: ['low', 'medium', 'high'] },
             project: { type: 'string' },
             sprint: { type: 'string' },
+            expectedRevision: { type: 'number' },
             blockedBy: { type: 'array', items: { type: 'string' } },
             blockedReason: { $ref: '#/components/schemas/BlockedReason' },
             reviewScores: {
@@ -206,6 +214,19 @@ const options: swaggerJsdoc.Options = {
             line: { type: 'number' },
             content: { type: 'string' },
             created: { type: 'string', format: 'date-time' },
+          },
+        },
+        Comment: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            author: { type: 'string' },
+            text: { type: 'string' },
+            timestamp: { type: 'string', format: 'date-time' },
+            revision: { type: 'number' },
+            createdBy: { type: 'string' },
+            updatedBy: { type: 'string' },
+            updated: { type: 'string', format: 'date-time' },
           },
         },
         PaginatedResponse: {

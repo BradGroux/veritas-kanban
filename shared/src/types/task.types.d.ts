@@ -65,6 +65,10 @@ export interface Comment {
   author: string;
   text: string;
   timestamp: string;
+  revision?: number;
+  createdBy?: string;
+  updatedBy?: string;
+  updated?: string;
 }
 export type AttachmentValidationStatus = 'valid' | 'invalid' | 'skipped' | 'unknown';
 export type AttachmentRetentionStatus = 'active' | 'archived' | 'deleted' | 'expired';
@@ -131,6 +135,9 @@ export interface Task {
   sprint?: string;
   created: string;
   updated: string;
+  revision?: number;
+  createdBy?: string;
+  updatedBy?: string;
   agent?: AgentType | 'auto';
   agents?: AgentType[];
   git?: TaskGit;
@@ -194,6 +201,8 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   project?: string;
   sprint?: string;
+  createdBy?: string;
+  updatedBy?: string;
   agent?: AgentType | 'auto';
   agents?: AgentType[];
   subtasks?: Subtask[];
@@ -207,6 +216,8 @@ export interface UpdateTaskInput {
   priority?: TaskPriority;
   project?: string;
   sprint?: string;
+  expectedRevision?: number;
+  updatedBy?: string;
   agent?: AgentType | 'auto';
   agents?: AgentType[];
   git?: Partial<TaskGit>;

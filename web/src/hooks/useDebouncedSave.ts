@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useUpdateTask } from './useTasks';
+import { isRevisionConflict, useUpdateTask } from './useTasks';
 import { useToast } from '@/hooks/useToast';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { Task } from '@veritas-kanban/shared';
@@ -73,10 +73,16 @@ export function useDebouncedSave(task: Task | null) {
             });
           },
           onError: (error) => {
+            if (isRevisionConflict(error)) {
+              return;
+            }
             toastRef.current({
               variant: 'destructive',
               title: 'Failed to save changes',
-              description: error instanceof Error ? error.message : 'Please try again',
+              description:
+                typeof (error as { message?: unknown }).message === 'string'
+                  ? (error as { message: string }).message
+                  : 'Please try again',
             });
           },
         }

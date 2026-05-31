@@ -7,7 +7,7 @@ import { getBlockingService } from '../services/blocking-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { getDelegationService } from '../services/delegation-service.js';
 import { getProgressService } from '../services/progress-service.js';
-import type { CreateTaskInput, UpdateTaskInput, Task, TaskSummary } from '@veritas-kanban/shared';
+import type { CreateTaskInput, UpdateTaskInput, TaskSummary } from '@veritas-kanban/shared';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -16,6 +16,7 @@ import { setLastModified } from '../middleware/cache-control.js';
 import { sanitizeTaskFields } from '../utils/sanitize.js';
 import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -151,6 +152,7 @@ const updateTaskSchema = z.object({
   plan: z.string().optional(),
   automation: automationSchema,
   position: z.number().optional(),
+  expectedRevision: z.number().int().min(0).optional(),
 });
 
 // Progress schemas
@@ -500,6 +502,7 @@ router.get(
       throw new NotFoundError('Task not found');
     }
     setLastModified(res, task.updated || task.created);
+    setRevisionHeaders(res, 'task', task.id, task);
     res.json(task);
   })
 );
@@ -560,6 +563,9 @@ router.post(
     }
     // Sanitize user-provided text fields to prevent stored XSS
     sanitizeTaskFields(input);
+    const authReq = req as AuthenticatedRequest;
+    const actor = actorFromRequest(authReq);
+    input = { ...input, createdBy: actor, updatedBy: actor };
     const task = await taskService.createTask(input);
     broadcastTaskChange('created', task.id);
 
@@ -572,19 +578,21 @@ router.post(
         type: task.type,
         priority: task.priority,
         project: task.project,
+        actor,
       },
-      task.agent
+      task.agent,
+      actor
     );
 
     // Audit log
-    const authReq = req as AuthenticatedRequest;
     await auditLog({
       action: 'task.create',
-      actor: authReq.auth?.keyName || 'unknown',
+      actor,
       resource: task.id,
       details: { title: task.title, type: task.type, priority: task.priority },
     });
 
+    setRevisionHeaders(res, 'task', task.id, task);
     res.status(201).json(task);
   })
 );
@@ -650,11 +658,15 @@ router.patch(
     if (!oldTask) {
       throw new NotFoundError('Task not found');
     }
+    assertFreshRevision(req, 'task', oldTask.id, oldTask);
+
+    const authReq = req as AuthenticatedRequest;
+    const actor = actorFromRequest(authReq);
+    input = { ...input, updatedBy: actor };
 
     // Check delegation if moving to 'done'
     if (input.status === 'done' && oldTask.status !== 'done') {
-      const authReq = req as AuthenticatedRequest;
-      const agentName = authReq.auth?.keyName || 'unknown';
+      const agentName = authReq.auth?.keyName || actor;
 
       const delegationCheck = await delegationService.canApprove(agentName, {
         id: oldTask.id,
@@ -681,8 +693,10 @@ router.patch(
             status: 'done',
             delegated: true,
             delegateAgent: agentName,
+            actor,
           },
-          agentName
+          agentName,
+          actor
         );
       }
       // If delegation check fails, no special handling — the request proceeds normally
@@ -723,8 +737,10 @@ router.patch(
         {
           from: oldTask.status,
           status: input.status,
+          actor,
         },
-        task.agent
+        task.agent,
+        actor
       );
 
       // Outbound sync: push status change to linked GitHub issue (fire-and-forget)
@@ -736,9 +752,17 @@ router.patch(
           });
       }
     } else {
-      await activityService.logActivity('task_updated', task.id, task.title, undefined, task.agent);
+      await activityService.logActivity(
+        'task_updated',
+        task.id,
+        task.title,
+        { actor },
+        task.agent,
+        actor
+      );
     }
 
+    setRevisionHeaders(res, 'task', task.id, task);
     res.json(task);
   })
 );
@@ -778,14 +802,24 @@ router.delete(
 
     // Log activity
     if (task) {
-      await activityService.logActivity('task_deleted', task.id, task.title, undefined, task.agent);
+      const authReqDel = req as AuthenticatedRequest;
+      const actor = actorFromRequest(authReqDel);
+      await activityService.logActivity(
+        'task_deleted',
+        task.id,
+        task.title,
+        { actor },
+        task.agent,
+        actor
+      );
     }
 
     // Audit log
     const authReqDel = req as AuthenticatedRequest;
+    const actor = actorFromRequest(authReqDel);
     await auditLog({
       action: 'task.delete',
-      actor: authReqDel.auth?.keyName || 'unknown',
+      actor,
       resource: req.params.id as string,
       details: task ? { title: task.title } : undefined,
     });
