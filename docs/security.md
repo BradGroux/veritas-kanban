@@ -71,7 +71,13 @@ const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 
 - **admin**: Full access to all endpoints including sensitive operations
 - **agent**: Can read/write tasks, run agents, manage worktrees. Intended for AI agents like [OpenClaw](https://github.com/openclaw/openclaw)
-- **read-only**: Can only perform GET requests. Suitable for dashboards and monitoring
+- **read-only**: Can perform read endpoints, including documented read-like POST
+  checks. Suitable for dashboards and monitoring
+
+Agent self-service routes are still permission-scoped. Read-like checks such as
+agent routing and permission checks require `agent:read`; approval requests
+require `task:write`; approval review, routing configuration, and permission
+elevation require `admin:manage`.
 
 ### v5 Auth Context
 

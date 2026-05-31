@@ -3,20 +3,29 @@ import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../middleware/auth.js';
 import {
   activityAccess,
+  agentPermissionAccess,
+  agentRegistryAccess,
+  agentRoutingAccess,
   policyAccess,
   scoringAccess,
   searchAccess,
   settingsAccess,
+  taskAccess,
+  taskCommentAccess,
   workflowAccess,
 } from '../../routes/v1/permissions.js';
 
 type AccessGuard = (req: AuthenticatedRequest, res: Response, next: NextFunction) => void;
 
-function mockRequest(method: string, path: string): AuthenticatedRequest {
+function mockRequest(
+  method: string,
+  path: string,
+  role: 'admin' | 'agent' | 'read-only' = 'agent'
+): AuthenticatedRequest {
   return {
     method,
     path,
-    auth: { role: 'agent', isLocalhost: false },
+    auth: { role, isLocalhost: false },
   } as unknown as AuthenticatedRequest;
 }
 
@@ -35,6 +44,49 @@ function runGuard(handler: AccessGuard, req: AuthenticatedRequest) {
 }
 
 describe('v1 REST permission guard presets', () => {
+  it('blocks read-only callers from task, settings, workflow, comment, and approval mutations', () => {
+    const blockedMutations: Array<{
+      guard: AccessGuard;
+      method: string;
+      path: string;
+      required: string;
+    }> = [
+      { guard: taskAccess, method: 'POST', path: '/', required: 'task:write' },
+      { guard: settingsAccess, method: 'PATCH', path: '/features', required: 'settings:write' },
+      { guard: workflowAccess, method: 'POST', path: '/', required: 'workflow:write' },
+      {
+        guard: taskCommentAccess,
+        method: 'POST',
+        path: '/task_20260531_readonly/comments',
+        required: 'comment:write',
+      },
+      {
+        guard: agentPermissionAccess,
+        method: 'POST',
+        path: '/approvals',
+        required: 'task:write',
+      },
+    ];
+
+    for (const mutation of blockedMutations) {
+      const { res, next } = runGuard(
+        mutation.guard,
+        mockRequest(mutation.method, mutation.path, 'read-only')
+      );
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({
+            required: [mutation.required],
+            currentRole: 'read-only',
+          }),
+        })
+      );
+    }
+  });
+
   it('blocks agent keys from settings mutations at the route boundary', () => {
     const { res, next } = runGuard(settingsAccess, mockRequest('PATCH', '/features'));
 
@@ -103,6 +155,59 @@ describe('v1 REST permission guard presets', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         details: expect.objectContaining({ required: ['workflow:write'] }),
+      })
+    );
+  });
+
+  it('keeps agent self-service reads and checks narrow while guarding privileged writes', () => {
+    expect(runGuard(agentPermissionAccess, mockRequest('POST', '/check')).next).toHaveBeenCalled();
+    expect(
+      runGuard(agentPermissionAccess, mockRequest('POST', '/approvals')).next
+    ).toHaveBeenCalled();
+    expect(runGuard(agentRoutingAccess, mockRequest('POST', '/route')).next).toHaveBeenCalled();
+
+    const readOnlyApproval = runGuard(
+      agentPermissionAccess,
+      mockRequest('POST', '/approvals', 'read-only')
+    );
+    expect(readOnlyApproval.next).not.toHaveBeenCalled();
+    expect(readOnlyApproval.res.status).toHaveBeenCalledWith(403);
+    expect(readOnlyApproval.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['task:write'] }),
+      })
+    );
+
+    const readOnlyRegistration = runGuard(
+      agentRegistryAccess,
+      mockRequest('POST', '/', 'read-only')
+    );
+    expect(readOnlyRegistration.next).not.toHaveBeenCalled();
+    expect(readOnlyRegistration.res.status).toHaveBeenCalledWith(403);
+    expect(readOnlyRegistration.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['telemetry:write'] }),
+      })
+    );
+
+    const agentApprovalReview = runGuard(
+      agentPermissionAccess,
+      mockRequest('POST', '/approvals/a1')
+    );
+    expect(agentApprovalReview.next).not.toHaveBeenCalled();
+    expect(agentApprovalReview.res.status).toHaveBeenCalledWith(403);
+    expect(agentApprovalReview.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['admin:manage'] }),
+      })
+    );
+
+    const routingConfigUpdate = runGuard(agentRoutingAccess, mockRequest('PUT', '/routing'));
+    expect(routingConfigUpdate.next).not.toHaveBeenCalled();
+    expect(routingConfigUpdate.res.status).toHaveBeenCalledWith(403);
+    expect(routingConfigUpdate.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['admin:manage'] }),
       })
     );
   });
