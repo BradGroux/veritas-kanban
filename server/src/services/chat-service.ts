@@ -15,6 +15,8 @@ import { withFileLock } from './file-lock.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import { createLogger } from '../lib/logger.js';
 import { getChatsDir } from '../utils/paths.js';
+import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
+import { SqliteChatRepository } from '../storage/sqlite/chat-repository.js';
 
 const log = createLogger('chat-service');
 
@@ -25,18 +27,37 @@ const DEFAULT_SQUAD_DIR = path.join(DEFAULT_CHATS_DIR, 'squad');
 
 export interface ChatServiceOptions {
   chatsDir?: string;
+  storageType?: 'file' | 'sqlite';
+  sqliteDatabase?: SqliteDatabase;
+  sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
 export class ChatService {
   private chatsDir: string;
   private sessionsDir: string;
   private squadDir: string;
+  private readonly repository: SqliteChatRepository | null = null;
+  private readonly sqliteDatabase: SqliteDatabase | null = null;
+  private readonly ownsSqliteDatabase: boolean = false;
 
   constructor(options: ChatServiceOptions = {}) {
     this.chatsDir = options.chatsDir || DEFAULT_CHATS_DIR;
     this.sessionsDir = path.join(this.chatsDir, 'sessions');
     this.squadDir = path.join(this.chatsDir, 'squad');
-    this.ensureDirectories();
+    const storageType =
+      options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
+
+    if (storageType === 'sqlite') {
+      this.sqliteDatabase =
+        options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
+      this.ownsSqliteDatabase = !options.sqliteDatabase;
+      this.sqliteDatabase.open();
+      this.repository = new SqliteChatRepository(this.sqliteDatabase);
+    }
+
+    if (!this.repository) {
+      this.ensureDirectories();
+    }
   }
 
   private async ensureDirectories(): Promise<void> {
@@ -176,6 +197,15 @@ export class ChatService {
     // Try to find the session file (could be task-scoped or board-level)
     // First check if it's a task-scoped session
     const taskMatch = sessionId.match(/^task_(.+)$/);
+    if (this.repository) {
+      if (taskMatch) {
+        validatePathSegment(taskMatch[1]);
+      } else {
+        validatePathSegment(sessionId);
+      }
+      return this.repository.getSession(sessionId);
+    }
+
     if (taskMatch) {
       const taskId = taskMatch[1];
       const filePath = this.getSessionPath(sessionId, taskId);
@@ -205,6 +235,11 @@ export class ChatService {
    * Get the session for a specific task
    */
   async getSessionForTask(taskId: string): Promise<ChatSession | null> {
+    if (this.repository) {
+      validatePathSegment(taskId);
+      return this.repository.getSessionForTask(taskId);
+    }
+
     const filePath = this.getSessionPath(`task_${taskId}`, taskId);
 
     try {
@@ -220,6 +255,10 @@ export class ChatService {
    * List all sessions (board-level only)
    */
   async listSessions(): Promise<ChatSession[]> {
+    if (this.repository) {
+      return this.repository.listBoardSessions();
+    }
+
     try {
       const files = await fs.readdir(this.sessionsDir);
       const sessions: ChatSession[] = [];
@@ -250,6 +289,10 @@ export class ChatService {
     agent: string;
     mode?: 'ask' | 'build';
   }): Promise<ChatSession> {
+    if (input.taskId) {
+      validatePathSegment(input.taskId);
+    }
+
     const sessionId = input.taskId ? `task_${input.taskId}` : this.generateSessionId();
     const now = new Date().toISOString();
 
@@ -263,6 +306,12 @@ export class ChatService {
       created: now,
       updated: now,
     };
+
+    if (this.repository) {
+      this.repository.saveSession(session);
+      log.info({ sessionId, taskId: input.taskId }, 'Created chat session');
+      return session;
+    }
 
     const filePath = this.getSessionPath(sessionId, input.taskId);
     const content = this.serializeSession(session);
@@ -292,6 +341,26 @@ export class ChatService {
     // Determine file path - need to check both task-scoped and board-level paths
     const taskMatch = sessionId.match(/^task_(.+)$/);
     const taskId = taskMatch ? taskMatch[1] : undefined;
+    if (this.repository) {
+      if (taskId) {
+        validatePathSegment(taskId);
+      } else {
+        validatePathSegment(sessionId);
+      }
+
+      const session = await this.repository.getSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+
+      session.messages.push(newMessage);
+      session.updated = newMessage.timestamp;
+      this.repository.saveSession(session);
+
+      log.debug({ sessionId, messageId: newMessage.id, role: newMessage.role }, 'Added message');
+      return newMessage;
+    }
+
     const filePath = this.getSessionPath(sessionId, taskId);
 
     await withFileLock(filePath, async () => {
@@ -320,6 +389,22 @@ export class ChatService {
     // Determine file path - need to check both task-scoped and board-level paths
     const taskMatch = sessionId.match(/^task_(.+)$/);
     const taskId = taskMatch ? taskMatch[1] : undefined;
+    if (this.repository) {
+      if (taskId) {
+        validatePathSegment(taskId);
+      } else {
+        validatePathSegment(sessionId);
+      }
+
+      if (!this.repository.deleteSession(sessionId)) {
+        log.info({ sessionId }, 'Chat session already deleted or never existed');
+        return;
+      }
+
+      log.info({ sessionId }, 'Deleted chat session');
+      return;
+    }
+
     const filePath = this.getSessionPath(sessionId, taskId);
 
     await withFileLock(filePath, async () => {
@@ -383,6 +468,21 @@ export class ChatService {
       ...(input.card && { card: input.card }),
     };
 
+    if (this.repository) {
+      this.repository.appendSquadMessage(squadMessage);
+      log.info(
+        {
+          messageId,
+          agent: input.agent,
+          tags: input.tags,
+          model: input.model,
+          system: input.system,
+        },
+        'Squad message sent'
+      );
+      return squadMessage;
+    }
+
     // Store as daily markdown file: squad/YYYY-MM-DD.md
     const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const filePath = path.join(this.squadDir, `${date}.md`);
@@ -433,6 +533,10 @@ export class ChatService {
       includeSystem?: boolean;
     } = {}
   ): Promise<SquadMessage[]> {
+    if (this.repository) {
+      return this.repository.listSquadMessages(options);
+    }
+
     const messages: SquadMessage[] = [];
     const includeSystem = options.includeSystem !== false; // Default to true
     const sinceTimestamp = options.since ? Date.parse(options.since) : null;
@@ -561,6 +665,12 @@ export class ChatService {
     } catch (err: any) {
       if (err.code === 'ENOENT') return [];
       throw err;
+    }
+  }
+
+  dispose(): void {
+    if (this.ownsSqliteDatabase) {
+      this.sqliteDatabase?.close();
     }
   }
 }

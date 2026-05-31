@@ -949,6 +949,18 @@ YAML and `run.json` persistence layer while retaining file mode as the default.
 | `workflow_audit_events` | Complete workflow audit event JSON plus workflow, action, user, and timestamp data.  |
 | `workflow_runs`         | Complete `WorkflowRun` JSON plus status, task, checkpoint, error, and snapshot JSON. |
 
+## Chat Repository Implementation
+
+Chat sessions, task chat messages, and squad messages move into SQLite when
+`VERITAS_STORAGE=sqlite`. File mode remains the default and keeps the current
+Markdown format for existing local projects.
+
+| Runtime table    | Stored data                                                                     |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `chat_sessions`  | Board and task chat session metadata, scoped by task when present.              |
+| `chat_messages`  | Individual chat messages with session, task, role, agent, model, and timestamp. |
+| `squad_messages` | Squad channel messages with agent, system/event flags, tags, cards, and timing. |
+
 ## Migration Numbering
 
 Migrations live under the future SQLite package as paired SQL files:

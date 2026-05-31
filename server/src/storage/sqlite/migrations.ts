@@ -519,6 +519,78 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON workflow_runs(status, started_at DESC);
     `,
   },
+  {
+    version: 9,
+    name: '0009_chat_repositories',
+    up: `
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT,
+        title TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        model TEXT,
+        mode TEXT NOT NULL,
+        session_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_sessions_task
+        ON chat_sessions(task_id)
+        WHERE task_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_chat_sessions_workspace_updated
+        ON chat_sessions(workspace_id, updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        task_id TEXT,
+        role TEXT NOT NULL,
+        agent TEXT,
+        model TEXT,
+        message_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created
+        ON chat_messages(session_id, created_at ASC);
+
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_task_created
+        ON chat_messages(task_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS squad_messages (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        agent TEXT NOT NULL,
+        display_name TEXT,
+        message TEXT NOT NULL,
+        tags_json TEXT,
+        timestamp TEXT NOT NULL,
+        model TEXT,
+        is_system INTEGER NOT NULL DEFAULT 0,
+        event TEXT,
+        task_title TEXT,
+        duration TEXT,
+        card_json TEXT,
+        message_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_squad_messages_workspace_timestamp
+        ON squad_messages(workspace_id, timestamp DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_squad_messages_agent_timestamp
+        ON squad_messages(agent, timestamp DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_squad_messages_event_timestamp
+        ON squad_messages(event, timestamp DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
