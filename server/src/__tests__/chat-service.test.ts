@@ -106,7 +106,9 @@ describe('ChatService', () => {
     expect(
       (await service.getSquadMessages({ includeSystem: false })).some((m: any) => m.system)
     ).toBe(false);
-    expect(await service.getSquadMessages({ agent: 'TARS' })).toEqual([]);
+    expect((await service.getSquadMessages({ agent: 'TARS' })).map((m) => m.id)).toEqual([
+      'msg_message0001',
+    ]);
     expect(
       (await service.getSquadMessages({ since: '2026-03-01T00:00:00.001Z' })).some(
         (m: any) => m.id === 'msg_manual'

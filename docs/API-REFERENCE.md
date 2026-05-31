@@ -2490,6 +2490,75 @@ POST /api/prompt-registry/:id/record-usage
 
 ---
 
+## SQLite Portability (`/api/v1/sqlite`)
+
+Admin-only endpoints for v5 file-to-SQLite migration and backup portability.
+
+#### Dry-Run File Migration
+
+```
+POST /api/v1/sqlite/migration/dry-run
+```
+
+```json
+{
+  "sourceRoot": "/path/to/project",
+  "sqlitePath": "/path/to/.veritas-kanban/veritas.db"
+}
+```
+
+Returns entity counts and warnings without creating or mutating the database.
+
+#### Run File Migration
+
+```
+POST /api/v1/sqlite/migration/run
+```
+
+```json
+{
+  "sourceRoot": "/path/to/project",
+  "sqlitePath": "/path/to/.veritas-kanban/veritas.db",
+  "backupDir": "/path/to/pre-migration-backup"
+}
+```
+
+Creates a timestamped source backup, imports supported file-backed data into
+SQLite, and returns a migration report.
+
+#### Export Backup Bundle
+
+```
+POST /api/v1/sqlite/export
+```
+
+```json
+{
+  "sqlitePath": "/path/to/.veritas-kanban/veritas.db",
+  "outputDir": "/path/to/backup-bundle"
+}
+```
+
+Writes raw SQLite table snapshots plus human-readable Markdown/JSON/YAML files.
+
+#### Import Backup Bundle
+
+```
+POST /api/v1/sqlite/import
+```
+
+```json
+{
+  "sqlitePath": "/path/to/fresh.db",
+  "bundleDir": "/path/to/backup-bundle",
+  "replaceExisting": true
+}
+```
+
+Restores the bundle into SQLite and rebuilds derived search indexes.
+
+---
+
 ### System Health (`/api/v1/system/health`)
 
 Get a real-time snapshot of system health across resources, agents, and operations.

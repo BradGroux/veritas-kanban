@@ -551,12 +551,13 @@ export class ChatService {
       for (const file of files) {
         const filePath = path.join(this.squadDir, file);
         const content = await fs.readFile(filePath, 'utf-8');
+        const body = content.replace(/^#\s+Squad Chat[^\n]*\n+/, '');
 
         // Parse messages from markdown
-        const messageBlocks = content.split(/\n---\n/);
+        const messageBlocks = body.split(/\n---\n/);
 
         for (const block of messageBlocks) {
-          if (!block.trim() || block.startsWith('# Squad Chat')) continue;
+          if (!block.trim()) continue;
 
           const lines = block.trim().split('\n');
           const headerLine = lines[0];
