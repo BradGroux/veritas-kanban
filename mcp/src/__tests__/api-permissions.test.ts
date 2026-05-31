@@ -62,4 +62,28 @@ describe('MCP API permission preflight', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('http://vk.test/api/summary');
   });
+
+  it('allows scoped agent approval requests only when the token has task write scope', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          role: 'agent',
+          isLocalhost: false,
+          permissions: ['agent:read', 'task:write'],
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: 'approval_1' }, 201));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'agent-key');
+    const approval = await api<{ id: string }>('/api/agents/permissions/approvals', {
+      method: 'POST',
+      body: JSON.stringify({ agentId: 'agent_1', action: 'create_task' }),
+    });
+
+    expect(approval).toEqual({ id: 'approval_1' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe('http://vk.test/api/agents/permissions/approvals');
+  });
 });

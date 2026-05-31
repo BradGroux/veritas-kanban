@@ -19,7 +19,9 @@ import { readRateLimit, writeRateLimit, uploadRateLimit } from '../../middleware
 import {
   activityAccess,
   adminAccess,
-  agentSelfServiceAccess,
+  agentPermissionAccess,
+  agentRegistryAccess,
+  agentRoutingAccess,
   agentStatusAccess,
   agentTaskAccess,
   backupAccess,
@@ -165,9 +167,9 @@ v1Router.use('/observations', taskReadAccess, observationSearchRouter);
 v1Router.use('/config', configAccess, configRoutes);
 v1Router.use('/changes', taskReadAccess, changesRoutes); // Efficient agent polling endpoint
 v1Router.use('/chat', taskCommentAccess, chatRoutes); // Chat interface - must be before agent routes
-v1Router.use('/agents/register', agentSelfServiceAccess, agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
-v1Router.use('/agents/permissions', agentSelfServiceAccess, agentPermissionRoutes);
-v1Router.use('/agents', agentSelfServiceAccess, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
+v1Router.use('/agents/register', agentRegistryAccess, agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
+v1Router.use('/agents/permissions', agentPermissionAccess, agentPermissionRoutes);
+v1Router.use('/agents', agentRoutingAccess, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
 v1Router.use('/agents', agentTaskAccess, agentRoutes);
 v1Router.use('/diff', taskReadAccess, diffRoutes);
 v1Router.use('/automation', taskAccess, automationRoutes);

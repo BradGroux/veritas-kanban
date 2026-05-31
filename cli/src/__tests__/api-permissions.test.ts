@@ -62,4 +62,31 @@ describe('CLI API permission preflight', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('http://vk.test/api/tasks');
   });
+
+  it('blocks read-only agent approval requests even when agent reads are allowed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        role: 'read-only',
+        isLocalhost: false,
+        permissions: ['agent:read'],
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'reader-key');
+
+    await expect(
+      api('/api/agents/permissions/approvals', {
+        method: 'POST',
+        body: JSON.stringify({ agentId: 'agent_1', action: 'create_task' }),
+      })
+    ).rejects.toMatchObject({
+      required: ['task:write'],
+      path: '/api/agents/permissions/approvals',
+      method: 'POST',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
+  });
 });

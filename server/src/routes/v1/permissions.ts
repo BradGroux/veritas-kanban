@@ -20,7 +20,14 @@ export const taskCommentAccess = routeAccess('task:read', 'comment:write');
 export const workProductAccess = routeAccess('work_product:read', 'work_product:write');
 export const settingsAccess = routeAccess('settings:read', 'settings:write');
 export const adminAccess = routeAccess('admin:manage', 'admin:manage');
-export const agentSelfServiceAccess = routeAccess('agent:read', 'agent:read');
+export const agentRegistryAccess = routeAccess('agent:read', 'telemetry:write');
+export const agentPermissionAccess = routeAccess('agent:read', 'admin:manage', [
+  { methods: ['POST'], path: /^\/check\/?$/, permissions: 'agent:read' },
+  { methods: ['POST'], path: /^\/approvals\/?$/, permissions: 'task:write' },
+]);
+export const agentRoutingAccess = routeAccess('agent:read', 'admin:manage', [
+  { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
+]);
 export const agentTaskAccess = routeAccess('agent:read', 'task:write');
 export const agentStatusAccess = routeAccess('agent:read', 'telemetry:write');
 export const reportAccess = routeAccess('report:read', 'report:read');
