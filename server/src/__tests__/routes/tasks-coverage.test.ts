@@ -226,8 +226,9 @@ describe('Tasks Routes (actual module)', () => {
         'status_changed',
         't1',
         'Task',
-        expect.objectContaining({ from: 'todo', status: 'done' }),
-        updatedTask.agent
+        expect.objectContaining({ from: 'todo', status: 'done', actor: 'system:unknown' }),
+        updatedTask.agent,
+        'system:unknown'
       );
     });
 
