@@ -51,6 +51,7 @@ export type DesktopConnectionModeRequest = 'local' | 'remote';
 export interface DesktopConnectionConfigRequest {
   mode: DesktopConnectionModeRequest;
   serverUrl?: string;
+  serverToken?: string;
   workspaceId?: string;
 }
 
@@ -83,6 +84,7 @@ export interface DesktopSetupDiagnostics {
 
 export const DESKTOP_COMMAND_NAMES = [
   'new-task',
+  'open-onboarding',
   'open-search',
   'open-settings',
   'open-command-center',
@@ -639,6 +641,17 @@ function diagnosticCheck(
   };
 }
 
+function optionalSecret(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const text = requireString(value, label, 4096);
+  if (/[\r\n]/.test(text)) {
+    throw new Error(`${label} cannot contain newlines`);
+  }
+  return text;
+}
+
 export function validateRestartLocalServerRequest(
   payload: unknown
 ): DesktopRestartLocalServerRequest {
@@ -707,6 +720,7 @@ export function validateConnectionConfigRequest(payload: unknown): DesktopConnec
   return {
     mode: 'remote',
     serverUrl: parsed.toString(),
+    serverToken: optionalSecret(request.serverToken, 'Remote server token'),
     workspaceId,
   };
 }
@@ -862,6 +876,22 @@ export function createDesktopSetupDiagnostics(
         status.serverOrigin && status.rendererOrigin
           ? 'Loopback origins are configured.'
           : 'Loopback origins are not fully configured.',
+        checkedAt
+      ),
+      diagnosticCheck(
+        'desktop-secrets',
+        status.secretsBackedByKeychain ? 'ok' : 'warning',
+        status.secretsBackedByKeychain
+          ? 'Desktop runtime secrets are backed by Keychain.'
+          : 'Desktop runtime secrets are not backed by Keychain.',
+        checkedAt
+      ),
+      diagnosticCheck(
+        'local-database',
+        status.server.state === 'ready' ? 'ok' : 'unknown',
+        status.server.state === 'ready'
+          ? 'SQLite storage is managed by the local server.'
+          : 'Local database readiness depends on server startup.',
         checkedAt
       ),
       diagnosticCheck(

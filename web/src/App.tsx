@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { KanbanBoard } from './components/board/KanbanBoard';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
@@ -12,6 +12,7 @@ import { ViewProvider, useView } from './contexts/ViewContext';
 import { AuthProvider } from './hooks/useAuth';
 import { IdentityProvider } from './hooks/useIdentity';
 import { AuthGuard } from './components/auth';
+import { DesktopOnboardingDialog } from './components/auth/DesktopOnboarding';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
@@ -168,6 +169,31 @@ function MainContent() {
 function AppContent() {
   // Connect to WebSocket for real-time task updates
   const { isConnected, connectionState, reconnectAttempt } = useTaskSync();
+  const [showDesktopOnboarding, setShowDesktopOnboarding] = useState(false);
+
+  useEffect(() => {
+    const desktop = (
+      window as Window & {
+        veritasDesktop?: {
+          onMenuCommand(listener: (payload: { command: string }) => void): () => void;
+        };
+      }
+    ).veritasDesktop;
+
+    if (!desktop?.onMenuCommand) {
+      return undefined;
+    }
+
+    return desktop.onMenuCommand((payload) => {
+      if (
+        payload.command === 'open-onboarding' ||
+        payload.command === 'show-diagnostics' ||
+        payload.command === 'communication-health'
+      ) {
+        setShowDesktopOnboarding(true);
+      }
+    });
+  }, []);
 
   return (
     <WebSocketStatusProvider
@@ -193,6 +219,10 @@ function AppContent() {
                     <Toaster />
                     <CommandPalette />
                     <FloatingChat />
+                    <DesktopOnboardingDialog
+                      open={showDesktopOnboarding}
+                      onOpenChange={setShowDesktopOnboarding}
+                    />
                   </div>
                 </IdentityProvider>
               </ViewProvider>

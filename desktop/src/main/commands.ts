@@ -52,6 +52,8 @@ function commandLabel(name: DesktopCommandName): string {
   switch (name) {
     case 'new-task':
       return 'New Task';
+    case 'open-onboarding':
+      return 'Setup & Diagnostics';
     case 'open-search':
       return 'Search';
     case 'open-settings':

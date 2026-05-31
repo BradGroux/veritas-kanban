@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IpcMain, Shell } from 'electron';
 
 import {
@@ -91,6 +91,10 @@ function handlers(): DesktopBridgeHandlerMap {
 }
 
 describe('desktop bridge contracts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('keeps contract registries and name lists in sync', () => {
     expect(Object.keys(DESKTOP_BRIDGE_METHODS).sort()).toEqual(
       [...DESKTOP_BRIDGE_METHOD_NAMES].sort()
@@ -200,11 +204,13 @@ describe('desktop bridge contracts', () => {
       validateConnectionConfigRequest({
         mode: 'remote',
         serverUrl: ' https://example.com/veritas ',
+        serverToken: 'vk_pat_secret',
         workspaceId: 'workspace-1',
       })
     ).toEqual({
       mode: 'remote',
       serverUrl: 'https://example.com/veritas',
+      serverToken: 'vk_pat_secret',
       workspaceId: 'workspace-1',
     });
     expect(() =>
@@ -213,6 +219,37 @@ describe('desktop bridge contracts', () => {
     expect(() =>
       validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'https://user@example.com' })
     ).toThrow('credentials are not allowed');
+    expect(() =>
+      validateConnectionConfigRequest({
+        mode: 'remote',
+        serverUrl: 'https://example.com',
+        serverToken: 'bad\ntoken',
+      })
+    ).toThrow('cannot contain newlines');
+  });
+
+  it('validates remote connection reachability in the desktop process', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ authenticated: false }))
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handlers().validateConnectionConfig({
+      mode: 'remote',
+      serverUrl: 'https://remote.example/veritas',
+      serverToken: 'vk_pat_secret',
+    });
+
+    expect(result).toMatchObject({
+      mode: 'remote',
+      valid: true,
+      normalizedServerUrl: 'https://remote.example/veritas',
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://remote.example/api/auth/status');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer vk_pat_secret' },
+    });
   });
 
   it('validates command names, file paths, notification actions, and work product exports', () => {
@@ -359,6 +396,8 @@ describe('desktop bridge contracts', () => {
       'local-server-health',
       'renderer-health',
       'communication-health',
+      'desktop-secrets',
+      'local-database',
       'cli-auth',
       'mcp-auth',
     ]);

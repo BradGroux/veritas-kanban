@@ -38,6 +38,7 @@ export function createDesktopMenuTemplate(
     {
       label: 'Veritas Kanban',
       submenu: [
+        command('open-onboarding'),
         command('open-settings'),
         command('communication-health'),
         { type: 'separator' },

@@ -49,6 +49,7 @@ describe('desktop native menu', () => {
     );
 
     expect(labels).toContain('New Task');
+    expect(labels).toContain('Setup & Diagnostics');
     expect(labels).toContain('Command Center');
     expect(labels).toContain('Search');
     expect(labels).toContain('Settings');

@@ -23,6 +23,8 @@ import {
   type DesktopBridgeMethod,
   type DesktopBridgeRequest,
   type DesktopBridgeResponse,
+  type DesktopConnectionConfigRequest,
+  type DesktopConnectionValidationResult,
 } from '../shared/desktop-bridge-contracts.js';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -32,6 +34,63 @@ export type DesktopBridgeHandlerMap = {
     request: DesktopBridgeRequest<Method>
   ) => MaybePromise<DesktopBridgeResponse<Method>>;
 };
+
+async function validateRemoteConnection(
+  config: DesktopConnectionConfigRequest
+): Promise<DesktopConnectionValidationResult> {
+  if (!config.serverUrl) {
+    return {
+      mode: 'remote',
+      valid: false,
+      normalizedServerUrl: null,
+      warnings: [],
+      errors: ['Remote server URL is required.'],
+    };
+  }
+
+  const statusUrl = new URL('/api/auth/status', config.serverUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+
+  try {
+    const response = await fetch(statusUrl, {
+      method: 'GET',
+      headers: config.serverToken ? { Authorization: `Bearer ${config.serverToken}` } : undefined,
+      signal: controller.signal,
+    });
+    const warnings: string[] = [];
+    if (response.status === 401 || response.status === 403) {
+      warnings.push('Remote server is reachable but rejected the supplied credentials.');
+    }
+    if (response.ok) {
+      return {
+        mode: 'remote',
+        valid: true,
+        normalizedServerUrl: config.serverUrl,
+        warnings,
+        errors: [],
+      };
+    }
+
+    return {
+      mode: 'remote',
+      valid: false,
+      normalizedServerUrl: config.serverUrl,
+      warnings,
+      errors: [`Remote server returned HTTP ${response.status}.`],
+    };
+  } catch (error) {
+    return {
+      mode: 'remote',
+      valid: false,
+      normalizedServerUrl: config.serverUrl,
+      warnings: [],
+      errors: [redactDesktopBridgeError(error)],
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export function createDesktopBridgeHandlers(
   runtime: DesktopRuntime,
@@ -52,14 +111,18 @@ export function createDesktopBridgeHandlers(
     getAppInfo: appInfo,
     getConnectionStatus: () => runtime.snapshot(),
     getSetupDiagnostics: () => createDesktopSetupDiagnostics(runtime.snapshot()),
-    validateConnectionConfig: (request) => {
+    validateConnectionConfig: async (request) => {
       const config = validateConnectionConfigRequest(request);
+      if (config.mode === 'remote') {
+        return validateRemoteConnection(config);
+      }
+      const status = runtime.snapshot();
       return {
         mode: config.mode,
-        valid: true,
+        valid: status.server.state === 'ready',
         normalizedServerUrl: config.serverUrl ?? null,
-        warnings: [],
-        errors: [],
+        warnings: status.server.state === 'ready' ? [] : ['Local server is not ready.'],
+        errors: status.server.lastError ? [status.server.lastError] : [],
       };
     },
     restartLocalServer: (request) => {
