@@ -2567,7 +2567,8 @@ POST /api/v1/sqlite/migration/dry-run
 ```json
 {
   "sourceRoot": "/path/to/project",
-  "sqlitePath": "/path/to/.veritas-kanban/veritas.db"
+  "sqlitePath": "/path/to/.veritas-kanban/veritas.db",
+  "journalPath": "/path/to/.veritas-kanban/sqlite-migration-journal.json"
 }
 ```
 
@@ -2583,12 +2584,43 @@ POST /api/v1/sqlite/migration/run
 {
   "sourceRoot": "/path/to/project",
   "sqlitePath": "/path/to/.veritas-kanban/veritas.db",
-  "backupDir": "/path/to/pre-migration-backup"
+  "backupDir": "/path/to/pre-migration-backup",
+  "journalPath": "/path/to/.veritas-kanban/sqlite-migration-journal.json"
 }
 ```
 
 Creates a timestamped source backup, imports supported file-backed data into
 SQLite, and returns a migration report.
+
+#### Migration Recovery State
+
+```
+GET /api/v1/sqlite/migration/recovery?sourceRoot=/path/to/project&sqlitePath=/path/to/.veritas-kanban/veritas.db
+```
+
+Returns the latest migration journal, safe-mode recommendation, backup
+restore availability, source-file availability, SQLite readability, next
+actions, and artifacts to preserve for support.
+
+#### Restore Pre-Migration Backup
+
+```
+POST /api/v1/sqlite/migration/restore-backup
+```
+
+```json
+{
+  "backupPath": "/path/to/pre-migration-backup",
+  "targetRoot": "/path/to/project",
+  "journalPath": "/path/to/.veritas-kanban/sqlite-migration-journal.json",
+  "replaceExisting": true,
+  "dryRun": false
+}
+```
+
+Restores the file-backed `tasks/` and `.veritas-kanban/` content from the
+pre-migration backup. Non-empty targets require `replaceExisting: true`; use
+`dryRun: true` to verify the paths and file count before overwriting.
 
 #### Export Backup Bundle
 

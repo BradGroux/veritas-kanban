@@ -804,6 +804,7 @@ Current planning lives in GitHub, not in a stale README checklist:
 - [Open issues](https://github.com/BradGroux/veritas-kanban/issues)
 - [v5.0 roadmap issues](https://github.com/BradGroux/veritas-kanban/issues?q=is%3Aissue%20state%3Aopen%20label%3Arelease%3Av5.0)
 - [v5.0 SQLite schema and migration strategy](docs/SQLITE-SCHEMA.md)
+- [v5.0 SQLite migration recovery drill](docs/MIGRATION-RECOVERY.md)
 - [Release history](CHANGELOG.md)
 
 Use issues for current work and the changelog for shipped work.

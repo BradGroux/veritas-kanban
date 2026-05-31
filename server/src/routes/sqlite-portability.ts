@@ -13,6 +13,7 @@ const migrationSchema = z.object({
   sourceRoot: pathSchema.optional(),
   sqlitePath: pathSchema,
   backupDir: pathSchema.optional(),
+  journalPath: pathSchema.optional(),
 });
 
 const exportSchema = z.object({
@@ -24,6 +25,20 @@ const importSchema = z.object({
   sqlitePath: pathSchema,
   bundleDir: pathSchema,
   replaceExisting: z.boolean().optional(),
+});
+
+const recoveryQuerySchema = z.object({
+  sourceRoot: pathSchema.optional(),
+  sqlitePath: pathSchema.optional(),
+  journalPath: pathSchema.optional(),
+});
+
+const restoreBackupSchema = z.object({
+  backupPath: pathSchema,
+  targetRoot: pathSchema.optional(),
+  journalPath: pathSchema.optional(),
+  replaceExisting: z.boolean().optional(),
+  dryRun: z.boolean().optional(),
 });
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -56,6 +71,26 @@ router.post(
       ...input,
       dryRun: false,
     });
+    res.json(report);
+  })
+);
+
+router.get(
+  '/migration/recovery',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const input = parseBody(recoveryQuerySchema, req.query);
+    const state = await getSqlitePortabilityService().getMigrationRecoveryState(input);
+    res.json(state);
+  })
+);
+
+router.post(
+  '/migration/restore-backup',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const input = parseBody(restoreBackupSchema, req.body);
+    const report = await getSqlitePortabilityService().restorePreMigrationBackup(input);
     res.json(report);
   })
 );

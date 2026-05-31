@@ -1168,7 +1168,7 @@ Rollback is safety-first because v5 upgrades existing file-backed projects.
    migrated in a manifest and keep them for rollback/export until the user
    explicitly cleans them up.
 3. If any import step fails, rollback the SQLite transaction, keep the backup,
-   write a migration report, and leave the app on file storage.
+   write a migration journal/report, and leave the app on file storage.
 4. If a shipped schema migration fails after v5 adoption, stop startup before
    mutating data further and show the failed migration version.
 5. `down` migrations may be used during development and pre-GA testing. For GA
@@ -1177,17 +1177,23 @@ Rollback is safety-first because v5 upgrades existing file-backed projects.
 6. Any migration that changes sensitive fields must prove redaction behavior in
    the migration report.
 
+Operational drills, support bundle contents, safe-mode behavior, and the GA
+downgrade policy are defined in
+[v5 SQLite Migration Recovery](MIGRATION-RECOVERY.md).
+
 ## Migration and Backup API
 
 v5 exposes an admin-only portability surface under `/api/sqlite` so upgrades can
 be rehearsed, reported, and reversed without deleting source files.
 
-| Endpoint                             | Purpose                                                                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/sqlite/migration/dry-run` | Scan file-backed data and return entity counts, warnings, skipped files, and parse errors without creating or mutating the SQLite database.                           |
-| `POST /api/sqlite/migration/run`     | Create a timestamped pre-migration backup, import supported file-backed data into SQLite, preserve existing source files, and return the same migration report shape. |
-| `POST /api/sqlite/export`            | Write a backup bundle containing raw SQLite table snapshots plus human-readable task Markdown, config JSON, and workflow YAML.                                        |
-| `POST /api/sqlite/import`            | Restore a backup bundle into a fresh or explicitly replaced SQLite database and rebuild derived search indexes.                                                       |
+| Endpoint                                    | Purpose                                                                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/sqlite/migration/dry-run`        | Scan file-backed data and return entity counts, warnings, skipped files, and parse errors without creating or mutating the SQLite database.                     |
+| `POST /api/sqlite/migration/run`            | Create a timestamped pre-migration backup, import supported file-backed data into SQLite, preserve existing source files, write a journal, and return a report. |
+| `GET /api/sqlite/migration/recovery`        | Read the latest migration journal and return safe mode, source/SQLite readability, backup restore availability, next actions, and artifacts to preserve.        |
+| `POST /api/sqlite/migration/restore-backup` | Restore the file-backed `tasks/` and `.veritas-kanban/` state from a pre-migration backup after a dry-run check or explicit replacement request.                |
+| `POST /api/sqlite/export`                   | Write a backup bundle containing raw SQLite table snapshots plus human-readable task Markdown, config JSON, and workflow YAML.                                  |
+| `POST /api/sqlite/import`                   | Restore a backup bundle into a fresh or explicitly replaced SQLite database and rebuild derived search indexes.                                                 |
 
 The initial migration path imports active, archived, and backlog task Markdown;
 settings; task templates; prompt templates, versions, and usage; activity;
@@ -1201,10 +1207,10 @@ Manual recovery is intentionally boring:
 
 1. Keep `VERITAS_STORAGE=file` if dry-run or migration warnings are unacceptable.
 2. If `/api/sqlite/migration/run` fails, leave the app on file storage, inspect
-   the returned warnings, and fix or remove the malformed source files.
-3. If a migrated database behaves incorrectly, stop the server, point
-   `VERITAS_SQLITE_PATH` at a new database or restore the previous database file,
-   and keep the timestamped backup created under `.veritas-kanban/backups/`.
+   the returned recovery state, and fix or remove malformed source files.
+3. If a migrated database behaves incorrectly, stop the server, restore the
+   pre-migration backup, and boot with `VERITAS_STORAGE=file` before retrying
+   SQLite.
 4. To verify portability, export the SQLite database, import the bundle into a
    fresh database path, then smoke the board, search, workflows, chat, and task
    detail APIs before switching the live path.

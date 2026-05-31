@@ -239,6 +239,7 @@ describe('SqlitePortabilityService', () => {
 
     const service = new SqlitePortabilityService();
     const sqlitePath = path.join(testRoot, 'migration.db');
+    const journalPath = path.join(runtimeDir, 'sqlite-migration-journal.json');
     const dryRun = await service.migrateFilesToSqlite({ sourceRoot, sqlitePath, dryRun: true });
 
     expect(dryRun.dryRun).toBe(true);
@@ -247,9 +248,31 @@ describe('SqlitePortabilityService', () => {
     expect(dryRun.warnings.some((warning) => warning.entity === 'tasks.active')).toBe(true);
     expect(dryRun.warnings.some((warning) => warning.entity === 'telemetry')).toBe(true);
 
-    const report = await service.migrateFilesToSqlite({ sourceRoot, sqlitePath });
+    const report = await service.migrateFilesToSqlite({ sourceRoot, sqlitePath, journalPath });
     expect(report.backupPath).toBeTruthy();
     expect(await exists(path.join(report.backupPath!, 'backup-manifest.json'))).toBe(true);
+    expect(
+      await exists(
+        path.join(report.backupPath!, '.veritas-kanban', 'sqlite-migration-journal.json')
+      )
+    ).toBe(false);
+    const journal = await service.readMigrationJournal(journalPath);
+    expect(journal?.status).toBe('completed');
+    expect(journal?.backupPath).toBe(report.backupPath);
+    expect(journal?.completedStages).toEqual(
+      expect.arrayContaining(['scan-source', 'create-backup', 'open-sqlite', 'write-sqlite'])
+    );
+    expect(journal?.counts.find((count) => count.entity === 'tasks.active')?.written).toBe(1);
+
+    const recovery = await service.getMigrationRecoveryState({
+      sourceRoot,
+      sqlitePath,
+      journalPath,
+    });
+    expect(recovery.safeMode).toBe('normal');
+    expect(recovery.canRestoreBackup).toBe(true);
+    expect(recovery.canOpenSourceFiles).toBe(true);
+    expect(recovery.canOpenSqlite).toBe(true);
 
     const database = new SqliteDatabase({ databasePath: sqlitePath });
     database.open();
@@ -279,6 +302,164 @@ describe('SqlitePortabilityService', () => {
     } finally {
       database.close();
     }
+  });
+
+  it('records failed migration recovery state and supports rerun to a fresh database', async () => {
+    const service = new SqlitePortabilityService();
+    const { sourceRoot, taskId, runtimeDir } = await createMinimalLegacyProject(
+      testRoot,
+      'failed',
+      'task_20260531_fail1'
+    );
+    const sqlitePath = path.join(testRoot, 'corrupt.db');
+    const journalPath = path.join(runtimeDir, 'sqlite-migration-journal.json');
+    await fs.writeFile(sqlitePath, 'not a sqlite database', 'utf-8');
+
+    await expect(
+      service.migrateFilesToSqlite({ sourceRoot, sqlitePath, journalPath })
+    ).rejects.toThrow();
+
+    const journal = await service.readMigrationJournal(journalPath);
+    expect(journal?.status).toBe('failed');
+    expect(journal?.failure?.stage).toBe('open-sqlite');
+    expect(journal?.completedStages).not.toContain('open-sqlite');
+    expect(journal?.backupPath).toBeTruthy();
+    expect(journal?.recovery.safeMode).toBe('file-readonly');
+    expect(await exists(path.join(sourceRoot, 'tasks', 'active'))).toBe(true);
+    expect(
+      await exists(
+        path.join(journal!.backupPath!, '.veritas-kanban', 'sqlite-migration-journal.json')
+      )
+    ).toBe(false);
+
+    const recovery = await service.getMigrationRecoveryState({
+      sourceRoot,
+      sqlitePath,
+      journalPath,
+    });
+    expect(recovery.canOpenSourceFiles).toBe(true);
+    expect(recovery.canOpenSqlite).toBe(false);
+    expect(recovery.canRestoreBackup).toBe(true);
+    expect(recovery.nextActions.join(' ')).toContain('file storage');
+
+    const rerunPath = path.join(testRoot, 'rerun.db');
+    await service.migrateFilesToSqlite({ sourceRoot, sqlitePath: rerunPath });
+    const rerunDb = new SqliteDatabase({ databasePath: rerunPath });
+    rerunDb.open();
+    try {
+      const task = await new SqliteTaskRepository(rerunDb).findById(taskId);
+      expect(task?.title).toBe('Minimal failed task');
+    } finally {
+      rerunDb.close();
+    }
+  });
+
+  it('restores a pre-migration backup over the file tree and records restored recovery state', async () => {
+    const service = new SqlitePortabilityService();
+    const { sourceRoot, activeDir, runtimeDir, taskId } = await createMinimalLegacyProject(
+      testRoot,
+      'restore',
+      'task_20260531_restore1'
+    );
+    const sqlitePath = path.join(testRoot, 'restore.db');
+    const journalPath = path.join(runtimeDir, 'sqlite-migration-journal.json');
+    const report = await service.migrateFilesToSqlite({ sourceRoot, sqlitePath, journalPath });
+
+    await writeTask(activeDir, {
+      id: taskId,
+      title: 'Mutated task',
+      description: 'This should be replaced by the backup.',
+      type: 'feature',
+      status: 'todo',
+      priority: 'high',
+      created: '2026-05-31T12:00:00.000Z',
+      updated: '2026-05-31T13:00:00.000Z',
+    });
+
+    await expect(
+      service.restorePreMigrationBackup({ backupPath: report.backupPath!, targetRoot: sourceRoot })
+    ).rejects.toThrow(/replaceExisting=true/);
+
+    const dryRun = await service.restorePreMigrationBackup({
+      backupPath: report.backupPath!,
+      targetRoot: sourceRoot,
+      dryRun: true,
+    });
+    expect(dryRun.filesRestored).toBeGreaterThan(0);
+
+    const restore = await service.restorePreMigrationBackup({
+      backupPath: report.backupPath!,
+      targetRoot: sourceRoot,
+      journalPath,
+      replaceExisting: true,
+    });
+    expect(restore.filesRestored).toBeGreaterThan(0);
+
+    const activeFiles = await fs.readdir(activeDir);
+    const restoredTaskFile = activeFiles.find((file) => file.startsWith(`${taskId}-`));
+    expect(restoredTaskFile).toBeTruthy();
+    const restoredTask = matter(
+      await fs.readFile(path.join(activeDir, restoredTaskFile!), 'utf-8')
+    );
+    expect(restoredTask.data.title).toBe('Minimal restore task');
+    expect(restoredTask.content).toContain('Original restore body');
+
+    const journal = await service.readMigrationJournal(journalPath);
+    expect(journal?.status).toBe('restored');
+    expect(journal?.recovery.safeMode).toBe('file-readonly');
+  });
+
+  it('warns about duplicate task ids and missing attachment files before migration', async () => {
+    const service = new SqlitePortabilityService();
+    const { sourceRoot, activeDir, backlogDir, taskId } = await createMinimalLegacyProject(
+      testRoot,
+      'warnings',
+      'task_20260531_warn1'
+    );
+    await writeTask(activeDir, {
+      id: taskId,
+      title: 'Task with missing attachment',
+      description: 'Attachment metadata points at a missing file.',
+      type: 'feature',
+      status: 'todo',
+      priority: 'high',
+      created: '2026-05-31T12:00:00.000Z',
+      updated: '2026-05-31T12:00:00.000Z',
+      attachments: [
+        {
+          id: 'att_missing',
+          filename: 'missing.txt',
+          originalName: 'missing.txt',
+          mimeType: 'text/plain',
+          size: 12,
+          uploaded: '2026-05-31T12:00:00.000Z',
+          storagePath: 'tasks/attachments/task_20260531_warn1/missing.txt',
+        },
+      ],
+    });
+    await writeTask(backlogDir, {
+      id: taskId,
+      title: 'Duplicate task id',
+      description: 'This duplicate should be called out before migration.',
+      type: 'task',
+      status: 'todo',
+      priority: 'medium',
+      created: '2026-05-31T12:00:00.000Z',
+      updated: '2026-05-31T12:00:00.000Z',
+    });
+
+    const report = await service.migrateFilesToSqlite({
+      sourceRoot,
+      sqlitePath: path.join(testRoot, 'warnings.db'),
+      dryRun: true,
+    });
+
+    expect(report.warnings.some((warning) => warning.message.includes('Duplicate task id'))).toBe(
+      true
+    );
+    expect(
+      report.warnings.some((warning) => warning.message.includes('Attachment file not found'))
+    ).toBe(true);
   });
 
   it('exports a SQLite backup bundle and imports it into a fresh database', async () => {
@@ -349,6 +530,53 @@ describe('SqlitePortabilityService', () => {
     }
   });
 });
+
+async function createMinimalLegacyProject(
+  testRoot: string,
+  name: string,
+  taskId: string
+): Promise<{
+  sourceRoot: string;
+  runtimeDir: string;
+  activeDir: string;
+  backlogDir: string;
+  taskId: string;
+}> {
+  const sourceRoot = path.join(testRoot, `project-${name}`);
+  const runtimeDir = path.join(sourceRoot, '.veritas-kanban');
+  const activeDir = path.join(sourceRoot, 'tasks', 'active');
+  const archiveDir = path.join(sourceRoot, 'tasks', 'archive');
+  const backlogDir = path.join(sourceRoot, 'tasks', 'backlog');
+  const now = '2026-05-31T12:00:00.000Z';
+
+  await fs.mkdir(activeDir, { recursive: true });
+  await fs.mkdir(archiveDir, { recursive: true });
+  await fs.mkdir(backlogDir, { recursive: true });
+  await fs.mkdir(runtimeDir, { recursive: true });
+
+  await writeTask(activeDir, {
+    id: taskId,
+    title: `Minimal ${name} task`,
+    description: `Original ${name} body`,
+    type: 'feature',
+    status: 'todo',
+    priority: 'high',
+    created: now,
+    updated: now,
+  });
+
+  await fs.writeFile(
+    path.join(runtimeDir, 'config.json'),
+    JSON.stringify({
+      repos: [{ name, path: sourceRoot, defaultBranch: 'main' }],
+      agents: [],
+      defaultAgent: 'codex',
+    }),
+    'utf-8'
+  );
+
+  return { sourceRoot, runtimeDir, activeDir, backlogDir, taskId };
+}
 
 async function writeTask(dir: string, task: Task): Promise<void> {
   const { description, ...frontmatter } = task;

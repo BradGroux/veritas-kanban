@@ -134,6 +134,7 @@ export interface FileToSqliteMigrationOptions {
   sqlitePath: string;
   dryRun?: boolean;
   backupDir?: string;
+  journalPath?: string;
 }
 
 export interface SqliteBackupExportOptions {
@@ -145,6 +146,78 @@ export interface SqliteBackupImportOptions {
   sqlitePath: string;
   bundleDir: string;
   replaceExisting?: boolean;
+}
+
+export type SqliteMigrationStage =
+  | 'scan-source'
+  | 'create-backup'
+  | 'open-sqlite'
+  | 'write-sqlite'
+  | 'promote-database'
+  | 'completed'
+  | 'failed';
+
+export interface SqliteMigrationJournal {
+  formatVersion: 1;
+  operation: 'file-to-sqlite';
+  status: 'running' | 'completed' | 'failed' | 'restored';
+  startedAt: string;
+  updatedAt: string;
+  sourceRoot: string;
+  sqlitePath: string;
+  backupPath?: string;
+  tempSqlitePath?: string;
+  currentStage: SqliteMigrationStage;
+  completedStages: SqliteMigrationStage[];
+  counts: SqlitePortabilityEntityCount[];
+  warnings: SqlitePortabilityWarning[];
+  failure?: {
+    stage: SqliteMigrationStage;
+    name: string;
+    message: string;
+  };
+  recovery: {
+    safeMode: 'file-readonly' | 'sqlite-readonly' | 'normal';
+    nextActions: string[];
+    preserveArtifacts: string[];
+  };
+}
+
+export interface SqliteMigrationRecoveryState {
+  journalPath: string;
+  journal: SqliteMigrationJournal | null;
+  safeMode: SqliteMigrationJournal['recovery']['safeMode'];
+  canRestoreBackup: boolean;
+  canOpenSourceFiles: boolean;
+  canOpenSqlite: boolean;
+  nextActions: string[];
+  preserveArtifacts: string[];
+}
+
+export interface SqliteMigrationRecoveryOptions {
+  sourceRoot?: string;
+  sqlitePath?: string;
+  journalPath?: string;
+}
+
+export interface RestorePreMigrationBackupOptions {
+  backupPath: string;
+  targetRoot?: string;
+  journalPath?: string;
+  replaceExisting?: boolean;
+  dryRun?: boolean;
+}
+
+export interface RestorePreMigrationBackupReport {
+  operation: 'restore-pre-migration-backup';
+  dryRun: boolean;
+  startedAt: string;
+  completedAt: string;
+  backupPath: string;
+  targetRoot: string;
+  restoredPaths: string[];
+  filesRestored: number;
+  warnings: SqlitePortabilityWarning[];
 }
 
 interface LegacyPaths {
@@ -202,13 +275,30 @@ export class SqlitePortabilityService {
     const paths = this.resolveLegacyPaths(options.sourceRoot);
     const warnings: SqlitePortabilityWarning[] = [];
     const legacy = await this.readLegacyData(paths, warnings);
-    const counts = this.buildLegacyCounts(legacy, dryRun ? 0 : undefined);
+    const counts = this.buildLegacyCounts(legacy, 0);
+    const journalPath = dryRun
+      ? undefined
+      : this.resolveMigrationJournalPath(paths, options.journalPath);
+    let journal = journalPath
+      ? this.createMigrationJournal({
+          startedAt,
+          sourceRoot: paths.sourceRoot,
+          sqlitePath: path.resolve(options.sqlitePath),
+          journalPath,
+          counts,
+          warnings,
+        })
+      : null;
 
     let backupPath: string | undefined;
     let database: SqliteDatabase | null = null;
     let tempSqlitePath: string | null = null;
 
     try {
+      if (journalPath && journal) {
+        journal = await this.writeMigrationJournal(journalPath, journal, 'scan-source');
+      }
+
       if (!dryRun) {
         const sqlitePath = path.resolve(options.sqlitePath);
         const sqliteExists = await this.exists(sqlitePath);
@@ -217,18 +307,53 @@ export class SqlitePortabilityService {
           : `${sqlitePath}.tmp-${Date.now().toString(36)}`;
 
         backupPath = await this.createPreMigrationBackup(paths, options.backupDir, warnings);
+        if (journalPath && journal) {
+          journal.backupPath = backupPath;
+          journal.warnings = warnings;
+          journal = await this.writeMigrationJournal(journalPath, journal, 'create-backup');
+        }
+
         tempSqlitePath = sqliteExists ? null : writeSqlitePath;
+        if (journalPath && journal) {
+          journal.tempSqlitePath = tempSqlitePath ?? undefined;
+        }
+
         await fs.mkdir(path.dirname(writeSqlitePath), { recursive: true });
         database = new SqliteDatabase({ databasePath: writeSqlitePath });
+        if (journalPath && journal) {
+          journal = await this.writeMigrationJournal(journalPath, journal, 'open-sqlite', {
+            completeStage: false,
+          });
+        }
         database.open();
+        if (journalPath && journal) {
+          journal = await this.writeMigrationJournal(journalPath, journal, 'open-sqlite');
+          journal = await this.writeMigrationJournal(journalPath, journal, 'write-sqlite', {
+            completeStage: false,
+          });
+        }
         await this.writeLegacyData(database, legacy);
+        if (journalPath && journal) {
+          journal = await this.writeMigrationJournal(journalPath, journal, 'write-sqlite');
+        }
+
         database.getConnection().exec('PRAGMA wal_checkpoint(FULL);');
         database.close();
         database = null;
 
         if (tempSqlitePath) {
+          if (journalPath && journal) {
+            journal.tempSqlitePath = tempSqlitePath;
+            journal = await this.writeMigrationJournal(journalPath, journal, 'promote-database', {
+              completeStage: false,
+            });
+          }
           await this.promoteTempDatabase(tempSqlitePath, sqlitePath);
           tempSqlitePath = null;
+          if (journalPath && journal) {
+            journal.tempSqlitePath = undefined;
+            journal = await this.writeMigrationJournal(journalPath, journal, 'promote-database');
+          }
         }
 
         for (const count of counts) {
@@ -236,7 +361,7 @@ export class SqlitePortabilityService {
         }
       }
 
-      return {
+      const report: SqlitePortabilityReport = {
         operation: 'file-to-sqlite',
         dryRun,
         startedAt,
@@ -247,6 +372,17 @@ export class SqlitePortabilityService {
         counts,
         warnings,
       };
+
+      if (journalPath && journal) {
+        await this.completeMigrationJournal(journalPath, journal, report);
+      }
+
+      return report;
+    } catch (error) {
+      if (journalPath && journal) {
+        await this.failMigrationJournal(journalPath, journal, error);
+      }
+      throw error;
     } finally {
       database?.close();
       if (tempSqlitePath) {
@@ -358,6 +494,125 @@ export class SqlitePortabilityService {
     }
   }
 
+  async readMigrationJournal(journalPath: string): Promise<SqliteMigrationJournal | null> {
+    if (!(await this.exists(journalPath))) {
+      return null;
+    }
+
+    return JSON.parse(await fs.readFile(journalPath, 'utf-8')) as SqliteMigrationJournal;
+  }
+
+  async getMigrationRecoveryState(
+    options: SqliteMigrationRecoveryOptions = {}
+  ): Promise<SqliteMigrationRecoveryState> {
+    const paths = this.resolveLegacyPaths(options.sourceRoot);
+    const journalPath = this.resolveMigrationJournalPath(paths, options.journalPath);
+    const journal = await this.readMigrationJournal(journalPath);
+    const sqlitePath = options.sqlitePath ?? journal?.sqlitePath;
+    const canOpenSourceFiles = await this.exists(paths.sourceRoot);
+    const canOpenSqlite = sqlitePath ? await this.canOpenSqlite(sqlitePath) : false;
+    const canRestoreBackup = journal?.backupPath ? await this.exists(journal.backupPath) : false;
+    const fallback = this.buildRecoveryPlan({
+      status: journal?.status ?? 'failed',
+      sourceRoot: paths.sourceRoot,
+      sqlitePath: sqlitePath ? path.resolve(sqlitePath) : undefined,
+      backupPath: journal?.backupPath,
+      journalPath,
+      failureStage: journal?.failure?.stage ?? journal?.currentStage ?? 'failed',
+    });
+
+    return {
+      journalPath,
+      journal,
+      safeMode: journal?.recovery.safeMode ?? fallback.safeMode,
+      canRestoreBackup,
+      canOpenSourceFiles,
+      canOpenSqlite,
+      nextActions: journal?.recovery.nextActions ?? fallback.nextActions,
+      preserveArtifacts: journal?.recovery.preserveArtifacts ?? fallback.preserveArtifacts,
+    };
+  }
+
+  async restorePreMigrationBackup(
+    options: RestorePreMigrationBackupOptions
+  ): Promise<RestorePreMigrationBackupReport> {
+    const startedAt = new Date().toISOString();
+    const backupPath = path.resolve(options.backupPath);
+    const warnings: SqlitePortabilityWarning[] = [];
+    const manifest = await this.readBackupManifest(backupPath);
+    const targetRoot = path.resolve(options.targetRoot ?? manifest.sourceRoot);
+    const journalPath = path.resolve(
+      options.journalPath ??
+        path.join(targetRoot, '.veritas-kanban', 'sqlite-migration-journal.json')
+    );
+    const journal = await this.readMigrationJournal(journalPath);
+    const dryRun = options.dryRun === true;
+    const restoredPaths: string[] = [];
+    let filesRestored = 0;
+
+    const restoreTargets = [
+      {
+        source: path.join(backupPath, 'tasks'),
+        target: path.join(targetRoot, 'tasks'),
+      },
+      {
+        source: path.join(backupPath, '.veritas-kanban'),
+        target: path.join(targetRoot, '.veritas-kanban'),
+      },
+    ];
+
+    for (const restoreTarget of restoreTargets) {
+      const files = await this.countRecursiveFiles(restoreTarget.source);
+      if (files === 0) {
+        continue;
+      }
+      filesRestored += files;
+      restoredPaths.push(restoreTarget.target);
+
+      if (dryRun) {
+        continue;
+      }
+
+      if (!options.replaceExisting) {
+        await this.assertRestoreTargetIsClear(restoreTarget.target);
+      } else {
+        await fs.rm(restoreTarget.target, { recursive: true, force: true });
+      }
+
+      await this.copyBackupSource(restoreTarget.source, restoreTarget.target, [], warnings);
+    }
+
+    if (!dryRun && journal) {
+      const restored: SqliteMigrationJournal = {
+        ...journal,
+        status: 'restored',
+        updatedAt: new Date().toISOString(),
+        recovery: this.buildRecoveryPlan({
+          status: 'restored',
+          sourceRoot: targetRoot,
+          sqlitePath: journal.sqlitePath,
+          backupPath,
+          tempSqlitePath: journal.tempSqlitePath,
+          journalPath,
+          failureStage: journal.failure?.stage ?? journal.currentStage,
+        }),
+      };
+      await this.writeJson(journalPath, restored);
+    }
+
+    return {
+      operation: 'restore-pre-migration-backup',
+      dryRun,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      backupPath,
+      targetRoot,
+      restoredPaths,
+      filesRestored,
+      warnings,
+    };
+  }
+
   private resolveLegacyPaths(sourceRoot?: string): LegacyPaths {
     if (!sourceRoot) {
       const runtimeDir = getRuntimeDir();
@@ -412,6 +667,7 @@ export class SqlitePortabilityService {
       archived: await this.readTasks(paths.tasksArchiveDir, 'tasks.archived', warnings),
       backlog: await this.readTasks(paths.tasksBacklogDir, 'tasks.backlog', warnings),
     };
+    await this.validateTaskMigrationInputs(paths, tasks, warnings);
 
     const config = await this.readJsonFile<AppConfig>(paths.configFile, 'settings', warnings);
     const taskTemplates = await this.readMatterDirectory<TaskTemplate>(
@@ -600,6 +856,7 @@ export class SqlitePortabilityService {
     for (const entry of entries) {
       if (
         entry.name === 'backups' ||
+        entry.name === 'sqlite-migration-journal.json' ||
         entry.name === 'veritas.db' ||
         entry.name === 'veritas.db-shm' ||
         entry.name === 'veritas.db-wal'
@@ -644,6 +901,310 @@ export class SqlitePortabilityService {
     await fs.rm(tempSqlitePath, { force: true }).catch(() => {});
     await fs.rm(`${tempSqlitePath}-wal`, { force: true }).catch(() => {});
     await fs.rm(`${tempSqlitePath}-shm`, { force: true }).catch(() => {});
+  }
+
+  private resolveMigrationJournalPath(paths: LegacyPaths, journalPath?: string): string {
+    return path.resolve(
+      journalPath ?? path.join(paths.runtimeDir, 'sqlite-migration-journal.json')
+    );
+  }
+
+  private createMigrationJournal(input: {
+    startedAt: string;
+    sourceRoot: string;
+    sqlitePath: string;
+    journalPath?: string;
+    counts: SqlitePortabilityEntityCount[];
+    warnings: SqlitePortabilityWarning[];
+  }): SqliteMigrationJournal {
+    const recovery = this.buildRecoveryPlan({
+      status: 'running',
+      sourceRoot: input.sourceRoot,
+      sqlitePath: input.sqlitePath,
+      journalPath: input.journalPath,
+      failureStage: 'scan-source',
+    });
+
+    return {
+      formatVersion: 1,
+      operation: 'file-to-sqlite',
+      status: 'running',
+      startedAt: input.startedAt,
+      updatedAt: input.startedAt,
+      sourceRoot: input.sourceRoot,
+      sqlitePath: input.sqlitePath,
+      currentStage: 'scan-source',
+      completedStages: [],
+      counts: input.counts,
+      warnings: input.warnings,
+      recovery,
+    };
+  }
+
+  private async writeMigrationJournal(
+    journalPath: string,
+    journal: SqliteMigrationJournal,
+    completedStage: SqliteMigrationStage,
+    options: { completeStage?: boolean } = {}
+  ): Promise<SqliteMigrationJournal> {
+    const nextCompleted = new Set(journal.completedStages);
+    if (completedStage !== 'failed' && options.completeStage !== false) {
+      nextCompleted.add(completedStage);
+    }
+
+    const nextJournal: SqliteMigrationJournal = {
+      ...journal,
+      updatedAt: new Date().toISOString(),
+      currentStage: completedStage,
+      completedStages: Array.from(nextCompleted),
+      recovery: this.buildRecoveryPlan({
+        status: journal.status,
+        sourceRoot: journal.sourceRoot,
+        sqlitePath: journal.sqlitePath,
+        backupPath: journal.backupPath,
+        journalPath,
+        failureStage: completedStage,
+      }),
+    };
+
+    await this.writeJson(journalPath, nextJournal);
+    return nextJournal;
+  }
+
+  private async completeMigrationJournal(
+    journalPath: string,
+    journal: SqliteMigrationJournal,
+    report: SqlitePortabilityReport
+  ): Promise<void> {
+    const completed: SqliteMigrationJournal = {
+      ...journal,
+      status: 'completed',
+      updatedAt: report.completedAt,
+      backupPath: report.backupPath,
+      tempSqlitePath: undefined,
+      currentStage: 'completed',
+      completedStages: Array.from(new Set([...journal.completedStages, 'completed'])),
+      counts: report.counts,
+      warnings: report.warnings,
+      failure: undefined,
+      recovery: this.buildRecoveryPlan({
+        status: 'completed',
+        sourceRoot: journal.sourceRoot,
+        sqlitePath: journal.sqlitePath,
+        backupPath: report.backupPath,
+        journalPath,
+        failureStage: 'completed',
+      }),
+    };
+
+    await this.writeJson(journalPath, completed);
+  }
+
+  private async failMigrationJournal(
+    journalPath: string,
+    journal: SqliteMigrationJournal,
+    error: unknown
+  ): Promise<void> {
+    const failure = {
+      stage: journal.currentStage,
+      name: error instanceof Error ? error.name : 'Error',
+      message: error instanceof Error ? error.message : String(error),
+    };
+    const failed: SqliteMigrationJournal = {
+      ...journal,
+      status: 'failed',
+      updatedAt: new Date().toISOString(),
+      currentStage: 'failed',
+      completedStages: Array.from(new Set([...journal.completedStages, 'failed'])),
+      failure,
+      recovery: this.buildRecoveryPlan({
+        status: 'failed',
+        sourceRoot: journal.sourceRoot,
+        sqlitePath: journal.sqlitePath,
+        backupPath: journal.backupPath,
+        tempSqlitePath: journal.tempSqlitePath,
+        journalPath,
+        failureStage: failure.stage,
+      }),
+    };
+
+    await this.writeJson(journalPath, failed);
+  }
+
+  private buildRecoveryPlan(input: {
+    status: SqliteMigrationJournal['status'];
+    sourceRoot: string;
+    sqlitePath?: string;
+    backupPath?: string;
+    tempSqlitePath?: string;
+    journalPath?: string;
+    failureStage: SqliteMigrationStage;
+  }): SqliteMigrationJournal['recovery'] {
+    if (input.status === 'completed') {
+      return {
+        safeMode: 'normal',
+        nextActions: [
+          'Continue with SQLite storage after verifying the migrated database.',
+          'Keep the pre-migration backup until the v5 upgrade is accepted.',
+        ],
+        preserveArtifacts: [input.backupPath, input.sqlitePath].filter(
+          (artifact): artifact is string => Boolean(artifact)
+        ),
+      };
+    }
+
+    if (input.status === 'restored') {
+      return {
+        safeMode: 'file-readonly',
+        nextActions: [
+          'Boot with file storage and verify the restored project before retrying migration.',
+          'Preserve the failed SQLite database and migration journal for support review.',
+        ],
+        preserveArtifacts: [input.backupPath, input.sqlitePath, input.tempSqlitePath].filter(
+          (artifact): artifact is string => Boolean(artifact)
+        ),
+      };
+    }
+
+    return {
+      safeMode: 'file-readonly',
+      nextActions: [
+        'Boot with file storage in read-only recovery mode.',
+        input.backupPath
+          ? 'Offer restore from the pre-migration backup or export the failed SQLite artifacts.'
+          : 'Create a manual file-system backup before retrying migration.',
+        'Retry migration only after preserving the failed journal and target database.',
+      ],
+      preserveArtifacts: [
+        input.backupPath,
+        input.sqlitePath,
+        input.tempSqlitePath,
+        input.journalPath ??
+          path.join(input.sourceRoot, '.veritas-kanban', 'sqlite-migration-journal.json'),
+      ].filter((artifact): artifact is string => Boolean(artifact)),
+    };
+  }
+
+  private async readBackupManifest(backupPath: string): Promise<{ sourceRoot: string }> {
+    const manifestPath = path.join(backupPath, 'backup-manifest.json');
+    if (!(await this.exists(manifestPath))) {
+      throw new Error(`Pre-migration backup manifest not found: ${manifestPath}`);
+    }
+
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8')) as {
+      sourceRoot?: unknown;
+    };
+    if (typeof manifest.sourceRoot !== 'string' || !manifest.sourceRoot.trim()) {
+      throw new Error(`Pre-migration backup manifest is missing sourceRoot: ${manifestPath}`);
+    }
+
+    return { sourceRoot: manifest.sourceRoot };
+  }
+
+  private async assertRestoreTargetIsClear(target: string): Promise<void> {
+    if (!(await this.exists(target))) {
+      return;
+    }
+
+    const entries = await fs.readdir(target);
+    if (entries.length > 0) {
+      throw new Error(
+        `Restore target is not empty: ${target}. Rerun with replaceExisting=true to overwrite.`
+      );
+    }
+  }
+
+  private async countRecursiveFiles(root: string): Promise<number> {
+    if (!(await this.exists(root))) {
+      return 0;
+    }
+
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    let count = 0;
+    for (const entry of entries) {
+      const fullPath = path.join(root, entry.name);
+      if (entry.isDirectory()) {
+        count += await this.countRecursiveFiles(fullPath);
+      } else if (entry.isFile()) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  private async canOpenSqlite(sqlitePath: string): Promise<boolean> {
+    if (!(await this.exists(sqlitePath))) {
+      return false;
+    }
+
+    const database = new SqliteDatabase({ databasePath: sqlitePath, applyMigrations: false });
+    try {
+      database.open();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      database.close();
+    }
+  }
+
+  private async validateTaskMigrationInputs(
+    paths: LegacyPaths,
+    tasks: ParsedTaskSet,
+    warnings: SqlitePortabilityWarning[]
+  ): Promise<void> {
+    const seen = new Map<string, SqlitePortabilityEntity>();
+    const groups: Array<{
+      entity: Extract<SqlitePortabilityEntity, `tasks.${string}`>;
+      tasks: Task[];
+    }> = [
+      { entity: 'tasks.active', tasks: tasks.active },
+      { entity: 'tasks.archived', tasks: tasks.archived },
+      { entity: 'tasks.backlog', tasks: tasks.backlog },
+    ];
+
+    for (const group of groups) {
+      for (const task of group.tasks) {
+        const previousEntity = seen.get(task.id);
+        if (previousEntity) {
+          warnings.push({
+            entity: group.entity,
+            source: task.id,
+            message: `Duplicate task id already seen in ${previousEntity}`,
+          });
+        } else {
+          seen.set(task.id, group.entity);
+        }
+
+        await this.validateTaskAttachments(paths.sourceRoot, group.entity, task, warnings);
+      }
+    }
+  }
+
+  private async validateTaskAttachments(
+    sourceRoot: string,
+    entity: Extract<SqlitePortabilityEntity, `tasks.${string}`>,
+    task: Task,
+    warnings: SqlitePortabilityWarning[]
+  ): Promise<void> {
+    for (const attachment of task.attachments ?? []) {
+      const storagePath =
+        typeof attachment.storagePath === 'string' && attachment.storagePath.trim()
+          ? attachment.storagePath
+          : path.join('tasks', 'attachments', task.id, attachment.filename);
+      const attachmentPath = path.isAbsolute(storagePath)
+        ? storagePath
+        : path.join(sourceRoot, storagePath);
+
+      if (!(await this.exists(attachmentPath))) {
+        warnings.push({
+          entity,
+          source: attachmentPath,
+          message: `Attachment file not found for task ${task.id}: ${attachment.filename}`,
+        });
+      }
+    }
   }
 
   private async readTasks(
