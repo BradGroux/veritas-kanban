@@ -19,7 +19,7 @@ import { BulkActionsBar } from './BulkActionsBar';
 import { BoardSidebar } from './BoardSidebar';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { CheckSquare } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@mantine/core';
 import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
@@ -242,14 +242,14 @@ export function KanbanBoard() {
         <FilterBar tasks={tasks || []} filters={filters} onFiltersChange={setFilters} />
         {!isSelecting && (
           <Button
-            variant="ghost"
+            variant="subtle"
             size="sm"
             onClick={toggleSelecting}
             disabled={!canWriteTasks}
             title={canWriteTasks ? 'Select tasks' : 'Task write permission required'}
             className="text-muted-foreground shrink-0"
+            leftSection={<CheckSquare className="h-4 w-4" aria-hidden="true" />}
           >
-            <CheckSquare className="h-4 w-4 mr-1" />
             Select
           </Button>
         )}

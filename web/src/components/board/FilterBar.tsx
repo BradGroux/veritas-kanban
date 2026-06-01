@@ -1,16 +1,7 @@
 import { Search, X, Filter } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { ActionIcon, Badge, Button, Select, TextInput } from '@mantine/core';
 import type { Task, TaskType } from '@veritas-kanban/shared';
-import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
+import { useTaskTypes } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useConfig } from '@/hooks/useConfig';
 
@@ -32,6 +23,20 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
   const { data: config } = useConfig();
   const agents = config?.agents || [];
+  const projectOptions = [
+    { value: 'all', label: 'All Projects' },
+    ...projects.map((project) => ({ value: project.id, label: project.label })),
+  ];
+  const typeOptions = [
+    { value: 'all', label: 'All Types' },
+    ...taskTypes.map((type) => ({ value: type.id, label: type.label })),
+  ];
+  const agentOptions = [
+    { value: 'all', label: 'All Agents' },
+    { value: 'auto', label: 'Auto (routing)' },
+    { value: 'unassigned', label: 'Unassigned' },
+    ...agents.map((agent) => ({ value: agent.type, label: agent.name })),
+  ];
 
   // Count active filters
   const activeFilterCount = [filters.search, filters.project, filters.type, filters.agent].filter(
@@ -50,112 +55,86 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
     <div className="flex items-center gap-3" role="search" aria-label="Filter tasks">
       {/* Search */}
       <div className="relative flex-1 max-w-sm">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <label htmlFor="task-search" className="sr-only">
-          Search tasks
-        </label>
-        <Input
+        <TextInput
           id="task-search"
+          aria-label="Search tasks"
           placeholder="Search tasks..."
           value={filters.search}
           onChange={(e) => updateSearch(e.target.value)}
-          className="pl-9 pr-9"
+          leftSection={<Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+          rightSectionPointerEvents="auto"
+          rightSection={
+            filters.search ? (
+              <ActionIcon
+                aria-label="Clear search"
+                variant="subtle"
+                size="sm"
+                onClick={() => updateSearch('')}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            ) : null
+          }
           aria-describedby={activeFilterCount > 0 ? 'active-filter-count' : undefined}
         />
-        {filters.search && (
-          <button
-            onClick={() => updateSearch('')}
-            aria-label="Clear search"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
       </div>
 
       {/* Project filter */}
       <Select
         value={filters.project || 'all'}
-        onValueChange={(value) =>
-          onFiltersChange({ ...filters, project: value === 'all' ? null : value })
+        onChange={(value) =>
+          onFiltersChange({ ...filters, project: value && value !== 'all' ? value : null })
         }
         disabled={projectsLoading}
-      >
-        <SelectTrigger className="w-[160px]" aria-label="Filter by project">
-          <SelectValue placeholder="All Projects" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Projects</SelectItem>
-          {projects.map((project) => (
-            <SelectItem key={project.id} value={project.id}>
-              {project.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        data={projectOptions}
+        aria-label="Filter by project"
+        className="w-[160px]"
+        allowDeselect={false}
+      />
 
       {/* Type filter */}
       <Select
         value={filters.type || 'all'}
-        onValueChange={(value) =>
-          onFiltersChange({ ...filters, type: value === 'all' ? null : (value as TaskType) })
+        onChange={(value) =>
+          onFiltersChange({
+            ...filters,
+            type: value && value !== 'all' ? (value as TaskType) : null,
+          })
         }
         disabled={typesLoading}
-      >
-        <SelectTrigger className="w-[160px]" aria-label="Filter by type">
-          <SelectValue placeholder="All Types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Types</SelectItem>
-          {taskTypes.map((type) => {
-            const IconComponent = getTypeIcon(type.icon);
-            return (
-              <SelectItem key={type.id} value={type.id}>
-                <div className="flex items-center gap-2">
-                  {IconComponent && <IconComponent className="h-4 w-4" />}
-                  {type.label}
-                </div>
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
+        data={typeOptions}
+        aria-label="Filter by type"
+        className="w-[160px]"
+        allowDeselect={false}
+      />
 
       {/* Agent filter */}
       <Select
         value={filters.agent || 'all'}
-        onValueChange={(value) =>
-          onFiltersChange({ ...filters, agent: value === 'all' ? null : value })
+        onChange={(value) =>
+          onFiltersChange({ ...filters, agent: value && value !== 'all' ? value : null })
         }
-      >
-        <SelectTrigger className="w-[160px]" aria-label="Filter by agent">
-          <SelectValue placeholder="All Agents" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Agents</SelectItem>
-          <SelectItem value="auto">Auto (routing)</SelectItem>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-          {agents.map((a) => (
-            <SelectItem key={a.type} value={a.type}>
-              {a.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        data={agentOptions}
+        aria-label="Filter by agent"
+        className="w-[160px]"
+        allowDeselect={false}
+      />
 
       {/* Active filter indicator & clear */}
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2">
-          <Badge id="active-filter-count" variant="secondary" className="gap-1" aria-live="polite">
-            <Filter className="h-3 w-3" aria-hidden="true" />
+          <Badge
+            id="active-filter-count"
+            variant="light"
+            color="gray"
+            leftSection={<Filter className="h-3 w-3" aria-hidden="true" />}
+            aria-live="polite"
+          >
             {activeFilterCount} active {activeFilterCount === 1 ? 'filter' : 'filters'}
           </Badge>
           <Button
-            variant="ghost"
-            size="sm"
+            variant="subtle"
+            size="xs"
             onClick={clearAllFilters}
             aria-label="Clear all filters"
             className="text-muted-foreground hover:text-foreground"

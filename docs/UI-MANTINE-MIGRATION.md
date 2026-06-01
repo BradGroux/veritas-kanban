@@ -314,6 +314,10 @@ Phase 3 progress:
   button, action icon, and modal primitives while preserving installed-agent
   add/edit/remove/toggle behavior, Codex health refresh, routing defaults, and
   routing-rule create/edit controls.
+- Board filter and bulk-selection chrome now use direct Mantine text input,
+  select, badge, button, action icon, and modal primitives while preserving
+  search/filter URL behavior, selection groups, move, backlog, archive, and
+  delete confirmation flows.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

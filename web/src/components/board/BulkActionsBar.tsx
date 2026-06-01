@@ -1,18 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Trash2, Archive, ArrowRight, Inbox } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { ActionIcon, Button, Group, Modal, Select, Text } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDeleteTask, useBulkUpdate, useBulkArchiveByIds } from '@/hooks/useTasks';
 import { useBulkDemote } from '@/hooks/useBacklog';
@@ -45,6 +34,8 @@ const STATUS_BUTTONS: { id: TaskStatus; label: string; color: string; activeColo
     activeColor: 'bg-green-500 text-white border-green-500',
   },
 ];
+
+const MOVE_STATUS_OPTIONS = STATUS_BUTTONS.map(({ id, label }) => ({ value: id, label }));
 
 interface BulkActionsBarProps {
   tasks: Task[];
@@ -177,7 +168,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
       }
 
       clearSelection();
-    } catch (error) {
+    } catch {
       toast({
         variant: 'destructive',
         title: 'Archive Failed',
@@ -216,7 +207,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
       }
 
       clearSelection();
-    } catch (error) {
+    } catch {
       toast({
         variant: 'destructive',
         title: 'Move Failed',
@@ -250,9 +241,14 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
         aria-label="Bulk actions"
       >
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={toggleSelecting}>
-            <X className="h-4 w-4" />
-          </Button>
+          <ActionIcon
+            aria-label="Exit selection mode"
+            variant="subtle"
+            size="sm"
+            onClick={toggleSelecting}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </ActionIcon>
 
           <Button
             variant="outline"
@@ -274,7 +270,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
                 <Button
                   key={id}
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => toggleGroup(taskIdsByStatus[id])}
                   className={cn(
                     'text-xs h-7 px-2 border transition-colors',
@@ -296,36 +292,25 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
           <div className="flex items-center gap-2">
             {/* Move to status — two-step: pick target → confirm */}
             <Select
-              value={moveTarget ?? ''}
-              onValueChange={(value) => setMoveTarget(value as TaskStatus)}
+              value={moveTarget}
+              onChange={(value) => setMoveTarget(value as TaskStatus | null)}
               disabled={isProcessing}
-            >
-              <SelectTrigger className="w-[140px]">
-                <div className="flex items-center gap-1">
-                  <ArrowRight className="h-4 w-4" />
-                  <span>
-                    {moveTarget
-                      ? (STATUS_BUTTONS.find((s) => s.id === moveTarget)?.label ?? 'Move to...')
-                      : 'Move to...'}
-                  </span>
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todo">To Do</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
-              </SelectContent>
-            </Select>
+              data={MOVE_STATUS_OPTIONS}
+              aria-label="Move selected tasks to status"
+              placeholder="Move to..."
+              className="w-[140px]"
+              leftSection={<ArrowRight className="h-4 w-4" aria-hidden="true" />}
+              clearable
+            />
 
             {moveTarget && (
               <Button
-                variant="default"
+                variant="filled"
                 size="sm"
                 onClick={handleMoveToStatus}
                 disabled={isProcessing}
+                leftSection={<ArrowRight className="h-4 w-4" aria-hidden="true" />}
               >
-                <ArrowRight className="h-4 w-4 mr-1" />
                 {isProcessing ? 'Moving...' : 'Move'}
               </Button>
             )}
@@ -336,8 +321,8 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
               size="sm"
               onClick={handleMoveToBacklog}
               disabled={isProcessing}
+              leftSection={<Inbox className="h-4 w-4" aria-hidden="true" />}
             >
-              <Inbox className="h-4 w-4 mr-1" />
               To Backlog
             </Button>
 
@@ -347,8 +332,8 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
               size="sm"
               onClick={handleArchiveSelected}
               disabled={isProcessing}
+              leftSection={<Archive className="h-4 w-4" aria-hidden="true" />}
             >
-              <Archive className="h-4 w-4 mr-1" />
               Archive
             </Button>
 
@@ -359,36 +344,36 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
               onClick={() => setShowDeleteConfirm(true)}
               disabled={isProcessing}
               className="text-destructive hover:text-destructive"
+              leftSection={<Trash2 className="h-4 w-4" aria-hidden="true" />}
             >
-              <Trash2 className="h-4 w-4 mr-1" />
               Delete
             </Button>
           </div>
         )}
       </div>
 
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {selectedCount} task{selectedCount !== 1 ? 's' : ''}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The selected tasks will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteSelected}
-              disabled={isProcessing}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isProcessing ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Modal
+        opened={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title={`Delete ${selectedCount} task${selectedCount !== 1 ? 's' : ''}?`}
+        centered
+      >
+        <Text size="sm" c="dimmed">
+          This action cannot be undone. The selected tasks will be permanently deleted.
+        </Text>
+        <Group justify="flex-end" gap="sm" mt="lg">
+          <Button
+            variant="default"
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={isProcessing}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteSelected} disabled={isProcessing} color="red">
+            {isProcessing ? 'Deleting...' : 'Delete'}
+          </Button>
+        </Group>
+      </Modal>
     </>
   );
 }
