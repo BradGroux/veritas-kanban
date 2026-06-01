@@ -27,6 +27,7 @@ import { ChatPanel } from '@/components/chat/ChatPanel';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 import { TaskMetricsPanel } from './TaskMetricsPanel';
 import { WorkflowSection } from './WorkflowSection';
+import { WorkProductsSection } from './WorkProductsSection';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import {
   GitBranch,
@@ -42,6 +43,7 @@ import {
   NotebookPen,
   Workflow,
   Eye,
+  Files,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -59,6 +61,7 @@ interface TaskDetailPanelProps {
 type TaskDetailTabId =
   | 'details'
   | 'progress'
+  | 'work-products'
   | 'observations'
   | 'attachments'
   | 'git'
@@ -84,6 +87,12 @@ const TASK_DETAIL_TABS: readonly TaskDetailTabDefinition[] = [
     label: 'Progress',
     Icon: NotebookPen,
     fallbackTitle: 'Progress section failed to load',
+  },
+  {
+    id: 'work-products',
+    label: 'Work Products',
+    Icon: Files,
+    fallbackTitle: 'Work products section failed to load',
   },
   {
     id: 'observations',
@@ -207,6 +216,8 @@ export function TaskDetailPanel({
         );
       case 'progress':
         return <ProgressTab task={localTask} />;
+      case 'work-products':
+        return <WorkProductsSection taskId={localTask.id} />;
       case 'observations':
         return (
           <ObservationsSection
