@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import type { KeyboardEvent } from 'react';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Checkbox,
+  Group,
+  Progress,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import {
   useAddSubtask,
   useUpdateSubtask,
@@ -68,10 +75,10 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
     await deleteSubtask.mutateAsync({ taskId: task.id, subtaskId });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleAddSubtask();
+      void handleAddSubtask();
     }
   };
 
@@ -90,13 +97,15 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
   };
 
   const toggleSubtaskExpanded = (subtaskId: string) => {
-    const newExpanded = new Set(expandedSubtasks);
-    if (newExpanded.has(subtaskId)) {
-      newExpanded.delete(subtaskId);
-    } else {
-      newExpanded.add(subtaskId);
-    }
-    setExpandedSubtasks(newExpanded);
+    setExpandedSubtasks((current) => {
+      const next = new Set(current);
+      if (next.has(subtaskId)) {
+        next.delete(subtaskId);
+      } else {
+        next.add(subtaskId);
+      }
+      return next;
+    });
   };
 
   const handleToggleCriteria = async (subtaskId: string, criteriaIndex: number) => {
@@ -111,181 +120,205 @@ export function SubtasksSection({ task, onAutoCompleteChange }: SubtasksSectionP
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label className="text-muted-foreground">Subtasks</Label>
+    <Stack gap="sm">
+      <Group justify="space-between" align="center">
+        <Text size="sm" c="dimmed" fw={500}>
+          Subtasks
+        </Text>
         {totalCount > 0 && (
-          <span className="text-xs text-muted-foreground">
+          <Text size="xs" c="dimmed">
             {completedCount}/{totalCount} complete
-          </span>
+          </Text>
         )}
-      </div>
+      </Group>
 
       {/* Progress bar */}
       {totalCount > 0 && (
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <Progress value={progress} size="xs" radius="xl" aria-label="Subtask progress" />
       )}
 
       {/* Subtask list */}
-      <div className="space-y-1">
+      <Stack gap={4}>
         {subtasks.map((subtask) => {
+          const criteria = subtask.acceptanceCriteria || [];
           const criteriaProgress = getCriteriaProgress(subtask);
           const isExpanded = expandedSubtasks.has(subtask.id);
-          const hasCriteria = subtask.acceptanceCriteria && subtask.acceptanceCriteria.length > 0;
+          const hasCriteria = criteria.length > 0;
 
           return (
-            <div key={subtask.id} className="space-y-1">
-              <div
+            <Stack key={subtask.id} gap={4}>
+              <Group
+                align="center"
+                gap="xs"
                 className={cn(
-                  'flex items-center gap-2 p-2 rounded-md group hover:bg-muted/50 transition-colors',
+                  'group rounded-md p-2 transition-colors hover:bg-muted/50',
                   subtask.completed && 'opacity-60'
                 )}
               >
                 <Checkbox
                   checked={subtask.completed}
-                  onCheckedChange={() => handleToggleSubtask(subtask)}
+                  onChange={() => {
+                    void handleToggleSubtask(subtask);
+                  }}
                   className="flex-shrink-0"
+                  aria-label={`Mark subtask ${subtask.title}`}
                 />
                 {hasCriteria && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="xs"
                     className="h-4 w-4 p-0"
                     onClick={() => toggleSubtaskExpanded(subtask.id)}
+                    aria-label={`${isExpanded ? 'Collapse' : 'Expand'} criteria for ${subtask.title}`}
                   >
                     {isExpanded ? (
                       <ChevronDown className="h-3 w-3" />
                     ) : (
                       <ChevronRight className="h-3 w-3" />
                     )}
-                  </Button>
+                  </ActionIcon>
                 )}
-                <span
+                <Text
+                  size="sm"
                   className={cn(
                     'flex-1 text-sm',
                     subtask.completed && 'line-through text-muted-foreground'
                   )}
                 >
                   {subtask.title}
-                </span>
+                </Text>
                 {criteriaProgress && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" color="gray" size="sm">
                     {criteriaProgress.checked}/{criteriaProgress.total}
                   </Badge>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => handleDeleteSubtask(subtask.id)}
+                  onClick={() => {
+                    void handleDeleteSubtask(subtask.id);
+                  }}
+                  aria-label={`Delete subtask: ${subtask.title}`}
                 >
                   <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                </Button>
-              </div>
+                </ActionIcon>
+              </Group>
 
               {/* Acceptance criteria checklist */}
               {hasCriteria && isExpanded && (
-                <div className="ml-10 space-y-1">
-                  {subtask.acceptanceCriteria!.map((criterion, idx) => (
-                    <div key={idx} className="flex items-start gap-2 p-1">
+                <Stack gap={4} className="ml-10">
+                  {criteria.map((criterion, idx) => (
+                    <Group key={idx} align="flex-start" gap="xs" className="p-1">
                       <Checkbox
                         checked={subtask.criteriaChecked?.[idx] || false}
-                        onCheckedChange={() => handleToggleCriteria(subtask.id, idx)}
+                        onChange={() => {
+                          void handleToggleCriteria(subtask.id, idx);
+                        }}
                         className="flex-shrink-0 mt-0.5"
+                        aria-label={`Mark criterion ${criterion}`}
                       />
-                      <span className="text-xs text-muted-foreground">{criterion}</span>
-                    </div>
+                      <Text size="xs" c="dimmed">
+                        {criterion}
+                      </Text>
+                    </Group>
                   ))}
-                </div>
+                </Stack>
               )}
-            </div>
+            </Stack>
           );
         })}
-      </div>
+      </Stack>
 
       {/* Add subtask input */}
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <Input
+      <Stack gap="xs">
+        <Group gap="xs" align="flex-start" wrap="nowrap">
+          <TextInput
+            aria-label="New subtask"
             value={newSubtaskTitle}
-            onChange={(e) => setNewSubtaskTitle(e.target.value)}
+            onChange={(e) => setNewSubtaskTitle(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add a subtask..."
-            className="text-sm"
+            className="flex-1 text-sm"
             disabled={isAdding}
           />
           <Button
-            size="icon"
-            onClick={handleAddSubtask}
+            size="sm"
+            onClick={() => {
+              void handleAddSubtask();
+            }}
             disabled={!newSubtaskTitle.trim() || isAdding}
-            className="h-9 w-9 shrink-0"
+            className="shrink-0"
+            aria-label="Add subtask"
           >
             <Plus className="h-4 w-4" />
           </Button>
-        </div>
+        </Group>
 
         {/* Add Acceptance Criteria toggle */}
         <Button
-          variant="ghost"
+          variant="subtle"
           size="sm"
           onClick={() => setShowCriteriaInput(!showCriteriaInput)}
-          className="text-xs text-muted-foreground"
+          className="self-start text-xs text-muted-foreground"
         >
-          {showCriteriaInput ? '− Hide' : '+ Add'} Acceptance Criteria
+          {showCriteriaInput ? '- Hide' : '+ Add'} Acceptance Criteria
         </Button>
 
         {/* Acceptance Criteria inputs */}
         {showCriteriaInput && (
-          <div className="space-y-2 pl-4 border-l-2 border-muted">
+          <Stack gap="xs" className="border-l-2 border-muted pl-4">
             {criteriaInputs.map((criterion, idx) => (
-              <div key={idx} className="flex gap-2">
-                <Input
+              <Group key={idx} gap="xs" align="flex-start" wrap="nowrap">
+                <TextInput
                   value={criterion}
-                  onChange={(e) => handleCriteriaInputChange(idx, e.target.value)}
+                  onChange={(e) => handleCriteriaInputChange(idx, e.currentTarget.value)}
                   placeholder={`Criterion ${idx + 1}...`}
-                  className="text-xs"
+                  className="flex-1 text-xs"
+                  aria-label={`Criterion ${idx + 1}`}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
                   className="h-8 w-8"
                   onClick={() => handleRemoveCriteriaInput(idx)}
                   disabled={criteriaInputs.length === 1}
+                  aria-label={`Remove criterion ${idx + 1}`}
                 >
                   <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
+                </ActionIcon>
+              </Group>
             ))}
             <Button
               variant="outline"
               size="sm"
               onClick={handleAddCriteriaInput}
-              className="text-xs"
+              className="self-start text-xs"
+              leftSection={<Plus className="h-3 w-3" />}
             >
-              <Plus className="h-3 w-3 mr-1" /> Add Criterion
+              Add Criterion
             </Button>
-          </div>
+          </Stack>
         )}
-      </div>
+      </Stack>
 
       {/* Auto-complete toggle */}
       {totalCount > 0 && (
-        <div className="flex items-center justify-between pt-2 border-t">
-          <Label htmlFor="auto-complete" className="text-xs text-muted-foreground cursor-pointer">
+        <Group justify="space-between" align="center" className="border-t pt-2">
+          <Text component="label" htmlFor="auto-complete" size="xs" c="dimmed">
             Auto-complete task when all subtasks done
-          </Label>
+          </Text>
           <Switch
             id="auto-complete"
             checked={task.autoCompleteOnSubtasks || false}
-            onCheckedChange={onAutoCompleteChange}
+            onChange={(event) => onAutoCompleteChange(event.currentTarget.checked)}
+            aria-label="Auto-complete task when all subtasks done"
           />
-        </div>
+        </Group>
       )}
-    </div>
+    </Stack>
   );
 }

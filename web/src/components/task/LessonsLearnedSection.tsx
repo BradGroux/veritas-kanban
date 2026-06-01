@@ -1,9 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import type { KeyboardEvent } from 'react';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Group,
+  Paper,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+  ThemeIcon,
+} from '@mantine/core';
 import { Lightbulb, X, Plus } from 'lucide-react';
 import type { Task } from '@veritas-kanban/shared';
 
@@ -63,7 +71,7 @@ export function LessonsLearnedSection({
     );
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleAddTag();
@@ -71,83 +79,105 @@ export function LessonsLearnedSection({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-muted p-4">
-      <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
-        <Lightbulb className="h-5 w-5" />
-        <h3 className="font-semibold">Lessons Learned</h3>
-      </div>
+    <Paper className="border border-border bg-muted p-4" radius="lg">
+      <Stack gap="md">
+        <Group gap="xs" className="text-violet-600 dark:text-violet-400">
+          <ThemeIcon variant="light" color="violet" size="sm" radius="xl">
+            <Lightbulb className="h-4 w-4" />
+          </ThemeIcon>
+          <Text fw={600}>Lessons Learned</Text>
+        </Group>
 
-      <p className="text-sm text-muted-foreground">
-        Capture institutional knowledge from this completed task. What worked well? What would you
-        do differently?
-      </p>
+        <Text size="sm" c="dimmed">
+          Capture institutional knowledge from this completed task. What worked well? What would you
+          do differently?
+        </Text>
 
-      <div className="space-y-2">
-        <Label htmlFor="lessonsLearned">Notes (Markdown supported)</Label>
-        {readOnly ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none p-3 bg-card rounded border border-border">
-            {task.lessonsLearned || (
-              <span className="text-muted-foreground italic">No lessons captured</span>
-            )}
-          </div>
-        ) : (
-          <Textarea
-            id="lessonsLearned"
-            value={localNotes}
-            onChange={(e) => {
-              setLocalNotes(e.target.value);
-              debouncedUpdate(e.target.value);
-            }}
-            placeholder="What did you learn from this task? What would you do differently next time?"
-            className="min-h-[120px] bg-card border-border"
-          />
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label>Tags</Label>
-        <div className="flex flex-wrap gap-2 mb-2">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="gap-1">
-              {tag}
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  className="ml-1 hover:text-destructive"
-                  aria-label={`Remove ${tag} tag`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+        <Stack gap="xs">
+          <Text component="label" htmlFor="lessonsLearned" size="sm" fw={500}>
+            Notes (Markdown supported)
+          </Text>
+          {readOnly ? (
+            <Paper className="prose prose-sm dark:prose-invert max-w-none border border-border bg-card p-3">
+              {task.lessonsLearned || (
+                <Text component="span" size="sm" c="dimmed" fs="italic">
+                  No lessons captured
+                </Text>
               )}
-            </Badge>
-          ))}
-          {tags.length === 0 && (
-            <span className="text-sm text-muted-foreground italic">No tags added</span>
-          )}
-        </div>
-
-        {!readOnly && (
-          <div className="flex gap-2">
-            <Input
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Add a tag..."
-              className="flex-1"
+            </Paper>
+          ) : (
+            <Textarea
+              id="lessonsLearned"
+              value={localNotes}
+              onChange={(e) => {
+                setLocalNotes(e.currentTarget.value);
+                debouncedUpdate(e.currentTarget.value);
+              }}
+              placeholder="What did you learn from this task? What would you do differently next time?"
+              rows={4}
+              className="bg-card"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddTag}
-              disabled={!newTag.trim()}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </Stack>
+
+        <Stack gap="xs">
+          <Text size="sm" fw={500}>
+            Tags
+          </Text>
+          <Group gap="xs">
+            {tags.map((tag) => (
+              <Badge
+                key={tag}
+                variant="light"
+                color="violet"
+                rightSection={
+                  !readOnly ? (
+                    <ActionIcon
+                      aria-label={`Remove ${tag} tag`}
+                      color="gray"
+                      size="xs"
+                      variant="transparent"
+                      onClick={() => handleRemoveTag(tag)}
+                    >
+                      <X className="h-3 w-3" />
+                    </ActionIcon>
+                  ) : undefined
+                }
+              >
+                {tag}
+              </Badge>
+            ))}
+            {tags.length === 0 && (
+              <Text size="sm" c="dimmed" fs="italic">
+                No tags added
+              </Text>
+            )}
+          </Group>
+
+          {!readOnly && (
+            <Group gap="xs" align="flex-start" wrap="nowrap">
+              <TextInput
+                value={newTag}
+                onChange={(e) => setNewTag(e.currentTarget.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Add a tag..."
+                className="flex-1"
+                aria-label="New lesson tag"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddTag}
+                disabled={!newTag.trim()}
+                aria-label="Add lesson tag"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </Group>
+          )}
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }

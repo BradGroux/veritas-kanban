@@ -344,6 +344,11 @@ Phase 3 progress:
   button, action icon, and paper primitives while preserving blocked-reason
   updates, verification-step mutations, dependency display, add/cancel, and
   remove behavior.
+- Task detail subtask, deliverable, and lessons-learned subsections now use
+  direct Mantine checkbox, switch, progress, text input, textarea, select,
+  badge, button, action icon, paper, theme icon, and modal primitives while
+  preserving subtask and criterion mutations, auto-complete toggling,
+  deliverable add/edit/delete flows, and lessons-note/tag updates.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

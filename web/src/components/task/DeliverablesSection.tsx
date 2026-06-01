@@ -1,26 +1,21 @@
 import { useState } from 'react';
 import { FileText, Pencil, Trash2, X, Check, Plus, ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Group,
+  Modal,
+  Paper,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  ThemeIcon,
+} from '@mantine/core';
 import {
   useAddDeliverable,
   useUpdateDeliverable,
@@ -33,19 +28,34 @@ interface DeliverablesSectionProps {
 }
 
 const TYPE_COLORS: Record<DeliverableType, string> = {
-  document: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  code: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
-  report: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  artifact: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
-  other: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
+  document: 'blue',
+  code: 'violet',
+  report: 'green',
+  artifact: 'orange',
+  other: 'gray',
 };
 
 const STATUS_COLORS: Record<DeliverableStatus, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  attached: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  reviewed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
-  accepted: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  pending: 'yellow',
+  attached: 'blue',
+  reviewed: 'violet',
+  accepted: 'green',
 };
+
+const DELIVERABLE_TYPES: { value: DeliverableType; label: string }[] = [
+  { value: 'document', label: 'Document' },
+  { value: 'code', label: 'Code' },
+  { value: 'report', label: 'Report' },
+  { value: 'artifact', label: 'Artifact' },
+  { value: 'other', label: 'Other' },
+];
+
+const DELIVERABLE_STATUSES: { value: DeliverableStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'attached', label: 'Attached' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'accepted', label: 'Accepted' },
+];
 
 function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; taskId: string }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -91,178 +101,197 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
 
   return (
     <>
-      <div className="group flex gap-3 p-3 rounded-md bg-muted/30 border border-border/50">
-        <div className="h-8 w-8 flex-shrink-0 rounded-md bg-primary/10 flex items-center justify-center">
+      <Paper className="group flex gap-3 border border-border/50 bg-muted/30 p-3" radius="md">
+        <ThemeIcon variant="light" color="violet" size="lg" radius="md" className="flex-shrink-0">
           <FileText className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
+        </ThemeIcon>
+        <Box className="min-w-0 flex-1">
           {isEditing ? (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Title</Label>
-                <Input
+            <Stack gap="sm">
+              <Stack gap={4}>
+                <Text size="xs" fw={500}>
+                  Title
+                </Text>
+                <TextInput
                   value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
+                  onChange={(e) => setEditTitle(e.currentTarget.value)}
                   placeholder="Deliverable title"
-                  className="text-sm h-8"
+                  size="xs"
                   autoFocus
+                  aria-label="Deliverable title"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Type</Label>
-                  <Select value={editType} onValueChange={(v) => setEditType(v as DeliverableType)}>
-                    <SelectTrigger className="text-sm h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="document">Document</SelectItem>
-                      <SelectItem value="code">Code</SelectItem>
-                      <SelectItem value="report">Report</SelectItem>
-                      <SelectItem value="artifact">Artifact</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Status</Label>
+              </Stack>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+                <Stack gap={4}>
+                  <Text size="xs" fw={500}>
+                    Type
+                  </Text>
                   <Select
+                    aria-label="Deliverable type"
+                    allowDeselect={false}
+                    data={DELIVERABLE_TYPES}
+                    value={editType}
+                    onChange={(value) => {
+                      if (value) setEditType(value as DeliverableType);
+                    }}
+                    size="xs"
+                  />
+                </Stack>
+                <Stack gap={4}>
+                  <Text size="xs" fw={500}>
+                    Status
+                  </Text>
+                  <Select
+                    aria-label="Deliverable status"
+                    allowDeselect={false}
+                    data={DELIVERABLE_STATUSES}
                     value={editStatus}
-                    onValueChange={(v) => setEditStatus(v as DeliverableStatus)}
-                  >
-                    <SelectTrigger className="text-sm h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="attached">Attached</SelectItem>
-                      <SelectItem value="reviewed">Reviewed</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Path / URL (optional)</Label>
-                <Input
+                    onChange={(value) => {
+                      if (value) setEditStatus(value as DeliverableStatus);
+                    }}
+                    size="xs"
+                  />
+                </Stack>
+              </SimpleGrid>
+              <Stack gap={4}>
+                <Text size="xs" fw={500}>
+                  Path / URL (optional)
+                </Text>
+                <TextInput
                   value={editPath}
-                  onChange={(e) => setEditPath(e.target.value)}
+                  onChange={(e) => setEditPath(e.currentTarget.value)}
                   placeholder="https://... or /path/to/file"
-                  className="text-sm h-8"
+                  size="xs"
+                  aria-label="Deliverable path or URL"
                 />
-              </div>
-              <div>
-                <Label className="text-xs">Description (optional)</Label>
+              </Stack>
+              <Stack gap={4}>
+                <Text size="xs" fw={500}>
+                  Description (optional)
+                </Text>
                 <Textarea
                   value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
+                  onChange={(e) => setEditDescription(e.currentTarget.value)}
                   placeholder="Add details about this deliverable..."
-                  className="text-sm min-h-[60px] resize-none"
+                  rows={2}
+                  className="resize-none"
+                  aria-label="Deliverable description"
                 />
-              </div>
-              <div className="flex items-center gap-2">
+              </Stack>
+              <Group gap="xs">
                 <Button
-                  size="sm"
-                  className="h-7"
-                  onClick={handleSaveEdit}
+                  size="xs"
+                  onClick={() => {
+                    void handleSaveEdit();
+                  }}
                   disabled={!editTitle.trim() || updateDeliverable.isPending}
+                  leftSection={<Check className="h-3 w-3" />}
                 >
-                  <Check className="h-3 w-3 mr-1" />
                   Save
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7" onClick={handleCancelEdit}>
-                  <X className="h-3 w-3 mr-1" />
+                <Button variant="subtle" size="xs" onClick={handleCancelEdit}>
+                  <X className="h-3 w-3" />
                   Cancel
                 </Button>
-              </div>
-            </div>
+              </Group>
+            </Stack>
           ) : (
-            <>
-              <div className="flex items-start gap-2 mb-1">
-                <span className="font-medium text-sm flex-1">{deliverable.title}</span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
+            <Stack gap={6}>
+              <Group align="flex-start" gap="xs" wrap="nowrap">
+                <Text size="sm" fw={500} className="min-w-0 flex-1">
+                  {deliverable.title}
+                </Text>
+                <Group gap={4} className="opacity-0 transition-opacity group-hover:opacity-100">
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
                     size="sm"
-                    className="h-6 w-6 p-0"
                     aria-label="Edit deliverable"
                     onClick={() => setIsEditing(true)}
                   >
                     <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                  </Button>
-                  <Button
-                    variant="ghost"
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
                     size="sm"
-                    className="h-6 w-6 p-0"
                     aria-label="Delete deliverable"
                     onClick={() => setDeleteDialogOpen(true)}
                   >
-                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[deliverable.type]}`}
-                >
+                    <Trash2 className="h-3 w-3" />
+                  </ActionIcon>
+                </Group>
+              </Group>
+              <Group gap="xs">
+                <Badge color={TYPE_COLORS[deliverable.type]} variant="light" size="sm">
                   {deliverable.type}
-                </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[deliverable.status]}`}
-                >
+                </Badge>
+                <Badge color={STATUS_COLORS[deliverable.status]} variant="light" size="sm">
                   {deliverable.status}
-                </span>
+                </Badge>
                 {deliverable.agent && (
-                  <span className="text-xs text-muted-foreground">by {deliverable.agent}</span>
+                  <Text size="xs" c="dimmed">
+                    by {deliverable.agent}
+                  </Text>
                 )}
-              </div>
+              </Group>
               {deliverable.path && (
-                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <Group gap={4} className="min-w-0">
                   {isUrl ? (
-                    <a
+                    <Text
+                      component="a"
                       href={deliverable.path}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary hover:underline flex items-center gap-1"
+                      size="xs"
+                      className="flex min-w-0 items-center gap-1 text-primary hover:underline"
                     >
-                      {deliverable.path}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                      <span className="truncate">{deliverable.path}</span>
+                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    </Text>
                   ) : (
-                    <span className="font-mono">{deliverable.path}</span>
+                    <Text size="xs" c="dimmed" ff="monospace" className="truncate">
+                      {deliverable.path}
+                    </Text>
                   )}
-                </div>
+                </Group>
               )}
               {deliverable.description && (
-                <p className="text-xs text-foreground/70 mt-1">{deliverable.description}</p>
+                <Text size="xs" className="text-foreground/70">
+                  {deliverable.description}
+                </Text>
               )}
-              <div className="text-xs text-muted-foreground mt-1">
+              <Text size="xs" c="dimmed">
                 Added {new Date(deliverable.created).toLocaleDateString()}
-              </div>
-            </>
+              </Text>
+            </Stack>
           )}
-        </div>
-      </div>
+        </Box>
+      </Paper>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete deliverable?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove "{deliverable.title}" from this task's deliverables?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90"
+      <Modal
+        opened={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        title="Delete deliverable?"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">Remove "{deliverable.title}" from this task's deliverables?</Text>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                void handleDelete();
+              }}
             >
               Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }
@@ -303,98 +332,113 @@ export function DeliverablesSection({ task }: DeliverablesSectionProps) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <Stack gap="sm">
+      <Group justify="space-between" align="center">
+        <Group gap="xs">
           <FileText className="h-4 w-4 text-muted-foreground" />
-          <Label className="text-sm font-medium">
+          <Text size="sm" fw={500}>
             Deliverables {deliverables.length > 0 && `(${deliverables.length})`}
-          </Label>
-        </div>
+          </Text>
+        </Group>
         {!showForm && (
           <Button
             variant="outline"
-            size="sm"
-            className="h-7 text-xs"
+            size="xs"
             onClick={() => setShowForm(true)}
+            leftSection={<Plus className="h-3 w-3" />}
           >
-            <Plus className="h-3 w-3 mr-1" />
             Add
           </Button>
         )}
-      </div>
+      </Group>
 
       {deliverables.length === 0 && !showForm && (
-        <p className="text-sm text-muted-foreground">No deliverables yet</p>
+        <Text size="sm" c="dimmed">
+          No deliverables yet
+        </Text>
       )}
 
       {showForm && (
-        <div className="space-y-3 p-3 rounded-md border border-border bg-muted/20">
-          <div>
-            <Label className="text-xs">Title *</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., API Documentation"
-              className="text-sm h-8"
-              autoFocus
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Type *</Label>
-            <Select value={type} onValueChange={(v) => setType(v as DeliverableType)}>
-              <SelectTrigger className="text-sm h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="document">Document</SelectItem>
-                <SelectItem value="code">Code</SelectItem>
-                <SelectItem value="report">Report</SelectItem>
-                <SelectItem value="artifact">Artifact</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Path / URL (optional)</Label>
-            <Input
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="https://... or /path/to/file"
-              className="text-sm h-8"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Description (optional)</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add details about this deliverable..."
-              className="text-sm min-h-[60px] resize-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={handleAddDeliverable}
-              disabled={!title.trim() || addDeliverable.isPending}
-            >
-              <Check className="h-3 w-3 mr-1" />
-              Add Deliverable
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleCancel}>
-              <X className="h-3 w-3 mr-1" />
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <Paper className="border border-border bg-muted/20 p-3" radius="md">
+          <Stack gap="sm">
+            <Stack gap={4}>
+              <Text size="xs" fw={500}>
+                Title *
+              </Text>
+              <TextInput
+                value={title}
+                onChange={(e) => setTitle(e.currentTarget.value)}
+                placeholder="e.g., API Documentation"
+                size="xs"
+                autoFocus
+                aria-label="New deliverable title"
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="xs" fw={500}>
+                Type *
+              </Text>
+              <Select
+                aria-label="New deliverable type"
+                allowDeselect={false}
+                data={DELIVERABLE_TYPES}
+                value={type}
+                onChange={(value) => {
+                  if (value) setType(value as DeliverableType);
+                }}
+                size="xs"
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="xs" fw={500}>
+                Path / URL (optional)
+              </Text>
+              <TextInput
+                value={path}
+                onChange={(e) => setPath(e.currentTarget.value)}
+                placeholder="https://... or /path/to/file"
+                size="xs"
+                aria-label="New deliverable path or URL"
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="xs" fw={500}>
+                Description (optional)
+              </Text>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.currentTarget.value)}
+                placeholder="Add details about this deliverable..."
+                rows={2}
+                className="resize-none"
+                aria-label="New deliverable description"
+              />
+            </Stack>
+            <Group gap="xs">
+              <Button
+                size="sm"
+                onClick={() => {
+                  void handleAddDeliverable();
+                }}
+                disabled={!title.trim() || addDeliverable.isPending}
+                leftSection={<Check className="h-3 w-3" />}
+              >
+                Add Deliverable
+              </Button>
+              <Button variant="subtle" size="sm" onClick={handleCancel}>
+                <X className="h-3 w-3" />
+                Cancel
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
       )}
 
-      <div className="space-y-2">
+      <Stack gap="xs">
         {deliverables.map((deliverable) => (
           <DeliverableItem key={deliverable.id} deliverable={deliverable} taskId={task.id} />
         ))}
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
