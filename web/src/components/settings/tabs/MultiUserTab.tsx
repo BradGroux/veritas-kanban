@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { ActionIcon, Badge, Button, Checkbox, Select, TextInput } from '@mantine/core';
 import {
   AlertTriangle,
   Building2,
@@ -13,18 +14,6 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/useToast';
 import {
   SCOPED_API_TOKEN_PERMISSIONS,
@@ -65,20 +54,21 @@ function formatDate(value: string | null | undefined) {
 }
 
 function invitationStatus(invitation: WorkspaceInvitation) {
-  if (invitation.acceptedAt) return { label: 'Accepted', variant: 'secondary' as const };
-  if (invitation.revokedAt) return { label: 'Revoked', variant: 'destructive' as const };
+  if (invitation.acceptedAt)
+    return { label: 'Accepted', color: 'green', variant: 'light' as const };
+  if (invitation.revokedAt) return { label: 'Revoked', color: 'red', variant: 'light' as const };
   if (Date.parse(invitation.expiresAt) <= Date.now()) {
-    return { label: 'Expired', variant: 'outline' as const };
+    return { label: 'Expired', color: 'gray', variant: 'outline' as const };
   }
-  return { label: 'Pending', variant: 'secondary' as const };
+  return { label: 'Pending', color: 'yellow', variant: 'light' as const };
 }
 
 function tokenStatus(token: ApiTokenSummary) {
-  if (token.revokedAt) return { label: 'Revoked', variant: 'destructive' as const };
+  if (token.revokedAt) return { label: 'Revoked', color: 'red', variant: 'light' as const };
   if (token.expiresAt && Date.parse(token.expiresAt) <= Date.now()) {
-    return { label: 'Expired', variant: 'outline' as const };
+    return { label: 'Expired', color: 'gray', variant: 'outline' as const };
   }
-  return { label: 'Active', variant: 'secondary' as const };
+  return { label: 'Active', color: 'green', variant: 'light' as const };
 }
 
 function memberName(member: WorkspaceMembership) {
@@ -163,6 +153,18 @@ export function MultiUserTab() {
         ? WORKSPACE_ROLES
         : WORKSPACE_ROLES.filter((role) => role !== 'owner'),
     [activeMembership?.role]
+  );
+  const roleSelectData = useMemo(
+    () => roleOptions.map((role) => ({ value: role, label: ROLE_LABELS[role] })),
+    [roleOptions]
+  );
+  const workspaceSelectData = useMemo(
+    () =>
+      workspaces.map(({ workspace, membership }) => ({
+        value: workspace.id,
+        label: `${workspace.name} (${membership.role})`,
+      })),
+    [workspaces]
   );
 
   const members = membersQuery.data ?? [];
@@ -337,10 +339,10 @@ export function MultiUserTab() {
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="truncate font-medium">{activeWorkspace.name}</div>
-              <Badge variant="secondary" className="capitalize">
+              <Badge variant="light" color="gray" className="capitalize">
                 {activeMembership.role}
               </Badge>
-              <Badge variant="outline" className="capitalize">
+              <Badge variant="outline" color="gray" className="capitalize">
                 {activeWorkspace.mode}
               </Badge>
             </div>
@@ -348,18 +350,19 @@ export function MultiUserTab() {
               {activeWorkspace.description ?? 'Workspace access is active.'}
             </div>
           </div>
-          <Select value={activeWorkspace.id} onValueChange={(value) => void switchWorkspace(value)}>
-            <SelectTrigger className="w-full sm:w-56" aria-label="Active workspace">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {workspaces.map(({ workspace, membership }) => (
-                <SelectItem key={workspace.id} value={workspace.id}>
-                  {workspace.name} ({membership.role})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Select
+            data={workspaceSelectData}
+            value={activeWorkspace.id}
+            onChange={(value) => {
+              if (value) {
+                void switchWorkspace(value);
+              }
+            }}
+            aria-label="Active workspace"
+            className="w-full sm:w-56"
+            size="sm"
+            radius="md"
+          />
         </div>
       </Section>
 
@@ -395,36 +398,33 @@ export function MultiUserTab() {
                       </td>
                       <td className="px-3 py-2">
                         <Select
+                          data={roleSelectData}
                           value={member.role}
-                          onValueChange={(role) =>
-                            void handleRoleChange(member, role as WorkspaceRole)
-                          }
+                          onChange={(role) => {
+                            if (role) {
+                              void handleRoleChange(member, role as WorkspaceRole);
+                            }
+                          }}
                           disabled={!canEditMember}
-                        >
-                          <SelectTrigger
-                            className="h-8 w-36"
-                            aria-label={`Role for ${memberName(member)}`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roleOptions.map((role) => (
-                              <SelectItem key={role} value={role}>
-                                {ROLE_LABELS[role]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          aria-label={`Role for ${memberName(member)}`}
+                          w={144}
+                          size="xs"
+                          radius="md"
+                        />
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {formatDate(member.joinedAt)}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
+                        <ActionIcon
+                          type="button"
+                          variant="subtle"
+                          color="red"
                           size="sm"
+                          radius="md"
                           onClick={() => void handleRemoveMember(member)}
                           disabled={!canEditMember || isSelf}
+                          aria-label={`Remove ${memberName(member)}`}
                           title={
                             isSelf
                               ? 'Cannot remove your own active session'
@@ -434,7 +434,7 @@ export function MultiUserTab() {
                           }
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </Button>
+                        </ActionIcon>
                       </td>
                     </tr>
                   );
@@ -454,50 +454,47 @@ export function MultiUserTab() {
               className="grid gap-3 rounded-md border p-3 sm:grid-cols-2"
               onSubmit={handleCreateInvitation}
             >
-              <div className="grid gap-1.5 sm:col-span-2">
-                <Label htmlFor="invite-email">Email</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="person@example.com"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Role</Label>
-                <Select
-                  value={inviteRole}
-                  onValueChange={(role) => setInviteRole(role as WorkspaceRole)}
-                >
-                  <SelectTrigger aria-label="Invitation role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roleOptions.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {ROLE_LABELS[role]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="invite-expires">Expires</Label>
-                <Input
-                  id="invite-expires"
-                  type="datetime-local"
-                  value={inviteExpiresAt}
-                  onChange={(event) => setInviteExpiresAt(event.target.value)}
-                />
-              </div>
+              <TextInput
+                className="sm:col-span-2"
+                id="invite-email"
+                type="email"
+                label="Email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="person@example.com"
+                size="sm"
+                radius="md"
+              />
+              <Select
+                data={roleSelectData}
+                label="Role"
+                value={inviteRole}
+                onChange={(role) => {
+                  if (role) {
+                    setInviteRole(role as WorkspaceRole);
+                  }
+                }}
+                aria-label="Invitation role"
+                size="sm"
+                radius="md"
+              />
+              <TextInput
+                id="invite-expires"
+                type="datetime-local"
+                label="Expires"
+                value={inviteExpiresAt}
+                onChange={(event) => setInviteExpiresAt(event.target.value)}
+                size="sm"
+                radius="md"
+              />
               <div className="flex items-end sm:col-span-2 sm:justify-end">
                 <Button
                   type="submit"
                   disabled={createInvitation.isPending}
                   className="w-full sm:w-auto"
+                  radius="md"
+                  leftSection={<MailPlus className="h-4 w-4" aria-hidden="true" />}
                 >
-                  <MailPlus className="mr-2 h-4 w-4" aria-hidden="true" />
                   Send
                 </Button>
               </div>
@@ -510,10 +507,24 @@ export function MultiUserTab() {
                   One-time invitation token
                 </div>
                 <div className="flex gap-2">
-                  <Input value={createdToken} readOnly className="font-mono text-xs" />
-                  <Button type="button" variant="outline" onClick={() => void handleCopyToken()}>
+                  <TextInput
+                    value={createdToken}
+                    readOnly
+                    className="flex-1"
+                    classNames={{ input: 'font-mono text-xs' }}
+                    size="sm"
+                    radius="md"
+                  />
+                  <ActionIcon
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleCopyToken()}
+                    aria-label="Copy invitation token"
+                    size="lg"
+                    radius="md"
+                  >
                     <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                  </ActionIcon>
                 </div>
               </div>
             )}
@@ -537,16 +548,23 @@ export function MultiUserTab() {
                           <span className="truncate font-medium">
                             {invitation.email ?? invitation.id}
                           </span>
-                          <Badge variant={status.variant}>{status.label}</Badge>
-                          <Badge variant="outline">{ROLE_LABELS[invitation.role]}</Badge>
+                          <Badge variant={status.variant} color={status.color}>
+                            {status.label}
+                          </Badge>
+                          <Badge variant="outline" color="gray">
+                            {ROLE_LABELS[invitation.role]}
+                          </Badge>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Expires {formatDate(invitation.expiresAt)}
                         </div>
                       </div>
                       <Button
-                        variant="ghost"
+                        type="button"
+                        variant="subtle"
+                        color="gray"
                         size="sm"
+                        radius="md"
                         onClick={() => void handleRevokeInvitation(invitation)}
                         disabled={!canRevoke || revokeInvitation.isPending}
                       >
@@ -579,12 +597,19 @@ export function MultiUserTab() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(authContext?.permissions ?? []).slice(0, 10).map((permission) => (
-              <Badge key={permission} variant="outline" className="font-mono text-[11px]">
+              <Badge
+                key={permission}
+                variant="outline"
+                color="gray"
+                className="font-mono text-[11px]"
+              >
                 {permission}
               </Badge>
             ))}
             {(authContext?.permissions?.length ?? 0) > 10 && (
-              <Badge variant="secondary">+{(authContext?.permissions?.length ?? 0) - 10}</Badge>
+              <Badge variant="light" color="gray">
+                +{(authContext?.permissions?.length ?? 0) - 10}
+              </Badge>
             )}
           </div>
           {!canManageApiTokens ? (
@@ -593,45 +618,43 @@ export function MultiUserTab() {
             <div className="space-y-3">
               <form className="grid gap-3 rounded-md border p-3" onSubmit={handleCreateApiToken}>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="api-token-name">Name</Label>
-                    <Input
-                      id="api-token-name"
-                      value={apiTokenName}
-                      onChange={(event) => setApiTokenName(event.target.value)}
-                      placeholder="Automation worker"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="api-token-expires">Expires</Label>
-                    <Input
-                      id="api-token-expires"
-                      type="datetime-local"
-                      value={apiTokenExpiresAt}
-                      onChange={(event) => setApiTokenExpiresAt(event.target.value)}
-                    />
-                  </div>
+                  <TextInput
+                    id="api-token-name"
+                    label="Name"
+                    value={apiTokenName}
+                    onChange={(event) => setApiTokenName(event.target.value)}
+                    placeholder="Automation worker"
+                    size="sm"
+                    radius="md"
+                  />
+                  <TextInput
+                    id="api-token-expires"
+                    type="datetime-local"
+                    label="Expires"
+                    value={apiTokenExpiresAt}
+                    onChange={(event) => setApiTokenExpiresAt(event.target.value)}
+                    size="sm"
+                    radius="md"
+                  />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Scopes</Label>
+                  <div className="text-sm font-medium">Scopes</div>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {selectableTokenScopes.map((permission) => {
-                      const id = `api-scope-${permission}`;
                       return (
-                        <label
+                        <div
                           key={permission}
-                          htmlFor={id}
                           className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
                         >
                           <Checkbox
-                            id={id}
                             checked={apiTokenScopes.includes(permission)}
-                            onCheckedChange={(checked) =>
-                              handleToggleApiScope(permission, checked === true)
+                            onChange={(event) =>
+                              handleToggleApiScope(permission, event.currentTarget.checked)
                             }
+                            label={<span className="font-mono">{permissionLabel(permission)}</span>}
+                            radius="sm"
                           />
-                          <span className="font-mono">{permissionLabel(permission)}</span>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
@@ -645,8 +668,9 @@ export function MultiUserTab() {
                       apiTokenScopes.length === 0
                     }
                     className="w-full sm:w-auto"
+                    radius="md"
+                    leftSection={<KeyRound className="h-4 w-4" aria-hidden="true" />}
                   >
-                    <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
                     Create
                   </Button>
                 </div>
@@ -659,14 +683,24 @@ export function MultiUserTab() {
                     One-time API token
                   </div>
                   <div className="flex gap-2">
-                    <Input value={createdApiTokenSecret} readOnly className="font-mono text-xs" />
-                    <Button
+                    <TextInput
+                      value={createdApiTokenSecret}
+                      readOnly
+                      className="flex-1"
+                      classNames={{ input: 'font-mono text-xs' }}
+                      size="sm"
+                      radius="md"
+                    />
+                    <ActionIcon
                       type="button"
                       variant="outline"
                       onClick={() => void handleCopyApiToken()}
+                      aria-label="Copy API token"
+                      size="lg"
+                      radius="md"
                     >
                       <Clipboard className="h-4 w-4" aria-hidden="true" />
-                    </Button>
+                    </ActionIcon>
                   </div>
                 </div>
               )}
@@ -686,8 +720,10 @@ export function MultiUserTab() {
                           <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="truncate font-medium">{token.name}</span>
-                              <Badge variant={status.variant}>{status.label}</Badge>
-                              <Badge variant="outline" className="font-mono">
+                              <Badge variant={status.variant} color={status.color}>
+                                {status.label}
+                              </Badge>
+                              <Badge variant="outline" color="gray" className="font-mono">
                                 {token.tokenPrefix}...
                               </Badge>
                             </div>
@@ -697,31 +733,42 @@ export function MultiUserTab() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button
+                            <ActionIcon
                               type="button"
-                              variant="ghost"
+                              variant="subtle"
+                              color="gray"
                               size="sm"
+                              radius="md"
                               onClick={() => void handleRotateApiToken(token)}
                               disabled={rotateApiToken.isPending}
+                              aria-label={`Rotate ${token.name}`}
                               title="Rotate token"
                             >
                               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                            </Button>
-                            <Button
+                            </ActionIcon>
+                            <ActionIcon
                               type="button"
-                              variant="ghost"
+                              variant="subtle"
+                              color="red"
                               size="sm"
+                              radius="md"
                               onClick={() => void handleRevokeApiToken(token)}
                               disabled={!isActive || revokeApiToken.isPending}
+                              aria-label={`Revoke ${token.name}`}
                               title="Revoke token"
                             >
                               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            </Button>
+                            </ActionIcon>
                           </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {token.scopes.map((scope) => (
-                            <Badge key={scope} variant="outline" className="font-mono text-[11px]">
+                            <Badge
+                              key={scope}
+                              variant="outline"
+                              color="gray"
+                              className="font-mono text-[11px]"
+                            >
                               {scope}
                             </Badge>
                           ))}

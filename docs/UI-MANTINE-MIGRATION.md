@@ -306,6 +306,10 @@ Phase 3 progress:
   modal, text input, textarea, checkbox, number input, badge, button, and action
   icon primitives while preserving policy list/edit/create/delete affordances
   and shared-resource allowed-type/max-resource controls.
+- Multi-user settings now use direct Mantine select, text input, checkbox, badge,
+  button, and action icon primitives while preserving workspace switching,
+  member role management, invitations, scoped API token creation, rotation, and
+  revocation behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

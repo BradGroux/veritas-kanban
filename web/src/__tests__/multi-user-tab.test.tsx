@@ -136,7 +136,7 @@ describe('MultiUserTab', () => {
       })
     );
 
-    renderMultiUserTab();
+    const { baseElement } = renderMultiUserTab();
 
     expect(await screen.findByText('Local Workspace')).toBeDefined();
     expect(await screen.findByText('Local User')).toBeDefined();
@@ -145,6 +145,16 @@ describe('MultiUserTab', () => {
     expect(screen.getByText('Expired')).toBeDefined();
     expect(screen.getByText('Active')).toBeDefined();
     expect(screen.getAllByText('session').length).toBeGreaterThan(0);
+    expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Checkbox-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Button-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Badge-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-ActionIcon-root')).toBeDefined();
+    expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
   });
 
   it('shows invite permission state for read-only workspace members', async () => {
