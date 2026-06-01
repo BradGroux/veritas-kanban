@@ -8,6 +8,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { Checkbox, Group, Paper, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import {
   useBacklogTasks,
   usePromoteTask,
@@ -17,16 +18,7 @@ import {
 import { useProjects } from '@/hooks/useProjects';
 import { useTaskTypes } from '@/hooks/useTaskTypes';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, ArrowUp, Search, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { Task } from '@veritas-kanban/shared';
@@ -51,6 +43,22 @@ export function BacklogPage({ onBack }: BacklogPageProps) {
   const promoteTask = usePromoteTask();
   const bulkPromote = useBulkPromote();
   const deleteTask = useDeleteBacklogTask();
+
+  const projectOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Projects' },
+      ...projects.map((project) => ({ value: project.id, label: project.label })),
+    ],
+    [projects]
+  );
+
+  const taskTypeOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Types' },
+      ...taskTypes.map((type) => ({ value: type.id, label: type.label })),
+    ],
+    [taskTypes]
+  );
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -139,101 +147,93 @@ export function BacklogPage({ onBack }: BacklogPageProps) {
   };
 
   const priorityColors = {
-    low: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    low: 'blue',
+    medium: 'yellow',
+    high: 'red',
+    critical: 'pink',
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <Stack gap="lg">
+      <Group justify="space-between" align="center" gap="md" wrap="wrap">
+        <Group gap="md" wrap="wrap">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Board
           </Button>
-          <h1 className="text-2xl font-bold">Backlog</h1>
+          <Text component="h1" size="xl" fw={700} lh={1.1} m={0}>
+            Backlog
+          </Text>
           <Badge variant="secondary">{filteredTasks.length} tasks</Badge>
-        </div>
+        </Group>
 
-        {/* Bulk Actions */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
+          <Group gap="sm">
+            <Text size="sm" c="dimmed">
+              {selectedIds.size} selected
+            </Text>
             <Button size="sm" onClick={handleBulkPromote} disabled={bulkPromote.isPending}>
               <ArrowUp className="h-4 w-4 mr-2" />
               Promote to Board
             </Button>
-          </div>
+          </Group>
         )}
-      </div>
+      </Group>
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
+      <Paper withBorder radius="md" p="md">
+        <Group gap="md" align="end" wrap="wrap">
+          <TextInput
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
+            onChange={(event) => setSearch(event.currentTarget.value)}
+            placeholder="Search tasks..."
+            aria-label="Search backlog tasks"
+            leftSection={<Search className="h-4 w-4" aria-hidden="true" />}
+            className="min-w-[240px] flex-1"
           />
-        </div>
 
-        <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Projects" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select
+            value={projectFilter}
+            onChange={(value) => setProjectFilter(value ?? 'all')}
+            data={projectOptions}
+            aria-label="Filter backlog by project"
+            checkIconPosition="right"
+            className="w-[180px]"
+          />
 
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {taskTypes.map((type) => (
-              <SelectItem key={type.id} value={type.id}>
-                {type.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select
+            value={typeFilter}
+            onChange={(value) => setTypeFilter(value ?? 'all')}
+            data={taskTypeOptions}
+            aria-label="Filter backlog by type"
+            checkIconPosition="right"
+            className="w-[180px]"
+          />
 
-        {filteredTasks.length > 0 && (
-          <div className="flex items-center gap-2 shrink-0">
+          {filteredTasks.length > 0 && (
             <Checkbox
               checked={selectedIds.size === filteredTasks.length}
-              onCheckedChange={handleSelectAll}
+              onChange={handleSelectAll}
               id="select-all"
+              label="Select all"
+              className="shrink-0"
             />
-            <label htmlFor="select-all" className="text-sm cursor-pointer whitespace-nowrap">
-              Select all
-            </label>
-          </div>
-        )}
-      </div>
+          )}
+        </Group>
+      </Paper>
 
       {/* Task List */}
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading backlog tasks...</div>
+        <Text ta="center" py="xl" c="dimmed">
+          Loading backlog tasks...
+        </Text>
       ) : filteredTasks.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <Text ta="center" py="xl" c="dimmed">
           {search || projectFilter !== 'all' || typeFilter !== 'all'
             ? 'No tasks match your filters'
             : 'No tasks in backlog'}
-        </div>
+        </Text>
       ) : (
-        <div className="space-y-3">
+        <Stack gap="sm">
           {filteredTasks.map((task) => (
             <BacklogTaskCard
               key={task.id}
@@ -247,9 +247,9 @@ export function BacklogPage({ onBack }: BacklogPageProps) {
               priorityColors={priorityColors}
             />
           ))}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -275,9 +275,12 @@ function BacklogTaskCard({
   priorityColors,
 }: BacklogTaskCardProps) {
   return (
-    <div
+    <Paper
+      withBorder
+      radius="md"
+      p="md"
       className={cn(
-        'p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer',
+        'bg-card hover:bg-accent/50 transition-colors cursor-pointer',
         isSelected && 'ring-2 ring-primary',
         isExpanded && 'ring-2 ring-accent'
       )}
@@ -285,12 +288,13 @@ function BacklogTaskCard({
       <div className="flex items-start gap-3">
         <Checkbox
           checked={isSelected}
-          onCheckedChange={onToggleSelect}
+          onChange={onToggleSelect}
           onClick={(e) => e.stopPropagation()}
           className="mt-1"
         />
 
-        <div
+        <Stack
+          gap="sm"
           className="flex-1 min-w-0"
           onClick={onClick}
           role="button"
@@ -302,13 +306,15 @@ function BacklogTaskCard({
             }
           }}
         >
-          <div className="flex items-start justify-between gap-4">
+          <Group align="flex-start" justify="space-between" gap="md" wrap="nowrap">
             <div className="flex-1 min-w-0">
-              <h3 className="font-medium truncate">{task.title}</h3>
+              <Text fw={600} truncate>
+                {task.title}
+              </Text>
               {!isExpanded && task.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
                   {task.description}
-                </p>
+                </Text>
               )}
             </div>
 
@@ -335,13 +341,15 @@ function BacklogTaskCard({
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
-          </div>
+          </Group>
 
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <Group gap="xs" wrap="wrap">
             <Badge variant="outline" className="text-xs">
               {task.id}
             </Badge>
-            <Badge className={cn('text-xs', priorityColors[task.priority])}>{task.priority}</Badge>
+            <Badge color={priorityColors[task.priority] ?? 'gray'} className="text-xs">
+              {task.priority}
+            </Badge>
             <Badge variant="secondary" className="text-xs">
               {task.type}
             </Badge>
@@ -360,7 +368,7 @@ function BacklogTaskCard({
                 {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length} subtasks
               </Badge>
             )}
-          </div>
+          </Group>
 
           {/* Expanded detail view */}
           {isExpanded && (
@@ -368,26 +376,33 @@ function BacklogTaskCard({
               {task.description && (
                 <div>
                   <h4 className="text-sm font-medium mb-1">Description</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  <Text size="sm" c="dimmed" className="whitespace-pre-wrap">
                     {task.description}
-                  </p>
+                  </Text>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Created:</span>{' '}
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                <Text size="sm">
+                  <Text component="span" c="dimmed" inherit>
+                    Created:
+                  </Text>{' '}
                   {new Date(task.created).toLocaleDateString()}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Updated:</span>{' '}
+                </Text>
+                <Text size="sm">
+                  <Text component="span" c="dimmed" inherit>
+                    Updated:
+                  </Text>{' '}
                   {new Date(task.updated).toLocaleDateString()}
-                </div>
+                </Text>
                 {task.agent && (
-                  <div>
-                    <span className="text-muted-foreground">Agent:</span> {task.agent}
-                  </div>
+                  <Text size="sm">
+                    <Text component="span" c="dimmed" inherit>
+                      Agent:
+                    </Text>{' '}
+                    {task.agent}
+                  </Text>
                 )}
-              </div>
+              </SimpleGrid>
               {task.comments && task.comments.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium mb-1">Comments ({task.comments.length})</h4>
@@ -400,8 +415,8 @@ function BacklogTaskCard({
               )}
             </div>
           )}
-        </div>
+        </Stack>
       </div>
-    </div>
+    </Paper>
   );
 }

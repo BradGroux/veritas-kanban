@@ -11,33 +11,33 @@ component primitives are not the right abstraction.
 
 ## Current Inventory
 
-The current web app uses React, Vite, Tailwind, shadcn/Radix primitives, lucide
-icons, custom CSS tokens in `web/src/globals.css`, and product-specific feature
-components.
+The current web app uses React, Vite, Tailwind, Mantine-backed compatibility
+wrappers, lucide icons, custom CSS tokens in `web/src/globals.css`, and
+product-specific feature components.
 
 Current shared primitive usage:
 
-| Primitive                         | Current state                                                  | Observed use |
-| --------------------------------- | -------------------------------------------------------------- | ------------ |
-| `button`                          | Mantine Button/ActionIcon wrapper with Radix Slot escape hatch | 73 imports   |
-| `input`                           | Mantine Input compatibility wrapper                            | 41 imports   |
-| `select`                          | Mantine Select compatibility wrapper                           | 39 imports   |
-| `label`                           | Mantine Box label compatibility wrapper                        | 36 imports   |
-| `badge`                           | Mantine Badge wrapper with Radix Slot escape hatch             | 36 imports   |
-| `textarea`                        | Mantine Textarea compatibility wrapper                         | 20 imports   |
-| `skeleton`                        | Mantine Skeleton compatibility wrapper                         | 18 imports   |
-| `alert-dialog`                    | Mantine Modal compatibility wrapper                            | 18 imports   |
-| `scroll-area`                     | Mantine ScrollArea compatibility wrapper                       | 13 imports   |
-| `dialog`                          | Mantine Modal compatibility wrapper                            | 13 imports   |
-| `tabs`                            | Mantine Tabs compatibility wrapper                             | 9 imports    |
-| `checkbox`                        | Mantine Checkbox compatibility wrapper                         | 9 imports    |
-| `switch`                          | Mantine Switch compatibility wrapper                           | 8 imports    |
-| `sheet`                           | Mantine Drawer compatibility wrapper                           | 8 imports    |
-| `tooltip`                         | Mantine Tooltip compatibility wrapper                          | 4 imports    |
-| `popover`                         | Mantine Popover compatibility wrapper                          | 3 imports    |
-| `MarkdownEditor/MarkdownRenderer` | Custom markdown surfaces                                       | 2 imports    |
-| `toast`/`toaster`                 | Mantine Notifications bridge                                   | 1 import     |
-| `data-table`                      | Custom table wrapper                                           | 1 import     |
+| Primitive                         | Current state                                            | Observed use |
+| --------------------------------- | -------------------------------------------------------- | ------------ |
+| `button`                          | Mantine Button/ActionIcon wrapper with local Slot helper | 73 imports   |
+| `input`                           | Mantine Input compatibility wrapper                      | 41 imports   |
+| `select`                          | Mantine Select compatibility wrapper                     | 39 imports   |
+| `label`                           | Mantine Box label compatibility wrapper                  | 36 imports   |
+| `badge`                           | Mantine Badge wrapper with local Slot helper             | 36 imports   |
+| `textarea`                        | Mantine Textarea compatibility wrapper                   | 20 imports   |
+| `skeleton`                        | Mantine Skeleton compatibility wrapper                   | 18 imports   |
+| `alert-dialog`                    | Mantine Modal compatibility wrapper                      | 18 imports   |
+| `scroll-area`                     | Mantine ScrollArea compatibility wrapper                 | 13 imports   |
+| `dialog`                          | Mantine Modal compatibility wrapper                      | 13 imports   |
+| `tabs`                            | Mantine Tabs compatibility wrapper                       | 9 imports    |
+| `checkbox`                        | Mantine Checkbox compatibility wrapper                   | 9 imports    |
+| `switch`                          | Mantine Switch compatibility wrapper                     | 8 imports    |
+| `sheet`                           | Mantine Drawer compatibility wrapper                     | 8 imports    |
+| `tooltip`                         | Mantine Tooltip compatibility wrapper                    | 4 imports    |
+| `popover`                         | Mantine Popover compatibility wrapper                    | 3 imports    |
+| `MarkdownEditor/MarkdownRenderer` | Custom markdown surfaces                                 | 2 imports    |
+| `toast`/`toaster`                 | Mantine Notifications bridge                             | 1 import     |
+| `data-table`                      | Custom table wrapper                                     | 1 import     |
 
 Shared primitive migration progress:
 
@@ -46,10 +46,10 @@ Shared primitive migration progress:
   `scroll-area`, `number-input`, `dialog`, `sheet`, `alert-dialog`, `popover`,
   `tooltip`, `tabs`, `select`, and the app-level `toaster` delivery path.
 - No shared `components/ui` primitive wrapper remains backed by a Radix
-  interaction primitive. Radix Slot can stay temporarily for `asChild`
+  interaction primitive. A local Slot helper now preserves `asChild`
   composition while migrated feature surfaces still depend on that contract.
-- The old direct Radix primitive package dependencies have been removed; only
-  `@radix-ui/react-slot` remains for `button`/`badge` `asChild` composition.
+- The old direct Radix primitive package dependencies, `@radix-ui/react-slot`,
+  and the shadcn package have been removed.
 - Feature surfaces still need visual and keyboard/focus checks before the final
   cleanup gate. New v5 surfaces should prefer Mantine primitives directly unless
   they need one of the compatibility wrappers above.
@@ -69,10 +69,8 @@ High-traffic feature surfaces:
 | Chat/activity        | chat sheets, floating chat, activity feed                                            | Mantine overlays     |
 | Archive/backlog      | archive and backlog list/filter pages                                                | Mantine tables/forms |
 
-Package dependencies still tied to the old primitive layer:
+Legacy helper dependencies still tied to compatibility wrappers:
 
-- `@radix-ui/react-slot` for `button`/`badge` `asChild` composition
-- shadcn CLI/package
 - `class-variance-authority`
 - `tailwind-merge`
 - Tailwind animation helpers used by shadcn-style primitives
@@ -268,6 +266,13 @@ Recommended order:
 8. Dashboard shell and drilldowns
 9. Chat/activity overlays
 10. Board filter/bulk action chrome while preserving custom board internals
+
+Phase 3 progress:
+
+- Auth/setup screens and the app shell/header/command palette have an initial
+  direct Mantine surface slice.
+- Archive and backlog list/filter pages now use direct Mantine layout and form
+  controls while preserving custom task card/list behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
