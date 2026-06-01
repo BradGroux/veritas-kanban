@@ -1,16 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { API_BASE } from '@/lib/config';
 import { Plus, X, Ban, CheckCircle2, Link as LinkIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { ActionIcon, Badge, Button, Group, Paper, Select, Stack, Text } from '@mantine/core';
 import { useTasks, isTaskBlocked } from '@/hooks/useTasks';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
@@ -36,8 +27,11 @@ export function DependenciesSection({
   const addDependsOnButtonRef = useRef<HTMLButtonElement>(null);
   const addBlocksButtonRef = useRef<HTMLButtonElement>(null);
 
-  const dependsOn = task.dependencies?.depends_on || [];
-  const blocks = task.dependencies?.blocks || [];
+  const dependsOn = useMemo(
+    () => task.dependencies?.depends_on || [],
+    [task.dependencies?.depends_on]
+  );
+  const blocks = useMemo(() => task.dependencies?.blocks || [], [task.dependencies?.blocks]);
 
   // Get available tasks (not self, not already in relationship)
   const availableTasksForDependsOn = useMemo(() => {
@@ -84,7 +78,7 @@ export function DependenciesSection({
       }
 
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
 
       toast({
         title: 'Dependency added',
@@ -121,13 +115,13 @@ export function DependenciesSection({
       }
 
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
 
       toast({
         title: 'Dependency removed',
         description: 'Successfully removed dependency',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to remove dependency',
@@ -137,31 +131,35 @@ export function DependenciesSection({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Label className="text-muted-foreground flex items-center gap-2">
+    <Stack gap="md">
+      <Group justify="space-between" align="center">
+        <Group gap="xs" className="text-muted-foreground">
           <LinkIcon className="h-4 w-4" aria-hidden="true" />
-          Dependencies
-        </Label>
+          <Text size="sm" fw={500}>
+            Dependencies
+          </Text>
+        </Group>
         {isCurrentlyBlocked && (
-          <Badge variant="destructive" className="text-xs">
-            <Ban className="h-3 w-3 mr-1" aria-hidden="true" />
+          <Badge color="red" variant="filled" size="sm" leftSection={<Ban className="h-3 w-3" />}>
             Blocked
           </Badge>
         )}
-      </div>
+      </Group>
 
       {/* Depends On Section */}
-      <div className="space-y-2">
-        <div className="text-sm font-medium text-foreground/70">Depends On</div>
+      <Stack gap="xs">
+        <Text size="sm" fw={500} className="text-foreground/70">
+          Depends On
+        </Text>
 
         {dependsOnTasks.length > 0 && (
-          <div className="space-y-1">
+          <Stack gap={4}>
             {dependsOnTasks.map((dep) => (
-              <div
+              <Paper
                 key={dep.id}
+                radius="md"
                 className={cn(
-                  'flex items-center gap-2 p-2 rounded-md bg-muted/50 group',
+                  'group flex items-center gap-2 bg-muted/50 p-2',
                   dep.status === 'done' && 'opacity-60'
                 )}
               >
@@ -181,146 +179,139 @@ export function DependenciesSection({
                 >
                   {dep.title}
                 </span>
-                <Badge variant="secondary" className="text-xs">
+                <Badge color="gray" variant="light" size="sm">
                   {dep.status}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                  onClick={() => handleRemoveDependency(dep.id)}
+                  onClick={() => {
+                    void handleRemoveDependency(dep.id);
+                  }}
                   aria-label={`Remove dependency: ${dep.title}`}
                 >
                   <X className="h-3 w-3" aria-hidden="true" />
-                </Button>
-              </div>
+                </ActionIcon>
+              </Paper>
             ))}
-          </div>
+          </Stack>
         )}
 
         {/* Add depends_on */}
         {isAddingDependsOn ? (
-          <div className="flex gap-2">
-            <Select onValueChange={(id) => handleAddDependency(id, 'depends_on')}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select a task this depends on..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTasksForDependsOn.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No available tasks
-                  </div>
-                ) : (
-                  availableTasksForDependsOn.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="truncate">{t.title}</span>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+          <Group gap="xs" align="flex-start" wrap="nowrap">
+            <Select
+              aria-label="Select dependency task"
+              className="flex-1"
+              placeholder="Select a task this depends on..."
+              data={availableTasksForDependsOn.map((t) => ({ value: t.id, label: t.title }))}
+              nothingFoundMessage="No available tasks"
+              onChange={(id) => {
+                if (id) void handleAddDependency(id, 'depends_on');
+              }}
+            />
             <Button
-              variant="ghost"
-              size="sm"
+              variant="subtle"
+              size="xs"
               onClick={() => setIsAddingDependsOn(false)}
               aria-label="Cancel adding dependency"
             >
               Cancel
             </Button>
-          </div>
+          </Group>
         ) : (
           <Button
             ref={addDependsOnButtonRef}
             variant="outline"
-            size="sm"
+            size="xs"
             className="w-full"
             onClick={() => setIsAddingDependsOn(true)}
+            leftSection={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
-            <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
             Add Dependency
           </Button>
         )}
-      </div>
+      </Stack>
 
       {/* Blocks Section */}
-      <div className="space-y-2 border-t pt-3">
-        <div className="text-sm font-medium text-foreground/70">Blocks</div>
+      <Stack gap="xs" className="border-t pt-3">
+        <Text size="sm" fw={500} className="text-foreground/70">
+          Blocks
+        </Text>
 
         {blocksTasks.length > 0 && (
-          <div className="space-y-1">
+          <Stack gap={4}>
             {blocksTasks.map((blocked) => (
-              <div
+              <Paper
                 key={blocked.id}
-                className="flex items-center gap-2 p-2 rounded-md bg-muted/50 group"
+                radius="md"
+                className="group flex items-center gap-2 bg-muted/50 p-2"
               >
                 <Ban className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden="true" />
                 <span className="flex-1 text-sm truncate">{blocked.title}</span>
-                <Badge variant="secondary" className="text-xs">
+                <Badge color="gray" variant="light" size="sm">
                   {blocked.status}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                  onClick={() => handleRemoveDependency(blocked.id)}
+                  onClick={() => {
+                    void handleRemoveDependency(blocked.id);
+                  }}
                   aria-label={`Remove blocker: ${blocked.title}`}
                 >
                   <X className="h-3 w-3" aria-hidden="true" />
-                </Button>
-              </div>
+                </ActionIcon>
+              </Paper>
             ))}
-          </div>
+          </Stack>
         )}
 
         {/* Add blocks */}
         {isAddingBlocks ? (
-          <div className="flex gap-2">
-            <Select onValueChange={(id) => handleAddDependency(id, 'blocks')}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select a task this blocks..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTasksForBlocks.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No available tasks
-                  </div>
-                ) : (
-                  availableTasksForBlocks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="truncate">{t.title}</span>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+          <Group gap="xs" align="flex-start" wrap="nowrap">
+            <Select
+              aria-label="Select blocked task"
+              className="flex-1"
+              placeholder="Select a task this blocks..."
+              data={availableTasksForBlocks.map((t) => ({ value: t.id, label: t.title }))}
+              nothingFoundMessage="No available tasks"
+              onChange={(id) => {
+                if (id) void handleAddDependency(id, 'blocks');
+              }}
+            />
             <Button
-              variant="ghost"
-              size="sm"
+              variant="subtle"
+              size="xs"
               onClick={() => setIsAddingBlocks(false)}
               aria-label="Cancel adding blocker"
             >
               Cancel
             </Button>
-          </div>
+          </Group>
         ) : (
           <Button
             ref={addBlocksButtonRef}
             variant="outline"
-            size="sm"
+            size="xs"
             className="w-full"
             onClick={() => setIsAddingBlocks(true)}
+            leftSection={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
-            <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
             Add Blocker
           </Button>
         )}
-      </div>
+      </Stack>
 
       {dependsOnTasks.length === 0 && blocksTasks.length === 0 && (
-        <p className="text-xs text-muted-foreground text-center pt-2">
+        <Text size="xs" c="dimmed" ta="center" pt="xs">
           No dependencies. This task is independent.
-        </p>
+        </Text>
       )}
-    </div>
+    </Stack>
   );
 }

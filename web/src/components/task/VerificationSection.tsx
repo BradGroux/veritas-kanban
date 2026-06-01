@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { Plus, Trash2, ShieldCheck, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import {
+  ActionIcon,
+  Box,
+  Button,
+  Checkbox,
+  Group,
+  Progress,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import {
   useAddVerificationStep,
   useUpdateVerificationStep,
@@ -56,7 +63,7 @@ export function VerificationSection({ task }: VerificationSectionProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleAddStep();
+      void handleAddStep();
     }
   };
 
@@ -70,95 +77,109 @@ export function VerificationSection({ task }: VerificationSectionProps) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+    <Stack gap="sm">
+      <Group justify="space-between" align="center">
+        <Group gap={6}>
           <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          <Label className="text-muted-foreground">Done Criteria</Label>
-        </div>
+          <Text size="sm" c="dimmed" fw={500}>
+            Done Criteria
+          </Text>
+        </Group>
         {totalCount > 0 && (
-          <span className="text-xs text-muted-foreground">
+          <Text size="xs" c="dimmed">
             {checkedCount}/{totalCount} verified
-          </span>
+          </Text>
         )}
-      </div>
+      </Group>
 
       {/* Progress bar */}
       {totalCount > 0 && (
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full transition-all duration-300',
-              checkedCount === totalCount ? 'bg-green-500' : 'bg-primary'
-            )}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <Progress
+          value={progress}
+          size="xs"
+          radius="xl"
+          color={checkedCount === totalCount ? 'green' : 'violet'}
+          aria-label="Done criteria progress"
+        />
       )}
 
       {/* Verification step list */}
-      <div className="space-y-1">
+      <Stack gap={4}>
         {steps.map((step) => (
-          <div
+          <Group
             key={step.id}
+            align="flex-start"
+            gap="xs"
             className={cn(
-              'flex items-start gap-2 p-2 rounded-md group hover:bg-muted/50 transition-colors',
+              'group rounded-md p-2 transition-colors hover:bg-muted/50',
               step.checked && 'opacity-70'
             )}
           >
             <Checkbox
               checked={step.checked}
-              onCheckedChange={() => handleToggleStep(step)}
-              className={cn(
-                'flex-shrink-0 mt-0.5',
-                step.checked &&
-                  'data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600'
-              )}
+              onChange={() => {
+                void handleToggleStep(step);
+              }}
+              color="green"
+              className="mt-0.5 flex-shrink-0"
+              aria-label={`Mark verification step ${step.description}`}
             />
-            <div className="flex-1 min-w-0">
-              <span className={cn('text-sm', step.checked && 'line-through text-muted-foreground')}>
+            <Box className="min-w-0 flex-1">
+              <Text
+                component="span"
+                size="sm"
+                className={cn(step.checked && 'text-muted-foreground line-through')}
+              >
                 {step.description}
-              </span>
+              </Text>
               {step.checked && step.checkedAt && (
-                <div className="flex items-center gap-1 mt-0.5">
+                <Group gap={4} mt={2}>
                   <Check className="h-3 w-3 text-green-500" />
-                  <span className="text-xs text-green-500/80">
+                  <Text size="xs" c="green.5">
                     {formatTimestamp(step.checkedAt)}
-                  </span>
-                </div>
+                  </Text>
+                </Group>
               )}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
+            </Box>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
               className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-              onClick={() => handleDeleteStep(step.id)}
+              onClick={() => {
+                void handleDeleteStep(step.id);
+              }}
+              aria-label={`Delete verification step: ${step.description}`}
             >
               <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-            </Button>
-          </div>
+            </ActionIcon>
+          </Group>
         ))}
-      </div>
+      </Stack>
 
       {/* Add verification step input */}
-      <div className="flex gap-2">
-        <Input
+      <Group gap="xs" align="flex-start" wrap="nowrap">
+        <TextInput
+          aria-label="New verification step"
           value={newDescription}
-          onChange={(e) => setNewDescription(e.target.value)}
+          onChange={(e) => setNewDescription(e.currentTarget.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add verification step..."
-          className="text-sm"
+          className="flex-1 text-sm"
           disabled={isAdding}
         />
         <Button
-          size="icon"
-          onClick={handleAddStep}
+          size="sm"
+          onClick={() => {
+            void handleAddStep();
+          }}
           disabled={!newDescription.trim() || isAdding}
-          className="h-9 w-9 shrink-0"
+          className="shrink-0"
+          aria-label="Add verification step"
         >
           <Plus className="h-4 w-4" />
         </Button>
-      </div>
-    </div>
+      </Group>
+    </Stack>
   );
 }
