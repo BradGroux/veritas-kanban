@@ -3,8 +3,9 @@
  */
 
 import { memo } from 'react';
+import type { ElementType } from 'react';
+import { Group, Paper, SimpleGrid, Text, ThemeIcon } from '@mantine/core';
 import { BarChart3, Activity, CheckCircle2, XCircle, TrendingUp, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import type { WorkflowStats, WorkflowPeriod } from '@/hooks/useWorkflowStats';
 import { formatDuration } from '@/hooks/useMetrics';
 
@@ -18,7 +19,7 @@ export const WorkflowSummaryCards = memo(function WorkflowSummaryCards({
   period,
 }: WorkflowSummaryCardsProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md">
       <SummaryCard
         title="Total Workflows"
         value={stats.totalWorkflows}
@@ -52,7 +53,7 @@ export const WorkflowSummaryCards = memo(function WorkflowSummaryCards({
         icon={Clock}
         color="blue"
       />
-    </div>
+    </SimpleGrid>
   );
 });
 
@@ -60,31 +61,31 @@ interface SummaryCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  icon: React.ElementType;
+  icon: ElementType;
   color: 'blue' | 'green' | 'red' | 'yellow';
 }
 
 function SummaryCard({ title, value, subtitle, icon: Icon, color }: SummaryCardProps) {
-  const colorClasses = {
-    blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  };
-
   return (
-    <div className="p-6 rounded-lg border bg-card">
-      <div className="flex items-start justify-between">
+    <Paper className="p-6" radius="md" withBorder>
+      <Group align="flex-start" justify="space-between">
         <div>
-          <p className="text-sm text-muted-foreground mb-1">{title}</p>
-          <p className="text-3xl font-bold">
-            {value} {subtitle && <span className="text-sm text-muted-foreground">{subtitle}</span>}
-          </p>
+          <Text size="sm" c="dimmed" mb={4}>
+            {title}
+          </Text>
+          <Text size="xl" fw={700} className="text-3xl">
+            {value}{' '}
+            {subtitle && (
+              <Text span size="sm" c="dimmed">
+                {subtitle}
+              </Text>
+            )}
+          </Text>
         </div>
-        <div className={cn('p-3 rounded-lg', colorClasses[color])}>
+        <ThemeIcon variant="light" color={color} size="xl" radius="md">
           <Icon className="h-6 w-6" />
-        </div>
-      </div>
-    </div>
+        </ThemeIcon>
+      </Group>
+    </Paper>
   );
 }

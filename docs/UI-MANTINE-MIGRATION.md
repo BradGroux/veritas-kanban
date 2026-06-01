@@ -374,6 +374,12 @@ Phase 3 progress:
   while preserving agent start/stop/message flows, template merge previews,
   force-overwrite/custom-variable application, metrics expansion/export, and
   blueprint/custom-variable rendering.
+- Workflow browse, dashboard, run list, active/recent run cards, summary cards,
+  health metrics, and run detail/timeline surfaces now use direct Mantine
+  select, text input, badge, button, skeleton, paper, progress, stack, group,
+  simple grid, alert, code, text, title, and theme icon primitives while
+  preserving workflow search, run start, dashboard filters, run selection, live
+  status rendering, health progress, resume action, and step output expansion.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

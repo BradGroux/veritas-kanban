@@ -3,7 +3,7 @@
  */
 
 import { memo } from 'react';
-import { cn } from '@/lib/utils';
+import { Group, Paper, Progress, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { formatDuration } from '@/hooks/useMetrics';
 
 interface WorkflowHealthMetricsProps {
@@ -22,11 +22,11 @@ export const WorkflowHealthMetrics = memo(function WorkflowHealthMetrics({
   workflowStats,
 }: WorkflowHealthMetricsProps) {
   return (
-    <div className="space-y-3">
+    <Stack gap="sm">
       {workflowStats.map((stats) => (
         <WorkflowHealthCard key={stats.workflowId} stats={stats} />
       ))}
-    </div>
+    </Stack>
   );
 });
 
@@ -47,50 +47,49 @@ const WorkflowHealthCard = memo(function WorkflowHealthCard({ stats }: WorkflowH
   const healthColor =
     stats.successRate >= 0.8 ? 'green' : stats.successRate >= 0.5 ? 'yellow' : 'red';
 
-  const colorClasses = {
-    green: 'bg-green-500',
-    yellow: 'bg-yellow-500',
-    red: 'bg-red-500',
-  };
-
   return (
-    <div className="p-4 rounded-lg border bg-card">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold mb-2">{stats.workflowName}</h3>
+    <Paper className="p-4" radius="md" withBorder>
+      <Group align="flex-start" justify="space-between" gap="md">
+        <Stack gap="sm" className="flex-1 min-w-0">
+          <Title order={3} className="text-base">
+            {stats.workflowName}
+          </Title>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md" className="text-sm">
             <div>
-              <p className="text-muted-foreground">Runs</p>
-              <p className="font-medium">{stats.runs}</p>
+              <Text c="dimmed">Runs</Text>
+              <Text fw={500}>{stats.runs}</Text>
             </div>
             <div>
-              <p className="text-muted-foreground">Success Rate</p>
-              <p className="font-medium">{successRatePercent}%</p>
+              <Text c="dimmed">Success Rate</Text>
+              <Text fw={500}>{successRatePercent}%</Text>
             </div>
             <div>
-              <p className="text-muted-foreground">Completed</p>
-              <p className="font-medium text-green-600">{stats.completed}</p>
+              <Text c="dimmed">Completed</Text>
+              <Text fw={500} c="green">
+                {stats.completed}
+              </Text>
             </div>
             <div>
-              <p className="text-muted-foreground">Failed</p>
-              <p className="font-medium text-red-600">{stats.failed}</p>
+              <Text c="dimmed">Failed</Text>
+              <Text fw={500} c="red">
+                {stats.failed}
+              </Text>
             </div>
-          </div>
+          </SimpleGrid>
 
-          <div className="mt-3 flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">
               Avg Duration: {formatDuration(stats.avgDuration)}
-            </div>
-            <div className="flex-1 max-w-xs h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className={cn('h-full transition-all', colorClasses[healthColor])}
-                style={{ width: `${stats.successRate * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            </Text>
+            <Progress
+              className="flex-1 max-w-xs"
+              value={stats.successRate * 100}
+              color={healthColor}
+            />
+          </Group>
+        </Stack>
+      </Group>
+    </Paper>
   );
 });

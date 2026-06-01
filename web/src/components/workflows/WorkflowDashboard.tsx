@@ -9,18 +9,19 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
+  Badge,
+  Button,
+  Group,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Skeleton,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title,
+} from '@mantine/core';
 import { ArrowLeft, Activity, Clock, Zap, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { WorkflowRunView } from './WorkflowRunView';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
@@ -130,34 +131,41 @@ export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+      <Group justify="space-between" align="center">
+        <Group gap="md" align="center">
+          <Button
+            variant="subtle"
+            size="sm"
+            leftSection={<ArrowLeft className="h-4 w-4" />}
+            onClick={onBack}
+          >
             Back to Workflows
           </Button>
-          <h1 className="text-2xl font-bold">Workflow Dashboard</h1>
-        </div>
+          <Title order={1} className="text-2xl">
+            Workflow Dashboard
+          </Title>
+        </Group>
 
-        <Select value={period} onValueChange={(value) => setPeriod(value as WorkflowPeriod)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="24h">Last 24 hours</SelectItem>
-            <SelectItem value="7d">Last 7 days</SelectItem>
-            <SelectItem value="30d">Last 30 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        <Select
+          aria-label="Workflow dashboard period"
+          className="w-[180px]"
+          value={period}
+          onChange={(value) => setPeriod((value ?? '7d') as WorkflowPeriod)}
+          data={[
+            { value: '24h', label: 'Last 24 hours' },
+            { value: '7d', label: 'Last 7 days' },
+            { value: '30d', label: 'Last 30 days' },
+          ]}
+        />
+      </Group>
 
       {/* Summary Cards */}
       {isStatsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
+            <Skeleton key={i} h={128} />
           ))}
         </div>
       ) : stats ? (
@@ -165,61 +173,75 @@ export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
       ) : null}
 
       {/* Active Runs */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Active Runs</h2>
-          <Badge variant="secondary">{activeRuns.length}</Badge>
+      <Stack gap="md">
+        <Group gap="xs">
+          <ThemeIcon variant="transparent" color="gray" size="sm">
+            <Activity className="h-5 w-5" />
+          </ThemeIcon>
+          <Title order={2} className="text-lg">
+            Active Runs
+          </Title>
+          <Badge variant="light">{activeRuns.length}</Badge>
           {!isConnected && (
-            <Badge variant="outline" className="text-yellow-600">
-              <AlertCircle className="h-3 w-3 mr-1" />
+            <Badge
+              color="yellow"
+              variant="outline"
+              leftSection={<AlertCircle className="h-3 w-3" />}
+            >
               WebSocket disconnected
             </Badge>
           )}
-        </div>
+        </Group>
 
         {isActiveRunsLoading ? (
-          <div className="space-y-3">
+          <Stack gap="sm">
             {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-24" />
+              <Skeleton key={i} h={96} />
             ))}
-          </div>
+          </Stack>
         ) : activeRuns.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">No active runs</div>
+          <Text ta="center" c="dimmed" py="xl">
+            No active runs
+          </Text>
         ) : (
           <ActiveRunsList runs={activeRuns} onSelectRun={setSelectedRunId} />
         )}
-      </div>
+      </Stack>
 
       {/* Recent Runs */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Recent Runs</h2>
-            <Badge variant="secondary">{recentRuns.length}</Badge>
-          </div>
+      <Stack gap="md">
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <ThemeIcon variant="transparent" color="gray" size="sm">
+              <Clock className="h-5 w-5" />
+            </ThemeIcon>
+            <Title order={2} className="text-lg">
+              Recent Runs
+            </Title>
+            <Badge variant="light">{recentRuns.length}</Badge>
+          </Group>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="blocked">Blocked</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+          <Select
+            aria-label="Recent workflow run status filter"
+            className="w-[180px]"
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value ?? 'all')}
+            data={[
+              { value: 'all', label: 'All Statuses' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'failed', label: 'Failed' },
+              { value: 'blocked', label: 'Blocked' },
+              { value: 'pending', label: 'Pending' },
+            ]}
+          />
+        </Group>
 
         {isRecentRunsLoading ? (
-          <div className="space-y-3">
+          <Stack gap="sm">
             {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-20" />
+              <Skeleton key={i} h={80} />
             ))}
-          </div>
+          </Stack>
         ) : (
           <RecentRunsList
             runs={recentRuns}
@@ -227,19 +249,23 @@ export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
             onSelectRun={setSelectedRunId}
           />
         )}
-      </div>
+      </Stack>
 
       {/* Workflow Health */}
       {stats && stats.perWorkflow.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Workflow Health</h2>
-          </div>
+        <Stack gap="md">
+          <Group gap="xs">
+            <ThemeIcon variant="transparent" color="gray" size="sm">
+              <Zap className="h-5 w-5" />
+            </ThemeIcon>
+            <Title order={2} className="text-lg">
+              Workflow Health
+            </Title>
+          </Group>
 
           <WorkflowHealthMetrics workflowStats={stats.perWorkflow} />
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }

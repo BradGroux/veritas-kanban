@@ -3,7 +3,7 @@
  */
 
 import { memo } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, Group, Paper, Progress, Stack, Text } from '@mantine/core';
 import { PlayCircle } from 'lucide-react';
 import type { WorkflowRun } from '@/hooks/useWorkflowStats';
 
@@ -17,11 +17,11 @@ export const ActiveRunsList = memo(function ActiveRunsList({
   onSelectRun,
 }: ActiveRunsListProps) {
   return (
-    <div className="space-y-3">
+    <Stack gap="sm">
       {runs.map((run) => (
         <ActiveRunCard key={run.id} run={run} onClick={() => onSelectRun(run.id)} />
       ))}
-    </div>
+    </Stack>
   );
 });
 
@@ -34,10 +34,13 @@ const ActiveRunCard = memo(function ActiveRunCard({ run, onClick }: ActiveRunCar
   const duration = Math.floor((Date.now() - new Date(run.startedAt).getTime()) / 1000);
   const completedSteps = run.steps?.filter((s) => s.status === 'completed').length;
   const totalSteps = run.steps?.length ?? 0;
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   return (
-    <div
-      className="p-4 rounded-lg border-2 border-blue-500 bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+    <Paper
+      className="p-4 border-2 border-blue-500 transition-colors cursor-pointer hover:bg-accent/50"
+      radius="md"
+      withBorder
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -48,9 +51,9 @@ const ActiveRunCard = memo(function ActiveRunCard({ run, onClick }: ActiveRunCar
         }
       }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <Group align="flex-start" justify="space-between" gap="md">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
+          <Group gap="sm" mb="xs">
             <Badge variant="outline" className="text-xs font-mono">
               {run.id}
             </Badge>
@@ -58,29 +61,30 @@ const ActiveRunCard = memo(function ActiveRunCard({ run, onClick }: ActiveRunCar
               <PlayCircle className="h-3 w-3 mr-1" />
               Running
             </Badge>
-          </div>
+          </Group>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-            <div>Started: {new Date(run.startedAt).toLocaleString()}</div>
-            <div>
+          <Group gap="md" mb="xs" className="text-sm text-muted-foreground">
+            <Text span inherit>
+              Started: {new Date(run.startedAt).toLocaleString()}
+            </Text>
+            <Text span inherit>
               Duration: {Math.floor(duration / 60)}m {duration % 60}s
-            </div>
-            {run.currentStep && <div className="font-medium">Current: {run.currentStep}</div>}
-          </div>
+            </Text>
+            {run.currentStep && (
+              <Text span inherit fw={500}>
+                Current: {run.currentStep}
+              </Text>
+            )}
+          </Group>
 
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">
               Progress: {completedSteps}/{totalSteps} steps
-            </div>
-            <div className="flex-1 max-w-xs h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all"
-                style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
-              />
-            </div>
-          </div>
+            </Text>
+            <Progress className="flex-1 max-w-xs" value={progress} color="blue" />
+          </Group>
         </div>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 });
