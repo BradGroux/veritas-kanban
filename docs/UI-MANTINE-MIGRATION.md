@@ -289,6 +289,9 @@ Phase 3 progress:
 - General settings now uses direct Mantine switch, text input, select, button,
   badge, and icon action primitives for theme, profile, repository, and default
   agent controls.
+- Security settings and the settings error fallback now use direct Mantine
+  password input and button primitives while preserving password-change,
+  visibility, reset, and retry behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

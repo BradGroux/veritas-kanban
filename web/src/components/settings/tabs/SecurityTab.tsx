@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button, PasswordInput } from '@mantine/core';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -92,34 +90,32 @@ export function SecurityTab() {
 
         <div className="space-y-4 max-w-md">
           <div className="space-y-2">
-            <Label htmlFor="current-password">Current Password</Label>
-            <div className="relative">
-              <Input
-                id="current-password"
-                type={showPasswords ? 'text' : 'password'}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPasswords(!showPasswords)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
+            <PasswordInput
+              id="current-password"
+              label="Current Password"
+              visible={showPasswords}
+              onVisibilityChange={setShowPasswords}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              visibilityToggleIcon={({ reveal }) =>
+                reveal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />
+              }
+            />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="new-password">New Password</Label>
-            <Input
+            <PasswordInput
               id="new-password"
-              type={showPasswords ? 'text' : 'password'}
+              label="New Password"
+              visible={showPasswords}
+              onVisibilityChange={setShowPasswords}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter new password (8+ characters)"
+              visibilityToggleIcon={({ reveal }) =>
+                reveal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />
+              }
             />
             {newPassword && (
               <div className="space-y-1">
@@ -141,13 +137,17 @@ export function SecurityTab() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-new-password">Confirm New Password</Label>
-            <Input
+            <PasswordInput
               id="confirm-new-password"
-              type={showPasswords ? 'text' : 'password'}
+              label="Confirm New Password"
+              visible={showPasswords}
+              onVisibilityChange={setShowPasswords}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
+              visibilityToggleIcon={({ reveal }) =>
+                reveal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />
+              }
             />
             {confirmPassword && !passwordsMatch && (
               <p className="text-xs text-destructive">Passwords do not match</p>
@@ -157,18 +157,10 @@ export function SecurityTab() {
           <Button
             onClick={handleChangePassword}
             disabled={!canChange || isChanging}
-            className="w-full"
+            fullWidth
+            leftSection={changeSuccess ? <Check className="w-4 h-4" /> : undefined}
           >
-            {isChanging ? (
-              'Changing...'
-            ) : changeSuccess ? (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Password Changed
-              </>
-            ) : (
-              'Change Password'
-            )}
+            {isChanging ? 'Changing...' : changeSuccess ? 'Password Changed' : 'Change Password'}
           </Button>
         </div>
       </section>
@@ -192,7 +184,7 @@ export function SecurityTab() {
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
+              <Button color="red" size="sm">
                 Reset All Security
               </Button>
             </AlertDialogTrigger>

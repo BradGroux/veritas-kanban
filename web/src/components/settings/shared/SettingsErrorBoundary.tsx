@@ -1,6 +1,6 @@
 import React, { Component, ReactNode } from 'react';
 import { AlertCircle, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@mantine/core';
 
 interface SettingsErrorBoundaryProps {
   tabName: string;
@@ -58,23 +58,28 @@ export class SettingsErrorBoundary extends Component<
                   This section failed to load
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  The {this.props.tabName} tab encountered an unexpected error and couldn't render properly.
+                  The {this.props.tabName} tab encountered an unexpected error and couldn't render
+                  properly.
                 </p>
-                
+
                 {this.state.error && (
                   <div className="pt-2">
-                    <button
+                    <Button
                       onClick={this.toggleErrorDetails}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      variant="subtle"
+                      color="gray"
+                      size="compact-xs"
+                      leftSection={
+                        this.state.errorExpanded ? (
+                          <ChevronUp className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )
+                      }
                     >
-                      {this.state.errorExpanded ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
                       {this.state.errorExpanded ? 'Hide' : 'Show'} error details
-                    </button>
-                    
+                    </Button>
+
                     {this.state.errorExpanded && (
                       <div className="mt-2 p-3 rounded bg-background/50 border border-border">
                         <code className="text-xs text-red-400 break-all whitespace-pre-wrap">
@@ -97,9 +102,8 @@ export class SettingsErrorBoundary extends Component<
                 onClick={this.handleReset}
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                leftSection={<RotateCcw className="h-3.5 w-3.5" />}
               >
-                <RotateCcw className="h-3.5 w-3.5" />
                 Try Again
               </Button>
             </div>
