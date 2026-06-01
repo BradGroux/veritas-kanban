@@ -193,10 +193,10 @@ export function Header() {
             <WebSocketIndicator />
           </Group>
 
-          <Group gap="xs" wrap="nowrap" role="toolbar" aria-label="Board actions">
+          <Group gap="xs" wrap="wrap" role="toolbar" aria-label="Board actions" className="min-w-0">
             <Button
               variant="filled"
-              size="xs"
+              size="sm"
               leftSection={<Plus className="h-4 w-4" aria-hidden="true" />}
               onClick={openCreateDialog}
               disabled={!canCreateTask}
@@ -287,7 +287,7 @@ export function Header() {
             <Button
               variant="subtle"
               color="gray"
-              size="xs"
+              size="sm"
               leftSection={<Search className="h-4 w-4" aria-hidden="true" />}
               onClick={() =>
                 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))

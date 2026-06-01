@@ -118,8 +118,8 @@ export function ActivityClock({ period }: ActivityClockProps) {
           w={260}
           label="24-hour ring showing when agent state transitions happen. Brighter/thicker segments mean more activity at that hour. Midnight is at top, noon at bottom. Based on status history."
         >
-          <ActionIcon aria-label="Activity clock help" size="xs" variant="subtle">
-            <Info className="w-3 h-3 text-muted-foreground" />
+          <ActionIcon aria-label="Activity clock help" size="sm" variant="subtle">
+            <Info className="h-4 w-4 text-muted-foreground" />
           </ActionIcon>
         </Tooltip>
       </Group>

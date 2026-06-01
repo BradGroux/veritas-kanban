@@ -103,12 +103,14 @@ export function UserMenu({ onOpenSecuritySettings, onOpenIdentitySettings }: Use
         <Button
           variant="subtle"
           color="gray"
-          size="xs"
+          size="sm"
+          aria-label="Session menu"
           leftSection={<Lock className="h-4 w-4 text-emerald-500" aria-hidden="true" />}
           rightSection={
             <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
           }
           title="Session menu"
+          className="min-h-8"
           onClick={() => setOpen((current) => !current)}
         >
           <Text span size="xs" c="dimmed" className="hidden sm:inline">

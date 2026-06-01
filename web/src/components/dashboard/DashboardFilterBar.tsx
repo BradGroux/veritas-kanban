@@ -54,14 +54,14 @@ export function DashboardFilterBar({
   const isCustomActive = period === 'custom';
 
   return (
-    <Group className="w-full border-b pb-4" gap="sm" justify="space-between" wrap="nowrap">
+    <Group className="w-full border-b pb-4" gap="sm" justify="space-between" wrap="wrap">
       {/* Left: Preset Pills */}
-      <Group gap={6} className="shrink-0" wrap="nowrap">
+      <Group gap={6} className="min-w-0 shrink" wrap="wrap">
         {PERIOD_PRESETS.map((preset) => (
           <Button
             key={preset.value}
             variant={isPresetActive(preset.value) ? 'filled' : 'subtle'}
-            size="xs"
+            size="sm"
             onClick={() => handlePresetClick(preset.value)}
           >
             {preset.label}
@@ -70,11 +70,16 @@ export function DashboardFilterBar({
       </Group>
 
       {/* Right: Project + Custom Range + Export */}
-      <Group gap="sm" justify="flex-end" className="ml-auto shrink-0" wrap="nowrap">
+      <Group
+        gap="sm"
+        justify="flex-end"
+        className="w-full min-w-0 sm:ml-auto sm:w-auto sm:shrink-0"
+        wrap="wrap"
+      >
         {/* Project Selector */}
         <Select
           aria-label="Dashboard project filter"
-          size="xs"
+          size="sm"
           w={160}
           value={project || 'all'}
           onChange={(value) => onProjectChange(value === 'all' ? undefined : (value ?? undefined))}
@@ -85,14 +90,14 @@ export function DashboardFilterBar({
         />
 
         {/* Custom Date Range */}
-        <Group gap={6} wrap="nowrap">
+        <Group gap={6} wrap="wrap">
           <Text size="xs" c="dimmed" className="whitespace-nowrap">
             Custom:
           </Text>
           <TextInput
             aria-label="Custom date from"
             type="date"
-            size="xs"
+            size="sm"
             w={130}
             value={customFrom}
             onChange={(e) => setCustomFrom(e.target.value)}
@@ -104,14 +109,14 @@ export function DashboardFilterBar({
           <TextInput
             aria-label="Custom date to"
             type="date"
-            size="xs"
+            size="sm"
             w={130}
             value={customTo}
             onChange={(e) => setCustomTo(e.target.value)}
             min={customFrom || undefined}
           />
           <Button
-            size="xs"
+            size="sm"
             variant={isCustomActive ? 'filled' : 'outline'}
             onClick={handleCustomApply}
             disabled={!customFrom || !customTo}
@@ -123,8 +128,8 @@ export function DashboardFilterBar({
         {/* Export Button */}
         <Button
           variant="outline"
-          size="xs"
-          leftSection={<Download className="h-3 w-3" />}
+          size="sm"
+          leftSection={<Download className="h-4 w-4" />}
           onClick={onExportClick}
         >
           Export

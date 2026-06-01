@@ -30,6 +30,7 @@ const requiredScripts = [
   'build',
   'lint',
   'lint:budget',
+  'qa:mantine',
   'test:e2e',
   'test:load',
   'test:load:smoke',

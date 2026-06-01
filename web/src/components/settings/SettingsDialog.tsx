@@ -173,6 +173,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const dialogContentRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const firstTabButtonRef = useRef<HTMLButtonElement>(null);
   const [resetAllOpen, setResetAllOpen] = useState(false);
@@ -301,6 +302,53 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     [activeTab, canUseTab]
   );
 
+  const handleDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return;
+
+    const container = dialogContentRef.current;
+    if (!container) return;
+
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        [
+          'a[href]',
+          'button:not([disabled])',
+          'input:not([type="hidden"]):not([disabled])',
+          'select:not([disabled])',
+          'textarea:not([disabled])',
+          '[role="button"]:not([aria-disabled="true"])',
+          '[role="combobox"]:not([aria-disabled="true"])',
+          '[role="tab"]:not([aria-disabled="true"])',
+          '[tabindex]:not([tabindex="-1"])',
+        ].join(',')
+      )
+    ).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+    });
+
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+
+    if (!active || !container.contains(active)) {
+      e.preventDefault();
+      first.focus();
+      return;
+    }
+
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
   const renderTab = () => {
     return (
       <Suspense fallback={<TabSkeleton />}>
@@ -386,13 +434,16 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       size={800}
       padding={0}
       centered
+      trapFocus
+      returnFocus
+      closeButtonProps={{ 'aria-label': 'Close settings' }}
       styles={{
         content: { height: '85vh', overflow: 'hidden' },
         body: { height: '100%', padding: 0 },
       }}
     >
       <ErrorBoundary level="section">
-        <div className="flex h-full min-h-0">
+        <div ref={dialogContentRef} className="flex h-full min-h-0" onKeyDown={handleDialogKeyDown}>
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
           <div className="hidden sm:flex flex-col w-48 border-r bg-muted/30 py-4">
             <div className="px-4 pb-3">
@@ -499,9 +550,10 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               }}
               data={mobileTabOptions}
               aria-label="Select settings section"
-              size="xs"
+              size="sm"
               checkIconPosition="right"
               className="w-40"
+              styles={{ input: { minHeight: '2rem' } }}
             />
           </div>
 

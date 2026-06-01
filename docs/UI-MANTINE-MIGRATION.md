@@ -418,14 +418,20 @@ Phase 3 progress:
 
 Target issue: `v5.0 QA: Mantine migration visual, accessibility, and cleanup gate`
 
-- Run visual smoke checks against desktop and mobile viewports.
+- Run `pnpm test:e2e -- e2e/mantine-qa-gate.spec.ts` to capture desktop
+  dark/light and mobile visual smoke evidence for the current route inventory
+  plus migrated overlays.
 - Run keyboard/focus checks for dialog, drawer, tabs, select, command/search,
-  task create/edit, and settings flows.
-- Measure bundle size after each large surface migration.
-- Remove unused Radix/shadcn dependencies only after import counts prove they
-  are unused.
-- Keep a cleanup ledger of removed wrappers and accepted retained custom
-  components.
+  task create/edit, settings, and auth/setup flows through the Mantine QA gate.
+- Run `pnpm --filter @veritas-kanban/web build` and then `pnpm qa:mantine` to
+  verify bundle output, active wrapper-import cleanup, dependency cleanup, and
+  v5 GA checklist coverage.
+- Remove unused Radix/shadcn dependencies only after import counts and bundle
+  output prove they are unused.
+- Keep a cleanup ledger of removed wrappers, accepted retained custom
+  components, and planned-but-not-yet-present surfaces. Current temporary
+  holdouts are unified work products, maintenance center, workflow visual
+  builder, and final run replay view.
 
 ## Component Mapping
 
@@ -482,6 +488,7 @@ Minimum gates for foundation and shared primitive PRs:
 - `pnpm --filter @veritas-kanban/web test`
 - `pnpm lint:budget`
 - `pnpm build`
+- `pnpm qa:mantine` after `pnpm --filter @veritas-kanban/web build`
 - visual smoke screenshots for app boot, board, task detail, create task,
   settings, command/search, and one mobile viewport once browser automation is
   added to the migration branch
@@ -492,6 +499,14 @@ Minimum gates for route-level migration PRs:
 - keyboard smoke for overlays/forms
 - desktop and mobile screenshot comparison
 - bundle-size note when a lazy chunk changes materially
+
+Minimum gate for closing #418:
+
+- `pnpm test:e2e -- e2e/mantine-qa-gate.spec.ts`
+- `pnpm --filter @veritas-kanban/web build`
+- `pnpm qa:mantine`
+- issue and PR notes list any temporary holdouts that map to not-yet-landed v5
+  feature issues
 
 ## Completion Criteria
 

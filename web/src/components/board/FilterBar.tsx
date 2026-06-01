@@ -52,9 +52,13 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-3" role="search" aria-label="Filter tasks">
+    <div
+      className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3"
+      role="search"
+      aria-label="Filter tasks"
+    >
       {/* Search */}
-      <div className="relative flex-1 max-w-sm">
+      <div className="relative w-full sm:max-w-sm sm:flex-1">
         <TextInput
           id="task-search"
           aria-label="Search tasks"
@@ -88,7 +92,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         disabled={projectsLoading}
         data={projectOptions}
         aria-label="Filter by project"
-        className="w-[160px]"
+        className="w-full sm:w-[160px]"
         allowDeselect={false}
       />
 
@@ -104,7 +108,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         disabled={typesLoading}
         data={typeOptions}
         aria-label="Filter by type"
-        className="w-[160px]"
+        className="w-full sm:w-[160px]"
         allowDeselect={false}
       />
 
@@ -116,7 +120,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         }
         data={agentOptions}
         aria-label="Filter by agent"
-        className="w-[160px]"
+        className="w-full sm:w-[160px]"
         allowDeselect={false}
       />
 

@@ -308,20 +308,25 @@ export function DesktopOnboardingPanel({
   return (
     <div
       className={cn(
-        'grid w-full gap-6 text-foreground lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]',
+        'grid w-full max-w-full min-w-0 gap-6 text-foreground lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]',
         compact ? 'max-w-5xl' : 'max-w-6xl'
       )}
     >
-      <section className="space-y-5">
+      <section className="min-w-0 space-y-5">
         <div className="space-y-3">
           <Badge variant="outline" color="cyan" tt="none">
             v5 Desktop Setup
           </Badge>
           <div className="space-y-2">
-            <h1 className={cn('font-bold tracking-normal', compact ? 'text-2xl' : 'text-3xl')}>
+            <h1
+              className={cn(
+                'break-words font-bold tracking-normal',
+                compact ? 'text-2xl' : 'text-3xl'
+              )}
+            >
               Choose setup path
             </h1>
-            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+            <p className="max-w-xl break-words text-sm leading-6 text-muted-foreground">
               Start with the board, then layer in agents, remote access, and recovery paths when
               they are needed.
             </p>
@@ -394,7 +399,7 @@ export function DesktopOnboardingPanel({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="min-w-0 space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           {setupModes.map((mode) => {
             const Icon = mode.icon;

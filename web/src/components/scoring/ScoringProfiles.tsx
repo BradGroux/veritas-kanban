@@ -363,6 +363,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Name</label>
                       <TextInput
+                        aria-label="Profile name"
                         value={draft.name}
                         onChange={(event) =>
                           setDraft((current) => ({ ...current, name: event.target.value }))
@@ -373,6 +374,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Composite Method</label>
                       <Select
+                        aria-label="Composite method"
                         value={draft.compositeMethod}
                         onChange={(value) =>
                           setDraft((current) => ({
@@ -392,6 +394,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Description</label>
                     <Textarea
+                      aria-label="Profile description"
                       value={draft.description || ''}
                       onChange={(event) =>
                         setDraft((current) => ({ ...current, description: event.target.value }))
@@ -430,6 +433,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                             <div className="flex items-center justify-between gap-3">
                               <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_180px_120px]">
                                 <TextInput
+                                  aria-label={`Scorer ${index + 1} name`}
                                   value={scorer.name}
                                   onChange={(event) =>
                                     updateScorer(index, (current) => ({
@@ -440,6 +444,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                   disabled={selectedProfile?.builtIn}
                                 />
                                 <Select
+                                  aria-label={`Scorer ${index + 1} type`}
                                   value={scorer.type}
                                   onChange={(value) => {
                                     if (!value) return;
@@ -455,6 +460,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                   allowDeselect={false}
                                 />
                                 <TextInput
+                                  aria-label={`Scorer ${index + 1} weight`}
                                   type="number"
                                   min="0"
                                   step="0.1"
@@ -491,6 +497,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                   Target
                                 </label>
                                 <Select
+                                  aria-label={`Scorer ${index + 1} target`}
                                   value={scorer.target || 'output'}
                                   onChange={(value) =>
                                     updateScorer(index, (current) => ({
@@ -510,6 +517,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                     Keywords
                                   </label>
                                   <TextInput
+                                    aria-label={`Scorer ${index + 1} keywords`}
                                     value={scorer.keywords.join(', ')}
                                     onChange={(event) =>
                                       updateScorer(index, (current) => ({
@@ -532,6 +540,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       Regex Pattern
                                     </label>
                                     <TextInput
+                                      aria-label={`Scorer ${index + 1} regex pattern`}
                                       value={scorer.pattern}
                                       onChange={(event) =>
                                         updateScorer(index, (current) => ({
@@ -547,6 +556,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       Flags
                                     </label>
                                     <TextInput
+                                      aria-label={`Scorer ${index + 1} regex flags`}
                                       value={scorer.flags || ''}
                                       onChange={(event) =>
                                         updateScorer(index, (current) => ({
@@ -567,6 +577,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       Value Path
                                     </label>
                                     <TextInput
+                                      aria-label={`Scorer ${index + 1} value path`}
                                       value={scorer.valuePath}
                                       onChange={(event) =>
                                         updateScorer(index, (current) => ({
@@ -579,6 +590,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-2">
                                     <TextInput
+                                      aria-label={`Scorer ${index + 1} minimum value`}
                                       type="number"
                                       placeholder="Min"
                                       value={scorer.min ?? ''}
@@ -594,6 +606,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       disabled={selectedProfile?.builtIn}
                                     />
                                     <TextInput
+                                      aria-label={`Scorer ${index + 1} maximum value`}
                                       type="number"
                                       placeholder="Max"
                                       value={scorer.max ?? ''}
@@ -618,6 +631,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                     Expression
                                   </label>
                                   <Textarea
+                                    aria-label={`Scorer ${index + 1} expression`}
                                     rows={3}
                                     value={scorer.expression}
                                     onChange={(event) =>

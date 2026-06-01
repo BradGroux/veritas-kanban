@@ -219,7 +219,7 @@ export function Dashboard() {
       {/* Agent Operations Row */}
       <div>
         {isLoading ? (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-32 rounded-lg" />
             ))}
@@ -233,7 +233,7 @@ export function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Tokens Card */}
               {widgets.showTokenUsage && (
                 <StatCard
@@ -309,7 +309,7 @@ export function Dashboard() {
 
       {/* Agent Comparison (left) + Agent Activity (right) */}
       {(widgets.showAgentComparison || widgets.showStatusTimeline) && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {widgets.showAgentComparison && <AgentComparison project={project} />}
           {widgets.showStatusTimeline && (
             <div className="rounded-lg border bg-card p-4">
@@ -321,7 +321,7 @@ export function Dashboard() {
 
       {/* Cost per Task + Agent Utilization */}
       {(widgets.showCostPerTask || widgets.showAgentUtilization) && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Cost per Task */}
           {widgets.showCostPerTask && (
             <div className="rounded-lg border bg-card p-4">
@@ -427,7 +427,7 @@ export function Dashboard() {
 
       {/* New Dashboard Widgets */}
       {(widgets.showWallTime || widgets.showSessionMetrics || widgets.showActivityClock) && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {widgets.showWallTime && <WallTimeToggle period={period} />}
           {widgets.showSessionMetrics && <SessionMetrics period={period} />}
           {widgets.showActivityClock && <ActivityClock period={period} />}
@@ -435,7 +435,7 @@ export function Dashboard() {
       )}
 
       {(widgets.showWhereTimeWent || widgets.showHourlyActivity) && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {widgets.showWhereTimeWent && <WhereTimeWent period={period} />}
           {widgets.showHourlyActivity && <HourlyActivityChart period={period} />}
         </div>

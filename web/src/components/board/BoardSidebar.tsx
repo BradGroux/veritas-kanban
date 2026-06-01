@@ -219,7 +219,7 @@ function AgentStatusPanel({ onTaskClick }: { onTaskClick?: (taskId: string) => v
                 return (
                   <button
                     key={agent.agent || i}
-                    className="flex items-start gap-2 w-full text-left px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                    className="flex min-h-8 items-start gap-2 w-full text-left px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
                     onClick={() => agent.taskId && onTaskClick?.(agent.taskId)}
                   >
                     <span
@@ -251,7 +251,7 @@ function AgentStatusPanel({ onTaskClick }: { onTaskClick?: (taskId: string) => v
           ) : data.activeTaskTitle ? (
             /* Fallback: single task (no activeAgents array) */
             <button
-              className="text-xs font-medium leading-snug text-left hover:underline cursor-pointer w-full"
+              className="min-h-8 text-xs font-medium leading-snug text-left hover:underline cursor-pointer w-full"
               onClick={() => data.activeTask && onTaskClick?.(data.activeTask)}
             >
               {data.activeTaskTitle}
@@ -316,7 +316,7 @@ function RecentStatusChanges({
     <div className="rounded-lg border bg-card p-3 min-h-[220px]">
       <button
         onClick={onOpenActivityLog}
-        className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground mb-2 uppercase tracking-wider hover:text-foreground transition-colors group w-full text-left"
+        className="mb-2 flex min-h-8 w-full items-center gap-1.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground group"
       >
         Recent Status Changes
         <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -326,7 +326,7 @@ function RecentStatusChanges({
           activities.map((activity) => (
             <button
               key={activity.id}
-              className="flex items-center gap-1.5 text-[11px] w-full text-left hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+              className="flex min-h-8 items-center gap-1.5 text-[11px] w-full text-left hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
               onClick={() => activity.taskId && onTaskClick?.(activity.taskId)}
             >
               <div

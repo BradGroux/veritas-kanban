@@ -32,6 +32,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
+    "qa:mantine": "node scripts/check-mantine-qa-gate.mjs",
     "test:load:smoke": "k6 run load-tests/k6/smoke.js",
     "test:load": "k6 run load-tests/k6/smoke.js && k6 run load-tests/k6/read-load.js && k6 run load-tests/k6/write-load.js && k6 run load-tests/k6/mixed-load.js && k6 run load-tests/k6/ws-stress.js",
     "validate:release": "node scripts/validate-release.mjs",

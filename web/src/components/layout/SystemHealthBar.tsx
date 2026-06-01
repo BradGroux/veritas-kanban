@@ -114,7 +114,7 @@ export function SystemHealthBar() {
     <div className={`border-b border-border ${config.barClass}`}>
       {/* Main bar */}
       <button
-        className="flex h-7 w-full items-center justify-center gap-2 px-4 text-xs cursor-pointer select-none transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+        className="flex min-h-8 w-full items-center justify-center gap-2 px-4 text-xs cursor-pointer select-none transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
         aria-controls="system-health-details"

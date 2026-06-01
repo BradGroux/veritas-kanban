@@ -57,7 +57,7 @@ export function WebSocketIndicator() {
     <Popover position="bottom-end">
       <Popover.Target>
         <UnstyledButton
-          className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none rounded px-1.5 py-1 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex min-h-8 min-w-8 items-center justify-center gap-1 rounded px-1.5 py-1 text-xs text-muted-foreground cursor-pointer select-none transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           aria-label={label}
         >
           <Box component="span" className={`inline-block h-2 w-2 rounded-full ${dotClass}`} />

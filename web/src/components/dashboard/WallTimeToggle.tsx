@@ -84,14 +84,14 @@ export function WallTimeToggle({ period }: WallTimeToggleProps) {
               </Stack>
             }
           >
-            <ActionIcon aria-label="Wall time help" size="xs" variant="subtle">
-              <Info className="w-3 h-3 text-muted-foreground" />
+            <ActionIcon aria-label="Wall time help" size="sm" variant="subtle">
+              <Info className="h-4 w-4 text-muted-foreground" />
             </ActionIcon>
           </Tooltip>
         </Group>
         <Button
           variant="subtle"
-          size="compact-xs"
+          size="sm"
           className="text-muted-foreground"
           onClick={() => setShowActive(!showActive)}
           leftSection={

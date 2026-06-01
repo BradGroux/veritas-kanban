@@ -98,38 +98,93 @@ export const veritasMantineTheme = createTheme({
       defaultProps: {
         radius: 'sm',
       },
+      styles: {
+        root: {
+          minHeight: '2rem',
+          minWidth: '2rem',
+        },
+      },
     },
     ActionIcon: {
       defaultProps: {
         radius: 'sm',
         variant: 'subtle',
       },
-    },
-    Modal: {
-      defaultProps: {
-        radius: 'md',
-        centered: true,
-        overlayProps: { blur: 2, opacity: 0.45 },
+      styles: {
+        root: {
+          minHeight: '2rem',
+          minWidth: '2rem',
+        },
       },
     },
-    Drawer: {
+    CloseButton: {
+      styles: {
+        root: {
+          minHeight: '2rem',
+          minWidth: '2rem',
+        },
+      },
+    },
+    Select: {
       defaultProps: {
-        overlayProps: { blur: 2, opacity: 0.35 },
+        radius: 'sm',
+      },
+      styles: {
+        input: {
+          minHeight: '2rem',
+        },
       },
     },
     TextInput: {
       defaultProps: {
         radius: 'sm',
       },
+      styles: {
+        input: {
+          minHeight: '2rem',
+        },
+      },
+    },
+    PasswordInput: {
+      styles: {
+        input: {
+          minHeight: '2rem',
+        },
+      },
     },
     Textarea: {
       defaultProps: {
         radius: 'sm',
       },
+      styles: {
+        input: {
+          minHeight: '2rem',
+        },
+      },
     },
-    Select: {
+    Tabs: {
+      styles: {
+        tab: {
+          minHeight: '2rem',
+        },
+      },
+    },
+    Modal: {
       defaultProps: {
-        radius: 'sm',
+        radius: 'md',
+        centered: true,
+        trapFocus: true,
+        returnFocus: true,
+        closeButtonProps: { 'aria-label': 'Close dialog' },
+        overlayProps: { blur: 2, opacity: 0.45 },
+      },
+    },
+    Drawer: {
+      defaultProps: {
+        trapFocus: true,
+        returnFocus: true,
+        closeButtonProps: { 'aria-label': 'Close panel' },
+        overlayProps: { blur: 2, opacity: 0.35 },
       },
     },
   },
