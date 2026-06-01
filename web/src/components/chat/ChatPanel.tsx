@@ -1,19 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+  ActionIcon,
+  Button,
+  Drawer,
+  Group,
+  Modal,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import {
   MessageSquare,
   Send,
@@ -45,6 +41,7 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
   const [message, setMessage] = useState('');
   const [mode, setMode] = useState<'ask' | 'build'>('ask');
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const { data: task } = useTask(taskId || '');
   const { data: sessions = [] } = useChatSessions();
   const { data: session } = useChatSession(currentSessionId);
@@ -119,96 +116,79 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
   }, [filteredSessions, currentSessionId, taskId]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        className="w-[500px] sm:max-w-[500px] overflow-hidden flex flex-col p-0"
-        side="right"
-      >
-        {/* Header action buttons — positioned next to Sheet's built-in X */}
-        {currentSessionId && session?.messages && session.messages.length > 0 && (
-          <button
-            onClick={() => {
-              if (!session?.messages?.length) return;
-              const title = taskId && task ? task.title : 'Board Chat';
-              const date = new Date().toLocaleString();
-              const lines = [`# Chat Export — ${title}`, `*Exported: ${date}*`, ''];
-              for (const msg of session.messages) {
-                const role =
-                  msg.role === 'user'
-                    ? '👤 User'
-                    : msg.role === 'assistant'
-                      ? '🤖 Assistant'
-                      : '⚙️ System';
-                const time = new Date(msg.timestamp).toLocaleString();
-                lines.push('---', '', `### ${role}`, `*${time}*`, '', msg.content, '');
-              }
-              const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `chat-${taskId || 'board'}-${new Date().toISOString().slice(0, 10)}.md`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="absolute right-20 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:text-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            <Download className="h-4 w-4" />
-            <span className="sr-only">Export chat</span>
-          </button>
-        )}
-        {currentSessionId && session?.messages && session.messages.length > 0 && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button className="absolute right-12 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:text-destructive focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                <Trash2 className="h-4 w-4" />
-                <span className="sr-only">Clear chat</span>
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear chat history?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete all messages in this chat. This action cannot be
-                  undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
+    <>
+      <Drawer
+        opened={open}
+        onClose={() => onOpenChange(false)}
+        position="right"
+        size={500}
+        padding={0}
+        title={
+          <Group justify="space-between" wrap="nowrap" className="w-full pr-8">
+            <Stack gap={4}>
+              <Group gap="xs" wrap="nowrap">
+                <Bot className="h-5 w-5" />
+                <Text fw={600}>{taskId ? 'Task Chat' : 'Board Chat'}</Text>
+              </Group>
+              {taskId && task && (
+                <Group gap="xs" className="border-t border-border/50 pt-2">
+                  <MessageSquare className="h-3 w-3" />
+                  <Text size="xs" c="dimmed">
+                    Task: {task.title}
+                  </Text>
+                </Group>
+              )}
+            </Stack>
+            {currentSessionId && session?.messages && session.messages.length > 0 && (
+              <Group gap={4} wrap="nowrap">
+                <ActionIcon
+                  variant="subtle"
+                  aria-label="Export chat"
                   onClick={() => {
-                    if (currentSessionId) {
-                      deleteChatSession(currentSessionId, {
-                        onSuccess: () => {
-                          setCurrentSessionId(undefined);
-                          if (taskId) {
-                            setTimeout(() => setCurrentSessionId(`task_${taskId}`), 100);
-                          }
-                        },
-                      });
+                    if (!session?.messages?.length) return;
+                    const title = taskId && task ? task.title : 'Board Chat';
+                    const date = new Date().toLocaleString();
+                    const lines = [`# Chat Export — ${title}`, `*Exported: ${date}*`, ''];
+                    for (const msg of session.messages) {
+                      const role =
+                        msg.role === 'user'
+                          ? '👤 User'
+                          : msg.role === 'assistant'
+                            ? '🤖 Assistant'
+                            : '⚙️ System';
+                      const time = new Date(msg.timestamp).toLocaleString();
+                      lines.push('---', '', `### ${role}`, `*${time}*`, '', msg.content, '');
                     }
+                    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `chat-${taskId || 'board'}-${new Date()
+                      .toISOString()
+                      .slice(0, 10)}.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
                   }}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  Clear History
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-
-        <SheetHeader className="border-b border-border px-4 py-3 pr-10 flex-shrink-0">
-          <SheetTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
-            {taskId ? 'Task Chat' : 'Board Chat'}
-          </SheetTitle>
-          {taskId && task && (
-            <div className="text-xs text-muted-foreground flex items-center gap-2 pt-2 border-t border-border/50 mt-2">
-              <MessageSquare className="h-3 w-3" />
-              Task: {task.title}
-            </div>
-          )}
-        </SheetHeader>
-
+                  <Download className="h-4 w-4" />
+                </ActionIcon>
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  aria-label="Clear chat"
+                  onClick={() => setClearConfirmOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </ActionIcon>
+              </Group>
+            )}
+          </Group>
+        }
+        styles={{
+          content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+          body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
+        }}
+      >
         {/* Messages */}
         <ScrollArea className="flex-1 px-4" onScrollCapture={handleScroll} ref={scrollAreaRef}>
           <div className="py-4 space-y-4">
@@ -241,7 +221,7 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
         {/* Input Area */}
         <div className="border-t border-border p-4 flex-shrink-0 space-y-3">
           <div className="flex items-center gap-2">
-            <Input
+            <TextInput
               ref={inputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -251,31 +231,33 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
               className="flex-1"
               autoFocus
             />
-            <Button onClick={handleSend} disabled={!message.trim() || isPending} size="icon">
+            <ActionIcon
+              onClick={handleSend}
+              disabled={!message.trim() || isPending}
+              aria-label="Send chat message"
+            >
               {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
-            </Button>
+            </ActionIcon>
           </div>
 
           {/* Mode Toggle */}
           <div className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Mode:</span>
             <Button
-              variant={mode === 'ask' ? 'default' : 'outline'}
-              size="sm"
+              variant={mode === 'ask' ? 'filled' : 'outline'}
+              size="xs"
               onClick={() => setMode('ask')}
-              className="h-7 text-xs"
             >
               Ask
             </Button>
             <Button
-              variant={mode === 'build' ? 'default' : 'outline'}
-              size="sm"
+              variant={mode === 'build' ? 'filled' : 'outline'}
+              size="xs"
               onClick={() => setMode('build')}
-              className="h-7 text-xs"
             >
               Build
             </Button>
@@ -284,8 +266,43 @@ export function ChatPanel({ open, onOpenChange, taskId }: ChatPanelProps) {
             </span>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </Drawer>
+      <Modal
+        opened={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        centered
+        title="Clear chat history?"
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            This will permanently delete all messages in this chat. This action cannot be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                if (currentSessionId) {
+                  deleteChatSession(currentSessionId, {
+                    onSuccess: () => {
+                      setClearConfirmOpen(false);
+                      setCurrentSessionId(undefined);
+                      if (taskId) {
+                        setTimeout(() => setCurrentSessionId(`task_${taskId}`), 100);
+                      }
+                    },
+                  });
+                }
+              }}
+            >
+              Clear History
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
   );
 }
 

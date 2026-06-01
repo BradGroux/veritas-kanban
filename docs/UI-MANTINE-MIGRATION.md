@@ -393,6 +393,12 @@ Phase 3 progress:
   trends, wall-time, activity clock, and the budget widget while preserving
   existing metric queries, chart rendering, sorting, help affordances, and
   toggle behavior.
+- Activity and chat overlays now use direct Mantine drawer, modal, tabs, select,
+  text input, scroll area, button, action icon, skeleton, badge, paper, stack,
+  group, text, and theme icon primitives while preserving activity filtering,
+  status history, daily summaries, board/task chat export and clear
+  confirmation, squad sender/filter controls, system-message toggling, and the
+  floating chat launcher.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

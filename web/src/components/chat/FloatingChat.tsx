@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { ActionIcon } from '@mantine/core';
 import { MessageSquare } from 'lucide-react';
 import { chatEventTarget } from '@/hooks/useTaskSync';
 import { cn } from '@/lib/utils';
@@ -49,9 +49,11 @@ export function FloatingChat() {
   return (
     <>
       {/* Floating button */}
-      <Button
+      <ActionIcon
         onClick={handleOpen}
-        size="icon"
+        size={56}
+        radius="xl"
+        variant="filled"
         className={cn(
           'fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-lg',
           'bg-primary hover:bg-primary/90 text-primary-foreground',
@@ -67,7 +69,7 @@ export function FloatingChat() {
             <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
           </span>
         )}
-      </Button>
+      </ActionIcon>
 
       {/* Chat panel — board-level (no taskId) */}
       {panelMounted && (

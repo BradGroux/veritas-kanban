@@ -7,7 +7,7 @@ import {
   Zap,
   Coffee,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ActionIcon, Badge, Group, Paper, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
 import {
   useDailySummary,
   useStatusHistory,
@@ -59,35 +59,49 @@ function DailySummaryPanel() {
   const activePercent = total > 0 ? Math.round((summary.activeMs / total) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="p-4 rounded-lg border bg-card">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="h-5 w-5 text-green-500" />
-            <span className="text-sm text-muted-foreground">Active Time</span>
-          </div>
-          <div className="text-2xl font-bold text-green-500">
+      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+        <Paper withBorder p="md" radius="md">
+          <Group gap="xs" mb="xs">
+            <ThemeIcon variant="transparent" color="green">
+              <Zap className="h-5 w-5" />
+            </ThemeIcon>
+            <Text size="sm" c="dimmed">
+              Active Time
+            </Text>
+          </Group>
+          <Text size="xl" fw={700} c="green">
             {formatDurationMs(summary.activeMs)}
-          </div>
-        </div>
-        <div className="p-4 rounded-lg border bg-card">
-          <div className="flex items-center gap-2 mb-2">
-            <Coffee className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Idle Time</span>
-          </div>
-          <div className="text-2xl font-bold text-muted-foreground">
+          </Text>
+        </Paper>
+        <Paper withBorder p="md" radius="md">
+          <Group gap="xs" mb="xs">
+            <ThemeIcon variant="transparent" color="gray">
+              <Coffee className="h-5 w-5" />
+            </ThemeIcon>
+            <Text size="sm" c="dimmed">
+              Idle Time
+            </Text>
+          </Group>
+          <Text size="xl" fw={700} c="dimmed">
             {formatDurationMs(summary.idleMs)}
-          </div>
-        </div>
-        <div className="p-4 rounded-lg border bg-card">
-          <div className="flex items-center gap-2 mb-2">
-            <ActivityIcon className="h-5 w-5 text-primary" />
-            <span className="text-sm text-muted-foreground">Utilization</span>
-          </div>
-          <div className="text-2xl font-bold">{activePercent}%</div>
-        </div>
-      </div>
+          </Text>
+        </Paper>
+        <Paper withBorder p="md" radius="md">
+          <Group gap="xs" mb="xs">
+            <ThemeIcon variant="transparent" color="violet">
+              <ActivityIcon className="h-5 w-5" />
+            </ThemeIcon>
+            <Text size="sm" c="dimmed">
+              Utilization
+            </Text>
+          </Group>
+          <Text size="xl" fw={700}>
+            {activePercent}%
+          </Text>
+        </Paper>
+      </SimpleGrid>
 
       {/* Progress bar */}
       {total > 0 && (
@@ -108,7 +122,7 @@ function DailySummaryPanel() {
           )}
         </div>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -119,14 +133,14 @@ function StatusBadge({ status, isTaskStatus }: { status: string; isTaskStatus?: 
   // Format task status for display
   const displayStatus = isTaskStatus ? (status === 'in-progress' ? 'in-progress' : status) : status;
   return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-center w-[5.5rem] px-2 py-0.5 rounded text-xs font-medium text-white',
-        colorClass
-      )}
+    <Badge
+      size="sm"
+      radius="sm"
+      tt="none"
+      className={cn('w-[5.5rem] justify-center text-white', colorClass)}
     >
       {displayStatus}
-    </span>
+    </Badge>
   );
 }
 
@@ -340,9 +354,14 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={onBack} title="Back to board">
+        <ActionIcon
+          variant="subtle"
+          onClick={onBack}
+          title="Back to board"
+          aria-label="Back to board"
+        >
           <ArrowLeft className="h-5 w-5" />
-        </Button>
+        </ActionIcon>
         <div className="flex items-center gap-2">
           <ActivityIcon className="h-6 w-6 text-primary" />
           <h2 className="text-2xl font-bold">Activity</h2>

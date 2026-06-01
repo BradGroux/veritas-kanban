@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Activity, Trash2, RefreshCw, Coffee, ArrowRight, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
+  ActionIcon,
+  Badge,
+  Box,
+  Drawer,
+  Group,
+  ScrollArea,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  Skeleton,
+  Tabs,
+  Text,
+} from '@mantine/core';
 import {
   useActivities,
   useClearActivities,
@@ -109,14 +110,9 @@ function StatusBadge({ status }: { status: string }) {
   const colorClass = getStatusColor(status);
 
   return (
-    <span
-      className={cn(
-        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white',
-        colorClass
-      )}
-    >
+    <Badge size="sm" radius="sm" tt="none" className={cn('text-white', colorClass)}>
       {status}
-    </span>
+    </Badge>
   );
 }
 
@@ -126,13 +122,13 @@ function DailySummaryCard() {
 
   if (isLoading || !summary) {
     return (
-      <div className="px-4 py-3 border-b bg-muted/30">
-        <div className="animate-pulse flex items-center gap-4">
-          <div className="h-10 w-20 bg-muted rounded"></div>
-          <div className="h-10 w-20 bg-muted rounded"></div>
-          <div className="h-10 w-20 bg-muted rounded"></div>
-        </div>
-      </div>
+      <Box px="md" py="sm" className="border-b bg-muted/30">
+        <Group gap="md">
+          <Skeleton h={40} w={80} radius="sm" />
+          <Skeleton h={40} w={80} radius="sm" />
+          <Skeleton h={40} w={80} radius="sm" />
+        </Group>
+      </Box>
     );
   }
 
@@ -140,10 +136,12 @@ function DailySummaryCard() {
   const activePercent = total > 0 ? Math.round((summary.activeMs / total) * 100) : 0;
 
   return (
-    <div className="px-4 py-3 border-b bg-muted/30">
-      <div className="text-xs font-medium text-muted-foreground mb-2">Today's Summary</div>
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
+    <Box px="md" py="sm" className="border-b bg-muted/30">
+      <Text size="xs" fw={500} c="dimmed" mb="xs">
+        Today's Summary
+      </Text>
+      <Group gap="sm">
+        <Group gap={6}>
           <Zap className="h-4 w-4 text-green-500" />
           <div>
             <div className="text-sm font-bold text-green-500">
@@ -151,8 +149,8 @@ function DailySummaryCard() {
             </div>
             <div className="text-xs text-muted-foreground">Active</div>
           </div>
-        </div>
-        <div className="flex items-center gap-1.5">
+        </Group>
+        <Group gap={6}>
           <Coffee className="h-4 w-4 text-muted-foreground" />
           <div>
             <div className="text-sm font-bold text-muted-foreground">
@@ -160,14 +158,14 @@ function DailySummaryCard() {
             </div>
             <div className="text-xs text-muted-foreground">Idle</div>
           </div>
-        </div>
-        <div className="flex items-center gap-1.5 ml-auto">
+        </Group>
+        <Group gap={6} ml="auto">
           <div className="text-right">
             <div className="text-sm font-bold">{activePercent}%</div>
             <div className="text-xs text-muted-foreground">Utilization</div>
           </div>
-        </div>
-      </div>
+        </Group>
+      </Group>
       {/* Mini progress bar */}
       {total > 0 && (
         <div className="mt-2 h-1.5 rounded-full overflow-hidden flex bg-muted">
@@ -187,7 +185,7 @@ function DailySummaryCard() {
           )}
         </div>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -253,92 +251,100 @@ export function ActivitySidebar({ open, onOpenChange }: ActivitySidebarProps) {
   const activityTypes = activities ? [...new Set(activities.map((a) => a.type))] : [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[400px] sm:w-[450px] p-0">
-        <SheetHeader className="px-4 py-3 border-b">
-          <div className="flex items-center justify-between pr-8">
-            <SheetTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Activity Log
-            </SheetTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => refetch()}
-                disabled={isRefetching}
-                className="h-8 w-8"
-              >
-                <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => clearActivities.mutate()}
-                disabled={clearActivities.isPending || !activities?.length}
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+    <Drawer
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      position="right"
+      size={450}
+      padding={0}
+      title={
+        <Group justify="space-between" wrap="nowrap" className="w-full pr-8">
+          <Group gap="xs" wrap="nowrap">
+            <Activity className="h-5 w-5" />
+            <Text fw={600}>Activity Log</Text>
+          </Group>
+          <Group gap={4} wrap="nowrap">
+            <ActionIcon
+              variant="subtle"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              aria-label="Refresh activity log"
+            >
+              <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={() => clearActivities.mutate()}
+              disabled={clearActivities.isPending || !activities?.length}
+              aria-label="Clear activity log"
+            >
+              <Trash2 className="h-4 w-4" />
+            </ActionIcon>
+          </Group>
+        </Group>
+      }
+      styles={{
+        content: { display: 'flex', flexDirection: 'column' },
+        body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
+      }}
+    >
+      {/* Daily Summary always visible at top */}
+      <DailySummaryCard />
+
+      <Tabs
+        value={tab}
+        onChange={(value) => setTab(value ?? 'tasks')}
+        className="flex flex-col h-[calc(100vh-200px)]"
+      >
+        <Tabs.List grow mx="md" mt="sm">
+          <Tabs.Tab value="tasks">Task Activity</Tabs.Tab>
+          <Tabs.Tab value="status">Status History</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="tasks" className="flex-1 mt-0">
+          {activityTypes.length > 1 && (
+            <div className="px-4 py-2">
+              <Select
+                value={filter}
+                onChange={(value) => setFilter(value ?? 'all')}
+                allowDeselect={false}
+                placeholder="Filter activities"
+                data={[
+                  { value: 'all', label: 'All Activities' },
+                  ...activityTypes.map((type) => ({
+                    value: type,
+                    label: `${activityIcons[type]} ${activityLabels[type]}`,
+                  })),
+                ]}
+              />
             </div>
-          </div>
-        </SheetHeader>
+          )}
+          <ScrollArea className="h-full">
+            <div className="px-2 py-2">
+              {isLoading ? (
+                <div className="text-center text-muted-foreground py-8">Loading activities...</div>
+              ) : filteredActivities.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">No activities yet</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filteredActivities.map((activity) => (
+                    <ActivityRow key={activity.id} activity={activity} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </Tabs.Panel>
 
-        {/* Daily Summary always visible at top */}
-        <DailySummaryCard />
-
-        <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-[calc(100vh-200px)]">
-          <TabsList className="mx-4 mt-2 grid w-[calc(100%-32px)] grid-cols-2">
-            <TabsTrigger value="tasks">Task Activity</TabsTrigger>
-            <TabsTrigger value="status">Status History</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="tasks" className="flex-1 mt-0">
-            {activityTypes.length > 1 && (
-              <div className="px-4 py-2">
-                <Select value={filter} onValueChange={setFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter activities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Activities</SelectItem>
-                    {activityTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {activityIcons[type]} {activityLabels[type]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <ScrollArea className="h-full">
-              <div className="px-2 py-2">
-                {isLoading ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    Loading activities...
-                  </div>
-                ) : filteredActivities.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">No activities yet</div>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {filteredActivities.map((activity) => (
-                      <ActivityRow key={activity.id} activity={activity} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          <TabsContent value="status" className="flex-1 mt-0">
-            <ScrollArea className="h-full">
-              <div className="px-2 py-2">
-                <StatusHistoryList />
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </SheetContent>
-    </Sheet>
+        <Tabs.Panel value="status" className="flex-1 mt-0">
+          <ScrollArea className="h-full">
+            <div className="px-2 py-2">
+              <StatusHistoryList />
+            </div>
+          </ScrollArea>
+        </Tabs.Panel>
+      </Tabs>
+    </Drawer>
   );
 }

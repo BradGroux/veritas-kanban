@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  ActionIcon,
+  Button,
+  Drawer,
+  Group,
+  ScrollArea,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { Send, Loader2, Users, Filter, Settings2 } from 'lucide-react';
 import { useSquadMessages, useSendSquadMessage, useSquadStream } from '@/hooks/useChat';
 import { useConfig } from '@/hooks/useConfig';
@@ -99,7 +98,9 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
       messagesEndRef.current.scrollIntoView({ behavior });
     }
     // Fallback: find the Mantine-backed ScrollArea viewport and scroll it directly.
-    const viewport = scrollAreaRef.current?.querySelector('[data-slot="scroll-area-viewport"]');
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"], .mantine-ScrollArea-viewport'
+    );
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
     }
@@ -169,45 +170,52 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   const uniqueAgents = Array.from(new Set(messages.map((m) => m.agent))).sort();
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        className="w-[500px] sm:max-w-[500px] overflow-hidden flex flex-col p-0"
-        side="right"
-      >
-        <SheetHeader className="border-b border-border px-4 py-3 pr-10 flex-shrink-0">
-          <SheetTitle className="flex items-center gap-2">
+    <Drawer
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      position="right"
+      size={500}
+      padding={0}
+      title={
+        <div>
+          <Group gap="xs" wrap="nowrap">
             <Users className="h-5 w-5" />
-            Squad Chat
-          </SheetTitle>
-          <div className="text-xs text-muted-foreground pt-2">
+            <Text fw={600}>Squad Chat</Text>
+          </Group>
+          <Text size="xs" c="dimmed" pt={4}>
             Agent-to-agent communication channel
-          </div>
-        </SheetHeader>
-
+          </Text>
+        </div>
+      }
+      styles={{
+        content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
+      }}
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* Filter Bar */}
         <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-shrink-0">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={agentFilter} onValueChange={setAgentFilter}>
-            <SelectTrigger className="h-8 text-xs w-[150px]">
-              <SelectValue placeholder="Filter by agent" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Agents</SelectItem>
-              {uniqueAgents.map((agent) => (
-                <SelectItem key={agent} value={agent}>
-                  {agent}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Select
+            value={agentFilter}
+            onChange={(value) => setAgentFilter(value ?? 'all')}
+            allowDeselect={false}
+            size="xs"
+            w={150}
+            data={[
+              { value: 'all', label: 'All Agents' },
+              ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
+            ]}
+            aria-label="Filter by agent"
+          />
           <Button
-            variant={includeSystem ? 'default' : 'outline'}
-            size="sm"
+            variant={includeSystem ? 'filled' : 'outline'}
+            size="xs"
             onClick={() => setIncludeSystem(!includeSystem)}
-            className="ml-auto h-8 text-xs gap-1.5"
+            className="ml-auto gap-1.5"
             title={includeSystem ? 'Hide system messages' : 'Show system messages'}
+            leftSection={<Settings2 className="h-3.5 w-3.5" />}
           >
-            <Settings2 className="h-3.5 w-3.5" />
             {includeSystem ? 'Hide' : 'Show'} System
           </Button>
         </div>
@@ -254,21 +262,18 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
         <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs text-muted-foreground">Sending as:</span>
-            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-              <SelectTrigger className="h-8 text-xs w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableAgents.map((agent) => (
-                  <SelectItem key={agent} value={agent}>
-                    {agent}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Select
+              value={selectedAgent}
+              onChange={(value) => setSelectedAgent(value ?? humanDisplayName ?? 'Human')}
+              allowDeselect={false}
+              size="xs"
+              w={140}
+              data={availableAgents.map((agent) => ({ value: agent, label: agent }))}
+              aria-label="Sending as"
+            />
           </div>
           <div className="flex items-center gap-2">
-            <Input
+            <TextInput
               ref={inputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -278,17 +283,21 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
               className="flex-1"
               autoFocus
             />
-            <Button onClick={handleSend} disabled={!message.trim() || isPending} size="icon">
+            <ActionIcon
+              onClick={handleSend}
+              disabled={!message.trim() || isPending}
+              aria-label="Send squad message"
+            >
               {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
-            </Button>
+            </ActionIcon>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </Drawer>
   );
 }
 
