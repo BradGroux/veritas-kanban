@@ -276,6 +276,10 @@ Phase 3 progress:
 - Create-task dialog form controls now use direct Mantine text, textarea,
   select, tabs, alert, and list primitives while preserving duplicate detection,
   template, project, sprint, agent, and subtask behavior.
+- Settings dialog shell navigation, mobile section selector, loading skeleton,
+  scroll area, and import/export/reset controls now use direct Mantine
+  primitives while keeping lazy tab content and destructive confirmation behavior
+  stable.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

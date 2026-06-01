@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, lazy, Suspense, useEffect } from 'react';
+import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
+import { Button, ScrollArea, Select, Skeleton, Stack } from '@mantine/core';
 import {
   Dialog,
   DialogContent,
@@ -6,13 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,8 +18,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
@@ -50,7 +42,6 @@ import {
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
-import { cn } from '@/lib/utils';
 import { SettingsErrorBoundary } from './shared';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
@@ -96,14 +87,14 @@ const LazyMultiUserTab = lazy(() =>
 
 function TabSkeleton() {
   return (
-    <div className="space-y-4">
-      <Skeleton className="h-6 w-32" />
-      <div className="space-y-3">
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
-      </div>
-    </div>
+    <Stack gap="md">
+      <Skeleton height={24} width={128} radius="sm" />
+      <Stack gap="sm">
+        <Skeleton height={48} radius="md" />
+        <Skeleton height={48} radius="md" />
+        <Skeleton height={48} radius="md" />
+      </Stack>
+    </Stack>
   );
 }
 
@@ -171,6 +162,15 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   const canUseTab = useCallback(
     (tab: TabDef) => !tab.requiredPermission || hasPermission(tab.requiredPermission),
     [hasPermission]
+  );
+  const mobileTabOptions = useMemo(
+    () =>
+      TABS.map((tab) => ({
+        value: tab.id,
+        label: tab.label,
+        disabled: !canUseTab(tab),
+      })),
+    [canUseTab]
   );
 
   // Set active tab when defaultTab changes
@@ -413,39 +413,43 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 aria-orientation="vertical"
                 onKeyDown={handleKeyDown}
               >
-                {TABS.map((tab, index) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      id={`tab-${tab.id}`}
-                      ref={index === 0 ? firstTabButtonRef : undefined}
-                      role="tab"
-                      aria-selected={activeTab === tab.id}
-                      aria-controls="settings-tab-content"
-                      tabIndex={activeTab === tab.id ? 0 : -1}
-                      onClick={() => setActiveTab(tab.id)}
-                      disabled={!canUseTab(tab)}
-                      title={
-                        canUseTab(tab) ? tab.label : `${tab.requiredPermission} permission required`
-                      }
-                      className={cn(
-                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-left',
-                        activeTab === tab.id
-                          ? 'bg-background shadow-sm font-medium'
-                          : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
-                        !canUseTab(tab) && 'cursor-not-allowed opacity-45 hover:bg-transparent'
-                      )}
-                    >
-                      <Icon className="h-4 w-4 flex-shrink-0" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+                <Stack gap={4}>
+                  {TABS.map((tab, index) => {
+                    const Icon = tab.icon;
+                    const allowed = canUseTab(tab);
+                    const active = activeTab === tab.id;
+                    return (
+                      <Button
+                        key={tab.id}
+                        id={`tab-${tab.id}`}
+                        ref={index === 0 ? firstTabButtonRef : undefined}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        aria-controls="settings-tab-content"
+                        tabIndex={active ? 0 : -1}
+                        onClick={() => setActiveTab(tab.id)}
+                        disabled={!allowed}
+                        title={
+                          allowed ? tab.label : `${tab.requiredPermission} permission required`
+                        }
+                        variant={active ? 'light' : 'subtle'}
+                        color={active ? 'violet' : 'gray'}
+                        size="xs"
+                        radius="md"
+                        fullWidth
+                        justify="flex-start"
+                        leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
+                      >
+                        {tab.label}
+                      </Button>
+                    );
+                  })}
+                </Stack>
               </nav>
 
               {/* Import/Export/Reset */}
-              <div className="px-2 pt-3 mt-auto border-t space-y-1">
+              <Stack gap={4} className="mt-auto border-t px-2 pt-3">
                 <input
                   ref={settingsFileInputRef}
                   type="file"
@@ -454,32 +458,49 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                   className="hidden"
                   aria-label="Import settings file"
                 />
-                <button
+                <Button
+                  type="button"
                   onClick={handleExportSettings}
                   aria-label="Export settings as JSON file"
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors text-left"
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                  }
                 >
-                  <Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                   Export Settings
-                </button>
-                <button
+                </Button>
+                <Button
+                  type="button"
                   onClick={() => settingsFileInputRef.current?.click()}
                   disabled={!canWriteSettings}
                   aria-label="Import settings from JSON file"
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors text-left"
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={<Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
                 >
-                  <Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                   Import Settings
-                </button>
+                </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <button
+                    <Button
+                      type="button"
                       disabled={!canWriteSettings}
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-45 transition-colors text-left"
+                      variant="subtle"
+                      color="red"
+                      size="xs"
+                      fullWidth
+                      justify="flex-start"
+                      leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
                     >
-                      <RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />
                       Reset All
-                    </button>
+                    </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -500,23 +521,22 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-              </div>
+              </Stack>
             </div>
 
             {/* Mobile Tab Selector */}
             <div className="sm:hidden absolute top-3 right-12">
-              <Select value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-                <SelectTrigger className="w-36 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TABS.map((tab) => (
-                    <SelectItem key={tab.id} value={tab.id} disabled={!canUseTab(tab)}>
-                      {tab.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Select
+                value={activeTab}
+                onChange={(value) => {
+                  if (value) setActiveTab(value as TabId);
+                }}
+                data={mobileTabOptions}
+                aria-label="Select settings section"
+                size="xs"
+                checkIconPosition="right"
+                className="w-40"
+              />
             </div>
 
             {/* Content */}
