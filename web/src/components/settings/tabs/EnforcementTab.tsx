@@ -1,13 +1,7 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useConfig } from '@/hooks/useConfig';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select } from '@mantine/core';
 import { ToggleRow, SettingRow, SectionHeader, SaveIndicator } from '../shared';
 import { Shield, ShieldCheck, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -144,24 +138,25 @@ export function EnforcementTab() {
                 {orchestratorAgent && <Bot className="h-4 w-4 text-primary" />}
                 <Select
                   value={orchestratorAgent || '__none__'}
-                  onValueChange={(v) =>
-                    updateEnforcement('orchestratorAgent', v === '__none__' ? '' : v)
+                  onChange={(value) =>
+                    updateEnforcement(
+                      'orchestratorAgent',
+                      value === '__none__' ? '' : (value ?? '')
+                    )
                   }
-                >
-                  <SelectTrigger className="w-[180px] h-8">
-                    <SelectValue placeholder="Select agent..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">
-                      <span className="text-muted-foreground">None selected</span>
-                    </SelectItem>
-                    {enabledAgents.map((a) => (
-                      <SelectItem key={a.type} value={a.type}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  data={[
+                    { value: '__none__', label: 'None selected' },
+                    ...enabledAgents.map((agent) => ({
+                      value: agent.type,
+                      label: agent.name,
+                    })),
+                  ]}
+                  aria-label="Orchestrator Agent"
+                  placeholder="Select agent..."
+                  allowDeselect={false}
+                  size="xs"
+                  w={180}
+                />
               </div>
             </SettingRow>
           </div>

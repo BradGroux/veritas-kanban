@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
@@ -149,17 +143,18 @@ export function TasksTab() {
             value={
               settings.tasks?.defaultPriority ?? DEFAULT_FEATURE_SETTINGS.tasks.defaultPriority
             }
-            onValueChange={(v) => update('defaultPriority', v)}
-          >
-            <SelectTrigger className="w-28 h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(value) => value && update('defaultPriority', value)}
+            data={[
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' },
+              { value: 'critical', label: 'Critical' },
+            ]}
+            aria-label="Default Priority"
+            allowDeselect={false}
+            size="xs"
+            w={128}
+          />
         </SettingRow>
       </div>
 

@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS, type DashboardWidgetSettings } from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
@@ -95,16 +89,16 @@ export function BoardTab() {
         <SettingRow label="Card Density" description="Compact cards use less space">
           <Select
             value={settings.board?.cardDensity ?? DEFAULT_FEATURE_SETTINGS.board.cardDensity}
-            onValueChange={(v) => update('cardDensity', v)}
-          >
-            <SelectTrigger className="w-28 h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="compact">Compact</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(value) => value && update('cardDensity', value)}
+            data={[
+              { value: 'normal', label: 'Normal' },
+              { value: 'compact', label: 'Compact' },
+            ]}
+            aria-label="Card Density"
+            allowDeselect={false}
+            size="xs"
+            w={112}
+          />
         </SettingRow>
         <ToggleRow
           label="Priority Indicators"

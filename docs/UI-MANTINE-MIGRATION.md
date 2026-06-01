@@ -283,6 +283,9 @@ Phase 3 progress:
 - Shared settings row, toggle, and section header primitives now use direct
   Mantine layout, text, switch, and button components while preserving existing
   tab APIs.
+- Board, Tasks, Notifications, and Enforcement settings tab controls now use
+  direct Mantine select and text input primitives where tab-specific controls
+  are not covered by shared rows.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
