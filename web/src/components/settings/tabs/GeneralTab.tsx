@@ -1,15 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ActionIcon, Badge, Button, Group, Select, Switch, TextInput } from '@mantine/core';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,8 +68,9 @@ export function GeneralTab() {
           </div>
           <Switch
             checked={theme === 'dark'}
-            onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+            onChange={(event) => setTheme(event.currentTarget.checked ? 'dark' : 'light')}
             aria-label="Toggle dark mode"
+            size="sm"
           />
         </div>
       </div>
@@ -89,19 +80,21 @@ export function GeneralTab() {
         <h3 className="text-sm font-medium">User Preferences</h3>
         <div className="rounded-md border p-4 bg-card space-y-3">
           <div className="grid gap-2">
-            <Label htmlFor="human-display-name" className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              Display Name (Squad Chat)
-            </Label>
-            <Input
+            <TextInput
               id="human-display-name"
+              label={
+                <Group gap={6}>
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>Display Name (Squad Chat)</span>
+                </Group>
+              }
               value={localDisplayName}
               onChange={(e) => setLocalDisplayName(e.target.value)}
               onBlur={() =>
                 debouncedUpdate({ general: { humanDisplayName: localDisplayName || 'Human' } })
               }
               placeholder="Human"
-              className="max-w-xs"
+              maw={320}
             />
             <p className="text-xs text-muted-foreground">
               How your messages appear in Squad Chat. Shows as "{localDisplayName} (Human)" in the
@@ -116,8 +109,13 @@ export function GeneralTab() {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Git Repositories</h3>
           {!showAddForm && (
-            <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add Repo
+            <Button
+              variant="outline"
+              size="xs"
+              leftSection={<Plus className="h-4 w-4" />}
+              onClick={() => setShowAddForm(true)}
+            >
+              Add Repo
             </Button>
           )}
         </div>
@@ -169,13 +167,12 @@ function AgentDefaultItem({ agent, isDefault }: { agent: AgentConfig; isDefault:
         <span className="font-medium">{agent.name}</span>
       </div>
       <Button
-        variant={isDefault ? 'default' : 'ghost'}
-        size="sm"
-        className="h-7"
+        variant={isDefault ? 'filled' : 'subtle'}
+        size="xs"
+        leftSection={<Star className={cn('h-3 w-3', isDefault && 'fill-current')} />}
         onClick={() => setDefaultAgent.mutate(agent.type)}
         disabled={isDefault}
       >
-        <Star className={cn('h-3 w-3 mr-1', isDefault && 'fill-current')} />
         {isDefault ? 'Default' : 'Set Default'}
       </Button>
     </div>
@@ -221,19 +218,19 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
       </div>
       <div className="grid gap-3">
         <div className="grid gap-2">
-          <Label htmlFor="repo-name">Name</Label>
-          <Input
+          <TextInput
             id="repo-name"
+            label="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., rubicon"
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="repo-path">Path</Label>
-          <div className="flex gap-2">
-            <Input
+          <div className="flex items-end gap-2">
+            <TextInput
               id="repo-path"
+              label="Path"
               value={path}
               onChange={(e) => {
                 setPath(e.target.value);
@@ -241,16 +238,24 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
                 setBranches([]);
               }}
               placeholder="e.g., ~/Projects/rubicon"
-              className={cn(
-                pathValid === true && 'border-green-500',
-                pathValid === false && 'border-red-500'
-              )}
+              error={pathValid === false ? validatePath.error?.message || 'Invalid path' : null}
+              className="flex-1"
             />
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={handleValidatePath}
               disabled={!path || validatePath.isPending}
+              aria-label={
+                validatePath.isPending
+                  ? 'Validating repository path'
+                  : pathValid === true
+                    ? 'Repository path valid'
+                    : pathValid === false
+                      ? 'Repository path invalid'
+                      : 'Validate repository path'
+              }
             >
               {validatePath.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -263,33 +268,29 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
               )}
             </Button>
           </div>
-          {pathValid === false && (
-            <p className="text-xs text-red-500">{validatePath.error?.message || 'Invalid path'}</p>
-          )}
         </div>
         {branches.length > 0 && (
           <div className="grid gap-2">
-            <Label htmlFor="default-branch">Default Branch</Label>
-            <Select value={defaultBranch} onValueChange={setDefaultBranch}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((branch) => (
-                  <SelectItem key={branch} value={branch}>
-                    {branch}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Select
+              id="default-branch"
+              label="Default Branch"
+              value={defaultBranch}
+              onChange={(value) => value && setDefaultBranch(value)}
+              data={branches.map((branch) => ({ value: branch, label: branch }))}
+              allowDeselect={false}
+            />
           </div>
         )}
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!name || !path || !pathValid || addRepo.isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!name || !path || !pathValid || addRepo.isPending}
+        >
           {addRepo.isPending ? 'Adding...' : 'Add Repository'}
         </Button>
       </div>
@@ -309,12 +310,20 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs bg-muted px-2 py-0.5 rounded">{repo.defaultBranch}</span>
+        <Badge variant="light" color="gray" size="sm">
+          {repo.defaultBranch}
+        </Badge>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <ActionIcon
+              type="button"
+              variant="subtle"
+              color="gray"
+              size="sm"
+              aria-label={`Remove ${repo.name}`}
+            >
               <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-            </Button>
+            </ActionIcon>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>

@@ -286,6 +286,9 @@ Phase 3 progress:
 - Board, Tasks, Notifications, and Enforcement settings tab controls now use
   direct Mantine select and text input primitives where tab-specific controls
   are not covered by shared rows.
+- General settings now uses direct Mantine switch, text input, select, button,
+  badge, and icon action primitives for theme, profile, repository, and default
+  agent controls.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
