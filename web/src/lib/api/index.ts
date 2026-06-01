@@ -16,6 +16,7 @@ import { decisionsApi } from './decisions';
 import { scoringApi } from './scoring';
 import { searchApi } from './search';
 import { identityApi } from './identity';
+import { workProductsApi } from './work-products';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -42,6 +43,7 @@ export const api = {
   scoring: scoringApi,
   search: searchApi,
   identity: identityApi,
+  workProducts: workProductsApi,
 };
 
 export type {
@@ -51,6 +53,8 @@ export type {
   SearchResponse,
   SearchResult,
 } from './search';
+
+export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';
