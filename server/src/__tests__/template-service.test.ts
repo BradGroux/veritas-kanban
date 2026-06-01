@@ -157,6 +157,22 @@ describe('TemplateService', () => {
       const files = await fs.readdir(templatesDir);
       expect(files.filter((f) => f.endsWith('.md'))).toHaveLength(1);
     });
+
+    it('should preserve empty task defaults when reading created templates', async () => {
+      const created = await service.createTemplate({
+        name: 'Empty Defaults',
+        taskDefaults: {},
+      });
+
+      expect(created.taskDefaults).toEqual({});
+
+      const listed = await service.getTemplates();
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.taskDefaults).toEqual({});
+
+      const loaded = await service.getTemplate(created.id);
+      expect(loaded?.taskDefaults).toEqual({});
+    });
   });
 
   describe('updateTemplate', () => {

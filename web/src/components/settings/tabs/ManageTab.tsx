@@ -1,33 +1,24 @@
-import { useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useRef, useState } from 'react';
+import { ActionIcon, Button, Select, Text, TextInput } from '@mantine/core';
 import { useConfig } from '@/hooks/useConfig';
 import { useTemplates, useCreateTemplate } from '@/hooks/useTemplates';
 import {
-  useTaskTypesManager,
-  getTypeIcon,
-  getAvailableIcons,
   AVAILABLE_COLORS,
+  getAvailableIcons,
+  getTypeIcon,
+  useTaskTypesManager,
 } from '@/hooks/useTaskTypes';
-import { useProjectsManager, AVAILABLE_PROJECT_COLORS } from '@/hooks/useProjects';
+import { AVAILABLE_PROJECT_COLORS, useProjectsManager } from '@/hooks/useProjects';
 import { useSprintsManager } from '@/hooks/useSprints';
 import { useToast } from '@/hooks/useToast';
-import { Plus, Download, Upload, HelpCircle, Info } from 'lucide-react';
+import { Download, HelpCircle, Info, Plus, Upload } from 'lucide-react';
 import type {
-  TaskTypeConfig,
-  SprintConfig,
-  ProjectConfig,
   CreateTemplateInput,
+  ProjectConfig,
+  SprintConfig,
+  TaskTypeConfig,
 } from '@veritas-kanban/shared';
-import { exportAllTemplates, parseTemplateFile, checkDuplicateName } from '@/lib/template-io';
+import { checkDuplicateName, exportAllTemplates, parseTemplateFile } from '@/lib/template-io';
 import { ManagedListManager } from '../ManagedListManager';
 import { AddTemplateForm, TemplateItem } from './TemplateComponents';
 
@@ -100,9 +91,23 @@ export function ManageTab() {
     }
   };
 
+  const iconOptions = getAvailableIcons().map((iconName) => ({
+    value: iconName,
+    label: iconName,
+  }));
+
+  const taskTypeColorOptions = AVAILABLE_COLORS.map((color) => ({
+    value: color.value,
+    label: color.label,
+  }));
+
+  const projectColorOptions = AVAILABLE_PROJECT_COLORS.map((color) => ({
+    value: color.value,
+    label: color.label,
+  }));
+
   return (
     <div className="space-y-6">
-      {/* Task Types */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Task Types</h3>
         <div className="border rounded-md p-3">
@@ -118,46 +123,51 @@ export function ManageTab() {
             renderExtraFields={(item, onChange) => (
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Icon</Label>
-                  <Select value={item.icon} onValueChange={(icon) => onChange({ icon })}>
-                    <SelectTrigger className="h-7 w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getAvailableIcons().map((iconName) => {
-                        const IconComponent = getTypeIcon(iconName);
-                        return (
-                          <SelectItem key={iconName} value={iconName}>
-                            <div className="flex items-center gap-2">
-                              {IconComponent && <IconComponent className="h-4 w-4" />}
-                              {iconName}
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                  <Text size="xs" c="dimmed" className="whitespace-nowrap">
+                    Icon
+                  </Text>
+                  <Select
+                    value={item.icon}
+                    onChange={(icon) => {
+                      if (icon) onChange({ icon });
+                    }}
+                    data={iconOptions}
+                    size="xs"
+                    radius="md"
+                    w={120}
+                    aria-label={`${item.label} icon`}
+                    renderOption={({ option }) => {
+                      const IconComponent = getTypeIcon(option.value);
+                      return (
+                        <div className="flex items-center gap-2">
+                          {IconComponent && <IconComponent className="h-4 w-4" />}
+                          {option.label}
+                        </div>
+                      );
+                    }}
+                  />
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Color</Label>
+                  <Text size="xs" c="dimmed" className="whitespace-nowrap">
+                    Color
+                  </Text>
                   <Select
                     value={item.color || 'border-l-gray-500'}
-                    onValueChange={(color) => onChange({ color })}
-                  >
-                    <SelectTrigger className="h-7 w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_COLORS.map((color) => (
-                        <SelectItem key={color.value} value={color.value}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded border-l-4 ${color.value}`}></div>
-                            {color.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(color) => {
+                      if (color) onChange({ color });
+                    }}
+                    data={taskTypeColorOptions}
+                    size="xs"
+                    radius="md"
+                    w={120}
+                    aria-label={`${item.label} color`}
+                    renderOption={({ option }) => (
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded border-l-4 ${option.value}`} />
+                        {option.label}
+                      </div>
+                    )}
+                  />
                 </div>
               </div>
             )}
@@ -166,7 +176,6 @@ export function ManageTab() {
         </div>
       </div>
 
-      {/* Projects */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Projects</h3>
         <div className="border rounded-md p-3">
@@ -182,34 +191,40 @@ export function ManageTab() {
             renderExtraFields={(item, onChange) => (
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-2 flex-1">
-                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Desc</Label>
-                  <Input
+                  <Text size="xs" c="dimmed" className="whitespace-nowrap">
+                    Desc
+                  </Text>
+                  <TextInput
                     value={item.description || ''}
                     onChange={(e) => onChange({ description: e.target.value })}
                     placeholder="Optional..."
-                    className="h-7 flex-1"
+                    size="xs"
+                    radius="md"
+                    className="flex-1"
+                    aria-label={`${item.label} description`}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Color</Label>
+                  <Text size="xs" c="dimmed" className="whitespace-nowrap">
+                    Color
+                  </Text>
                   <Select
                     value={item.color || 'bg-muted'}
-                    onValueChange={(color) => onChange({ color })}
-                  >
-                    <SelectTrigger className="h-7 w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_PROJECT_COLORS.map((color) => (
-                        <SelectItem key={color.value} value={color.value}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded ${color.value}`}></div>
-                            {color.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(color) => {
+                      if (color) onChange({ color });
+                    }}
+                    data={projectColorOptions}
+                    size="xs"
+                    radius="md"
+                    w={120}
+                    aria-label={`${item.label} color`}
+                    renderOption={({ option }) => (
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded ${option.value}`} />
+                        {option.label}
+                      </div>
+                    )}
+                  />
                 </div>
               </div>
             )}
@@ -218,7 +233,6 @@ export function ManageTab() {
         </div>
       </div>
 
-      {/* Sprints */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Sprints</h3>
         <div className="border rounded-md p-3">
@@ -233,12 +247,17 @@ export function ManageTab() {
             canDeleteCheck={sprintsManager.canDelete}
             renderExtraFields={(item, onChange) => (
               <div className="flex items-center gap-2 mt-2">
-                <Label className="text-xs text-muted-foreground whitespace-nowrap">Desc</Label>
-                <Input
+                <Text size="xs" c="dimmed" className="whitespace-nowrap">
+                  Desc
+                </Text>
+                <TextInput
                   value={item.description || ''}
                   onChange={(e) => onChange({ description: e.target.value })}
                   placeholder="Optional..."
-                  className="h-7 flex-1"
+                  size="xs"
+                  radius="md"
+                  className="flex-1"
+                  aria-label={`${item.label} description`}
                 />
               </div>
             )}
@@ -247,32 +266,56 @@ export function ManageTab() {
         </div>
       </div>
 
-      {/* Templates */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium">Task Templates</h3>
-            <Button
-              variant="ghost"
+            <ActionIcon
+              type="button"
+              variant="subtle"
+              color="gray"
               size="sm"
-              className="h-6 w-6 p-0"
+              radius="md"
+              aria-label="Toggle template guide"
               onClick={() => setShowTemplateHelp(!showTemplateHelp)}
             >
-              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-            </Button>
+              <HelpCircle className="h-4 w-4" />
+            </ActionIcon>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleImportClick}>
-              <Upload className="h-4 w-4 mr-1" /> Import
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              radius="md"
+              leftSection={<Upload className="h-4 w-4" />}
+              onClick={handleImportClick}
+            >
+              Import
             </Button>
             {templates && templates.length > 0 && (
-              <Button variant="outline" size="sm" onClick={handleExportTemplates}>
-                <Download className="h-4 w-4 mr-1" /> Export
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                radius="md"
+                leftSection={<Download className="h-4 w-4" />}
+                onClick={handleExportTemplates}
+              >
+                Export
               </Button>
             )}
             {!showAddTemplateForm && (
-              <Button variant="outline" size="sm" onClick={() => setShowAddTemplateForm(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Add
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                radius="md"
+                leftSection={<Plus className="h-4 w-4" />}
+                aria-label="Add template"
+                onClick={() => setShowAddTemplateForm(true)}
+              >
+                Add
               </Button>
             )}
           </div>
@@ -290,8 +333,7 @@ export function ManageTab() {
                     lists
                   </div>
                   <div>
-                    <strong className="text-foreground">Categories:</strong> Bug 🐛, Feature ✨,
-                    Sprint 🔄
+                    <strong className="text-foreground">Categories:</strong> Bug, Feature, Sprint
                   </div>
                   <div>
                     <strong className="text-foreground">Variables:</strong> {'{{date}}'},{' '}

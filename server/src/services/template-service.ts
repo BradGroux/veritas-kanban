@@ -66,6 +66,13 @@ export class TemplateService {
     return obj;
   }
 
+  private cleanTemplateForYaml(template: TaskTemplate): Record<string, unknown> {
+    return {
+      ...(this.cleanForYaml(template) ?? {}),
+      taskDefaults: this.cleanForYaml(template.taskDefaults) ?? {},
+    };
+  }
+
   private slugify(name: string): string {
     return name
       .toLowerCase()
@@ -87,7 +94,10 @@ export class TemplateService {
   private migrateTemplate(data: any): TaskTemplate {
     // If version is already 1, no migration needed
     if (data.version === 1) {
-      return data as TaskTemplate;
+      return {
+        ...data,
+        taskDefaults: data.taskDefaults ?? {},
+      } as TaskTemplate;
     }
 
     // Migrate v0 to v1
@@ -186,7 +196,7 @@ export class TemplateService {
     };
 
     // Recursively filter out undefined values for YAML serialization
-    const cleanTemplate = this.cleanForYaml(template);
+    const cleanTemplate = this.cleanTemplateForYaml(template);
 
     const content = matter.stringify('', cleanTemplate);
     await writeFile(this.templatePath(id), content, 'utf-8');
@@ -218,7 +228,7 @@ export class TemplateService {
     };
 
     // Recursively filter out undefined values for YAML serialization
-    const cleanTemplate = this.cleanForYaml(updated);
+    const cleanTemplate = this.cleanTemplateForYaml(updated);
 
     const content = matter.stringify('', cleanTemplate);
     await writeFile(this.templatePath(id), content, 'utf-8');

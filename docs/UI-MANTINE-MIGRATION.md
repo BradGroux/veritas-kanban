@@ -298,6 +298,10 @@ Phase 3 progress:
 - Shared managed-list settings controls now use direct Mantine text input,
   button, and action icon primitives while preserving create, inline edit,
   keyboard save/cancel, drag handles, and explicit move/delete actions.
+- Manage settings extra fields and template controls now use direct Mantine
+  text input, textarea, select, button, badge, and action icon primitives while
+  preserving managed-list metadata edits, template import/export/help, template
+  create, and template delete behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
