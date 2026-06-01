@@ -1,25 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Button,
+  Code,
+  Drawer,
+  Group,
+  Loader,
+  Modal,
+  Paper,
+  ScrollArea,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+} from '@mantine/core';
 import {
   useConflictStatus,
   useFileConflict,
@@ -126,59 +119,75 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-[90vw] sm:max-w-[1200px] p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b">
-            <div className="flex items-center justify-between pr-8">
-              <div>
-                <SheetTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Merge Conflicts
-                </SheetTitle>
-                <SheetDescription>
-                  {status?.rebaseInProgress ? 'Rebase' : 'Merge'} has conflicts that need to be
-                  resolved
-                </SheetDescription>
-              </div>
+      <Drawer
+        opened={open}
+        onClose={() => onOpenChange(false)}
+        position="right"
+        size="90vw"
+        padding={0}
+        title={
+          <Group gap="xs">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <Text fw={600}>Merge Conflicts</Text>
+          </Group>
+        }
+      >
+        <Stack gap={0} className="h-[calc(100vh-64px)]">
+          <Group justify="space-between" align="center" className="border-b px-6 py-4">
+            <Text size="sm" c="dimmed">
+              {status?.rebaseInProgress ? 'Rebase' : 'Merge'} has conflicts that need to be resolved
+            </Text>
 
-              <div className="flex items-center gap-2">
-                {status?.conflictingFiles.length === 0 && (
-                  <Button onClick={handleContinue} disabled={continueConflict.isPending}>
-                    {continueConflict.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Group gap="xs">
+              {status?.conflictingFiles.length === 0 && (
+                <Button
+                  onClick={handleContinue}
+                  disabled={continueConflict.isPending}
+                  leftSection={
+                    continueConflict.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <GitMerge className="h-4 w-4 mr-2" />
-                    )}
-                    Continue {status?.rebaseInProgress ? 'Rebase' : 'Merge'}
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => setShowAbortDialog(true)}>
-                  <X className="h-4 w-4 mr-2" />
-                  Abort
+                      <GitMerge className="h-4 w-4" />
+                    )
+                  }
+                >
+                  Continue {status?.rebaseInProgress ? 'Rebase' : 'Merge'}
                 </Button>
-              </div>
-            </div>
-          </SheetHeader>
+              )}
+              <Button
+                variant="outline"
+                color="red"
+                onClick={() => setShowAbortDialog(true)}
+                leftSection={<X className="h-4 w-4" />}
+              >
+                Abort
+              </Button>
+            </Group>
+          </Group>
 
           <div className="flex flex-1 overflow-hidden">
             {/* File list sidebar */}
             <div className="w-64 border-r flex flex-col">
               <div className="p-3 border-b bg-muted/50">
-                <h3 className="text-sm font-medium">
+                <Text size="sm" fw={500}>
                   Conflicting Files ({status?.conflictingFiles.length || 0})
-                </h3>
+                </Text>
               </div>
               <ScrollArea className="flex-1">
                 {statusLoading ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                    Loading...
-                  </div>
+                  <Stack align="center" gap="xs" className="p-4" c="dimmed">
+                    <Loader color="gray" size="sm" />
+                    <Text size="sm" c="dimmed">
+                      Loading...
+                    </Text>
+                  </Stack>
                 ) : status?.conflictingFiles.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground">
+                  <Stack align="center" gap="xs" className="p-4">
                     <Check className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                    All conflicts resolved!
-                  </div>
+                    <Text size="sm" c="dimmed">
+                      All conflicts resolved!
+                    </Text>
+                  </Stack>
                 ) : (
                   <div className="p-2">
                     {status?.conflictingFiles.map((file) => (
@@ -211,169 +220,193 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
                   <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="subtle"
+                        size="xs"
                         onClick={() => navigateFile('prev')}
                         disabled={!status?.conflictingFiles.length}
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <span className="text-sm">
+                      <Text size="sm">
                         {currentIndex + 1} of {status?.conflictingFiles.length}
-                      </span>
+                      </Text>
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="subtle"
+                        size="xs"
                         onClick={() => navigateFile('next')}
                         disabled={!status?.conflictingFiles.length}
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
-                    <code className="text-sm bg-muted px-2 py-1 rounded">{selectedFile}</code>
+                    <Code>{selectedFile}</Code>
                   </div>
 
                   {/* Conflict viewer tabs */}
                   <Tabs defaultValue="sidebyside" className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="mx-4 mt-2 w-fit">
-                      <TabsTrigger value="sidebyside">Side by Side</TabsTrigger>
-                      <TabsTrigger value="manual">Manual Edit</TabsTrigger>
-                    </TabsList>
+                    <Tabs.List className="mx-4 mt-2 w-fit">
+                      <Tabs.Tab value="sidebyside">Side by Side</Tabs.Tab>
+                      <Tabs.Tab value="manual">Manual Edit</Tabs.Tab>
+                    </Tabs.List>
 
                     {/* Side by side view */}
-                    <TabsContent value="sidebyside" className="flex-1 overflow-hidden m-0 p-4">
+                    <Tabs.Panel value="sidebyside" className="m-0 flex-1 overflow-hidden p-4">
                       <div className="grid grid-cols-2 gap-4 h-full">
                         {/* Ours */}
-                        <div className="flex flex-col border rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 bg-blue-500/10 border-b flex items-center justify-between">
-                            <span className="text-sm font-medium flex items-center gap-2">
+                        <Paper className="flex flex-col overflow-hidden" radius="md" withBorder>
+                          <Group
+                            justify="space-between"
+                            className="border-b bg-blue-500/10 px-3 py-2"
+                          >
+                            <Group gap="xs">
                               <ArrowLeft className="h-4 w-4" />
-                              Ours (Current)
-                            </span>
+                              <Text size="sm" fw={500}>
+                                Ours (Current)
+                              </Text>
+                            </Group>
                             <Button
-                              size="sm"
+                              size="xs"
                               variant="outline"
                               onClick={() => handleResolve('ours')}
                               disabled={resolveConflict.isPending}
+                              leftSection={
+                                resolveConflict.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )
+                              }
                             >
-                              {resolveConflict.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <>
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Accept Ours
-                                </>
-                              )}
+                              Accept Ours
                             </Button>
-                          </div>
+                          </Group>
                           <ScrollArea className="flex-1">
                             <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
                               {fileConflict.oursContent || '(empty)'}
                             </pre>
                           </ScrollArea>
-                        </div>
+                        </Paper>
 
                         {/* Theirs */}
-                        <div className="flex flex-col border rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 bg-green-500/10 border-b flex items-center justify-between">
-                            <span className="text-sm font-medium flex items-center gap-2">
+                        <Paper className="flex flex-col overflow-hidden" radius="md" withBorder>
+                          <Group
+                            justify="space-between"
+                            className="border-b bg-green-500/10 px-3 py-2"
+                          >
+                            <Group gap="xs">
                               <ArrowRight className="h-4 w-4" />
-                              Theirs (Incoming)
-                            </span>
+                              <Text size="sm" fw={500}>
+                                Theirs (Incoming)
+                              </Text>
+                            </Group>
                             <Button
-                              size="sm"
+                              size="xs"
                               variant="outline"
                               onClick={() => handleResolve('theirs')}
                               disabled={resolveConflict.isPending}
+                              leftSection={
+                                resolveConflict.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )
+                              }
                             >
-                              {resolveConflict.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <>
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Accept Theirs
-                                </>
-                              )}
+                              Accept Theirs
                             </Button>
-                          </div>
+                          </Group>
                           <ScrollArea className="flex-1">
                             <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
                               {fileConflict.theirsContent || '(empty)'}
                             </pre>
                           </ScrollArea>
-                        </div>
+                        </Paper>
                       </div>
-                    </TabsContent>
+                    </Tabs.Panel>
 
                     {/* Manual edit view */}
-                    <TabsContent
+                    <Tabs.Panel
                       value="manual"
                       className="flex-1 overflow-hidden m-0 p-4 flex flex-col"
                     >
-                      <div className="flex-1 flex flex-col border rounded-lg overflow-hidden">
-                        <div className="px-3 py-2 bg-muted/50 border-b flex items-center justify-between">
-                          <span className="text-sm font-medium">Manual Resolution</span>
+                      <Paper
+                        className="flex flex-1 flex-col overflow-hidden"
+                        radius="md"
+                        withBorder
+                      >
+                        <Group justify="space-between" className="border-b bg-muted/50 px-3 py-2">
+                          <Text size="sm" fw={500}>
+                            Manual Resolution
+                          </Text>
                           <Button
-                            size="sm"
+                            size="xs"
                             onClick={() => handleResolve('manual')}
                             disabled={resolveConflict.isPending}
+                            leftSection={
+                              resolveConflict.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )
+                            }
                           >
-                            {resolveConflict.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4 mr-2" />
-                            )}
                             Save Resolution
                           </Button>
-                        </div>
+                        </Group>
                         <Textarea
                           value={manualContent}
-                          onChange={(e) => setManualContent(e.target.value)}
+                          onChange={(e) => setManualContent(e.currentTarget.value)}
                           className="flex-1 font-mono text-xs resize-none border-0 rounded-none focus-visible:ring-0"
                           placeholder="Edit the file content to resolve conflicts..."
                         />
-                      </div>
-                    </TabsContent>
+                      </Paper>
+                    </Tabs.Panel>
                   </Tabs>
                 </>
               ) : fileLoading ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
+                <Stack align="center" justify="center" className="flex-1">
+                  <Loader color="gray" size="md" />
+                </Stack>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                <Text className="flex flex-1 items-center justify-center" c="dimmed">
                   Select a file to resolve conflicts
-                </div>
+                </Text>
               )}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </Stack>
+      </Drawer>
 
       {/* Abort confirmation dialog */}
-      <AlertDialog open={showAbortDialog} onOpenChange={setShowAbortDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Abort {status?.rebaseInProgress ? 'Rebase' : 'Merge'}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will discard all conflict resolutions and return to the state before the
-              {status?.rebaseInProgress ? ' rebase' : ' merge'} started.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleAbort}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      <Modal
+        opened={showAbortDialog}
+        onClose={() => setShowAbortDialog(false)}
+        title={`Abort ${status?.rebaseInProgress ? 'Rebase' : 'Merge'}?`}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            This will discard all conflict resolutions and return to the state before the
+            {status?.rebaseInProgress ? ' rebase' : ' merge'} started.
+          </Text>
+          <Group justify="flex-end" gap="xs">
+            <Button variant="default" onClick={() => setShowAbortDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                void handleAbort();
+              }}
+              leftSection={
+                abortConflict.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined
+              }
             >
-              {abortConflict.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Abort
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }

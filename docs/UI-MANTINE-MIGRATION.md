@@ -361,6 +361,12 @@ Phase 3 progress:
   scroll area, modal, stack, group, and text primitives while preserving Git
   updates, worktree create/rebase/merge/delete actions, PR draft creation,
   workflow start behavior, run-mode changes, and QA gate toggles.
+- Task detail review decisions, inline review comments, preview drawer, and
+  conflict-resolution drawer now use direct Mantine drawer, modal, tabs,
+  textarea, button, action icon, code, paper, scroll area, stack, group, text,
+  loader, and theme icon primitives while preserving review decision summaries,
+  merge confirmation, inline comment add/remove, preview output/external/stop
+  controls, manual conflict resolution, and abort behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

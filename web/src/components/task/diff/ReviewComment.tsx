@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { ActionIcon, Button, Group, Paper, Text, Textarea } from '@mantine/core';
 import { X } from 'lucide-react';
 import type { ReviewComment } from '@veritas-kanban/shared';
 import { sanitizeText } from '@/lib/sanitize';
@@ -21,24 +20,24 @@ export function CommentInput({ onSubmit, onCancel }: CommentInputProps) {
   };
 
   return (
-    <div className="p-2 bg-amber-500/10 border-l-2 border-amber-500 space-y-2">
+    <Paper className="space-y-2 border-l-2 border-amber-500 bg-amber-500/10 p-2" radius={0}>
       <Textarea
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => setContent(e.currentTarget.value)}
         placeholder="Add review comment..."
-        rows={2}
+        minRows={2}
         className="text-xs"
         autoFocus
       />
-      <div className="flex gap-2">
+      <Group gap="xs">
         <Button size="sm" onClick={handleSubmit} disabled={!content.trim()}>
           Add Comment
         </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+        <Button size="sm" variant="subtle" onClick={onCancel}>
           Cancel
         </Button>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 }
 
@@ -49,19 +48,25 @@ interface CommentDisplayProps {
 
 export function CommentDisplay({ comment, onRemove }: CommentDisplayProps) {
   return (
-    <div className="p-2 bg-amber-500/10 border-l-2 border-amber-500 group">
-      <div className="flex items-start justify-between">
-        <p className="text-xs whitespace-pre-wrap">{sanitizeText(comment.content)}</p>
-        <button
+    <Paper className="group border-l-2 border-amber-500 bg-amber-500/10 p-2" radius={0}>
+      <Group align="flex-start" justify="space-between" wrap="nowrap">
+        <Text size="xs" className="whitespace-pre-wrap">
+          {sanitizeText(comment.content)}
+        </Text>
+        <ActionIcon
+          aria-label="Remove review comment"
+          variant="subtle"
+          color="red"
+          size="xs"
           onClick={onRemove}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+          className="opacity-0 transition-opacity group-hover:opacity-100"
         >
           <X className="h-3 w-3" />
-        </button>
-      </div>
-      <p className="text-[10px] text-muted-foreground mt-1">
+        </ActionIcon>
+      </Group>
+      <Text size="10px" c="dimmed" className="mt-1">
         {new Date(comment.created).toLocaleString()}
-      </p>
-    </div>
+      </Text>
+    </Paper>
   );
 }

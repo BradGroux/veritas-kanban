@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
+  ActionIcon,
+  Button,
+  Code,
+  Drawer,
+  Group,
+  Loader,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+} from '@mantine/core';
 import {
   usePreviewStatus,
   usePreviewOutput,
@@ -25,7 +28,6 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { Task } from '@veritas-kanban/shared';
-import { cn } from '@/lib/utils';
 
 interface PreviewPanelProps {
   task: Task;
@@ -67,132 +69,141 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[800px] sm:max-w-[800px] p-0 flex flex-col">
-        <SheetHeader className="px-6 py-4 border-b">
-          <div className="flex items-center justify-between pr-8">
-            <div>
-              <SheetTitle className="flex items-center gap-2">
-                <Monitor className="h-5 w-5" />
-                Preview
-              </SheetTitle>
-              <SheetDescription>
-                {task.git?.repo ? `Dev server for ${task.git.repo}` : 'No repository configured'}
-              </SheetDescription>
-            </div>
+    <Drawer
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      position="right"
+      size="min(800px, 92vw)"
+      padding={0}
+      title={
+        <Group gap="xs">
+          <Monitor className="h-5 w-5" />
+          <Text fw={600}>Preview</Text>
+        </Group>
+      }
+    >
+      <Stack gap={0} className="h-[calc(100vh-64px)]">
+        <Group justify="space-between" align="center" className="border-b px-6 py-4">
+          <Text size="sm" c="dimmed">
+            {task.git?.repo ? `Dev server for ${task.git.repo}` : 'No repository configured'}
+          </Text>
 
-            {/* Controls */}
-            <div className="flex items-center gap-2">
-              {isRunning && (
-                <>
-                  <Button variant="outline" size="sm" onClick={handleRefresh}>
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleOpenExternal}>
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowOutput(!showOutput)}
-                    className={cn(showOutput && 'bg-muted')}
-                  >
-                    <Terminal className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleStop}
-                    disabled={stopPreview.isPending}
-                  >
-                    {stopPreview.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Square className="h-4 w-4" />
-                    )}
-                  </Button>
-                </>
-              )}
-
-              {!isRunning && !isStarting && (
-                <Button onClick={handleStart} disabled={startPreview.isPending || !task.git?.repo}>
-                  {startPreview.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Starting...
-                    </>
+          {/* Controls */}
+          <Group gap="xs">
+            {isRunning && (
+              <>
+                <ActionIcon
+                  variant="outline"
+                  size="lg"
+                  aria-label="Refresh preview"
+                  onClick={handleRefresh}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </ActionIcon>
+                <ActionIcon
+                  variant="outline"
+                  size="lg"
+                  aria-label="Open preview externally"
+                  onClick={handleOpenExternal}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </ActionIcon>
+                <ActionIcon
+                  variant={showOutput ? 'filled' : 'outline'}
+                  size="lg"
+                  aria-label="Toggle preview output"
+                  onClick={() => setShowOutput(!showOutput)}
+                >
+                  <Terminal className="h-4 w-4" />
+                </ActionIcon>
+                <ActionIcon
+                  color="red"
+                  variant="filled"
+                  size="lg"
+                  aria-label="Stop preview"
+                  onClick={handleStop}
+                  disabled={stopPreview.isPending}
+                >
+                  {stopPreview.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Preview
-                    </>
+                    <Square className="h-4 w-4" />
                   )}
-                </Button>
-              )}
-            </div>
-          </div>
-        </SheetHeader>
+                </ActionIcon>
+              </>
+            )}
+
+            {!isRunning && !isStarting && (
+              <Button
+                onClick={handleStart}
+                disabled={startPreview.isPending || !task.git?.repo}
+                leftSection={
+                  startPreview.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )
+                }
+              >
+                {startPreview.isPending ? 'Starting...' : 'Start Preview'}
+              </Button>
+            )}
+          </Group>
+        </Group>
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
           {/* Loading state */}
           {(isLoading || isStarting) && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  {isStarting ? 'Starting dev server...' : 'Loading...'}
-                </p>
-                {isStarting && status && 'output' in status && status.output.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-2 font-mono">
-                    {status.output[status.output.length - 1]?.slice(0, 80)}
-                  </p>
-                )}
-              </div>
-            </div>
+            <Stack align="center" justify="center" gap="sm" className="flex-1">
+              <Loader color="gray" size="md" />
+              <Text c="dimmed">{isStarting ? 'Starting dev server...' : 'Loading...'}</Text>
+              {isStarting && status && 'output' in status && status.output.length > 0 && (
+                <Text size="xs" c="dimmed" className="font-mono">
+                  {status.output[status.output.length - 1]?.slice(0, 80)}
+                </Text>
+              )}
+            </Stack>
           )}
 
           {/* Error state */}
           {hasError && !isStarting && (
-            <div className="flex-1 flex items-center justify-center p-6">
-              <div className="text-center max-w-md">
-                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-                <h3 className="font-semibold mb-2">Preview Error</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {status && 'error' in status ? status.error : 'An error occurred'}
-                </p>
-                <Button onClick={handleStart}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Try Again
-                </Button>
-              </div>
-            </div>
+            <Stack align="center" justify="center" gap="sm" className="flex-1 p-6" ta="center">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+              <Text fw={600}>Preview Error</Text>
+              <Text size="sm" c="dimmed" className="max-w-md">
+                {status && 'error' in status ? status.error : 'An error occurred'}
+              </Text>
+              <Button onClick={handleStart} leftSection={<RefreshCw className="h-4 w-4" />}>
+                Try Again
+              </Button>
+            </Stack>
           )}
 
           {/* Stopped state */}
           {!isRunning && !isStarting && !hasError && !isLoading && (
-            <div className="flex-1 flex items-center justify-center p-6">
-              <div className="text-center max-w-md">
-                <Monitor className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="font-semibold mb-2">Preview Not Running</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {task.git?.repo
-                    ? 'Start the dev server to see a live preview of your changes.'
-                    : 'Configure a repository for this task to use preview.'}
-                </p>
-                {startPreview.error && (
-                  <p className="text-sm text-red-500 mb-4">{startPreview.error.message}</p>
-                )}
-              </div>
-            </div>
+            <Stack align="center" justify="center" gap="sm" className="flex-1 p-6" ta="center">
+              <Monitor className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <Text fw={600}>Preview Not Running</Text>
+              <Text size="sm" c="dimmed" className="max-w-md">
+                {task.git?.repo
+                  ? 'Start the dev server to see a live preview of your changes.'
+                  : 'Configure a repository for this task to use preview.'}
+              </Text>
+              {startPreview.error && (
+                <Text size="sm" c="red">
+                  {startPreview.error.message}
+                </Text>
+              )}
+            </Stack>
           )}
 
           {/* Running - show iframe */}
           {isRunning && previewUrl && (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
               {/* Output panel (collapsible) */}
               {showOutput && (
-                <div className="h-48 border-b bg-black text-green-400 font-mono text-xs">
+                <Paper className="h-48 rounded-none border-b bg-black font-mono text-xs text-green-400">
                   <ScrollArea className="h-full">
                     <div className="p-4">
                       {outputData?.output.map((line, i) => (
@@ -202,14 +213,16 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                       ))}
                     </div>
                   </ScrollArea>
-                </div>
+                </Paper>
               )}
 
               {/* URL bar */}
-              <div className="px-4 py-2 border-b bg-muted/50 flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">URL:</span>
-                <code className="text-xs bg-muted px-2 py-1 rounded flex-1">{previewUrl}</code>
-              </div>
+              <Group gap="xs" className="border-b bg-muted/50 px-4 py-2" wrap="nowrap">
+                <Text size="xs" c="dimmed">
+                  URL:
+                </Text>
+                <Code className="min-w-0 flex-1 truncate">{previewUrl}</Code>
+              </Group>
 
               {/* iframe */}
               <div className="flex-1 bg-white">
@@ -221,10 +234,10 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                 />
               </div>
-            </div>
+            </Stack>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+        </Stack>
+      </Stack>
+    </Drawer>
   );
 }
