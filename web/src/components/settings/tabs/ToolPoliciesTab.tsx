@@ -6,22 +6,21 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Group,
+  Modal,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { useToast } from '@/hooks/useToast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Shield, Info } from 'lucide-react';
+import { Edit, Info, Plus, Shield, Trash2 } from 'lucide-react';
 
 interface ToolPolicy {
   role: string;
@@ -171,21 +170,29 @@ export function ToolPoliciesTab() {
         </p>
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex gap-2">
-          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-900 dark:text-blue-100">
-            <strong>Default roles:</strong> planner, developer, reviewer, tester, deployer.
-            <br />
-            Default policies can be edited but not deleted. Custom roles can be created for
-            specialized workflows.
-          </div>
-        </div>
-      </div>
+      <Alert
+        color="blue"
+        variant="light"
+        radius="md"
+        icon={<Info className="h-5 w-5" />}
+        className="border border-blue-200 dark:border-blue-800"
+      >
+        <Text size="sm">
+          <strong>Default roles:</strong> planner, developer, reviewer, tester, deployer.
+          <br />
+          Default policies can be edited but not deleted. Custom roles can be created for
+          specialized workflows.
+        </Text>
+      </Alert>
 
       <div className="flex justify-end">
-        <Button onClick={() => openEditDialog(null)} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
+        <Button
+          type="button"
+          onClick={() => openEditDialog(null)}
+          size="sm"
+          radius="md"
+          leftSection={<Plus className="h-4 w-4" />}
+        >
           New Policy
         </Button>
       </div>
@@ -206,7 +213,7 @@ export function ToolPoliciesTab() {
                   <div className="flex items-center gap-2">
                     <h4 className="font-semibold">{policy.role}</h4>
                     {DEFAULT_ROLES.has(policy.role) && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="light" color="gray" size="xs">
                         default
                       </Badge>
                     )}
@@ -222,16 +229,18 @@ export function ToolPoliciesTab() {
                       {policy.allowed.length === 0 ? (
                         <span className="text-muted-foreground">none</span>
                       ) : policy.allowed.includes('*') ? (
-                        <Badge variant="outline">all tools</Badge>
+                        <Badge variant="outline" color="gray">
+                          all tools
+                        </Badge>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {policy.allowed.slice(0, 5).map((tool) => (
-                            <Badge key={tool} variant="outline" className="text-xs">
+                            <Badge key={tool} variant="outline" color="gray" size="xs">
                               {tool}
                             </Badge>
                           ))}
                           {policy.allowed.length > 5 && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" color="gray" size="xs">
                               +{policy.allowed.length - 5} more
                             </Badge>
                           )}
@@ -246,12 +255,12 @@ export function ToolPoliciesTab() {
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {policy.denied.slice(0, 5).map((tool) => (
-                            <Badge key={tool} variant="destructive" className="text-xs">
+                            <Badge key={tool} variant="light" color="red" size="xs">
                               {tool}
                             </Badge>
                           ))}
                           {policy.denied.length > 5 && (
-                            <Badge variant="destructive" className="text-xs">
+                            <Badge variant="light" color="red" size="xs">
                               +{policy.denied.length - 5} more
                             </Badge>
                           )}
@@ -262,23 +271,29 @@ export function ToolPoliciesTab() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button
-                    variant="ghost"
+                  <ActionIcon
+                    type="button"
+                    variant="subtle"
+                    color="gray"
                     size="sm"
+                    radius="md"
+                    aria-label={`Edit ${policy.role}`}
                     onClick={() => openEditDialog(policy)}
-                    className="h-8 w-8 p-0"
                   >
                     <Edit className="h-4 w-4" />
-                  </Button>
+                  </ActionIcon>
                   {!DEFAULT_ROLES.has(policy.role) && (
-                    <Button
-                      variant="ghost"
+                    <ActionIcon
+                      type="button"
+                      variant="subtle"
+                      color="red"
                       size="sm"
+                      radius="md"
+                      aria-label={`Delete ${policy.role}`}
                       onClick={() => handleDeletePolicy(policy.role)}
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </ActionIcon>
                   )}
                 </div>
               </div>
@@ -287,77 +302,76 @@ export function ToolPoliciesTab() {
         )}
       </div>
 
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{isNew ? 'Create Tool Policy' : `Edit Policy: ${formRole}`}</DialogTitle>
-            <DialogDescription>
-              Define tool access restrictions for an agent role. Denied tools take precedence over
-              allowed tools.
-            </DialogDescription>
-          </DialogHeader>
+      <Modal
+        opened={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        title={isNew ? 'Create Tool Policy' : `Edit Policy: ${formRole}`}
+        size="lg"
+        radius="md"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Define tool access restrictions for an agent role. Denied tools take precedence over
+            allowed tools.
+          </Text>
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="role">Role Name</Label>
-              <Input
-                id="role"
-                value={formRole}
-                onChange={(e) => setFormRole(e.target.value)}
-                placeholder="e.g., analyst, deployer, custom-role"
-                disabled={!isNew}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Role name (lowercase, no spaces). Cannot be changed after creation.
-              </p>
-            </div>
+          <TextInput
+            label="Role Name"
+            description="Role name (lowercase, no spaces). Cannot be changed after creation."
+            value={formRole}
+            onChange={(e) => setFormRole(e.target.value)}
+            placeholder="e.g., analyst, deployer, custom-role"
+            disabled={!isNew}
+            size="sm"
+            radius="md"
+          />
 
-            <div>
-              <Label htmlFor="allowed">Allowed Tools</Label>
-              <Input
-                id="allowed"
-                value={formAllowed}
-                onChange={(e) => setFormAllowed(e.target.value)}
-                placeholder="e.g., Read, web_search, browser or * for all"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Comma-separated list of tool names. Use * to allow all tools.
-              </p>
-            </div>
+          <TextInput
+            label="Allowed Tools"
+            description="Comma-separated list of tool names. Use * to allow all tools."
+            value={formAllowed}
+            onChange={(e) => setFormAllowed(e.target.value)}
+            placeholder="e.g., Read, web_search, browser or * for all"
+            size="sm"
+            radius="md"
+          />
 
-            <div>
-              <Label htmlFor="denied">Denied Tools</Label>
-              <Input
-                id="denied"
-                value={formDenied}
-                onChange={(e) => setFormDenied(e.target.value)}
-                placeholder="e.g., Write, Edit, exec, message"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Comma-separated list of tool names. Denied tools take precedence.
-              </p>
-            </div>
+          <TextInput
+            label="Denied Tools"
+            description="Comma-separated list of tool names. Denied tools take precedence."
+            value={formDenied}
+            onChange={(e) => setFormDenied(e.target.value)}
+            placeholder="e.g., Write, Edit, exec, message"
+            size="sm"
+            radius="md"
+          />
 
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Describe when to use this role and what it can do..."
-                rows={3}
-              />
-            </div>
-          </div>
+          <Textarea
+            label="Description"
+            value={formDescription}
+            onChange={(e) => setFormDescription(e.target.value)}
+            placeholder="Describe when to use this role and what it can do..."
+            rows={3}
+            size="sm"
+            radius="md"
+          />
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              type="button"
+              variant="outline"
+              radius="md"
+              onClick={() => setEditDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSavePolicy}>{isNew ? 'Create' : 'Save Changes'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Button type="button" radius="md" onClick={handleSavePolicy}>
+              {isNew ? 'Create' : 'Save Changes'}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </div>
   );
 }
