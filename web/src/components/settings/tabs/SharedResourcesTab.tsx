@@ -1,7 +1,7 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
-import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
+import { Checkbox, NumberInput } from '@mantine/core';
+import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings } from '@veritas-kanban/shared';
 import { ToggleRow, SectionHeader, SaveIndicator, SettingRow } from '../shared';
-import { Checkbox } from '@/components/ui/checkbox';
 
 const TYPE_OPTIONS: Array<{
   key: 'prompt' | 'guideline' | 'skill' | 'config' | 'template';
@@ -20,7 +20,7 @@ export function SharedResourcesTab() {
 
   const sharedResources = settings?.sharedResources ?? DEFAULT_FEATURE_SETTINGS.sharedResources;
 
-  const updateSharedResources = (patch: Record<string, any>) => {
+  const updateSharedResources = (patch: Partial<FeatureSettings['sharedResources']>) => {
     debouncedUpdate({ sharedResources: { ...sharedResources, ...patch } });
   };
 
@@ -62,19 +62,21 @@ export function SharedResourcesTab() {
             label="Max Resources"
             description="Global limit for shared resources (1-1000)"
           >
-            <div className="flex items-center gap-3 min-w-[200px]">
-              <input
-                type="range"
-                min={1}
-                max={1000}
-                value={sharedResources.maxResources}
-                onChange={(e) => updateSharedResources({ maxResources: Number(e.target.value) })}
-                className="w-40"
-              />
-              <span className="text-xs text-muted-foreground w-10 text-right">
-                {sharedResources.maxResources}
-              </span>
-            </div>
+            <NumberInput
+              min={1}
+              max={1000}
+              value={sharedResources.maxResources}
+              onChange={(value) => {
+                const nextValue = typeof value === 'number' ? value : Number(value);
+                if (Number.isFinite(nextValue)) {
+                  updateSharedResources({ maxResources: nextValue });
+                }
+              }}
+              size="xs"
+              radius="md"
+              w={160}
+              aria-label="Max Resources"
+            />
           </SettingRow>
         )}
       </div>
@@ -86,13 +88,13 @@ export function SharedResourcesTab() {
           </h4>
           <div className="space-y-2">
             {TYPE_OPTIONS.map((option) => (
-              <label key={option.key} className="flex items-center gap-3 text-sm">
-                <Checkbox
-                  checked={allowedTypes.includes(option.key)}
-                  onCheckedChange={() => toggleAllowedType(option.key)}
-                />
-                <span>{option.label}</span>
-              </label>
+              <Checkbox
+                key={option.key}
+                checked={allowedTypes.includes(option.key)}
+                onChange={() => toggleAllowedType(option.key)}
+                label={option.label}
+                radius="sm"
+              />
             ))}
           </div>
         </div>

@@ -302,6 +302,10 @@ Phase 3 progress:
   text input, textarea, select, button, badge, and action icon primitives while
   preserving managed-list metadata edits, template import/export/help, template
   create, and template delete behavior.
+- Tool Policies and Shared Resources settings now use direct Mantine alert,
+  modal, text input, textarea, checkbox, number input, badge, button, and action
+  icon primitives while preserving policy list/edit/create/delete affordances
+  and shared-resource allowed-type/max-resource controls.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
