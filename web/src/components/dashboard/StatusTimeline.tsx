@@ -4,7 +4,7 @@ import {
   calculateActivePercent,
   type DailySummary,
 } from '@/hooks/useStatusHistory';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Box, Group, Paper, SimpleGrid, Skeleton, Stack, Text, ThemeIcon } from '@mantine/core';
 import { Clock, Activity, Coffee } from 'lucide-react';
 
 interface StatusTimelineProps {
@@ -16,9 +16,9 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
 
   if (total === 0) {
     return (
-      <div className="h-8 bg-muted rounded-md flex items-center justify-center text-sm text-muted-foreground">
+      <Box className="flex h-8 items-center justify-center rounded-md bg-muted text-sm text-muted-foreground">
         No activity recorded
-      </div>
+      </Box>
     );
   }
 
@@ -28,7 +28,7 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
   const errorPercent = (summary.errorMs / total) * 100;
 
   return (
-    <div className="h-8 rounded-md overflow-hidden flex">
+    <Group className="h-8 overflow-hidden rounded-md" gap={0} wrap="nowrap">
       {activePercent > 0 && (
         <div
           className="bg-green-500 flex items-center justify-center text-xs text-white font-medium transition-all"
@@ -56,7 +56,7 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
           {errorPercent >= 15 && formatDurationMs(summary.errorMs)}
         </div>
       )}
-    </div>
+    </Group>
   );
 }
 
@@ -65,83 +65,101 @@ export function StatusTimeline({ date }: StatusTimelineProps) {
 
   if (summaryLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-full" />
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-        </div>
-      </div>
+      <Stack gap="md">
+        <Skeleton h={32} radius="md" />
+        <SimpleGrid cols={3} spacing="md">
+          <Skeleton h={80} radius="md" />
+          <Skeleton h={80} radius="md" />
+          <Skeleton h={80} radius="md" />
+        </SimpleGrid>
+      </Stack>
     );
   }
 
   if (!summary) {
-    return <div className="text-center text-muted-foreground py-4">No status data available</div>;
+    return (
+      <Text ta="center" c="dimmed" py="md">
+        No status data available
+      </Text>
+    );
   }
 
   const activePercent = calculateActivePercent(summary);
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {/* Daily Activity — full width */}
-      <div className="space-y-4">
+      <Stack gap="md">
         {/* Timeline Bar */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-muted-foreground">
+          <Group justify="space-between" mb="xs">
+            <Text size="sm" fw={500} c="dimmed">
               Daily Activity ({summary.date})
-            </h4>
-            <span className="text-sm font-medium">{activePercent}% active</span>
-          </div>
+            </Text>
+            <Text size="sm" fw={500}>
+              {activePercent}% active
+            </Text>
+          </Group>
           <TimelineBar summary={summary} />
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border bg-green-500/10 border-green-500/20 p-3 text-center">
-            <Activity className="h-4 w-4 mx-auto mb-1 text-green-500" />
+        <SimpleGrid cols={3} spacing="md">
+          <Paper
+            withBorder
+            p="sm"
+            radius="md"
+            ta="center"
+            className="border-green-500/20 bg-green-500/10"
+          >
+            <ThemeIcon color="green" variant="transparent" mx="auto" mb={4} size="sm">
+              <Activity className="h-4 w-4" />
+            </ThemeIcon>
             <div className="text-lg font-bold text-green-500">
               {formatDurationMs(summary.activeMs)}
             </div>
             <div className="text-xs text-muted-foreground">Active</div>
-          </div>
+          </Paper>
 
-          <div className="rounded-lg border bg-muted/50 p-3 text-center">
-            <Coffee className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+          <Paper withBorder p="sm" radius="md" ta="center" className="bg-muted/50">
+            <ThemeIcon color="gray" variant="transparent" mx="auto" mb={4} size="sm">
+              <Coffee className="h-4 w-4" />
+            </ThemeIcon>
             <div className="text-lg font-bold text-muted-foreground">
               {formatDurationMs(summary.idleMs)}
             </div>
             <div className="text-xs text-muted-foreground">Idle</div>
-          </div>
+          </Paper>
 
-          <div className="rounded-lg border bg-card p-3 text-center">
-            <Clock className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+          <Paper withBorder p="sm" radius="md" ta="center">
+            <ThemeIcon color="gray" variant="transparent" mx="auto" mb={4} size="sm">
+              <Clock className="h-4 w-4" />
+            </ThemeIcon>
             <div className="text-lg font-bold">{summary.transitions}</div>
             <div className="text-xs text-muted-foreground">Transitions</div>
-          </div>
-        </div>
-      </div>
+          </Paper>
+        </SimpleGrid>
+      </Stack>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground justify-center pt-2 border-t">
-        <div className="flex items-center gap-1">
+      <Group gap="md" justify="center" className="border-t pt-2 text-xs text-muted-foreground">
+        <Group gap={4}>
           <div className="w-3 h-3 rounded bg-green-500" />
           <span>Working/Thinking</span>
-        </div>
-        <div className="flex items-center gap-1">
+        </Group>
+        <Group gap={4}>
           <div className="w-3 h-3 rounded bg-blue-500" />
           <span>Sub-agent</span>
-        </div>
-        <div className="flex items-center gap-1">
+        </Group>
+        <Group gap={4}>
           <div className="w-3 h-3 rounded bg-gray-400" />
           <span>Idle</span>
-        </div>
-        <div className="flex items-center gap-1">
+        </Group>
+        <Group gap={4}>
           <div className="w-3 h-3 rounded bg-red-500" />
           <span>Error</span>
-        </div>
-      </div>
-    </div>
+        </Group>
+      </Group>
+    </Stack>
   );
 }

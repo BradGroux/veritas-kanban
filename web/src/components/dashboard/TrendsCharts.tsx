@@ -10,9 +10,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { Group, Paper, SimpleGrid, Skeleton, Stack, Text } from '@mantine/core';
 import { useTrends, type TrendsPeriod, formatShortDate } from '@/hooks/useTrends';
 import { formatDuration } from '@/hooks/useMetrics';
-import { Skeleton } from '@/components/ui/skeleton';
 interface TrendsChartsProps {
   project?: string;
 }
@@ -43,18 +43,22 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-lg border bg-popover p-3 shadow-md">
-      <p className="font-medium mb-2">{label}</p>
+    <Paper withBorder p="sm" radius="md" shadow="md">
+      <Text fw={500} mb="xs">
+        {label}
+      </Text>
       {payload.map((entry, index) => (
-        <div key={index} className="flex items-center gap-2 text-sm">
+        <Group key={index} gap="xs" className="text-sm">
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-medium">
+          <Text component="span" size="sm" c="dimmed">
+            {entry.name}:
+          </Text>
+          <Text component="span" size="sm" fw={500}>
             {formatter ? formatter(entry.value, entry.name) : entry.value}
-          </span>
-        </div>
+          </Text>
+        </Group>
       ))}
-    </div>
+    </Paper>
   );
 }
 
@@ -239,13 +243,15 @@ function ChartCard({
   extra?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+    <Paper withBorder p="md" radius="md">
+      <Group justify="space-between" mb="sm">
+        <Text size="sm" fw={500} c="dimmed">
+          {title}
+        </Text>
         {extra}
-      </div>
+      </Group>
       {children}
-    </div>
+    </Paper>
   );
 }
 
@@ -254,48 +260,57 @@ export function TrendsCharts({ project }: TrendsChartsProps) {
   const { data, isLoading, error } = useTrends(period, project);
 
   if (error) {
-    return <div className="p-4 text-center text-destructive">Failed to load trends data</div>;
+    return (
+      <Text p="md" ta="center" c="red">
+        Failed to load trends data
+      </Text>
+    );
   }
 
   // Check if we have any data with runs
-  const hasData = data?.daily.some((d) => d.runs > 0);
+  const daily = data?.daily ?? [];
+  const hasData = daily.some((d) => d.runs > 0);
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {/* Header */}
-      <h3 className="text-sm font-medium text-muted-foreground">Historical Trends</h3>
+      <Text size="sm" fw={500} c="dimmed">
+        Historical Trends
+      </Text>
 
       {/* Charts grid - 2x2 on larger screens, stacked on mobile */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-[250px] rounded-lg" />
+            <Skeleton key={i} h={250} radius="md" />
           ))}
-        </div>
+        </SimpleGrid>
       ) : !hasData ? (
-        <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
-          <p>No telemetry data available for the selected period.</p>
-          <p className="text-sm mt-2">Run some tasks to see historical trends.</p>
-        </div>
+        <Paper withBorder p="xl" radius="md" ta="center">
+          <Text c="dimmed">No telemetry data available for the selected period.</Text>
+          <Text size="sm" c="dimmed" mt="xs">
+            Run some tasks to see historical trends.
+          </Text>
+        </Paper>
       ) : (
-        <div className="space-y-4">
+        <Stack gap="md">
           {/* Task Activity full width */}
           <ChartCard title="Task Activity per Day">
-            <TaskActivityChart data={data!.daily} />
+            <TaskActivityChart data={daily} />
           </ChartCard>
 
           {/* Other charts in 2-col grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <ChartCard title="Token Usage">
-              <TokensChart data={data!.daily} />
+              <TokensChart data={daily} />
             </ChartCard>
 
             <ChartCard title="Average Run Duration">
-              <DurationChart data={data!.daily} />
+              <DurationChart data={daily} />
             </ChartCard>
-          </div>
-        </div>
+          </SimpleGrid>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }

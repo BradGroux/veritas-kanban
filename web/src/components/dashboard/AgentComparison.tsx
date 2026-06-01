@@ -1,5 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  ActionIcon,
+  Group,
+  Paper,
+  SimpleGrid,
+  Skeleton,
+  Stack,
+  Text,
+  Tooltip,
+} from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import {
@@ -13,8 +23,6 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 interface AgentComparisonData {
   agent: string;
   runs: number;
@@ -165,71 +173,84 @@ export function AgentComparison({ project }: AgentComparisonProps) {
   };
 
   return (
-    <div className="rounded-lg border bg-card">
+    <Paper withBorder radius="md">
       {/* Header */}
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">Agent Comparison</h3>
+      <Group justify="space-between" p="md">
+        <Group gap="xs">
+          <Text size="sm" fw={500}>
+            Agent Comparison
+          </Text>
           {data && (
-            <span className="text-xs text-muted-foreground">
+            <Text size="xs" c="dimmed">
               ({data.qualifyingAgents} of {data.totalAgents} agents with 3+ runs)
-            </span>
+            </Text>
           )}
-        </div>
-      </div>
+        </Group>
+      </Group>
 
       {/* Content */}
-      <div className="p-4 pt-0 space-y-4">
+      <Stack gap="md" p="md" pt={0}>
         {isLoading && (
-          <div className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-32 w-full" />
-          </div>
+          <Stack gap="sm">
+            <Skeleton h={64} radius="md" />
+            <Skeleton h={128} radius="md" />
+          </Stack>
         )}
 
         {error && (
-          <div className="text-sm text-destructive text-center py-4">
+          <Text size="sm" c="red" ta="center" py="md">
             Failed to load agent comparison data
-          </div>
+          </Text>
         )}
 
         {data && data.qualifyingAgents === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <p className="text-sm">No agents have enough runs for comparison</p>
-            <p className="text-xs mt-1">Minimum 3 runs required per agent</p>
-          </div>
+          <Stack gap={4} ta="center" py="xl">
+            <Text size="sm" c="dimmed">
+              No agents have enough runs for comparison
+            </Text>
+            <Text size="xs" c="dimmed">
+              Minimum 3 runs required per agent
+            </Text>
+          </Stack>
         )}
 
         {data && data.qualifyingAgents > 0 && (
           <>
             {/* Recommendations */}
             {data.recommendations.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <TooltipProvider>
-                  {data.recommendations.map((rec) => (
-                    <Tooltip key={rec.category}>
-                      <TooltipTrigger asChild>
-                        <div className="rounded-lg border bg-muted/30 p-3 cursor-help">
-                          <div className="flex items-center gap-2 mb-1">
-                            {categoryIcons[rec.category]}
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {categoryLabels[rec.category]}
-                            </span>
-                          </div>
-                          <div className="font-semibold text-sm">{rec.agent}</div>
-                          <div className="text-xs text-muted-foreground">{rec.value}</div>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[200px]">
-                        <p className="text-xs">{rec.reason}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+              <SimpleGrid cols={{ base: 2, md: 4 }} spacing="sm">
+                {data.recommendations.map((rec) => (
+                  <Tooltip
+                    key={rec.category}
+                    multiline
+                    w={220}
+                    position="bottom"
+                    label={
+                      <Stack gap={4}>
+                        <Text size="xs">{rec.reason}</Text>
+                        <Text size="xs" c="dimmed">
                           {categoryTooltips[rec.category]}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </TooltipProvider>
-              </div>
+                        </Text>
+                      </Stack>
+                    }
+                  >
+                    <Paper withBorder radius="md" p="sm" className="cursor-help bg-muted/30">
+                      <Group gap="xs" mb={4} wrap="nowrap">
+                        {categoryIcons[rec.category]}
+                        <Text size="xs" fw={500} c="dimmed">
+                          {categoryLabels[rec.category]}
+                        </Text>
+                      </Group>
+                      <Text size="sm" fw={600}>
+                        {rec.agent}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {rec.value}
+                      </Text>
+                    </Paper>
+                  </Tooltip>
+                ))}
+              </SimpleGrid>
             )}
 
             {/* Comparison Table */}
@@ -244,65 +265,41 @@ export function AgentComparison({ project }: AgentComparisonProps) {
                     <th className="pb-2 px-2 font-medium text-right">
                       <div className="flex items-center justify-end gap-1">
                         <SortHeader field="successRate" label="Success" />
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">
-                                Percentage of runs that completed successfully
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip label="Percentage of runs that completed successfully">
+                          <ActionIcon variant="subtle" size="xs" aria-label="Success rate help">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </ActionIcon>
+                        </Tooltip>
                       </div>
                     </th>
                     <th className="pb-2 px-2 font-medium text-right">
                       <div className="flex items-center justify-end gap-1">
                         <SortHeader field="avgDurationMs" label="Avg Time" />
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">Average run duration (lower is better)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip label="Average run duration (lower is better)">
+                          <ActionIcon variant="subtle" size="xs" aria-label="Average time help">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </ActionIcon>
+                        </Tooltip>
                       </div>
                     </th>
                     <th className="pb-2 px-2 font-medium text-right">
                       <div className="flex items-center justify-end gap-1">
                         <SortHeader field="avgTokensPerRun" label="Avg Tokens" />
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">
-                                Average tokens per run (lower is more efficient)
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip label="Average tokens per run (lower is more efficient)">
+                          <ActionIcon variant="subtle" size="xs" aria-label="Average tokens help">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </ActionIcon>
+                        </Tooltip>
                       </div>
                     </th>
                     <th className="pb-2 pl-2 font-medium text-right">
                       <div className="flex items-center justify-end gap-1">
                         <SortHeader field="avgCostPerRun" label="Avg Cost" />
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">Estimated cost per run (lower is cheaper)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip label="Estimated cost per run (lower is cheaper)">
+                          <ActionIcon variant="subtle" size="xs" aria-label="Average cost help">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </ActionIcon>
+                        </Tooltip>
                       </div>
                     </th>
                   </tr>
@@ -365,7 +362,7 @@ export function AgentComparison({ project }: AgentComparisonProps) {
             </div>
           </>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Paper>
   );
 }

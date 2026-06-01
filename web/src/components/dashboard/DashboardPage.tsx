@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Skeleton } from '@mantine/core';
 import { RefreshCw } from 'lucide-react';
 import {
   useMetrics,
@@ -11,7 +12,6 @@ import {
 } from '@/hooks/useMetrics';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
-import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { ExportDialog } from './ExportDialog';
 import { DashboardFilterBar } from './DashboardFilterBar';
@@ -165,11 +165,16 @@ export function DashboardPage() {
 
   const getDrillDownTitle = () => {
     switch (drillDown) {
-      case 'tasks': return 'Task Details';
-      case 'errors': return 'Failed Runs';
-      case 'tokens': return 'Token Usage Breakdown';
-      case 'duration': return 'Run Duration Breakdown';
-      default: return '';
+      case 'tasks':
+        return 'Task Details';
+      case 'errors':
+        return 'Failed Runs';
+      case 'tokens':
+        return 'Token Usage Breakdown';
+      case 'duration':
+        return 'Run Duration Breakdown';
+      default:
+        return '';
     }
   };
 
@@ -190,7 +195,10 @@ export function DashboardPage() {
       title={
         <div className="flex items-center justify-between">
           <span>Token Usage</span>
-          <TrendIndicator direction={metrics.trends.tokensTrend} change={metrics.trends.tokensChange} />
+          <TrendIndicator
+            direction={metrics.trends.tokensTrend}
+            change={metrics.trends.tokensChange}
+          />
         </div>
       }
       onClick={() => setDrillDown('tokens')}
@@ -219,7 +227,10 @@ export function DashboardPage() {
       title={
         <div className="flex items-center justify-between">
           <span>Run Duration</span>
-          <TrendIndicator direction={metrics.trends.durationTrend} change={metrics.trends.durationChange} />
+          <TrendIndicator
+            direction={metrics.trends.durationTrend}
+            change={metrics.trends.durationChange}
+          />
         </div>
       }
       onClick={() => setDrillDown('duration')}
@@ -229,8 +240,14 @@ export function DashboardPage() {
       <StatRow label="Average" value={formatDuration(metrics.duration.avgMs)} />
       <div className="pt-2 border-t mt-2">
         <div className="flex justify-between text-sm">
-          <div><span className="text-muted-foreground">p50: </span><span className="font-medium">{formatDuration(metrics.duration.p50Ms)}</span></div>
-          <div><span className="text-muted-foreground">p95: </span><span className="font-medium">{formatDuration(metrics.duration.p95Ms)}</span></div>
+          <div>
+            <span className="text-muted-foreground">p50: </span>
+            <span className="font-medium">{formatDuration(metrics.duration.p50Ms)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">p95: </span>
+            <span className="font-medium">{formatDuration(metrics.duration.p95Ms)}</span>
+          </div>
         </div>
       </div>
     </StatCard>
@@ -262,7 +279,9 @@ export function DashboardPage() {
             </span>
             <div className="flex items-center gap-1 shrink-0">
               <span className="font-mono font-medium">${t.estimatedCost.toFixed(2)}</span>
-              <span className="text-muted-foreground/0 group-hover:text-primary transition-colors text-xs">→</span>
+              <span className="text-muted-foreground/0 group-hover:text-primary transition-colors text-xs">
+                →
+              </span>
             </div>
           </button>
         ))}
@@ -276,11 +295,16 @@ export function DashboardPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground text-sm">Overall</span>
-        <span className={cn(
-          'font-bold text-lg',
-          utilization.utilizationPercent > 50 ? 'text-green-500' :
-          utilization.utilizationPercent > 20 ? 'text-yellow-500' : 'text-muted-foreground'
-        )}>
+        <span
+          className={cn(
+            'font-bold text-lg',
+            utilization.utilizationPercent > 50
+              ? 'text-green-500'
+              : utilization.utilizationPercent > 20
+                ? 'text-yellow-500'
+                : 'text-muted-foreground'
+          )}
+        >
           {utilization.utilizationPercent.toFixed(1)}%
         </span>
       </div>
@@ -289,14 +313,21 @@ export function DashboardPage() {
         <span className="font-semibold">{formatDuration(utilization.totalActiveMs)}</span>
       </div>
       <div className="border-t pt-2 space-y-1.5 overflow-y-auto">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Daily</div>
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+          Daily
+        </div>
         {utilization.daily.map((d) => (
           <div key={d.date} className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground w-20 shrink-0 text-xs">{d.date.slice(5)}</span>
             <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
-              <div className="h-full bg-green-500 rounded-sm transition-all" style={{ width: `${Math.min(100, d.utilizationPercent)}%` }} />
+              <div
+                className="h-full bg-green-500 rounded-sm transition-all"
+                style={{ width: `${Math.min(100, d.utilizationPercent)}%` }}
+              />
             </div>
-            <span className="font-mono text-xs w-12 text-right shrink-0">{d.utilizationPercent.toFixed(1)}%</span>
+            <span className="font-mono text-xs w-12 text-right shrink-0">
+              {d.utilizationPercent.toFixed(1)}%
+            </span>
           </div>
         ))}
       </div>
@@ -346,20 +377,12 @@ export function DashboardPage() {
     {
       id: 'cost-per-task',
       visible: widgets.showCostPerTask,
-      content: (
-        <WidgetWrapper title="Cost per Task">
-          {costPerTaskContent}
-        </WidgetWrapper>
-      ),
+      content: <WidgetWrapper title="Cost per Task">{costPerTaskContent}</WidgetWrapper>,
     },
     {
       id: 'agent-utilization',
       visible: widgets.showAgentUtilization,
-      content: (
-        <WidgetWrapper title="Agent Utilization">
-          {agentUtilizationContent}
-        </WidgetWrapper>
-      ),
+      content: <WidgetWrapper title="Agent Utilization">{agentUtilizationContent}</WidgetWrapper>,
     },
     {
       id: 'wall-time',

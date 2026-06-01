@@ -9,14 +9,9 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ActionIcon, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { Clock, Info } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import type { MetricsPeriod } from '@/hooks/useMetrics';
 
 interface ActivityClockProps {
@@ -104,48 +99,59 @@ export function ActivityClock({ period }: ActivityClockProps) {
         stroke="rgba(0,0,0,0.15)"
         strokeWidth="0.5"
       >
-        <title>{data.label}: {data.count} transitions</title>
+        <title>
+          {data.label}: {data.count} transitions
+        </title>
       </path>
     );
   });
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+    <Paper withBorder p="md" radius="md">
+      <Group gap="xs" mb="sm">
         <Clock className="w-4 h-4 text-muted-foreground" />
-        Activity Clock
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" className="inline-flex"><Info className="w-3 h-3 text-muted-foreground" /></button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[250px]">
-              <p className="text-xs">
-                24-hour ring showing when agent state transitions happen.
-                Brighter/thicker segments = more activity at that hour.
-                Midnight at top, noon at bottom. Based on status history.
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </h3>
+        <Text size="sm" fw={500}>
+          Activity Clock
+        </Text>
+        <Tooltip
+          multiline
+          w={260}
+          label="24-hour ring showing when agent state transitions happen. Brighter/thicker segments mean more activity at that hour. Midnight is at top, noon at bottom. Based on status history."
+        >
+          <ActionIcon aria-label="Activity clock help" size="xs" variant="subtle">
+            <Info className="w-3 h-3 text-muted-foreground" />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
-      <div className="flex items-center justify-center">
+      <Stack align="center" gap="xs">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {segments}
-          <text x={center} y={center - 8} textAnchor="middle" className="fill-foreground text-lg font-bold">
+          <text
+            x={center}
+            y={center - 8}
+            textAnchor="middle"
+            className="fill-foreground text-lg font-bold"
+          >
             {totalActivity}
           </text>
-          <text x={center} y={center + 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+          <text
+            x={center}
+            y={center + 8}
+            textAnchor="middle"
+            className="fill-muted-foreground text-[10px]"
+          >
             transitions
           </text>
         </svg>
-      </div>
+      </Stack>
 
-      <div className="flex justify-between text-[10px] text-muted-foreground mt-2 px-2">
-        <span>Peak: {peakHour.label} ({peakHour.count})</span>
+      <Group justify="space-between" mt="xs" px="xs" className="text-[10px] text-muted-foreground">
+        <span>
+          Peak: {peakHour.label} ({peakHour.count})
+        </span>
         <span>24h distribution</span>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 }

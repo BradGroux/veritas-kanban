@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Skeleton } from '@mantine/core';
 import {
   useMetrics,
   useTaskCost,
@@ -10,7 +11,6 @@ import {
 } from '@/hooks/useMetrics';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
-import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import { ExportDialog } from './ExportDialog';
 import { DashboardFilterBar } from './DashboardFilterBar';

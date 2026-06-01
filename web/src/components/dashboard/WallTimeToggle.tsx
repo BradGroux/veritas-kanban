@@ -8,15 +8,10 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ActionIcon, Button, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { formatDuration, type MetricsPeriod } from '@/hooks/useMetrics';
 import { Clock, Timer, ToggleLeft, ToggleRight, Info } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 interface WallTimeToggleProps {
   period: MetricsPeriod;
@@ -48,73 +43,100 @@ export function WallTimeToggle({ period }: WallTimeToggleProps) {
   // Active time = average per run
   const activeTime = totalRuns > 0 ? wallTime / totalRuns : 0;
   // Efficiency = ratio of tasks actually worked vs calendar time in period
-  const periodHours = period === '24h' ? 24 : period === '3d' ? 72 : period === '7d' ? 168 : period === '30d' ? 720 : 168;
-  const efficiency = periodHours > 0 ? ((wallTime / 3600000) / periodHours) * 100 : 0;
+  const periodHours =
+    period === '24h'
+      ? 24
+      : period === '3d'
+        ? 72
+        : period === '7d'
+          ? 168
+          : period === '30d'
+            ? 720
+            : 168;
+  const efficiency = periodHours > 0 ? (wallTime / 3600000 / periodHours) * 100 : 0;
 
   const displayTime = showActive ? activeTime : wallTime;
   const label = showActive ? 'Avg Run Duration' : 'Total Agent Time';
   const Icon = showActive ? Timer : Clock;
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium flex items-center gap-2">
-          <Icon className="w-4 h-4 text-muted-foreground" />
-          {label}
-          <TooltipProvider delayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="inline-flex"><Info className="w-3 h-3 text-muted-foreground" /></button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[250px]">
-                <p className="text-xs">
+    <Paper withBorder p="md" radius="md">
+      <Group justify="space-between" mb="sm" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <Text size="sm" fw={500}>
+            {label}
+          </Text>
+          <Tooltip
+            multiline
+            w={260}
+            label={
+              <Stack gap={6}>
+                <Text size="xs">
                   <strong>Total Agent Time:</strong> Sum of all run durations in the period.
-                  <br /><br />
+                </Text>
+                <Text size="xs">
                   <strong>Avg Run Duration:</strong> Average time per agent run.
-                  <br /><br />
+                </Text>
+                <Text size="xs">
                   <strong>Utilization:</strong> Percentage of calendar time with agent activity.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </h3>
-        <button
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                </Text>
+              </Stack>
+            }
+          >
+            <ActionIcon aria-label="Wall time help" size="xs" variant="subtle">
+              <Info className="w-3 h-3 text-muted-foreground" />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+        <Button
+          variant="subtle"
+          size="compact-xs"
+          className="text-muted-foreground"
           onClick={() => setShowActive(!showActive)}
+          leftSection={
+            showActive ? (
+              <ToggleRight className="h-4 w-4 text-purple-500" />
+            ) : (
+              <ToggleLeft className="h-4 w-4" />
+            )
+          }
         >
-          {showActive ? (
-            <ToggleRight className="w-4 h-4 text-purple-500" />
-          ) : (
-            <ToggleLeft className="w-4 h-4" />
-          )}
           {showActive ? 'Per Run' : 'Total'}
-        </button>
-      </div>
+        </Button>
+      </Group>
 
-      <div className="text-2xl font-bold mb-1">
+      <Text size="xl" fw={700} mb={4}>
         {formatDuration(displayTime)}
-      </div>
+      </Text>
 
-      <div className="text-xs text-muted-foreground space-y-1">
-        <div className="flex justify-between">
+      <Stack gap={4} className="text-xs text-muted-foreground">
+        <Group justify="space-between">
           <span>Total time</span>
-          <span className={!showActive ? 'font-medium text-foreground' : ''}>{formatDuration(wallTime)}</span>
-        </div>
-        <div className="flex justify-between">
+          <span className={!showActive ? 'font-medium text-foreground' : ''}>
+            {formatDuration(wallTime)}
+          </span>
+        </Group>
+        <Group justify="space-between">
           <span>Avg per run</span>
-          <span className={showActive ? 'font-medium text-foreground' : ''}>{formatDuration(activeTime)}</span>
-        </div>
-        <div className="flex justify-between">
+          <span className={showActive ? 'font-medium text-foreground' : ''}>
+            {formatDuration(activeTime)}
+          </span>
+        </Group>
+        <Group justify="space-between">
           <span>Total runs</span>
           <span>{totalRuns}</span>
-        </div>
-        <div className="flex justify-between pt-1 border-t">
+        </Group>
+        <Group justify="space-between" className="border-t pt-1">
           <span>Utilization</span>
-          <span className="font-medium" style={{ color: efficiency > 10 ? '#22c55e' : efficiency > 3 ? '#f59e0b' : '#6b7280' }}>
+          <span
+            className="font-medium"
+            style={{ color: efficiency > 10 ? '#22c55e' : efficiency > 3 ? '#f59e0b' : '#6b7280' }}
+          >
             {efficiency.toFixed(1)}%
           </span>
-        </div>
-      </div>
-    </div>
+        </Group>
+      </Stack>
+    </Paper>
   );
 }

@@ -387,6 +387,12 @@ Phase 3 progress:
   custom ranges, export scope/format/date controls, drawer close behavior,
   task selection, failure summaries, token summaries, duration summaries, and
   per-agent breakdowns.
+- Dashboard widget and chart shells now use direct Mantine paper, skeleton,
+  tooltip, action icon, progress, stack, group, simple grid, text, and theme icon
+  primitives for active dashboard cards, status timeline, agent comparison,
+  trends, wall-time, activity clock, and the budget widget while preserving
+  existing metric queries, chart rendering, sorting, help affordances, and
+  toggle behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
