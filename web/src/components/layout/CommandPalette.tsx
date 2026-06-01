@@ -1,6 +1,15 @@
 import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Box, Group, Kbd, ScrollArea, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+  Box,
+  Group,
+  Kbd,
+  Modal,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  UnstyledButton,
+} from '@mantine/core';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import {
@@ -275,15 +284,19 @@ export function CommandPalette() {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          className="max-w-[520px] p-0 gap-0 overflow-hidden"
-          onKeyDown={handleKeyDown}
-        >
-          <DialogTitle className="sr-only">Command palette</DialogTitle>
-          <DialogDescription className="sr-only">
+      <Modal
+        opened={open}
+        onClose={() => setOpen(false)}
+        size={520}
+        padding={0}
+        title={<span className="sr-only">Command palette</span>}
+        withCloseButton={false}
+        classNames={{ content: 'overflow-hidden', header: 'sr-only', body: 'p-0' }}
+      >
+        <Box onKeyDown={handleKeyDown}>
+          <Text component="p" className="sr-only">
             Search and run board actions, navigation commands, and shortcuts.
-          </DialogDescription>
+          </Text>
 
           <Group gap="sm" px="md" className="border-b" wrap="nowrap">
             <TextInput
@@ -365,8 +378,8 @@ export function CommandPalette() {
               ))
             )}
           </ScrollArea>
-        </DialogContent>
-      </Dialog>
+        </Box>
+      </Modal>
       {searchMounted && (
         <Suspense fallback={null}>
           <SearchDialog

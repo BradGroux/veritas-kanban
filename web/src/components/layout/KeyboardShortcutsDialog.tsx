@@ -1,4 +1,5 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Group, Kbd, Modal, Stack, Text } from '@mantine/core';
+import { Keyboard } from 'lucide-react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 
 interface Shortcut {
@@ -36,9 +37,9 @@ const shortcuts: { category: string; items: Shortcut[] }[] = [
 
 function KeyBadge({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-medium bg-muted border border-border rounded shadow-sm">
+    <Kbd className="inline-flex min-w-[24px] items-center justify-center px-2 text-xs font-medium">
       {children}
-    </kbd>
+    </Kbd>
   );
 }
 
@@ -46,45 +47,49 @@ export function KeyboardShortcutsDialog() {
   const { isHelpOpen, closeHelpDialog } = useKeyboard();
 
   return (
-    <Dialog open={isHelpOpen} onOpenChange={(open) => !open && closeHelpDialog()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">⌨️ Keyboard Shortcuts</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6 py-2">
-          {shortcuts.map((section) => (
-            <section key={section.category} aria-label={`${section.category} shortcuts`}>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                {section.category}
-              </h3>
-              <dl className="space-y-2">
-                {section.items.map((shortcut, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <dt className="text-sm">{shortcut.description}</dt>
-                    <dd className="flex items-center gap-1">
-                      {shortcut.keys.map((key, j) => (
-                        <span key={j} className="flex items-center gap-1">
-                          {j > 0 && (
-                            <span className="text-muted-foreground text-xs" aria-hidden="true">
-                              or
-                            </span>
-                          )}
-                          <KeyBadge>{key}</KeyBadge>
-                        </span>
-                      ))}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
+    <Modal
+      opened={isHelpOpen}
+      onClose={closeHelpDialog}
+      size="md"
+      title={
+        <Group gap="xs">
+          <Keyboard className="h-4 w-4" aria-hidden="true" />
+          <span>Keyboard Shortcuts</span>
+        </Group>
+      }
+    >
+      <Stack gap="lg" py="xs">
+        {shortcuts.map((section) => (
+          <section key={section.category} aria-label={`${section.category} shortcuts`}>
+            <Text component="h3" size="sm" fw={600} c="dimmed" mb="sm">
+              {section.category}
+            </Text>
+            <dl className="space-y-2">
+              {section.items.map((shortcut, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <dt className="text-sm">{shortcut.description}</dt>
+                  <dd className="flex items-center gap-1">
+                    {shortcut.keys.map((key, j) => (
+                      <span key={j} className="flex items-center gap-1">
+                        {j > 0 && (
+                          <span className="text-muted-foreground text-xs" aria-hidden="true">
+                            or
+                          </span>
+                        )}
+                        <KeyBadge>{key}</KeyBadge>
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
 
         <div className="text-xs text-muted-foreground text-center pt-2 border-t">
           Press <KeyBadge>?</KeyBadge> anytime to toggle this help
         </div>
-      </DialogContent>
-    </Dialog>
+      </Stack>
+    </Modal>
   );
 }

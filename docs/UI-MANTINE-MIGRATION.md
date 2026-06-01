@@ -326,6 +326,10 @@ Phase 3 progress:
   Mantine password input, text input, checkbox, and button primitives while
   preserving password creation, remember-me login, recovery reset, key copy, and
   key-download behavior.
+- Command palette and keyboard-shortcut help overlays now use direct Mantine
+  modal, text input, scroll area, stack, text, and key badge primitives while
+  preserving keyboard launch, command filtering, shortcut display, and nested
+  search-dialog launch behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
