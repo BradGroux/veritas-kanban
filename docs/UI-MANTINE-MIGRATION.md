@@ -339,6 +339,11 @@ Phase 3 progress:
   delete confirmation now use direct Mantine drawer, tabs, text input, textarea,
   select, badge, button, paper, loader, and modal primitives while preserving
   task update, progress, archive, restore, and delete behavior.
+- Task detail blocked reason, done criteria, and dependency subsections now use
+  direct Mantine select, textarea, checkbox, progress, text input, badge,
+  button, action icon, and paper primitives while preserving blocked-reason
+  updates, verification-step mutations, dependency display, add/cancel, and
+  remove behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
