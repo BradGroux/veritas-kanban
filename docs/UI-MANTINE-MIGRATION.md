@@ -292,6 +292,9 @@ Phase 3 progress:
 - Security settings and the settings error fallback now use direct Mantine
   password input and button primitives while preserving password-change,
   visibility, reset, and retry behavior.
+- Delegation settings now uses direct Mantine select, switch, badge, and button
+  primitives while preserving delegation enable, revoke, scope, duration, and
+  critical-priority exclusion behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

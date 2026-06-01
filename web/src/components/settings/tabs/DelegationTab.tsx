@@ -5,16 +5,7 @@
 import { useState } from 'react';
 import { API_BASE } from '@/lib/config';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Badge, Button, Select, Switch } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
 import { Plane, ShieldCheck, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import type { DelegationSettings } from '@veritas-kanban/shared';
@@ -166,16 +157,16 @@ export function DelegationTab() {
               <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               <span className="font-semibold text-base">Delegation Active</span>
             </div>
-            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 dark:bg-blue-900">
+            <Badge variant="light" color="blue" size="sm">
               Active
-            </span>
+            </Badge>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-medium">🤖 Delegate Agent:</span>
-              <span className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-800">
+              <Badge variant="light" color="gray" size="sm">
                 {delegation.delegateAgent}
-              </span>
+              </Badge>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -192,7 +183,7 @@ export function DelegationTab() {
               size="sm"
               onClick={handleRevokeDelegation}
               disabled={revokeDelegationMutation.isPending}
-              className="mt-3"
+              mt="sm"
             >
               Revoke Delegation
             </Button>
@@ -224,89 +215,80 @@ export function DelegationTab() {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="delegate-agent">Delegate Agent</Label>
-            <Select value={delegateAgent} onValueChange={setDelegateAgent}>
-              <SelectTrigger id="delegate-agent">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="veritas">VERITAS</SelectItem>
-                <SelectItem value="claude-code">Claude Code</SelectItem>
-                <SelectItem value="amp">Amp</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              This agent will be able to approve tasks on your behalf
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="duration">Duration</Label>
             <Select
+              id="delegate-agent"
+              label="Delegate Agent"
+              value={delegateAgent}
+              onChange={(value) => value && setDelegateAgent(value)}
+              data={[
+                { value: 'veritas', label: 'VERITAS' },
+                { value: 'claude-code', label: 'Claude Code' },
+                { value: 'amp', label: 'Amp' },
+              ]}
+              description="This agent will be able to approve tasks on your behalf"
+              allowDeselect={false}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Select
+              id="duration"
+              label="Duration"
               value={durationHours.toString()}
-              onValueChange={(v) => setDurationHours(parseInt(v, 10))}
-            >
-              <SelectTrigger id="duration">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 hour</SelectItem>
-                <SelectItem value="4">4 hours</SelectItem>
-                <SelectItem value="8">8 hours (work day)</SelectItem>
-                <SelectItem value="12">12 hours</SelectItem>
-                <SelectItem value="24">24 hours (1 day)</SelectItem>
-                <SelectItem value="48">48 hours (2 days)</SelectItem>
-                <SelectItem value="72">72 hours (3 days)</SelectItem>
-                <SelectItem value="168">1 week</SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={(value) => value && setDurationHours(parseInt(value, 10))}
+              data={[
+                { value: '1', label: '1 hour' },
+                { value: '4', label: '4 hours' },
+                { value: '8', label: '8 hours (work day)' },
+                { value: '12', label: '12 hours' },
+                { value: '24', label: '24 hours (1 day)' },
+                { value: '48', label: '48 hours (2 days)' },
+                { value: '72', label: '72 hours (3 days)' },
+                { value: '168', label: '1 week' },
+              ]}
+              allowDeselect={false}
+            />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="scope">Scope</Label>
-            <Select value={scopeType} onValueChange={(v: any) => setScopeType(v)}>
-              <SelectTrigger id="scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All tasks</SelectItem>
-                <SelectItem value="project">Specific projects</SelectItem>
-                <SelectItem value="priority">Specific priorities</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Which tasks can the delegate approve?</p>
+            <Select
+              id="scope"
+              label="Scope"
+              value={scopeType}
+              onChange={(value) => value && setScopeType(value as 'all' | 'project' | 'priority')}
+              data={[
+                { value: 'all', label: 'All tasks' },
+                { value: 'project', label: 'Specific projects' },
+                { value: 'priority', label: 'Specific priorities' },
+              ]}
+              description="Which tasks can the delegate approve?"
+              allowDeselect={false}
+            />
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="exclude-critical"
-                checked={excludeCritical}
-                onCheckedChange={setExcludeCritical}
-              />
-              <Label htmlFor="exclude-critical">Exclude critical priority tasks</Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Critical tasks will still require manual approval
-            </p>
+            <Switch
+              id="exclude-critical"
+              label="Exclude critical priority tasks"
+              checked={excludeCritical}
+              onChange={(event) => setExcludeCritical(event.currentTarget.checked)}
+              description="Critical tasks will still require manual approval"
+            />
           </div>
 
           <Button
             onClick={handleEnableDelegation}
             disabled={setDelegationMutation.isPending || (isActive && !hasExpired)}
-            className="w-full"
+            fullWidth
+            leftSection={
+              isActive && !hasExpired ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Plane className="h-4 w-4" />
+              )
+            }
           >
-            {isActive && !hasExpired ? (
-              <>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Delegation Active
-              </>
-            ) : (
-              <>
-                <Plane className="mr-2 h-4 w-4" />
-                Enable Delegation
-              </>
-            )}
+            {isActive && !hasExpired ? 'Delegation Active' : 'Enable Delegation'}
           </Button>
         </div>
       </div>
