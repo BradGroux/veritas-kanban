@@ -1,24 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Archive, FileText, Loader2, Search, ShieldAlert, Sparkles } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
+  Badge,
+  Button,
+  Checkbox,
+  Group,
+  Modal,
+  ScrollArea,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { api, type SearchBackend, type SearchCollection, type SearchResponse } from '@/lib/api';
 import { extractTaskId } from '@/lib/search-utils';
 import { cn } from '@/lib/utils';
@@ -96,149 +89,158 @@ export function SearchDialog({ open, onOpenChange, onTaskOpen }: SearchDialogPro
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base">
+    <Modal
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      size="xl"
+      padding={0}
+      title={
+        <Group gap="xs">
+          <span className="flex items-center gap-2 text-base font-semibold">
             <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
             Search Tasks and Docs
-          </DialogTitle>
-          <DialogDescription>
-            Find active work, archived decisions, and project documentation.
-          </DialogDescription>
-        </DialogHeader>
+          </span>
+        </Group>
+      }
+      classNames={{ header: 'border-b px-5 py-4', body: 'p-0' }}
+    >
+      <div className="border-b px-5 pb-4">
+        <Text size="sm" c="dimmed">
+          Find active work, archived decisions, and project documentation.
+        </Text>
+      </div>
 
-        <div className="space-y-4 px-5 py-4">
-          <form
-            className="flex flex-col gap-3 sm:flex-row"
-            onSubmit={(event) => {
-              event.preventDefault();
-              runSearch();
-            }}
-          >
-            <div className="relative min-w-0 flex-1">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search task titles, descriptions, notes, docs..."
-                className="pl-9"
-                autoFocus
-              />
-            </div>
-            <Select value={backend} onValueChange={(value) => setBackend(value as SearchBackend)}>
-              <SelectTrigger className="w-full sm:w-32" aria-label="Search backend">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BACKENDS.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" disabled={!canSearch} className="gap-2">
-              {isSearching ? (
+      <Stack gap="md" className="px-5 py-4">
+        <form
+          className="flex flex-col gap-3 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            runSearch();
+          }}
+        >
+          <div className="relative min-w-0 flex-1">
+            <TextInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search task titles, descriptions, notes, docs..."
+              aria-label="Search tasks and docs"
+              leftSection={<Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+              autoFocus
+            />
+          </div>
+          <Select
+            value={backend}
+            onChange={(value) => setBackend((value ?? 'auto') as SearchBackend)}
+            data={BACKENDS.map((item) => ({ value: item.id, label: item.label }))}
+            aria-label="Search backend"
+            className="w-full sm:w-32"
+            allowDeselect={false}
+          />
+          <Button
+            type="submit"
+            disabled={!canSearch}
+            leftSection={
+              isSearching ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
                 <Search className="h-4 w-4" aria-hidden="true" />
-              )}
-              Search
-            </Button>
-          </form>
+              )
+            }
+          >
+            Search
+          </Button>
+        </form>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {COLLECTIONS.map((collection) => (
-              <Label
-                key={collection.id}
-                className="flex h-8 items-center gap-2 rounded-md border px-3 text-sm font-normal"
-              >
-                <Checkbox
-                  checked={collections.includes(collection.id)}
-                  onCheckedChange={(checked) => toggleCollection(collection.id, checked === true)}
-                />
-                {collection.label}
-              </Label>
-            ))}
-            {response?.degraded && (
-              <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-700">
-                <ShieldAlert className="h-3 w-3" aria-hidden="true" />
-                Fallback
-              </Badge>
-            )}
-            {statusLabel && <span className="text-sm text-muted-foreground">{statusLabel}</span>}
-          </div>
-
-          {error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {COLLECTIONS.map((collection) => (
+            <Checkbox
+              key={collection.id}
+              checked={collections.includes(collection.id)}
+              onChange={(event) => toggleCollection(collection.id, event.currentTarget.checked)}
+              label={collection.label}
+              className="flex h-8 items-center rounded-md border px-3"
+              classNames={{ label: 'text-sm font-normal' }}
+            />
+          ))}
+          {response?.degraded && (
+            <Badge
+              variant="outline"
+              color="yellow"
+              leftSection={<ShieldAlert className="h-3 w-3" aria-hidden="true" />}
+            >
+              Fallback
+            </Badge>
           )}
-
-          <div className="max-h-[460px] overflow-y-auto rounded-md border">
-            {!response && !error ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                Search across task markdown and docs.
-              </div>
-            ) : response && response.results.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No matches found.
-              </div>
-            ) : (
-              response?.results.map((result) => {
-                const Icon = collectionIcon(result.collection);
-                const taskId = result.collection.startsWith('tasks')
-                  ? extractTaskId(result.path)
-                  : null;
-
-                return (
-                  <button
-                    key={`${result.collection}:${result.id}`}
-                    type="button"
-                    className={cn(
-                      'flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0',
-                      taskId ? 'hover:bg-muted/60' : 'cursor-default'
-                    )}
-                    onClick={() => {
-                      if (!taskId) return;
-                      onTaskOpen?.(taskId);
-                      onOpenChange(false);
-                    }}
-                  >
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-foreground">{result.title}</span>
-                        <Badge variant="secondary">{result.collection}</Badge>
-                      </span>
-                      <span className="mt-1 block break-all text-xs text-muted-foreground">
-                        {result.path}
-                      </span>
-                      {result.snippet && (
-                        <span className="mt-2 block text-sm leading-6 text-muted-foreground">
-                          {result.snippet}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {Number(result.score).toFixed(2)}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          {response?.degraded && response.reason && (
-            <p className="text-xs text-muted-foreground">{response.reason}</p>
-          )}
+          {statusLabel && <span className="text-sm text-muted-foreground">{statusLabel}</span>}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <ScrollArea h={460} className="rounded-md border">
+          {!response && !error ? (
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              Search across task markdown and docs.
+            </div>
+          ) : response && response.results.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              No matches found.
+            </div>
+          ) : (
+            response?.results.map((result) => {
+              const Icon = collectionIcon(result.collection);
+              const taskId = result.collection.startsWith('tasks')
+                ? extractTaskId(result.path)
+                : null;
+
+              return (
+                <button
+                  key={`${result.collection}:${result.id}`}
+                  type="button"
+                  className={cn(
+                    'flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0',
+                    taskId ? 'hover:bg-muted/60' : 'cursor-default'
+                  )}
+                  onClick={() => {
+                    if (!taskId) return;
+                    onTaskOpen?.(taskId);
+                    onOpenChange(false);
+                  }}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{result.title}</span>
+                      <Badge variant="light" color="gray">
+                        {result.collection}
+                      </Badge>
+                    </span>
+                    <span className="mt-1 block break-all text-xs text-muted-foreground">
+                      {result.path}
+                    </span>
+                    {result.snippet && (
+                      <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                        {result.snippet}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {Number(result.score).toFixed(2)}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </ScrollArea>
+
+        {response?.degraded && response.reason && (
+          <p className="text-xs text-muted-foreground">{response.reason}</p>
+        )}
+      </Stack>
+    </Modal>
   );
 }
 

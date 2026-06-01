@@ -318,6 +318,10 @@ Phase 3 progress:
   select, badge, button, action icon, and modal primitives while preserving
   search/filter URL behavior, selection groups, move, backlog, archive, and
   delete confirmation flows.
+- Search dialog controls now use direct Mantine modal, text input, select,
+  checkbox, badge, button, and scroll-area primitives while preserving task/doc
+  search, collection filters, backend selection, fallback status, and task-open
+  callbacks.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

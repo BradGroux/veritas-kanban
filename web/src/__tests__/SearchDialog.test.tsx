@@ -50,7 +50,20 @@ describe('SearchDialog', () => {
       ],
     });
 
-    renderWithProviders(<SearchDialog open onOpenChange={vi.fn()} />);
+    const { baseElement } = renderWithProviders(<SearchDialog open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByRole('dialog', { name: 'Search Tasks and Docs' })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Search tasks and docs' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Search backend' })).toBeDefined();
+    expect(screen.getByRole('checkbox', { name: 'Active' })).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Modal-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
+    expect(baseElement.querySelectorAll('.mantine-Checkbox-root').length).toBe(3);
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
+    expect(baseElement.querySelector('[data-slot="checkbox"]')).toBeNull();
 
     await userEvent.type(screen.getByPlaceholderText(/search task titles/i), 'qmd');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
