@@ -1,9 +1,13 @@
 import { memo } from 'react';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { Switch } from '@mantine/core';
 import { SettingRow } from './SettingRow';
 
-export const ToggleRow = memo(function ToggleRow({ label, description, checked, onCheckedChange }: {
+export const ToggleRow = memo(function ToggleRow({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
   label: string;
   description?: string;
   checked: boolean;
@@ -12,8 +16,12 @@ export const ToggleRow = memo(function ToggleRow({ label, description, checked, 
   const id = `toggle-${label.toLowerCase().replace(/\s+/g, '-')}`;
   return (
     <SettingRow label={label} description={description}>
-      <Label htmlFor={id} className="sr-only">{label}</Label>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+      <Switch
+        id={id}
+        checked={checked}
+        onChange={(event) => onCheckedChange(event.currentTarget.checked)}
+        aria-label={label}
+      />
     </SettingRow>
   );
 });

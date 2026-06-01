@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button';
+import { Button, Group, Text } from '@mantine/core';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,13 +14,20 @@ import { RotateCcw } from 'lucide-react';
 
 export function SectionHeader({ title, onReset }: { title: string; onReset?: () => void }) {
   return (
-    <div className="flex items-center justify-between pb-2 mb-2 border-b">
-      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{title}</h4>
+    <Group justify="space-between" align="center" className="mb-2 border-b pb-2">
+      <Text size="sm" fw={600} c="dimmed" tt="uppercase">
+        {title}
+      </Text>
       {onReset && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">
-              <RotateCcw className="h-3 w-3 mr-1" />
+            <Button
+              type="button"
+              variant="subtle"
+              size="xs"
+              color="gray"
+              leftSection={<RotateCcw className="h-3 w-3" />}
+            >
               Reset
             </Button>
           </AlertDialogTrigger>
@@ -38,6 +45,6 @@ export function SectionHeader({ title, onReset }: { title: string; onReset?: () 
           </AlertDialogContent>
         </AlertDialog>
       )}
-    </div>
+    </Group>
   );
 }

@@ -280,6 +280,9 @@ Phase 3 progress:
   scroll area, and import/export/reset controls now use direct Mantine
   primitives while keeping lazy tab content and destructive confirmation behavior
   stable.
+- Shared settings row, toggle, and section header primitives now use direct
+  Mantine layout, text, switch, and button components while preserving existing
+  tab APIs.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
