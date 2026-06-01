@@ -322,6 +322,10 @@ Phase 3 progress:
   checkbox, badge, button, and scroll-area primitives while preserving task/doc
   search, collection filters, backend selection, fallback status, and task-open
   callbacks.
+- Setup, login, recovery, and recovery-key confirmation controls now use direct
+  Mantine password input, text input, checkbox, and button primitives while
+  preserving password creation, remember-me login, recovery reset, key copy, and
+  key-download behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

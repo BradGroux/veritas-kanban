@@ -1,9 +1,6 @@
 import { useState } from 'react';
-import { PasswordInput } from '@mantine/core';
+import { Button, Checkbox, PasswordInput } from '@mantine/core';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Copy, Download, Check, Shield, Key } from 'lucide-react';
 import { DesktopOnboardingScreen, shouldShowDesktopOnboarding } from './DesktopOnboarding';
 
@@ -106,26 +103,35 @@ export function SetupScreen() {
           <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
             <div className="font-mono text-xl text-center tracking-wider py-2">{recoveryKey}</div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={copyRecoveryKey}>
-                {copiedKey ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={copyRecoveryKey}
+                leftSection={
+                  copiedKey ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />
+                }
+              >
                 {copiedKey ? 'Copied!' : 'Copy'}
               </Button>
-              <Button variant="outline" className="flex-1" onClick={downloadRecoveryKey}>
-                <Download className="w-4 h-4 mr-2" />
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={downloadRecoveryKey}
+                leftSection={<Download className="w-4 h-4" />}
+              >
                 Download
               </Button>
             </div>
           </div>
 
-          <div className="flex items-start space-x-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
             <Checkbox
               id="saved-confirm"
               checked={savedConfirmed}
-              onCheckedChange={(checked) => setSavedConfirmed(!!checked)}
+              onChange={(event) => setSavedConfirmed(event.currentTarget.checked)}
+              label="I have saved my recovery key in a safe place"
+              classNames={{ label: 'text-sm cursor-pointer' }}
             />
-            <Label htmlFor="saved-confirm" className="text-sm cursor-pointer">
-              I have saved my recovery key in a safe place
-            </Label>
           </div>
 
           <Button
@@ -155,9 +161,9 @@ export function SetupScreen() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
             <PasswordInput
               id="password"
+              label="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password (8+ characters)"
@@ -185,9 +191,9 @@ export function SetupScreen() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm Password</Label>
             <PasswordInput
               id="confirm-password"
+              label="Confirm Password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"

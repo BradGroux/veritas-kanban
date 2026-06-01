@@ -1,9 +1,6 @@
 import { useState } from 'react';
-import { PasswordInput, TextInput } from '@mantine/core';
+import { Button, Checkbox, PasswordInput, TextInput } from '@mantine/core';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Lock, Key, Check, Copy, Download } from 'lucide-react';
 
 export function LoginScreen() {
@@ -104,26 +101,35 @@ export function LoginScreen() {
               {newRecoveryKey}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={copyRecoveryKey}>
-                {copiedKey ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={copyRecoveryKey}
+                leftSection={
+                  copiedKey ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />
+                }
+              >
                 {copiedKey ? 'Copied!' : 'Copy'}
               </Button>
-              <Button variant="outline" className="flex-1" onClick={downloadRecoveryKey}>
-                <Download className="w-4 h-4 mr-2" />
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={downloadRecoveryKey}
+                leftSection={<Download className="w-4 h-4" />}
+              >
                 Download
               </Button>
             </div>
           </div>
 
-          <div className="flex items-start space-x-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
             <Checkbox
               id="saved-confirm"
               checked={savedConfirmed}
-              onCheckedChange={(checked) => setSavedConfirmed(!!checked)}
+              onChange={(event) => setSavedConfirmed(event.currentTarget.checked)}
+              label="I have saved my recovery key in a safe place"
+              classNames={{ label: 'text-sm cursor-pointer' }}
             />
-            <Label htmlFor="saved-confirm" className="text-sm cursor-pointer">
-              I have saved my recovery key in a safe place
-            </Label>
           </div>
 
           <Button
@@ -156,9 +162,9 @@ export function LoginScreen() {
 
           <form onSubmit={handleRecover} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="recovery-key">Recovery Key</Label>
               <TextInput
                 id="recovery-key"
+                label="Recovery Key"
                 value={recoveryKey}
                 onChange={(e) => setRecoveryKey(e.target.value.toUpperCase())}
                 placeholder="XXXX-XXXX-XXXX-XXXX"
@@ -168,9 +174,9 @@ export function LoginScreen() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
               <PasswordInput
                 id="new-password"
+                label="New Password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password (8+ characters)"
@@ -180,9 +186,9 @@ export function LoginScreen() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirm-new-password">Confirm New Password</Label>
               <PasswordInput
                 id="confirm-new-password"
+                label="Confirm New Password"
                 value={confirmNewPassword}
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
                 placeholder="Confirm new password"
@@ -204,8 +210,10 @@ export function LoginScreen() {
               {isSubmitting ? 'Resetting...' : 'Reset Password'}
             </Button>
 
-            <button
+            <Button
               type="button"
+              variant="subtle"
+              color="gray"
               onClick={() => {
                 setShowRecovery(false);
                 setError(null);
@@ -213,7 +221,7 @@ export function LoginScreen() {
               className="w-full text-sm text-muted-foreground hover:text-foreground"
             >
               Back to login
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -234,9 +242,9 @@ export function LoginScreen() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
             <PasswordInput
               id="password"
+              label="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
@@ -246,15 +254,14 @@ export function LoginScreen() {
             />
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div>
             <Checkbox
               id="remember-me"
               checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(!!checked)}
+              onChange={(event) => setRememberMe(event.currentTarget.checked)}
+              label="Remember me for 30 days"
+              classNames={{ label: 'text-sm cursor-pointer' }}
             />
-            <Label htmlFor="remember-me" className="text-sm cursor-pointer">
-              Remember me for 30 days
-            </Label>
           </div>
 
           {error && (
@@ -267,8 +274,10 @@ export function LoginScreen() {
             {isSubmitting ? 'Logging in...' : 'Login'}
           </Button>
 
-          <button
+          <Button
             type="button"
+            variant="subtle"
+            color="gray"
             onClick={() => {
               setShowRecovery(true);
               setError(null);
@@ -276,7 +285,7 @@ export function LoginScreen() {
             className="w-full text-sm text-muted-foreground hover:text-foreground"
           >
             Forgot password?
-          </button>
+          </Button>
         </form>
       </div>
     </div>
