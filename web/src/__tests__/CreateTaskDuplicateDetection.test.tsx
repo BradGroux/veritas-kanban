@@ -86,7 +86,13 @@ describe('CreateTaskDialog duplicate detection', () => {
     });
 
     const onOpenChange = vi.fn();
-    renderWithProviders(<CreateTaskDialog open onOpenChange={onOpenChange} />);
+    const { container } = renderWithProviders(
+      <CreateTaskDialog open onOpenChange={onOpenChange} />
+    );
+
+    expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
+    expect(container.querySelector('.mantine-Textarea-root')).toBeDefined();
+    expect(container.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(5);
 
     fireEvent.change(screen.getByLabelText('Title'), {
       target: { value: 'Search duplicate' },

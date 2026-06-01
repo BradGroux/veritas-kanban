@@ -273,6 +273,9 @@ Phase 3 progress:
   direct Mantine surface slice.
 - Archive and backlog list/filter pages now use direct Mantine layout and form
   controls while preserving custom task card/list behavior.
+- Create-task dialog form controls now use direct Mantine text, textarea,
+  select, tabs, alert, and list primitives while preserving duplicate detection,
+  template, project, sprint, agent, and subtask behavior.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 

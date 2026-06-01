@@ -6,18 +6,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
+  ActionIcon,
+  Alert,
+  Code,
+  Group,
+  Paper,
+  ScrollArea,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+  TextInput,
+  ThemeIcon,
+} from '@mantine/core';
+import { Button } from '@/components/ui/button';
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints } from '@/hooks/useSprints';
@@ -29,12 +34,15 @@ import { TemplateVariableInputs } from './create/TemplateVariableInputs';
 import type { TaskPriority } from '@veritas-kanban/shared';
 import {
   AlertTriangle,
+  Bug,
   Check,
   ExternalLink,
   FileText,
   HelpCircle,
   Info,
   Loader2,
+  Sparkles,
+  RefreshCw,
   X,
 } from 'lucide-react';
 import { getCategoryIcon } from '@/lib/template-categories';
@@ -47,6 +55,13 @@ interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const priorityOptions: { value: TaskPriority; label: string }[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'critical', label: 'Critical' },
+];
 
 export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) {
   const { navigateToTask } = useView();
@@ -91,7 +106,6 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const { data: projects = [] } = useProjects();
   const { data: sprints = [] } = useSprints();
   const { data: config } = useConfig();
-  const enabledAgents = config?.agents.filter((a) => a.enabled) || [];
 
   const {
     selectedTemplate,
@@ -113,6 +127,59 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     if (categoryFilter === 'all') return templates;
     return templates.filter((t) => (t.category || 'custom') === categoryFilter);
   }, [templates, categoryFilter]);
+
+  const templateOptions = useMemo(
+    () => [
+      { value: 'none', label: 'No template' },
+      ...filteredTemplates.map((template) => ({
+        value: template.id,
+        label: `${template.category ? `${getCategoryIcon(template.category)} ` : ''}${
+          template.name
+        }${template.description ? ` - ${template.description}` : ''}`,
+      })),
+    ],
+    [filteredTemplates]
+  );
+
+  const taskTypeOptions = useMemo(
+    () => taskTypes.map((taskType) => ({ value: taskType.id, label: taskType.label })),
+    [taskTypes]
+  );
+
+  const projectOptions = useMemo(() => {
+    const options = [
+      { value: '__none__', label: 'No project' },
+      ...projects.map((proj) => ({ value: proj.id, label: proj.label })),
+    ];
+
+    if (project && !projects.some((proj) => proj.id === project)) {
+      options.push({ value: project, label: project });
+    }
+
+    options.push({ value: '__new__', label: '+ New Project' });
+    return options;
+  }, [project, projects]);
+
+  const sprintOptions = useMemo(
+    () => [
+      { value: '__none__', label: 'No Sprint' },
+      ...sprints.map((s) => ({ value: s.id, label: s.label })),
+    ],
+    [sprints]
+  );
+
+  const agentOptions = useMemo(
+    () => [
+      { value: 'auto', label: 'Auto (routing)' },
+      ...(config?.agents ?? [])
+        .filter((enabledAgent) => enabledAgent.enabled)
+        .map((enabledAgent) => ({
+          value: enabledAgent.type,
+          label: enabledAgent.name,
+        })),
+    ],
+    [config?.agents]
+  );
 
   const handleTemplateSelect = (templateId: string) => {
     if (templateId === 'none') {
@@ -207,152 +274,157 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
           {/* Template selector */}
           {templates && templates.length > 0 && (
-            <div className="border-b pb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <Label className="text-sm">Template</Label>
-                </div>
-                <Button
+            <Stack gap="sm" className="border-b pb-2">
+              <Group justify="space-between" gap="sm">
+                <Group gap="xs">
+                  <ThemeIcon size="sm" variant="light" color="violet">
+                    <FileText className="h-3.5 w-3.5" />
+                  </ThemeIcon>
+                  <Text size="sm" fw={500}>
+                    Template
+                  </Text>
+                </Group>
+                <ActionIcon
                   type="button"
-                  variant="ghost"
+                  variant="subtle"
                   size="sm"
-                  className="h-6 w-6 p-0"
                   onClick={toggleHelp}
                   aria-label={showHelp ? 'Hide template help' : 'Show template help'}
                 >
                   <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </div>
+                </ActionIcon>
+              </Group>
 
               {/* Help Section */}
               {showHelp && (
-                <div className="mb-3 p-3 rounded-md bg-muted/50 border border-muted-foreground/20 text-sm space-y-2">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                    <div className="space-y-1.5">
-                      <p className="font-medium text-sm">Using Templates</p>
-                      <ul className="space-y-1 text-xs text-muted-foreground">
+                <Alert
+                  variant="light"
+                  color="blue"
+                  icon={<Info className="h-4 w-4" />}
+                  title="Using Templates"
+                >
+                  <Stack gap={4}>
+                    <Text component="div" size="xs" c="dimmed">
+                      <ul className="space-y-1">
                         <li>
-                          • <strong>Simple templates</strong> pre-fill task fields and can include
+                          <strong>Simple templates</strong> pre-fill task fields and can include
                           subtasks
                         </li>
                         <li>
-                          • <strong>Variables</strong> like{' '}
-                          <code className="px-1 py-0.5 rounded bg-muted">{'{{date}}'}</code> or{' '}
-                          <code className="px-1 py-0.5 rounded bg-muted">{'{{author}}'}</code> are
-                          replaced when creating the task
+                          <strong>Variables</strong> like <Code>{'{{date}}'}</Code> or{' '}
+                          <Code>{'{{author}}'}</Code> are replaced when creating the task
                         </li>
                         <li>
-                          • <strong>Custom variables</strong> (e.g.,{' '}
-                          <code className="px-1 py-0.5 rounded bg-muted">{'{{bugId}}'}</code>)
+                          <strong>Custom variables</strong> such as <Code>{'{{bugId}}'}</Code>{' '}
                           prompt you for values
                         </li>
                         <li>
-                          • <strong>Blueprint templates</strong> create multiple linked tasks with
+                          <strong>Blueprint templates</strong> create multiple linked tasks with
                           dependencies
                         </li>
                       </ul>
-                    </div>
-                  </div>
-                </div>
+                    </Text>
+                  </Stack>
+                </Alert>
               )}
 
-              <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="all" className="text-xs">
-                    All
-                  </TabsTrigger>
-                  <TabsTrigger value="bug" className="text-xs">
-                    🐛
-                  </TabsTrigger>
-                  <TabsTrigger value="feature" className="text-xs">
-                    ✨
-                  </TabsTrigger>
-                  <TabsTrigger value="sprint" className="text-xs">
-                    🔄
-                  </TabsTrigger>
-                </TabsList>
+              <Tabs value={categoryFilter} onChange={(value) => setCategoryFilter(value ?? 'all')}>
+                <Tabs.List grow>
+                  <Tabs.Tab value="all">All</Tabs.Tab>
+                  <Tabs.Tab value="bug" aria-label="Bug templates">
+                    <Bug className="h-4 w-4" />
+                  </Tabs.Tab>
+                  <Tabs.Tab value="feature" aria-label="Feature templates">
+                    <Sparkles className="h-4 w-4" />
+                  </Tabs.Tab>
+                  <Tabs.Tab value="sprint" aria-label="Sprint templates">
+                    <RefreshCw className="h-4 w-4" />
+                  </Tabs.Tab>
+                </Tabs.List>
               </Tabs>
 
-              <Select value={selectedTemplate || 'none'} onValueChange={handleTemplateSelect}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select template..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No template</SelectItem>
-                  {filteredTemplates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.category && `${getCategoryIcon(template.category)} `}
-                      {template.name}
-                      {template.description && (
-                        <span className="text-muted-foreground ml-2">— {template.description}</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <Select
+                value={selectedTemplate || 'none'}
+                onChange={(value) => handleTemplateSelect(value ?? 'none')}
+                data={templateOptions}
+                placeholder="Select template..."
+                checkIconPosition="right"
+              />
+            </Stack>
           )}
 
           {/* Blueprint preview or regular form */}
-          <div className="grid gap-4 py-4">
+          <Stack gap="md" py="md">
             {isBlueprint ? (
-              <>
-                <BlueprintPreview template={currentTemplate!} />
-                <TemplateVariableInputs
-                  variables={requiredCustomVars}
-                  values={customVars}
-                  onChange={(name, value) => setCustomVars((prev) => ({ ...prev, [name]: value }))}
-                />
-              </>
+              currentTemplate ? (
+                <>
+                  <BlueprintPreview template={currentTemplate} />
+                  <TemplateVariableInputs
+                    variables={requiredCustomVars}
+                    values={customVars}
+                    onChange={(name, value) =>
+                      setCustomVars((prev) => ({ ...prev, [name]: value }))
+                    }
+                  />
+                </>
+              ) : null
             ) : (
               <>
-                <div className="grid gap-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Enter task title..."
-                    autoFocus
-                  />
-                </div>
+                <TextInput
+                  id="title"
+                  label="Title"
+                  value={title}
+                  onChange={(event) => setTitle(event.currentTarget.value)}
+                  placeholder="Enter task title..."
+                  autoFocus
+                />
 
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the task..."
-                    rows={3}
-                  />
-                </div>
+                <Textarea
+                  id="description"
+                  label="Description"
+                  value={description}
+                  onChange={(event) => setDescription(event.currentTarget.value)}
+                  placeholder="Describe the task..."
+                  rows={3}
+                />
 
                 {(isCheckingDuplicates || duplicateResults.length > 0 || duplicateError) && (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
-                        Possible duplicates
-                      </div>
+                  <Alert
+                    color="yellow"
+                    variant="light"
+                    icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+                    title={
+                      <Group justify="space-between" gap="sm">
+                        <Text size="sm" fw={600}>
+                          Possible duplicates
+                        </Text>
+                        {isCheckingDuplicates && (
+                          <Loader2
+                            className="h-4 w-4 animate-spin text-muted-foreground"
+                            aria-label="Checking duplicates"
+                          />
+                        )}
+                      </Group>
+                    }
+                  >
+                    <Stack gap="sm" mt={duplicateResults.length > 0 ? 'xs' : 0}>
                       {isCheckingDuplicates && (
-                        <Loader2
-                          className="h-4 w-4 animate-spin text-muted-foreground"
-                          aria-label="Checking duplicates"
-                        />
+                        <Text size="sm" c="dimmed">
+                          Checking existing tasks...
+                        </Text>
                       )}
-                    </div>
-                    {duplicateResults.length > 0 ? (
-                      <div className="mt-2 space-y-2">
-                        {duplicateResults.map((result) => {
+                      {duplicateResults.length > 0 ? (
+                        duplicateResults.map((result) => {
                           const taskId = extractTaskId(result.path);
                           return (
-                            <button
+                            <Paper
                               key={`${result.collection}:${result.id}`}
+                              component="button"
                               type="button"
-                              className="flex w-full items-start gap-2 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                              withBorder
+                              radius="md"
+                              p="sm"
+                              className="flex w-full items-start gap-2 bg-background text-left transition-colors hover:bg-muted/50"
                               onClick={() => {
                                 if (!taskId) return;
                                 navigateToTask(taskId);
@@ -379,94 +451,73 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                                   aria-hidden="true"
                                 />
                               )}
-                            </button>
+                            </Paper>
                           );
-                        })}
-                      </div>
-                    ) : (
-                      !isCheckingDuplicates && (
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        })
+                      ) : !isCheckingDuplicates ? (
+                        <Text size="sm" c="dimmed">
                           No likely task duplicates found.
-                        </p>
-                      )
-                    )}
-                    {duplicateError && (
-                      <p className="mt-2 text-xs text-muted-foreground">{duplicateError}</p>
-                    )}
-                  </div>
+                        </Text>
+                      ) : null}
+                      {duplicateError && (
+                        <Text size="xs" c="dimmed">
+                          {duplicateError}
+                        </Text>
+                      )}
+                    </Stack>
+                  </Alert>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="type">Type</Label>
-                    <Select value={type} onValueChange={setType}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {taskTypes.map((taskType) => {
-                          const IconComponent = getTypeIcon(taskType.icon);
-                          return (
-                            <SelectItem key={taskType.id} value={taskType.id}>
-                              <div className="flex items-center gap-2">
-                                {IconComponent && <IconComponent className="h-4 w-4" />}
-                                {taskType.label}
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                  <Select
+                    label="Type"
+                    value={type}
+                    onChange={(value) => setType(value ?? 'code')}
+                    data={taskTypeOptions}
+                    renderOption={({ option }) => {
+                      const taskType = taskTypes.find((item) => item.id === option.value);
+                      const IconComponent = taskType ? getTypeIcon(taskType.icon) : null;
+                      return (
+                        <Group gap="xs">
+                          {IconComponent && <IconComponent className="h-4 w-4" />}
+                          <span>{option.label}</span>
+                        </Group>
+                      );
+                    }}
+                    checkIconPosition="right"
+                  />
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="priority">Priority</Label>
-                    <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  <Select
+                    label="Priority"
+                    value={priority}
+                    onChange={(value) => setPriority((value ?? 'medium') as TaskPriority)}
+                    data={priorityOptions}
+                    checkIconPosition="right"
+                  />
+                </SimpleGrid>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="project">Project (optional)</Label>
+                <Stack gap="xs">
                   {!showNewProject ? (
                     <Select
-                      value={project}
-                      onValueChange={(value) => {
+                      label="Project (optional)"
+                      value={project || '__none__'}
+                      onChange={(value) => {
                         if (value === '__new__') {
                           onShowNewProject();
                         } else {
-                          setProject(value);
+                          setProject(value === '__none__' ? '' : (value ?? ''));
                         }
                       }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">No project</SelectItem>
-                        {projects.map((proj) => (
-                          <SelectItem key={proj.id} value={proj.id}>
-                            {proj.label}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="__new__" className="text-primary">
-                          + New Project
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                      data={projectOptions}
+                      placeholder="Select project..."
+                      checkIconPosition="right"
+                    />
                   ) : (
-                    <div className="flex gap-2">
-                      <Input
+                    <Group gap="sm" align="end" wrap="nowrap">
+                      <TextInput
+                        label="New project"
                         value={newProjectName}
-                        onChange={(e) => setNewProjectName(e.target.value)}
+                        onChange={(event) => setNewProjectName(event.currentTarget.value)}
                         placeholder="Enter project name..."
                         autoFocus
                         onKeyDown={(e) => {
@@ -478,6 +529,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                             hideNewProject();
                           }
                         }}
+                        className="flex-1"
                       />
                       <Button
                         type="button"
@@ -493,51 +545,28 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                       <Button type="button" size="sm" variant="outline" onClick={hideNewProject}>
                         Cancel
                       </Button>
-                    </div>
+                    </Group>
                   )}
-                </div>
+                </Stack>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Sprint (optional)</Label>
-                    <Select
-                      value={sprint || '__none__'}
-                      onValueChange={(v) => setSprint(v === '__none__' ? '' : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="No sprint" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">No Sprint</SelectItem>
-                        {sprints.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                  <Select
+                    label="Sprint (optional)"
+                    value={sprint || '__none__'}
+                    onChange={(value) => setSprint(value === '__none__' ? '' : (value ?? ''))}
+                    data={sprintOptions}
+                    placeholder="No sprint"
+                    checkIconPosition="right"
+                  />
 
-                  <div className="grid gap-2">
-                    <Label>Agent</Label>
-                    <Select value={agent || 'auto'} onValueChange={setAgent}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">
-                          <span className="text-muted-foreground">Auto</span>
-                          <span className="text-xs text-muted-foreground ml-1">(routing)</span>
-                        </SelectItem>
-                        {enabledAgents.map((a) => (
-                          <SelectItem key={a.type} value={a.type}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  <Select
+                    label="Agent"
+                    value={agent || 'auto'}
+                    onChange={(value) => setAgent(value ?? 'auto')}
+                    data={agentOptions}
+                    checkIconPosition="right"
+                  />
+                </SimpleGrid>
 
                 <TemplateVariableInputs
                   variables={requiredCustomVars}
@@ -546,36 +575,47 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 />
 
                 {subtasks.length > 0 && (
-                  <div className="grid gap-2">
-                    <Label>Subtasks ({subtasks.length})</Label>
-                    <div className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
-                      {subtasks.map((subtask) => (
-                        <div
-                          key={subtask.id}
-                          className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50"
-                        >
-                          <div className="flex items-center gap-2 flex-1">
-                            <Check className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm">{subtask.title}</span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => removeSubtask(subtask.id)}
-                            aria-label={`Remove subtask: ${subtask.title}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>
+                      Subtasks ({subtasks.length})
+                    </Text>
+                    <Paper withBorder radius="md" p="xs">
+                      <ScrollArea.Autosize mah={160} type="auto">
+                        <Stack gap={4}>
+                          {subtasks.map((subtask) => (
+                            <Group
+                              key={subtask.id}
+                              justify="space-between"
+                              gap="sm"
+                              wrap="nowrap"
+                              className="rounded px-2 py-1 transition-colors hover:bg-muted/50"
+                            >
+                              <Group gap="xs" className="min-w-0 flex-1" wrap="nowrap">
+                                <Check className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                <Text size="sm" truncate>
+                                  {subtask.title}
+                                </Text>
+                              </Group>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => removeSubtask(subtask.id)}
+                                aria-label={`Remove subtask: ${subtask.title}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </Group>
+                          ))}
+                        </Stack>
+                      </ScrollArea.Autosize>
+                    </Paper>
+                  </Stack>
                 )}
               </>
             )}
-          </div>
+          </Stack>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
