@@ -1,27 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ActionIcon, Badge, Button, Modal, Select, Switch, Text, TextInput } from '@mantine/core';
 import { useCodexHealth, useConfig, useUpdateAgents } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
@@ -49,6 +27,8 @@ import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanba
 import { cn } from '@/lib/utils';
 import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
 
+type AgentFeatureSettings = typeof DEFAULT_FEATURE_SETTINGS.agents;
+
 export function AgentsTab() {
   const { data: config, isLoading } = useConfig();
   const {
@@ -62,8 +42,8 @@ export function AgentsTab() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
 
-  const update = (key: string, value: any) => {
-    debouncedUpdate({ agents: { [key]: value } });
+  const update = <K extends keyof AgentFeatureSettings>(key: K, value: AgentFeatureSettings[K]) => {
+    debouncedUpdate({ agents: { [key]: value } as Partial<AgentFeatureSettings> });
   };
 
   const handleToggleAgent = (agentType: AgentType) => {
@@ -106,8 +86,13 @@ export function AgentsTab() {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Installed Agents</h3>
           {!showAddForm && (
-            <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add Agent
+            <Button
+              variant="outline"
+              size="xs"
+              leftSection={<Plus className="h-4 w-4" />}
+              onClick={() => setShowAddForm(true)}
+            >
+              Add Agent
             </Button>
           )}
         </div>
@@ -225,8 +210,11 @@ function CodexHealthPanel({
   onRefresh: () => void;
 }) {
   const statusBadge = (ready: boolean, label: string) => (
-    <Badge variant={ready ? 'default' : 'secondary'} className="gap-1">
-      {ready ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+    <Badge
+      variant={ready ? 'light' : 'outline'}
+      color={ready ? 'green' : 'gray'}
+      leftSection={ready ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+    >
       {label}
     </Badge>
   );
@@ -242,10 +230,9 @@ function CodexHealthPanel({
               : 'Checking Codex readiness'}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
+        <ActionIcon
+          variant="subtle"
+          size="sm"
           onClick={onRefresh}
           disabled={isFetching}
           aria-label="Refresh Codex health"
@@ -255,7 +242,7 @@ function CodexHealthPanel({
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-        </Button>
+        </ActionIcon>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -296,87 +283,94 @@ interface AgentItemProps {
 }
 
 function AgentItem({ agent, isDefault, onToggle, onEdit, onRemove }: AgentItemProps) {
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+
   return (
-    <div
-      className={cn(
-        'flex items-center justify-between py-2 px-3 rounded-md border',
-        agent.enabled ? 'bg-card' : 'bg-muted/30'
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <Bot className="h-4 w-4 text-muted-foreground" />
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={cn('font-medium text-sm', !agent.enabled && 'text-muted-foreground')}>
-              {agent.name}
-            </span>
-            {isDefault && (
-              <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
-                Default
+    <>
+      <div
+        className={cn(
+          'flex items-center justify-between py-2 px-3 rounded-md border',
+          agent.enabled ? 'bg-card' : 'bg-muted/30'
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <Bot className="h-4 w-4 text-muted-foreground" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span
+                className={cn('font-medium text-sm', !agent.enabled && 'text-muted-foreground')}
+              >
+                {agent.name}
               </span>
-            )}
+              {isDefault && (
+                <Badge size="xs" variant="light" color="violet">
+                  Default
+                </Badge>
+              )}
+            </div>
+            <code className="text-xs text-muted-foreground">
+              {agent.command} {agent.args.join(' ')}
+            </code>
           </div>
-          <code className="text-xs text-muted-foreground">
-            {agent.command} {agent.args.join(' ')}
-          </code>
+        </div>
+        <div className="flex items-center gap-2">
+          <ActionIcon variant="subtle" size="sm" onClick={onEdit} aria-label={`Edit ${agent.name}`}>
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </ActionIcon>
+          {isDefault ? (
+            <span
+              className="text-xs text-muted-foreground px-1"
+              title="Cannot remove the default agent"
+            >
+              —
+            </span>
+          ) : (
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={() => setConfirmRemoveOpen(true)}
+              aria-label={`Remove ${agent.name}`}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            </ActionIcon>
+          )}
+          <Switch
+            checked={agent.enabled}
+            onChange={() => onToggle()}
+            aria-label={`Enable ${agent.name}`}
+            size="sm"
+          />
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onEdit}
-          aria-label={`Edit ${agent.name}`}
+
+      {!isDefault && (
+        <Modal
+          opened={confirmRemoveOpen}
+          onClose={() => setConfirmRemoveOpen(false)}
+          title="Remove agent?"
+          centered
         >
-          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-        </Button>
-        {isDefault ? (
-          <span
-            className="text-xs text-muted-foreground px-1"
-            title="Cannot remove the default agent"
-          >
-            —
-          </span>
-        ) : (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                aria-label={`Remove ${agent.name}`}
-              >
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Remove agent?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will remove &ldquo;{agent.name}&rdquo; ({agent.type}) from your agent
-                  configuration.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={onRemove}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Remove
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-        <Switch
-          checked={agent.enabled}
-          onCheckedChange={onToggle}
-          aria-label={`Enable ${agent.name}`}
-        />
-      </div>
-    </div>
+          <Text size="sm" c="dimmed">
+            This will remove &ldquo;{agent.name}&rdquo; ({agent.type}) from your agent
+            configuration.
+          </Text>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="subtle" onClick={() => setConfirmRemoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                onRemove();
+                setConfirmRemoveOpen(false);
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -498,8 +492,9 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
           {updateRouting.isPending && <SaveIndicator isPending />}
           <Switch
             checked={config.enabled}
-            onCheckedChange={handleToggleEnabled}
+            onChange={() => handleToggleEnabled()}
             aria-label="Enable agent routing"
+            size="sm"
           />
         </div>
       </div>
@@ -513,8 +508,13 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
                 Rules (first match wins)
               </h4>
               {!showAddRule && (
-                <Button variant="outline" size="sm" onClick={() => setShowAddRule(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Add Rule
+                <Button
+                  variant="outline"
+                  size="xs"
+                  leftSection={<Plus className="h-3.5 w-3.5" />}
+                  onClick={() => setShowAddRule(true)}
+                >
+                  Add Rule
                 </Button>
               )}
             </div>
@@ -569,41 +569,41 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Defaults
               </h4>
-              <Button variant="ghost" size="sm" className="text-xs h-6" onClick={resetRouting}>
+              <Button variant="subtle" size="compact-xs" onClick={resetRouting}>
                 Reset to defaults
               </Button>
             </div>
             <div className="divide-y">
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <Label className="text-sm">Default Agent</Label>
+                  <p className="text-sm font-medium">Default Agent</p>
                   <p className="text-xs text-muted-foreground">Used when no rules match</p>
                 </div>
-                <Select value={config.defaultAgent} onValueChange={handleDefaultAgentChange}>
-                  <SelectTrigger className="w-[180px] h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {enabledAgents.map((a) => (
-                      <SelectItem key={a.type} value={a.type}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Select
+                  aria-label="Default Agent"
+                  value={config.defaultAgent}
+                  onChange={(value) => value && handleDefaultAgentChange(value)}
+                  data={enabledAgents.map((a) => ({ value: a.type, label: a.name }))}
+                  className="w-[180px]"
+                  size="xs"
+                  allowDeselect={false}
+                  disabled={enabledAgents.length === 0}
+                />
               </div>
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <Label className="text-sm">Default Model</Label>
+                  <p className="text-sm font-medium">Default Model</p>
                   <p className="text-xs text-muted-foreground">
                     Model override for the default agent
                   </p>
                 </div>
-                <Input
+                <TextInput
+                  aria-label="Default Model"
                   value={config.defaultModel || ''}
                   onChange={(e) => handleDefaultModelChange(e.target.value)}
                   placeholder="e.g., sonnet"
-                  className="w-[180px] h-8 text-sm"
+                  className="w-[180px]"
+                  size="xs"
                 />
               </div>
               <ToggleRow
@@ -715,19 +715,19 @@ function RoutingRuleItem({
         </div>
         <div className="flex flex-wrap gap-1 mt-1">
           {matchLabels.map((label, i) => (
-            <Badge key={i} variant="secondary" className="text-xs font-mono">
+            <Badge key={i} size="xs" variant="light" color="gray" className="font-mono">
               {label}
             </Badge>
           ))}
           <span className="text-xs text-muted-foreground">→</span>
-          <Badge variant="outline" className="text-xs">
+          <Badge size="xs" variant="outline" color="gray">
             {agentName}
             {rule.model ? ` (${rule.model})` : ''}
           </Badge>
           {fallbackName && (
             <>
               <span className="text-xs text-muted-foreground">fallback:</span>
-              <Badge variant="outline" className="text-xs">
+              <Badge size="xs" variant="outline" color="gray">
                 {fallbackName}
               </Badge>
             </>
@@ -737,13 +737,23 @@ function RoutingRuleItem({
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
+        <ActionIcon variant="subtle" size="sm" onClick={onEdit} aria-label={`Edit ${rule.name}`}>
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}>
+        </ActionIcon>
+        <ActionIcon
+          variant="subtle"
+          size="sm"
+          onClick={onRemove}
+          aria-label={`Remove ${rule.name}`}
+        >
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </Button>
-        <Switch checked={rule.enabled} onCheckedChange={onToggle} />
+        </ActionIcon>
+        <Switch
+          checked={rule.enabled}
+          onChange={() => onToggle()}
+          aria-label={`Enable ${rule.name}`}
+          size="sm"
+        />
       </div>
     </div>
   );
@@ -815,7 +825,7 @@ function RoutingRuleForm({ rule, agents, existingIds, onSubmit, onCancel }: Rout
       name: name.trim(),
       match: {
         type: parseList(matchType),
-        priority: parseList(matchPriority) as any,
+        priority: parseList(matchPriority) as RoutingRule['match']['priority'],
         project: parseList(matchProject),
         minSubtasks: minSubtasks ? parseInt(minSubtasks, 10) : undefined,
       },
@@ -835,145 +845,121 @@ function RoutingRuleForm({ rule, agents, existingIds, onSubmit, onCancel }: Rout
 
       <div className="grid gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>Rule Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., High-priority bugs"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>
-              ID{' '}
-              {!isEditing && effectiveId && (
-                <span className="text-xs text-muted-foreground ml-1">({effectiveId})</span>
-              )}
-            </Label>
-            <Input
-              value={isEditing ? rule.id : id}
-              onChange={(e) => setId(e.target.value)}
-              placeholder="auto from name"
-              disabled={isEditing}
-              className={cn(isDuplicate && 'border-red-500')}
-            />
-          </div>
+          <TextInput
+            label="Rule Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., High-priority bugs"
+          />
+          <TextInput
+            label={
+              <>
+                ID{' '}
+                {!isEditing && effectiveId && (
+                  <span className="text-xs text-muted-foreground ml-1">({effectiveId})</span>
+                )}
+              </>
+            }
+            value={isEditing ? rule.id : id}
+            onChange={(e) => setId(e.target.value)}
+            placeholder="auto from name"
+            disabled={isEditing}
+            error={isDuplicate ? 'A routing rule with this ID already exists' : undefined}
+          />
         </div>
 
         {/* Match criteria */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>
-              Match Type(s) <span className="text-xs text-muted-foreground">(comma-separated)</span>
-            </Label>
-            <Input
-              value={matchType}
-              onChange={(e) => setMatchType(e.target.value)}
-              placeholder="e.g., code, bug"
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>
-              Match Priority{' '}
-              <span className="text-xs text-muted-foreground">(low, medium, high)</span>
-            </Label>
-            <Input
-              value={matchPriority}
-              onChange={(e) => setMatchPriority(e.target.value)}
-              placeholder="e.g., high"
-              className="font-mono text-sm"
-            />
-          </div>
+          <TextInput
+            label="Match Type(s)"
+            description="Comma-separated"
+            value={matchType}
+            onChange={(e) => setMatchType(e.target.value)}
+            placeholder="e.g., code, bug"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
+          <TextInput
+            label="Match Priority"
+            description="low, medium, high"
+            value={matchPriority}
+            onChange={(e) => setMatchPriority(e.target.value)}
+            placeholder="e.g., high"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label>
-              Match Project <span className="text-xs text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              value={matchProject}
-              onChange={(e) => setMatchProject(e.target.value)}
-              placeholder="e.g., rubicon"
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>
-              Min Subtasks <span className="text-xs text-muted-foreground">(complexity)</span>
-            </Label>
-            <Input
-              type="number"
-              value={minSubtasks}
-              onChange={(e) => setMinSubtasks(e.target.value)}
-              placeholder="e.g., 5"
-              className="font-mono text-sm"
-              min="0"
-            />
-          </div>
+          <TextInput
+            label="Match Project"
+            description="Optional"
+            value={matchProject}
+            onChange={(e) => setMatchProject(e.target.value)}
+            placeholder="e.g., rubicon"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
+          <TextInput
+            label="Min Subtasks"
+            description="Complexity"
+            type="number"
+            value={minSubtasks}
+            onChange={(e) => setMinSubtasks(e.target.value)}
+            placeholder="e.g., 5"
+            classNames={{ input: 'font-mono text-sm' }}
+            min="0"
+          />
         </div>
 
         {/* Agent selection */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="grid gap-1.5">
-            <Label>Primary Agent</Label>
-            <Select value={agent} onValueChange={setAgent}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {agents.map((a) => (
-                  <SelectItem key={a.type} value={a.type}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>
-              Model <span className="text-xs text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="e.g., opus"
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>
-              Fallback Agent <span className="text-xs text-muted-foreground">(optional)</span>
-            </Label>
-            <Select
-              value={fallback || '__none__'}
-              onValueChange={(v) => setFallback(v === '__none__' ? '' : v)}
-            >
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="None" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {agents
-                  .filter((a) => a.type !== agent)
-                  .map((a) => (
-                    <SelectItem key={a.type} value={a.type}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select
+            label="Primary Agent"
+            value={agent}
+            onChange={(value) => value && setAgent(value as AgentType)}
+            data={agents.map((a) => ({ value: a.type, label: a.name }))}
+            allowDeselect={false}
+            disabled={agents.length === 0}
+          />
+          <TextInput
+            label="Model"
+            description="Optional"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="e.g., opus"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
+          <Select
+            label="Fallback Agent"
+            description="Optional"
+            value={fallback || '__none__'}
+            onChange={(value) => setFallback(!value || value === '__none__' ? '' : value)}
+            data={[
+              { value: '__none__', label: 'None' },
+              ...agents
+                .filter((a) => a.type !== agent)
+                .map((a) => ({ value: a.type, label: a.name })),
+            ]}
+            allowDeselect={false}
+          />
         </div>
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          <X className="h-3.5 w-3.5 mr-1" /> Cancel
+        <Button
+          type="button"
+          variant="subtle"
+          size="xs"
+          leftSection={<X className="h-3.5 w-3.5" />}
+          onClick={onCancel}
+        >
+          Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={!isValid}>
-          <Check className="h-3.5 w-3.5 mr-1" /> {isEditing ? 'Save Rule' : 'Add Rule'}
+        <Button
+          type="submit"
+          size="xs"
+          leftSection={<Check className="h-3.5 w-3.5" />}
+          disabled={!isValid}
+        >
+          {isEditing ? 'Save Rule' : 'Add Rule'}
         </Button>
       </div>
     </form>
@@ -1024,66 +1010,69 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
 
       <div className="grid gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="agent-name">Display Name</Label>
-            <Input
-              id="agent-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., My Custom Agent"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="agent-type">
-              Type Slug
-              {!isEditing && typeSlug && (
-                <span className="text-xs text-muted-foreground ml-1">({typeSlug})</span>
-              )}
-            </Label>
-            <Input
-              id="agent-type"
-              value={isEditing ? agent.type : type}
-              onChange={(e) => setType(e.target.value)}
-              placeholder="auto-generated from name"
-              disabled={isEditing}
-              className={cn(isDuplicate && 'border-red-500')}
-            />
-            {isDuplicate && (
-              <p className="text-xs text-red-500">An agent with this type already exists</p>
-            )}
-          </div>
+          <TextInput
+            id="agent-name"
+            label="Display Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., My Custom Agent"
+          />
+          <TextInput
+            id="agent-type"
+            label={
+              <>
+                Type Slug
+                {!isEditing && typeSlug && (
+                  <span className="text-xs text-muted-foreground ml-1">({typeSlug})</span>
+                )}
+              </>
+            }
+            value={isEditing ? agent.type : type}
+            onChange={(e) => setType(e.target.value)}
+            placeholder="auto-generated from name"
+            disabled={isEditing}
+            error={isDuplicate ? 'An agent with this type already exists' : undefined}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="agent-command">Command</Label>
-            <Input
-              id="agent-command"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              placeholder="e.g., claude"
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="agent-args">Arguments (space-separated)</Label>
-            <Input
-              id="agent-args"
-              value={argsStr}
-              onChange={(e) => setArgsStr(e.target.value)}
-              placeholder="e.g., --flag -p"
-              className="font-mono text-sm"
-            />
-          </div>
+          <TextInput
+            id="agent-command"
+            label="Command"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="e.g., claude"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
+          <TextInput
+            id="agent-args"
+            label="Arguments"
+            description="Space-separated"
+            value={argsStr}
+            onChange={(e) => setArgsStr(e.target.value)}
+            placeholder="e.g., --flag -p"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
         </div>
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          <X className="h-3.5 w-3.5 mr-1" /> Cancel
+        <Button
+          type="button"
+          variant="subtle"
+          size="xs"
+          leftSection={<X className="h-3.5 w-3.5" />}
+          onClick={onCancel}
+        >
+          Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={!isValid}>
-          <Check className="h-3.5 w-3.5 mr-1" /> {isEditing ? 'Save' : 'Add Agent'}
+        <Button
+          type="submit"
+          size="xs"
+          leftSection={<Check className="h-3.5 w-3.5" />}
+          disabled={!isValid}
+        >
+          {isEditing ? 'Save' : 'Add Agent'}
         </Button>
       </div>
     </form>

@@ -310,6 +310,10 @@ Phase 3 progress:
   button, and action icon primitives while preserving workspace switching,
   member role management, invitations, scoped API token creation, rotation, and
   revocation behavior.
+- Agents settings now use direct Mantine switch, select, text input, badge,
+  button, action icon, and modal primitives while preserving installed-agent
+  add/edit/remove/toggle behavior, Codex health refresh, routing defaults, and
+  routing-rule create/edit controls.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
