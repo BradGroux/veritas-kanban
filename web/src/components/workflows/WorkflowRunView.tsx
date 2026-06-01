@@ -11,8 +11,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '@/lib/config';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import {
+  Alert,
+  Badge,
+  Button,
+  Code,
+  Group,
+  Paper,
+  Progress,
+  Skeleton,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title,
+} from '@mantine/core';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -23,7 +35,6 @@ import {
   Pause,
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 
@@ -109,9 +120,11 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     fetchRun();
   }, [fetchRun]);
 
+  const workflowId = run?.workflowId;
+
   // Fetch workflow definition when run loads
   useEffect(() => {
-    if (!run) return;
+    if (!workflowId) return;
 
     setWorkflow(null);
     setIsWorkflowLoading(true);
@@ -119,7 +132,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     let isCancelled = false;
     const fetchWorkflow = async () => {
       try {
-        const workflowResponse = await fetch(`${API_BASE}/workflows/${run.workflowId}`);
+        const workflowResponse = await fetch(`${API_BASE}/workflows/${workflowId}`);
         if (!workflowResponse.ok) throw new Error('Failed to fetch workflow definition');
         const json = await workflowResponse.json();
         if (!isCancelled) {
@@ -142,7 +155,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     return () => {
       isCancelled = true;
     };
-  }, [run?.workflowId]);
+  }, [workflowId]);
 
   // WebSocket subscription for live updates
   const handleWebSocketMessage = useCallback(
@@ -184,15 +197,19 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   if (isLoading || (run && isWorkflowLoading)) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <Stack gap="lg">
+        <Skeleton h={48} />
+        <Skeleton h={256} />
+      </Stack>
     );
   }
 
   if (!run) {
-    return <div className="text-center py-12 text-muted-foreground">Workflow run not found</div>;
+    return (
+      <Text ta="center" c="dimmed" py="xl">
+        Workflow run not found
+      </Text>
+    );
   }
 
   const workflowName = workflow?.name ?? `Workflow ${run.workflowId}`;
@@ -202,6 +219,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   const completedSteps = run.steps?.filter((s) => s.status === 'completed').length;
   const totalSteps = run.steps?.length ?? 0;
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   const duration = run.completedAt
     ? Math.floor((new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)
@@ -211,26 +229,31 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     pending: {
       icon: Clock,
       color: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+      progressColor: 'gray',
       label: 'Pending',
     },
     running: {
       icon: PlayCircle,
       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      progressColor: 'blue',
       label: 'Running',
     },
     completed: {
       icon: CheckCircle2,
       color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      progressColor: 'green',
       label: 'Completed',
     },
     failed: {
       icon: XCircle,
       color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      progressColor: 'red',
       label: 'Failed',
     },
     blocked: {
       icon: AlertCircle,
       color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      progressColor: 'yellow',
       label: 'Blocked',
     },
   };
@@ -239,79 +262,85 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   const Icon = config.icon;
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+      <Group justify="space-between" align="center">
+        <Group gap="md" align="center">
+          <Button
+            variant="subtle"
+            size="sm"
+            leftSection={<ArrowLeft className="h-4 w-4" />}
+            onClick={onBack}
+          >
             Back to Runs
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{workflowName}</h1>
-            <p className="text-sm text-muted-foreground">Run: {run.id}</p>
+            <Title order={1} className="text-2xl">
+              {workflowName}
+            </Title>
+            <Text size="sm" c="dimmed">
+              Run: {run.id}
+            </Text>
           </div>
-        </div>
+        </Group>
 
-        <div className="flex items-center gap-3">
+        <Group gap="sm">
           <Badge className={cn('text-sm', config.color)}>
             <Icon className="h-4 w-4 mr-1" />
             {config.label}
           </Badge>
           {run.status === 'blocked' && (
-            <Button size="sm" onClick={handleResume}>
-              <PlayCircle className="h-4 w-4 mr-1" />
+            <Button
+              size="sm"
+              leftSection={<PlayCircle className="h-4 w-4" />}
+              onClick={handleResume}
+            >
               Resume
             </Button>
           )}
-        </div>
-      </div>
+        </Group>
+      </Group>
 
       {/* Progress Overview */}
-      <div className="p-6 rounded-lg border bg-card space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Overall Progress</h2>
-            <p className="text-sm text-muted-foreground">
-              Step {completedSteps} of {totalSteps}
-            </p>
-          </div>
-          <div className="text-right space-y-1">
-            <div className="text-sm text-muted-foreground">
-              Duration: {Math.floor(duration / 60)}m {duration % 60}s
+      <Paper className="p-6" radius="md" withBorder>
+        <Stack gap="md">
+          <Group justify="space-between" align="flex-start">
+            <div className="space-y-1">
+              <Title order={2} className="text-lg">
+                Overall Progress
+              </Title>
+              <Text size="sm" c="dimmed">
+                Step {completedSteps} of {totalSteps}
+              </Text>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Started: {new Date(run.startedAt).toLocaleString()}
-            </div>
-          </div>
-        </div>
+            <Stack gap={4} align="flex-end">
+              <Text size="sm" c="dimmed">
+                Duration: {Math.floor(duration / 60)}m {duration % 60}s
+              </Text>
+              <Text size="sm" c="dimmed">
+                Started: {new Date(run.startedAt).toLocaleString()}
+              </Text>
+            </Stack>
+          </Group>
 
-        <div className="h-3 bg-secondary rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full transition-all',
-              run.status === 'completed'
-                ? 'bg-green-500'
-                : run.status === 'failed'
-                  ? 'bg-red-500'
-                  : run.status === 'blocked'
-                    ? 'bg-yellow-500'
-                    : 'bg-blue-500'
-            )}
-            style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
-          />
-        </div>
+          <Progress value={progress} color={config.progressColor} size="md" radius="xl" />
 
-        {run.error && (
-          <div className="p-3 rounded bg-destructive/10 text-destructive text-sm">
-            <strong>Error:</strong> {run.error}
-          </div>
-        )}
-      </div>
+          {run.error && (
+            <Alert color="red" variant="light">
+              <Text span fw={600}>
+                Error:
+              </Text>{' '}
+              {run.error}
+            </Alert>
+          )}
+        </Stack>
+      </Paper>
 
       {/* Step Timeline */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Steps</h2>
+      <Stack gap="sm">
+        <Title order={2} className="text-lg">
+          Steps
+        </Title>
         {stepDefinitions.map((stepDef, index) => {
           const stepRun = run.steps?.find((s) => s.stepId === stepDef.id);
           if (!stepRun) return null;
@@ -329,8 +358,8 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
             />
           );
         })}
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -375,12 +404,14 @@ function StepCard({ stepDef, stepRun, index, isExpanded, onToggleExpand }: StepC
   const Icon = config.icon;
 
   return (
-    <div
+    <Paper
       className={cn(
-        'p-4 rounded-lg border-2 bg-card transition-colors cursor-pointer',
+        'p-4 border-2 transition-colors cursor-pointer',
         config.borderColor,
         isExpanded && 'ring-2 ring-accent'
       )}
+      radius="md"
+      withBorder
       onClick={onToggleExpand}
       role="button"
       tabIndex={0}
@@ -391,14 +422,16 @@ function StepCard({ stepDef, stepRun, index, isExpanded, onToggleExpand }: StepC
         }
       }}
     >
-      <div className="flex items-start gap-4">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-sm font-medium">
+      <Group align="flex-start" gap="md">
+        <ThemeIcon className="shrink-0" radius="xl" variant="light" color="gray">
           {index + 1}
-        </div>
+        </ThemeIcon>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="font-medium">{stepDef.name}</h3>
+          <Group gap="sm" mb="xs">
+            <Title order={3} className="text-base">
+              {stepDef.name}
+            </Title>
             <Badge className={cn('text-xs', config.color)}>
               <Icon className="h-3 w-3 mr-1" />
               {stepRun.status}
@@ -409,34 +442,51 @@ function StepCard({ stepDef, stepRun, index, isExpanded, onToggleExpand }: StepC
               </Badge>
             )}
             {stepRun.retries > 0 && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="light" className="text-xs">
                 Retry {stepRun.retries}
               </Badge>
             )}
-          </div>
+          </Group>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <Group gap="md" className="text-sm text-muted-foreground">
             {stepRun.startedAt && (
-              <div>Started: {new Date(stepRun.startedAt).toLocaleTimeString()}</div>
+              <Text span inherit>
+                Started: {new Date(stepRun.startedAt).toLocaleTimeString()}
+              </Text>
             )}
-            {stepRun.duration !== undefined && <div>Duration: {stepRun.duration}s</div>}
-          </div>
+            {stepRun.completedAt && (
+              <Text span inherit>
+                Completed: {new Date(stepRun.completedAt).toLocaleTimeString()}
+              </Text>
+            )}
+            {stepRun.duration !== undefined && (
+              <Text span inherit>
+                Duration: {stepRun.duration}s
+              </Text>
+            )}
+          </Group>
 
           {stepRun.error && (
-            <div className="mt-2 p-2 rounded bg-destructive/10 text-destructive text-sm">
-              <strong>Error:</strong> {stepRun.error}
-            </div>
+            <Alert mt="xs" color="red" variant="light">
+              <Text span fw={600}>
+                Error:
+              </Text>{' '}
+              {stepRun.error}
+            </Alert>
           )}
 
           {isExpanded && stepRun.output && (
-            <div className="mt-3 p-3 rounded bg-secondary text-sm font-mono whitespace-pre-wrap">
-              <strong>Output:</strong>
-              <br />
-              {stepRun.output}
-            </div>
+            <Paper mt="sm" p="sm" radius="sm" className="bg-secondary">
+              <Text size="sm" fw={600}>
+                Output:
+              </Text>
+              <Code block className="mt-2 whitespace-pre-wrap">
+                {stepRun.output}
+              </Code>
+            </Paper>
           )}
         </div>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 }

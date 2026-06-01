@@ -10,12 +10,19 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { API_BASE } from '@/lib/config';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import {
+  Badge,
+  Button,
+  Group,
+  Paper,
+  Skeleton,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
 import { ArrowLeft, Search, Play, Users, ListOrdered, BarChart3 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { WorkflowRunList } from './WorkflowRunList';
 import { WorkflowDashboard } from './WorkflowDashboard';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -115,48 +122,54 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+      <Group justify="space-between" align="center">
+        <Group gap="md" align="center">
+          <Button
+            variant="subtle"
+            size="sm"
+            leftSection={<ArrowLeft className="h-4 w-4" />}
+            onClick={onBack}
+          >
             Back to Board
           </Button>
-          <h1 className="text-2xl font-bold">Workflows</h1>
-          <Badge variant="secondary">{filteredWorkflows.length} workflows</Badge>
-        </div>
+          <Title order={1} className="text-2xl">
+            Workflows
+          </Title>
+          <Badge variant="light">{filteredWorkflows.length} workflows</Badge>
+        </Group>
 
-        <Button onClick={() => setShowDashboard(true)}>
-          <BarChart3 className="h-4 w-4 mr-2" />
+        <Button
+          leftSection={<BarChart3 className="h-4 w-4" />}
+          onClick={() => setShowDashboard(true)}
+        >
           Dashboard
         </Button>
-      </div>
+      </Group>
 
       {/* Search */}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search workflows..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      <TextInput
+        className="max-w-md"
+        leftSection={<Search className="h-4 w-4" />}
+        placeholder="Search workflows..."
+        value={search}
+        onChange={(event) => setSearch(event.currentTarget.value)}
+      />
 
       {/* Workflow List */}
       {isLoading ? (
-        <div className="space-y-3">
+        <Stack gap="sm">
           {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} h={128} />
           ))}
-        </div>
+        </Stack>
       ) : filteredWorkflows.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <Text ta="center" c="dimmed" py="xl">
           {search ? 'No workflows match your search' : 'No workflows available'}
-        </div>
+        </Text>
       ) : (
-        <div className="space-y-4">
+        <Stack gap="md">
           {filteredWorkflows.map((workflow) => (
             <WorkflowCard
               key={workflow.id}
@@ -166,9 +179,9 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
               canStartRun={canExecuteWorkflows}
             />
           ))}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -181,45 +194,47 @@ interface WorkflowCardProps {
 
 function WorkflowCard({ workflow, onStartRun, onViewRuns, canStartRun }: WorkflowCardProps) {
   return (
-    <div className="p-6 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-      <div className="flex items-start justify-between gap-4">
+    <Paper className="p-6 transition-colors hover:bg-accent/50" radius="md" withBorder>
+      <Group align="flex-start" justify="space-between" gap="md">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="font-semibold text-lg">{workflow.name}</h3>
+          <Group gap="sm" mb="xs">
+            <Title order={3} className="text-lg">
+              {workflow.name}
+            </Title>
             <Badge variant="outline" className="text-xs">
               v{workflow.version}
             </Badge>
             {workflow.activeRunCount !== undefined && workflow.activeRunCount > 0 && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="light" className="text-xs">
                 {workflow.activeRunCount} active run{workflow.activeRunCount !== 1 ? 's' : ''}
               </Badge>
             )}
-          </div>
+          </Group>
 
-          <p className="text-sm text-muted-foreground mb-4 whitespace-pre-wrap">
+          <Text size="sm" c="dimmed" mb="md" className="whitespace-pre-wrap">
             {workflow.description}
-          </p>
+          </Text>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
+          <Group gap="md" className="text-sm text-muted-foreground">
+            <Group gap={4}>
               <Users className="h-4 w-4" />
               <span>{workflow.agents?.length ?? 0} agents</span>
-            </div>
-            <div className="flex items-center gap-1">
+            </Group>
+            <Group gap={4}>
               <ListOrdered className="h-4 w-4" />
               <span>{workflow.steps?.length ?? 0} steps</span>
-            </div>
-          </div>
+            </Group>
+          </Group>
         </div>
 
-        <div className="flex flex-col gap-2 shrink-0">
+        <Stack gap="xs" className="shrink-0">
           <Button
             size="sm"
             onClick={onStartRun}
             disabled={!canStartRun}
             title={canStartRun ? 'Start run' : 'Workflow execute permission required'}
+            leftSection={<Play className="h-3 w-3" />}
           >
-            <Play className="h-3 w-3 mr-1" />
             Start Run
           </Button>
           {workflow.activeRunCount !== undefined && workflow.activeRunCount > 0 && (
@@ -227,8 +242,8 @@ function WorkflowCard({ workflow, onStartRun, onViewRuns, canStartRun }: Workflo
               View Runs
             </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </Stack>
+      </Group>
+    </Paper>
   );
 }

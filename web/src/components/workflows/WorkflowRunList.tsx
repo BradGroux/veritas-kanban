@@ -10,18 +10,20 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { API_BASE } from '@/lib/config';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
+  Badge,
+  Button,
+  Group,
+  Paper,
+  Progress,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Skeleton,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, PlayCircle } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { WorkflowRunView } from './WorkflowRunView';
 
@@ -84,52 +86,59 @@ export function WorkflowRunList({ workflowId, onBack }: WorkflowRunListProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+      <Group justify="space-between" align="center">
+        <Group gap="md" align="center">
+          <Button
+            variant="subtle"
+            size="sm"
+            leftSection={<ArrowLeft className="h-4 w-4" />}
+            onClick={onBack}
+          >
             Back to Workflows
           </Button>
-          <h1 className="text-2xl font-bold">Workflow Runs</h1>
-          <Badge variant="secondary">{filteredRuns.length} runs</Badge>
-        </div>
+          <Title order={1} className="text-2xl">
+            Workflow Runs
+          </Title>
+          <Badge variant="light">{filteredRuns.length} runs</Badge>
+        </Group>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="running">Running</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-            <SelectItem value="blocked">Blocked</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        <Select
+          aria-label="Workflow run status filter"
+          className="w-[180px]"
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value ?? 'all')}
+          data={[
+            { value: 'all', label: 'All Statuses' },
+            { value: 'running', label: 'Running' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'failed', label: 'Failed' },
+            { value: 'blocked', label: 'Blocked' },
+            { value: 'pending', label: 'Pending' },
+          ]}
+        />
+      </Group>
 
       {/* Run List */}
       {isLoading ? (
-        <div className="space-y-3">
+        <Stack gap="sm">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+            <Skeleton key={i} h={96} />
           ))}
-        </div>
+        </Stack>
       ) : filteredRuns.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <Text ta="center" c="dimmed" py="xl">
           {statusFilter !== 'all' ? 'No runs match your filter' : 'No runs yet'}
-        </div>
+        </Text>
       ) : (
-        <div className="space-y-3">
+        <Stack gap="sm">
           {filteredRuns.map((run) => (
             <RunCard key={run.id} run={run} onClick={() => setSelectedRunId(run.id)} />
           ))}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -145,31 +154,37 @@ function RunCard({ run, onClick }: RunCardProps) {
 
   const completedSteps = run.steps?.filter((s) => s.status === 'completed').length;
   const totalSteps = run.steps?.length ?? 0;
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   const statusConfig = {
     pending: {
       icon: Clock,
       color: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+      progressColor: 'gray',
       label: 'Pending',
     },
     running: {
       icon: PlayCircle,
       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      progressColor: 'blue',
       label: 'Running',
     },
     completed: {
       icon: CheckCircle2,
       color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      progressColor: 'green',
       label: 'Completed',
     },
     failed: {
       icon: XCircle,
       color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      progressColor: 'red',
       label: 'Failed',
     },
     blocked: {
       icon: AlertCircle,
       color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      progressColor: 'yellow',
       label: 'Blocked',
     },
   };
@@ -178,8 +193,10 @@ function RunCard({ run, onClick }: RunCardProps) {
   const Icon = config.icon;
 
   return (
-    <div
-      className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+    <Paper
+      className="p-4 transition-colors cursor-pointer hover:bg-accent/50"
+      radius="md"
+      withBorder
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -190,9 +207,9 @@ function RunCard({ run, onClick }: RunCardProps) {
         }
       }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <Group align="flex-start" justify="space-between" gap="md">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
+          <Group gap="sm" mb="xs">
             <Badge variant="outline" className="text-xs font-mono">
               {run.id}
             </Badge>
@@ -200,40 +217,36 @@ function RunCard({ run, onClick }: RunCardProps) {
               <Icon className="h-3 w-3 mr-1" />
               {config.label}
             </Badge>
-          </div>
+          </Group>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div>Started: {new Date(run.startedAt).toLocaleString()}</div>
-            <div>
+          <Group gap="md" className="text-sm text-muted-foreground">
+            <Text span inherit>
+              Started: {new Date(run.startedAt).toLocaleString()}
+            </Text>
+            <Text span inherit>
               Duration: {Math.floor(duration / 60)}m {duration % 60}s
-            </div>
-            {run.currentStep && <div>Current: {run.currentStep}</div>}
-          </div>
+            </Text>
+            {run.currentStep && (
+              <Text span inherit>
+                Current: {run.currentStep}
+              </Text>
+            )}
+          </Group>
 
-          <div className="mt-2 flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">
+          <Group gap="xs" mt="xs">
+            <Text size="sm" c="dimmed">
               Progress: {completedSteps}/{totalSteps} steps
-            </div>
-            <div className="flex-1 max-w-xs h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  'h-full transition-all',
-                  run.status === 'completed'
-                    ? 'bg-green-500'
-                    : run.status === 'failed'
-                      ? 'bg-red-500'
-                      : run.status === 'blocked'
-                        ? 'bg-yellow-500'
-                        : 'bg-blue-500'
-                )}
-                style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
-              />
-            </div>
-          </div>
+            </Text>
+            <Progress className="flex-1 max-w-xs" value={progress} color={config.progressColor} />
+          </Group>
 
-          {run.error && <div className="mt-2 text-sm text-destructive">Error: {run.error}</div>}
+          {run.error && (
+            <Text mt="xs" size="sm" c="red">
+              Error: {run.error}
+            </Text>
+          )}
         </div>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 }

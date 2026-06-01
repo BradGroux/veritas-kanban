@@ -3,7 +3,7 @@
  */
 
 import { memo, useMemo } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, Group, Paper, Stack, Text } from '@mantine/core';
 import { Clock, PlayCircle, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WorkflowRun } from '@/hooks/useWorkflowStats';
@@ -32,18 +32,18 @@ export const RecentRunsList = memo(function RecentRunsList({
 
   if (filteredRuns.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <Text ta="center" c="dimmed" py="xl">
         {statusFilter !== 'all' ? 'No runs match your filter' : 'No recent runs'}
-      </div>
+      </Text>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <Stack gap="sm">
       {filteredRuns.map((run) => (
         <RecentRunCard key={run.id} run={run} onClick={() => onSelectRun(run.id)} />
       ))}
-    </div>
+    </Stack>
   );
 });
 
@@ -92,8 +92,10 @@ const RecentRunCard = memo(function RecentRunCard({ run, onClick }: RecentRunCar
   const Icon = config.icon;
 
   return (
-    <div
-      className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+    <Paper
+      className="p-4 transition-colors cursor-pointer hover:bg-accent/50"
+      radius="md"
+      withBorder
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -104,9 +106,9 @@ const RecentRunCard = memo(function RecentRunCard({ run, onClick }: RecentRunCar
         }
       }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <Group align="flex-start" justify="space-between" gap="md">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
+          <Group gap="sm" mb="xs">
             <Badge variant="outline" className="text-xs font-mono">
               {run.id}
             </Badge>
@@ -114,21 +116,27 @@ const RecentRunCard = memo(function RecentRunCard({ run, onClick }: RecentRunCar
               <Icon className="h-3 w-3 mr-1" />
               {config.label}
             </Badge>
-          </div>
+          </Group>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div>Started: {new Date(run.startedAt).toLocaleString()}</div>
-            <div>
+          <Group gap="md" className="text-sm text-muted-foreground">
+            <Text span inherit>
+              Started: {new Date(run.startedAt).toLocaleString()}
+            </Text>
+            <Text span inherit>
               Duration: {Math.floor(duration / 60)}m {duration % 60}s
-            </div>
-            <div>
+            </Text>
+            <Text span inherit>
               Steps: {completedSteps}/{totalSteps}
-            </div>
-          </div>
+            </Text>
+          </Group>
 
-          {run.error && <div className="mt-2 text-sm text-destructive">Error: {run.error}</div>}
+          {run.error && (
+            <Text mt="xs" size="sm" c="red">
+              Error: {run.error}
+            </Text>
+          )}
         </div>
-      </div>
-    </div>
+      </Group>
+    </Paper>
   );
 });
