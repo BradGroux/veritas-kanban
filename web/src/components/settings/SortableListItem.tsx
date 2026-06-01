@@ -1,7 +1,6 @@
 import { useState, memo } from 'react';
 import type { ManagedListItem } from '@veritas-kanban/shared';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { ActionIcon, TextInput } from '@mantine/core';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,18 +15,17 @@ import { Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+type ManagedListPatch<T extends ManagedListItem> = Partial<T> | Pick<ManagedListItem, 'label'>;
+
 export interface SortableListItemProps<T extends ManagedListItem> {
   item: T;
   index: number;
   totalItems: number;
-  onUpdate: (id: string, patch: any) => Promise<any>;
-  onDelete: (id: string) => Promise<any>;
+  onUpdate: (id: string, patch: ManagedListPatch<T>) => Promise<unknown>;
+  onDelete: (id: string) => Promise<unknown>;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
-  renderExtraFields?: (
-    item: T,
-    onChange: (patch: Partial<T>) => void
-  ) => React.ReactNode;
+  renderExtraFields?: (item: T, onChange: (patch: Partial<T>) => void) => React.ReactNode;
   canDeleteCheck?: (id: string) => Promise<{
     allowed: boolean;
     referenceCount: number;
@@ -35,9 +33,7 @@ export interface SortableListItemProps<T extends ManagedListItem> {
   }>;
 }
 
-export const SortableListItem = memo(function SortableListItem<
-  T extends ManagedListItem
->({
+export const SortableListItem = memo(function SortableListItem<T extends ManagedListItem>({
   item,
   index,
   totalItems,
@@ -57,8 +53,7 @@ export const SortableListItem = memo(function SortableListItem<
     isDefault: boolean;
   } | null>(null);
 
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -100,43 +95,52 @@ export const SortableListItem = memo(function SortableListItem<
         style={style}
         className="flex items-center gap-1.5 px-2 py-1.5 bg-card border rounded-md mb-1"
       >
-        <button
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex-shrink-0"
+        <ActionIcon
+          type="button"
+          variant="subtle"
+          color="gray"
+          size="sm"
+          radius="md"
+          className="cursor-grab active:cursor-grabbing flex-shrink-0"
           aria-label="Drag to reorder"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-3.5 w-3.5" />
-        </button>
+        </ActionIcon>
 
         <div className="flex gap-0.5 flex-shrink-0">
-          <Button
-            variant="ghost"
+          <ActionIcon
+            type="button"
+            variant="subtle"
+            color="gray"
             size="sm"
-            className="h-6 w-6 p-0"
+            radius="md"
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             title="Move up"
             aria-label="Move up"
           >
             <ChevronUp className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
+          </ActionIcon>
+          <ActionIcon
+            type="button"
+            variant="subtle"
+            color="gray"
             size="sm"
-            className="h-6 w-6 p-0"
+            radius="md"
             onClick={() => onMoveDown(index)}
             disabled={index === totalItems - 1}
             title="Move down"
             aria-label="Move down"
           >
             <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
+          </ActionIcon>
         </div>
 
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <Input
+            <TextInput
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               onBlur={handleLabelSave}
@@ -148,7 +152,9 @@ export const SortableListItem = memo(function SortableListItem<
                 }
               }}
               autoFocus
-              className="h-7 text-sm"
+              size="xs"
+              radius="md"
+              aria-label={`Edit ${item.label}`}
             />
           ) : (
             <div
@@ -157,9 +163,7 @@ export const SortableListItem = memo(function SortableListItem<
             >
               {item.label}
               {item.isHidden && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  (hidden)
-                </span>
+                <span className="ml-2 text-xs text-muted-foreground">(hidden)</span>
               )}
             </div>
           )}
@@ -167,16 +171,19 @@ export const SortableListItem = memo(function SortableListItem<
           {renderExtraFields && renderExtraFields(item, handleExtraFieldChange)}
         </div>
 
-        <Button
-          variant="ghost"
+        <ActionIcon
+          type="button"
+          variant="subtle"
+          color="red"
           size="sm"
-          className="h-7 w-7 p-0 flex-shrink-0"
+          radius="md"
+          className="flex-shrink-0"
           onClick={handleDeleteClick}
           title={`Delete ${item.label}`}
           aria-label={`Delete ${item.label}`}
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
+        </ActionIcon>
       </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -188,14 +195,13 @@ export const SortableListItem = memo(function SortableListItem<
             <AlertDialogDescription>
               {deleteInfo && deleteInfo.referenceCount > 0 && !deleteInfo.allowed ? (
                 <span>
-                  &quot;{item.label}&quot; is used by {deleteInfo.referenceCount}{' '}
-                  task(s). Remove or reassign those tasks first before deleting
-                  this item.
+                  &quot;{item.label}&quot; is used by {deleteInfo.referenceCount} task(s). Remove or
+                  reassign those tasks first before deleting this item.
                 </span>
               ) : (
                 <span>
-                  Are you sure you want to delete &quot;{item.label}&quot;? This
-                  action cannot be undone.
+                  Are you sure you want to delete &quot;{item.label}&quot;? This action cannot be
+                  undone.
                 </span>
               )}
             </AlertDialogDescription>
@@ -215,6 +221,4 @@ export const SortableListItem = memo(function SortableListItem<
       </AlertDialog>
     </>
   );
-}) as <T extends ManagedListItem>(
-  props: SortableListItemProps<T>
-) => React.JSX.Element;
+}) as <T extends ManagedListItem>(props: SortableListItemProps<T>) => React.JSX.Element;

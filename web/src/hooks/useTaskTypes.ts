@@ -96,6 +96,7 @@ export function getTypeIconName(types: TaskTypeConfig[], typeId: string): string
  * Available border colors for task types
  */
 export const AVAILABLE_COLORS = [
+  { value: 'border-l-gray-500', label: 'Gray' },
   { value: 'border-l-violet-500', label: 'Violet' },
   { value: 'border-l-cyan-500', label: 'Cyan' },
   { value: 'border-l-orange-500', label: 'Orange' },

@@ -295,6 +295,9 @@ Phase 3 progress:
 - Delegation settings now uses direct Mantine select, switch, badge, and button
   primitives while preserving delegation enable, revoke, scope, duration, and
   critical-priority exclusion behavior.
+- Shared managed-list settings controls now use direct Mantine text input,
+  button, and action icon primitives while preserving create, inline edit,
+  keyboard save/cancel, drag handles, and explicit move/delete actions.
 
 ### Phase 4: QA, Cleanup, and Dependency Removal
 
