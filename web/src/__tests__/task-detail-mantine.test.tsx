@@ -98,6 +98,10 @@ vi.mock('@/components/task/AgentPanel', () => ({
   AgentPanel: () => <div>Agent panel</div>,
 }));
 
+vi.mock('@/components/task/AgentRunTimelinePanel', () => ({
+  AgentRunTimelinePanel: () => <div>Run timeline panel</div>,
+}));
+
 vi.mock('@/components/task/DiffViewer', () => ({
   DiffViewer: () => <div>Diff viewer</div>,
 }));
@@ -246,6 +250,7 @@ describe('task detail Mantine migration', () => {
     renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
 
     expect(screen.getByRole('tab', { name: 'Work' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Timeline' })).toBeDefined();
     expect(screen.getByText('Work View')).toBeDefined();
   });
 });

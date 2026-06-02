@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
+  ActionIcon,
   Badge,
   Button,
   Code,
@@ -10,6 +11,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
 import { useConfig } from '@/hooks/useConfig';
 import {
@@ -45,6 +47,7 @@ import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 
 interface AgentPanelProps {
   task: Task;
+  onOpenTimeline?: (attemptId?: string) => void;
 }
 
 const attemptStatusIcons: Record<AttemptStatus, React.ReactNode> = {
@@ -54,7 +57,7 @@ const attemptStatusIcons: Record<AttemptStatus, React.ReactNode> = {
   failed: <XCircle className="h-3 w-3 text-red-500" />,
 };
 
-export function AgentPanel({ task }: AgentPanelProps) {
+export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const { data: config } = useConfig();
   const { data: agentStatus } = useAgentStatus(task.id);
   const { outputs, isConnected, isRunning, clearOutputs } = useAgentStream(task.id);
@@ -369,6 +372,21 @@ export function AgentPanel({ task }: AgentPanelProps) {
                         Viewing
                       </Badge>
                     )}
+                    {onOpenTimeline && (
+                      <Tooltip label="Open run timeline">
+                        <ActionIcon
+                          aria-label={`Open timeline for ${attemptId}`}
+                          size="sm"
+                          variant="subtle"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenTimeline(attemptId);
+                          }}
+                        >
+                          <History className="h-3 w-3" />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
                   </div>
                 );
               })}
@@ -424,6 +442,16 @@ export function AgentPanel({ task }: AgentPanelProps) {
                 <Text size="xs" c="dimmed">
                   Ended: {new Date(task.attempt.ended).toLocaleString()}
                 </Text>
+              )}
+              {onOpenTimeline && (
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  leftSection={<History className="h-3 w-3" />}
+                  onClick={() => onOpenTimeline(task.attempt?.id)}
+                >
+                  Timeline
+                </Button>
               )}
             </Stack>
           </Paper>

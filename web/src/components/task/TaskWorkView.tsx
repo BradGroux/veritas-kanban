@@ -42,6 +42,7 @@ export type TaskWorkViewTarget =
   | 'attachments'
   | 'git'
   | 'agent'
+  | 'timeline'
   | 'changes'
   | 'review'
   | 'metrics';
@@ -392,6 +393,16 @@ export function TaskWorkView({
               >
                 Open Agent
               </Button>
+              {isCodeTask && (
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  leftSection={<History className="h-3 w-3" />}
+                  onClick={() => onOpenTab('timeline')}
+                >
+                  Timeline
+                </Button>
+              )}
               <Button
                 size="compact-xs"
                 variant="subtle"

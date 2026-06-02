@@ -1,33 +1,21 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { AgentType } from '@veritas-kanban/shared';
+import type {
+  AgentRunTrace,
+  AgentRunTraceMetadata,
+  AgentRunTraceStep,
+  AgentRunTraceStepType,
+  AgentType,
+} from '@veritas-kanban/shared';
 import { getTelemetryService } from './telemetry-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import { getTracesDir } from '../utils/paths.js';
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const TRACES_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'traces');
+const TRACES_DIR = getTracesDir();
 
-export type TraceStepType = 'init' | 'execute' | 'complete' | 'error';
-
-export interface TraceStep {
-  type: TraceStepType;
-  startedAt: string;
-  endedAt?: string;
-  durationMs?: number;
-  metadata?: Record<string, unknown>;
-}
-
-export interface Trace {
-  traceId: string; // Same as attemptId
-  taskId: string;
-  agent: AgentType;
-  project?: string;
-  startedAt: string;
-  endedAt?: string;
-  totalDurationMs?: number;
-  steps: TraceStep[];
-  status: 'running' | 'completed' | 'failed' | 'error';
-}
+export type TraceStepType = AgentRunTraceStepType;
+export type TraceStep = AgentRunTraceStep;
+export type Trace = AgentRunTrace;
 
 // In-memory store for active traces
 const activeTraces = new Map<string, Trace>();
@@ -73,7 +61,13 @@ export class TraceService {
   /**
    * Start a new trace for an agent run
    */
-  startTrace(attemptId: string, taskId: string, agent: AgentType, project?: string): Trace | null {
+  startTrace(
+    attemptId: string,
+    taskId: string,
+    agent: AgentType,
+    project?: string,
+    metadata?: AgentRunTraceMetadata
+  ): Trace | null {
     if (!this.enabled) return null;
 
     const trace: Trace = {
@@ -84,6 +78,7 @@ export class TraceService {
       startedAt: new Date().toISOString(),
       steps: [],
       status: 'running',
+      metadata,
     };
 
     activeTraces.set(attemptId, trace);
@@ -105,6 +100,7 @@ export class TraceService {
 
     const step: TraceStep = {
       type: stepType,
+      sequence: trace.steps.length + 1,
       startedAt: new Date().toISOString(),
       metadata,
     };
@@ -217,7 +213,9 @@ export class TraceService {
         if (!file.endsWith('.json')) continue;
 
         try {
-          const content = await fs.readFile(path.join(this.tracesDir, file), 'utf-8');
+          const filepath = path.join(this.tracesDir, file);
+          ensureWithinBase(this.tracesDir, filepath);
+          const content = await fs.readFile(filepath, 'utf-8');
           const trace = JSON.parse(content) as Trace;
           if (trace.taskId === taskId && !activeTraces.has(trace.traceId)) {
             traces.push(trace);

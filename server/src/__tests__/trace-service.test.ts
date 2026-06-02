@@ -59,7 +59,14 @@ describe('TraceService', () => {
     });
 
     it('should create a new trace when enabled', () => {
-      const trace = service.startTrace('attempt-1', 'task-1', 'veritas', 'my-project');
+      const trace = service.startTrace('attempt-1', 'task-1', 'veritas', 'my-project', {
+        clientSource: 'agent-service',
+        mode: 'eng-review',
+        capabilitySet: ['start', 'status', 'logs', 'complete'],
+        workspaceId: 'local',
+        runKey: 'attempt-1',
+        policyProfile: 'codex-cli:workspace-write',
+      });
       expect(trace).not.toBeNull();
       expect(trace!.traceId).toBe('attempt-1');
       expect(trace!.taskId).toBe('task-1');
@@ -68,6 +75,11 @@ describe('TraceService', () => {
       expect(trace!.status).toBe('running');
       expect(trace!.steps).toHaveLength(0);
       expect(trace!.startedAt).toBeDefined();
+      expect(trace!.metadata).toMatchObject({
+        clientSource: 'agent-service',
+        runKey: 'attempt-1',
+        policyProfile: 'codex-cli:workspace-write',
+      });
     });
   });
 
@@ -89,6 +101,7 @@ describe('TraceService', () => {
 
       expect(step).not.toBeNull();
       expect(step!.type).toBe('execute');
+      expect(step!.sequence).toBe(1);
       expect(step!.startedAt).toBeDefined();
       expect(step!.metadata).toEqual({ tool: 'vitest' });
 

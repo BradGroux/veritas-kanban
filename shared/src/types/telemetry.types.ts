@@ -103,14 +103,90 @@ export type AnyTelemetryEvent =
 export interface TelemetryConfig {
   enabled: boolean;
   retention: number; // Days to retain events
-  traces?: boolean;  // Optional trace collection (future)
+  traces?: boolean; // Optional trace collection (future)
+}
+
+/** Low-level trace step types captured during an agent attempt. */
+export type AgentRunTraceStepType = 'init' | 'execute' | 'complete' | 'error';
+
+/** Additional run context persisted with each trace for replay/audit surfaces. */
+export interface AgentRunTraceMetadata {
+  clientSource?: string;
+  mode?: string | null;
+  capabilitySet?: string[];
+  workspaceId?: string;
+  sessionKey?: string;
+  runKey?: string;
+  policyProfile?: string;
+  provider?: string;
+  model?: string;
+  taskType?: string;
+  repo?: string;
+  branch?: string;
+  baseBranch?: string;
+  worktreePath?: string;
+}
+
+/** A single sequenced step inside an agent run trace. */
+export interface AgentRunTraceStep {
+  type: AgentRunTraceStepType;
+  sequence?: number;
+  startedAt: string;
+  endedAt?: string;
+  durationMs?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** Stored or active trace for one agent attempt. */
+export interface AgentRunTrace {
+  traceId: string; // Same as attemptId
+  taskId: string;
+  agent: AgentType;
+  project?: string;
+  startedAt: string;
+  endedAt?: string;
+  totalDurationMs?: number;
+  steps: AgentRunTraceStep[];
+  status: 'running' | 'completed' | 'failed' | 'error';
+  metadata?: AgentRunTraceMetadata;
+}
+
+/** Timeline event categories exposed to the task run replay UI. */
+export type AgentRunTimelineEventType =
+  | 'prompt'
+  | 'command'
+  | 'file'
+  | 'policy'
+  | 'approval'
+  | 'error'
+  | 'usage'
+  | 'tool'
+  | 'result';
+
+export type AgentRunTimelineEventSource = 'live' | 'stored' | 'derived';
+
+export interface AgentRunTimelineEvent {
+  id: string;
+  sequence: number;
+  type: AgentRunTimelineEventType;
+  source: AgentRunTimelineEventSource;
+  timestamp: string;
+  title: string;
+  detail?: string;
+  durationMs?: number;
+  metadata?: Record<string, unknown>;
+  link?: {
+    label: string;
+    href: string;
+    target?: 'agent' | 'changes' | 'review' | 'work-products' | 'workflow' | 'external';
+  };
 }
 
 /** Query options for fetching events */
 export interface TelemetryQueryOptions {
   type?: TelemetryEventType | TelemetryEventType[];
-  since?: string;  // ISO timestamp
-  until?: string;  // ISO timestamp
+  since?: string; // ISO timestamp
+  until?: string; // ISO timestamp
   taskId?: string;
   project?: string;
   limit?: number;

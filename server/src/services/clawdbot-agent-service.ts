@@ -28,6 +28,7 @@ import type {
   Task,
   AgentType,
   AgentConfig,
+  AgentRunTraceMetadata,
   TaskAttempt,
   AttemptStatus,
   Deliverable,
@@ -483,7 +484,14 @@ export class ClawdbotAgentService {
       id: 'openclaw',
       label: 'OpenClaw',
       capabilities: { ...commonCapabilities, stop: false, resume: false },
-      start: async ({ prompt, task, attemptId }) => {
+      start: async ({ prompt, task, attemptId, agentConfig }) => {
+        void this.recordAgentStarted(
+          task,
+          attemptId,
+          agentConfig?.type || 'openclaw',
+          'openclaw',
+          agentConfig
+        );
         const agentBreaker = getBreaker('agent');
         await agentBreaker.execute(() => this.sendToClawdbot(prompt, task.id, attemptId));
       },
@@ -525,7 +533,13 @@ export class ClawdbotAgentService {
       logPath,
       `\n## Codex CLI\n\n**Command:** \`${[command, ...args.map((a) => (a === prompt ? '<prompt>' : a))].join(' ')}\`\n**PID:** ${child.pid ?? 'unknown'}\n\n`
     );
-    void this.recordAgentStarted(task, attemptId, agentConfig?.type || 'codex', 'codex-cli');
+    void this.recordAgentStarted(
+      task,
+      attemptId,
+      agentConfig?.type || 'codex',
+      'codex-cli',
+      agentConfig
+    );
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -662,7 +676,13 @@ export class ClawdbotAgentService {
       logPath,
       `\n## Codex SDK\n\n**Worktree:** \`${worktreePath}\`\n**Model:** ${agentConfig?.model || 'default'}\n\n`
     );
-    await this.recordAgentStarted(task, attemptId, agentConfig?.type || 'codex-sdk', 'codex-sdk');
+    await this.recordAgentStarted(
+      task,
+      attemptId,
+      agentConfig?.type || 'codex-sdk',
+      'codex-sdk',
+      agentConfig
+    );
 
     const streamed = await thread.runStreamed(prompt, { signal: abortController.signal });
     let finalSummary = '';
@@ -764,9 +784,16 @@ export class ClawdbotAgentService {
     task: Task,
     attemptId: string,
     agent: string,
-    provider: AgentProvider
+    provider: AgentProvider,
+    agentConfig?: AgentConfig
   ): Promise<void> {
-    getTraceService().startTrace(attemptId, task.id, agent as AgentType, task.project);
+    getTraceService().startTrace(
+      attemptId,
+      task.id,
+      agent as AgentType,
+      task.project,
+      this.buildTraceMetadata(task, attemptId, provider, agentConfig)
+    );
     getTraceService().startStep(attemptId, 'init', { provider });
     getTraceService().endStep(attemptId, 'init');
     await activityService.logActivity(
@@ -776,6 +803,41 @@ export class ClawdbotAgentService {
       { attemptId, provider },
       agent
     );
+  }
+
+  private buildTraceMetadata(
+    task: Task,
+    attemptId: string,
+    provider: AgentProvider,
+    agentConfig?: AgentConfig
+  ): AgentRunTraceMetadata {
+    return {
+      clientSource: 'agent-service',
+      mode: task.runMode ?? 'agent',
+      capabilitySet: this.traceCapabilitiesForProvider(provider),
+      workspaceId: 'local',
+      runKey: attemptId,
+      policyProfile:
+        provider === 'codex-sdk'
+          ? 'codex-sdk:workspace-write:approval-never'
+          : provider === 'codex-cli'
+            ? 'codex-cli:workspace-write'
+            : 'openclaw:delegated',
+      provider,
+      model: agentConfig?.model,
+      taskType: task.type,
+      repo: task.git?.repo,
+      branch: task.git?.branch,
+      baseBranch: task.git?.baseBranch,
+      worktreePath: task.git?.worktreePath,
+    };
+  }
+
+  private traceCapabilitiesForProvider(provider: AgentProvider): string[] {
+    const base = ['start', 'status', 'logs', 'complete'];
+    if (provider === 'openclaw') return base;
+    if (provider === 'codex-cli') return [...base, 'stop'];
+    return [...base, 'stop', 'resume'];
   }
 
   private async recordCodexEvent(

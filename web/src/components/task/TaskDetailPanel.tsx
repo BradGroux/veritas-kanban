@@ -28,6 +28,7 @@ import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 import { TaskMetricsPanel } from './TaskMetricsPanel';
 import { WorkflowSection } from './WorkflowSection';
 import { WorkProductsSection } from './WorkProductsSection';
+import { AgentRunTimelinePanel } from './AgentRunTimelinePanel';
 import { shouldDefaultTaskDetailToWork, TaskWorkView } from './TaskWorkView';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import {
@@ -46,6 +47,7 @@ import {
   Workflow,
   Eye,
   Files,
+  History,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -69,6 +71,7 @@ type TaskDetailTabId =
   | 'attachments'
   | 'git'
   | 'agent'
+  | 'timeline'
   | 'changes'
   | 'review'
   | 'metrics';
@@ -131,6 +134,13 @@ const TASK_DETAIL_TABS: readonly TaskDetailTabDefinition[] = [
     codeOnly: true,
   },
   {
+    id: 'timeline',
+    label: 'Timeline',
+    Icon: History,
+    fallbackTitle: 'Run timeline failed to load',
+    codeOnly: true,
+  },
+  {
     id: 'changes',
     label: 'Changes',
     Icon: FileDiff,
@@ -170,6 +180,7 @@ export function TaskDetailPanel({
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [taskChatOpen, setTaskChatOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [timelineAttemptId, setTimelineAttemptId] = useState<string | null>(null);
   const lastDefaultedTaskIdRef = useRef<string | undefined>(undefined);
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
@@ -276,7 +287,23 @@ export function TaskDetailPanel({
           />
         );
       case 'agent':
-        return <AgentPanel task={localTask} />;
+        return (
+          <AgentPanel
+            task={localTask}
+            onOpenTimeline={(attemptId) => {
+              setTimelineAttemptId(attemptId ?? null);
+              setActiveTab('timeline');
+            }}
+          />
+        );
+      case 'timeline':
+        return (
+          <AgentRunTimelinePanel
+            task={localTask}
+            initialAttemptId={timelineAttemptId}
+            onOpenTab={setActiveTab}
+          />
+        );
       case 'changes':
         if (!hasWorktree) return null;
         return (
