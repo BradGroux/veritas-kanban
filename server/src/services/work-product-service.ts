@@ -6,6 +6,8 @@ import type {
   UpdateWorkProductInput,
   WorkProduct,
   WorkProductListOptions,
+  WorkProductMaintenancePreview,
+  WorkProductMaintenancePreviewItem,
   WorkProductPreview,
   WorkProductPrimitive,
   WorkProductRedaction,
@@ -217,6 +219,54 @@ export class WorkProductService {
     return this.list({ query, limit });
   }
 
+  async maintenancePreview(): Promise<WorkProductMaintenancePreview> {
+    const products = await this.listMaintenanceProducts();
+    const items = await Promise.all(
+      products.map(async (product) => this.toMaintenancePreviewItem(product))
+    );
+    const byKind = Array.from(
+      items
+        .reduce((groups, item) => {
+          const current = groups.get(item.kind) ?? {
+            kind: item.kind,
+            products: 0,
+            versions: 0,
+            estimatedBytes: 0,
+          };
+          current.products += 1;
+          current.versions += item.versionCount;
+          current.estimatedBytes += item.estimatedBytes;
+          groups.set(item.kind, current);
+          return groups;
+        }, new Map<WorkProduct['kind'], WorkProductMaintenancePreview['byKind'][number]>())
+        .values()
+    ).sort((a, b) => b.estimatedBytes - a.estimatedBytes || a.kind.localeCompare(b.kind));
+
+    const cleanupCandidates = items.filter((item) => item.cleanupEligible);
+    const retained = items.filter((item) => !item.cleanupEligible);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      workspaceId: 'local',
+      totals: {
+        products: items.length,
+        active: items.filter((item) => item.status === 'active').length,
+        archived: items.filter((item) => item.status === 'archived').length,
+        versions: items.reduce((sum, item) => sum + item.versionCount, 0),
+        cleanupCandidates: cleanupCandidates.length,
+        estimatedBytes: items.reduce((sum, item) => sum + item.estimatedBytes, 0),
+      },
+      byKind,
+      cleanupCandidates,
+      retained,
+      notes: [
+        'Preview only. No work products or version history are deleted by this endpoint.',
+        'Archived work products are cleanup candidates; active work products are retained.',
+        'Byte counts are JSON storage estimates for product metadata, render payloads, and versions.',
+      ],
+    };
+  }
+
   async generateCompletionPacket(
     task: Task,
     options: { sourceRunId?: string; changeSummary?: string } = {}
@@ -271,6 +321,66 @@ export class WorkProductService {
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
+  }
+
+  private async listMaintenanceProducts(): Promise<WorkProduct[]> {
+    if (this.repository) {
+      return this.repository.listForMaintenance();
+    }
+
+    await this.ensureLoaded();
+    return [...this.fileState.products].sort(
+      (a, b) =>
+        a.status.localeCompare(b.status) ||
+        a.updatedAt.localeCompare(b.updatedAt) ||
+        a.id.localeCompare(b.id)
+    );
+  }
+
+  private async toMaintenancePreviewItem(
+    product: WorkProduct
+  ): Promise<WorkProductMaintenancePreviewItem> {
+    const versions = await this.listVersions(product.id);
+    const redacted = this.toPreview(product).redacted;
+    const cleanupEligible = product.status === 'archived';
+
+    return {
+      id: product.id,
+      workspaceId: product.workspaceId,
+      title: product.title,
+      kind: product.kind,
+      status: product.status,
+      taskId: product.taskId,
+      sourceRunId: product.sourceRunId,
+      version: product.version,
+      versionCount: versions.length,
+      sourceLinkCount: product.sourceLinks?.length ?? 0,
+      redacted,
+      cleanupEligible,
+      retainedReason: this.maintenanceRetainedReason(product, versions.length),
+      estimatedBytes: this.estimateWorkProductBytes(product, versions),
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      archivedAt: product.archivedAt,
+    };
+  }
+
+  private maintenanceRetainedReason(product: WorkProduct, versionCount: number): string {
+    if (product.status === 'active') {
+      if (product.taskId) return 'Active work product linked to a task.';
+      if (product.sourceRunId) return 'Active work product linked to a run.';
+      return 'Active work product.';
+    }
+
+    if (versionCount > 1) return 'Archived work product with restorable version history.';
+    return 'Archived generated output eligible for explicit cleanup.';
+  }
+
+  private estimateWorkProductBytes(product: WorkProduct, versions: WorkProductVersion[]): number {
+    return (
+      Buffer.byteLength(JSON.stringify(product), 'utf8') +
+      versions.reduce((sum, version) => sum + Buffer.byteLength(JSON.stringify(version), 'utf8'), 0)
+    );
   }
 
   exportProduct(

@@ -30,6 +30,23 @@ export class SqliteWorkProductRepository {
     return rows.map((row) => JSON.parse(row.product_json) as WorkProduct);
   }
 
+  listForMaintenance(): WorkProduct[] {
+    const rows = this.database
+      .getConnection()
+      .prepare(
+        `
+          SELECT product_json
+          FROM work_products
+          WHERE workspace_id = 'local'
+            AND deleted_at IS NULL
+          ORDER BY status DESC, datetime(updated_at) ASC, id ASC
+        `
+      )
+      .all() as unknown as WorkProductRow[];
+
+    return rows.map((row) => JSON.parse(row.product_json) as WorkProduct);
+  }
+
   get(id: string): WorkProduct | null {
     const row = this.database
       .getConnection()
