@@ -41,8 +41,10 @@ operator checklist for final release verification.
       and the Shared Resources UI exposes declared, observed, and mismatch state.
 - [ ] Skill security scanner verifies local skill directories and single
       `SKILL.md` files, produces redacted JSON and Markdown reports, persists
-      audit artifacts, exposes an admin-only maintenance scan action, and keeps
-      malicious plus benign fixture contracts in CI.
+      audit artifacts, exposes an admin-only maintenance scan action, feeds the
+      Shared Resources Skill Risk Dashboard, creates remediation tasks and
+      temporary exceptions, blocks unsafe install decisions in remote/cloud
+      workflow gates, and keeps malicious plus benign fixture contracts in CI.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
       WebSocket fan-out, workflow run updates, and remote/mobile clients. Track
       evidence and limits in

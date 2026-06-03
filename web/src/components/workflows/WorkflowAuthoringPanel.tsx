@@ -1114,6 +1114,49 @@ function DryRunResultPanel({ result }: { result: WorkflowDryRunResult }) {
           </Badge>
         </Group>
 
+        {result.skillAudit && (
+          <Stack gap={4}>
+            <Group gap="xs">
+              <Badge
+                color={
+                  result.skillAudit.status === 'fail'
+                    ? 'red'
+                    : result.skillAudit.status === 'warn'
+                      ? 'yellow'
+                      : 'green'
+                }
+                variant="light"
+              >
+                Skill audit {result.skillAudit.status}
+              </Badge>
+              <Text size="xs" c="dimmed">
+                {result.skillAudit.references.length} referenced skills · {result.skillAudit.mode}{' '}
+                mode
+              </Text>
+            </Group>
+            {result.skillAudit.references.length > 0 && (
+              <Group gap={4}>
+                {result.skillAudit.references.slice(0, 4).map((reference) => (
+                  <Badge
+                    key={reference.reference}
+                    size="xs"
+                    color={
+                      reference.status === 'blocked' || reference.status === 'missing'
+                        ? 'red'
+                        : reference.status === 'warning' || reference.status === 'unscanned'
+                          ? 'yellow'
+                          : 'green'
+                    }
+                    variant="light"
+                  >
+                    {reference.name ?? reference.reference}: {reference.status}
+                  </Badge>
+                ))}
+              </Group>
+            )}
+          </Stack>
+        )}
+
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xs">
           {result.checks.map((check) => (
             <Alert

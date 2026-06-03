@@ -2,24 +2,38 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type {
+  CreateTaskInput,
   SharedResource,
   SkillCapabilityFinding,
+  SkillCapabilityProfile,
   SkillSecurityEvidence,
+  SkillSecurityDecision,
+  SkillSecurityException,
+  SkillSecurityExceptionInput,
   SkillSecurityFinding,
   SkillSecurityFindingCategory,
   SkillSecurityPatternDefinition,
   SkillSecurityRecommendation,
+  SkillRiskInventoryItem,
+  SkillRiskInventorySummary,
+  SkillRiskRemediationTaskInput,
+  SkillRiskRemediationTaskResult,
   SkillSecurityScanInput,
   SkillSecurityScanReport,
   SkillSecurityScanSummary,
   SkillSecurityScannedFile,
   SkillSecuritySeverity,
   SkillSecurityScanTargetType,
+  Task,
+  WorkflowSkillAuditSummary,
 } from '@veritas-kanban/shared';
+import type { WorkflowDefinition } from '../types/workflow.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { redactString } from '../lib/redact.js';
 import { auditLog } from './audit-service.js';
 import { profileSkillResource } from './skill-capability-service.js';
+import { getSharedResourcesService } from './shared-resources-service.js';
+import { getTaskService } from './task-service.js';
 
 const MAX_FILES = 80;
 const MAX_FILE_BYTES = 200_000;
@@ -41,6 +55,19 @@ interface Detector {
   remediation: string;
   pattern: RegExp;
   fileRoles?: SkillSecurityScannedFile['role'][];
+}
+
+interface SkillResourceProvider {
+  listResources(filters?: { type?: 'skill' }): Promise<SharedResource[]>;
+}
+
+interface TaskCreator {
+  createTask(input: CreateTaskInput): Promise<Task>;
+}
+
+interface SkillSecurityState {
+  exceptions: SkillSecurityException[];
+  remediationTasks: Record<string, string>;
 }
 
 const SEVERITY_RANK: Record<SkillSecuritySeverity, number> = {
@@ -438,6 +465,154 @@ function riskScoreFor(findings: SkillSecurityFinding[]): number {
   );
 }
 
+function severityFromScore(
+  profile: SkillCapabilityProfile,
+  latestReport?: SkillSecurityScanSummary
+): SkillSecuritySeverity {
+  const severities = [
+    profile.severity,
+    ...(latestReport ? [latestReport.severity] : []),
+  ] as SkillSecuritySeverity[];
+  return severityMax(severities);
+}
+
+function sourcePathFor(resource: SharedResource): string {
+  return `shared-resource:${resource.id}`;
+}
+
+function normalizedSkillToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^skill[:/]/, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[._-]+|[._-]+$/g, '');
+}
+
+function latestReportFor(
+  resource: SharedResource,
+  reports: SkillSecurityScanSummary[]
+): SkillSecurityScanSummary | undefined {
+  const resourceName = normalizedSkillToken(resource.name);
+  return reports.find((report) => {
+    const reportName = normalizedSkillToken(report.skillName);
+    const target = report.targetPath.toLowerCase();
+    return reportName === resourceName || target.includes(resource.id.toLowerCase());
+  });
+}
+
+function activeExceptionFor(
+  skillId: string,
+  exceptions: SkillSecurityException[],
+  now = Date.now()
+): SkillSecurityException | undefined {
+  return exceptions.find((exception) => {
+    if (exception.skillId !== skillId) return false;
+    const expires = Date.parse(exception.expiresAt);
+    return Number.isFinite(expires) && expires > now;
+  });
+}
+
+function installDecisionFor(
+  severity: SkillSecuritySeverity,
+  riskScore: number,
+  recommendation: SkillSecurityRecommendation,
+  exception?: SkillSecurityException
+): { decision: SkillSecurityDecision; reason: string } {
+  if (exception) {
+    return {
+      decision: 'allow',
+      reason: `Exception ${exception.id} expires ${exception.expiresAt}.`,
+    };
+  }
+  if (severity === 'critical' || severity === 'high' || recommendation === 'do-not-install') {
+    return {
+      decision: 'block',
+      reason: `${severity} skill risk blocks install and workflow use by default.`,
+    };
+  }
+  if (severity === 'medium' || riskScore >= 30 || recommendation === 'caution') {
+    return {
+      decision: 'warn',
+      reason: 'Medium skill risk requires acknowledgement or reviewer approval.',
+    };
+  }
+  return { decision: 'allow', reason: 'No blocking scanner or capability findings.' };
+}
+
+function changedFilesFor(
+  resource: SharedResource,
+  latestReport?: SkillSecurityScanSummary
+): string[] {
+  if (!latestReport) return [];
+  return Date.parse(resource.updatedAt) > Date.parse(latestReport.scannedAt)
+    ? [sourcePathFor(resource)]
+    : [];
+}
+
+function riskFindingsForInventory(
+  profile: SkillCapabilityProfile,
+  latestReport?: SkillSecurityScanSummary
+): SkillSecurityFinding[] {
+  const capabilityFindings = scanCapabilityMismatch(profile);
+  if (!latestReport) return capabilityFindings;
+  const reportFinding: SkillSecurityFinding = {
+    id: `scan-summary:${latestReport.id}`,
+    patternId: 'scan.summary',
+    category: 'capability-mismatch',
+    severity: latestReport.severity,
+    confidence: 1,
+    title: 'Latest persisted scan summary',
+    description: `${latestReport.findingCount} findings in latest persisted scan.`,
+    remediation: 'Open the persisted scan report and remediate blocking findings.',
+    evidence: [
+      {
+        file: latestReport.persistedJsonPath ?? latestReport.targetPath,
+        line: 1,
+        excerpt: latestReport.recommendation,
+      },
+    ],
+  };
+  return [...capabilityFindings, reportFinding];
+}
+
+function scanStatusFor(
+  resource: SharedResource,
+  latestReport?: SkillSecurityScanSummary
+): SkillRiskInventoryItem['scanStatus'] {
+  if (!latestReport) return 'unscanned';
+  return changedFilesFor(resource, latestReport).length > 0 ? 'changed' : 'scanned';
+}
+
+function extractSkillReferences(workflow: WorkflowDefinition): string[] {
+  const refs = new Set<string>();
+  const collect = (value: unknown): void => {
+    if (typeof value === 'string') {
+      const direct = value.match(/^skill[:/](.+)$/i);
+      if (direct) refs.add(direct[1]);
+      const regex = /\bskill[:/]([A-Za-z0-9._:-]+)/gi;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(value))) refs.add(match[1]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (/^skill(ids?)?$/i.test(key)) collect(nested);
+      if (key === 'tools') collect(nested);
+      if (key === 'input' || key === 'description') collect(nested);
+    }
+  };
+
+  collect(workflow.agents);
+  collect(workflow.steps);
+  collect(workflow.variables);
+  return [...refs].map(normalizedSkillToken).filter(Boolean).sort();
+}
+
 function renderMarkdown(report: Omit<SkillSecurityScanReport, 'reportMarkdown'>): string {
   const lines = [
     `# Skill Security Scan: ${report.skillName}`,
@@ -474,7 +649,12 @@ function renderMarkdown(report: Omit<SkillSecurityScanReport, 'reportMarkdown'>)
 }
 
 export class SkillSecurityService {
-  constructor(private readonly reportRoot = path.join(getRuntimeDir(), REPORT_DIR)) {}
+  constructor(
+    private readonly reportRoot = path.join(getRuntimeDir(), REPORT_DIR),
+    private readonly statePath = path.join(getRuntimeDir(), 'skill-security-state.json'),
+    private readonly resourceProvider?: SkillResourceProvider,
+    private readonly taskCreator?: TaskCreator
+  ) {}
 
   getPatterns(): SkillSecurityPatternDefinition[] {
     return [
@@ -617,6 +797,272 @@ export class SkillSecurityService {
     }
   }
 
+  async listInventory(): Promise<SkillRiskInventorySummary> {
+    const [resources, reports, state] = await Promise.all([
+      this.resources().listResources({ type: 'skill' }),
+      this.listReports(),
+      this.readState(),
+    ]);
+    const now = Date.now();
+    const items = resources.map((resource) => {
+      const profile = profileSkillResource(resource);
+      const latestReport = latestReportFor(resource, reports);
+      const findings = riskFindingsForInventory(profile, latestReport);
+      const severity = severityFromScore(profile, latestReport);
+      const riskScore = latestReport?.riskScore ?? riskScoreFor(findings);
+      const recommendation = latestReport?.recommendation ?? recommendationFor(severity, riskScore);
+      const exception = activeExceptionFor(resource.id, state.exceptions, now);
+      const decision = installDecisionFor(severity, riskScore, recommendation, exception);
+      const changedFiles = changedFilesFor(resource, latestReport);
+      const item: SkillRiskInventoryItem = {
+        skillId: resource.id,
+        name: resource.name,
+        version: resource.version,
+        sourcePath: sourcePathFor(resource),
+        tags: resource.tags,
+        mountedIn: resource.mountedIn,
+        updatedAt: resource.updatedAt,
+        lastScannedAt: latestReport?.scannedAt,
+        scanStatus: scanStatusFor(resource, latestReport),
+        changedFiles,
+        severity,
+        riskScore,
+        recommendation,
+        installDecision: decision.decision,
+        installReason: decision.reason,
+        declaredCapabilities: profile.declaredCapabilities,
+        observedCapabilities: profile.observedCapabilities,
+        mismatches: profile.findings,
+        findingCount: findings.length,
+        highOrCriticalFindingCount: findings.filter((finding) =>
+          ['high', 'critical'].includes(finding.severity)
+        ).length,
+        latestReportId: latestReport?.id,
+        latestReportPath: latestReport?.persistedJsonPath,
+        remediationTaskId: state.remediationTasks[resource.id],
+        exception,
+      };
+      return item;
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      items,
+      totals: {
+        skills: items.length,
+        blocked: items.filter((item) => item.installDecision === 'block').length,
+        warnings: items.filter((item) => item.installDecision === 'warn').length,
+        unscanned: items.filter((item) => item.scanStatus === 'unscanned').length,
+        exceptions: items.filter((item) => item.exception).length,
+      },
+    };
+  }
+
+  async createException(
+    skillId: string,
+    input: SkillSecurityExceptionInput,
+    actor: string
+  ): Promise<SkillRiskInventoryItem> {
+    const inventory = await this.listInventory();
+    const item = inventory.items.find((candidate) => candidate.skillId === skillId);
+    if (!item) throw new Error(`Skill ${skillId} not found`);
+    const expiresAt = Date.parse(input.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      throw new Error('Skill security exception expiration must be in the future');
+    }
+
+    const state = await this.readState();
+    state.exceptions = state.exceptions.filter(
+      (exception) => exception.skillId !== skillId || Date.parse(exception.expiresAt) > Date.now()
+    );
+    state.exceptions.push({
+      id: `skillsec_exception_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      skillId,
+      owner: input.owner,
+      reason: input.reason,
+      expiresAt: input.expiresAt,
+      createdAt: new Date().toISOString(),
+      createdBy: actor,
+    });
+    await this.writeState(state);
+
+    await auditLog({
+      action: 'skill.security.exception.created',
+      actor,
+      resource: skillId,
+      details: {
+        owner: input.owner,
+        reason: input.reason,
+        expiresAt: input.expiresAt,
+      },
+    });
+
+    return (await this.listInventory()).items.find((candidate) => candidate.skillId === skillId)!;
+  }
+
+  async createRiskRemediationTask(
+    skillId: string,
+    input: SkillRiskRemediationTaskInput,
+    actor: string
+  ): Promise<SkillRiskRemediationTaskResult> {
+    const inventory = await this.listInventory();
+    const item = inventory.items.find((candidate) => candidate.skillId === skillId);
+    if (!item) throw new Error(`Skill ${skillId} not found`);
+
+    const priority = input.priority ?? (item.severity === 'critical' ? 'critical' : 'high');
+    const task = await this.tasks().createTask({
+      title: `Review skill security risk: ${item.name}`,
+      description: [
+        `Skill: ${item.name} (${item.skillId})`,
+        `Decision: ${item.installDecision}`,
+        `Severity: ${item.severity}`,
+        `Risk score: ${item.riskScore}`,
+        `Recommendation: ${item.recommendation}`,
+        `Scan status: ${item.scanStatus}`,
+        `Declared: ${item.declaredCapabilities.join(', ') || 'none'}`,
+        `Observed: ${item.observedCapabilities.map((observed) => observed.capability).join(', ') || 'none'}`,
+        `Reason: ${item.installReason}`,
+        item.latestReportPath ? `Latest report: ${item.latestReportPath}` : 'Latest report: none',
+      ].join('\n'),
+      type: 'security',
+      priority,
+      project: input.project,
+      sprint: input.sprint,
+      createdBy: actor,
+      updatedBy: actor,
+    });
+
+    const state = await this.readState();
+    state.remediationTasks[skillId] = task.id;
+    await this.writeState(state);
+
+    await auditLog({
+      action: 'skill.security.remediation_task.created',
+      actor,
+      resource: skillId,
+      details: {
+        taskId: task.id,
+        severity: item.severity,
+        riskScore: item.riskScore,
+      },
+    });
+
+    const refreshed = (await this.listInventory()).items.find(
+      (candidate) => candidate.skillId === skillId
+    );
+    return { item: refreshed ?? { ...item, remediationTaskId: task.id }, task };
+  }
+
+  async auditWorkflowSkills(
+    workflow: WorkflowDefinition,
+    mode: 'local' | 'remote' | 'cloud' = 'local'
+  ): Promise<WorkflowSkillAuditSummary> {
+    const references = extractSkillReferences(workflow);
+    if (references.length === 0) return { status: 'pass', mode, references: [] };
+
+    const inventory = await this.listInventory();
+    const byToken = new Map<string, SkillRiskInventoryItem>();
+    for (const item of inventory.items) {
+      byToken.set(normalizedSkillToken(item.skillId), item);
+      byToken.set(normalizedSkillToken(item.name), item);
+    }
+
+    const results = references.map((reference) => {
+      const item = byToken.get(reference);
+      if (!item) {
+        return {
+          reference,
+          status: 'missing' as const,
+          message: `Referenced skill ${reference} is not installed as a shared skill resource.`,
+        };
+      }
+      if (item.exception) {
+        return {
+          reference,
+          skillId: item.skillId,
+          name: item.name,
+          status: 'allowed' as const,
+          severity: item.severity,
+          riskScore: item.riskScore,
+          recommendation: item.recommendation,
+          installDecision: item.installDecision,
+          findingCount: item.findingCount,
+          exception: item.exception,
+          message: `Skill ${item.name} is allowed by an active exception.`,
+        };
+      }
+      if (item.scanStatus === 'unscanned') {
+        const blocks = mode !== 'local';
+        return {
+          reference,
+          skillId: item.skillId,
+          name: item.name,
+          status: blocks ? ('blocked' as const) : ('unscanned' as const),
+          severity: item.severity,
+          riskScore: item.riskScore,
+          recommendation: item.recommendation,
+          installDecision: item.installDecision,
+          findingCount: item.findingCount,
+          exception: item.exception,
+          message: blocks
+            ? `Skill ${item.name} has no persisted scan and cannot run in ${mode} mode.`
+            : `Skill ${item.name} has no persisted scan.`,
+        };
+      }
+      if (item.installDecision === 'block') {
+        return {
+          reference,
+          skillId: item.skillId,
+          name: item.name,
+          status: 'blocked' as const,
+          severity: item.severity,
+          riskScore: item.riskScore,
+          recommendation: item.recommendation,
+          installDecision: item.installDecision,
+          findingCount: item.findingCount,
+          exception: item.exception,
+          message: `Skill ${item.name} is blocked by ${item.severity} risk.`,
+        };
+      }
+      if (item.installDecision === 'warn') {
+        return {
+          reference,
+          skillId: item.skillId,
+          name: item.name,
+          status: 'warning' as const,
+          severity: item.severity,
+          riskScore: item.riskScore,
+          recommendation: item.recommendation,
+          installDecision: item.installDecision,
+          findingCount: item.findingCount,
+          exception: item.exception,
+          message: `Skill ${item.name} requires acknowledgement before use.`,
+        };
+      }
+      return {
+        reference,
+        skillId: item.skillId,
+        name: item.name,
+        status: 'matched' as const,
+        severity: item.severity,
+        riskScore: item.riskScore,
+        recommendation: item.recommendation,
+        installDecision: item.installDecision,
+        findingCount: item.findingCount,
+        message: `Skill ${item.name} passed skill audit.`,
+      };
+    });
+
+    const status = results.some(
+      (result) => result.status === 'blocked' || result.status === 'missing'
+    )
+      ? 'fail'
+      : results.some((result) => result.status === 'warning' || result.status === 'unscanned')
+        ? 'warn'
+        : 'pass';
+    return { status, mode, references: results };
+  }
+
   private async collectFiles(
     targetPath: string,
     targetType: SkillSecurityScanTargetType,
@@ -660,6 +1106,35 @@ export class SkillSecurityService {
     await fs.writeFile(jsonPath, JSON.stringify(persisted, null, 2), 'utf8');
     await fs.writeFile(markdownPath, persisted.reportMarkdown, 'utf8');
     return persisted;
+  }
+
+  private async readState(): Promise<SkillSecurityState> {
+    try {
+      const content = await fs.readFile(this.statePath, 'utf8');
+      const parsed = JSON.parse(content) as Partial<SkillSecurityState>;
+      return {
+        exceptions: parsed.exceptions ?? [],
+        remediationTasks: parsed.remediationTasks ?? {},
+      };
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { exceptions: [], remediationTasks: {} };
+      }
+      throw err;
+    }
+  }
+
+  private async writeState(state: SkillSecurityState): Promise<void> {
+    await fs.mkdir(path.dirname(this.statePath), { recursive: true });
+    await fs.writeFile(this.statePath, JSON.stringify(state, null, 2), 'utf8');
+  }
+
+  private resources(): SkillResourceProvider {
+    return this.resourceProvider ?? getSharedResourcesService();
+  }
+
+  private tasks(): TaskCreator {
+    return this.taskCreator ?? getTaskService();
   }
 }
 

@@ -74,6 +74,43 @@ const skillProfiles = [
   },
 ];
 
+const skillInventory = {
+  generatedAt: '2026-06-03T00:00:00.000Z',
+  totals: {
+    skills: 1,
+    blocked: 1,
+    warnings: 0,
+    unscanned: 1,
+    exceptions: 0,
+  },
+  items: [
+    {
+      skillId: 'skill_1',
+      name: 'Review Helper',
+      version: 1,
+      sourcePath: 'shared-resource:skill_1',
+      tags: ['review'],
+      mountedIn: [],
+      updatedAt: '2026-06-03T00:00:00.000Z',
+      scanStatus: 'unscanned',
+      changedFiles: [],
+      severity: 'high',
+      riskScore: 60,
+      recommendation: 'caution',
+      installDecision: 'block',
+      installReason: 'high skill risk blocks install and workflow use by default.',
+      declaredCapabilities: ['filesystem.read'],
+      observedCapabilities: [
+        { capability: 'filesystem.read', confidence: 0.9, evidence: [] },
+        { capability: 'network.egress', confidence: 0.85, evidence: [] },
+      ],
+      mismatches: skillProfiles[0].findings,
+      findingCount: 2,
+      highOrCriticalFindingCount: 1,
+    },
+  ],
+};
+
 vi.mock('@/lib/api/helpers', () => ({
   apiFetch: mocks.apiFetch,
 }));
@@ -98,6 +135,9 @@ describe('Settings governance Mantine controls', () => {
     mocks.apiFetch.mockImplementation(async (url: string) => {
       if (url === '/api/skills/capabilities') {
         return skillProfiles;
+      }
+      if (url === '/api/skills/security/inventory') {
+        return skillInventory;
       }
       if (url === '/api/skills/capabilities/skill_1/remediation-task') {
         return { profile: skillProfiles[0], task: { id: 'task_1', title: 'Review skill' } };
@@ -132,9 +172,12 @@ describe('Settings governance Mantine controls', () => {
     });
 
     expect(await screen.findByText('Skill Capability Profiles')).toBeDefined();
-    expect(await screen.findByText('Review Helper')).toBeDefined();
+    expect(await screen.findByText('Skill Risk Dashboard')).toBeDefined();
+    expect((await screen.findAllByText('Review Helper')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('block')).toBeDefined();
+    expect(screen.getByText('score 60 · 2 findings')).toBeDefined();
     expect(screen.getByText('mismatch')).toBeDefined();
-    expect(screen.getByText('network.egress')).toBeDefined();
+    expect(screen.getAllByText('network.egress').length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector('.mantine-Table-root')).toBeDefined();
   });
 

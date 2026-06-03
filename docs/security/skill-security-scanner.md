@@ -24,6 +24,30 @@ Maintenance callers can use the equivalent admin-only action:
 POST /api/maintenance/skill-security/scan
 ```
 
+## Risk Inventory and Workflow Gates
+
+Persisted scans feed the shared skill risk inventory:
+
+```http
+GET /api/skills/security/inventory
+```
+
+The inventory is shown in Settings -> Shared Resources -> Skill Risk Dashboard.
+It combines shared skill metadata, declared-vs-observed capability mismatches,
+latest scan summaries, remediation task links, and temporary exceptions.
+
+Install decisions are intentionally conservative:
+
+- `allow`: no blocking risk or an active reviewed exception.
+- `warn`: medium or caution risk that needs acknowledgement.
+- `block`: high, critical, or `do-not-install` risk.
+
+Workflow authoring dry-runs include a `skillAudit` summary for `skill:<id>` and
+`skill/<id>` references found in agents, tools, steps, variables, inputs, and
+descriptions. Local workflows warn on unscanned skills; remote and cloud
+workflows block unscanned, missing, or blocked skills unless an active exception
+exists.
+
 ## Detector Scope
 
 The scanner currently detects:

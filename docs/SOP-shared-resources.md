@@ -206,9 +206,15 @@ Rules:
   credential handling, or persistence hooks. Use
   `POST /api/skills/security/scan` or the Maintenance action
   `POST /api/maintenance/skill-security/scan`.
+- Review Settings -> Shared Resources -> Skill Risk Dashboard before enabling
+  a shared skill. The dashboard joins declared capabilities, observed behavior,
+  persisted scan reports, exceptions, and remediation tasks into one install
+  decision.
 - If the profile reports observed behavior that exceeds declarations, create a
   remediation task from the Shared Resources panel and either narrow the skill or
   add a reviewer-approved declaration.
+- Treat `block` install decisions as hard stops for remote and cloud workflows
+  unless there is a named owner, clear reason, and future-dated exception.
 - Evidence snippets are redacted, but skill authors should still avoid embedding
   example secrets or real customer data in shared skill text.
 

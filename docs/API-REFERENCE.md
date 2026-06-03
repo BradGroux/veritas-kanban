@@ -1544,13 +1544,16 @@ Reads require `policy:read`; scans require `admin:manage` because scan requests
 read local filesystem paths. Scan evidence is redacted before it is returned or
 persisted.
 
-| Method | Path                                   | Description                                 |
-| ------ | -------------------------------------- | ------------------------------------------- |
-| `GET`  | `/api/skills/security/patterns`        | List scanner pattern definitions            |
-| `POST` | `/api/skills/security/scan`            | Scan a skill path and optionally persist it |
-| `GET`  | `/api/skills/security/scans`           | List persisted scan summaries               |
-| `GET`  | `/api/skills/security/scans/:id`       | Get one persisted JSON report               |
-| `POST` | `/api/maintenance/skill-security/scan` | Maintenance action alias for scan execution |
+| Method | Path                                                       | Description                                 |
+| ------ | ---------------------------------------------------------- | ------------------------------------------- |
+| `GET`  | `/api/skills/security/patterns`                            | List scanner pattern definitions            |
+| `GET`  | `/api/skills/security/inventory`                           | List shared skill risk inventory            |
+| `POST` | `/api/skills/security/inventory/:skillId/remediation-task` | Create a task for a risky skill             |
+| `POST` | `/api/skills/security/inventory/:skillId/exceptions`       | Add a reviewed temporary install exception  |
+| `POST` | `/api/skills/security/scan`                                | Scan a skill path and optionally persist it |
+| `GET`  | `/api/skills/security/scans`                               | List persisted scan summaries               |
+| `GET`  | `/api/skills/security/scans/:id`                           | Get one persisted JSON report               |
+| `POST` | `/api/maintenance/skill-security/scan`                     | Maintenance action alias for scan execution |
 
 The scanner emits JSON plus a Markdown report when `persist` is not `false`.
 Persisted artifacts are written under
@@ -1621,6 +1624,58 @@ by default.
 Recommendation values are `safe`, `caution`, and `do-not-install`. A scan also
 writes an audit event with scan id, severity, risk score, recommendation, and
 finding count.
+
+### Risk Inventory and Install Decisions
+
+```http
+GET /api/skills/security/inventory
+```
+
+Returns every shared resource with `type: "skill"` joined to its capability
+profile, latest persisted scan, open remediation task, and active exception.
+Each item includes `scanStatus`, `riskScore`, `severity`, `recommendation`,
+`installDecision`, `declaredCapabilities`, `observedCapabilities`, `mismatches`,
+`findingCount`, and `highOrCriticalFindingCount`.
+
+`installDecision` values:
+
+- `allow`: no blocking scanner or capability findings, or an active reviewed
+  exception exists.
+- `warn`: medium risk or caution findings require acknowledgement or reviewer
+  approval.
+- `block`: high, critical, or `do-not-install` risk blocks install and workflow
+  use by default.
+
+Reviewed exceptions are temporary and require an owner, reason, and future
+expiration:
+
+```http
+POST /api/skills/security/inventory/shared_123/exceptions
+```
+
+```json
+{
+  "owner": "platform",
+  "reason": "Reviewed for the current release candidate.",
+  "expiresAt": "2026-06-10T18:00:00.000Z"
+}
+```
+
+Risk remediation tasks can be created directly from the inventory:
+
+```http
+POST /api/skills/security/inventory/shared_123/remediation-task
+```
+
+```json
+{
+  "project": "Security",
+  "sprint": "v5-ga",
+  "priority": "high"
+}
+```
+
+Both actions write audit events and return the refreshed inventory item.
 
 ---
 

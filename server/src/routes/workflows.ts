@@ -390,9 +390,40 @@ router.post(
 
     // Validate input
     const { taskId, context } = startRunSchema.parse(req.body);
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${workflowId} not found`);
+    }
+
+    const dryRun = await workflowAuthoringService.dryRun({
+      workflow,
+      context: {
+        taskId,
+        clientMode:
+          context?.clientMode === 'remote' || context?.clientMode === 'cloud'
+            ? context.clientMode
+            : 'local',
+        permissions: getRequestPermissions(req),
+      },
+    });
+    const skillBlocker = dryRun.messages.find(
+      (item) => item.category === 'skill' && item.severity === 'error'
+    );
+    if (skillBlocker) {
+      throw new ValidationError(skillBlocker.message, [
+        {
+          code: 'WORKFLOW_SKILL_AUDIT_BLOCKED',
+          message: skillBlocker.remediation,
+          path: [skillBlocker.path],
+        },
+      ]);
+    }
 
     // Start run
-    const run = await workflowRunService.startRun(workflowId, taskId, context);
+    const run = await workflowRunService.startRun(workflowId, taskId, {
+      ...context,
+      skillAudit: dryRun.skillAudit,
+    });
 
     // Audit log
     await workflowService.auditChange({

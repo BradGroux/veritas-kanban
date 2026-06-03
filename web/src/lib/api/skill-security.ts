@@ -1,8 +1,12 @@
 import type {
   SkillSecurityPatternDefinition,
+  SkillSecurityExceptionInput,
   SkillSecurityScanInput,
   SkillSecurityScanReport,
   SkillSecurityScanSummary,
+  SkillRiskInventorySummary,
+  SkillRiskRemediationTaskInput,
+  SkillRiskRemediationTaskResult,
 } from '@veritas-kanban/shared';
 import { apiFetch } from './helpers';
 
@@ -29,4 +33,30 @@ export const skillSecurityApi = {
 
   getReport: (id: string): Promise<SkillSecurityScanReport> =>
     apiFetch<SkillSecurityScanReport>(`/api/skills/security/scans/${encodeURIComponent(id)}`),
+
+  inventory: (): Promise<SkillRiskInventorySummary> =>
+    apiFetch<SkillRiskInventorySummary>('/api/skills/security/inventory'),
+
+  createRemediationTask: (
+    skillId: string,
+    input: SkillRiskRemediationTaskInput = {}
+  ): Promise<SkillRiskRemediationTaskResult> =>
+    apiFetch<SkillRiskRemediationTaskResult>(
+      `/api/skills/security/inventory/${encodeURIComponent(skillId)}/remediation-task`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    ),
+
+  createException: (skillId: string, input: SkillSecurityExceptionInput) =>
+    apiFetch<SkillRiskInventorySummary['items'][number]>(
+      `/api/skills/security/inventory/${encodeURIComponent(skillId)}/exceptions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    ),
 };

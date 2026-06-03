@@ -372,6 +372,79 @@ curl -X DELETE http://localhost:3001/api/workflows/hello-world
 
 ---
 
+## Workflow Authoring
+
+### POST /api/workflows/authoring/dry-run
+
+Validate an unsaved workflow without starting a run. The response includes lint
+messages, executable checks, and a skill audit for referenced shared skills.
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:3001/api/workflows/authoring/dry-run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow": {
+      "id": "release-helper",
+      "name": "Release Helper",
+      "version": 1,
+      "description": "Uses a shared release skill",
+      "agents": [
+        {
+          "id": "runner",
+          "name": "Runner",
+          "role": "developer",
+          "tools": ["Read", "skill:release-helper"]
+        }
+      ],
+      "steps": [{ "id": "run", "name": "Run", "type": "agent", "agent": "runner" }]
+    },
+    "context": { "clientMode": "remote" }
+  }'
+```
+
+**Response excerpt**:
+
+```json
+{
+  "status": "blocked",
+  "canRun": false,
+  "checks": [{ "id": "skill", "label": "Skill audit", "status": "fail" }],
+  "messages": [
+    {
+      "category": "skill",
+      "severity": "error",
+      "message": "Skill Release Helper has no persisted scan and cannot run in remote mode."
+    }
+  ],
+  "skillAudit": {
+    "status": "fail",
+    "mode": "remote",
+    "references": [
+      {
+        "reference": "release-helper",
+        "skillId": "release-helper",
+        "status": "blocked",
+        "message": "Skill Release Helper has no persisted scan and cannot run in remote mode."
+      }
+    ]
+  }
+}
+```
+
+The skill audit recognizes `skill:<id>` and `skill/<id>` references in agents,
+tools, steps, variables, inputs, and descriptions. Local mode warns on unscanned
+skills. Remote and cloud modes fail missing, unscanned, or blocked skills unless
+the skill has an active reviewed exception.
+
+### POST /api/workflows/:id/dry-run
+
+Dry-run a saved workflow definition with the same response shape and context
+rules as `/api/workflows/authoring/dry-run`.
+
+---
+
 ## Workflow Runs
 
 ### POST /api/workflows/:id/runs
@@ -384,12 +457,13 @@ Start a new workflow run.
 curl -X POST http://localhost:3001/api/workflows/feature-dev/runs \
   -H "Content-Type: application/json" \
   -d '{
-    "taskId": "US-42",
-    "context": {
-      "priority": "high",
-      "deadline": "2026-02-15"
-    }
-  }'
+  "taskId": "US-42",
+  "context": {
+    "clientMode": "remote",
+    "priority": "high",
+    "deadline": "2026-02-15"
+  }
+}'
 ```
 
 **Request Body**:
@@ -397,9 +471,17 @@ curl -X POST http://localhost:3001/api/workflows/feature-dev/runs \
 ```typescript
 {
   taskId?: string;           // Optional: VK task ID to associate with run
-  context?: Record<string, unknown>;  // Optional: Additional context variables
+  context?: {
+    clientMode?: "local" | "remote" | "cloud"; // Optional: workflow skill gate mode
+    [key: string]: unknown;
+  };
 }
 ```
+
+Before a run starts, the server dry-runs the saved workflow and blocks remote or
+cloud execution when a referenced shared skill is missing, unscanned, or blocked.
+The run context includes the resulting `skillAudit` summary when execution is
+allowed.
 
 **Response**:
 

@@ -3,6 +3,7 @@ import type {
   WorkflowOutputTarget,
   WorkflowSchedule,
   WorkflowStep,
+  WorkflowSkillAuditSummary,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -15,6 +16,7 @@ export type WorkflowLintCategory =
   | 'permission'
   | 'policy'
   | 'secret'
+  | 'skill'
   | 'client'
   | 'output'
   | 'schedule';
@@ -81,6 +83,7 @@ export interface WorkflowDryRunResult extends WorkflowLintResult {
   status: 'ready' | 'attention' | 'blocked';
   canRun: boolean;
   checks: WorkflowDryRunCheck[];
+  skillAudit?: WorkflowSkillAuditSummary;
   workflow?: WorkflowDefinition;
 }
 

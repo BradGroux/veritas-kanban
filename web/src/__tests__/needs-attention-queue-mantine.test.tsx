@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { SkillRiskInventoryItem } from '@veritas-kanban/shared';
 
 import {
   buildNeedsAttentionItems,
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   useMarkNotificationDelivered: vi.fn(),
   usePendingAgentApprovals: vi.fn(),
   useRecentRuns: vi.fn(),
+  useSkillRiskInventory: vi.fn(),
   useTaskCost: vi.fn(),
   useTasks: vi.fn(),
   useUndeliveredNotifications: vi.fn(),
@@ -53,6 +55,10 @@ vi.mock('@/hooks/useAgent', () => ({
 vi.mock('@/hooks/useNotifications', () => ({
   useMarkNotificationDelivered: mocks.useMarkNotificationDelivered,
   useUndeliveredNotifications: mocks.useUndeliveredNotifications,
+}));
+
+vi.mock('@/hooks/useSkillSecurity', () => ({
+  useSkillRiskInventory: mocks.useSkillRiskInventory,
 }));
 
 const tasks = [
@@ -194,6 +200,30 @@ const notifications = [
   },
 ];
 
+const skillRisks: SkillRiskInventoryItem[] = [
+  {
+    skillId: 'skill-risky',
+    name: 'Risky Skill',
+    version: 1,
+    sourcePath: 'shared-resource:skill-risky',
+    tags: [],
+    mountedIn: [],
+    updatedAt: '2026-06-01T12:00:00Z',
+    scanStatus: 'unscanned' as const,
+    changedFiles: [],
+    severity: 'high' as const,
+    riskScore: 60,
+    recommendation: 'caution' as const,
+    installDecision: 'block' as const,
+    installReason: 'high skill risk blocks install and workflow use by default.',
+    declaredCapabilities: ['filesystem.read'],
+    observedCapabilities: [{ capability: 'network.egress', confidence: 0.85, evidence: [] }],
+    mismatches: [],
+    findingCount: 2,
+    highOrCriticalFindingCount: 1,
+  },
+];
+
 function ensureLocalStorage() {
   if (window.localStorage) return;
 
@@ -233,6 +263,10 @@ function mockQueueData() {
   mocks.useDriftAlerts.mockReturnValue({ data: driftAlerts, isLoading: false });
   mocks.usePendingAgentApprovals.mockReturnValue({ data: approvals, isLoading: false });
   mocks.useUndeliveredNotifications.mockReturnValue({ data: notifications, isLoading: false });
+  mocks.useSkillRiskInventory.mockReturnValue({
+    data: { generatedAt: '2026-06-01T12:00:00Z', items: skillRisks, totals: {} },
+    isLoading: false,
+  });
   mocks.useAcknowledgeDriftAlert.mockReturnValue({ mutate: mocks.acknowledgeDriftMutate });
   mocks.useMarkNotificationDelivered.mockReturnValue({
     mutate: mocks.markNotificationDeliveredMutate,
@@ -262,6 +296,7 @@ describe('needs attention queue', () => {
         notifications,
         project: 'platform',
         recentRuns: [],
+        skillRisks,
         taskCost,
         tasks,
       },
@@ -275,6 +310,7 @@ describe('needs attention queue', () => {
         'expensive-run',
         'failed-run',
         'notification',
+        'skill-risk',
         'stale-task',
         'stale-worktree',
         'stuck-workflow',
@@ -292,6 +328,9 @@ describe('needs attention queue', () => {
     expect(items.find((item) => item.source === 'notification')?.destinationLabel).toBe(
       'timeline:attempt-review-1'
     );
+    expect(items.find((item) => item.source === 'skill-risk')?.title).toBe(
+      'Skill risk: Risky Skill'
+    );
   });
 
   it('renders queue items through Mantine controls and opens task targets', async () => {
@@ -305,6 +344,7 @@ describe('needs attention queue', () => {
     expect(screen.getByText('Needs Attention')).toBeDefined();
     expect(screen.getAllByText('Blocked queue task').length).toBeGreaterThan(0);
     expect(screen.getByText('Review notification')).toBeDefined();
+    expect(screen.getByText('Skill risk: Risky Skill')).toBeDefined();
     expect(screen.getAllByText('Stale running task').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(5);
     expect(container.querySelectorAll('.mantine-Badge-root').length).toBeGreaterThan(3);
@@ -345,6 +385,10 @@ describe('needs attention queue', () => {
     mocks.useDriftAlerts.mockReturnValue({ data: [], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [], isLoading: false });
     mocks.useUndeliveredNotifications.mockReturnValue({ data: [], isLoading: false });
+    mocks.useSkillRiskInventory.mockReturnValue({
+      data: { totals: { total: 0, blocked: 0, warned: 0, unscanned: 0 }, items: [] },
+      isLoading: false,
+    });
 
     renderWithProviders(<NeedsAttentionQueue period="7d" project="platform" />);
 

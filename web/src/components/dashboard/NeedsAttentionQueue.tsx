@@ -13,7 +13,7 @@ import {
   ShieldAlert,
   Workflow,
 } from 'lucide-react';
-import type { DriftAlert, Task } from '@veritas-kanban/shared';
+import type { DriftAlert, SkillRiskInventoryItem, Task } from '@veritas-kanban/shared';
 import { usePendingAgentApprovals, type AgentApprovalRequest } from '@/hooks/useAgent';
 import { useDriftAlerts, useAcknowledgeDriftAlert } from '@/hooks/useDrift';
 import {
@@ -30,6 +30,7 @@ import {
 } from '@/hooks/useNotifications';
 import { useTasks } from '@/hooks/useTasks';
 import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
+import { useSkillRiskInventory } from '@/hooks/useSkillSecurity';
 import { cn } from '@/lib/utils';
 
 const DISMISSED_STORAGE_KEY = 'veritas-needs-attention-dismissed-v1';
@@ -49,6 +50,7 @@ type NeedsAttentionSource =
   | 'expensive-run'
   | 'failed-run'
   | 'notification'
+  | 'skill-risk'
   | 'stale-task'
   | 'stale-worktree'
   | 'stuck-workflow'
@@ -89,6 +91,7 @@ export interface BuildNeedsAttentionInput {
   notifications?: AgentNotification[];
   project?: string;
   recentRuns?: WorkflowRun[];
+  skillRisks?: SkillRiskInventoryItem[];
   taskCost?: TaskCostMetrics;
   tasks?: Task[];
 }
@@ -118,6 +121,7 @@ const SOURCE_LABELS: Record<NeedsAttentionSource, string> = {
   'expensive-run': 'Cost',
   'failed-run': 'Failed run',
   notification: 'Notification',
+  'skill-risk': 'Skill risk',
   'stale-task': 'Stale task',
   'stale-worktree': 'Worktree',
   'stuck-workflow': 'Workflow',
@@ -131,6 +135,7 @@ const SOURCE_ICONS: Record<NeedsAttentionSource, typeof AlertTriangle> = {
   'expensive-run': DollarSign,
   'failed-run': AlertTriangle,
   notification: Bell,
+  'skill-risk': ShieldAlert,
   'stale-task': Hourglass,
   'stale-worktree': GitPullRequest,
   'stuck-workflow': Workflow,
@@ -537,6 +542,30 @@ export function buildNeedsAttentionItems(
     });
   }
 
+  for (const skill of input.skillRisks ?? []) {
+    const needsAttention =
+      skill.installDecision === 'block' ||
+      skill.severity === 'critical' ||
+      skill.severity === 'high';
+    if (!needsAttention) continue;
+
+    addItem(items, {
+      id: `skill-risk:${skill.skillId}`,
+      dedupeKey: `skill-risk:${skill.skillId}:${skill.updatedAt}:${skill.lastScannedAt ?? 'unscanned'}`,
+      title: `Skill risk: ${skill.name}`,
+      reason: skill.installReason,
+      nextAction: 'Open Shared Resources',
+      severity: skill.severity === 'critical' ? 'critical' : 'high',
+      source: 'skill-risk',
+      sourceLabel: SOURCE_LABELS['skill-risk'],
+      timestamp: skill.lastScannedAt ?? skill.updatedAt,
+      owner: skill.exception?.owner,
+      agent: skill.name,
+      destination: 'workflows',
+      destinationLabel: `skill:${skill.skillId}`,
+    });
+  }
+
   return [...items.values()].sort((a, b) => {
     const severityDelta = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
     if (severityDelta !== 0) return severityDelta;
@@ -638,6 +667,7 @@ export function NeedsAttentionQueue({
   const { data: approvals = [], isLoading: approvalsLoading } = usePendingAgentApprovals();
   const { data: notifications = [], isLoading: notificationsLoading } =
     useUndeliveredNotifications(50);
+  const { data: skillInventory, isLoading: skillRiskLoading } = useSkillRiskInventory();
   const acknowledgeDrift = useAcknowledgeDriftAlert();
   const markNotificationDelivered = useMarkNotificationDelivered();
 
@@ -652,6 +682,7 @@ export function NeedsAttentionQueue({
           notifications,
           project,
           recentRuns,
+          skillRisks: skillInventory?.items,
           taskCost,
           tasks,
         },
@@ -665,6 +696,7 @@ export function NeedsAttentionQueue({
       notifications,
       project,
       recentRuns,
+      skillInventory?.items,
       taskCost,
       tasks,
       now,
@@ -698,7 +730,8 @@ export function NeedsAttentionQueue({
     recentRunsLoading ||
     driftLoading ||
     approvalsLoading ||
-    notificationsLoading;
+    notificationsLoading ||
+    skillRiskLoading;
 
   const severityOptions = [
     { value: 'all', label: 'All severity' },

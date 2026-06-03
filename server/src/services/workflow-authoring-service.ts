@@ -1,4 +1,5 @@
 import yaml from 'yaml';
+import type { WorkflowSkillAuditSummary } from '@veritas-kanban/shared';
 import type {
   ToolPolicy,
   WorkflowDefinition,
@@ -8,6 +9,7 @@ import type {
   WorkflowStep,
 } from '../types/workflow.js';
 import { getToolPolicyService, type ToolPolicyService } from './tool-policy-service.js';
+import { getSkillSecurityService, type SkillSecurityService } from './skill-security-service.js';
 
 export type WorkflowRecipeInputType = 'text' | 'textarea' | 'select' | 'boolean';
 export type WorkflowLintSeverity = 'error' | 'warning' | 'info';
@@ -18,6 +20,7 @@ export type WorkflowLintCategory =
   | 'permission'
   | 'policy'
   | 'secret'
+  | 'skill'
   | 'client'
   | 'output'
   | 'schedule';
@@ -103,6 +106,7 @@ export interface WorkflowDryRunResult extends WorkflowLintResult {
   status: 'ready' | 'attention' | 'blocked';
   canRun: boolean;
   checks: WorkflowDryRunCheck[];
+  skillAudit?: WorkflowSkillAuditSummary;
   workflow?: WorkflowDefinition;
 }
 
@@ -645,7 +649,10 @@ const RECIPES: WorkflowRecipeDefinition[] = [
 ];
 
 export class WorkflowAuthoringService {
-  constructor(private readonly toolPolicyService: ToolPolicyService = getToolPolicyService()) {}
+  constructor(
+    private readonly toolPolicyService: ToolPolicyService = getToolPolicyService(),
+    private readonly skillSecurityService: SkillSecurityService = getSkillSecurityService()
+  ) {}
 
   listRecipes(): WorkflowRecipe[] {
     return RECIPES.map(publicRecipe);
@@ -740,6 +747,7 @@ export class WorkflowAuthoringService {
       status,
       canRun: lint.summary.errors === 0,
       checks: this.buildChecks(lint.messages),
+      skillAudit: lint.skillAudit,
       workflow: parsed.workflow,
     };
   }
@@ -755,11 +763,12 @@ export class WorkflowAuthoringService {
   private async lintWorkflow(
     workflow: WorkflowDefinition,
     context: WorkflowDryRunContext
-  ): Promise<WorkflowLintResult> {
+  ): Promise<WorkflowLintResult & { skillAudit?: WorkflowSkillAuditSummary }> {
     const messages: WorkflowLintMessage[] = [];
 
     this.lintDefinition(workflow, messages);
     await this.lintToolPolicies(workflow, messages);
+    const skillAudit = await this.lintSkillAudit(workflow, context, messages);
     this.lintSecrets(workflow, context, messages);
     this.lintClientMode(workflow, context, messages);
     this.lintOutputTargets(workflow, context, messages);
@@ -769,6 +778,7 @@ export class WorkflowAuthoringService {
     return {
       ...this.resultFromMessages(messages),
       yaml: this.toYaml(workflow),
+      skillAudit,
     };
   }
 
@@ -1305,6 +1315,53 @@ export class WorkflowAuthoringService {
     }
   }
 
+  private async lintSkillAudit(
+    workflow: WorkflowDefinition,
+    context: WorkflowDryRunContext,
+    messages: WorkflowLintMessage[]
+  ): Promise<WorkflowSkillAuditSummary> {
+    const audit = await this.skillSecurityService.auditWorkflowSkills(
+      workflow,
+      context.clientMode ?? 'local'
+    );
+    for (const reference of audit.references) {
+      if (reference.status === 'blocked' || reference.status === 'missing') {
+        messages.push(
+          message(
+            'error',
+            'skill',
+            `skills.${reference.reference}`,
+            reference.message,
+            reference.status === 'missing'
+              ? 'Install the referenced shared skill or remove it from the workflow.'
+              : 'Remediate the skill finding or create an expiring reviewed exception.'
+          )
+        );
+      } else if (reference.status === 'warning' || reference.status === 'unscanned') {
+        messages.push(
+          message(
+            'warning',
+            'skill',
+            `skills.${reference.reference}`,
+            reference.message,
+            'Scan the skill, acknowledge medium findings, or create an expiring reviewed exception.'
+          )
+        );
+      } else if (reference.exception) {
+        messages.push(
+          message(
+            'info',
+            'skill',
+            `skills.${reference.reference}`,
+            reference.message,
+            'Review the exception before the expiration date.'
+          )
+        );
+      }
+    }
+    return audit;
+  }
+
   private isScheduled(schedule: WorkflowSchedule | undefined): schedule is WorkflowSchedule {
     return Boolean(schedule?.enabled && SCHEDULED_MODES.has(schedule.mode));
   }
@@ -1316,6 +1373,7 @@ export class WorkflowAuthoringService {
       this.checkFor('context', 'Task context', messages),
       this.checkFor('permission', 'Permissions', messages),
       this.checkFor('policy', 'Policy gates and tools', messages),
+      this.checkFor('skill', 'Skill audit', messages),
       this.checkFor('secret', 'Secrets', messages),
       this.checkFor('client', 'Client mode', messages),
       this.checkFor('output', 'Output targets', messages),
