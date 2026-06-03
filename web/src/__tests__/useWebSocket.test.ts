@@ -2,7 +2,7 @@
  * Tests for hooks/useWebSocket.ts — WebSocket connection, reconnection, and messaging.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, cleanup } from '@testing-library/react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { createMockWebSocket } from './test-utils';
 
@@ -20,9 +20,14 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
+  Object.defineProperty(window.navigator, 'onLine', {
+    value: true,
+    configurable: true,
+  });
 });
 
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -209,6 +214,69 @@ describe('useWebSocket', () => {
       ws.latest.simulateClose(1006);
     });
 
+    expect(result.current.connectionState).toBe('disconnected');
+  });
+
+  it('reconnects on browser resume after reconnect attempts are exhausted', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    const { result } = renderHook(() =>
+      useWebSocket({
+        url: 'ws://test/ws',
+        autoReconnect: true,
+        maxReconnectAttempts: 1,
+      })
+    );
+
+    act(() => {
+      ws.latest.simulateOpen();
+    });
+
+    act(() => {
+      ws.latest.simulateClose(1006);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1200);
+    });
+
+    expect(ws.instances).toHaveLength(2);
+
+    act(() => {
+      ws.latest.simulateClose(1006);
+    });
+
+    expect(result.current.connectionState).toBe('disconnected');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(ws.instances).toHaveLength(3);
+    expect(result.current.connectionState).toBe('connecting');
+    expect(result.current.reconnectAttempt).toBe(0);
+  });
+
+  it('does not reconnect on browser resume after an intentional disconnect', () => {
+    const { result } = renderHook(() => useWebSocket({ url: 'ws://test/ws', autoReconnect: true }));
+
+    act(() => {
+      ws.latest.simulateOpen();
+    });
+
+    act(() => {
+      result.current.disconnect();
+    });
+
+    const connectionCount = ws.instances.length;
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(ws.instances).toHaveLength(connectionCount);
     expect(result.current.connectionState).toBe('disconnected');
   });
 

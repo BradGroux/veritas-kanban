@@ -87,11 +87,11 @@ interface WorkflowDefinition {
 
 interface WorkflowStatusMessage extends WebSocketMessage {
   type: 'workflow:status';
-  data: WorkflowRun;
+  payload: WorkflowRun;
 }
 
 function isWorkflowStatusMessage(msg: WebSocketMessage): msg is WorkflowStatusMessage {
-  return msg.type === 'workflow:status' && typeof msg.data === 'object' && msg.data !== null;
+  return msg.type === 'workflow:status' && typeof msg.payload === 'object' && msg.payload !== null;
 }
 
 function safeContextString(value: unknown): string | undefined {
@@ -179,9 +179,9 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   // WebSocket subscription for live updates
   const handleWebSocketMessage = useCallback(
     (message: WebSocketMessage) => {
-      if (isWorkflowStatusMessage(message) && message.data.id === runId) {
-        console.log('[WorkflowRunView] Received workflow:status update', message.data);
-        setRun(message.data);
+      if (isWorkflowStatusMessage(message) && message.payload.id === runId) {
+        console.log('[WorkflowRunView] Received workflow:status update', message.payload);
+        setRun(message.payload);
       }
     },
     [runId]
@@ -189,6 +189,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   useWebSocket({
     autoConnect: true,
+    onOpen: { type: 'workflow:subscribe', runId },
     onMessage: handleWebSocketMessage,
   });
 

@@ -28,7 +28,7 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
-import { initBroadcast } from './services/broadcast-service.js';
+import { initBroadcast, nextWebSocketEventSequence } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { getPolicyService } from './services/policy-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
@@ -61,7 +61,11 @@ import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js'
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
 import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
-import { canReceiveWebSocketEvent } from './services/websocket-permissions.js';
+import {
+  canReceiveWebSocketEvent,
+  subscribeWebSocketChannel,
+  type WebSocketEventChannel,
+} from './services/websocket-permissions.js';
 
 const log = createLogger('server');
 
@@ -620,6 +624,7 @@ const WS_PONG_TIMEOUT_MS = 10_000;
 interface HeartbeatWebSocket extends AuthenticatedWebSocket {
   isAlive?: boolean;
   heartbeatTimer?: ReturnType<typeof setTimeout>;
+  subscribedChannels?: Set<WebSocketEventChannel>;
 }
 
 const wss = new WebSocketServer({
@@ -807,6 +812,44 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
     try {
       const message = JSON.parse(data.toString());
 
+      if (message.type === 'subscribe:tasks') {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['task:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'subscribe:tasks', permissions, workspaceId);
+          return;
+        }
+
+        subscribeWebSocketChannel(ws, 'tasks');
+        ws.send(
+          JSON.stringify({
+            type: 'tasks:subscribed',
+            workspaceId,
+            sequence: nextWebSocketEventSequence(),
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+
+      if (message.type === 'workflow:subscribe') {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['workflow:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'workflow:subscribe', permissions, workspaceId);
+          return;
+        }
+
+        subscribeWebSocketChannel(ws, 'workflows');
+        ws.send(
+          JSON.stringify({
+            type: 'workflow:subscribed',
+            workspaceId,
+            sequence: nextWebSocketEventSequence(),
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+
       // Handle subscription to chat session
       if (message.type === 'chat:subscribe' && message.sessionId) {
         const workspaceId = getMessageWorkspaceId(message);
@@ -815,6 +858,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
           sendWebSocketForbidden(ws, 'chat:subscribe', permissions, workspaceId);
           return;
         }
+        subscribeWebSocketChannel(ws, 'chat');
 
         // Unsubscribe from previous chat session
         if (subscribedChatSession) {
@@ -848,6 +892,25 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         log.debug({ sessionId, clients: sessionSubscribers.size }, 'Chat subscription added');
       }
 
+      if (message.type === 'subscribe' && message.channel === 'agent:status') {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['agent:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'subscribe', permissions, workspaceId);
+          return;
+        }
+
+        subscribeWebSocketChannel(ws, 'agent-status');
+        ws.send(
+          JSON.stringify({
+            type: 'agent:status:subscribed',
+            workspaceId,
+            sequence: nextWebSocketEventSequence(),
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+
       // Handle subscription to agent output
       if (message.type === 'subscribe' && message.taskId) {
         const workspaceId = getMessageWorkspaceId(message);
@@ -856,6 +919,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
           sendWebSocketForbidden(ws, 'subscribe', permissions, workspaceId);
           return;
         }
+        subscribeWebSocketChannel(ws, 'agent-output');
 
         // Unsubscribe from previous task
         if (subscribedTaskId) {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastReviewed": "2026-05-31",
+  "lastReviewed": "2026-06-03",
   "notes": "Authority surface manifest for v5.0. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
   "surfaces": [
     {
@@ -76,12 +76,36 @@
       "denialReason": "Workflow status events require workflow read access."
     },
     {
+      "id": "websocket:tasks:subscribed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Task channel subscription confirmations are only sent after task read authorization."
+    },
+    {
+      "id": "websocket:workflow:subscribed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["workflow:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Workflow subscription confirmations are only sent after workflow read authorization."
+    },
+    {
       "id": "websocket:agent:status",
       "kind": "websocket",
       "classification": "agent-scoped",
       "permissions": ["agent:read"],
       "source": "server/src/routes/agent-status.ts",
       "denialReason": "Agent status events require agent read access."
+    },
+    {
+      "id": "websocket:agent:status:subscribed",
+      "kind": "websocket",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Agent status subscription confirmations are only sent after agent read authorization."
     },
     {
       "id": "websocket:agent:output",
@@ -138,6 +162,22 @@
       "permissions": ["task:read"],
       "source": "server/src/index.ts",
       "denialReason": "Chat subscriptions require task read access in the requested workspace."
+    },
+    {
+      "id": "websocket-inbound:subscribe:tasks",
+      "kind": "websocket-inbound",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Task event channel subscriptions require task read access in the requested workspace."
+    },
+    {
+      "id": "websocket-inbound:workflow:subscribe",
+      "kind": "websocket-inbound",
+      "classification": "authenticated-read",
+      "permissions": ["workflow:read"],
+      "source": "server/src/index.ts",
+      "denialReason": "Workflow event channel subscriptions require workflow read access in the requested workspace."
     },
     {
       "id": "websocket-inbound:subscribe",

@@ -258,6 +258,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     }
   }, []);
 
+  const reconnectAfterBrowserResume = useCallback(() => {
+    if (!autoConnect || !autoReconnect || intentionalDisconnectRef.current || !mountedRef.current) {
+      return;
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return;
+    }
+
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN ||
+      wsRef.current?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
+
+    reconnectAttemptsRef.current = 0;
+    setReconnectAttempt(0);
+    connect();
+  }, [autoConnect, autoReconnect, connect]);
+
   // Connect on mount if autoConnect
   useEffect(() => {
     mountedRef.current = true;
@@ -274,6 +295,26 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       wsRef.current = null;
     };
   }, [autoConnect, connect, clearReconnectTimeout, clearKeepaliveTimeout]);
+
+  useEffect(() => {
+    if (!autoConnect || !autoReconnect) return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        reconnectAfterBrowserResume();
+      }
+    };
+
+    window.addEventListener('online', reconnectAfterBrowserResume);
+    window.addEventListener('focus', reconnectAfterBrowserResume);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('online', reconnectAfterBrowserResume);
+      window.removeEventListener('focus', reconnectAfterBrowserResume);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [autoConnect, autoReconnect, reconnectAfterBrowserResume]);
 
   return {
     isConnected: connectionState === 'connected',

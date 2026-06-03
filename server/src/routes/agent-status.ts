@@ -116,7 +116,7 @@ function broadcastAgentStatusChange(): void {
   const payload = JSON.stringify(message);
 
   wssRef.clients.forEach((client: WebSocket) => {
-    sendWebSocketEvent(client, payload, { permissions: ['agent:read'] });
+    sendWebSocketEvent(client, payload, { permissions: ['agent:read'], channel: 'agent-status' });
   });
 }
 

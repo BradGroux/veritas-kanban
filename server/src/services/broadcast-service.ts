@@ -7,6 +7,7 @@ import {
 } from './clawdbot-webhook-service.js';
 import {
   canReceiveWebSocketEvent,
+  sendWebSocketEvent,
   type WebSocketDeliveryOptions,
 } from './websocket-permissions.js';
 
@@ -18,9 +19,24 @@ let wssRef: WebSocketServer | null = null;
 
 // Performance: batch size for WebSocket broadcasts
 const BROADCAST_BATCH_SIZE = 50;
+const WORKFLOW_STATUS_COALESCE_MS = 100;
+const DEFAULT_WORKSPACE_ID = 'local';
+let websocketEventSequence = 0;
+let workflowStatusFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingWorkflowStatusEvents = new Map<string, WorkflowStatusEvent>();
 
 export function initBroadcast(wss: WebSocketServer): void {
   wssRef = wss;
+}
+
+export function nextWebSocketEventSequence(): number {
+  websocketEventSequence =
+    websocketEventSequence >= Number.MAX_SAFE_INTEGER ? 1 : websocketEventSequence + 1;
+  return websocketEventSequence;
+}
+
+function normalizeWorkspaceId(workspaceId?: string): string {
+  return workspaceId && workspaceId.trim() ? workspaceId : DEFAULT_WORKSPACE_ID;
 }
 
 /**
@@ -41,7 +57,7 @@ function broadcastToClients(payload: string, options: WebSocketDeliveryOptions =
   // For small client counts, send synchronously
   if (openClients.length <= BROADCAST_BATCH_SIZE) {
     for (const client of openClients) {
-      client.send(payload);
+      sendWebSocketEvent(client, payload, options);
     }
     return;
   }
@@ -51,7 +67,7 @@ function broadcastToClients(payload: string, options: WebSocketDeliveryOptions =
   const sendBatch = (): void => {
     const end = Math.min(index + BROADCAST_BATCH_SIZE, openClients.length);
     for (let i = index; i < end; i++) {
-      openClients[i].send(payload);
+      sendWebSocketEvent(openClients[i], payload, options);
     }
     index = end;
     if (index < openClients.length) {
@@ -74,11 +90,16 @@ export interface TaskChangeEvent {
   changeType: TaskChangeType;
   taskId?: string;
   timestamp: string;
+  sequence: number;
+  workspaceId: string;
 }
 
 export interface TelemetryBroadcastEvent {
   type: 'telemetry:event';
   event: AnyTelemetryEvent;
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
 }
 
 /**
@@ -90,20 +111,24 @@ export interface TelemetryBroadcastEvent {
 export function broadcastTaskChange(
   changeType: TaskChangeType,
   taskId?: string,
-  taskContext?: TaskContext
+  taskContext?: TaskContext,
+  options: { workspaceId?: string } = {}
 ): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
   const message: TaskChangeEvent = {
     type: 'task:changed',
     changeType,
     taskId,
     timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
   };
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload, { permissions: ['task:read'] });
+  broadcastToClients(payload, { permissions: ['task:read'], workspaceId, channel: 'tasks' });
 
   // Also notify via webhook (fire-and-forget)
   notifyTaskChange(changeType, taskId, taskContext);
@@ -115,17 +140,30 @@ export interface ChatBroadcastEvent {
   text?: string;
   message?: unknown;
   error?: string;
+  timestamp?: string;
+  sequence?: number;
+  workspaceId?: string;
 }
 
 /**
  * Broadcast a chat message/event to all connected WebSocket clients.
  */
-export function broadcastChatMessage(sessionId: string, event: ChatBroadcastEvent): void {
+export function broadcastChatMessage(
+  sessionId: string,
+  event: ChatBroadcastEvent,
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
-  const payload = JSON.stringify(event);
+  const payload = JSON.stringify({
+    ...event,
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    sequence: event.sequence ?? nextWebSocketEventSequence(),
+    workspaceId: event.workspaceId ?? workspaceId,
+  });
 
-  broadcastToClients(payload, { permissions: ['task:read'] });
+  broadcastToClients(payload, { permissions: ['task:read'], workspaceId, channel: 'chat' });
 
   // Also notify via webhook (fire-and-forget)
   notifyChatMessage(
@@ -138,39 +176,60 @@ export function broadcastChatMessage(sessionId: string, event: ChatBroadcastEven
 export interface SquadBroadcastEvent {
   type: 'squad:message';
   message: SquadMessage;
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
 }
 
 /**
  * Broadcast a squad message to all connected WebSocket clients.
  */
-export function broadcastSquadMessage(message: SquadMessage): void {
+export function broadcastSquadMessage(
+  message: SquadMessage,
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
   const event: SquadBroadcastEvent = {
     type: 'squad:message',
     message,
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
   };
 
   const payload = JSON.stringify(event);
 
-  broadcastToClients(payload, { permissions: ['agent:read'] });
+  broadcastToClients(payload, { permissions: ['agent:read'], workspaceId, channel: 'squad' });
 }
 
 /**
  * Broadcast a telemetry event to all connected WebSocket clients.
  * Clients can listen for 'telemetry:event' messages for real-time telemetry updates.
  */
-export function broadcastTelemetryEvent(event: AnyTelemetryEvent): void {
+export function broadcastTelemetryEvent(
+  event: AnyTelemetryEvent,
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
   const message: TelemetryBroadcastEvent = {
     type: 'telemetry:event',
     event,
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
   };
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload, { permissions: ['telemetry:read'] });
+  broadcastToClients(payload, {
+    permissions: ['telemetry:read'],
+    workspaceId,
+    channel: 'telemetry',
+  });
 }
 
 export interface BroadcastMessageEvent {
@@ -184,27 +243,40 @@ export interface BroadcastMessageEvent {
     createdAt: string;
     readBy: Array<{ agent: string; readAt: string }>;
   };
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
 }
 
 /**
  * Broadcast a new broadcast message to all connected WebSocket clients.
  * Clients can listen for 'broadcast:new' messages to receive real-time notifications.
  */
-export function broadcastNewMessage(broadcast: BroadcastMessageEvent['broadcast']): void {
+export function broadcastNewMessage(
+  broadcast: BroadcastMessageEvent['broadcast'],
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
   const message: BroadcastMessageEvent = {
     type: 'broadcast:new',
     broadcast,
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
   };
 
   const payload = JSON.stringify(message);
 
-  broadcastToClients(payload, { permissions: ['agent:read'] });
+  broadcastToClients(payload, { permissions: ['agent:read'], workspaceId, channel: 'broadcasts' });
 }
 
 export interface WorkflowStatusEvent {
   type: 'workflow:status';
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
   payload: {
     id: string;
     workflowId: string;
@@ -230,37 +302,58 @@ export interface WorkflowStatusEvent {
   };
 }
 
+function flushWorkflowStatusEvents(): void {
+  workflowStatusFlushTimer = null;
+  const events = Array.from(pendingWorkflowStatusEvents.values());
+  pendingWorkflowStatusEvents.clear();
+
+  for (const event of events) {
+    broadcastToClients(JSON.stringify(event), {
+      permissions: ['workflow:read'],
+      workspaceId: event.workspaceId,
+      channel: 'workflows',
+    });
+  }
+}
+
 /**
  * Broadcast workflow run status updates to all connected WebSocket clients.
  * Sends full run state to avoid extra HTTP fetches.
  */
-export function broadcastWorkflowStatus(run: {
-  id: string;
-  workflowId: string;
-  workflowVersion: number;
-  taskId?: string;
-  status: string;
-  currentStep?: string;
-  startedAt: string;
-  completedAt?: string;
-  error?: string;
-  steps: Array<{
-    stepId: string;
+export function broadcastWorkflowStatus(
+  run: {
+    id: string;
+    workflowId: string;
+    workflowVersion: number;
+    taskId?: string;
     status: string;
-    agent?: string;
-    sessionKey?: string;
-    startedAt?: string;
+    currentStep?: string;
+    startedAt: string;
     completedAt?: string;
-    duration?: number;
-    retries: number;
-    output?: string;
     error?: string;
-  }>;
-}): void {
+    steps: Array<{
+      stepId: string;
+      status: string;
+      agent?: string;
+      sessionKey?: string;
+      startedAt?: string;
+      completedAt?: string;
+      duration?: number;
+      retries: number;
+      output?: string;
+      error?: string;
+    }>;
+  },
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
   const message: WorkflowStatusEvent = {
     type: 'workflow:status',
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
     payload: {
       id: run.id,
       workflowId: run.workflowId,
@@ -286,7 +379,9 @@ export function broadcastWorkflowStatus(run: {
     },
   };
 
-  const payload = JSON.stringify(message);
+  pendingWorkflowStatusEvents.set(run.id, message);
 
-  broadcastToClients(payload, { permissions: ['workflow:read'] });
+  if (!workflowStatusFlushTimer) {
+    workflowStatusFlushTimer = setTimeout(flushWorkflowStatusEvents, WORKFLOW_STATUS_COALESCE_MS);
+  }
 }

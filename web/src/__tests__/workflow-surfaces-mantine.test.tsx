@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { WorkflowsPage } from '@/components/workflows/WorkflowsPage';
@@ -7,6 +7,7 @@ import { WorkflowDashboard } from '@/components/workflows/WorkflowDashboard';
 import { WorkflowRunView } from '@/components/workflows/WorkflowRunView';
 import { ActiveRunsList } from '@/components/workflows/dashboard/ActiveRunsList';
 import { renderWithProviders } from './test-utils';
+import type { UseWebSocketOptions, WebSocketMessage } from '@/hooks/useWebSocket';
 
 const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
@@ -81,6 +82,8 @@ const workflowStats = {
   ],
 };
 
+let webSocketOptions: UseWebSocketOptions[] = [];
+
 function jsonResponse(data: unknown, ok = true) {
   return {
     ok,
@@ -92,8 +95,12 @@ function jsonResponse(data: unknown, ok = true) {
 describe('workflow surfaces Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    webSocketOptions = [];
     mocks.hasPermission.mockReturnValue(true);
-    mocks.useWebSocket.mockReturnValue(undefined);
+    mocks.useWebSocket.mockImplementation((options: UseWebSocketOptions = {}) => {
+      webSocketOptions.push(options);
+      return undefined;
+    });
     mocks.useWorkflowStats.mockReturnValue({ data: workflowStats, isLoading: false, error: null });
     mocks.useActiveRuns.mockReturnValue({
       data: [workflowRun],
@@ -320,5 +327,42 @@ describe('workflow surfaces Mantine migration', () => {
     await user.click(screen.getByText('Build artifact'));
 
     await waitFor(() => expect(screen.getByText('artifact ready')).toBeDefined());
+  });
+
+  it('applies workflow run WebSocket payload updates without a full reload', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/workflows/runs/run-1')) {
+        return jsonResponse(workflowRun);
+      }
+      if (url.endsWith('/workflows/wf-release')) {
+        return jsonResponse({
+          id: 'wf-release',
+          name: 'Release workflow',
+          version: 3,
+          steps: [{ id: 'smoke', name: 'Smoke test', agent: 'codex' }],
+        });
+      }
+      return jsonResponse(null, false);
+    }) as typeof fetch;
+
+    renderWithProviders(<WorkflowRunView runId="run-1" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Release workflow')).toBeDefined();
+    expect(webSocketOptions.at(-1)?.onOpen).toEqual({ type: 'workflow:subscribe', runId: 'run-1' });
+
+    act(() => {
+      webSocketOptions.at(-1)?.onMessage?.({
+        type: 'workflow:status',
+        payload: {
+          ...workflowRun,
+          status: 'completed',
+          completedAt: '2026-06-01T10:05:00Z',
+          steps: workflowRun.steps.map((step) => ({ ...step, status: 'completed' })),
+        },
+      } as WebSocketMessage);
+    });
+
+    await waitFor(() => expect(screen.getByText('Completed')).toBeDefined());
   });
 });

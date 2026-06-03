@@ -44,11 +44,11 @@ interface WorkflowDashboardProps {
 
 interface WorkflowStatusMessage extends WebSocketMessage {
   type: 'workflow:status';
-  data: WorkflowRun;
+  payload: WorkflowRun;
 }
 
 function isWorkflowStatusMessage(msg: WebSocketMessage): msg is WorkflowStatusMessage {
-  return msg.type === 'workflow:status' && typeof msg.data === 'object' && msg.data !== null;
+  return msg.type === 'workflow:status' && typeof msg.payload === 'object' && msg.payload !== null;
 }
 
 export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
@@ -106,7 +106,7 @@ export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
   const handleWebSocketMessage = useCallback(
     (message: WebSocketMessage) => {
       if (isWorkflowStatusMessage(message)) {
-        const updatedRun = message.data;
+        const updatedRun = message.payload;
 
         // Invalidate queries to trigger refetch
         queryClient.invalidateQueries({ queryKey: ['workflow-active-runs'] });
@@ -123,6 +123,7 @@ export function WorkflowDashboard({ onBack }: WorkflowDashboardProps) {
 
   useWebSocket({
     autoConnect: true,
+    onOpen: { type: 'workflow:subscribe' },
     onMessage: handleWebSocketMessage,
   });
 
