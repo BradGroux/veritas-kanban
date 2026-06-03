@@ -56,7 +56,8 @@ import { apiVersionMiddleware } from './middleware/api-version.js';
 import { apiCacheHeaders } from './middleware/cache-control.js';
 import type { AgentOutput } from './services/clawdbot-agent-service.js';
 import { webhookN8nRouter } from './routes/webhook-n8n.js';
-import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js';
+import { cspNonceMiddleware, injectCspNonceAttributes } from './middleware/csp-nonce.js';
+import { apiDocsCspOverride, buildCspDirectives } from './config/csp.js';
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
@@ -160,7 +161,8 @@ app.set('etag', 'weak');
 // CSP Directives:
 //   defaultSrc  - Fallback for all resource types: only same-origin
 //   scriptSrc   - Scripts: same-origin only (+ unsafe-inline in dev for Vite HMR)
-//   styleSrc    - Styles: same-origin + inline (Tailwind/JSX inline styles)
+//   styleSrc    - Stylesheets and nonce-tagged style elements only in production
+//   styleSrcAttr - React runtime style attributes only
 //   connectSrc  - XHR/fetch/WebSocket: same-origin + ws://localhost for dev WS
 //   imgSrc      - Images: same-origin + data: URIs (inline SVGs, base64 images)
 //   fontSrc     - Fonts: same-origin
@@ -188,11 +190,13 @@ app.set('etag', 'weak');
 //   only, not to Vite-served HTML. They still matter for any HTML served
 //   directly by Express (e.g., error pages) and as defense-in-depth.
 //
-// PRODUCTION (strict: no unsafe-inline, no unsafe-eval):
+// PRODUCTION:
 //   Scripts require same-origin + nonce. The cspNonceMiddleware generates
-//   a per-request nonce available via res.locals.cspNonce. To serve HTML
-//   with nonce-tagged scripts, inject the nonce attribute on <script> tags
-//   in the SPA fallback handler.
+//   a per-request nonce available via res.locals.cspNonce. Server-served HTML
+//   receives nonce attributes on <script> and <style> tags in the SPA fallback
+//   handler. Inline style attributes remain allowed through style-src-attr only
+//   because the current React UI still uses dynamic style props for progress,
+//   drag/drop transforms, chart widths, and color indicators.
 //
 // == CSP Report-Only Mode ==
 //
@@ -217,49 +221,11 @@ app.use(
       // Report-Only mode: log violations without enforcing (for safe rollout)
       reportOnly: cspReportOnly,
       directives: {
-        defaultSrc: ["'self'"],
-
-        scriptSrc: [
-          "'self'",
-          // DEV ONLY: Vite HMR requires inline scripts. See comment block above.
-          // This is scoped to dev and does NOT include 'unsafe-eval'.
-          ...(isDev ? ["'unsafe-inline'"] : []),
-          // PRODUCTION: Per-request nonce for server-rendered script tags.
-          // Use res.locals.cspNonce when injecting scripts into HTML.
-          ...(!isDev ? [cspNonceDirective()] : []),
-        ],
-
-        styleSrc: [
-          "'self'",
-          // unsafe-inline is needed across both environments for:
-          //   - Tailwind CSS utility classes applied via style attribute
-          //   - Radix UI / shadcn component inline styles
-          //   - React component inline styles (style prop)
-          // TODO: Migrate to nonce-based style injection when CSS-in-JS
-          // libraries and Radix UI support it consistently.
-          "'unsafe-inline'",
-        ],
-
-        connectSrc: [
-          "'self'",
-          'ws://localhost:*',
-          'ws://127.0.0.1:*',
-          ...(isDev ? ['http://localhost:*', 'http://127.0.0.1:*'] : []),
-        ],
-
-        imgSrc: ["'self'", 'data:', 'blob:'],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        frameSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        // The packaged desktop app serves the SPA over loopback HTTP. Do not
-        // upgrade those local asset requests to HTTPS.
-        upgradeInsecureRequests: isDev || isDesktopRuntime ? null : [],
-
-        // CSP violation reporting — only included when CSP_REPORT_URI is set.
-        // Works with both enforced and report-only modes.
-        ...(cspReportUri ? { reportUri: cspReportUri } : {}),
+        ...buildCspDirectives({
+          isDev,
+          isDesktopRuntime,
+          reportUri: cspReportUri,
+        }),
       },
     },
     // Cross-Origin-Embedder-Policy can break loading of cross-origin resources;
@@ -408,11 +374,8 @@ app.get('/api-docs/swagger.json', (_req, res) => {
   res.send(swaggerSpec);
 });
 
-// Swagger UI needs inline scripts/styles, so override CSP for /api-docs only
-app.use('/api-docs', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.removeHeader('Content-Security-Policy');
-  next();
-});
+// Swagger UI needs inline scripts/styles, so override CSP for /api-docs only.
+app.use('/api-docs', apiDocsCspOverride);
 app.use(
   '/api-docs',
   swaggerUi.serve,
@@ -497,8 +460,6 @@ if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const webDistPath = path.resolve(__dirname, '../../web/dist');
   const indexHtmlPath = path.join(webDistPath, 'index.html');
-  const injectScriptNonce = (html: string, nonce: string | undefined): string =>
-    nonce ? html.replace(/<script(\s|>)/g, `<script nonce="${nonce}"$1`) : html;
   const sendSpaIndex = async (
     _req: express.Request,
     res: express.Response,
@@ -507,7 +468,7 @@ if (process.env.NODE_ENV === 'production') {
     try {
       const html = await readFile(indexHtmlPath, 'utf-8');
       res.set('Cache-Control', 'no-cache');
-      res.type('html').send(injectScriptNonce(html, res.locals.cspNonce));
+      res.type('html').send(injectCspNonceAttributes(html, res.locals.cspNonce));
     } catch (error) {
       next(error);
     }

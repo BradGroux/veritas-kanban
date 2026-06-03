@@ -6,7 +6,8 @@
  * `res.locals.cspNonce` and can be:
  *
  *   1. Referenced in Helmet CSP via the `cspNonceDirective()` helper function
- *   2. Injected into HTML responses as `<script nonce="...">` attributes
+ *   2. Injected into HTML responses as `<script nonce="...">` and
+ *      `<style nonce="...">` attributes
  *
  * Nonces are 128-bit (16 bytes) base64-encoded values — sufficient entropy
  * to prevent brute-force attacks within a single request lifetime.
@@ -26,7 +27,7 @@
  *
  * // In HTML template / SPA fallback:
  * const nonce = res.locals.cspNonce;
- * html = html.replace('<script', `<script nonce="${nonce}"`);
+ * html = injectCspNonceAttributes(html, nonce);
  * ```
  *
  * @module
@@ -63,4 +64,16 @@ export function cspNonceDirective(): (_req: IncomingMessage, res: ServerResponse
     const locals = (res as ServerResponse & { locals?: { cspNonce?: string } }).locals;
     return locals?.cspNonce ? `'nonce-${locals.cspNonce}'` : '';
   };
+}
+
+/**
+ * Adds the generated nonce to inline script and style elements in server-served
+ * HTML. Existing nonce attributes are preserved so repeated calls are safe.
+ */
+export function injectCspNonceAttributes(html: string, nonce: string | undefined): string {
+  if (!nonce) return html;
+  return html.replace(
+    /<(script|style)(?=[\s>])(?![^>]*\bnonce=)/gi,
+    (_match, tag: string) => `<${tag} nonce="${nonce}"`
+  );
 }

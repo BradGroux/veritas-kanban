@@ -1564,8 +1564,8 @@ Defense-in-depth security model with multiple authentication methods and hardene
 
 ### Network & Headers
 
-- **CSP headers** — Content Security Policy via [Helmet](https://helmetjs.github.io/) with nonce-based script allowlisting
-- **CSP nonce middleware** — Per-request nonce generation for inline scripts
+- **CSP headers** — Content Security Policy via [Helmet](https://helmetjs.github.io/) with nonce-based script/style allowlisting and a documented `style-src-attr` exception for runtime React style attributes
+- **CSP nonce middleware** — Per-request nonce generation for inline scripts and style elements
 - **Rate limiting** — 300 requests/minute per IP (configurable via `RATE_LIMIT_MAX`); sensitive endpoints (auth, settings) limited to 15/min; localhost exempt
 - **CORS origin validation** — Configurable allowed origins via `CORS_ORIGINS` env var
 - **WebSocket origin validation** — Origin checking on WebSocket upgrade requests

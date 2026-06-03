@@ -1,27 +1,7 @@
+import { createHash } from 'crypto';
 import type { DesktopStatusSnapshot } from './types.js';
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-export function statusPage(title: string, message: string, status?: DesktopStatusSnapshot): string {
-  const statusJson = status ? escapeHtml(JSON.stringify(status, null, 2)) : '';
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none';"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(title)}</title>
-    <style>
+const STATUS_PAGE_CSS = `
       :root {
         color-scheme: dark;
         font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -58,7 +38,34 @@ export function statusPage(title: string, message: string, status?: DesktopStatu
         color: #d8deea;
         font-size: 12px;
       }
-    </style>
+    `;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function styleHash(style: string): string {
+  return `'sha256-${createHash('sha256').update(style).digest('base64')}'`;
+}
+
+export function statusPage(title: string, message: string, status?: DesktopStatusSnapshot): string {
+  const statusJson = status ? escapeHtml(JSON.stringify(status, null, 2)) : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${styleHash(STATUS_PAGE_CSS)}; img-src data:; script-src 'none';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>${STATUS_PAGE_CSS}</style>
   </head>
   <body>
     <main>
