@@ -48,6 +48,12 @@ import {
 import type { Task, TaskAttempt, TaskReadinessCheck, TaskStatus } from '@veritas-kanban/shared';
 import { useAgentStatus, useAgentStream, useStopAgent } from '@/hooks/useAgent';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
+import {
+  useActiveRuns,
+  useRecentRuns,
+  type WorkflowRun,
+  type WorkflowRunStatus,
+} from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
 
 export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
@@ -247,6 +253,90 @@ function getReviewLabel(task: Task): string {
   return 'not started';
 }
 
+function getWorkflowStatusColor(status?: WorkflowRunStatus): string {
+  switch (status) {
+    case 'running':
+      return 'blue';
+    case 'blocked':
+      return 'yellow';
+    case 'completed':
+      return 'green';
+    case 'failed':
+      return 'red';
+    case 'pending':
+      return 'gray';
+    default:
+      return 'gray';
+  }
+}
+
+function getWorkflowStatusLabel(status?: WorkflowRunStatus): string {
+  switch (status) {
+    case 'running':
+      return 'Running';
+    case 'blocked':
+      return 'Blocked';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    case 'pending':
+      return 'Pending';
+    default:
+      return 'No run';
+  }
+}
+
+function workflowRunMatchesTask(run: WorkflowRun, taskId: string): boolean {
+  const contextTaskId = run.context?.taskId ?? run.context?.task_id;
+  return run.taskId === taskId || contextTaskId === taskId;
+}
+
+function getWorkflowDurationMs(run?: WorkflowRun): number | undefined {
+  if (!run?.startedAt) return undefined;
+  const start = new Date(run.startedAt).getTime();
+  if (Number.isNaN(start)) return undefined;
+  const end = run.completedAt ? new Date(run.completedAt).getTime() : Date.now();
+  if (Number.isNaN(end) || end < start) return undefined;
+  return end - start;
+}
+
+function getWorkflowProgress(run?: WorkflowRun): {
+  complete: number;
+  total: number;
+  percent: number;
+} {
+  const steps = run?.steps ?? [];
+  const total = steps.length;
+  const complete = steps.filter((step) => step.status === 'completed').length;
+  return {
+    complete,
+    total,
+    percent: total > 0 ? Math.round((complete / total) * 100) : 0,
+  };
+}
+
+function workflowRunSortWeight(status: WorkflowRunStatus): number {
+  switch (status) {
+    case 'running':
+      return 0;
+    case 'blocked':
+      return 1;
+    case 'pending':
+      return 2;
+    case 'failed':
+      return 3;
+    case 'completed':
+      return 4;
+  }
+}
+
+function compareWorkflowRuns(a: WorkflowRun, b: WorkflowRun): number {
+  const statusDelta = workflowRunSortWeight(a.status) - workflowRunSortWeight(b.status);
+  if (statusDelta !== 0) return statusDelta;
+  return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
+}
+
 export function shouldDefaultTaskDetailToWork(task: Task): boolean {
   if (task.type !== 'code') return false;
   return Boolean(
@@ -272,6 +362,8 @@ export function TaskWorkView({
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
   const { data: agentStatus } = useAgentStatus(task.id);
   const { outputs, isConnected, isRunning } = useAgentStream(task.id);
+  const { data: activeWorkflowRuns = [], isLoading: activeWorkflowRunsLoading } = useActiveRuns();
+  const { data: recentWorkflowRuns = [], isLoading: recentWorkflowRunsLoading } = useRecentRuns();
   const stopAgent = useStopAgent();
   const readinessSummary = useMemo(
     () => evaluateTaskReadiness(task, { isCodeTask }),
@@ -293,6 +385,17 @@ export function TaskWorkView({
   const attemptDuration = getAttemptDurationMs(task.attempt);
   const trackedTime = formatTrackedSeconds(task.timeTracking?.totalSeconds);
   const runCost = formatCost(task.actualCost);
+  const taskWorkflowRuns = useMemo(() => {
+    const byId = new Map<string, WorkflowRun>();
+    for (const run of [...activeWorkflowRuns, ...recentWorkflowRuns]) {
+      if (workflowRunMatchesTask(run, task.id)) byId.set(run.id, run);
+    }
+    return [...byId.values()].sort(compareWorkflowRuns);
+  }, [activeWorkflowRuns, recentWorkflowRuns, task.id]);
+  const workflowRun = taskWorkflowRuns[0];
+  const workflowProgress = getWorkflowProgress(workflowRun);
+  const workflowDuration = getWorkflowDurationMs(workflowRun);
+  const workflowLoading = activeWorkflowRunsLoading || recentWorkflowRunsLoading;
   const currentStep =
     latestOutputs.length > 0
       ? sanitizeText(latestOutputs[latestOutputs.length - 1].content).slice(0, 180)
@@ -629,6 +732,81 @@ export function TaskWorkView({
                 </Stack>
               </ScrollArea>
             </div>
+          </Stack>
+        </Paper>
+
+        <Paper withBorder p="md" radius="md">
+          <Stack gap="sm">
+            <Group justify="space-between" align="flex-start" gap="sm">
+              <div className="min-w-0">
+                <Group gap="xs" wrap="wrap">
+                  <Workflow className="h-4 w-4 text-muted-foreground" />
+                  <Text fw={600}>Workflow State</Text>
+                  <Badge color={getWorkflowStatusColor(workflowRun?.status)} variant="light">
+                    {getWorkflowStatusLabel(workflowRun?.status)}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  {workflowRun
+                    ? `Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
+                    : 'No workflow run has been recorded for this task.'}
+                </Text>
+              </div>
+              <Button
+                size="compact-xs"
+                variant="light"
+                leftSection={<Workflow className="h-3 w-3" />}
+                onClick={onOpenWorkflow}
+              >
+                Open Workflow
+              </Button>
+            </Group>
+
+            {workflowLoading ? (
+              <Group gap="xs">
+                <Loader size="xs" />
+                <Text size="xs" c="dimmed">
+                  Loading workflow state...
+                </Text>
+              </Group>
+            ) : workflowRun ? (
+              <Stack gap="xs">
+                <Group gap="xs" wrap="wrap">
+                  <Badge variant="outline" className="font-mono">
+                    {workflowRun.id}
+                  </Badge>
+                  {workflowRun.currentStep && (
+                    <Badge variant="light" color="blue">
+                      {workflowRun.currentStep}
+                    </Badge>
+                  )}
+                </Group>
+                <Group gap="md" wrap="wrap">
+                  <Text size="xs" c="dimmed">
+                    Steps {workflowProgress.complete}/{workflowProgress.total}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Duration {formatDurationMs(workflowDuration)}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Started {formatDate(workflowRun.startedAt)}
+                  </Text>
+                </Group>
+                <Progress
+                  value={workflowProgress.percent}
+                  color={getWorkflowStatusColor(workflowRun.status)}
+                />
+                {workflowRun.error && (
+                  <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />}>
+                    {workflowRun.error}
+                  </Alert>
+                )}
+              </Stack>
+            ) : (
+              <Text size="sm" c="dimmed">
+                Open Workflow to start a recipe or inspect available workflow runs.
+              </Text>
+            )}
           </Stack>
         </Paper>
 

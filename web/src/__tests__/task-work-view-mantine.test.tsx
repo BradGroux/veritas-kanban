@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   stopAgentMutate: vi.fn(),
   useAgentStatus: vi.fn(),
   useAgentStream: vi.fn(),
+  useActiveRuns: vi.fn(),
+  useRecentRuns: vi.fn(),
   useTaskWorkProducts: vi.fn(),
 }));
 
@@ -31,6 +33,11 @@ vi.mock('@/hooks/useAgent', () => ({
 
 vi.mock('@/hooks/useWorkProducts', () => ({
   useTaskWorkProducts: mocks.useTaskWorkProducts,
+}));
+
+vi.mock('@/hooks/useWorkflowStats', () => ({
+  useActiveRuns: mocks.useActiveRuns,
+  useRecentRuns: mocks.useRecentRuns,
 }));
 
 const product: WorkProductPreview = {
@@ -72,6 +79,8 @@ describe('task work view Mantine surface', () => {
       isConnected: true,
       isRunning: false,
     });
+    mocks.useActiveRuns.mockReturnValue({ data: [], isLoading: false });
+    mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskWorkProducts.mockReturnValue({ data: [], isLoading: false });
   });
 
@@ -126,6 +135,29 @@ describe('task work view Mantine surface', () => {
       ],
       isConnected: true,
       isRunning: true,
+    });
+    mocks.useActiveRuns.mockReturnValue({
+      data: [
+        {
+          id: 'workflow-run-1',
+          workflowId: 'release-flow',
+          workflowVersion: 2,
+          taskId: 'task-work',
+          status: 'running',
+          currentStep: 'build',
+          startedAt: '2026-06-01T10:55:00.000Z',
+          steps: [
+            {
+              stepId: 'plan',
+              status: 'completed',
+              startedAt: '2026-06-01T10:55:00.000Z',
+              completedAt: '2026-06-01T10:59:00.000Z',
+            },
+            { stepId: 'build', status: 'running', startedAt: '2026-06-01T11:00:00.000Z' },
+          ],
+        },
+      ],
+      isLoading: false,
     });
     const task = createMockTask({
       id: 'task-work',
@@ -197,6 +229,11 @@ describe('task work view Mantine surface', () => {
     expect(screen.getByText('Installing dependencies')).toBeDefined();
     expect(screen.getByText('1h 30m')).toBeDefined();
     expect(screen.getByText('$0.04')).toBeDefined();
+    expect(screen.getByText('Workflow State')).toBeDefined();
+    expect(screen.getByText('Workflow release-flow v2')).toBeDefined();
+    expect(screen.getByText('workflow-run-1')).toBeDefined();
+    expect(screen.getByText('build')).toBeDefined();
+    expect(screen.getByText('Steps 1/2')).toBeDefined();
     expect(screen.getByText('Release readiness report')).toBeDefined();
     expect(screen.getByText('v3 | report | run run-456')).toBeDefined();
     expect(
@@ -206,6 +243,7 @@ describe('task work view Mantine surface', () => {
     ).toBe('/runs/run-456');
 
     await user.click(screen.getByRole('button', { name: 'Open Agent' }));
+    await user.click(screen.getByRole('button', { name: 'Open Workflow' }));
     await user.click(screen.getByRole('button', { name: 'Work Products' }));
     await user.click(screen.getByRole('button', { name: 'Workflow' }));
     await user.click(screen.getByRole('button', { name: 'Stop' }));
