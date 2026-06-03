@@ -43,10 +43,11 @@
 30. [Tool Policies](#tool-policies)
 31. [Traces](#traces)
 32. [Audit](#audit)
-33. [Common Workflows](#common-workflows)
-34. [Versioning & Deprecation](#versioning--deprecation)
-35. [Rate Limits](#rate-limits)
-36. [Additional Endpoint Groups](#additional-endpoint-groups)
+33. [Maintenance Center](#maintenance-center-apiv1maintenance)
+34. [Common Workflows](#common-workflows)
+35. [Versioning & Deprecation](#versioning--deprecation)
+36. [Rate Limits](#rate-limits)
+37. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2756,6 +2757,53 @@ POST /api/v1/sqlite/import
 ```
 
 Restores the bundle into SQLite and rebuilds derived search indexes.
+
+---
+
+## Maintenance Center (`/api/v1/maintenance`)
+
+Admin/backup endpoints that power Settings -> Maintenance. The full contract is
+documented in [v5.0 Maintenance Center](MAINTENANCE-CENTER.md).
+
+#### Summary
+
+```
+GET /api/v1/maintenance/summary
+```
+
+Returns health checks, storage categories, lifecycle policy metadata, work
+product maintenance preview data, safe cleanup preview items, and allowlisted
+log sources with redacted local paths. Cleanup is preview-only; the endpoint
+does not delete data.
+
+#### Redacted Log Tail
+
+```
+GET /api/v1/maintenance/logs?source=server&tail=200
+```
+
+Returns redacted lines and redacted source metadata from an allowlisted source.
+`tail` is capped at 500.
+
+#### Debug Bundle
+
+```
+POST /api/v1/maintenance/debug-bundle
+```
+
+Creates a redacted debug bundle under the runtime debug-bundles directory and
+returns the output path plus a manifest of included categories, excluded
+sensitive categories, redaction rules, and redacted file metadata.
+
+#### SQLite Export and Import
+
+```
+POST /api/v1/maintenance/sqlite/export
+POST /api/v1/maintenance/sqlite/import
+```
+
+Wrappers around the SQLite portability export/import handlers. They return the
+same portability report used by `/api/v1/sqlite`.
 
 ---
 

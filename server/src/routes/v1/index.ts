@@ -117,6 +117,7 @@ import { scoringRoutes } from '../scoring.js';
 import { feedbackRoutes } from '../feedback.js';
 import promptRegistryRoutes from '../prompt-registry.js';
 import { sqlitePortabilityRoutes } from '../sqlite-portability.js';
+import { maintenanceRoutes } from '../maintenance.js';
 import { identityRoutes } from '../identity.js';
 
 const v1Router: IRouter = Router();
@@ -219,6 +220,7 @@ v1Router.use('/decisions', taskAccess, decisionRoutes);
 v1Router.use('/feedback', feedbackAccess, feedbackRoutes);
 v1Router.use('/prompt-registry', promptRegistryAccess, promptRegistryRoutes);
 v1Router.use('/sqlite', backupAccess, sqlitePortabilityRoutes);
+v1Router.use('/maintenance', backupAccess, maintenanceRoutes);
 v1Router.use('/identity', workspaceAccess, identityRoutes);
 
 export { v1Router };

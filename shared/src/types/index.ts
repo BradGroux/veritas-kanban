@@ -23,3 +23,4 @@ export * from './system-health.types.js';
 export * from './feedback.types.js';
 export * from './workflow.js';
 export * from './work-product.types.js';
+export * from './maintenance.types.js';

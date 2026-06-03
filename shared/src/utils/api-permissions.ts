@@ -281,6 +281,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   { prefix: '/api/sqlite', read: 'backup:read', write: 'backup:write' },
+  { prefix: '/api/maintenance', read: 'backup:read', write: 'backup:write' },
   { prefix: '/api/identity', read: 'workspace:read', write: 'admin:manage' },
 ];
 

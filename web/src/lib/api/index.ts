@@ -18,6 +18,7 @@ import { searchApi } from './search';
 import { identityApi } from './identity';
 import { workProductsApi } from './work-products';
 import { tracesApi } from './traces';
+import { maintenanceApi } from './maintenance';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -46,6 +47,7 @@ export const api = {
   identity: identityApi,
   workProducts: workProductsApi,
   traces: tracesApi,
+  maintenance: maintenanceApi,
 };
 
 export type {
@@ -60,6 +62,7 @@ export type {
 
 export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';
 export type { TraceStatus } from './traces';
+export type { SqlitePortabilityReport } from './maintenance';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

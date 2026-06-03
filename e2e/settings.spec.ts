@@ -21,7 +21,7 @@ test.describe('Settings', () => {
     // Settings dialog should open — verify by the dialog title heading
     const dialog = page.locator('[role="dialog"]');
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(dialog.locator('.mantine-Modal-title')).toHaveText('Settings');
   });
 
   test('settings dialog shows tab navigation', async ({ page }) => {
@@ -39,6 +39,26 @@ test.describe('Settings', () => {
     await expect(dialog.getByRole('tab', { name: 'Board' })).toBeVisible();
     await expect(dialog.getByRole('tab', { name: 'Tasks' })).toBeVisible();
     await expect(dialog.getByRole('tab', { name: 'Agents' })).toBeVisible();
+    await expect(dialog.getByRole('tab', { name: 'Maintenance' })).toBeVisible();
+  });
+
+  test('maintenance tab renders live maintenance state', async ({ page }) => {
+    await page.goto('/');
+
+    const settingsBtn = page.locator('header button:has(svg.lucide-settings)');
+    await settingsBtn.click();
+
+    const dialog = page.locator('[role="dialog"]');
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+    await dialog.getByRole('tab', { name: 'Maintenance' }).click();
+
+    await expect(dialog.getByText('Maintenance Center')).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByText('Health')).toBeVisible();
+    await expect(dialog.getByText('Storage Usage')).toBeVisible();
+    await expect(dialog.getByText('Cleanup Preview').first()).toBeVisible();
+    await expect(dialog.getByText('Backup and Restore')).toBeVisible();
+    await expect(dialog.getByLabel('Redacted log tail')).toBeVisible();
   });
 
   test('switch to Board tab and toggle a setting', async ({ page }) => {
@@ -64,14 +84,18 @@ test.describe('Settings', () => {
     const toggle = dialog.getByRole('switch', { name: 'Show Dashboard' });
 
     // Get the current state
-    const initialState = await toggle.getAttribute('data-state');
-    const expectedNewState = initialState === 'checked' ? 'unchecked' : 'checked';
+    const initialState = await toggle.isChecked();
 
-    // Click to toggle
-    await toggle.click();
+    // Toggle by keyboard because Mantine's visual track can intercept pointer events.
+    await toggle.focus();
+    await page.keyboard.press('Space');
 
     // Wait for the state to change (may be debounced)
-    await expect(toggle).toHaveAttribute('data-state', expectedNewState, { timeout: 3_000 });
+    if (initialState) {
+      await expect(toggle).not.toBeChecked({ timeout: 3_000 });
+    } else {
+      await expect(toggle).toBeChecked({ timeout: 3_000 });
+    }
   });
 
   test('settings dialog closes on escape', async ({ page }) => {
@@ -103,9 +127,7 @@ test.describe('Settings', () => {
 
     // The Card Density uses a Radix Select — find the trigger within the setting row
     // The row structure: div > div(label) + div(select trigger)
-    const cardDensityTrigger = dialog
-      .locator('button[role="combobox"]')
-      .filter({ hasText: /Normal|Compact/ });
+    const cardDensityTrigger = dialog.getByRole('combobox', { name: 'Card Density' });
     await cardDensityTrigger.click();
 
     // Verify the dropdown options appear (Radix portals them to body)

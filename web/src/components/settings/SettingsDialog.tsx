@@ -21,6 +21,7 @@ import {
   Boxes,
   BookOpen,
   UserCog,
+  Wrench,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
@@ -64,6 +65,9 @@ const LazyDocFreshnessTab = lazy(() =>
 const LazyMultiUserTab = lazy(() =>
   import('./tabs/MultiUserTab').then((m) => ({ default: m.MultiUserTab }))
 );
+const LazyMaintenanceTab = lazy(() =>
+  import('./tabs/MaintenanceTab').then((m) => ({ default: m.MaintenanceTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -96,6 +100,7 @@ type TabId =
   | 'shared-resources'
   | 'doc-freshness'
   | 'multi-user'
+  | 'maintenance'
   | 'manage';
 
 interface TabDef {
@@ -114,6 +119,7 @@ const TABS: TabDef[] = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield, requiredPermission: 'settings:read' },
   { id: 'multi-user', label: 'Multi-user', icon: UserCog, requiredPermission: 'workspace:read' },
+  { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
   { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
   { id: 'tool-policies', label: 'Tool Policies', icon: Lock, requiredPermission: 'policy:read' },
   {
@@ -420,6 +426,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'manage' && (
           <SettingsErrorBoundary tabName="Manage">
             <LazyManageTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'maintenance' && (
+          <SettingsErrorBoundary tabName="Maintenance">
+            <LazyMaintenanceTab />
           </SettingsErrorBoundary>
         )}
       </Suspense>

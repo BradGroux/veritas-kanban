@@ -15,6 +15,9 @@ operator checklist for final release verification.
 - [ ] Data lifecycle controls define retention, export, deletion, privacy, and
       support-bundle redaction policy for durable v5 data classes. Track the
       contract in [v5.0 data lifecycle controls](DATA-LIFECYCLE.md).
+- [ ] Maintenance Center verifies health, storage usage, redacted log tails,
+      debug bundles, backup/import reporting, and cleanup previews. Track the
+      contract in [v5.0 Maintenance Center](MAINTENANCE-CENTER.md).
 - [ ] Multi-user mode verifies workspace switching, memberships, invitations,
       scoped API tokens, actor attribution, and RBAC denial paths.
 - [ ] Remote mode verifies the
