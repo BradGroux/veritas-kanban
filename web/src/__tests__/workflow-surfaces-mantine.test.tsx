@@ -129,6 +129,9 @@ describe('workflow surfaces Mantine migration', () => {
           },
         ]);
       }
+      if (url.endsWith('/workflows/recipes') && !init?.method) {
+        return jsonResponse([]);
+      }
       if (url.endsWith('/workflows/wf-release/runs') && init?.method === 'POST') {
         return jsonResponse({ id: 'run-1' });
       }
@@ -154,6 +157,97 @@ describe('workflow surfaces Mantine migration', () => {
       expect.objectContaining({ method: 'POST' })
     );
     expect(await screen.findByText('Workflow Runs')).toBeDefined();
+  });
+
+  it('builds a recipe through structured inputs and saves the materialized workflow', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/workflows') && !init?.method) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/workflows/recipes') && !init?.method) {
+        return jsonResponse([
+          {
+            id: 'task-implementation',
+            name: 'Task Implementation',
+            description: 'Plan, implement, review, and package a task.',
+            tags: ['task', 'implementation'],
+            inputs: [
+              {
+                id: 'workflowName',
+                label: 'Workflow name',
+                type: 'text',
+                required: true,
+                defaultValue: 'Task Implementation Workflow',
+              },
+              {
+                id: 'taskId',
+                label: 'Task ID',
+                type: 'text',
+                required: false,
+                defaultValue: 'task_123',
+              },
+            ],
+            defaultOutputTargets: [{ type: 'task-update', label: 'Task update' }],
+          },
+        ]);
+      }
+      if (url.endsWith('/workflows/recipes/task-implementation/materialize')) {
+        return jsonResponse({
+          recipe: { id: 'task-implementation', name: 'Task Implementation' },
+          workflow: {
+            id: 'task-implementation-workflow',
+            name: 'Task Implementation Workflow',
+            version: 1,
+            description: 'Plan and ship a task.',
+            outputTargets: [
+              { type: 'task-update', label: 'Task update' },
+              { type: 'work-product', label: 'Work product', path: 'work-products/task.md' },
+            ],
+            schedule: { mode: 'manual', enabled: false },
+            agents: [{ id: 'worker', name: 'Worker', role: 'developer', description: 'Work' }],
+            steps: [{ id: 'work', name: 'Do work', type: 'agent', agent: 'worker' }],
+          },
+          yaml: 'id: task-implementation-workflow\noutputTargets: []\n',
+          missingInputs: [],
+          lint: { ok: true, messages: [], summary: { errors: 0, warnings: 0, info: 0 } },
+          preview: {
+            steps: [{ id: 'work', name: 'Do work', type: 'agent', agent: 'worker' }],
+            outputTargets: [
+              { type: 'task-update', label: 'Task update' },
+              { type: 'work-product', label: 'Work product', path: 'work-products/task.md' },
+            ],
+            schedule: { mode: 'manual', enabled: false },
+          },
+        });
+      }
+      if (url.endsWith('/workflows') && init?.method === 'POST') {
+        return jsonResponse({ success: true, workflowId: 'task-implementation-workflow' });
+      }
+      return jsonResponse(null, false);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    renderWithProviders(<WorkflowsPage onBack={vi.fn()} />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Author' }));
+    expect((await screen.findAllByText('Task Implementation')).length).toBeGreaterThanOrEqual(1);
+
+    await user.click(screen.getByRole('button', { name: 'Build Recipe' }));
+
+    expect((await screen.findAllByText('Task update')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('No lint messages.')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Save Workflow' }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/workflows',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"outputTargets"'),
+      })
+    );
   });
 
   it('renders workflow dashboard lists and filters through direct Mantine primitives', () => {

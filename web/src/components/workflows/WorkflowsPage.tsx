@@ -4,12 +4,12 @@
  * Features:
  * - List all workflows with metadata
  * - Start workflow runs
+ * - Author recipes, visual definitions, dry-runs, and YAML
  * - View active runs per workflow
  * - Empty state when no workflows exist
  */
 
-import { useState, useMemo, useEffect } from 'react';
-import { API_BASE } from '@/lib/config';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Badge,
   Button,
@@ -17,6 +17,7 @@ import {
   Paper,
   Skeleton,
   Stack,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -25,51 +26,45 @@ import { ArrowLeft, Search, Play, Users, ListOrdered, BarChart3 } from 'lucide-r
 import { useToast } from '@/hooks/useToast';
 import { WorkflowRunList } from './WorkflowRunList';
 import { WorkflowDashboard } from './WorkflowDashboard';
+import { WorkflowAuthoringPanel } from './WorkflowAuthoringPanel';
 import { useIdentity } from '@/hooks/useIdentity';
+import { workflowsApi, type WorkflowSummary } from '@/lib/api/workflows';
 
 interface WorkflowsPageProps {
   onBack: () => void;
 }
 
-interface Workflow {
-  id: string;
-  name: string;
-  version: number;
-  description: string;
-  agents: Array<{ id: string; name: string; role: string }>;
-  steps: Array<{ id: string; name: string }>;
-  activeRunCount?: number;
-}
-
 export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   const [search, setSearch] = useState('');
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>('browse');
   const { toast } = useToast();
   const { hasPermission } = useIdentity();
   const canExecuteWorkflows = hasPermission('workflow:execute');
+  const canWriteWorkflows = hasPermission('workflow:write');
+
+  const fetchWorkflows = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const json = await workflowsApi.list();
+      setWorkflows(json);
+    } catch (error) {
+      toast({
+        title: 'Failed to load workflows',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   // Fetch workflows on mount
   useEffect(() => {
-    const fetchWorkflows = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/workflows`);
-        if (!response.ok) throw new Error('Failed to fetch workflows');
-        const json = await response.json();
-        setWorkflows(json.data ?? json);
-      } catch (error) {
-        toast({
-          title: '❌ Failed to load workflows',
-          description: error instanceof Error ? error.message : 'Unknown error',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchWorkflows();
-  }, [toast]);
+    void fetchWorkflows();
+  }, [fetchWorkflows]);
 
   // Filter workflows
   const filteredWorkflows = useMemo(() => {
@@ -87,15 +82,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
       if (!canExecuteWorkflows) {
         throw new Error('Workflow execute permission required');
       }
-      const response = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) throw new Error('Failed to start workflow run');
-
-      const run = await response.json();
+      const run = await workflowsApi.startRun(workflowId);
       toast({
         title: 'Workflow run started',
         description: `Run ID: ${run.id}`,
@@ -148,45 +135,66 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
         </Button>
       </Group>
 
-      {/* Search */}
-      <TextInput
-        className="max-w-md"
-        leftSection={<Search className="h-4 w-4" />}
-        placeholder="Search workflows..."
-        value={search}
-        onChange={(event) => setSearch(event.currentTarget.value)}
-      />
+      <Tabs value={activeTab} onChange={setActiveTab} className="w-full">
+        <Tabs.List className="w-fit">
+          <Tabs.Tab value="browse">Browse</Tabs.Tab>
+          <Tabs.Tab value="author">Author</Tabs.Tab>
+        </Tabs.List>
 
-      {/* Workflow List */}
-      {isLoading ? (
-        <Stack gap="sm">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} h={128} />
-          ))}
-        </Stack>
-      ) : filteredWorkflows.length === 0 ? (
-        <Text ta="center" c="dimmed" py="xl">
-          {search ? 'No workflows match your search' : 'No workflows available'}
-        </Text>
-      ) : (
-        <Stack gap="md">
-          {filteredWorkflows.map((workflow) => (
-            <WorkflowCard
-              key={workflow.id}
-              workflow={workflow}
-              onStartRun={() => handleStartRun(workflow.id)}
-              onViewRuns={() => setSelectedWorkflowId(workflow.id)}
-              canStartRun={canExecuteWorkflows}
+        <Tabs.Panel value="browse" pt="md">
+          <Stack gap="md">
+            {/* Search */}
+            <TextInput
+              className="max-w-md"
+              leftSection={<Search className="h-4 w-4" />}
+              placeholder="Search workflows..."
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
             />
-          ))}
-        </Stack>
-      )}
+
+            {/* Workflow List */}
+            {isLoading ? (
+              <Stack gap="sm">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} h={128} />
+                ))}
+              </Stack>
+            ) : filteredWorkflows.length === 0 ? (
+              <Text ta="center" c="dimmed" py="xl">
+                {search ? 'No workflows match your search' : 'No workflows available'}
+              </Text>
+            ) : (
+              <Stack gap="md">
+                {filteredWorkflows.map((workflow) => (
+                  <WorkflowCard
+                    key={workflow.id}
+                    workflow={workflow}
+                    onStartRun={() => handleStartRun(workflow.id)}
+                    onViewRuns={() => setSelectedWorkflowId(workflow.id)}
+                    canStartRun={canExecuteWorkflows}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="author" pt="md">
+          <WorkflowAuthoringPanel
+            canSaveWorkflow={canWriteWorkflows}
+            onWorkflowCreated={() => {
+              void fetchWorkflows();
+              setActiveTab('browse');
+            }}
+          />
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }
 
 interface WorkflowCardProps {
-  workflow: Workflow;
+  workflow: WorkflowSummary;
   onStartRun: () => void;
   onViewRuns: () => void;
   canStartRun: boolean;

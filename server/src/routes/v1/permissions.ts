@@ -56,6 +56,7 @@ export const searchAccess = routeAccess('task:read', 'settings:write', [
 
 export const workflowAccess = routeAccess('workflow:read', 'workflow:write', [
   { methods: ['POST'], path: /^\/[^/]+\/runs\/?$/, permissions: 'workflow:execute' },
+  { methods: ['POST'], path: /^\/[^/]+\/dry-run\/?$/, permissions: 'workflow:execute' },
   { methods: ['POST'], path: /^\/runs\/[^/]+\/resume\/?$/, permissions: 'workflow:execute' },
   {
     methods: ['POST'],

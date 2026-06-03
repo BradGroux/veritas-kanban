@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { WorkflowDefinition, WorkflowACL } from '../types/workflow.js';
 import { getWorkflowService } from '../services/workflow-service.js';
 import { getWorkflowRunService } from '../services/workflow-run-service.js';
+import { getWorkflowAuthoringService } from '../services/workflow-authoring-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError, BadRequestError } from '../middleware/error-handler.js';
@@ -18,6 +19,7 @@ import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../ut
 const router = Router();
 const workflowService = getWorkflowService();
 const workflowRunService = getWorkflowRunService();
+const workflowAuthoringService = getWorkflowAuthoringService();
 
 // Helper to extract string param (handles Express types)
 function getStringParam(param: string | string[] | undefined): string {
@@ -30,6 +32,10 @@ function getUserId(req: AuthenticatedRequest): string {
   return req.auth?.userId || req.auth?.keyName || 'unknown';
 }
 
+function getRequestPermissions(req: AuthenticatedRequest): string[] | undefined {
+  return req.auth?.permissions;
+}
+
 // Validation schemas
 const startRunSchema = z.object({
   taskId: z.string().optional(),
@@ -40,6 +46,26 @@ const resumeRunSchema = z.object({
   context: z.record(z.string(), z.unknown()).optional(),
 });
 
+const authoringContextSchema = z
+  .object({
+    taskId: z.string().optional(),
+    clientMode: z.enum(['local', 'remote', 'cloud']).optional(),
+    availableSecrets: z.array(z.string()).optional(),
+    now: z.string().optional(),
+  })
+  .optional();
+
+const recipeMaterializeSchema = z.object({
+  inputs: z.record(z.string(), z.unknown()).optional(),
+  context: authoringContextSchema,
+});
+
+const authoringInputSchema = z.object({
+  workflow: z.record(z.string(), z.unknown()).optional(),
+  yaml: z.string().optional(),
+  context: authoringContextSchema,
+});
+
 // Basic input validation - detailed validation happens in WorkflowService
 const workflowCreateSchema = z.object({
   id: z.string().min(1).max(100),
@@ -47,6 +73,8 @@ const workflowCreateSchema = z.object({
   version: z.number().int().min(0),
   description: z.string().max(2000),
   config: z.unknown().optional(),
+  outputTargets: z.array(z.record(z.string(), z.unknown())).max(12).optional(),
+  schedule: z.record(z.string(), z.unknown()).optional(),
   agents: z.array(z.unknown()).min(1).max(20),
   steps: z.array(z.unknown()).min(1).max(50),
   variables: z.record(z.string(), z.unknown()).optional(),
@@ -82,6 +110,91 @@ router.get(
   })
 );
 
+// ==================== Workflow Authoring Routes ====================
+
+/**
+ * GET /api/workflows/recipes — List reusable workflow recipes
+ */
+router.get(
+  '/recipes',
+  asyncHandler(async (_req: AuthenticatedRequest, res) => {
+    res.json(workflowAuthoringService.listRecipes());
+  })
+);
+
+/**
+ * POST /api/workflows/recipes/:recipeId/materialize — Build a workflow from a recipe
+ */
+router.post(
+  '/recipes/:recipeId/materialize',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const recipeId = getStringParam(req.params.recipeId);
+    const { inputs, context } = recipeMaterializeSchema.parse(req.body);
+    const materialized = await workflowAuthoringService.materializeRecipe(recipeId, inputs ?? {}, {
+      ...context,
+      permissions: getRequestPermissions(req),
+    });
+    if (!materialized) {
+      throw new NotFoundError(`Workflow recipe ${recipeId} not found`);
+    }
+    res.json(materialized);
+  })
+);
+
+/**
+ * POST /api/workflows/authoring/lint — Validate unsaved workflow YAML or JSON
+ */
+router.post(
+  '/authoring/lint',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = authoringInputSchema.parse(req.body);
+    const result = await workflowAuthoringService.lint({
+      workflow: input.workflow as unknown as WorkflowDefinition | undefined,
+      yaml: input.yaml,
+      context: {
+        ...input.context,
+        permissions: getRequestPermissions(req),
+      },
+    });
+    res.json(result);
+  })
+);
+
+/**
+ * POST /api/workflows/authoring/dry-run — Dry-run unsaved workflow YAML or JSON
+ */
+router.post(
+  '/authoring/dry-run',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = authoringInputSchema.parse(req.body);
+    const result = await workflowAuthoringService.dryRun({
+      workflow: input.workflow as unknown as WorkflowDefinition | undefined,
+      yaml: input.yaml,
+      context: {
+        ...input.context,
+        permissions: getRequestPermissions(req),
+      },
+    });
+    res.json(result);
+  })
+);
+
+/**
+ * POST /api/workflows/authoring/yaml — Render canonical YAML for a visual definition
+ */
+router.post(
+  '/authoring/yaml',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = authoringInputSchema.parse(req.body);
+    if (!input.workflow) {
+      throw new BadRequestError('workflow is required');
+    }
+    res.json({
+      yaml: workflowAuthoringService.toYaml(input.workflow as unknown as WorkflowDefinition),
+    });
+  })
+);
+
 /**
  * GET /api/workflows/:id — Get a specific workflow
  */
@@ -104,6 +217,33 @@ router.get(
 
     setRevisionHeaders(res, 'workflow', workflow.id, workflow.version);
     res.json(workflow);
+  })
+);
+
+/**
+ * POST /api/workflows/:id/dry-run — Dry-run a saved workflow definition
+ */
+router.post(
+  '/:id/dry-run',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const workflowId = getStringParam(req.params.id);
+    const userId = getUserId(req);
+    const input = z.object({ context: authoringContextSchema }).parse(req.body);
+
+    await assertWorkflowPermission(workflowId, userId, 'execute');
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${workflowId} not found`);
+    }
+
+    const result = await workflowAuthoringService.dryRun({
+      workflow,
+      context: {
+        ...input.context,
+        permissions: getRequestPermissions(req),
+      },
+    });
+    res.json(result);
   })
 );
 

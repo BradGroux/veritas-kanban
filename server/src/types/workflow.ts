@@ -13,6 +13,8 @@ export interface WorkflowDefinition {
   version: number;
   description: string;
   config?: WorkflowConfig;
+  outputTargets?: WorkflowOutputTarget[];
+  schedule?: WorkflowSchedule;
   agents: WorkflowAgent[];
   steps: WorkflowStep[];
   variables?: Record<string, unknown>;
@@ -28,6 +30,44 @@ export interface WorkflowConfig {
   fresh_session_default?: boolean;
   progress_file?: string;
   telemetry_tags?: string[];
+}
+
+export type WorkflowOutputTargetType =
+  | 'task-update'
+  | 'work-product'
+  | 'completion-packet'
+  | 'notification'
+  | 'dashboard-queue-item'
+  | 'scheduled-snapshot';
+
+export interface WorkflowOutputTarget {
+  type: WorkflowOutputTargetType;
+  label?: string;
+  required?: boolean;
+  path?: string;
+  taskField?: string;
+  channel?: string;
+  deliverableId?: string;
+  retentionDays?: number;
+}
+
+export type WorkflowScheduleMode =
+  | 'manual'
+  | 'daily'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'custom';
+
+export interface WorkflowSchedule {
+  mode: WorkflowScheduleMode;
+  enabled: boolean;
+  cronExpr?: string;
+  timezone?: string;
+  startAt?: string;
+  endAt?: string;
+  snapshotRetention?: number;
+  lastVerifiedAt?: string;
 }
 
 export interface WorkflowAgent {

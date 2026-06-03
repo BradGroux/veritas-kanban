@@ -148,6 +148,9 @@ describe('v1 REST permission guard presets', () => {
     expect(
       runGuard(workflowAccess, mockRequest('POST', '/workflow-1/runs')).next
     ).toHaveBeenCalled();
+    expect(
+      runGuard(workflowAccess, mockRequest('POST', '/workflow-1/dry-run')).next
+    ).toHaveBeenCalled();
 
     const { res, next } = runGuard(workflowAccess, mockRequest('POST', '/'));
     expect(next).not.toHaveBeenCalled();

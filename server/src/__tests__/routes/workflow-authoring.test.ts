@@ -1,0 +1,222 @@
+import express from 'express';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import request from 'supertest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { AuthenticatedRequest } from '../../middleware/auth.js';
+import type { WorkflowDefinition } from '../../types/workflow.js';
+
+function workflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
+  return {
+    id: 'authoring-route-workflow',
+    name: 'Authoring Route Workflow',
+    version: 1,
+    description: 'Workflow authoring route fixture',
+    outputTargets: [
+      {
+        type: 'work-product',
+        label: 'Work product',
+        path: 'work-products/authoring-route.md',
+      },
+    ],
+    schedule: { mode: 'manual', enabled: false },
+    agents: [
+      {
+        id: 'worker',
+        name: 'Worker',
+        role: 'developer',
+        description: 'Runs the workflow.',
+        tools: ['Read', 'Edit', 'exec'],
+      },
+    ],
+    steps: [
+      {
+        id: 'work',
+        name: 'Do work',
+        type: 'agent',
+        agent: 'worker',
+        input: 'Do the work.',
+        output: { file: 'authoring-route.md' },
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe('workflow authoring routes', () => {
+  let app: express.Express;
+  let testRoot: string;
+  let disposeWorkflowService: (() => void) | undefined;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-workflow-authoring-'));
+    process.env.VERITAS_DATA_DIR = testRoot;
+    process.env.DATA_DIR = testRoot;
+    process.env.VERITAS_DISABLE_WATCHERS = '1';
+
+    const [{ workflowRoutes }, workflowService, { errorHandler }] = await Promise.all([
+      import('../../routes/workflows.js'),
+      import('../../services/workflow-service.js'),
+      import('../../middleware/error-handler.js'),
+    ]);
+    disposeWorkflowService = workflowService.disposeWorkflowService;
+
+    app = express();
+    app.use(express.json());
+    app.use((req: AuthenticatedRequest, _res, next) => {
+      req.auth = {
+        role: 'admin',
+        keyName: 'workflow-authoring-test',
+        isLocalhost: false,
+        userId: 'workflow-authoring-user',
+        workspaceId: 'local',
+        actorType: 'user',
+        authMethod: 'session',
+        permissions: ['*'],
+      };
+      next();
+    });
+    app.use('/api/workflows', workflowRoutes);
+    app.use(errorHandler);
+  });
+
+  afterEach(async () => {
+    disposeWorkflowService?.();
+    delete process.env.VERITAS_DATA_DIR;
+    delete process.env.DATA_DIR;
+    delete process.env.VERITAS_DISABLE_WATCHERS;
+    await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it('lists recipes and materializes inspectable workflow YAML', async () => {
+    const recipes = await request(app).get('/api/workflows/recipes');
+    expect(recipes.status).toBe(200);
+    expect(recipes.body.map((recipe: { id: string }) => recipe.id)).toContain(
+      'task-implementation'
+    );
+
+    const materialized = await request(app)
+      .post('/api/workflows/recipes/task-implementation/materialize')
+      .send({
+        inputs: {
+          workflowName: 'Task Implementation Test',
+          taskId: 'task_123',
+          outputPath: 'work-products/task-123.md',
+        },
+        context: { taskId: 'task_123', clientMode: 'local' },
+      });
+
+    expect(materialized.status).toBe(200);
+    expect(materialized.body.workflow).toMatchObject({
+      id: 'task-implementation-test',
+      name: 'Task Implementation Test',
+    });
+    expect(
+      materialized.body.preview.outputTargets.map((target: { type: string }) => target.type)
+    ).toEqual(['task-update', 'work-product', 'completion-packet']);
+    expect(materialized.body.yaml).toContain('outputTargets:');
+    expect(materialized.body.lint.ok).toBe(true);
+  });
+
+  it('dry-runs drafts and reports missing context, policies, secrets, and schedules', async () => {
+    const draft = workflow({
+      id: 'unsafe-draft',
+      name: 'Unsafe Draft',
+      agents: [
+        {
+          id: 'planner',
+          name: 'Planner',
+          role: 'planner',
+          description: 'Plans with a denied write tool.',
+          tools: ['Write'],
+        },
+      ],
+      steps: [
+        {
+          id: 'plan',
+          name: 'Plan',
+          type: 'agent',
+          agent: 'planner',
+          input: 'Use {{ secrets.MISSING_TOKEN }} to plan.',
+          output: { file: 'plan.md' },
+        },
+      ],
+      outputTargets: [{ type: 'task-update', label: 'Task update' }],
+      schedule: { mode: 'custom', enabled: true },
+    });
+
+    const response = await request(app)
+      .post('/api/workflows/authoring/dry-run')
+      .send({
+        workflow: draft,
+        context: {
+          clientMode: 'remote',
+          permissions: ['workflow:read'],
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('blocked');
+    expect(response.body.canRun).toBe(false);
+    expect(response.body.messages.map((item: { category: string }) => item.category)).toEqual(
+      expect.arrayContaining(['context', 'policy', 'secret', 'schedule'])
+    );
+    expect(response.body.messages.map((item: { message: string }) => item.message)).toEqual(
+      expect.arrayContaining([
+        'Task update output requires task context.',
+        'Tool Write is denied for role planner.',
+        'Secret MISSING_TOKEN is referenced but unavailable.',
+        'Custom schedule is missing a cron expression.',
+      ])
+    );
+  });
+
+  it('dry-runs YAML edits and saved workflow definitions without starting a run', async () => {
+    const yamlDryRun = await request(app)
+      .post('/api/workflows/authoring/dry-run')
+      .send({
+        yaml: [
+          'id: yaml-authoring-workflow',
+          'name: YAML Authoring Workflow',
+          'version: 1',
+          'description: YAML route fixture',
+          'outputTargets:',
+          '  - type: work-product',
+          '    path: work-products/yaml.md',
+          'agents:',
+          '  - id: worker',
+          '    name: Worker',
+          '    role: developer',
+          '    description: Runs the YAML workflow.',
+          '    tools:',
+          '      - Read',
+          'steps:',
+          '  - id: work',
+          '    name: Do work',
+          '    type: agent',
+          '    agent: worker',
+          '    input: Do work.',
+          '    output:',
+          '      file: yaml.md',
+        ].join('\n'),
+      });
+
+    expect(yamlDryRun.status).toBe(200);
+    expect(yamlDryRun.body.canRun).toBe(true);
+    expect(yamlDryRun.body.workflow.id).toBe('yaml-authoring-workflow');
+
+    const create = await request(app).post('/api/workflows').send(workflow());
+    expect(create.status).toBe(201);
+
+    const savedDryRun = await request(app)
+      .post('/api/workflows/authoring-route-workflow/dry-run')
+      .send({ context: { clientMode: 'local' } });
+
+    expect(savedDryRun.status).toBe(200);
+    expect(savedDryRun.body.status).toBe('ready');
+    expect(savedDryRun.body.workflow.id).toBe('authoring-route-workflow');
+  });
+});
