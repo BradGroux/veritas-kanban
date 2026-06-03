@@ -1,6 +1,7 @@
 import type {
   UpdateWorkProductInput,
   WorkProduct,
+  WorkProductMaintenancePreview,
   WorkProductPreview,
   WorkProductVersion,
 } from '@veritas-kanban/shared';
@@ -44,6 +45,13 @@ function getErrorMessage(body: unknown, status: number): string {
 }
 
 export const workProductsApi = {
+  maintenancePreview: async (): Promise<WorkProductMaintenancePreview> => {
+    const response = await fetch(`${API_BASE}/work-products/maintenance-preview`, {
+      credentials: 'include',
+    });
+    return handleResponse<WorkProductMaintenancePreview>(response);
+  },
+
   listForTask: async (
     taskId: string,
     options: { includeArchived?: boolean; limit?: number } = {}

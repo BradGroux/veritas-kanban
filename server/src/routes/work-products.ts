@@ -60,6 +60,13 @@ router.post(
 );
 
 router.get(
+  '/maintenance-preview',
+  asyncHandler(async (_req, res) => {
+    res.json(await getWorkProductService().maintenancePreview());
+  })
+);
+
+router.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const product = await getWorkProductService().get(req.params.id as string);

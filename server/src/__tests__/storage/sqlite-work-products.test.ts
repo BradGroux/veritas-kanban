@@ -213,6 +213,31 @@ describe('SQLite work products', () => {
       expect(regenerated.id).toBe(packet.id);
       expect(regenerated.version).toBe(2);
       await expect(restarted.listVersions(packet.id)).resolves.toHaveLength(2);
+
+      await restarted.archive(packet.id);
+      const maintenancePreview = await restarted.maintenancePreview();
+      expect(maintenancePreview.totals).toMatchObject({
+        products: 3,
+        active: 2,
+        archived: 1,
+        cleanupCandidates: 1,
+      });
+      expect(maintenancePreview.totals.versions).toBeGreaterThanOrEqual(6);
+      expect(maintenancePreview.totals.estimatedBytes).toBeGreaterThan(0);
+      expect(maintenancePreview.cleanupCandidates[0]).toMatchObject({
+        id: packet.id,
+        status: 'archived',
+        cleanupEligible: true,
+        taskId: completedTask.id,
+        sourceRunId: 'attempt_packet',
+        versionCount: 2,
+      });
+      expect(maintenancePreview.retained.map((item) => item.id)).toContain(created.id);
+      expect(maintenancePreview.byKind.find((group) => group.kind === 'report')).toMatchObject({
+        products: 1,
+        versions: 2,
+      });
+      expect(maintenancePreview.notes.join(' ')).toContain('Preview only');
     } finally {
       service?.dispose();
       resetWorkProductServiceForTests();

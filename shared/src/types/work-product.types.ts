@@ -195,3 +195,45 @@ export interface WorkProductListOptions {
   includeArchived?: boolean;
   limit?: number;
 }
+
+export interface WorkProductMaintenancePreviewItem {
+  id: string;
+  workspaceId: string;
+  title: string;
+  kind: WorkProductKind;
+  status: WorkProductStatus;
+  taskId?: string;
+  sourceRunId?: string;
+  version: number;
+  versionCount: number;
+  sourceLinkCount: number;
+  redacted: boolean;
+  cleanupEligible: boolean;
+  retainedReason: string;
+  estimatedBytes: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface WorkProductMaintenancePreview {
+  generatedAt: string;
+  workspaceId: string;
+  totals: {
+    products: number;
+    active: number;
+    archived: number;
+    versions: number;
+    cleanupCandidates: number;
+    estimatedBytes: number;
+  };
+  byKind: Array<{
+    kind: WorkProductKind;
+    products: number;
+    versions: number;
+    estimatedBytes: number;
+  }>;
+  cleanupCandidates: WorkProductMaintenancePreviewItem[];
+  retained: WorkProductMaintenancePreviewItem[];
+  notes: string[];
+}
