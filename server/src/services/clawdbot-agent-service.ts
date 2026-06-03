@@ -19,6 +19,7 @@ import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
 import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
+import { AgentHealthService, type AgentHealthChecker } from './agent-health-service.js';
 import { getBreaker } from './circuit-registry.js';
 import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
@@ -41,6 +42,7 @@ import type {
   TaskReadinessSummary,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import { ConflictError } from '../middleware/error-handler.js';
 const log = createLogger('clawdbot-agent-service');
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
@@ -139,11 +141,13 @@ const pendingAgents = new Map<string, PendingAgent>();
 export class ClawdbotAgentService {
   private configService: ConfigService;
   private taskService: TaskService;
+  private agentHealth: AgentHealthChecker;
   private logsDir: string;
 
-  constructor() {
+  constructor(agentHealth?: AgentHealthChecker) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
+    this.agentHealth = agentHealth || new AgentHealthService();
     this.logsDir = LOGS_DIR;
     this.ensureLogsDir();
   }
@@ -201,6 +205,7 @@ export class ClawdbotAgentService {
     }
 
     const agentConfig = this.resolveAgentConfig(config.agents, agent);
+    await this.assertAgentAvailable(agent, agentConfig);
     const provider = this.resolveAgentProvider(agentConfig, agent);
     const readiness = evaluateTaskReadiness(task, { isCodeTask: true, selectedAgent: agent });
     const overrideReason = options.overrideReason?.trim();
@@ -502,6 +507,38 @@ export class ClawdbotAgentService {
 
   private resolveAgentConfig(agents: AgentConfig[], agent: AgentType): AgentConfig | undefined {
     return agents.find((a) => a.type === agent);
+  }
+
+  private async assertAgentAvailable(
+    agent: AgentType,
+    agentConfig: AgentConfig | undefined
+  ): Promise<void> {
+    if (!agentConfig) {
+      throw new ConflictError(`Agent "${agent}" is not configured`, {
+        agent,
+        reason: 'Agent is not configured',
+      });
+    }
+
+    if (!agentConfig.enabled) {
+      throw new ConflictError(`Agent "${agent}" is disabled`, {
+        agent,
+        reason: 'Agent is disabled',
+      });
+    }
+
+    const health = await this.agentHealth.checkAgent(agentConfig);
+    if (!health.healthy) {
+      throw new ConflictError(
+        `Agent "${agent}" is unavailable: ${health.reason || 'Agent health check failed'}`,
+        {
+          agent,
+          reason: health.reason || 'Agent health check failed',
+          command: agentConfig.command,
+          provider: agentConfig.provider,
+        }
+      );
+    }
   }
 
   private resolveAgentProvider(

@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentRoutingService } from '../services/agent-routing-service';
-import type { AgentRoutingConfig, AppConfig } from '@veritas-kanban/shared';
+import type { AgentConfig, AgentRoutingConfig, AppConfig } from '@veritas-kanban/shared';
+import type { AgentHealthStatus } from '../services/agent-health-service';
 
 // Mock ConfigService
 const mockGetConfig = vi.fn();
 const mockSaveConfig = vi.fn();
+const mockCheckAgent = vi.fn();
 
 vi.mock('../services/config-service.js', () => {
   return {
@@ -68,13 +70,59 @@ const BASE_CONFIG: AppConfig = {
   },
 };
 
+function healthyAgent(agent: AgentConfig): AgentHealthStatus {
+  return {
+    type: agent.type,
+    name: agent.name,
+    enabled: agent.enabled,
+    configured: true,
+    command: agent.command,
+    executableFound: true,
+    executablePath: `/usr/local/bin/${agent.command}`,
+    authenticated: null,
+    healthy: agent.enabled,
+    checkedAt: '2026-06-03T00:00:00.000Z',
+    reason: agent.enabled ? undefined : 'Agent is disabled',
+  };
+}
+
+function unhealthyAgent(agent: AgentConfig, reason: string): AgentHealthStatus {
+  return {
+    ...healthyAgent(agent),
+    executableFound: !reason.includes('Executable'),
+    authenticated: reason.includes('Authentication') ? false : null,
+    healthy: false,
+    reason,
+  };
+}
+
+function requireRouting(config: AppConfig): AgentRoutingConfig {
+  if (!config.agentRouting) throw new Error('Expected routing config in test fixture');
+  return config.agentRouting;
+}
+
+function requireAgent(config: AppConfig, type: string): AgentConfig {
+  const agent = config.agents.find((candidate) => candidate.type === type);
+  if (!agent) throw new Error(`Expected ${type} agent in test fixture`);
+  return agent;
+}
+
+function requireFallbackResult(
+  result: Awaited<ReturnType<AgentRoutingService['getFallback']>>
+): NonNullable<typeof result> {
+  expect(result).not.toBeNull();
+  if (!result) throw new Error('Expected fallback result');
+  return result;
+}
+
 describe('AgentRoutingService', () => {
   let service: AgentRoutingService;
 
   beforeEach(() => {
     mockGetConfig.mockResolvedValue(structuredClone(BASE_CONFIG));
     mockSaveConfig.mockResolvedValue(undefined);
-    service = new AgentRoutingService();
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => healthyAgent(agent));
+    service = new AgentRoutingService(undefined, { checkAgent: mockCheckAgent });
   });
 
   describe('resolveAgent', () => {
@@ -166,7 +214,7 @@ describe('AgentRoutingService', () => {
 
     it('returns default agent when routing is disabled', async () => {
       const config = structuredClone(BASE_CONFIG);
-      config.agentRouting!.enabled = false;
+      requireRouting(config).enabled = false;
       mockGetConfig.mockResolvedValue(config);
 
       const result = await service.resolveAgent({
@@ -189,14 +237,104 @@ describe('AgentRoutingService', () => {
         priority: 'high',
       });
 
-      // Both code rules point to claude-code which is disabled — falls to default
-      // But default is also claude-code (disabled), so it returns the config default anyway
-      expect(result.reason).toContain('No routing rules matched');
+      expect(result.agent).toBe('amp');
+      expect(result.reason).toContain('unavailable');
+      expect(result.reason).toContain('Using fallback');
+    });
+
+    it('uses a healthy fallback when a matched rule target is missing its executable', async () => {
+      mockCheckAgent.mockImplementation(async (agent: AgentConfig) =>
+        agent.type === 'claude-code'
+          ? unhealthyAgent(agent, 'Executable "claude" was not found on PATH')
+          : healthyAgent(agent)
+      );
+
+      const result = await service.resolveAgent({
+        type: 'code',
+        priority: 'high',
+      });
+
+      expect(result.agent).toBe('amp');
+      expect(result.rule).toBe('code-high');
+      expect(result.reason).toContain('Executable "claude" was not found on PATH');
+    });
+
+    it('throws a clear conflict when the primary and fallback agents are unavailable', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      const routing = requireRouting(config);
+      routing.rules = [
+        {
+          id: 'only-code',
+          name: 'Only code route',
+          match: { type: 'code' },
+          agent: 'claude-code',
+          fallback: 'amp',
+          enabled: true,
+        },
+      ];
+      routing.defaultAgent = 'amp';
+      requireAgent(config, 'amp').enabled = false;
+      mockGetConfig.mockResolvedValue(config);
+      mockCheckAgent.mockImplementation(async (agent: AgentConfig) =>
+        agent.type === 'claude-code'
+          ? unhealthyAgent(agent, 'Executable "claude" was not found on PATH')
+          : healthyAgent(agent)
+      );
+
+      await expect(
+        service.resolveAgent({
+          type: 'code',
+          priority: 'high',
+        })
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+        details: expect.objectContaining({
+          agent: 'amp',
+          reason: 'Agent is disabled',
+        }),
+      });
+    });
+
+    it('routes around an unauthenticated provider when a healthy fallback exists', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      config.agents.push({
+        type: 'codex',
+        name: 'OpenAI Codex',
+        command: 'codex',
+        args: [],
+        enabled: true,
+        provider: 'codex-cli',
+      });
+      requireRouting(config).rules = [
+        {
+          id: 'codex-code',
+          name: 'Codex code route',
+          match: { type: 'code' },
+          agent: 'codex',
+          fallback: 'amp',
+          enabled: true,
+        },
+      ];
+      mockGetConfig.mockResolvedValue(config);
+      mockCheckAgent.mockImplementation(async (agent: AgentConfig) =>
+        agent.type === 'codex'
+          ? unhealthyAgent(agent, 'Authentication check failed: not logged in')
+          : healthyAgent(agent)
+      );
+
+      const result = await service.resolveAgent({
+        type: 'code',
+        priority: 'medium',
+      });
+
+      expect(result.agent).toBe('amp');
+      expect(result.reason).toContain('Authentication check failed');
     });
 
     it('matches array criteria', async () => {
       const config = structuredClone(BASE_CONFIG);
-      config.agentRouting!.rules = [
+      requireRouting(config).rules = [
         {
           id: 'multi-type',
           name: 'Multiple types',
@@ -217,7 +355,7 @@ describe('AgentRoutingService', () => {
 
     it('matches minSubtasks criteria', async () => {
       const config = structuredClone(BASE_CONFIG);
-      config.agentRouting!.rules = [
+      requireRouting(config).rules = [
         {
           id: 'complex',
           name: 'Complex tasks',
@@ -244,7 +382,7 @@ describe('AgentRoutingService', () => {
 
     it('does NOT match when subtasks below threshold', async () => {
       const config = structuredClone(BASE_CONFIG);
-      config.agentRouting!.rules = [
+      requireRouting(config).rules = [
         {
           id: 'complex',
           name: 'Complex tasks',
@@ -269,18 +407,32 @@ describe('AgentRoutingService', () => {
   describe('getFallback', () => {
     it('returns fallback agent from matched rule', async () => {
       const result = await service.getFallback({ type: 'code', priority: 'high' }, 'claude-code');
+      const fallback = requireFallbackResult(result);
 
-      expect(result).not.toBeNull();
-      expect(result!.agent).toBe('amp');
-      expect(result!.reason).toContain('Fallback');
+      expect(fallback.agent).toBe('amp');
+      expect(fallback.reason).toContain('Fallback');
     });
 
     it('returns null when fallback is disabled', async () => {
       const config = structuredClone(BASE_CONFIG);
-      config.agentRouting!.fallbackOnFailure = false;
+      requireRouting(config).fallbackOnFailure = false;
       mockGetConfig.mockResolvedValue(config);
 
       const result = await service.getFallback({ type: 'code', priority: 'high' }, 'claude-code');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the matched fallback profile is disabled', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      const routing = requireRouting(config);
+      const [firstRule] = routing.rules;
+      if (!firstRule) throw new Error('Expected first routing rule in test fixture');
+      routing.rules = [firstRule];
+      requireAgent(config, 'amp').enabled = false;
+      mockGetConfig.mockResolvedValue(config);
+
+      const result = await service.getFallback({ type: 'code', priority: 'high' }, 'claude-code');
+
       expect(result).toBeNull();
     });
 
@@ -298,8 +450,8 @@ describe('AgentRoutingService', () => {
         { type: 'docs', priority: 'low' },
         'amp' // Failed agent is amp, default is claude-code → valid fallback
       );
-      expect(result).not.toBeNull();
-      expect(result!.agent).toBe('claude-code');
+      const fallback = requireFallbackResult(result);
+      expect(fallback.agent).toBe('claude-code');
     });
   });
 

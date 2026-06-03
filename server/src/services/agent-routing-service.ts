@@ -11,6 +11,7 @@
 import { ConfigService } from './config-service.js';
 import {
   DEFAULT_ROUTING_CONFIG,
+  type AgentConfig,
   type CreateGovernanceTraceInput,
   type GovernanceTraceRule,
   type GovernanceTraceStep,
@@ -19,8 +20,14 @@ import {
   type RoutingResult,
   type RoutingMatchCriteria,
 } from '@veritas-kanban/shared';
-import type { Task, AgentType, TaskPriority } from '@veritas-kanban/shared';
+import type { Task, AgentType } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import { ConflictError } from '../middleware/error-handler.js';
+import {
+  AgentHealthService,
+  type AgentHealthChecker,
+  type AgentHealthStatus,
+} from './agent-health-service.js';
 
 const log = createLogger('agent-routing');
 
@@ -30,11 +37,20 @@ interface RoutingTraceContext {
   taskId?: string;
 }
 
+interface AgentAvailability {
+  agentConfig?: AgentConfig;
+  health?: AgentHealthStatus;
+  available: boolean;
+  reason: string;
+}
+
 export class AgentRoutingService {
   private configService: ConfigService;
+  private agentHealth: AgentHealthChecker;
 
-  constructor(configService?: ConfigService) {
+  constructor(configService?: ConfigService, agentHealth?: AgentHealthChecker) {
     this.configService = configService || new ConfigService();
+    this.agentHealth = agentHealth || new AgentHealthService();
   }
 
   /**
@@ -58,8 +74,18 @@ export class AgentRoutingService {
 
     // If routing is disabled, return the global default
     if (!routing.enabled) {
+      const defaultAgent = routing.defaultAgent || config.defaultAgent;
+      const defaultAvailability = await this.getAgentAvailability(config.agents, defaultAgent);
+      if (!defaultAvailability.available) {
+        throw new ConflictError('No healthy agent available for routing', {
+          agent: defaultAgent,
+          reason: defaultAvailability.reason,
+          routingEnabled: routing.enabled,
+        });
+      }
+
       const result: RoutingResult = {
-        agent: routing.defaultAgent || config.defaultAgent,
+        agent: defaultAgent,
         model: routing.defaultModel,
         reason: 'Routing disabled, using default agent',
       };
@@ -90,13 +116,9 @@ export class AgentRoutingService {
       }
 
       if (this.matchesRule(task, rule.match)) {
-        // Verify the agent is actually configured and enabled
-        const agentConfig = config.agents.find(
-          (a: { type: string; name: string; command: string; args: string[]; enabled: boolean }) =>
-            a.type === rule.agent
-        );
-        if (!agentConfig?.enabled) {
-          const message = `Rule "${rule.name}" matched but agent "${rule.agent}" is disabled, skipping.`;
+        const availability = await this.getAgentAvailability(config.agents, rule.agent);
+        if (!availability.available) {
+          const message = `Rule "${rule.name}" matched but agent "${rule.agent}" is unavailable: ${availability.reason}.`;
           log.warn(message);
           const skippedRule = this.routingRuleTrace(rule, 'matched', message, 'skipped');
           evaluatedRules.push(skippedRule);
@@ -106,6 +128,49 @@ export class AgentRoutingService {
             status: 'skipped',
             message,
           });
+
+          if (routing.fallbackOnFailure && rule.fallback) {
+            const fallbackAvailability = await this.getAgentAvailability(
+              config.agents,
+              rule.fallback
+            );
+            if (fallbackAvailability.available) {
+              const reason = `${message} Using fallback agent "${rule.fallback}".`;
+              const result: RoutingResult = {
+                agent: rule.fallback,
+                rule: rule.id,
+                reason,
+              };
+              return {
+                result,
+                trace: this.buildRoutingTrace(task, context, result, {
+                  outcome: 'fallback',
+                  evaluatedRules,
+                  matchedRules: [],
+                  steps: [
+                    ...steps,
+                    {
+                      id: `fallback:${rule.id}`,
+                      label: `${rule.name} fallback`,
+                      status: 'matched',
+                      message: `Selected fallback agent ${rule.fallback}.`,
+                    },
+                  ],
+                  routing,
+                }),
+              };
+            }
+
+            const fallbackMessage = `Fallback agent "${rule.fallback}" for rule "${rule.name}" is unavailable: ${fallbackAvailability.reason}.`;
+            log.warn(fallbackMessage);
+            steps.push({
+              id: `fallback:${rule.id}`,
+              label: `${rule.name} fallback`,
+              status: 'skipped',
+              message: fallbackMessage,
+            });
+          }
+
           continue;
         }
 
@@ -160,6 +225,22 @@ export class AgentRoutingService {
       model: routing.defaultModel,
       reason: 'No routing rules matched, using default agent',
     };
+    const defaultAvailability = await this.getAgentAvailability(config.agents, result.agent);
+    if (!defaultAvailability.available) {
+      const message = `Default agent "${result.agent}" is unavailable: ${defaultAvailability.reason}.`;
+      steps.push({
+        id: 'default-agent',
+        label: 'Default agent',
+        status: 'skipped',
+        message,
+      });
+      throw new ConflictError('No healthy agent available for routing', {
+        agent: result.agent,
+        reason: defaultAvailability.reason,
+        routingEnabled: routing.enabled,
+      });
+    }
+
     return {
       result,
       trace: this.buildRoutingTrace(task, context, result, {
@@ -202,12 +283,11 @@ export class AgentRoutingService {
       if (!rule.fallback) continue;
       if (!this.matchesRule(task, rule.match)) continue;
 
-      const fallbackConfig = config.agents.find(
-        (a: { type: string; name: string; command: string; args: string[]; enabled: boolean }) =>
-          a.type === rule.fallback
-      );
-      if (!fallbackConfig?.enabled) {
-        log.warn(`Fallback agent "${rule.fallback}" for rule "${rule.name}" is disabled`);
+      const fallbackAvailability = await this.getAgentAvailability(config.agents, rule.fallback);
+      if (!fallbackAvailability.available) {
+        log.warn(
+          `Fallback agent "${rule.fallback}" for rule "${rule.name}" is unavailable: ${fallbackAvailability.reason}`
+        );
         continue;
       }
 
@@ -222,11 +302,8 @@ export class AgentRoutingService {
     // No specific fallback found — try default if it's different from failed
     const defaultAgent = routing.defaultAgent || config.defaultAgent;
     if (defaultAgent !== failedAgent) {
-      const defaultConfig = config.agents.find(
-        (a: { type: string; name: string; command: string; args: string[]; enabled: boolean }) =>
-          a.type === defaultAgent
-      );
-      if (defaultConfig?.enabled) {
+      const defaultAvailability = await this.getAgentAvailability(config.agents, defaultAgent);
+      if (defaultAvailability.available) {
         return {
           agent: defaultAgent,
           model: routing.defaultModel,
@@ -270,6 +347,44 @@ export class AgentRoutingService {
   }
 
   // ─── Private helpers ───────────────────────────────────────────
+
+  private async getAgentAvailability(
+    agents: AgentConfig[],
+    agent: AgentType
+  ): Promise<AgentAvailability> {
+    const agentConfig = agents.find((candidate) => candidate.type === agent);
+    if (!agentConfig) {
+      return {
+        available: false,
+        reason: 'Agent is not configured',
+      };
+    }
+
+    if (!agentConfig.enabled) {
+      return {
+        agentConfig,
+        available: false,
+        reason: 'Agent is disabled',
+      };
+    }
+
+    const health = await this.agentHealth.checkAgent(agentConfig);
+    if (!health.healthy) {
+      return {
+        agentConfig,
+        health,
+        available: false,
+        reason: health.reason || 'Agent health check failed',
+      };
+    }
+
+    return {
+      agentConfig,
+      health,
+      available: true,
+      reason: 'Agent is healthy',
+    };
+  }
 
   /**
    * Check if a task matches a rule's criteria.

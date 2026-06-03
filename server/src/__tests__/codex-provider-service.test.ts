@@ -11,6 +11,7 @@ const {
   mockGetConfig,
   mockGetTask,
   mockUpdateTask,
+  mockCheckAgent,
   mockTelemetryEmit,
   mockLogActivity,
   mockStartTrace,
@@ -22,6 +23,7 @@ const {
   mockGetConfig: vi.fn(),
   mockGetTask: vi.fn(),
   mockUpdateTask: vi.fn(),
+  mockCheckAgent: vi.fn(),
   mockTelemetryEmit: vi.fn(),
   mockLogActivity: vi.fn(),
   mockStartTrace: vi.fn(),
@@ -67,6 +69,12 @@ vi.mock('../services/agent-routing-service.js', () => ({
   getAgentRoutingService: () => ({
     resolveAgent: vi.fn().mockResolvedValue({ agent: 'codex', reason: 'test' }),
   }),
+}));
+
+vi.mock('../services/agent-health-service.js', () => ({
+  AgentHealthService: function () {
+    return { checkAgent: mockCheckAgent };
+  },
 }));
 
 vi.mock('../services/circuit-registry.js', () => ({
@@ -203,6 +211,18 @@ describe('ClawdbotAgentService Codex providers', () => {
       task = { ...task, ...update } as Task;
       return task;
     });
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: agent.enabled,
+      configured: true,
+      command: agent.command,
+      executableFound: true,
+      executablePath: `/usr/local/bin/${agent.command}`,
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-06-03T00:00:00.000Z',
+    }));
     mockGetConfig.mockResolvedValue({
       agents: [
         {
@@ -402,6 +422,32 @@ describe('ClawdbotAgentService Codex providers', () => {
         retryDelayMs: 1250,
       })
     );
+  });
+
+  it('blocks explicit dispatch when the selected agent is unhealthy', async () => {
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: true,
+      configured: true,
+      command: agent.command,
+      executableFound: false,
+      authenticated: null,
+      healthy: false,
+      checkedAt: '2026-06-03T00:00:00.000Z',
+      reason: 'Executable "codex" was not found on PATH',
+    }));
+    const service = testableService(tmpDir);
+
+    await expect(service.startAgent(task.id, 'codex')).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        agent: 'codex',
+        reason: 'Executable "codex" was not found on PATH',
+      }),
+    });
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it('records user stop requests as abort trace steps before completing the attempt', async () => {
