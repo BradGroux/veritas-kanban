@@ -11,6 +11,7 @@ import matter from 'gray-matter';
 import type { Task } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { getTasksBacklogDir } from '../utils/paths.js';
+import type { TaskIdentityScanSource } from '../services/task-identity-diagnostics.js';
 
 const log = createLogger('backlog-repo');
 
@@ -34,6 +35,10 @@ export class BacklogRepository {
     fs.mkdir(this.backlogDir, { recursive: true }).catch((err) => {
       log.error({ err }, 'Failed to create backlog directory');
     });
+  }
+
+  getIdentityScanSources(): TaskIdentityScanSource[] {
+    return [{ location: 'backlog', dir: this.backlogDir }];
   }
 
   /**

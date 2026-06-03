@@ -6,13 +6,18 @@
 
 import { nanoid } from 'nanoid';
 import type { Task, CreateTaskInput } from '@veritas-kanban/shared';
-import { getBacklogRepository } from '../storage/backlog-repository.js';
-import { getTaskService } from './task-service.js';
+import { BacklogRepository, getBacklogRepository } from '../storage/backlog-repository.js';
+import { getTaskService, type TaskService } from './task-service.js';
 import { activityService } from './activity-service.js';
 import { getTelemetryService } from './telemetry-service.js';
 import type { TaskTelemetryEvent } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import {
+  scanTaskIdentityDiagnostics,
+  type TaskIdentityDiagnostics,
+  type TaskIdentityScanSource,
+} from './task-identity-diagnostics.js';
 
 const log = createLogger('backlog-service');
 
@@ -24,10 +29,44 @@ export interface BacklogFilterOptions {
   offset?: number;
 }
 
+export interface BacklogServiceOptions {
+  backlogRepo?: BacklogRepository;
+  taskService?: TaskService;
+  telemetry?: ReturnType<typeof getTelemetryService>;
+}
+
 export class BacklogService {
-  private backlogRepo = getBacklogRepository();
-  private taskService = getTaskService();
-  private telemetry = getTelemetryService();
+  private backlogRepo: BacklogRepository;
+  private taskService: TaskService;
+  private telemetry: ReturnType<typeof getTelemetryService>;
+
+  constructor(options: BacklogServiceOptions = {}) {
+    this.backlogRepo = options.backlogRepo ?? getBacklogRepository();
+    this.taskService = options.taskService ?? getTaskService();
+    this.telemetry = options.telemetry ?? getTelemetryService();
+  }
+
+  getIdentityScanSources(): TaskIdentityScanSource[] {
+    return this.backlogRepo.getIdentityScanSources();
+  }
+
+  async getTaskIdentityDiagnostics(): Promise<TaskIdentityDiagnostics> {
+    return scanTaskIdentityDiagnostics([
+      ...this.taskService.getIdentityScanSources(),
+      ...this.getIdentityScanSources(),
+    ]);
+  }
+
+  private async assertTaskIdentityIntegrity(
+    operation: string,
+    taskId?: string,
+    destinationPath?: string
+  ): Promise<void> {
+    await this.taskService.assertTaskIdentityIntegrity(operation, taskId, {
+      destinationPath,
+      extraSources: this.getIdentityScanSources(),
+    });
+  }
 
   /**
    * Generate a task ID in the standard format: task_YYYYMMDD_XXXXXX
@@ -88,6 +127,7 @@ export class BacklogService {
    * Get a single backlog task by ID
    */
   async getBacklogTask(id: string): Promise<Task | null> {
+    await this.assertTaskIdentityIntegrity('backlog.get', id);
     return this.backlogRepo.findById(id);
   }
 
@@ -120,6 +160,8 @@ export class BacklogService {
       attachments: [],
     };
 
+    await this.assertTaskIdentityIntegrity('backlog.create', task.id);
+
     const created = await this.backlogRepo.create(task);
 
     // Log activity
@@ -148,6 +190,8 @@ export class BacklogService {
    * Update a backlog task
    */
   async updateBacklogTask(id: string, updates: Partial<Task>): Promise<Task> {
+    await this.assertTaskIdentityIntegrity('backlog.update', id);
+
     const task = await this.backlogRepo.findById(id);
     if (!task) {
       throw new NotFoundError('Backlog task not found');
@@ -175,6 +219,8 @@ export class BacklogService {
    * Delete a backlog task
    */
   async deleteBacklogTask(id: string): Promise<boolean> {
+    await this.assertTaskIdentityIntegrity('backlog.delete', id);
+
     const task = await this.backlogRepo.findById(id);
     if (!task) {
       return false;
@@ -203,6 +249,13 @@ export class BacklogService {
    * Moves the file from tasks/backlog/ to tasks/active/ and sets status to 'todo'
    */
   async promoteToActive(id: string): Promise<Task> {
+    const activeTasksDir = this.taskService.getActiveTasksDir();
+    await this.assertTaskIdentityIntegrity(
+      'backlog.promote',
+      id,
+      this.taskService.getActiveTasksDestinationPath()
+    );
+
     const task = await this.backlogRepo.findById(id);
     if (!task) {
       throw new NotFoundError('Backlog task not found');
@@ -219,7 +272,6 @@ export class BacklogService {
     await this.backlogRepo.update(id, { status: 'todo' });
 
     // Move file to active tasks directory
-    const activeTasksDir = this.taskService['tasksDir']; // Access private field
     await this.backlogRepo.moveToActive(id, activeTasksDir);
 
     // Invalidate task service cache and reload to pick up the new task
@@ -253,6 +305,8 @@ export class BacklogService {
    * Moves the file from tasks/active/ to tasks/backlog/
    */
   async demoteToBacklog(id: string): Promise<Task> {
+    await this.assertTaskIdentityIntegrity('task.demote', id);
+
     const task = await this.taskService.getTask(id);
     if (!task) {
       throw new NotFoundError('Active task not found');

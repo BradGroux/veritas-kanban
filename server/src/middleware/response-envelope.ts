@@ -40,6 +40,7 @@ interface EnvelopeMeta {
   utcOffset: number;
   requestId?: string;
   pagination?: PaginationMeta;
+  taskIdentityDiagnostics?: unknown;
 }
 
 interface SuccessEnvelope<T = unknown> {
@@ -133,6 +134,9 @@ export function responseEnvelopeMiddleware(_req: Request, res: Response, next: N
     const pagination: PaginationMeta | undefined = res.locals.pagination;
     if (pagination) {
       meta.pagination = pagination;
+    }
+    if (res.locals.taskIdentityDiagnostics) {
+      meta.taskIdentityDiagnostics = res.locals.taskIdentityDiagnostics;
     }
 
     const statusCode = res.statusCode;

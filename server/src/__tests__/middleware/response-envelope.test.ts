@@ -85,6 +85,25 @@ describe('responseEnvelopeMiddleware', () => {
 
       expect(res.body.meta.requestId).toBe('custom-id-123');
     });
+
+    it('should include task identity diagnostics from response locals', async () => {
+      const app = createApp();
+      app.get('/test', (_req, res) => {
+        res.locals.taskIdentityDiagnostics = {
+          hasConflicts: true,
+          conflictCount: 1,
+          conflicts: [{ kind: 'task-id', id: 'task_1', sources: [] }],
+        };
+        res.json([]);
+      });
+
+      const res = await request(app).get('/test');
+
+      expect(res.body.meta.taskIdentityDiagnostics).toMatchObject({
+        hasConflicts: true,
+        conflictCount: 1,
+      });
+    });
   });
 
   // ── Error Responses ─────────────────────────────────────────

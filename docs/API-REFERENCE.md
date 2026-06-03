@@ -181,6 +181,48 @@ the latest resource so the client can reload or reapply the edit:
 }
 ```
 
+### Duplicate Task Identity Diagnostics
+
+File-backed boards validate task identity directly from markdown files so stale
+cache entries cannot hide duplicate cards. The scanner detects:
+
+- duplicate task `id` values across active, backlog, and archive task files
+- duplicate GitHub issue identities such as `github:BradGroux/veritas-kanban#377`
+- duplicate Git pull request identities such as `git-pr:BradGroux/veritas-kanban#123`
+
+`GET /api/tasks` and `GET /api/backlog` keep their existing response data shape.
+When conflicts exist, enveloped API responses include
+`meta.taskIdentityDiagnostics`, and the response includes
+`X-Veritas-Task-Identity-Conflicts` with the number of conflicts.
+
+Mutating or moving a task with a duplicate identity fails with `409 CONFLICT`
+instead of silently selecting one matching file. The error details include the
+operation, target task ID, duplicate IDs, source paths, and destination path when
+the operation moves a task:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "Duplicate task identity detected",
+  "details": {
+    "operation": "backlog.promote",
+    "taskId": "task_20260603_dup",
+    "destinationPath": "active",
+    "duplicateIds": ["task_20260603_dup"],
+    "conflicts": [
+      {
+        "kind": "task-id",
+        "id": "task_20260603_dup",
+        "sources": [
+          { "location": "active", "path": "active/task_20260603_dup-active.md" },
+          { "location": "backlog", "path": "backlog/task_20260603_dup-backlog.md" }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ### List Tasks
 
 ```

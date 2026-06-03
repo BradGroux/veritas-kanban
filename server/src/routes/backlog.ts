@@ -10,7 +10,7 @@
  * POST   /api/backlog/bulk-promote - Bulk promote tasks
  */
 
-import { Router, type Router as RouterType } from 'express';
+import { Router, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getBacklogService } from '../services/backlog-service.js';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
@@ -19,9 +19,17 @@ import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { sendPaginated } from '../middleware/response-envelope.js';
+import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 
 const router: RouterType = Router();
 const backlogService = getBacklogService();
+
+function attachTaskIdentityDiagnostics(res: Response, diagnostics: TaskIdentityDiagnostics): void {
+  if (!diagnostics.hasConflicts) return;
+
+  res.set('X-Veritas-Task-Identity-Conflicts', String(diagnostics.conflictCount));
+  res.locals.taskIdentityDiagnostics = diagnostics;
+}
 
 // Validation schemas
 const createBacklogTaskSchema = z.object({
@@ -75,6 +83,7 @@ router.get(
       limit,
       offset,
     });
+    attachTaskIdentityDiagnostics(res, await backlogService.getTaskIdentityDiagnostics());
 
     sendPaginated(res, result.tasks, { page, limit, total: result.total });
   })
