@@ -109,6 +109,106 @@ export interface CreateApiTokenResult {
   secret: string;
 }
 
+export interface DeviceSessionSummary {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  deviceName: string;
+  deviceType: string;
+  deviceId: string;
+  clientId: string;
+  clientMode: string;
+  capabilities: string[];
+  scopes: ClientAuthPermission[];
+  role: WorkspaceRole;
+  tokenPrefix: string;
+  nonce: string;
+  signedAt: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  lastSeenAt: string | null;
+  lastSeenIp: string | null;
+  connectionState:
+    | 'pairing'
+    | 'connected'
+    | 'reconnecting'
+    | 'auth_failed'
+    | 'unreachable'
+    | 'revoked'
+    | 'expired';
+  stateReason: string | null;
+  lastAuthFailure: string | null;
+  degradedReason: string | null;
+}
+
+export interface CreatePairingCodeInput {
+  deviceName: string;
+  deviceType?: string;
+  deviceId?: string;
+  clientId?: string;
+  clientMode?: string;
+  capabilities?: string[];
+  scopes?: ClientAuthPermission[];
+  role?: WorkspaceRole;
+  expiresAt?: string | null;
+  sessionExpiresAt?: string | null;
+}
+
+export interface PairingPayload {
+  code: string;
+  workspaceId: string;
+  deviceId: string;
+  clientId: string;
+  clientMode: string;
+  capabilities: string[];
+  scopes: ClientAuthPermission[];
+  role: WorkspaceRole;
+  nonce: string;
+  signedAt: string;
+  signature: string;
+  expiresAt: string;
+}
+
+export interface PairingCodeSummary {
+  id: string;
+  workspaceId: string;
+  createdBy: string;
+  codePrefix: string;
+  deviceName: string;
+  deviceType: string;
+  deviceId: string;
+  clientId: string;
+  clientMode: string;
+  capabilities: string[];
+  scopes: ClientAuthPermission[];
+  role: WorkspaceRole;
+  nonce: string;
+  signedAt: string;
+  createdAt: string;
+  expiresAt: string;
+  sessionExpiresAt: string;
+  usedAt: string | null;
+  usedBy: string | null;
+  revokedAt: string | null;
+  attemptCount: number;
+  lastAttemptAt: string | null;
+}
+
+export interface CreatePairingCodeResult {
+  pairing: PairingCodeSummary;
+  code: string;
+  payload: PairingPayload;
+  link: string;
+}
+
+export interface DeviceSessionTestResult {
+  session: DeviceSessionSummary;
+  allowed: boolean;
+  reason: string;
+}
+
 export const identityApi = {
   getAuthContext: () => apiFetch<ClientAuthContext>('/api/auth/context'),
 
@@ -184,6 +284,41 @@ export const identityApi = {
       `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/api-tokens/${encodeURIComponent(
         tokenId
       )}/rotate`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  listDeviceSessions: (workspaceId: string) =>
+    apiFetch<DeviceSessionSummary[]>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/device-sessions`
+    ),
+
+  createPairingCode: (workspaceId: string, input: CreatePairingCodeInput) =>
+    apiFetch<CreatePairingCodeResult>(
+      `/api/identity/workspaces/${encodeURIComponent(workspaceId)}/device-pairing-codes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    ),
+
+  testDeviceSession: (workspaceId: string, sessionId: string) =>
+    apiFetch<DeviceSessionTestResult>(
+      `/api/identity/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/device-sessions/${encodeURIComponent(sessionId)}/test`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  revokeDeviceSession: (workspaceId: string, sessionId: string) =>
+    apiFetch<DeviceSessionSummary>(
+      `/api/identity/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/device-sessions/${encodeURIComponent(sessionId)}/revoke`,
       {
         method: 'POST',
       }

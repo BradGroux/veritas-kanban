@@ -14,9 +14,20 @@ import {
   rotateJwtSecret,
   getJwtRotationStatus,
 } from '../config/security.js';
-import { authenticate, authorize, type AuthenticatedRequest } from '../middleware/auth.js';
+import {
+  authenticate,
+  authorize,
+  type AuthenticatedRequest,
+  type AuthPermission,
+} from '../middleware/auth.js';
+import { ValidationError } from '../middleware/error-handler.js';
 import { auditLog } from '../services/audit-service.js';
 import { getIdentityService } from '../services/identity-service.js';
+import { SCOPED_API_TOKEN_PERMISSIONS } from '../services/api-token-service.js';
+import {
+  getDeviceSessionService,
+  type ExchangeDevicePairingInput,
+} from '../services/device-session-service.js';
 
 const router: IRouter = Router();
 
@@ -52,6 +63,47 @@ const acceptInvitationSchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   email: z.string().email().optional(),
 });
+
+const devicePairingPayloadSchema = z.object({
+  code: z.string().min(6).max(120).optional(),
+  nonce: z.string().min(16).max(128).optional(),
+  signedAt: z.string().datetime().optional(),
+  signature: z.string().min(16).max(256).optional(),
+  clientId: z.string().trim().min(1).max(160).optional(),
+  clientMode: z
+    .enum(['desktop-remote', 'desktop-local', 'mobile-pwa', 'browser', 'cli'])
+    .optional(),
+  capabilities: z.array(z.string().trim().min(1).max(80)).optional(),
+  scopes: z.array(z.enum(SCOPED_API_TOKEN_PERMISSIONS)).optional(),
+});
+
+const redeemPairingCodeSchema = devicePairingPayloadSchema.extend({
+  pairingCode: z.string().min(6).max(120).optional(),
+  payload: devicePairingPayloadSchema.optional(),
+});
+
+type RedeemPairingCodeBody = z.infer<typeof redeemPairingCodeSchema>;
+
+function pairingExchangeInputFromBody(body: RedeemPairingCodeBody): ExchangeDevicePairingInput {
+  const payload = body.payload ?? {};
+  return {
+    code: requiredPairingField(payload.code ?? body.code ?? body.pairingCode, 'code'),
+    nonce: requiredPairingField(payload.nonce ?? body.nonce, 'nonce'),
+    signedAt: requiredPairingField(payload.signedAt ?? body.signedAt, 'signedAt'),
+    signature: requiredPairingField(payload.signature ?? body.signature, 'signature'),
+    clientId: body.clientId ?? payload.clientId,
+    clientMode: body.clientMode ?? payload.clientMode,
+    capabilities: body.capabilities ?? payload.capabilities,
+    scopes: (body.scopes ?? payload.scopes) as AuthPermission[] | undefined,
+  };
+}
+
+function requiredPairingField(value: string | undefined, field: string): string {
+  if (!value) {
+    throw new ValidationError('Invalid pairing request', [{ path: field, message: 'Required' }]);
+  }
+  return value;
+}
 
 // Constants
 const SALT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12;
@@ -181,7 +233,70 @@ router.get(
       authMethod: req.auth?.authMethod,
       tokenName: req.auth?.tokenName,
       permissions: req.auth?.permissions ?? [],
+      deviceSessionId: req.auth?.deviceSessionId,
+      deviceId: req.auth?.deviceId,
+      clientId: req.auth?.clientId,
+      clientMode: req.auth?.clientMode,
+      capabilities: req.auth?.capabilities,
+      degradedReason: req.auth?.degradedReason,
     });
+  })
+);
+
+/**
+ * @openapi
+ * /api/auth/device-pairing/exchange:
+ *   post:
+ *     summary: Redeem a short-lived pairing code for a device session
+ *     tags: [Auth]
+ *     security: []
+ *     responses:
+ *       201:
+ *         description: Device session created. The secret is returned once.
+ */
+router.post(
+  '/device-pairing/exchange',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = redeemPairingCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid pairing request',
+        details: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+      return;
+    }
+
+    const result = await getDeviceSessionService().exchangePairingCode(
+      pairingExchangeInputFromBody(parsed.data)
+    );
+    res.status(201).json(result);
+  })
+);
+
+router.post(
+  '/pairing/redeem',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = redeemPairingCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid pairing request',
+        details: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+      return;
+    }
+
+    const result = await getDeviceSessionService().exchangePairingCode(
+      pairingExchangeInputFromBody(parsed.data)
+    );
+    res.status(201).json(result);
   })
 );
 

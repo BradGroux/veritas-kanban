@@ -132,6 +132,36 @@ describe('MultiUserTab', () => {
             },
           ]);
         }
+        if (url.endsWith('/api/identity/workspaces/local/device-sessions')) {
+          return jsonResponse([
+            {
+              id: 'devsess_phone',
+              workspaceId: 'local',
+              userId: 'local-user',
+              deviceName: 'Brad phone',
+              deviceType: 'pwa',
+              deviceId: 'device_phone',
+              clientId: 'mobile-client-1',
+              clientMode: 'mobile-pwa',
+              capabilities: ['workspace:read', 'task:read'],
+              scopes: ['workspace:read', 'task:read'],
+              role: 'member',
+              tokenPrefix: 'vk_dev_abcd1234',
+              nonce: 'nonce',
+              signedAt: '2026-01-01T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              expiresAt: '2026-12-31T00:00:00.000Z',
+              revokedAt: null,
+              revokedBy: null,
+              lastSeenAt: '2026-01-01T01:00:00.000Z',
+              lastSeenIp: '127.0.0.1',
+              connectionState: 'connected',
+              stateReason: null,
+              lastAuthFailure: null,
+              degradedReason: null,
+            },
+          ]);
+        }
         return jsonResponse({ error: `Unexpected ${url}` }, 404);
       })
     );
@@ -141,6 +171,7 @@ describe('MultiUserTab', () => {
     expect(await screen.findByText('Local Workspace')).toBeDefined();
     expect(await screen.findByText('Local User')).toBeDefined();
     expect(await screen.findByText('expired@example.com')).toBeDefined();
+    expect(await screen.findByText('Brad phone')).toBeDefined();
     expect(await screen.findByText('CLI worker')).toBeDefined();
     expect(screen.getByText('Expired')).toBeDefined();
     expect(screen.getByText('Active')).toBeDefined();

@@ -5,9 +5,11 @@ import type { AuthenticatedRequest } from '../../middleware/auth.js';
 import { errorHandler } from '../../middleware/error-handler.js';
 import { createIdentityRoutes } from '../../routes/identity.js';
 import { ApiTokenService } from '../../services/api-token-service.js';
+import { DeviceSessionService } from '../../services/device-session-service.js';
 import { IdentityService } from '../../services/identity-service.js';
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteApiTokenRepository } from '../../storage/sqlite/api-token-repository.js';
+import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
 import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
 
 function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
@@ -15,6 +17,7 @@ function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
   fixture.database.open();
   const repository = new SqliteIdentityRepository(fixture.database);
   const tokenRepository = new SqliteApiTokenRepository(fixture.database);
+  const deviceSessionRepository = new SqliteDeviceSessionRepository(fixture.database);
   const service = new IdentityService({
     repository,
     audit: vi.fn().mockResolvedValue(undefined),
@@ -23,6 +26,12 @@ function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
   const apiTokenService = new ApiTokenService({
     identityRepository: repository,
     tokenRepository,
+    audit: vi.fn().mockResolvedValue(undefined),
+    activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+  });
+  const deviceSessionService = new DeviceSessionService({
+    identityRepository: repository,
+    sessionRepository: deviceSessionRepository,
     audit: vi.fn().mockResolvedValue(undefined),
     activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
   });
@@ -41,10 +50,10 @@ function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
     };
     next();
   });
-  app.use('/identity', createIdentityRoutes(service, apiTokenService));
+  app.use('/identity', createIdentityRoutes(service, apiTokenService, deviceSessionService));
   app.use(errorHandler);
 
-  return { app, fixture };
+  return { app, fixture, deviceSessionService };
 }
 
 describe('identity routes', () => {
@@ -124,6 +133,61 @@ describe('identity routes', () => {
         .send()
         .expect(200);
       expect(revoked.body.revokedAt).toBeTruthy();
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('creates pairing codes and revokes device sessions without exposing hashes', async () => {
+    const { app, fixture, deviceSessionService } = createApp();
+
+    try {
+      const created = await request(app)
+        .post('/identity/workspaces/local/device-pairing-codes')
+        .send({
+          deviceName: 'Brad phone',
+          deviceType: 'pwa',
+          clientId: 'route-mobile-client',
+          clientMode: 'mobile-pwa',
+          capabilities: ['workspace:read', 'task:read', 'task:write'],
+          scopes: ['workspace:read', 'task:read', 'task:write'],
+          role: 'member',
+        })
+        .expect(201);
+
+      expect(created.body.code).toMatch(/^vk_pair_/);
+      expect(created.body.pairing.codeHash).toBeUndefined();
+      expect(created.body.link).toContain('veritas://pair?');
+
+      const redeemed = await deviceSessionService.exchangePairingCode({
+        code: created.body.code,
+        clientId: created.body.payload.clientId,
+        clientMode: created.body.payload.clientMode,
+        capabilities: created.body.payload.capabilities,
+        nonce: created.body.payload.nonce,
+        signedAt: created.body.payload.signedAt,
+        signature: created.body.payload.signature,
+      });
+
+      const listed = await request(app)
+        .get('/identity/workspaces/local/device-sessions')
+        .expect(200);
+      expect(listed.body).toHaveLength(1);
+      expect(listed.body[0].tokenHash).toBeUndefined();
+
+      const revoked = await request(app)
+        .post(`/identity/workspaces/local/device-sessions/${redeemed.session.id}/revoke`)
+        .send()
+        .expect(200);
+      expect(revoked.body.revokedAt).toBeTruthy();
+      expect(revoked.body.connectionState).toBe('revoked');
+
+      const tested = await request(app)
+        .post(`/identity/workspaces/local/device-sessions/${redeemed.session.id}/test`)
+        .send()
+        .expect(200);
+      expect(tested.body.allowed).toBe(false);
+      expect(tested.body.reason).toBe('revoked');
     } finally {
       fixture.cleanup();
     }

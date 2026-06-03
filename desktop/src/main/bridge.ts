@@ -48,17 +48,37 @@ async function validateRemoteConnection(
     };
   }
 
-  const statusUrl = new URL('/api/auth/status', config.serverUrl);
+  let serverToken = config.serverToken;
+  const warnings: string[] = [];
+
+  if (!serverToken && config.pairingPayload) {
+    const paired = await exchangeRemotePairingPayload(config.serverUrl, config.pairingPayload);
+    if (!paired.secret) {
+      return {
+        mode: 'remote',
+        valid: false,
+        normalizedServerUrl: config.serverUrl,
+        warnings,
+        errors: paired.errors,
+      };
+    }
+    serverToken = paired.secret;
+    warnings.push('Pairing payload was exchanged for a device session.');
+  }
+
+  const statusUrl = new URL(
+    serverToken ? '/api/auth/context' : '/api/auth/status',
+    config.serverUrl
+  );
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5_000);
 
   try {
     const response = await fetch(statusUrl, {
       method: 'GET',
-      headers: config.serverToken ? { Authorization: `Bearer ${config.serverToken}` } : undefined,
+      headers: serverToken ? { Authorization: `Bearer ${serverToken}` } : undefined,
       signal: controller.signal,
     });
-    const warnings: string[] = [];
     if (response.status === 401 || response.status === 403) {
       warnings.push('Remote server is reachable but rejected the supplied credentials.');
     }
@@ -90,6 +110,55 @@ async function validateRemoteConnection(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function exchangeRemotePairingPayload(
+  serverUrl: string,
+  pairingPayload: string
+): Promise<{ secret: string | null; errors: string[] }> {
+  const exchangeUrl = new URL('/api/auth/device-pairing/exchange', serverUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+
+  try {
+    const response = await fetch(exchangeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parseRemotePairingPayload(pairingPayload)),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return {
+        secret: null,
+        errors: [`Pairing exchange returned HTTP ${response.status}.`],
+      };
+    }
+
+    const body = (await response.json()) as { secret?: unknown };
+    return typeof body.secret === 'string'
+      ? { secret: body.secret, errors: [] }
+      : { secret: null, errors: ['Pairing exchange did not return a device session secret.'] };
+  } catch (error) {
+    return { secret: null, errors: [redactDesktopBridgeError(error)] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseRemotePairingPayload(pairingPayload: string): unknown {
+  const trimmed = pairingPayload.trim();
+  if (trimmed.startsWith('veritas://pair')) {
+    const url = new URL(trimmed);
+    const encoded = url.searchParams.get('payload');
+    if (!encoded) {
+      throw new Error('Pairing link is missing payload.');
+    }
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  }
+  if (trimmed.startsWith('{')) {
+    return JSON.parse(trimmed);
+  }
+  return { code: trimmed };
 }
 
 export function createDesktopBridgeHandlers(

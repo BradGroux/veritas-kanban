@@ -979,6 +979,105 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON api_tokens(workspace_id, revoked_at, expires_at);
     `,
   },
+  {
+    version: 16,
+    name: '0016_device_pairing_sessions',
+    up: `
+      CREATE TABLE device_pairing_codes (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        created_by TEXT NOT NULL REFERENCES users(id),
+        code_prefix TEXT NOT NULL,
+        code_hash TEXT NOT NULL UNIQUE,
+        device_name TEXT NOT NULL,
+        device_type TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_mode TEXT NOT NULL,
+        capabilities_json TEXT NOT NULL,
+        scopes_json TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (
+          role IN ('owner', 'admin', 'member', 'reviewer', 'read-only', 'agent')
+        ),
+        nonce TEXT NOT NULL UNIQUE,
+        signed_at TEXT NOT NULL,
+        signature TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        session_expires_at TEXT NOT NULL,
+        used_at TEXT,
+        used_by TEXT REFERENCES users(id),
+        revoked_at TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_attempt_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_device_pairing_codes_workspace_created
+        ON device_pairing_codes(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_device_pairing_codes_hash
+        ON device_pairing_codes(code_hash);
+
+      CREATE INDEX IF NOT EXISTS idx_device_pairing_codes_active
+        ON device_pairing_codes(workspace_id, used_at, revoked_at, expires_at);
+
+      CREATE TABLE device_sessions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_name TEXT NOT NULL,
+        device_type TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_mode TEXT NOT NULL,
+        capabilities_json TEXT NOT NULL,
+        scopes_json TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (
+          role IN ('owner', 'admin', 'member', 'reviewer', 'read-only', 'agent')
+        ),
+        token_prefix TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        nonce TEXT NOT NULL UNIQUE,
+        signed_at TEXT NOT NULL,
+        signature TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        revoked_by TEXT REFERENCES users(id),
+        last_seen_at TEXT,
+        last_seen_ip TEXT,
+        connection_state TEXT NOT NULL DEFAULT 'pairing' CHECK (
+          connection_state IN (
+            'pairing',
+            'connected',
+            'reconnecting',
+            'auth_failed',
+            'unreachable',
+            'revoked',
+            'expired'
+          )
+        ),
+        state_reason TEXT,
+        last_auth_failure TEXT,
+        degraded_reason TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_device_sessions_workspace_created
+        ON device_sessions(workspace_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_device_sessions_hash
+        ON device_sessions(token_hash);
+
+      CREATE INDEX IF NOT EXISTS idx_device_sessions_client
+        ON device_sessions(workspace_id, client_id, revoked_at);
+
+      CREATE INDEX IF NOT EXISTS idx_device_sessions_device
+        ON device_sessions(workspace_id, device_id, revoked_at);
+
+      CREATE INDEX IF NOT EXISTS idx_device_sessions_active
+        ON device_sessions(workspace_id, revoked_at, expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

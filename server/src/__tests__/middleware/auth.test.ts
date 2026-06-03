@@ -36,8 +36,13 @@ import {
 import { getSecurityConfig, getValidJwtSecrets } from '../../config/security.js';
 import jwt from 'jsonwebtoken';
 import { ApiTokenService, resetApiTokenServiceForTests } from '../../services/api-token-service.js';
+import {
+  DeviceSessionService,
+  resetDeviceSessionServiceForTests,
+} from '../../services/device-session-service.js';
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteApiTokenRepository } from '../../storage/sqlite/api-token-repository.js';
+import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
 import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
 import type { IdentityActor } from '../../services/identity-service.js';
 
@@ -90,6 +95,7 @@ describe('Auth Middleware', () => {
 
   afterEach(() => {
     resetApiTokenServiceForTests();
+    resetDeviceSessionServiceForTests();
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
   });
@@ -275,6 +281,73 @@ describe('Auth Middleware', () => {
         expect(req.auth?.role).toBe('read-only');
         expect(req.auth?.keyName).toBe('Scoped worker');
         expect(req.auth?.workspaceId).toBe('local');
+        expect(req.auth?.permissions).toEqual(['workspace:read', 'task:read']);
+      } finally {
+        fixture.cleanup();
+      }
+    });
+
+    it('should authenticate via SQLite device session token', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      const identityRepository = new SqliteIdentityRepository(fixture.database);
+      const deviceSessionRepository = new SqliteDeviceSessionRepository(fixture.database);
+      const service = new DeviceSessionService({
+        identityRepository,
+        sessionRepository: deviceSessionRepository,
+        audit: vi.fn().mockResolvedValue(undefined),
+        activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+      });
+      const owner = identityRepository.ensureLocalOwner({ displayName: 'Owner' });
+      const pairing = await service.createPairingCode(
+        {
+          workspaceId: 'local',
+          deviceName: 'Mobile device',
+          deviceType: 'pwa',
+          clientId: 'mobile-auth-client',
+          clientMode: 'mobile-pwa',
+          capabilities: ['workspace:read', 'task:read'],
+          scopes: ['workspace:read', 'task:read'],
+          role: 'read-only',
+        },
+        {
+          userId: owner.user.id,
+          role: 'owner',
+          displayName: owner.user.displayName,
+          permissions: ['*'],
+        }
+      );
+      const paired = await service.exchangePairingCode({
+        code: pairing.code,
+        clientId: pairing.payload.clientId,
+        clientMode: pairing.payload.clientMode,
+        capabilities: pairing.payload.capabilities,
+        nonce: pairing.payload.nonce,
+        signedAt: pairing.payload.signedAt,
+        signature: pairing.payload.signature,
+      });
+      resetDeviceSessionServiceForTests();
+
+      try {
+        const req = mockRequest({
+          headers: { authorization: `Bearer ${paired.secret}` },
+          socket: { remoteAddress: '192.168.1.101' } as any,
+          ip: '192.168.1.101',
+        }) as AuthenticatedRequest;
+        const res = mockResponse();
+        const next = mockNext();
+
+        authenticate(req, res, next);
+        expect(next).toHaveBeenCalled();
+        expect(req.auth?.role).toBe('read-only');
+        expect(req.auth?.actorType).toBe('device');
+        expect(req.auth?.authMethod).toBe('device-session');
+        expect(req.auth?.deviceSessionId).toBe(paired.session.id);
+        expect(req.auth?.deviceId).toBe(paired.session.deviceId);
+        expect(req.auth?.clientId).toBe('mobile-auth-client');
+        expect(req.auth?.clientMode).toBe('mobile-pwa');
         expect(req.auth?.permissions).toEqual(['workspace:read', 'task:read']);
       } finally {
         fixture.cleanup();
@@ -788,6 +861,70 @@ describe('Auth Middleware', () => {
         expect(result.role).toBe('read-only');
         expect(result.tokenName).toBe('WebSocket reader');
         expect(result.workspaceId).toBe('local');
+        expect(result.permissions).toEqual(['workspace:read', 'task:read']);
+      } finally {
+        fixture.cleanup();
+      }
+    });
+
+    it('should authenticate WebSocket device session tokens from the query parameter', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      const identityRepository = new SqliteIdentityRepository(fixture.database);
+      const deviceSessionRepository = new SqliteDeviceSessionRepository(fixture.database);
+      const service = new DeviceSessionService({
+        identityRepository,
+        sessionRepository: deviceSessionRepository,
+        audit: vi.fn().mockResolvedValue(undefined),
+        activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+      });
+      const owner = identityRepository.ensureLocalOwner({ displayName: 'Owner' });
+      const pairing = await service.createPairingCode(
+        {
+          workspaceId: 'local',
+          deviceName: 'WebSocket mobile',
+          deviceType: 'pwa',
+          clientId: 'ws-mobile-client',
+          clientMode: 'mobile-pwa',
+          capabilities: ['workspace:read', 'task:read'],
+          scopes: ['workspace:read', 'task:read'],
+          role: 'read-only',
+        },
+        {
+          userId: owner.user.id,
+          role: 'owner',
+          displayName: owner.user.displayName,
+          permissions: ['*'],
+        }
+      );
+      const paired = await service.exchangePairingCode({
+        code: pairing.code,
+        clientId: pairing.payload.clientId,
+        clientMode: pairing.payload.clientMode,
+        capabilities: pairing.payload.capabilities,
+        nonce: pairing.payload.nonce,
+        signedAt: pairing.payload.signedAt,
+        signature: pairing.payload.signature,
+      });
+      resetDeviceSessionServiceForTests();
+
+      try {
+        const req = {
+          headers: { host: 'localhost:3001' },
+          url: `/ws?api_key=${encodeURIComponent(paired.secret)}`,
+          socket: { remoteAddress: '192.168.1.101' },
+        } as unknown as IncomingMessage;
+
+        const result = authenticateWebSocket(req);
+        expect(result.authenticated).toBe(true);
+        expect(result.role).toBe('read-only');
+        expect(result.actorType).toBe('device');
+        expect(result.authMethod).toBe('device-session');
+        expect(result.deviceSessionId).toBe(paired.session.id);
+        expect(result.deviceId).toBe(paired.session.deviceId);
+        expect(result.clientId).toBe('ws-mobile-client');
         expect(result.permissions).toEqual(['workspace:read', 'task:read']);
       } finally {
         fixture.cleanup();

@@ -1,6 +1,11 @@
 export type ClientAuthRole = 'admin' | 'read-only' | 'agent';
-export type ClientAuthMethod = 'disabled' | 'session' | 'api-key' | 'localhost-bypass';
-export type ClientAuthActorType = 'user' | 'agent' | 'service' | 'localhost-bypass';
+export type ClientAuthMethod =
+  | 'disabled'
+  | 'session'
+  | 'api-key'
+  | 'device-session'
+  | 'localhost-bypass';
+export type ClientAuthActorType = 'user' | 'agent' | 'service' | 'device' | 'localhost-bypass';
 export type ClientAuthPermission =
   | '*'
   | 'workspace:read'
@@ -35,6 +40,12 @@ export interface ClientAuthContext {
   authMethod?: ClientAuthMethod;
   tokenName?: string;
   permissions?: ClientAuthPermission[];
+  deviceSessionId?: string;
+  deviceId?: string;
+  clientId?: string;
+  clientMode?: string;
+  capabilities?: string[];
+  degradedReason?: string | null;
 }
 
 export interface ApiPermissionRequirement {

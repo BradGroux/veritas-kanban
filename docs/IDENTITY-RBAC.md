@@ -37,6 +37,7 @@ auditable actor attribution, and route-level plus entity-level permissions.
 | Actor type         | Principal id          | Auth method                                         | Typical use                                           |
 | ------------------ | --------------------- | --------------------------------------------------- | ----------------------------------------------------- |
 | `user`             | `users.id`            | password session, future SSO subject, recovery flow | Browser, desktop, or mobile human user.               |
+| `device`           | `device_sessions.id`  | paired device session                               | Desktop remote, mobile/PWA, browser, and CLI pairing. |
 | `agent`            | `agent_identities.id` | scoped agent API token                              | OpenClaw, local Codex, workflow workers, MCP clients. |
 | `service`          | `api_tokens.id`       | scoped service API token                            | Dashboards, webhooks, import/export jobs.             |
 | `system`           | `system`              | internal                                            | Migrations, retention jobs, scheduled cleanup.        |
@@ -46,15 +47,21 @@ auditable actor attribution, and route-level plus entity-level permissions.
 
 ```ts
 interface AuthContext {
-  actorType: 'user' | 'agent' | 'service' | 'system' | 'localhost-bypass';
+  actorType: 'user' | 'device' | 'agent' | 'service' | 'system' | 'localhost-bypass';
   actorId: string;
   displayName: string;
   workspaceId: string;
   role: WorkspaceRole;
   permissions: Permission[];
-  authMethod: 'session' | 'api-token' | 'recovery' | 'localhost-bypass' | 'system';
+  authMethod: 'session' | 'api-key' | 'device-session' | 'recovery' | 'localhost-bypass' | 'system';
   sessionId?: string;
   tokenId?: string;
+  deviceSessionId?: string;
+  deviceId?: string;
+  clientId?: string;
+  clientMode?: string;
+  capabilities?: string[];
+  degradedReason?: string | null;
   isLocalhost: boolean;
 }
 ```
@@ -462,11 +469,15 @@ Rollback expectation:
 
 ### Mobile or Remote Device Pairing
 
-1. Owner/admin enables remote pairing for a workspace.
-2. Device completes login or pairing challenge.
-3. App creates a `device_sessions` row with device metadata and expiry.
-4. Session can be revoked by the user, admin, or owner.
-5. Remote requests are never treated as localhost bypass.
+1. Owner/admin creates a short-lived pairing payload for a workspace.
+2. Device redeems the code/link with its client id, client mode, capabilities,
+   nonce, signed timestamp, and signature.
+3. App creates a `device_sessions` row with hashed secret, device metadata,
+   scopes, capabilities, role, and expiry.
+4. Session appears in account security UI with last seen, connection state,
+   degraded reason, and revoke/test actions.
+5. Remote requests authenticate with `authMethod: device-session` and are never
+   treated as localhost bypass.
 
 ### Lost Admin Recovery
 

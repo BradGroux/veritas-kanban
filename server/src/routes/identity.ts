@@ -13,6 +13,10 @@ import {
   type ApiTokenService,
 } from '../services/api-token-service.js';
 import {
+  getDeviceSessionService,
+  type DeviceSessionService,
+} from '../services/device-session-service.js';
+import {
   getIdentityService,
   type IdentityActor,
   type IdentityService,
@@ -43,13 +47,36 @@ const createApiTokenSchema = z.object({
   expiresAt: z.string().datetime().optional().nullable(),
 });
 
+const deviceClientModeSchema = z.enum([
+  'desktop-remote',
+  'desktop-local',
+  'mobile-pwa',
+  'browser',
+  'cli',
+]);
+
+const createPairingCodeSchema = z.object({
+  deviceName: z.string().trim().min(1).max(120),
+  deviceType: z.string().trim().min(1).max(80).optional(),
+  deviceId: z.string().trim().min(1).max(160).optional(),
+  clientId: z.string().trim().min(1).max(120).optional(),
+  clientMode: deviceClientModeSchema.optional(),
+  capabilities: z.array(z.string().trim().min(1).max(80)).optional(),
+  scopes: z.array(z.enum(SCOPED_API_TOKEN_PERMISSIONS)).min(1).optional(),
+  role: roleSchema.optional(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  sessionExpiresAt: z.string().datetime().optional().nullable(),
+});
+
 export function createIdentityRoutes(
   service?: IdentityService,
-  apiTokenService?: ApiTokenService
+  apiTokenService?: ApiTokenService,
+  deviceSessionService?: DeviceSessionService
 ): RouterType {
   const router: RouterType = Router();
   const serviceForRequest = () => service ?? getIdentityService();
   const tokenServiceForRequest = () => apiTokenService ?? getApiTokenService();
+  const deviceSessionServiceForRequest = () => deviceSessionService ?? getDeviceSessionService();
 
   router.get(
     '/profile',
@@ -225,6 +252,70 @@ export function createIdentityRoutes(
         String(req.params.workspaceId)
       );
       res.status(201).json(result);
+    })
+  );
+
+  router.get(
+    '/workspaces/:workspaceId/device-sessions',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        deviceSessionServiceForRequest().listSessions(
+          String(req.params.workspaceId),
+          actorFromRequest(req as AuthenticatedRequest)
+        )
+      );
+    })
+  );
+
+  router.post(
+    ['/workspaces/:workspaceId/device-pairing-codes', '/workspaces/:workspaceId/pairing-codes'],
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const body = parseBody(createPairingCodeSchema, req.body);
+      const result = await deviceSessionServiceForRequest().createPairingCode(
+        {
+          workspaceId: String(req.params.workspaceId),
+          deviceName: body.deviceName,
+          deviceType: body.deviceType,
+          deviceId: body.deviceId,
+          clientId: body.clientId,
+          clientMode: body.clientMode,
+          capabilities: body.capabilities,
+          scopes: body.scopes as AuthPermission[] | undefined,
+          role: body.role,
+          expiresAt: body.expiresAt,
+          sessionExpiresAt: body.sessionExpiresAt,
+        },
+        actorFromRequest(req as AuthenticatedRequest)
+      );
+      res.status(201).json(result);
+    })
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/device-sessions/:sessionId/revoke',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const session = await deviceSessionServiceForRequest().revokeSession(
+        String(req.params.sessionId),
+        actorFromRequest(req as AuthenticatedRequest),
+        String(req.params.workspaceId)
+      );
+      res.json(session);
+    })
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/device-sessions/:sessionId/test',
+    authorizePermission('admin:manage'),
+    asyncHandler(async (req, res) => {
+      const result = deviceSessionServiceForRequest().testSession(
+        String(req.params.sessionId),
+        actorFromRequest(req as AuthenticatedRequest),
+        String(req.params.workspaceId)
+      );
+      res.json(result);
     })
   );
 

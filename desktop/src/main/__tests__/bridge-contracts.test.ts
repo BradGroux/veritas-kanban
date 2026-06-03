@@ -246,7 +246,7 @@ describe('desktop bridge contracts', () => {
       valid: true,
       normalizedServerUrl: 'https://remote.example/veritas',
     });
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://remote.example/api/auth/status');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://remote.example/api/auth/context');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: { Authorization: 'Bearer vk_pat_secret' },
     });

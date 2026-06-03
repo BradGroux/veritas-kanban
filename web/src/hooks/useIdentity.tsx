@@ -16,6 +16,7 @@ import {
 import {
   identityApi,
   type CreateApiTokenInput,
+  type CreatePairingCodeInput,
   type CreateInvitationInput,
   type IdentityProfile,
   type WorkspaceIdentity,
@@ -287,6 +288,17 @@ export function useWorkspaceApiTokens(
   });
 }
 
+export function useWorkspaceDeviceSessions(
+  workspaceId: string | null | undefined,
+  canManageDeviceSessions: boolean
+) {
+  return useQuery({
+    queryKey: ['identity', 'workspaces', workspaceId, 'device-sessions'],
+    queryFn: () => identityApi.listDeviceSessions(requireWorkspaceId(workspaceId)),
+    enabled: !!workspaceId && canManageDeviceSessions,
+  });
+}
+
 export function useCreateWorkspaceInvitation(workspaceId: string | null | undefined) {
   const queryClient = useQueryClient();
 
@@ -296,6 +308,48 @@ export function useCreateWorkspaceInvitation(workspaceId: string | null | undefi
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['identity', 'workspaces', workspaceId, 'invitations'],
+      });
+    },
+  });
+}
+
+export function useCreateWorkspacePairingCode(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreatePairingCodeInput) =>
+      identityApi.createPairingCode(requireWorkspaceId(workspaceId), input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'device-sessions'],
+      });
+    },
+  });
+}
+
+export function useRevokeWorkspaceDeviceSession(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      identityApi.revokeDeviceSession(requireWorkspaceId(workspaceId), sessionId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'device-sessions'],
+      });
+    },
+  });
+}
+
+export function useTestWorkspaceDeviceSession(workspaceId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      identityApi.testDeviceSession(requireWorkspaceId(workspaceId), sessionId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['identity', 'workspaces', workspaceId, 'device-sessions'],
       });
     },
   });

@@ -6,14 +6,15 @@ import jwt from 'jsonwebtoken';
 import { getSecurityConfig, getJwtSecret, getValidJwtSecrets } from '../config/security.js';
 import { createLogger } from '../lib/logger.js';
 import { validateScopedApiToken } from '../services/api-token-service.js';
+import { validateDeviceSessionSecret } from '../services/device-session-service.js';
 
 const log = createLogger('auth');
 
 // === Types ===
 
 export type AuthRole = 'admin' | 'read-only' | 'agent';
-export type AuthMethod = 'disabled' | 'session' | 'api-key' | 'localhost-bypass';
-export type AuthActorType = 'user' | 'agent' | 'service' | 'localhost-bypass';
+export type AuthMethod = 'disabled' | 'session' | 'api-key' | 'device-session' | 'localhost-bypass';
+export type AuthActorType = 'user' | 'agent' | 'service' | 'device' | 'localhost-bypass';
 export type AuthPermission =
   | '*'
   | 'workspace:read'
@@ -79,6 +80,12 @@ export interface AuthContext {
   authMethod?: AuthMethod;
   tokenName?: string;
   permissions?: AuthPermission[];
+  deviceSessionId?: string;
+  deviceId?: string;
+  clientId?: string;
+  clientMode?: string;
+  capabilities?: string[];
+  degradedReason?: string | null;
 }
 
 const ROLE_PERMISSIONS: Record<AuthRole, readonly AuthPermission[]> = {
@@ -351,6 +358,20 @@ function validateDatabaseApiToken(
   }
 }
 
+function validateDatabaseDeviceSession(
+  apiKey: string,
+  req: Request | IncomingMessage,
+  isLocalhost: boolean
+): AuthContext | null {
+  try {
+    const validation = validateDeviceSessionSecret(apiKey, requestRemoteAddress(req));
+    return validation.valid && validation.auth ? { ...validation.auth, isLocalhost } : null;
+  } catch (error) {
+    log.warn({ err: error }, 'Device session validation failed');
+    return null;
+  }
+}
+
 function requestRemoteAddress(req: Request | IncomingMessage): string | null {
   if ('socket' in req && req.socket) {
     return req.socket.remoteAddress ?? null;
@@ -449,6 +470,12 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     const scopedAuth = validateDatabaseApiToken(apiKey, req, isLocalhost);
     if (scopedAuth) {
       req.auth = scopedAuth;
+      return next();
+    }
+
+    const deviceAuth = validateDatabaseDeviceSession(apiKey, req, isLocalhost);
+    if (deviceAuth) {
+      req.auth = deviceAuth;
       return next();
     }
   }
@@ -644,6 +671,12 @@ export interface WebSocketAuthResult {
   authMethod?: AuthMethod;
   tokenName?: string;
   permissions?: AuthPermission[];
+  deviceSessionId?: string;
+  deviceId?: string;
+  clientId?: string;
+  clientMode?: string;
+  capabilities?: string[];
+  degradedReason?: string | null;
   error?: string;
 }
 
@@ -725,6 +758,14 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
       return {
         authenticated: true,
         ...scopedAuth,
+      };
+    }
+
+    const deviceAuth = validateDatabaseDeviceSession(apiKey, req, isLocalhost);
+    if (deviceAuth) {
+      return {
+        authenticated: true,
+        ...deviceAuth,
       };
     }
   }

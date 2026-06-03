@@ -60,6 +60,7 @@ interface DesktopBridgeApi {
     mode: 'local' | 'remote';
     serverUrl?: string;
     serverToken?: string;
+    pairingPayload?: string;
   }): Promise<DesktopConnectionValidationResult>;
   pickUploadFiles?(request: {
     purpose: 'backup-restore';
@@ -246,6 +247,7 @@ export function DesktopOnboardingPanel({
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState('');
   const [remoteToken, setRemoteToken] = useState('');
+  const [remotePairingPayload, setRemotePairingPayload] = useState('');
   const [remoteResult, setRemoteResult] = useState<DesktopConnectionValidationResult | null>(null);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [restoreFiles, setRestoreFiles] = useState<DesktopSelectedFile[]>([]);
@@ -275,6 +277,7 @@ export function DesktopOnboardingPanel({
             mode: 'remote',
             serverUrl: remoteUrl,
             serverToken: remoteToken || undefined,
+            pairingPayload: remotePairingPayload || undefined,
           })
         : await validateRemoteWithoutDesktop(remoteUrl);
       setRemoteResult(result);
@@ -471,8 +474,8 @@ export function DesktopOnboardingPanel({
                   Remote validation
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Validate reachability now. Pairing, device sessions, and tunnels are completed by
-                  the remote-security workstream.
+                  Validate reachability with a trusted token or a one-time pairing link from the
+                  remote server.
                 </p>
               </div>
               <div className="grid gap-3">
@@ -492,6 +495,13 @@ export function DesktopOnboardingPanel({
                   value={remoteToken}
                   onChange={(event) => setRemoteToken(event.target.value)}
                   placeholder="Optional scoped token"
+                />
+                <PasswordInput
+                  id="remote-pairing-payload"
+                  label="Pairing link"
+                  value={remotePairingPayload}
+                  onChange={(event) => setRemotePairingPayload(event.target.value)}
+                  placeholder="Optional veritas://pair link or JSON payload"
                 />
                 <Button
                   type="button"

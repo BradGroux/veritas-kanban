@@ -26,7 +26,9 @@ vi.mock('../../config/security.js', () => {
       securityConfig = config;
     },
     getJwtSecret: () => securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678',
-    getValidJwtSecrets: () => [securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678'],
+    getValidJwtSecrets: () => [
+      securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678',
+    ],
     generateRecoveryKey: () => 'RECOVERY-KEY-12345678',
     hashRecoveryKey: async (key: string) => {
       return crypto.createHash('sha256').update(key).digest('hex');
@@ -48,6 +50,13 @@ vi.mock('../../config/security.js', () => {
 // Import auth route after mocking
 import authRouter from '../../routes/auth.js';
 import { errorHandler } from '../../middleware/error-handler.js';
+import {
+  DeviceSessionService,
+  resetDeviceSessionServiceForTests,
+} from '../../services/device-session-service.js';
+import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
+import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
+import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
 
 describe('Auth Routes', () => {
   let app: express.Express;
@@ -65,6 +74,11 @@ describe('Auth Routes', () => {
     app.use(cookieParser());
     app.use('/api/auth', authRouter);
     app.use(errorHandler);
+  });
+
+  afterEach(() => {
+    resetDeviceSessionServiceForTests();
+    delete process.env.VERITAS_SQLITE_PATH;
   });
 
   describe('GET /api/auth/status', () => {
@@ -93,7 +107,7 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .get('/api/auth/status')
         .set('Cookie', `veritas_session=${token}`);
-      
+
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(true);
       expect(res.body.sessionExpiry).toBeDefined();
@@ -106,9 +120,64 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .get('/api/auth/status')
         .set('Cookie', 'veritas_session=invalid-token');
-      
+
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(false);
+    });
+  });
+
+  describe('POST /api/auth/device-pairing/exchange', () => {
+    it('redeems a pairing payload and authenticates the returned device secret', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      try {
+        const identityRepository = new SqliteIdentityRepository(fixture.database);
+        const sessionRepository = new SqliteDeviceSessionRepository(fixture.database);
+        const service = new DeviceSessionService({
+          identityRepository,
+          sessionRepository,
+          audit: vi.fn().mockResolvedValue(undefined),
+          activity: { logActivity: vi.fn().mockResolvedValue(undefined) },
+        });
+        const owner = identityRepository.ensureLocalOwner({ displayName: 'Owner' });
+        const pairing = await service.createPairingCode(
+          {
+            workspaceId: 'local',
+            deviceName: 'Route phone',
+            clientMode: 'mobile-pwa',
+            capabilities: ['workspace:read', 'task:read'],
+            scopes: ['workspace:read', 'task:read'],
+            role: 'read-only',
+          },
+          {
+            userId: owner.user.id,
+            role: 'owner',
+            displayName: owner.user.displayName,
+            permissions: ['*'],
+          }
+        );
+        resetDeviceSessionServiceForTests();
+
+        const exchanged = await request(app)
+          .post('/api/auth/device-pairing/exchange')
+          .send({ payload: pairing.payload })
+          .expect(201);
+
+        expect(exchanged.body.secret).toMatch(/^vk_dev_/);
+        expect(exchanged.body.session.tokenHash).toBeUndefined();
+
+        const context = await request(app)
+          .get('/api/auth/context')
+          .set('Authorization', `Bearer ${exchanged.body.secret}`)
+          .expect(200);
+        expect(context.body.authMethod).toBe('device-session');
+        expect(context.body.actorType).toBe('device');
+        expect(context.body.deviceSessionId).toBe(exchanged.body.session.id);
+      } finally {
+        fixture.cleanup();
+      }
     });
   });
 
@@ -127,27 +196,21 @@ describe('Auth Routes', () => {
     it('should reject setup when password already exists', async () => {
       securityConfig.passwordHash = 'existing-hash';
 
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({ password: 'newpassword123' });
+      const res = await request(app).post('/api/auth/setup').send({ password: 'newpassword123' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('ALREADY_SETUP');
     });
 
     it('should reject missing password', async () => {
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({});
+      const res = await request(app).post('/api/auth/setup').send({});
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('MISSING_PASSWORD');
     });
 
     it('should reject short password', async () => {
-      const res = await request(app)
-        .post('/api/auth/setup')
-        .send({ password: 'short' });
+      const res = await request(app).post('/api/auth/setup').send({ password: 'short' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('PASSWORD_TOO_SHORT');
@@ -161,9 +224,7 @@ describe('Auth Routes', () => {
     });
 
     it('should login with correct password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'correctpassword' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'correctpassword' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -173,18 +234,14 @@ describe('Auth Routes', () => {
     });
 
     it('should reject wrong password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'wrongpassword' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'wrongpassword' });
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBe('INVALID_PASSWORD');
     });
 
     it('should reject missing password', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({});
+      const res = await request(app).post('/api/auth/login').send({});
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('MISSING_PASSWORD');
@@ -193,9 +250,7 @@ describe('Auth Routes', () => {
     it('should reject login when no password configured', async () => {
       securityConfig.passwordHash = null;
 
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ password: 'anything' });
+      const res = await request(app).post('/api/auth/login').send({ password: 'anything' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('NOT_SETUP');
@@ -211,16 +266,21 @@ describe('Auth Routes', () => {
     });
 
     it('should rate limit after too many failures', async () => {
+      app.set('trust proxy', true);
+      const forwardedIp = '203.0.113.42';
+
       // Send 5 wrong passwords
       for (let i = 0; i < 5; i++) {
         await request(app)
           .post('/api/auth/login')
+          .set('X-Forwarded-For', forwardedIp)
           .send({ password: 'wrong' });
       }
 
       // 6th should be rate limited
       const res = await request(app)
         .post('/api/auth/login')
+        .set('X-Forwarded-For', forwardedIp)
         .send({ password: 'wrong' });
 
       expect(res.status).toBe(429);

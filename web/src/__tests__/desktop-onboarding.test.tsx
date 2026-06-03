@@ -85,6 +85,7 @@ describe('desktop onboarding', () => {
       mode: 'remote',
       serverUrl: 'https://remote.example',
       serverToken: 'vk_pat_secret',
+      pairingPayload: undefined,
     });
   });
 

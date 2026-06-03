@@ -52,6 +52,7 @@ export interface DesktopConnectionConfigRequest {
   mode: DesktopConnectionModeRequest;
   serverUrl?: string;
   serverToken?: string;
+  pairingPayload?: string;
   workspaceId?: string;
 }
 
@@ -721,6 +722,7 @@ export function validateConnectionConfigRequest(payload: unknown): DesktopConnec
     mode: 'remote',
     serverUrl: parsed.toString(),
     serverToken: optionalSecret(request.serverToken, 'Remote server token'),
+    pairingPayload: optionalSecret(request.pairingPayload, 'Remote pairing payload'),
     workspaceId,
   };
 }

@@ -56,11 +56,12 @@ VK supports three authentication methods. All are optional when running locally 
 
 ### Methods
 
-| Method                 | Header / Param                    | Use Case                    |
-| ---------------------- | --------------------------------- | --------------------------- |
-| **Bearer Token** (JWT) | `Authorization: Bearer <token>`   | Browser sessions, UI login  |
-| **API Key**            | `X-API-Key: <key>`                | Agent integrations, scripts |
-| **WS Query Param**     | `ws://host:port/ws?api_key=<key>` | WebSocket connections       |
+| Method                 | Header / Param                    | Use Case                          |
+| ---------------------- | --------------------------------- | --------------------------------- |
+| **Bearer Token** (JWT) | `Authorization: Bearer <token>`   | Browser sessions, UI login        |
+| **API Key**            | `X-API-Key: <key>`                | Agent integrations, scripts       |
+| **Device Session**     | `Authorization: Bearer vk_dev_…`  | Paired desktop/mobile/PWA clients |
+| **WS Query Param**     | `ws://host:port/ws?api_key=<key>` | WebSocket connections             |
 
 ### Roles
 
@@ -74,10 +75,12 @@ VK supports three authentication methods. All are optional when running locally 
 
 Protected REST handlers and WebSocket connections receive a shared auth context:
 `role`, `userId`, `workspaceId`, `actorType`, `authMethod`, `tokenName`, and
-role-derived `permissions`. Existing endpoints still accept the compatibility
-roles above, but new v5 route work should declare the specific permission it
-requires, such as `task:read`, `task:write`, `workflow:execute`, or
-`admin:manage`.
+role-derived `permissions`. Device sessions also include `deviceSessionId`,
+`deviceId`, `clientId`, `clientMode`, `capabilities`, and `degradedReason` when
+a current workspace role downgrade trimmed the approved scopes. Existing
+endpoints still accept the compatibility roles above, but new v5 route work
+should declare the specific permission it requires, such as `task:read`,
+`task:write`, `workflow:execute`, or `admin:manage`.
 
 ### Localhost Bypass
 
@@ -603,6 +606,7 @@ POST /api/auth/recover          # Account recovery
 POST /api/auth/change-password  # Change password
 POST /api/auth/rotate-secret    # Rotate JWT secret
 GET  /api/auth/rotation-status  # JWT rotation status
+POST /api/auth/device-pairing/exchange # Redeem a one-time pairing payload
 ```
 
 ### Login Example
@@ -631,19 +635,23 @@ v5 adds SQLite-backed identity management for users, workspaces, memberships,
 roles, and invitations. These endpoints are mounted at `/api/identity` and
 `/api/v1/identity`.
 
-| Method   | Path                                                | Description                                      |
-| -------- | --------------------------------------------------- | ------------------------------------------------ |
-| `GET`    | `/api/identity/profile`                             | Current user profile plus workspace memberships. |
-| `GET`    | `/api/identity/workspaces`                          | Workspaces available to the current user.        |
-| `POST`   | `/api/identity/workspaces/switch`                   | Validate/select an active workspace membership.  |
-| `GET`    | `/api/identity/workspaces/:workspaceId/members`     | List active workspace members.                   |
-| `GET`    | `/api/identity/workspaces/:workspaceId/invitations` | List invitations. Requires admin.                |
-| `POST`   | `/api/identity/workspaces/:workspaceId/invitations` | Create an invitation. Requires admin.            |
-| `POST`   | `/api/identity/invitations/accept`                  | Accept an invitation.                            |
-| `POST`   | `/api/auth/invitations/accept`                      | Accept an invitation before login.               |
-| `POST`   | `/api/identity/invitations/:id/revoke`              | Revoke a pending invitation. Requires admin.     |
-| `PATCH`  | `/api/identity/workspaces/:workspaceId/members/:id` | Update a member role. Requires admin.            |
-| `DELETE` | `/api/identity/workspaces/:workspaceId/members/:id` | Remove a member. Requires admin.                 |
+| Method   | Path                                                               | Description                                           |
+| -------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| `GET`    | `/api/identity/profile`                                            | Current user profile plus workspace memberships.      |
+| `GET`    | `/api/identity/workspaces`                                         | Workspaces available to the current user.             |
+| `POST`   | `/api/identity/workspaces/switch`                                  | Validate/select an active workspace membership.       |
+| `GET`    | `/api/identity/workspaces/:workspaceId/members`                    | List active workspace members.                        |
+| `GET`    | `/api/identity/workspaces/:workspaceId/invitations`                | List invitations. Requires admin.                     |
+| `POST`   | `/api/identity/workspaces/:workspaceId/invitations`                | Create an invitation. Requires admin.                 |
+| `POST`   | `/api/identity/invitations/accept`                                 | Accept an invitation.                                 |
+| `POST`   | `/api/auth/invitations/accept`                                     | Accept an invitation before login.                    |
+| `POST`   | `/api/identity/invitations/:id/revoke`                             | Revoke a pending invitation. Requires admin.          |
+| `PATCH`  | `/api/identity/workspaces/:workspaceId/members/:id`                | Update a member role. Requires admin.                 |
+| `DELETE` | `/api/identity/workspaces/:workspaceId/members/:id`                | Remove a member. Requires admin.                      |
+| `GET`    | `/api/identity/workspaces/:workspaceId/device-sessions`            | List trusted device sessions. Requires admin.         |
+| `POST`   | `/api/identity/workspaces/:workspaceId/device-pairing-codes`       | Create a short-lived pairing payload. Requires admin. |
+| `POST`   | `/api/identity/workspaces/:workspaceId/device-sessions/:id/test`   | Test current device session state. Requires admin.    |
+| `POST`   | `/api/identity/workspaces/:workspaceId/device-sessions/:id/revoke` | Revoke a trusted device session. Requires admin.      |
 
 ### Create Invitation
 
@@ -676,6 +684,34 @@ POST /api/auth/invitations/accept
 ```
 
 Membership mutations are recorded in audit and activity history.
+
+### Device Pairing
+
+```http
+POST /api/identity/workspaces/local/device-pairing-codes
+```
+
+```json
+{
+  "deviceName": "Brad phone",
+  "clientMode": "mobile-pwa",
+  "capabilities": ["workspace:read", "task:read"],
+  "scopes": ["workspace:read", "task:read"],
+  "role": "read-only"
+}
+```
+
+The response returns a plaintext `code` and `veritas://pair?...` link once.
+SQLite stores only hashes for pairing codes and device session secrets. Clients
+redeem the returned payload through:
+
+```http
+POST /api/auth/device-pairing/exchange
+```
+
+Pairing payloads include client id, client mode, capabilities, device id,
+scopes, role, workspace, nonce, signed timestamp, and signature. Codes expire
+quickly, cannot be reused, and failed attempts are rate-limited and audited.
 
 ---
 

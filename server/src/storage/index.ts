@@ -87,6 +87,12 @@ export type {
   WorkspaceMembership,
   WorkspaceRole,
 } from './sqlite/identity-repository.js';
+export { SqliteDeviceSessionRepository } from './sqlite/device-session-repository.js';
+export type {
+  DeviceConnectionState,
+  DevicePairingCodeRecord,
+  DeviceSessionRecord,
+} from './sqlite/device-session-repository.js';
 
 // ---------------------------------------------------------------------------
 // Supported backend types (extend this union as new backends are added)
