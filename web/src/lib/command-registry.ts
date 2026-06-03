@@ -2,7 +2,7 @@ import { VIEW_DEFINITIONS, type AppView, type ViewIcon } from './views';
 
 export type ThemeMode = 'dark' | 'light';
 
-export type CommandCategory = 'Actions' | 'Navigation' | 'Board';
+export type CommandCategory = 'Actions' | 'Navigation' | 'Board' | 'Diagnostics';
 
 export type CommandIcon =
   | ViewIcon
@@ -26,6 +26,8 @@ export type CommandAction =
   | { type: 'open-create-task' }
   | { type: 'toggle-theme' }
   | { type: 'open-search' }
+  | { type: 'open-settings'; section?: string }
+  | { type: 'open-diagnostics' }
   | { type: 'navigate-view'; view: AppView }
   | { type: 'board-shortcut'; shortcut: BoardShortcutCommand };
 
@@ -148,12 +150,89 @@ export function createCommandRegistry({
     },
     {
       id: 'open-search',
-      label: 'Search Tasks, Docs, and Work Products',
+      label: 'Universal Search',
       icon: 'Sparkles',
       category: 'Actions',
       action: { type: 'open-search' },
-      keywords: ['qmd', 'semantic', 'retrieval', 'docs', 'archive', 'work products'],
-      aliases: ['find', 'universal search', 'command search'],
+      keywords: [
+        'qmd',
+        'semantic',
+        'retrieval',
+        'docs',
+        'archive',
+        'work products',
+        'runs',
+        'policies',
+        'notifications',
+      ],
+      aliases: ['find', 'search', 'universal search', 'command search', 'jump to'],
+    },
+    {
+      id: 'open-settings',
+      label: 'Open Settings',
+      icon: 'ShieldAlert',
+      category: 'Actions',
+      action: { type: 'open-settings' },
+      keywords: ['configuration', 'features', 'security', 'identity', 'preferences'],
+      aliases: ['settings', 'preferences', 'config'],
+    },
+    {
+      id: 'open-diagnostics',
+      label: 'Open Logs and Diagnostics',
+      icon: 'Activity',
+      category: 'Diagnostics',
+      action: { type: 'open-diagnostics' },
+      keywords: ['logs', 'diagnostics', 'health', 'desktop', 'communication', 'troubleshoot'],
+      aliases: ['logs', 'diagnostics', 'health check'],
+    },
+    {
+      id: 'start-workflow',
+      label: 'Start Workflow',
+      icon: 'Workflow',
+      category: 'Actions',
+      action: { type: 'navigate-view', view: 'workflows' },
+      keywords: ['run', 'automation', 'execute'],
+      aliases: ['run workflow', 'workflow start'],
+    },
+    {
+      id: 'apply-template',
+      label: 'Apply Template to Selected Task',
+      icon: 'FileText',
+      category: 'Board',
+      action: { type: 'board-shortcut', shortcut: 'open-task' },
+      keywords: ['template', 'task', 'apply', 'prompt'],
+      aliases: ['apply template', 'task template'],
+      disabledReason: SELECTED_TASK_REQUIRED,
+    },
+    {
+      id: 'copy-completion-packet',
+      label: 'Copy Completion Packet',
+      icon: 'FileText',
+      category: 'Board',
+      action: { type: 'board-shortcut', shortcut: 'open-task' },
+      keywords: ['completion', 'packet', 'copy', 'summary', 'handoff'],
+      aliases: ['completion packet', 'copy packet'],
+      disabledReason: SELECTED_TASK_REQUIRED,
+    },
+    {
+      id: 'restart-local-server',
+      label: 'Restart Local Server',
+      icon: 'Activity',
+      category: 'Diagnostics',
+      action: { type: 'open-diagnostics' },
+      keywords: ['server', 'restart', 'desktop', 'local'],
+      aliases: ['restart server'],
+      disabledReason: 'The desktop bridge does not expose server restart from the web app yet.',
+    },
+    {
+      id: 'check-for-updates',
+      label: 'Check for Updates',
+      icon: 'Activity',
+      category: 'Diagnostics',
+      action: { type: 'open-diagnostics' },
+      keywords: ['updates', 'release', 'desktop', 'version'],
+      aliases: ['updates', 'check updates'],
+      disabledReason: 'The desktop bridge does not expose update checks from the web app yet.',
     },
     ...VIEW_DEFINITIONS.map(
       (definition): CommandDescriptor => ({

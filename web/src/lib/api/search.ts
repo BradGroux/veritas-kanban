@@ -1,7 +1,61 @@
 import { API_BASE, handleResponse } from './helpers';
 
 export type SearchBackend = 'auto' | 'qmd' | 'keyword';
-export type SearchCollection = 'tasks-active' | 'tasks-archive' | 'docs' | 'work-products';
+export type SearchCollection =
+  | 'tasks-active'
+  | 'tasks-archive'
+  | 'tasks-backlog'
+  | 'docs'
+  | 'prompts'
+  | 'work-products'
+  | 'workflows'
+  | 'workflow-runs'
+  | 'policies'
+  | 'decisions'
+  | 'settings'
+  | 'logs-diagnostics'
+  | 'agent-runs'
+  | 'notifications'
+  | 'maintenance'
+  | 'scheduled-runs';
+
+export type SearchTarget =
+  | {
+      type: 'task';
+      taskId: string;
+      tab?: string;
+      timelineAttemptId?: string;
+      href?: string;
+    }
+  | {
+      type: 'view';
+      view: string;
+      href?: string;
+    }
+  | {
+      type: 'settings';
+      section?: string;
+      href?: string;
+    }
+  | {
+      type: 'diagnostics';
+      href?: string;
+    }
+  | {
+      type: 'url';
+      href: string;
+    }
+  | {
+      type: 'none';
+      disabledReason?: string;
+    };
+
+export interface SearchResultAction {
+  id: string;
+  label: string;
+  target?: SearchTarget;
+  disabledReason?: string;
+}
 
 export interface SearchRequest {
   query: string;
@@ -18,7 +72,10 @@ export interface SearchResult {
   collection: SearchCollection | string;
   snippet: string;
   score: number;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & {
+    target?: SearchTarget;
+    actions?: SearchResultAction[];
+  };
 }
 
 export interface SearchResponse {

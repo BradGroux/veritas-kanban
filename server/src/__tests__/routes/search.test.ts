@@ -10,6 +10,24 @@ const { mockSearch, mockRefreshIndex } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/search-service.js', () => ({
+  SEARCH_COLLECTIONS: [
+    'tasks-active',
+    'tasks-archive',
+    'tasks-backlog',
+    'docs',
+    'prompts',
+    'work-products',
+    'workflows',
+    'workflow-runs',
+    'policies',
+    'decisions',
+    'settings',
+    'logs-diagnostics',
+    'agent-runs',
+    'notifications',
+    'maintenance',
+    'scheduled-runs',
+  ],
   getSearchService: () => ({
     search: mockSearch,
     refreshIndex: mockRefreshIndex,
@@ -55,6 +73,29 @@ describe('searchRoutes', () => {
     const res = await request(app).post('/api/search').send({ query: '' });
     expect(res.status).toBe(400);
     expect(mockSearch).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/search accepts expanded universal search collections', async () => {
+    mockSearch.mockResolvedValue({
+      query: 'runs',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 3,
+      results: [],
+    });
+
+    const res = await request(app)
+      .post('/api/search')
+      .send({ query: 'runs', collections: ['workflow-runs', 'logs-diagnostics', 'settings'] });
+
+    expect(res.status).toBe(200);
+    expect(mockSearch).toHaveBeenCalledWith({
+      query: 'runs',
+      limit: undefined,
+      collections: ['workflow-runs', 'logs-diagnostics', 'settings'],
+      backend: undefined,
+      minScore: undefined,
+    });
   });
 
   it('POST /api/search/index/refresh refreshes the qmd index', async () => {

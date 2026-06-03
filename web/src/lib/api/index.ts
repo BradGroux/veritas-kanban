@@ -54,6 +54,8 @@ export type {
   SearchRequest,
   SearchResponse,
   SearchResult,
+  SearchResultAction,
+  SearchTarget,
 } from './search';
 
 export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';

@@ -33,7 +33,7 @@ import {
 import { UserMenu } from './UserMenu';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
-import { lazy, Suspense, useState, useCallback } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import { useBacklogCount } from '@/hooks/useBacklog';
@@ -134,10 +134,14 @@ export function Header() {
     setSquadChatOpen(true);
   }, [markPanelLoaded]);
 
-  const openSettingsDialog = useCallback(() => {
-    markPanelLoaded('settings');
-    setSettingsOpen(true);
-  }, [markPanelLoaded]);
+  const openSettingsDialog = useCallback(
+    (section?: string) => {
+      markPanelLoaded('settings');
+      setSettingsTab(section);
+      setSettingsOpen(true);
+    },
+    [markPanelLoaded]
+  );
 
   const openSecuritySettings = useCallback(() => {
     markPanelLoaded('settings');
@@ -150,6 +154,16 @@ export function Header() {
     setSettingsTab('multi-user');
     setSettingsOpen(true);
   }, [markPanelLoaded]);
+
+  useEffect(() => {
+    const handleOpenSettings = (event: Event) => {
+      const section = (event as CustomEvent<{ section?: string }>).detail?.section;
+      openSettingsDialog(section);
+    };
+
+    window.addEventListener('veritas:open-settings', handleOpenSettings);
+    return () => window.removeEventListener('veritas:open-settings', handleOpenSettings);
+  }, [openSettingsDialog]);
 
   // Register the create dialog and chat panel openers with keyboard context (refs, no useEffect needed)
   setOpenCreateDialog(openCreateDialog);
@@ -259,7 +273,7 @@ export function Header() {
               variant="subtle"
               color="gray"
               size={32}
-              onClick={openSettingsDialog}
+              onClick={() => openSettingsDialog()}
               disabled={!canOpenSettings}
               aria-label="Settings"
               title={canOpenSettings ? 'Settings' : 'Settings permission required'}
@@ -327,6 +341,8 @@ export function Header() {
             open={searchOpen}
             onOpenChange={setSearchOpen}
             onTaskOpen={navigateToTask}
+            onViewOpen={setView}
+            onSettingsOpen={openSettingsDialog}
           />
         )}
       </Suspense>

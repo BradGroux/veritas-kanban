@@ -173,6 +173,7 @@ function AppContent() {
   const [showDesktopOnboarding, setShowDesktopOnboarding] = useState(false);
 
   useEffect(() => {
+    const openDiagnostics = () => setShowDesktopOnboarding(true);
     const desktop = (
       window as Window & {
         veritasDesktop?: {
@@ -181,11 +182,7 @@ function AppContent() {
       }
     ).veritasDesktop;
 
-    if (!desktop?.onMenuCommand) {
-      return undefined;
-    }
-
-    return desktop.onMenuCommand((payload) => {
+    const unsubscribe = desktop?.onMenuCommand?.((payload) => {
       if (
         payload.command === 'open-onboarding' ||
         payload.command === 'show-diagnostics' ||
@@ -194,6 +191,13 @@ function AppContent() {
         setShowDesktopOnboarding(true);
       }
     });
+
+    window.addEventListener('veritas:open-diagnostics', openDiagnostics);
+
+    return () => {
+      unsubscribe?.();
+      window.removeEventListener('veritas:open-diagnostics', openDiagnostics);
+    };
   }, []);
 
   return (

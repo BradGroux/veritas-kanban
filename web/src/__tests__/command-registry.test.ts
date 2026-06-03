@@ -11,6 +11,8 @@ describe('command registry', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain('new-task');
     expect(ids).toContain('open-search');
+    expect(ids).toContain('open-settings');
+    expect(ids).toContain('open-diagnostics');
     expect(ids).toContain('move-todo');
   });
 
@@ -37,7 +39,10 @@ describe('command registry', () => {
       'Switch to Dark Mode'
     );
     expect(darkCommands.find((command) => command.id === 'open-search')?.label).toBe(
-      'Search Tasks, Docs, and Work Products'
+      'Universal Search'
+    );
+    expect(darkCommands.find((command) => command.id === 'open-search')?.keywords).toEqual(
+      expect.arrayContaining(['work products', 'runs', 'policies', 'notifications'])
     );
   });
 
@@ -46,6 +51,16 @@ describe('command registry', () => {
     const boardCommand = commands.find((command) => command.id === 'move-done');
 
     expect(boardCommand?.disabledReason).toBe('Select a task on the board to use this shortcut.');
+  });
+
+  it('exposes diagnostics commands with mode-aware disabled reasons', () => {
+    const commands = createCommandRegistry({ theme: 'dark' });
+    const diagnostics = commands.find((command) => command.id === 'open-diagnostics');
+    const restart = commands.find((command) => command.id === 'restart-local-server');
+
+    expect(diagnostics?.action).toEqual({ type: 'open-diagnostics' });
+    expect(diagnostics?.aliases).toEqual(expect.arrayContaining(['logs', 'diagnostics']));
+    expect(restart?.disabledReason).toContain('desktop bridge');
   });
 
   it('makes the selected-task Work View path discoverable from command search', () => {

@@ -50,6 +50,46 @@ describe('SearchService', () => {
     expect(result.results[0].path).toContain('tasks/active/task_1.md');
   });
 
+  it('searches expanded local collections with redacted snippets and targets', async () => {
+    await fs.mkdir(path.join(root, 'tasks', 'backlog'), { recursive: true });
+    await fs.mkdir(path.join(root, 'prompt-registry'), { recursive: true });
+    await fs.mkdir(path.join(root, '.veritas-kanban', 'logs'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, 'tasks', 'backlog', 'task_20260601_abc123-recovery.md'),
+      '# Recovery task\n\nInvestigate recovery flow.',
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(root, 'prompt-registry', 'recovery.md'),
+      '# Recovery Prompt\n\nUse this prompt for recovery handoffs.',
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(root, '.veritas-kanban', 'logs', 'server.log'),
+      'recovery failed token=super-secret-value',
+      'utf-8'
+    );
+
+    const result = await new SearchService().search({
+      query: 'recovery',
+      collections: ['tasks-backlog', 'prompts', 'logs-diagnostics'],
+      limit: 10,
+    });
+
+    expect(result.results.map((item) => item.collection)).toEqual(
+      expect.arrayContaining(['tasks-backlog', 'prompts', 'logs-diagnostics'])
+    );
+    expect(
+      result.results.find((item) => item.collection === 'tasks-backlog')?.metadata?.target
+    ).toMatchObject({
+      type: 'task',
+      taskId: 'task_20260601_abc123',
+    });
+    expect(result.results.find((item) => item.collection === 'logs-diagnostics')?.snippet).toBe(
+      'recovery failed token: [redacted]'
+    );
+  });
+
   it('falls back to keyword search when qmd fails', async () => {
     process.env.VERITAS_SEARCH_BACKEND = 'qmd';
     execFileMock.mockImplementation((_bin, _args, _options, callback) => {

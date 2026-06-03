@@ -3,18 +3,18 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { getSearchService } from '../services/search-service.js';
-import type { SearchBackend, SearchCollection } from '../services/search-service.js';
+import {
+  SEARCH_COLLECTIONS,
+  type SearchBackend,
+  type SearchCollection,
+} from '../services/search-service.js';
 
 const router: RouterType = Router();
 
 const SearchBodySchema = z.object({
   query: z.string().trim().min(1).max(500),
   limit: z.number().int().min(1).max(50).optional(),
-  collections: z
-    .array(z.enum(['tasks-active', 'tasks-archive', 'docs', 'work-products']))
-    .min(1)
-    .max(4)
-    .optional(),
+  collections: z.array(z.enum(SEARCH_COLLECTIONS)).min(1).max(SEARCH_COLLECTIONS.length).optional(),
   backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
   minScore: z.number().min(0).max(1).optional(),
 });

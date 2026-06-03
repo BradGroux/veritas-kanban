@@ -118,6 +118,14 @@ export function CommandPalette() {
         case 'open-search':
           openSearchDialog();
           return;
+        case 'open-settings':
+          window.dispatchEvent(
+            new CustomEvent('veritas:open-settings', { detail: { section: cmd.action.section } })
+          );
+          return;
+        case 'open-diagnostics':
+          window.dispatchEvent(new CustomEvent('veritas:open-diagnostics'));
+          return;
         case 'navigate-view':
           setView(cmd.action.view);
           return;
@@ -337,6 +345,7 @@ export function CommandPalette() {
             open={searchOpen}
             onOpenChange={setSearchOpen}
             onTaskOpen={navigateToTask}
+            onViewOpen={setView}
           />
         </Suspense>
       )}
