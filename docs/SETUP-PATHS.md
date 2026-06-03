@@ -14,6 +14,19 @@ Veritas Kanban starts as a local board. The agent, MCP, OpenClaw, Squad Chat, no
 | Board plus OpenClaw | You want OpenClaw to run or wake agents                         | Board setup, OpenClaw config, optional browser relay or direct webhook |
 | Self-hosted         | You want remote access                                          | Production env, reverse proxy, auth keys, backups                      |
 
+## Readiness Levels
+
+Use these as stop points. Do not move to the next level until the current one is verified.
+
+| Level                        | You are done when                                                                     | Not included yet                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Working board                | UI loads at `localhost:3000`; API health works at `localhost:3001/api/health`         | CLI writes, MCP, agents, webhooks, workflows, notifications |
+| CLI-ready                    | CLI is built/linked; `vk list` works; write smoke test passes when using a key        | MCP tools or autonomous agent execution                     |
+| MCP read-ready               | MCP server builds; `tools/list` and read tools work from the client                   | Write tools, agent execution, external wake/delivery        |
+| MCP write-ready              | MCP write smoke test creates and deletes a temporary task with `VK_API_KEY`           | A runner/provider that performs agent work                  |
+| Agent-ready                  | A configured runner/provider consumes VK agent requests and updates task state        | Squad Chat webhooks or notification delivery                |
+| External wake/delivery-ready | Squad Chat Webhook, OpenClaw Direct, or notification channel is configured and tested | Board, API, CLI, and MCP basics are already separate        |
+
 ## Minimal Local Setup
 
 ```bash

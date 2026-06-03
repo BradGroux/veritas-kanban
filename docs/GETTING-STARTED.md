@@ -6,6 +6,8 @@ Whether you are standing up the board for yourself or for a fleet of agents, thi
 
 If you are evaluating VK for the first time, start with the board-only path. MCP, OpenClaw, Squad Chat webhooks, notification delivery, workflow gates, and governance policies are optional layers. The setup paths are broken out in [Setup Paths](SETUP-PATHS.md).
 
+A working board is not the same as agent-ready or external wake/delivery-ready. First verify the UI and API health endpoint, then use the [readiness levels](SETUP-PATHS.md#readiness-levels) to decide whether CLI, MCP, runners, webhooks, or notifications are actually needed.
+
 ---
 
 ## Table of Contents

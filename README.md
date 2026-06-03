@@ -52,6 +52,8 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) — that's it. The board auto-seeds with example tasks on first run so you can explore right away.
 
+A working board means the UI loads and `http://localhost:3001/api/health` returns healthy. Agent-ready and external wake/delivery-ready are separate setup levels; use [Setup Paths](docs/SETUP-PATHS.md#readiness-levels) before adding those layers.
+
 **Do not configure these on day one unless you already know you need them:**
 
 - OpenClaw gateway or browser relay
