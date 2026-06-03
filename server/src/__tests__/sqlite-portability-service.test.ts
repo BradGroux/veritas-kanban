@@ -9,6 +9,7 @@ import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteTaskRepository } from '../storage/sqlite/task-repository.js';
 import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../services/config-service.js';
+import { listDataLifecyclePolicies } from '../services/data-lifecycle-policy.js';
 import type { Task } from '@veritas-kanban/shared';
 import type { WorkflowDefinition, WorkflowRun } from '../types/workflow.js';
 
@@ -497,6 +498,26 @@ describe('SqlitePortabilityService', () => {
     });
     expect(exportReport.counts.find((count) => count.entity === 'table.tasks')?.written).toBe(1);
     expect(await exists(path.join(bundleDir, 'manifest.json'))).toBe(true);
+    const manifest = JSON.parse(await fs.readFile(path.join(bundleDir, 'manifest.json'), 'utf-8'));
+    expect(manifest).toMatchObject({
+      formatVersion: 2,
+      scope: { type: 'database' },
+      redaction: { backupBundle: 'raw' },
+    });
+    expect(manifest.dataClasses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tasks',
+          rowCount: 1,
+          workspaceScoped: true,
+        }),
+        expect.objectContaining({
+          id: 'configuration',
+          rowCount: 1,
+          workspaceScoped: false,
+        }),
+      ])
+    );
     expect(
       await exists(
         path.join(bundleDir, 'tasks', 'active', 'task_20260531_roundtrip-roundtrip-task.md')
@@ -528,6 +549,142 @@ describe('SqlitePortabilityService', () => {
     } finally {
       importedDb.close();
     }
+  });
+
+  it('exports a workspace-scoped SQLite backup without leaking another workspace', async () => {
+    const service = new SqlitePortabilityService();
+    const sourceDbPath = path.join(testRoot, 'workspace-source.db');
+    const sourceDb = new SqliteDatabase({ databasePath: sourceDbPath });
+    sourceDb.open();
+
+    try {
+      seedWorkspace(sourceDb, 'workspace-a', 'Workspace A', 'user-a');
+      seedWorkspace(sourceDb, 'workspace-b', 'Workspace B', 'user-b');
+      seedTaskRow(sourceDb, {
+        workspaceId: 'workspace-a',
+        id: 'task_workspace_a',
+        title: 'Workspace A task',
+      });
+      seedTaskRow(sourceDb, {
+        workspaceId: 'workspace-b',
+        id: 'task_workspace_b',
+        title: 'Workspace B task',
+      });
+      seedTelemetryRow(sourceDb, {
+        workspaceId: 'workspace-a',
+        id: 'evt_workspace_a',
+        taskId: 'task_workspace_a',
+      });
+      seedTelemetryRow(sourceDb, {
+        workspaceId: 'workspace-b',
+        id: 'evt_workspace_b',
+        taskId: 'task_workspace_b',
+      });
+    } finally {
+      sourceDb.close();
+    }
+
+    const bundleDir = path.join(testRoot, 'workspace-bundle');
+    await service.exportSqliteBackup({
+      sqlitePath: sourceDbPath,
+      outputDir: bundleDir,
+      workspaceId: 'workspace-a',
+    });
+
+    const manifest = JSON.parse(await fs.readFile(path.join(bundleDir, 'manifest.json'), 'utf-8'));
+    expect(manifest.scope).toEqual({ type: 'workspace', workspaceId: 'workspace-a' });
+
+    const exportedTasks = JSON.parse(
+      await fs.readFile(path.join(bundleDir, 'data', 'sqlite', 'tasks.json'), 'utf-8')
+    );
+    const exportedTelemetry = JSON.parse(
+      await fs.readFile(path.join(bundleDir, 'data', 'sqlite', 'telemetry_events.json'), 'utf-8')
+    );
+    const exportedUsers = JSON.parse(
+      await fs.readFile(path.join(bundleDir, 'data', 'sqlite', 'users.json'), 'utf-8')
+    );
+    const exportedConfig = JSON.parse(
+      await fs.readFile(
+        path.join(bundleDir, 'data', 'sqlite', 'app_config_documents.json'),
+        'utf-8'
+      )
+    );
+    const workspaceATaskMarkdown = path.join(
+      bundleDir,
+      'tasks',
+      'active',
+      'task_workspace_a-workspace-a-task.md'
+    );
+    const workspaceBTaskMarkdown = path.join(
+      bundleDir,
+      'tasks',
+      'active',
+      'task_workspace_b-workspace-b-task.md'
+    );
+
+    expect(exportedTasks).toHaveLength(1);
+    expect(exportedTasks[0]).toMatchObject({
+      id: 'task_workspace_a',
+      workspace_id: 'workspace-a',
+    });
+    expect(exportedTelemetry).toHaveLength(1);
+    expect(exportedTelemetry[0]).toMatchObject({
+      id: 'evt_workspace_a',
+      workspace_id: 'workspace-a',
+    });
+    expect(exportedUsers).toEqual([
+      expect.objectContaining({
+        id: 'user-a',
+      }),
+    ]);
+    expect(exportedConfig).toEqual([]);
+    expect(await exists(workspaceATaskMarkdown)).toBe(true);
+    expect(await exists(workspaceBTaskMarkdown)).toBe(false);
+    expect(await exists(path.join(bundleDir, 'settings', 'config.json'))).toBe(false);
+    expect(manifest.dataClasses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tasks',
+          rowCount: 1,
+        }),
+        expect.objectContaining({
+          id: 'telemetry',
+          rowCount: 1,
+        }),
+        expect.objectContaining({
+          id: 'configuration',
+          rowCount: 0,
+        }),
+      ])
+    );
+  });
+
+  it('exposes lifecycle policies for every durable v5 class', () => {
+    const policies = listDataLifecyclePolicies();
+
+    expect(policies.map((policy) => policy.id)).toEqual(
+      expect.arrayContaining([
+        'workspaceIdentity',
+        'tasks',
+        'comments',
+        'uploadsAttachments',
+        'workProducts',
+        'telemetry',
+        'workflowRuns',
+        'notifications',
+        'chat',
+        'audit',
+        'deviceAccess',
+        'configuration',
+        'backupsExports',
+        'debugBundles',
+      ])
+    );
+    expect(policies.every((policy) => policy.exportBehavior && policy.deleteBehavior)).toBe(true);
+    expect(policies.find((policy) => policy.id === 'deviceAccess')?.containsSecrets).toBe(true);
+    expect(policies.find((policy) => policy.id === 'debugBundles')?.containsPrivatePaths).toBe(
+      true
+    );
   });
 });
 
@@ -606,4 +763,124 @@ function rowCount(database: SqliteDatabase, table: string): number {
     .prepare(`SELECT COUNT(*) AS count FROM "${table}"`)
     .get() as { count: number };
   return row.count;
+}
+
+function seedWorkspace(
+  database: SqliteDatabase,
+  workspaceId: string,
+  name: string,
+  userId: string
+): void {
+  const now = '2026-06-03T12:00:00.000Z';
+  const db = database.getConnection();
+
+  db.prepare(
+    `
+      INSERT INTO workspaces (
+        id, slug, name, description, mode, created_by, archived_at, created_at, updated_at
+      )
+      VALUES (?, ?, ?, NULL, 'remote', ?, NULL, ?, ?)
+    `
+  ).run(workspaceId, workspaceId, name, userId, now, now);
+
+  db.prepare(
+    `
+      INSERT INTO users (
+        id, display_name, email, handle, auth_subject, avatar_url, disabled_at, last_seen_at,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
+    `
+  ).run(userId, name, `${userId}@example.test`, userId, now, now);
+
+  db.prepare(
+    `
+      INSERT INTO workspace_memberships (
+        workspace_id, user_id, role, status, invited_by, joined_at, disabled_at, created_at, updated_at
+      )
+      VALUES (?, ?, 'owner', 'active', NULL, ?, NULL, ?, ?)
+    `
+  ).run(workspaceId, userId, now, now, now);
+}
+
+function seedTaskRow(
+  database: SqliteDatabase,
+  input: { workspaceId: string; id: string; title: string }
+): void {
+  const now = '2026-06-03T12:00:00.000Z';
+  const task: Task = {
+    id: input.id,
+    title: input.title,
+    description: `${input.title} body`,
+    type: 'feature',
+    status: 'todo',
+    priority: 'medium',
+    created: now,
+    updated: now,
+  };
+
+  database
+    .getConnection()
+    .prepare(
+      `
+        INSERT INTO tasks (
+          id, workspace_id, storage_state, title, description, type, status, priority, project,
+          sprint, position, task_json, created_at, updated_at, archived_at, deleted_at
+        )
+        VALUES (?, ?, 'active', ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL)
+      `
+    )
+    .run(
+      task.id,
+      input.workspaceId,
+      task.title,
+      task.description,
+      task.type,
+      task.status,
+      task.priority,
+      JSON.stringify(task),
+      task.created,
+      task.updated
+    );
+}
+
+function seedTelemetryRow(
+  database: SqliteDatabase,
+  input: { workspaceId: string; id: string; taskId: string }
+): void {
+  const now = '2026-06-03T12:00:00.000Z';
+  const event = {
+    id: input.id,
+    type: 'run.completed',
+    timestamp: now,
+    taskId: input.taskId,
+    project: 'workspace-boundary',
+    agent: 'veritas',
+    success: true,
+    durationMs: 100,
+  };
+
+  database
+    .getConnection()
+    .prepare(
+      `
+        INSERT INTO telemetry_events (
+          id, workspace_id, type, task_id, project_id, agent, model, attempt_id, success,
+          duration_ms, exit_code, input_tokens, output_tokens, cache_tokens, total_tokens, cost,
+          error, stack_trace, session_key, payload_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
+      `
+    )
+    .run(
+      event.id,
+      input.workspaceId,
+      event.type,
+      event.taskId,
+      event.project,
+      event.agent,
+      event.durationMs,
+      JSON.stringify(event),
+      now
+    );
 }

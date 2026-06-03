@@ -2717,11 +2717,29 @@ POST /api/v1/sqlite/export
 ```json
 {
   "sqlitePath": "/path/to/.veritas-kanban/veritas.db",
-  "outputDir": "/path/to/backup-bundle"
+  "outputDir": "/path/to/backup-bundle",
+  "workspaceId": "local"
 }
 ```
 
 Writes raw SQLite table snapshots plus human-readable Markdown/JSON/YAML files.
+Omit `workspaceId` for a full database export. When `workspaceId` is supplied,
+the export includes only rows scoped to that workspace plus member user records;
+global app configuration tables are exported as empty arrays. Derived task
+Markdown and workflow YAML files use the same workspace boundary, and unscoped
+derived files such as global settings JSON are omitted.
+
+The generated `manifest.json` includes table row counts, data lifecycle classes,
+retention/export/delete behavior, sensitivity flags, scope, and redaction state.
+
+#### Data Lifecycle Policy
+
+```
+GET /api/v1/sqlite/lifecycle-policy
+```
+
+Returns the machine-readable v5 lifecycle policy used by backup manifests and
+future Maintenance Center cleanup previews.
 
 #### Import Backup Bundle
 

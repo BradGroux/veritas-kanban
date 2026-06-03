@@ -12,6 +12,9 @@ operator checklist for final release verification.
       recover through the rollback drill.
 - [ ] Backup and restore verifies SQLite data, task files, settings, templates,
       attachments, workflow state, and audit history.
+- [ ] Data lifecycle controls define retention, export, deletion, privacy, and
+      support-bundle redaction policy for durable v5 data classes. Track the
+      contract in [v5.0 data lifecycle controls](DATA-LIFECYCLE.md).
 - [ ] Multi-user mode verifies workspace switching, memberships, invitations,
       scoped API tokens, actor attribution, and RBAC denial paths.
 - [ ] Remote mode verifies the

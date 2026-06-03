@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { authorize } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { getSqlitePortabilityService } from '../services/sqlite-portability-service.js';
+import { listDataLifecyclePolicies } from '../services/data-lifecycle-policy.js';
 
 const router: RouterType = Router();
 
@@ -19,6 +20,7 @@ const migrationSchema = z.object({
 const exportSchema = z.object({
   sqlitePath: pathSchema,
   outputDir: pathSchema,
+  workspaceId: z.string().min(1).max(200).optional(),
 });
 
 const importSchema = z.object({
@@ -102,6 +104,17 @@ router.post(
     const input = parseBody(exportSchema, req.body);
     const report = await getSqlitePortabilityService().exportSqliteBackup(input);
     res.json(report);
+  })
+);
+
+router.get(
+  '/lifecycle-policy',
+  authorize('admin'),
+  asyncHandler(async (_req, res) => {
+    res.json({
+      formatVersion: 1,
+      dataClasses: listDataLifecyclePolicies(),
+    });
   })
 );
 

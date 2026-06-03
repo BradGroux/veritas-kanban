@@ -3,6 +3,7 @@ import { createReadStream } from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { createGunzip } from 'zlib';
+import type { SQLInputValue } from 'node:sqlite';
 import matter from 'gray-matter';
 import yaml from 'yaml';
 import type {
@@ -39,6 +40,7 @@ import { SqliteWorkflowDefinitionRepository } from '../storage/sqlite/workflow-r
 import { WorkflowService } from './workflow-service.js';
 import { WorkflowRunService } from './workflow-run-service.js';
 import { ChatService } from './chat-service.js';
+import { buildDataLifecycleManifest } from './data-lifecycle-policy.js';
 
 const TASK_ID_REGEX = /^task_(\d{8}_[a-zA-Z0-9_-]{1,20}|[a-zA-Z0-9_-]+)$/;
 
@@ -140,6 +142,7 @@ export interface FileToSqliteMigrationOptions {
 export interface SqliteBackupExportOptions {
   sqlitePath: string;
   outputDir: string;
+  workspaceId?: string;
 }
 
 export interface SqliteBackupImportOptions {
@@ -402,7 +405,7 @@ export class SqlitePortabilityService {
       const dataDir = path.join(bundleDir, 'data', 'sqlite');
       await fs.mkdir(dataDir, { recursive: true });
 
-      const snapshots = this.readSqliteSnapshots(database, warnings);
+      const snapshots = this.readSqliteSnapshots(database, warnings, options.workspaceId);
       const counts: SqlitePortabilityEntityCount[] = [];
 
       for (const snapshot of snapshots) {
@@ -415,14 +418,27 @@ export class SqlitePortabilityService {
         });
       }
 
-      await this.writeHumanReadableBundle(database, bundleDir, warnings);
+      const tableCounts = Object.fromEntries(
+        snapshots.map((snapshot) => [snapshot.table, snapshot.rows.length])
+      );
+      await this.writeHumanReadableBundle(database, bundleDir, warnings, options.workspaceId);
       await this.writeJson(path.join(bundleDir, 'manifest.json'), {
-        formatVersion: 1,
+        formatVersion: 2,
         exportedAt: new Date().toISOString(),
         sqlitePath: path.resolve(options.sqlitePath),
-        tables: Object.fromEntries(
-          snapshots.map((snapshot) => [snapshot.table, snapshot.rows.length])
-        ),
+        scope: options.workspaceId
+          ? { type: 'workspace', workspaceId: options.workspaceId }
+          : { type: 'database' },
+        tables: tableCounts,
+        dataClasses: buildDataLifecycleManifest({
+          workspaceId: options.workspaceId,
+          tableCounts,
+        }),
+        redaction: {
+          backupBundle: 'raw',
+          supportBundles:
+            'redact tokens, cookies, local paths, credentialed URLs, prompts, message content, and generated sensitive text by default',
+        },
       });
 
       return {
@@ -1792,7 +1808,8 @@ export class SqlitePortabilityService {
 
   private readSqliteSnapshots(
     database: SqliteDatabase,
-    warnings: SqlitePortabilityWarning[]
+    warnings: SqlitePortabilityWarning[],
+    workspaceId?: string
   ): TableSnapshot[] {
     const snapshots: TableSnapshot[] = [];
 
@@ -1805,14 +1822,55 @@ export class SqlitePortabilityService {
         continue;
       }
 
+      const query = this.buildSnapshotQuery(database, table, workspaceId);
       const rows = database
         .getConnection()
-        .prepare(`SELECT * FROM ${this.quoteIdentifier(table)}`)
-        .all() as unknown as Record<string, unknown>[];
+        .prepare(query.sql)
+        .all(...query.params) as unknown as Record<string, unknown>[];
       snapshots.push({ table, rows });
     }
 
     return snapshots;
+  }
+
+  private buildSnapshotQuery(
+    database: SqliteDatabase,
+    table: SqliteBackupTable,
+    workspaceId?: string
+  ): { sql: string; params: SQLInputValue[] } {
+    const tableName = this.quoteIdentifier(table);
+
+    if (!workspaceId) {
+      return { sql: `SELECT * FROM ${tableName}`, params: [] };
+    }
+
+    if (table === 'workspaces') {
+      return { sql: `SELECT * FROM ${tableName} WHERE id = ?`, params: [workspaceId] };
+    }
+
+    if (table === 'users') {
+      return {
+        sql: `
+          SELECT *
+          FROM ${tableName}
+          WHERE id IN (
+            SELECT user_id
+            FROM workspace_memberships
+            WHERE workspace_id = ?
+          )
+        `,
+        params: [workspaceId],
+      };
+    }
+
+    if (this.tableHasColumn(database, table, 'workspace_id')) {
+      return {
+        sql: `SELECT * FROM ${tableName} WHERE workspace_id = ?`,
+        params: [workspaceId],
+      };
+    }
+
+    return { sql: `SELECT * FROM ${tableName} WHERE 1 = 0`, params: [] };
   }
 
   private async readBundleSnapshots(
@@ -1942,12 +2000,22 @@ export class SqlitePortabilityService {
   private async writeHumanReadableBundle(
     database: SqliteDatabase,
     bundleDir: string,
-    warnings: SqlitePortabilityWarning[]
+    warnings: SqlitePortabilityWarning[],
+    workspaceId?: string
   ): Promise<void> {
+    const taskQuery = workspaceId
+      ? {
+          sql: 'SELECT storage_state, task_json FROM tasks WHERE workspace_id = ? ORDER BY updated_at DESC',
+          params: [workspaceId],
+        }
+      : {
+          sql: 'SELECT storage_state, task_json FROM tasks ORDER BY updated_at DESC',
+          params: [],
+        };
     const tasks = database
       .getConnection()
-      .prepare('SELECT storage_state, task_json FROM tasks ORDER BY updated_at DESC')
-      .all() as unknown as Array<{ storage_state: string; task_json: string }>;
+      .prepare(taskQuery.sql)
+      .all(...taskQuery.params) as unknown as Array<{ storage_state: string; task_json: string }>;
 
     for (const row of tasks) {
       try {
@@ -1967,10 +2035,12 @@ export class SqlitePortabilityService {
       }
     }
 
-    const configRow = database
-      .getConnection()
-      .prepare("SELECT document_json FROM app_config_documents WHERE key = 'app_config'")
-      .get() as { document_json: string } | undefined;
+    const configRow = workspaceId
+      ? undefined
+      : (database
+          .getConnection()
+          .prepare("SELECT document_json FROM app_config_documents WHERE key = 'app_config'")
+          .get() as { document_json: string } | undefined);
     if (configRow) {
       await this.writeJson(
         path.join(bundleDir, 'settings', 'config.json'),
@@ -1978,10 +2048,23 @@ export class SqlitePortabilityService {
       );
     }
 
-    const workflows = database
-      .getConnection()
-      .prepare('SELECT workflow_json FROM workflow_definitions ORDER BY id ASC')
-      .all() as unknown as Array<{ workflow_json: string }>;
+    const workflowQuery = workspaceId
+      ? this.tableHasColumn(database, 'workflow_definitions', 'workspace_id')
+        ? {
+            sql: 'SELECT workflow_json FROM workflow_definitions WHERE workspace_id = ? ORDER BY id ASC',
+            params: [workspaceId],
+          }
+        : null
+      : {
+          sql: 'SELECT workflow_json FROM workflow_definitions ORDER BY id ASC',
+          params: [],
+        };
+    const workflows = workflowQuery
+      ? (database
+          .getConnection()
+          .prepare(workflowQuery.sql)
+          .all(...workflowQuery.params) as unknown as Array<{ workflow_json: string }>)
+      : [];
     for (const row of workflows) {
       const workflow = JSON.parse(row.workflow_json) as WorkflowDefinition;
       const dir = path.join(bundleDir, 'workflows');
@@ -1996,6 +2079,14 @@ export class SqlitePortabilityService {
       .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?")
       .get(table) as { name: string } | undefined;
     return row !== undefined;
+  }
+
+  private tableHasColumn(database: SqliteDatabase, table: string, column: string): boolean {
+    const rows = database
+      .getConnection()
+      .prepare(`PRAGMA table_info(${this.quoteIdentifier(table)})`)
+      .all() as unknown as Array<{ name: string }>;
+    return rows.some((row) => row.name === column);
   }
 
   private async readNdjson(
