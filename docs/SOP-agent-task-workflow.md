@@ -2,6 +2,8 @@
 
 Use this playbook anytime an agent (human or LLM) takes a task from **todo** to **done**. It standardizes status changes, time tracking, summaries, and ensures telemetry stays usable.
 
+This SOP assumes an agent or human is already doing the work. Veritas Kanban can create agent requests and track status, but it does not execute model work unless a runner/provider such as OpenClaw, Codex CLI/SDK, Codex Cloud, or a custom process is configured.
+
 ---
 
 ## Roles

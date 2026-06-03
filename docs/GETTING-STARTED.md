@@ -19,7 +19,7 @@ If you are evaluating VK for the first time, start with the board-only path. MCP
 7. [Shared Resources & Prompt Registry](#shared-resources--prompt-registry)
 8. [Documentation Freshness & Repo Rules](#documentation-freshness--repo-rules)
 9. [Multi-Repo / Multi-Agent Notes](#multi-repo--multi-agent-notes)
-10. [OpenClaw Browser Relay (Optional but recommended)](#openclaw-browser-relay-optional-but-recommended)
+10. [OpenClaw Browser Relay (Optional)](#openclaw-browser-relay-optional)
 11. [What's Next?](#whats-next)
 
 ---
@@ -149,7 +149,7 @@ CLI commands fully mirror the API and are the fastest way to script agent workfl
 
 ## Connect an Agent + Agent Pickup Checklist
 
-Agents interact through HTTP + WebSocket; nothing is hard-coded to a particular provider. Follow this checklist to verify they can pick up work:
+This section is optional. Agents interact through HTTP + WebSocket; nothing is hard-coded to a particular provider. Creating an agent request records the work VK wants done, but an external runner/provider still has to execute it.
 
 1. **Create an agent API key** in `server/.env`:
    ```
@@ -161,16 +161,17 @@ Agents interact through HTTP + WebSocket; nothing is hard-coded to a particular 
    export VK_API_URL=http://localhost:3001
    export VK_API_KEY=super-secret-key
    ```
-4. **Create an agent request** (UI → Start Agent) or drop a JSON file in `.veritas-kanban/agent-requests/`.
-5. **Watch pending agents** in the UI or via CLI:
+4. **Confirm a runner/provider is installed and running** if you expect autonomous execution. Examples: OpenClaw, Codex CLI/SDK, Codex Cloud, or a custom process that polls VK and updates task state.
+5. **Create an agent request** (UI → Start Agent) or drop a JSON file in `.veritas-kanban/agent-requests/`.
+6. **Watch pending agents** in the UI or via CLI:
    ```bash
    vk agents:pending
    ```
-6. **Agent workflow** (example prompt to an agent runner):
+7. **Agent workflow** (example prompt to an agent runner):
    ```
    Hey Veritas, pick up task <ID>. Set status to in-progress, start the timer, do the work, then call `vk done <id> "summary"` when finished. Use cross-model review if you wrote code.
    ```
-7. **Agent completion**
+8. **Agent completion**
    - Verify `tasks/active/...` reflects status/time tracking
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**
@@ -206,12 +207,12 @@ Expect `{ "ok": true, "service": "veritas-kanban", ... }`. If the call hangs or 
 
 ### 4. Common failure modes & instant fixes
 
-| Symptom                     | Quick Fix                                                     |
-| --------------------------- | ------------------------------------------------------------- |
-| Ports collide / UI hung     | `pnpm dev:clean`                                              |
-| Health endpoint returns 404 | Wrong project running on 3001 (restart)                       |
-| Auth spamming rate limit    | Ensure request IP is `127.0.0.1` or increase limiter          |
-| Agents "never pick up"      | Verify API key role `agent`, check firewall/Docker networking |
+| Symptom                     | Quick Fix                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| Ports collide / UI hung     | `pnpm dev:clean`                                                                                  |
+| Health endpoint returns 404 | Wrong project running on 3001 (restart)                                                           |
+| Auth spamming rate limit    | Ensure request IP is `127.0.0.1` or increase limiter                                              |
+| Agents "never pick up"      | Verify the external runner/provider is running, API key role is `agent`, and network access works |
 
 For deeper debugging see [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -280,15 +281,15 @@ Running multiple projects or repos with the same agent pool? Borrow BoardKit's a
 
 ---
 
-## OpenClaw Browser Relay (Optional but Recommended)
+## OpenClaw Browser Relay (Optional)
 
-For auth-required workflows (LinkedIn research, dashboards behind Okta, etc.) you'll want OpenClaw's Browser Relay:
+Use OpenClaw's Browser Relay only for auth-required browser workflows such as research behind Okta, customer dashboards, or other tasks where the runner must use your active browser session:
 
 1. Install the extension + helper from the [OpenClaw docs](https://github.com/openclaw/openclaw).
 2. Launch the relay; attach your tab.
 3. Agents can now run headless instructions through your actual browser session while respecting your credentials.
 
-This is invaluable for Champions-style research tasks or anything needing a real login flow.
+Skip this for board-only use, REST/CLI/MCP task management, or agents that do not need your browser cookies.
 
 ---
 

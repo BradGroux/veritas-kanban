@@ -290,10 +290,11 @@ First-class support for autonomous coding agents.
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
 - **Send message to agent** — Send text messages to running agents
-- **OpenClaw native support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL; sub-agent spawning via `sessions_spawn`
+- **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, and MCP setup
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
+- **Agent request tracking** — VK can create and display pending agent requests; a configured external runner/provider must execute the work
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
 - **Failure alerts** — Dedicated failure alert service for agent run failures
 
@@ -595,7 +596,7 @@ A deterministic multi-step agent orchestration system for repeatable, observable
 
 ### Overview
 
-The workflow engine transforms Veritas Kanban from an ad-hoc task board into a full-featured agent orchestration platform. Define multi-step pipelines as version-controlled YAML files, execute them with loops, gates, and parallel steps, and monitor everything in real time through the dashboard.
+The workflow engine transforms Veritas Kanban from an ad-hoc task board into a full-featured agent orchestration platform. Define multi-step pipelines as version-controlled YAML files, execute them with loops, gates, and parallel steps, and monitor everything in real time through the dashboard. Agent execution requires a configured runner/provider; board visibility, workflow definitions, and governance review still work without OpenClaw.
 
 **What it does:**
 
@@ -607,17 +608,17 @@ The workflow engine transforms Veritas Kanban from an ad-hoc task board into a f
 **What it is NOT:**
 
 - Not a general-purpose workflow engine (Temporal, Airflow) — optimized for AI agents
-- Not a replacement for OpenClaw — workflows invoke OpenClaw sessions
+- Not a replacement for an agent runner — OpenClaw, Codex, or a custom provider executes agent steps
 - Not a programming language — declarative YAML, not imperative scripts
 
 ### Core Principles
 
 1. **Deterministic Execution** — Same workflow + same inputs = same execution path (modulo agent non-determinism)
-2. **Agent-Agnostic** — Workflows don't care which LLM/agent runs steps (OpenClaw handles that)
+2. **Agent-Agnostic** — Workflows resolve steps through configured runners/providers instead of requiring one platform
 3. **YAML-First** — Workflows are version-controlled YAML files, not database records
 4. **Observable** — Every step logs outputs, status broadcasts via WebSocket
 5. **Fail-Safe** — Explicit retry/escalation policies, no silent failures
-6. **Fresh Context by Default** — Each step spawns a fresh OpenClaw session (prevents context bleed)
+6. **Fresh Context by Default** — Each agent step should run in a fresh provider session when the runner supports it
 
 ### Workflow Definitions
 
@@ -1004,7 +1005,7 @@ Real-time monitoring for workflow execution.
 
 ### Known Limitations
 
-1. **OpenClaw integration placeholder** — Step executors have integration points for OpenClaw sessions API but don't yet call `sessions_spawn` (tracked in #110, #111)
+1. **Runner-dependent execution** — Agent steps need a configured provider/runner such as OpenClaw, Codex, or a custom adapter
 2. **Loop verify step not wired** — `loop.verify_step` is parsed but not executed by workflow engine (tracked for Phase 5)
 3. **No schema validation** — Step outputs are not validated against JSON Schema (planned for Phase 5)
 4. **Parallel timeouts not enforced** — Parallel steps don't have a global timeout, only sub-step timeouts (planned for Phase 5)

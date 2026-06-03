@@ -4,6 +4,14 @@
 
 The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcontextprotocol.io/) client — Claude Desktop, OpenClaw, Cursor, Cline, Codex, or your own tooling — manage tasks, sprints, projects, comments, agents, automation, notifications, and summaries through a single stdio process.
 
+MCP is optional. The board, REST API, and CLI do not require MCP or OpenClaw. Use MCP only when an assistant needs typed tool access instead of direct REST/CLI calls.
+
+| Mode                   | What works                                                                                    | Required auth                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Local read-only        | Tool discovery, task reads, summaries, resources, and other read operations against localhost | `VK_API_URL`; `VK_API_KEY` can be omitted when localhost bypass grants reads    |
+| Local or remote writes | Creating/updating tasks, comments, agents, automation, notifications, sprints, and projects   | `VK_API_KEY` with an `agent` or `admin` role, or localhost role `agent`/`admin` |
+| External runners       | MCP tools can create agent requests or update task state                                      | A separate runner/provider still has to execute the agent work                  |
+
 ---
 
 ## Table of Contents
@@ -45,6 +53,7 @@ Don't use it when:
 - You just need a quick REST call — use the [REST API](../API-WORKFLOWS.md) directly.
 - You're building a web frontend — use the HTTP API with the TypeScript client.
 - You need WebSocket streaming — the MCP server uses stdio, not SSE/WS.
+- You expect MCP itself to run agents — it can request work, but execution belongs to Codex, OpenClaw, or another configured runner.
 
 ---
 
@@ -97,6 +106,7 @@ Don't use it when:
 - Node.js ≥ 22
 - The Veritas Kanban server running (`pnpm dev` or production)
 - pnpm (for building from source)
+- No OpenClaw requirement unless OpenClaw is the MCP client or agent runner you choose
 
 ### Local Development
 
