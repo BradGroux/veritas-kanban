@@ -273,8 +273,9 @@ headers. This is required for accurate rate limiting and security logging.
 
 Reverse proxy deployments should follow the trusted-host model from
 [ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md): route
-the web app, `/api`, `/ws`, `/health`, and future PWA assets through the same
-public origin whenever possible.
+the web app, `/api`, `/ws`, `/health`, and PWA assets through the same public
+origin whenever possible. See [PWA install](guides/PWA_INSTALL.md) for mobile
+install and offline-shell behavior.
 
 Common values:
 

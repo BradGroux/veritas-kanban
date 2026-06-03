@@ -492,6 +492,8 @@ When exposing Veritas beyond loopback, also use `NODE_ENV=production` and keep
 the web client, `/api`, `/ws`, health endpoints, PWA assets, and service-worker
 scope on one trusted origin whenever possible. Split-origin deployments must set
 exact `CORS_ORIGINS` entries and confirm WebSocket origin/upgrade behavior.
+Mobile install steps and offline-shell behavior are documented in
+[PWA install](PWA_INSTALL.md).
 
 ### API keys for agents
 

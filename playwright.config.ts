@@ -47,12 +47,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /mobile-responsive\.spec\.ts/,
+      testIgnore: /(mobile-responsive|pwa-offline)\.spec\.ts/,
     },
     {
       name: 'mobile-chromium',
       use: { ...devices['Pixel 5'] },
-      testMatch: /mobile-responsive\.spec\.ts/,
+      testMatch: /(mobile-responsive|pwa-offline)\.spec\.ts/,
     },
   ],
 

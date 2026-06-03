@@ -10,7 +10,7 @@ import { useTaskSync } from './hooks/useTaskSync';
 import { TaskConfigProvider } from './contexts/TaskConfigContext';
 import { WebSocketStatusProvider } from './contexts/WebSocketContext';
 import { ViewProvider, useView } from './contexts/ViewContext';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { IdentityProvider } from './hooks/useIdentity';
 import { AuthGuard } from './components/auth';
 import { DesktopOnboardingDialog } from './components/auth/DesktopOnboarding';
@@ -20,6 +20,7 @@ import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { FloatingChat } from './components/chat/FloatingChat';
 import { SystemHealthBar } from './components/layout/SystemHealthBar';
 import { MobileShell } from './components/layout/MobileShell';
+import { PwaStatusBanner } from './components/layout/PwaStatusBanner';
 import { VIEW_BY_ID, type AppView } from './lib/views';
 
 // Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
@@ -170,7 +171,8 @@ function MainContent() {
 // Main app content (only rendered when authenticated)
 function AppContent() {
   // Connect to WebSocket for real-time task updates
-  const { isConnected, connectionState, reconnectAttempt } = useTaskSync();
+  const { isConnected, connectionState, reconnectAttempt, reconnect } = useTaskSync();
+  const { status: authStatus, refreshStatus } = useAuth();
   const [showDesktopOnboarding, setShowDesktopOnboarding] = useState(false);
 
   useEffect(() => {
@@ -206,6 +208,7 @@ function AppContent() {
       isConnected={isConnected}
       connectionState={connectionState}
       reconnectAttempt={reconnectAttempt}
+      reconnect={reconnect}
     >
       <LiveAnnouncerProvider>
         <KeyboardProvider>
@@ -217,6 +220,10 @@ function AppContent() {
                     <SkipToContent />
                     <Header />
                     <SystemHealthBar />
+                    <PwaStatusBanner
+                      sessionExpiry={authStatus?.sessionExpiry}
+                      onRefreshAuth={refreshStatus}
+                    />
                     <Box
                       component="main"
                       id="main-content"

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Veritas Kanban">
+  <rect width="512" height="512" fill="#15171f"/>
+  <circle cx="256" cy="256" r="224" fill="#202431"/>
+  <rect x="104" y="128" width="72" height="256" rx="18" fill="#4f46e5"/>
+  <rect x="220" y="128" width="72" height="256" rx="18" fill="#14b8a6"/>
+  <rect x="336" y="128" width="72" height="256" rx="18" fill="#f59e0b"/>
+  <path d="M124 190h32M124 238h32M240 190h32M240 238h32M356 190h32M356 238h32M356 286h32" stroke="#f8fafc" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="256" cy="372" r="44" fill="#f8fafc"/>
+  <path d="M237 373l15 15 29-34" fill="none" stroke="#15171f" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -8,6 +8,8 @@ interface WebSocketStatus {
   connectionState: ConnectionState;
   /** Current reconnect attempt (0 when connected or idle) */
   reconnectAttempt: number;
+  /** Manually retry the WebSocket connection after a disconnected state */
+  reconnect?: () => void;
 }
 
 const WebSocketStatusContext = createContext<WebSocketStatus>({
@@ -21,15 +23,17 @@ export function WebSocketStatusProvider({
   isConnected,
   connectionState,
   reconnectAttempt,
+  reconnect,
 }: {
   children: ReactNode;
   isConnected: boolean;
   connectionState: ConnectionState;
   reconnectAttempt: number;
+  reconnect?: () => void;
 }) {
   const value = useMemo(
-    () => ({ isConnected, connectionState, reconnectAttempt }),
-    [isConnected, connectionState, reconnectAttempt]
+    () => ({ isConnected, connectionState, reconnectAttempt, reconnect }),
+    [isConnected, connectionState, reconnectAttempt, reconnect]
   );
 
   return (

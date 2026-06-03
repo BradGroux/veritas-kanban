@@ -26,6 +26,7 @@ import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 import { useView } from '@/contexts/ViewContext';
 import { useIdentity } from '@/hooks/useIdentity';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
 // Lazy-load Dashboard to split recharts + d3 (~800KB) out of main bundle
@@ -55,9 +56,11 @@ export function KanbanBoard() {
   const { settings: featureSettings } = useFeatureSettings();
   const { announce } = useLiveAnnouncer();
   const { hasPermission } = useIdentity();
+  const { isOnline } = useNetworkStatus();
   const canWriteTasks = hasPermission('task:write');
   const isMobileLayout = useMediaQuery('(max-width: 767px)', false);
-  const canDragTasks = featureSettings.board.enableDragAndDrop && canWriteTasks && !isMobileLayout;
+  const canDragTasks =
+    featureSettings.board.enableDragAndDrop && canWriteTasks && isOnline && !isMobileLayout;
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailPanelMounted, setDetailPanelMounted] = useState(false);
@@ -213,10 +216,14 @@ export function KanbanBoard() {
         announce(`Task ${task?.title || taskId} cannot be moved with the current permissions`);
         return;
       }
+      if (!isOnline) {
+        announce(`Task ${task?.title || taskId} cannot be moved while this client is offline`);
+        return;
+      }
       updateTask.mutate({ id: taskId, input: { status } });
       announce(`Task ${task?.title || taskId} moved to ${columnName}`);
     },
-    [announce, canWriteTasks, filteredTasks, updateTask]
+    [announce, canWriteTasks, filteredTasks, isOnline, updateTask]
   );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
@@ -238,11 +245,11 @@ export function KanbanBoard() {
     tasksByStatus,
     columns: COLUMNS,
     onStatusChange: (taskId, status) => {
-      if (!canWriteTasks) return;
+      if (!canWriteTasks || !isOnline) return;
       updateTask.mutate({ id: taskId, input: { status } });
     },
     onReorder: (taskIds) => {
-      if (!canWriteTasks) return;
+      if (!canWriteTasks || !isOnline) return;
       reorderTasks.mutate(taskIds);
     },
   });
@@ -328,7 +335,7 @@ export function KanbanBoard() {
                       onTaskClick={handleTaskClick}
                       onTaskStatusChange={handleMoveTask}
                       selectedTaskId={selectedTaskId}
-                      canChangeStatus={canWriteTasks}
+                      canChangeStatus={canWriteTasks && isOnline}
                       dragEnabled={canDragTasks}
                       isDragActive={isDragActive}
                       statusOptions={STATUS_OPTIONS}
@@ -356,7 +363,7 @@ export function KanbanBoard() {
                     onTaskClick={handleTaskClick}
                     onTaskStatusChange={handleMoveTask}
                     selectedTaskId={selectedTaskId}
-                    canChangeStatus={canWriteTasks}
+                    canChangeStatus={canWriteTasks && isOnline}
                     dragEnabled={false}
                     showStatusControls={isMobileLayout}
                     statusOptions={STATUS_OPTIONS}

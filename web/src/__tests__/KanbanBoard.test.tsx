@@ -109,8 +109,18 @@ vi.mock('@/contexts/TaskConfigContext', () => ({
 
 // Mock KanbanColumn to simplify — just renders task titles
 vi.mock('@/components/board/KanbanColumn', () => ({
-  KanbanColumn: ({ id, title, tasks }: { id: string; title: string; tasks: Task[] }) => (
-    <div data-testid={`column-${id}`}>
+  KanbanColumn: ({
+    id,
+    title,
+    tasks,
+    canChangeStatus,
+  }: {
+    id: string;
+    title: string;
+    tasks: Task[];
+    canChangeStatus?: boolean;
+  }) => (
+    <div data-testid={`column-${id}`} data-can-change-status={String(canChangeStatus)}>
       <h2>{title}</h2>
       {tasks.map((t: Task) => (
         <div key={t.id} data-testid={`task-${t.id}`}>
@@ -171,8 +181,16 @@ function renderBoard() {
   return renderWithProviders(<KanbanBoard />, { queryClient });
 }
 
+function setOnline(value: boolean) {
+  Object.defineProperty(window.navigator, 'onLine', {
+    configurable: true,
+    value,
+  });
+}
+
 afterEach(() => {
   cleanup();
+  setOnline(true);
 });
 
 // ── Tests ────────────────────────────────────────────────────
@@ -227,5 +245,15 @@ describe('KanbanBoard', () => {
     // Columns should still exist
     expect(screen.getByTestId('column-todo')).toBeDefined();
     expect(screen.getByTestId('column-done')).toBeDefined();
+  });
+
+  it('disables explicit status changes while the browser is offline', () => {
+    setOnline(false);
+    mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+
+    renderBoard();
+
+    expect(screen.getByTestId('column-todo').dataset.canChangeStatus).toBe('false');
+    expect(screen.getByTestId('column-in-progress').dataset.canChangeStatus).toBe('false');
   });
 });

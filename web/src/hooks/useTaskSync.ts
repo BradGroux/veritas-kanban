@@ -19,6 +19,7 @@ export function useTaskSync(): {
   isConnected: boolean;
   connectionState: ConnectionState;
   reconnectAttempt: number;
+  reconnect: () => void;
 } {
   const queryClient = useQueryClient();
 
@@ -96,11 +97,11 @@ export function useTaskSync(): {
     [queryClient]
   );
 
-  const { isConnected, connectionState, reconnectAttempt } = useWebSocket({
+  const { isConnected, connectionState, reconnectAttempt, connect } = useWebSocket({
     onOpen: { type: 'subscribe:tasks' },
     onMessage: handleMessage,
     maxReconnectAttempts: 20,
   });
 
-  return { isConnected, connectionState, reconnectAttempt };
+  return { isConnected, connectionState, reconnectAttempt, reconnect: connect };
 }
