@@ -14,7 +14,19 @@ const mocks = vi.hoisted(() => ({
   onOpenChat: vi.fn(),
   onOpenTab: vi.fn(),
   onOpenWorkflow: vi.fn(),
+  stopAgentMutate: vi.fn(),
+  useAgentStatus: vi.fn(),
+  useAgentStream: vi.fn(),
   useTaskWorkProducts: vi.fn(),
+}));
+
+vi.mock('@/hooks/useAgent', () => ({
+  useAgentStatus: mocks.useAgentStatus,
+  useAgentStream: mocks.useAgentStream,
+  useStopAgent: () => ({
+    mutate: mocks.stopAgentMutate,
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/useWorkProducts', () => ({
@@ -54,6 +66,12 @@ function renderWorkView(task = createMockTask()) {
 describe('task work view Mantine surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useAgentStatus.mockReturnValue({ data: { running: false } });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: false,
+    });
     mocks.useTaskWorkProducts.mockReturnValue({ data: [], isLoading: false });
   });
 
@@ -90,6 +108,25 @@ describe('task work view Mantine surface', () => {
   it('links live execution, code review, handoff, and work products from the Work view', async () => {
     const user = userEvent.setup();
     mocks.useTaskWorkProducts.mockReturnValue({ data: [product], isLoading: false });
+    mocks.useAgentStatus.mockReturnValue({
+      data: { running: true, attemptId: 'attempt-1', agent: 'veritas', status: 'running' },
+    });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [
+        {
+          type: 'system',
+          content: 'Installing dependencies',
+          timestamp: '2026-06-01T11:01:00.000Z',
+        },
+        {
+          type: 'stdout',
+          content: 'Running focused tests',
+          timestamp: '2026-06-01T11:02:00.000Z',
+        },
+      ],
+      isConnected: true,
+      isRunning: true,
+    });
     const task = createMockTask({
       id: 'task-work',
       title: 'Ship release candidate',
@@ -113,6 +150,12 @@ describe('task work view Mantine surface', () => {
         provider: 'openai',
         started: '2026-06-01T11:00:00.000Z',
       },
+      timeTracking: {
+        entries: [],
+        totalSeconds: 5400,
+        isRunning: true,
+      },
+      actualCost: 0.037,
       verificationSteps: [
         { id: 'verify-1', description: 'Run tests', checked: true },
         { id: 'verify-2', description: 'Smoke desktop app', checked: false },
@@ -149,6 +192,11 @@ describe('task work view Mantine surface', () => {
 
     expect(screen.getByText('Monitor active run')).toBeDefined();
     expect(screen.getByText('Attempt attempt-1')).toBeDefined();
+    expect(screen.getByText('Activity Console')).toBeDefined();
+    expect(screen.getByText('Current step: Running focused tests')).toBeDefined();
+    expect(screen.getByText('Installing dependencies')).toBeDefined();
+    expect(screen.getByText('1h 30m')).toBeDefined();
+    expect(screen.getByText('$0.04')).toBeDefined();
     expect(screen.getByText('Release readiness report')).toBeDefined();
     expect(screen.getByText('v3 | report | run run-456')).toBeDefined();
     expect(
@@ -160,10 +208,13 @@ describe('task work view Mantine surface', () => {
     await user.click(screen.getByRole('button', { name: 'Open Agent' }));
     await user.click(screen.getByRole('button', { name: 'Work Products' }));
     await user.click(screen.getByRole('button', { name: 'Workflow' }));
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await user.click(screen.getByRole('button', { name: 'Stop Agent' }));
 
     expect(mocks.onOpenTab).toHaveBeenCalledWith('agent');
     expect(mocks.onOpenTab).toHaveBeenCalledWith('work-products');
     expect(mocks.onOpenWorkflow).toHaveBeenCalled();
+    expect(mocks.stopAgentMutate).toHaveBeenCalledWith('task-work');
   });
 
   it('keeps readiness and default-tab decisions deterministic', () => {
