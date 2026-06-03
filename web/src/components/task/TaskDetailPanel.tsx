@@ -31,6 +31,8 @@ import { WorkProductsSection } from './WorkProductsSection';
 import { AgentRunTimelinePanel } from './AgentRunTimelinePanel';
 import { shouldDefaultTaskDetailToWork, TaskWorkView } from './TaskWorkView';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
+import { useIdentity } from '@/hooks/useIdentity';
+import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 import {
   BriefcaseBusiness,
   GitBranch,
@@ -179,8 +181,10 @@ export function TaskDetailPanel({
 }: TaskDetailPanelProps) {
   const { data: taskTypes = [] } = useTaskTypes();
   const { settings: featureSettings } = useFeatureSettings();
+  const { authContext } = useIdentity();
   const taskSettings = featureSettings.tasks;
   const agentSettings = featureSettings.agents;
+  const canUseLocalAgentControls = clientAllowsLocalAgentControls(authContext);
   const { localTask, updateField, isDirty } = useDebouncedSave(task);
   const [activeTab, setActiveTab] = useState<TaskDetailTabId>('details');
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -374,11 +378,12 @@ export function TaskDetailPanel({
         <Drawer.Overlay className="fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs" />
         <Drawer.Content
           aria-label={`Task details: ${localTask.title}`}
-          className="flex h-full w-[700px] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
+          data-testid="task-detail-panel"
+          className="flex h-full max-h-[100dvh] w-[min(100vw,700px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
         >
           <Drawer.Body className="contents">
             <Stack gap={0} className="h-full overflow-hidden">
-              <header className="flex-shrink-0 border-b px-6 py-4 pr-12">
+              <header className="flex-shrink-0 border-b px-4 py-4 pr-12 sm:px-6">
                 <Group
                   gap="xs"
                   justify="space-between"
@@ -416,9 +421,9 @@ export function TaskDetailPanel({
                     </ActionIcon>
                   </Group>
                 </Group>
-                <Drawer.Title className="mt-1 pr-8 text-xl font-semibold text-foreground">
+                <Drawer.Title className="mt-1 pr-8 text-lg font-semibold text-foreground sm:text-xl">
                   {readOnly ? (
-                    <Text component="span" size="xl" fw={600}>
+                    <Text component="span" size="lg" fw={600} className="sm:text-xl">
                       {localTask.title}
                     </Text>
                   ) : (
@@ -429,7 +434,7 @@ export function TaskDetailPanel({
                       placeholder="Task title..."
                       aria-label="Task title"
                       classNames={{
-                        input: 'text-xl font-semibold text-foreground',
+                        input: 'text-lg font-semibold text-foreground sm:text-xl',
                       }}
                     />
                   )}
@@ -437,10 +442,14 @@ export function TaskDetailPanel({
               </header>
 
               {/* Action buttons above tabs */}
-              <SimpleGrid cols={3} spacing="xs" className="flex-shrink-0 px-6 pt-4">
+              <SimpleGrid
+                cols={{ base: 2, sm: 3 }}
+                spacing="xs"
+                className="flex-shrink-0 px-4 pt-3 sm:px-6 sm:pt-4"
+              >
                 <Button
                   variant="outline"
-                  size="xs"
+                  size="sm"
                   onClick={() => setTaskChatOpen(true)}
                   leftSection={<MessageSquare className="h-3 w-3" />}
                 >
@@ -450,7 +459,7 @@ export function TaskDetailPanel({
                   <>
                     <Button
                       variant="outline"
-                      size="xs"
+                      size="sm"
                       onClick={() => setApplyTemplateOpen(true)}
                       leftSection={<FileCode className="h-3 w-3" />}
                     >
@@ -458,7 +467,7 @@ export function TaskDetailPanel({
                     </Button>
                     <Button
                       variant="outline"
-                      size="xs"
+                      size="sm"
                       onClick={() => setWorkflowOpen(true)}
                       leftSection={<Workflow className="h-3 w-3" />}
                     >
@@ -471,17 +480,21 @@ export function TaskDetailPanel({
                     <div />
                   </>
                 )}
-                {!readOnly && isCodeTask && localTask.git?.repo && agentSettings.enablePreview && (
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setPreviewOpen(true)}
-                    className="col-span-2"
-                    leftSection={<Monitor className="h-3 w-3" />}
-                  >
-                    Preview
-                  </Button>
-                )}
+                {!readOnly &&
+                  isCodeTask &&
+                  localTask.git?.repo &&
+                  agentSettings.enablePreview &&
+                  canUseLocalAgentControls && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPreviewOpen(true)}
+                      className="col-span-2"
+                      leftSection={<Monitor className="h-3 w-3" />}
+                    >
+                      Preview
+                    </Button>
+                  )}
               </SimpleGrid>
 
               <Tabs
@@ -489,7 +502,7 @@ export function TaskDetailPanel({
                 onChange={(value) => {
                   if (value) setActiveTab(value as TaskDetailTabId);
                 }}
-                className="flex flex-1 flex-col overflow-hidden px-6 pt-3 pb-6"
+                className="flex flex-1 flex-col overflow-hidden px-4 pt-3 pb-6 sm:px-6"
               >
                 <Tabs.List className="w-full flex-shrink-0 justify-start overflow-x-auto">
                   {visibleTabs.map((tab) => {

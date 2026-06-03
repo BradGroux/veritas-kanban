@@ -10,8 +10,10 @@
 import { useState, useEffect } from 'react';
 import { API_BASE } from '@/lib/config';
 import { Badge, Button, Group, Loader, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { Play, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
+import { useIdentity } from '@/hooks/useIdentity';
 import type { Task } from '@veritas-kanban/shared';
 
 interface WorkflowSectionProps {
@@ -58,6 +60,9 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState<string | null>(null);
   const { toast } = useToast();
+  const { hasPermission } = useIdentity();
+  const isMobile = useMediaQuery('(max-width: 767px)', false);
+  const canExecuteWorkflows = hasPermission('workflow:execute');
 
   useEffect(() => {
     if (!open) return;
@@ -127,6 +132,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
       title="Run Workflow"
       centered
       size="xl"
+      fullScreen={isMobile}
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
@@ -187,7 +193,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                       radius="md"
                       withBorder
                     >
-                      <Group align="flex-start" justify="space-between" gap="md" wrap="nowrap">
+                      <Group align="flex-start" justify="space-between" gap="md" wrap="wrap">
                         <Stack gap={4} className="min-w-0 flex-1">
                           <Group gap="xs">
                             <Text size="sm" fw={500}>
@@ -212,7 +218,12 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                         <Button
                           size="sm"
                           onClick={() => handleStartWorkflow(workflow.id)}
-                          disabled={isStarting === workflow.id}
+                          disabled={!canExecuteWorkflows || isStarting === workflow.id}
+                          title={
+                            canExecuteWorkflows
+                              ? 'Start run'
+                              : 'Workflow execute permission required'
+                          }
                           leftSection={
                             isStarting === workflow.id ? (
                               <Loader2 className="h-3 w-3 animate-spin" />

@@ -41,12 +41,15 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  ShieldAlert,
 } from 'lucide-react';
 import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type { Task, AgentType, AttemptStatus } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { sanitizeText } from '@/lib/sanitize';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
+import { useIdentity } from '@/hooks/useIdentity';
+import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 
 interface AgentPanelProps {
   task: Task;
@@ -66,6 +69,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const { outputs, isConnected, isRunning, clearOutputs } = useAgentStream(task.id);
   const { data: attempts, refetch: refetchAttempts } = useAgentAttempts(task.id);
   const { data: routingResult } = useResolveAgent(task.id);
+  const { authContext, hasPermission } = useIdentity();
 
   const startAgent = useStartAgent();
   const stopAgent = useStopAgent();
@@ -178,7 +182,9 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   };
 
   // Check if we can start an agent
-  const canStart = task.git?.worktreePath && !isRunning && !agentStatus?.running;
+  const canControlAgent =
+    clientAllowsLocalAgentControls(authContext) && hasPermission('agent:write');
+  const canStart = canControlAgent && task.git?.worktreePath && !isRunning && !agentStatus?.running;
   const isAgentRunning = isRunning || agentStatus?.running;
 
   if (!task.git?.worktreePath) {
@@ -228,6 +234,20 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         </Group>
 
         <Paper className="overflow-hidden bg-muted/30" radius="md" withBorder>
+          {!canControlAgent && (
+            <Alert
+              color="blue"
+              icon={<ShieldAlert className="h-4 w-4" />}
+              title="Agent controls unavailable for this client"
+              className="m-2"
+            >
+              <Text size="sm">
+                This client can inspect run history and live output, but start, stop, retry, and
+                message controls require an agent-capable desktop or CLI session.
+              </Text>
+            </Alert>
+          )}
+
           {!isAgentRunning && !readinessSummary.ready && (
             <Alert
               color="yellow"
@@ -246,69 +266,71 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
           )}
 
           {/* Controls */}
-          <Group gap="xs" className="border-b bg-card p-2">
-            {!isAgentRunning ? (
-              <>
-                {routingResult && !selectedAgent && (
-                  <Text
+          {canControlAgent && (
+            <Group gap="xs" className="border-b bg-card p-2">
+              {!isAgentRunning ? (
+                <>
+                  {routingResult && !selectedAgent && (
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      truncate
+                      className="max-w-[200px]"
+                      title={routingResult.reason}
+                    >
+                      Rec:{' '}
+                      {enabledAgents.find((a) => a.type === routingResult.agent)?.name ||
+                        routingResult.agent}
+                      {routingResult.model ? ` (${routingResult.model})` : ''}
+                    </Text>
+                  )}
+                  <Select
+                    value={resolvedAgent}
+                    onChange={(value) => setSelectedAgent(value as AgentType)}
+                    data={agentOptions}
+                    placeholder="Select agent..."
+                    aria-label="Agent"
+                    className="w-[180px]"
                     size="xs"
-                    c="dimmed"
-                    truncate
-                    className="max-w-[200px]"
-                    title={routingResult.reason}
+                    checkIconPosition="right"
+                  />
+                  <Select
+                    value={selectedModel || routingResult?.model || 'sonnet'}
+                    onChange={(value) => setSelectedModel(value ?? undefined)}
+                    data={modelOptions}
+                    placeholder="Model..."
+                    aria-label="Model"
+                    className="w-[100px]"
+                    size="xs"
+                    checkIconPosition="right"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleStart}
+                    disabled={!canStart || startAgent.isPending}
+                    leftSection={
+                      startAgent.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )
+                    }
                   >
-                    Rec:{' '}
-                    {enabledAgents.find((a) => a.type === routingResult.agent)?.name ||
-                      routingResult.agent}
-                    {routingResult.model ? ` (${routingResult.model})` : ''}
-                  </Text>
-                )}
-                <Select
-                  value={resolvedAgent}
-                  onChange={(value) => setSelectedAgent(value as AgentType)}
-                  data={agentOptions}
-                  placeholder="Select agent..."
-                  aria-label="Agent"
-                  className="w-[180px]"
-                  size="xs"
-                  checkIconPosition="right"
-                />
-                <Select
-                  value={selectedModel || routingResult?.model || 'sonnet'}
-                  onChange={(value) => setSelectedModel(value ?? undefined)}
-                  data={modelOptions}
-                  placeholder="Model..."
-                  aria-label="Model"
-                  className="w-[100px]"
-                  size="xs"
-                  checkIconPosition="right"
-                />
+                    Start
+                  </Button>
+                </>
+              ) : (
                 <Button
                   size="sm"
-                  onClick={handleStart}
-                  disabled={!canStart || startAgent.isPending}
-                  leftSection={
-                    startAgent.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )
-                  }
+                  color="red"
+                  leftSection={<Square className="h-4 w-4" />}
+                  onClick={() => setStopDialogOpen(true)}
                 >
-                  Start
+                  Stop
                 </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                color="red"
-                leftSection={<Square className="h-4 w-4" />}
-                onClick={() => setStopDialogOpen(true)}
-              >
-                Stop
-              </Button>
-            )}
-          </Group>
+              )}
+            </Group>
+          )}
 
           {/* Output */}
           <div
@@ -341,7 +363,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
           </div>
 
           {/* Input */}
-          {isAgentRunning && (
+          {isAgentRunning && canControlAgent && (
             <form onSubmit={handleSendMessage} className="flex gap-2 p-2 border-t bg-card">
               <TextInput
                 value={message}
@@ -359,7 +381,8 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         {/* New Attempt button for completed/failed tasks */}
         {task.attempt &&
           ['complete', 'failed'].includes(task.attempt.status) &&
-          !isAgentRunning && (
+          !isAgentRunning &&
+          canControlAgent && (
             <Button
               variant="outline"
               size="sm"

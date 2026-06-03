@@ -34,6 +34,7 @@ import {
   Route,
   ShieldCheck,
   Square,
+  Smartphone,
   Terminal,
   RotateCcw,
   Workflow,
@@ -47,6 +48,7 @@ import {
 } from '@veritas-kanban/shared';
 import type { Task, TaskAttempt, TaskReadinessCheck, TaskStatus } from '@veritas-kanban/shared';
 import { useAgentStatus, useAgentStream, useStopAgent } from '@/hooks/useAgent';
+import { useIdentity } from '@/hooks/useIdentity';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
 import {
   useActiveRuns,
@@ -55,6 +57,7 @@ import {
   type WorkflowRunStatus,
 } from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
+import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 
 export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
   return getSharedTaskReadinessChecks(task, { isCodeTask });
@@ -365,6 +368,9 @@ export function TaskWorkView({
   const { data: activeWorkflowRuns = [], isLoading: activeWorkflowRunsLoading } = useActiveRuns();
   const { data: recentWorkflowRuns = [], isLoading: recentWorkflowRunsLoading } = useRecentRuns();
   const stopAgent = useStopAgent();
+  const { authContext, hasPermission } = useIdentity();
+  const canControlAgents =
+    clientAllowsLocalAgentControls(authContext) && hasPermission('agent:write');
   const readinessSummary = useMemo(
     () => evaluateTaskReadiness(task, { isCodeTask }),
     [task, isCodeTask]
@@ -396,6 +402,17 @@ export function TaskWorkView({
   const workflowProgress = getWorkflowProgress(workflowRun);
   const workflowDuration = getWorkflowDurationMs(workflowRun);
   const workflowLoading = activeWorkflowRunsLoading || recentWorkflowRunsLoading;
+  const nextActionRestricted =
+    nextAction.target === 'agent' || (nextAction.target === 'git' && !canControlAgents);
+  const effectiveNextAction =
+    nextActionRestricted && !canControlAgents
+      ? {
+          label: isCodeTask ? 'Review timeline' : 'Review details',
+          detail:
+            'This client can review task state, comments, gates, and run history. Agent execution is unavailable for this client mode.',
+          target: isCodeTask ? ('timeline' as const) : ('details' as const),
+        }
+      : nextAction;
   const currentStep =
     latestOutputs.length > 0
       ? sanitizeText(latestOutputs[latestOutputs.length - 1].content).slice(0, 180)
@@ -406,15 +423,15 @@ export function TaskWorkView({
           : 'No live output is available.';
 
   const openNextAction = () => {
-    if (nextAction.target === 'workflow') {
+    if (effectiveNextAction.target === 'workflow') {
       onOpenWorkflow();
       return;
     }
-    if (nextAction.target === 'chat') {
+    if (effectiveNextAction.target === 'chat') {
       onOpenChat();
       return;
     }
-    onOpenTab(nextAction.target);
+    onOpenTab(effectiveNextAction.target);
   };
 
   const handleStopAgent = () => {
@@ -441,16 +458,23 @@ export function TaskWorkView({
                 </Badge>
               </Group>
               <Text size="sm" c="dimmed" mt={6}>
-                {nextAction.detail}
+                {effectiveNextAction.detail}
               </Text>
             </div>
             {!readOnly && (
               <Button size="xs" onClick={openNextAction}>
-                {nextAction.label}
+                {effectiveNextAction.label}
               </Button>
             )}
           </Group>
         </Paper>
+
+        {!canControlAgents && (
+          <Alert color="blue" icon={<Smartphone className="h-4 w-4" />}>
+            Agent start, stop, and retry controls are hidden for this client. Review, comments,
+            gates, timelines, and work products remain available.
+          </Alert>
+        )}
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <Paper withBorder p="md" radius="md">
@@ -489,14 +513,16 @@ export function TaskWorkView({
                 </Text>
               )}
               <Group gap="xs" mt="xs">
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  leftSection={<Play className="h-3 w-3" />}
-                  onClick={() => onOpenTab('agent')}
-                >
-                  Open Agent
-                </Button>
+                {canControlAgents && (
+                  <Button
+                    size="compact-xs"
+                    variant="light"
+                    leftSection={<Play className="h-3 w-3" />}
+                    onClick={() => onOpenTab('agent')}
+                  >
+                    Open Agent
+                  </Button>
+                )}
                 {isCodeTask && (
                   <Button
                     size="compact-xs"
@@ -507,7 +533,7 @@ export function TaskWorkView({
                     Timeline
                   </Button>
                 )}
-                {retryableRun && (
+                {retryableRun && canControlAgents && (
                   <Button
                     size="compact-xs"
                     variant="subtle"
@@ -611,7 +637,7 @@ export function TaskWorkView({
                 </Text>
               </div>
               <Group gap="xs" wrap="wrap" justify="flex-end">
-                {activeRun && !readOnly && (
+                {activeRun && !readOnly && canControlAgents && (
                   <Button
                     size="compact-xs"
                     color="red"
@@ -623,7 +649,7 @@ export function TaskWorkView({
                     Stop
                   </Button>
                 )}
-                {retryableRun && !activeRun && !readOnly && (
+                {retryableRun && !activeRun && !readOnly && canControlAgents && (
                   <Button
                     size="compact-xs"
                     variant="light"

@@ -27,6 +27,10 @@ const mocks = vi.hoisted(() => ({
   updateTaskMutateAsync: vi.fn(),
   useTaskMetrics: vi.fn(),
   applyTemplateActivity: vi.fn(),
+  identity: {
+    authContext: null as unknown,
+    hasPermission: vi.fn((_permission: string) => true),
+  },
 }));
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -73,6 +77,10 @@ vi.mock('@/hooks/useTasks', () => ({
 
 vi.mock('@/hooks/useTaskMetrics', () => ({
   useTaskMetrics: mocks.useTaskMetrics,
+}));
+
+vi.mock('@/hooks/useIdentity', () => ({
+  useIdentity: () => mocks.identity,
 }));
 
 vi.mock('@/components/dashboard/ExportDialog', () => ({
@@ -183,6 +191,8 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
       isLoading: false,
       error: null,
     });
+    mocks.identity.authContext = null;
+    mocks.identity.hasPermission.mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -266,6 +276,32 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
       },
       { onSuccess: expect.any(Function) }
     );
+  });
+
+  it('hides agent start controls for mobile device sessions without agent write permission', () => {
+    mocks.identity.authContext = {
+      authMethod: 'device-session',
+      clientMode: 'mobile-pwa',
+      isLocalhost: false,
+      permissions: ['workspace:read', 'task:read', 'agent:read'],
+      role: 'read-only',
+    };
+    mocks.identity.hasPermission.mockImplementation(
+      (permission: string) => permission !== 'agent:write'
+    );
+    const task = createMockTask({
+      id: 'task-agent-mobile',
+      title: 'Review mobile run',
+      description: 'Review the run history from a paired mobile client.',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'feature/mobile', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+
+    renderWithProviders(<AgentPanel task={task} />);
+
+    expect(screen.getByText('Agent controls unavailable for this client')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Agent' })).toBeNull();
   });
 
   it('keeps running-agent message send and stop confirmation wired through Mantine modal', async () => {

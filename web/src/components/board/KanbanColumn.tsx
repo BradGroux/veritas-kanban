@@ -16,8 +16,13 @@ interface KanbanColumnProps {
   tasks: Task[];
   allTasks: Task[];
   onTaskClick?: (task: Task) => void;
+  onTaskStatusChange?: (taskId: string, status: TaskStatus) => void;
   selectedTaskId?: string | null;
+  canChangeStatus?: boolean;
+  dragEnabled?: boolean;
   isDragActive?: boolean;
+  showStatusControls?: boolean;
+  statusOptions?: Array<{ value: TaskStatus; label: string }>;
 }
 
 const columnColors: Record<TaskStatus, string> = {
@@ -34,10 +39,15 @@ export function KanbanColumn({
   tasks,
   allTasks,
   onTaskClick,
+  onTaskStatusChange,
   selectedTaskId,
+  canChangeStatus = true,
+  dragEnabled = true,
   isDragActive,
+  showStatusControls = false,
+  statusOptions,
 }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !dragEnabled });
   const { settings: featureSettings } = useFeatureSettings();
   const { isSelecting, selectedIds, toggleGroup } = useBulkActions();
   const showDoneMetrics = featureSettings.board.showDoneMetrics;
@@ -67,7 +77,7 @@ export function KanbanColumn({
       className={cn(
         'flex flex-col rounded-lg bg-muted/50 border-t-2 transition-all',
         columnColors[id],
-        isOver && 'ring-2 ring-primary/50 bg-muted/70'
+        dragEnabled && isOver && 'ring-2 ring-primary/50 bg-muted/70'
       )}
     >
       <div className="flex items-center justify-between px-3 py-2">
@@ -98,15 +108,15 @@ export function KanbanColumn({
       </div>
 
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex-1 p-2 space-y-2 min-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="flex-1 p-2 space-y-2 min-h-24 overflow-y-auto md:min-h-[calc(100vh-200px)]">
           {tasks.length === 0 ? (
             <div
               className={cn(
                 'flex items-center justify-center h-24 text-sm text-muted-foreground rounded-md border-2 border-dashed',
-                isOver && 'border-primary/50 bg-primary/5'
+                dragEnabled && isOver && 'border-primary/50 bg-primary/5'
               )}
             >
-              {isOver ? 'Drop here' : 'No tasks'}
+              {dragEnabled && isOver ? 'Drop here' : 'No tasks'}
             </div>
           ) : (
             tasks.map((task) => {
@@ -118,12 +128,17 @@ export function KanbanColumn({
                 <ErrorBoundary key={task.id} level="widget">
                   <TaskCard
                     task={task}
+                    dragEnabled={dragEnabled}
                     onClick={() => onTaskClick?.(task)}
+                    onStatusChange={(status) => onTaskStatusChange?.(task.id, status)}
                     isSelected={task.id === selectedTaskId}
                     isBlocked={blocked}
                     blockerTitles={blockers.map((b) => b.title)}
                     cardMetrics={taskMetrics}
+                    canChangeStatus={canChangeStatus}
                     isDragActive={isDragActive}
+                    showStatusControl={showStatusControls}
+                    statusOptions={statusOptions}
                   />
                 </ErrorBoundary>
               );

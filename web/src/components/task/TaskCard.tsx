@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Tooltip } from '@mantine/core';
+import { Select, Tooltip } from '@mantine/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
@@ -60,13 +60,18 @@ const blockedCategoryInfo: Record<
 
 interface TaskCardProps {
   task: Task;
+  dragEnabled?: boolean;
   isDragging?: boolean;
   isDragActive?: boolean;
   onClick?: () => void;
+  onStatusChange?: (status: Task['status']) => void;
   isSelected?: boolean;
   isBlocked?: boolean;
   blockerTitles?: string[];
   cardMetrics?: TaskCardMetrics;
+  canChangeStatus?: boolean;
+  showStatusControl?: boolean;
+  statusOptions?: Array<{ value: Task['status']; label: string }>;
 }
 
 /**
@@ -77,11 +82,15 @@ interface TaskCardProps {
  */
 function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolean {
   // Simple scalar/boolean props
+  if (prev.dragEnabled !== next.dragEnabled) return false;
   if (prev.isDragging !== next.isDragging) return false;
   if (prev.isDragActive !== next.isDragActive) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.isBlocked !== next.isBlocked) return false;
+  if (prev.canChangeStatus !== next.canChangeStatus) return false;
+  if (prev.showStatusControl !== next.showStatusControl) return false;
   // onClick is intentionally skipped — always a new closure but functionally equivalent
+  // onStatusChange is also skipped for the same reason.
 
   // Task object — compare fields that affect rendering rather than reference
   const pt = prev.task;
@@ -181,13 +190,18 @@ const priorityColors: Record<TaskPriority, string> = {
 
 export const TaskCard = memo(function TaskCard({
   task,
+  dragEnabled = true,
   isDragging,
   isDragActive,
   onClick,
+  onStatusChange,
   isSelected,
   isBlocked,
   blockerTitles,
   cardMetrics,
+  canChangeStatus = true,
+  showStatusControl = false,
+  statusOptions,
 }: TaskCardProps) {
   const { taskTypes, projects, sprints } = useTaskConfig();
   const {
@@ -199,6 +213,7 @@ export const TaskCard = memo(function TaskCard({
     isDragging: isCurrentlyDragging,
   } = useSortable({
     id: task.id,
+    disabled: !dragEnabled,
   });
   const { isSelecting, toggleSelect, isSelected: isBulkSelected } = useBulkActions();
   const isChecked = isBulkSelected(task.id);
@@ -216,10 +231,12 @@ export const TaskCard = memo(function TaskCard({
     [descriptionPreview]
   );
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = dragEnabled
+    ? {
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }
+    : undefined;
 
   const handleClick = () => {
     if (isCurrentlyDragging || isDragging) return;
@@ -321,15 +338,16 @@ export const TaskCard = memo(function TaskCard({
       <div
         ref={setNodeRef}
         style={style}
-        {...listeners}
-        {...attributes}
+        {...(dragEnabled ? listeners : {})}
+        {...(dragEnabled ? attributes : {})}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         role="article"
         tabIndex={0}
         aria-label={`Task: ${task.title}, Priority: ${task.priority}${readinessAria}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
         className={cn(
-          'group bg-card border border-border rounded-md cursor-grab active:cursor-grabbing',
+          'group bg-card border border-border rounded-md',
+          dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
           isCompact ? 'p-2' : 'p-3',
           'hover:border-muted-foreground/50 hover:bg-card/80 transition-all',
           'border-l-2',
@@ -707,6 +725,29 @@ export const TaskCard = memo(function TaskCard({
             </>
           )}
         </div>
+
+        {showStatusControl && statusOptions && statusOptions.length > 0 && (
+          <div
+            className="mt-3 md:hidden"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <Select
+              aria-label={`Change status for ${task.title}`}
+              data={statusOptions}
+              value={task.status}
+              onChange={(value) => {
+                if (value && value !== task.status) onStatusChange?.(value as Task['status']);
+              }}
+              disabled={!canChangeStatus}
+              size="sm"
+              allowDeselect={false}
+              checkIconPosition="right"
+            />
+          </div>
+        )}
       </div>
     </Tooltip>
   );

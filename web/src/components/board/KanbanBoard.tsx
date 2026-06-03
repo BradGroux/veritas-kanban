@@ -5,6 +5,7 @@ import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
 import type { TaskStatus, Task } from '@veritas-kanban/shared';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { TaskCard } from '@/components/task/TaskCard';
 import { useKeyboard } from '@/hooks/useKeyboard';
@@ -47,12 +48,16 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'done', title: 'Done' },
 ];
 
+const STATUS_OPTIONS = COLUMNS.map((column) => ({ value: column.id, label: column.title }));
+
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const { settings: featureSettings } = useFeatureSettings();
   const { announce } = useLiveAnnouncer();
   const { hasPermission } = useIdentity();
   const canWriteTasks = hasPermission('task:write');
+  const isMobileLayout = useMediaQuery('(max-width: 767px)', false);
+  const canDragTasks = featureSettings.board.enableDragAndDrop && canWriteTasks && !isMobileLayout;
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailPanelMounted, setDetailPanelMounted] = useState(false);
@@ -296,10 +301,11 @@ export function KanbanBoard() {
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <section
+            id="mobile-board-columns"
             className="min-w-0 xl:col-span-4"
             aria-label={`Kanban board, ${filteredTasks.length} tasks`}
           >
-            {featureSettings.board.enableDragAndDrop && canWriteTasks ? (
+            {canDragTasks ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={collisionDetection}
@@ -320,8 +326,12 @@ export function KanbanBoard() {
                       tasks={liveTasksByStatus[column.id]}
                       allTasks={filteredTasks}
                       onTaskClick={handleTaskClick}
+                      onTaskStatusChange={handleMoveTask}
                       selectedTaskId={selectedTaskId}
+                      canChangeStatus={canWriteTasks}
+                      dragEnabled={canDragTasks}
                       isDragActive={isDragActive}
+                      statusOptions={STATUS_OPTIONS}
                     />
                   ))}
                 </div>
@@ -344,7 +354,12 @@ export function KanbanBoard() {
                     tasks={tasksByStatus[column.id]}
                     allTasks={filteredTasks}
                     onTaskClick={handleTaskClick}
+                    onTaskStatusChange={handleMoveTask}
                     selectedTaskId={selectedTaskId}
+                    canChangeStatus={canWriteTasks}
+                    dragEnabled={false}
+                    showStatusControls={isMobileLayout}
+                    statusOptions={STATUS_OPTIONS}
                   />
                 ))}
               </div>

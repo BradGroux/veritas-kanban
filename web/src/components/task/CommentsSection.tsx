@@ -86,12 +86,12 @@ function CommentItem({
 
   return (
     <>
-      <Paper className="group flex gap-3 bg-muted/30 p-3" radius="md">
+      <Paper className="group flex flex-col gap-3 bg-muted/30 p-3 sm:flex-row" radius="md">
         <Avatar color="violet" radius="xl" size="sm" className="flex-shrink-0">
           {getInitials(comment.author)}
         </Avatar>
         <Box className="min-w-0 flex-1">
-          <Group align="baseline" gap="xs" className="mb-1">
+          <Group align="baseline" gap="xs" className="mb-1" wrap="wrap">
             <Text size="sm" fw={500}>
               {comment.author}
             </Text>
@@ -99,7 +99,10 @@ function CommentItem({
               {formatRelativeTime(comment.timestamp)}
             </Text>
             {/* Edit/Delete buttons - visible on hover */}
-            <Group gap={4} className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
+            <Group
+              gap={4}
+              className="ml-auto opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+            >
               <ActionIcon
                 variant="subtle"
                 color="gray"
@@ -292,7 +295,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
             value={author}
             onChange={(e) => setAuthor(e.currentTarget.value)}
             placeholder="Your name"
-            className="text-sm max-w-[150px]"
+            className="w-full text-sm sm:max-w-[180px]"
             disabled={isAdding}
             aria-label="Comment author"
           />
@@ -327,6 +330,7 @@ export function CommentsSection({ task }: CommentsSectionProps) {
               void handleAddComment();
             }}
             disabled={!text.trim() || !author.trim() || isAdding}
+            className="w-full sm:w-auto"
           >
             Add Comment
           </Button>

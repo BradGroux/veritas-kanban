@@ -770,7 +770,10 @@ export function NeedsAttentionQueue({
   };
 
   return (
-    <section className="rounded-lg border bg-card p-4" aria-labelledby="needs-attention-title">
+    <section
+      className="rounded-lg border bg-card p-3 sm:p-4"
+      aria-labelledby="needs-attention-title"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -787,7 +790,7 @@ export function NeedsAttentionQueue({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-5 lg:min-w-[680px]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-5 lg:min-w-[680px]">
           <Select
             aria-label="Filter needs attention by severity"
             data={severityOptions}
@@ -907,12 +910,13 @@ export function NeedsAttentionQueue({
                   </div>
                 </button>
 
-                <Group gap="xs" justify="flex-end" wrap="nowrap">
+                <Group gap="xs" justify="flex-end" wrap="wrap" className="w-full md:w-auto">
                   <Button
                     leftSection={<ExternalLink className="h-3.5 w-3.5" />}
                     size="compact-xs"
                     variant="light"
                     onClick={() => openItem(item)}
+                    className="w-full sm:w-auto"
                   >
                     {item.nextAction}
                   </Button>
@@ -925,7 +929,12 @@ export function NeedsAttentionQueue({
                           : 'Dismiss'
                     }
                   >
-                    <Button size="compact-xs" variant="subtle" onClick={() => dismissItem(item)}>
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      onClick={() => dismissItem(item)}
+                      className="w-full sm:w-auto"
+                    >
                       {item.notificationId
                         ? 'Mark read'
                         : item.driftAlertId

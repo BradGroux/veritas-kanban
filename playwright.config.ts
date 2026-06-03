@@ -19,8 +19,8 @@ if (!process.env.VERITAS_ADMIN_KEY) {
  * Playwright E2E test configuration for Veritas Kanban.
  *
  * Expects the dev server to be running:
- *   - Vite dev server on http://localhost:3000 (serves frontend, proxies API)
- *   - Express API server on http://localhost:3001
+ *   - Vite dev server on http://127.0.0.1:3000 (serves frontend, proxies API)
+ *   - Express API server on http://127.0.0.1:3001
  *
  * Start with: pnpm dev
  */
@@ -34,7 +34,7 @@ export default defineConfig({
   timeout: 30_000,
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     // Auth — read admin key from server/.env (loaded via dotenv above)
@@ -47,22 +47,39 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /mobile-responsive\.spec\.ts/,
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 5'] },
+      testMatch: /mobile-responsive\.spec\.ts/,
     },
   ],
 
   /* Run dev servers before starting tests (if not already running) */
   webServer: [
     {
-      command: 'pnpm --filter server dev',
+      command: 'cd server && node_modules/.bin/tsx src/index.ts',
       port: 3001,
       reuseExistingServer: true,
-      timeout: 15_000,
+      timeout: 30_000,
+      env: {
+        VERITAS_ADMIN_KEY: process.env.VERITAS_ADMIN_KEY || 'dev-admin-key',
+        VERITAS_DISABLE_WATCHERS: '1',
+        VERITAS_AUTH_LOCALHOST_BYPASS: 'true',
+        VERITAS_AUTH_LOCALHOST_ROLE: 'admin',
+      },
     },
     {
-      command: 'pnpm --filter web dev',
-      url: 'http://localhost:3000',
+      command: 'cd web && node_modules/.bin/vite --host 127.0.0.1',
+      url: 'http://127.0.0.1:3000',
       reuseExistingServer: true,
-      timeout: 15_000,
+      timeout: 30_000,
+      env: {
+        VITE_API_URL: 'http://127.0.0.1:3001/api',
+        VITE_API_PROXY_TARGET: 'http://127.0.0.1:3001',
+        VITE_WS_PROXY_TARGET: 'ws://127.0.0.1:3001',
+      },
     },
   ],
 });

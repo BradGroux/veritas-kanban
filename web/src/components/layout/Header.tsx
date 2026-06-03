@@ -39,6 +39,7 @@ import { useView } from '@/contexts/ViewContext';
 import { useBacklogCount } from '@/hooks/useBacklog';
 import { useTheme } from '@/hooks/useTheme';
 import { useIdentity } from '@/hooks/useIdentity';
+import type { SearchCollection } from '@/lib/api';
 import { NAVIGATION_VIEWS, type ViewIcon } from '@/lib/views';
 
 const CreateTaskDialog = lazy(() =>
@@ -73,6 +74,11 @@ const SearchDialog = lazy(() =>
 
 type LazyPanel = 'chat' | 'create' | 'search' | 'settings' | 'squadChat';
 
+interface SearchPreset {
+  query?: string;
+  collections?: SearchCollection[];
+}
+
 const VIEW_ICONS: Record<ViewIcon, LucideIcon> = {
   Activity,
   Archive,
@@ -91,6 +97,7 @@ export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchPreset, setSearchPreset] = useState<SearchPreset | undefined>();
   // activityOpen removed — sidebar merged into feed (GH-66)
   // archiveOpen removed — archive is now a full page view
   const [chatOpen, setChatOpen] = useState(false);
@@ -124,10 +131,14 @@ export function Header() {
     setChatOpen(true);
   }, [markPanelLoaded]);
 
-  const openSearchDialog = useCallback(() => {
-    markPanelLoaded('search');
-    setSearchOpen(true);
-  }, [markPanelLoaded]);
+  const openSearchDialog = useCallback(
+    (preset?: SearchPreset) => {
+      markPanelLoaded('search');
+      setSearchPreset(preset);
+      setSearchOpen(true);
+    },
+    [markPanelLoaded]
+  );
 
   const openSquadChatPanel = useCallback(() => {
     markPanelLoaded('squadChat');
@@ -164,6 +175,16 @@ export function Header() {
     window.addEventListener('veritas:open-settings', handleOpenSettings);
     return () => window.removeEventListener('veritas:open-settings', handleOpenSettings);
   }, [openSettingsDialog]);
+
+  useEffect(() => {
+    const handleOpenSearch = (event: Event) => {
+      const detail = (event as CustomEvent<SearchPreset>).detail;
+      openSearchDialog(detail);
+    };
+
+    window.addEventListener('veritas:open-search', handleOpenSearch);
+    return () => window.removeEventListener('veritas:open-search', handleOpenSearch);
+  }, [openSearchDialog]);
 
   // Register the create dialog and chat panel openers with keyboard context (refs, no useEffect needed)
   setOpenCreateDialog(openCreateDialog);
@@ -253,7 +274,7 @@ export function Header() {
               variant="subtle"
               color="gray"
               size={32}
-              onClick={openSearchDialog}
+              onClick={() => openSearchDialog()}
               aria-label="Search"
               title="Search"
             >
@@ -343,6 +364,8 @@ export function Header() {
             onTaskOpen={navigateToTask}
             onViewOpen={setView}
             onSettingsOpen={openSettingsDialog}
+            initialQuery={searchPreset?.query}
+            initialCollections={searchPreset?.collections}
           />
         )}
       </Suspense>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   Bell,
@@ -67,6 +67,8 @@ const COLLECTION_LABELS = new Map(
   COLLECTIONS.map((collection) => [collection.id, collection.label])
 );
 
+const ALL_COLLECTION_IDS = COLLECTIONS.map((collection) => collection.id);
+
 const BACKENDS: { id: SearchBackend; label: string }[] = [
   { id: 'auto', label: 'Auto' },
   { id: 'keyword', label: 'Keyword' },
@@ -95,6 +97,8 @@ interface SearchDialogProps {
   onViewOpen?: (view: AppView) => void;
   onSettingsOpen?: (section?: string) => void;
   onDiagnosticsOpen?: () => void;
+  initialQuery?: string;
+  initialCollections?: SearchCollection[];
 }
 
 function collectionIcon(collection: string) {
@@ -175,15 +179,25 @@ export function SearchDialog({
   onViewOpen,
   onSettingsOpen,
   onDiagnosticsOpen,
+  initialQuery,
+  initialCollections,
 }: SearchDialogProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery ?? '');
   const [backend, setBackend] = useState<SearchBackend>('auto');
   const [collections, setCollections] = useState<SearchCollection[]>(
-    COLLECTIONS.map((collection) => collection.id)
+    initialCollections?.length ? initialCollections : ALL_COLLECTION_IDS
   );
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery(initialQuery ?? '');
+    setCollections(initialCollections?.length ? initialCollections : ALL_COLLECTION_IDS);
+    setResponse(null);
+    setError(null);
+  }, [initialCollections, initialQuery, open]);
 
   const trimmedQuery = query.trim();
   const canSearch = trimmedQuery.length > 0 && collections.length > 0 && !isSearching;

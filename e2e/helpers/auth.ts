@@ -11,7 +11,7 @@ const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY || 'dev-admin-key';
  * Backend API base URL. Direct to Express on port 3001 to avoid
  * Vite proxy issues (IPv4/IPv6 binding differences on macOS).
  */
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:3001';
+const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
 
 /**
  * Bypass authentication for E2E tests.
@@ -116,7 +116,7 @@ export async function seedTestTask(
   page: Page,
   overrides: Record<string, unknown> = {}
 ): Promise<Record<string, unknown>> {
-  const { status: desiredStatus, ...rest } = overrides;
+  const { status: desiredStatus, git: desiredGit, ...rest } = overrides;
 
   const taskData = {
     title: `E2E Test Task ${Date.now()}`,
@@ -137,24 +137,33 @@ export async function seedTestTask(
     throw new Error(`Failed to seed task: ${response.status()} ${await response.text()}`);
   }
 
-  const task = await response.json();
+  const createdBody = await response.json();
+  const task = (createdBody as { data?: Record<string, unknown> }).data ?? createdBody;
 
-  // The API always creates tasks as 'todo'. If a different status was
-  // requested, PATCH it after creation.
+  // The API creates tasks as 'todo' and only accepts git/worktree data on PATCH.
   const targetStatus = desiredStatus ?? 'todo';
+  const patchData: Record<string, unknown> = {};
   if (targetStatus !== 'todo') {
+    patchData.status = targetStatus;
+  }
+  if (desiredGit) {
+    patchData.git = desiredGit;
+  }
+
+  if (Object.keys(patchData).length > 0) {
     const patchResponse = await withRetry(() =>
       page.request.patch(`${API_BASE}/api/tasks/${(task as { id: string }).id}`, {
         headers: { 'X-API-Key': ADMIN_KEY, 'Content-Type': 'application/json' },
-        data: { status: targetStatus },
+        data: patchData,
       })
     );
     if (!patchResponse.ok()) {
       throw new Error(
-        `Failed to set task status to ${targetStatus as string}: ${patchResponse.status()}`
+        `Failed to patch seeded task: ${patchResponse.status()} ${await patchResponse.text()}`
       );
     }
-    return patchResponse.json();
+    const patchedBody = await patchResponse.json();
+    return (patchedBody as { data?: Record<string, unknown> }).data ?? patchedBody;
   }
 
   return task;

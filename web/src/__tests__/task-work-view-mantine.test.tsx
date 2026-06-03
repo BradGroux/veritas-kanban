@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   useActiveRuns: vi.fn(),
   useRecentRuns: vi.fn(),
   useTaskWorkProducts: vi.fn(),
+  identity: {
+    authContext: null as unknown,
+    hasPermission: vi.fn((_permission: string) => true),
+  },
 }));
 
 vi.mock('@/hooks/useAgent', () => ({
@@ -38,6 +42,10 @@ vi.mock('@/hooks/useWorkProducts', () => ({
 vi.mock('@/hooks/useWorkflowStats', () => ({
   useActiveRuns: mocks.useActiveRuns,
   useRecentRuns: mocks.useRecentRuns,
+}));
+
+vi.mock('@/hooks/useIdentity', () => ({
+  useIdentity: () => mocks.identity,
 }));
 
 const product: WorkProductPreview = {
@@ -82,6 +90,8 @@ describe('task work view Mantine surface', () => {
     mocks.useActiveRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskWorkProducts.mockReturnValue({ data: [], isLoading: false });
+    mocks.identity.authContext = null;
+    mocks.identity.hasPermission.mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -286,5 +296,61 @@ describe('task work view Mantine surface', () => {
     expect(readiness.every((check) => check.passed)).toBe(true);
     expect(shouldDefaultTaskDetailToWork(task)).toBe(true);
     expect(shouldDefaultTaskDetailToWork(createMockTask({ type: 'feature' }))).toBe(false);
+  });
+
+  it('routes mobile device sessions to review-safe actions instead of agent controls', async () => {
+    const user = userEvent.setup();
+    mocks.identity.authContext = {
+      authMethod: 'device-session',
+      clientMode: 'mobile-pwa',
+      isLocalhost: false,
+      permissions: ['workspace:read', 'task:read', 'comment:write', 'agent:read'],
+      role: 'read-only',
+    };
+    mocks.identity.hasPermission.mockImplementation(
+      (permission: string) => permission !== 'agent:write'
+    );
+    const task = createMockTask({
+      id: 'task-mobile-work',
+      title: 'Review from phone',
+      description:
+        'Review the task from a mobile client without exposing local agent execution controls and capture the evidence artifact.',
+      type: 'code',
+      status: 'todo',
+      agent: 'veritas',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'mobile-review',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-worktree',
+      },
+      attempt: {
+        id: 'attempt-mobile',
+        agent: 'veritas',
+        status: 'running',
+        model: 'gpt-5',
+        provider: 'openai',
+        started: '2026-06-01T11:00:00.000Z',
+      },
+      subtasks: [
+        {
+          id: 'sub-mobile',
+          title: 'Confirm mobile review path',
+          completed: false,
+          created: '2026-06-01T11:00:00.000Z',
+          acceptanceCriteria: ['Mobile path opens timeline instead of agent start'],
+        },
+      ],
+      verificationSteps: [{ id: 'verify-mobile', description: 'Run mobile test', checked: false }],
+    });
+
+    renderWorkView(task);
+
+    expect(screen.getByText(/Agent start, stop, and retry controls are hidden/)).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Open Agent' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Review timeline' }));
+
+    expect(mocks.onOpenTab).toHaveBeenCalledWith('timeline');
   });
 });

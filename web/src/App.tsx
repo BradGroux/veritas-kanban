@@ -19,6 +19,7 @@ import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { FloatingChat } from './components/chat/FloatingChat';
 import { SystemHealthBar } from './components/layout/SystemHealthBar';
+import { MobileShell } from './components/layout/MobileShell';
 import { VIEW_BY_ID, type AppView } from './lib/views';
 
 // Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
@@ -220,7 +221,8 @@ function AppContent() {
                       component="main"
                       id="main-content"
                       px={{ base: 'md', md: '3.5rem' }}
-                      py="lg"
+                      pt="lg"
+                      pb={{ base: '6rem', md: 'lg' }}
                       tabIndex={-1}
                     >
                       <ErrorBoundary level="section">
@@ -230,6 +232,7 @@ function AppContent() {
                     <Toaster />
                     <CommandPalette />
                     <FloatingChat />
+                    <MobileShell />
                     <DesktopOnboardingDialog
                       open={showDesktopOnboarding}
                       onOpenChange={setShowDesktopOnboarding}

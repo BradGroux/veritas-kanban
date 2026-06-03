@@ -4,6 +4,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TaskCard } from '@/components/task/TaskCard';
 import { createMockTask } from './test-utils';
 import { MantineRoot } from '@/theme/MantineRoot';
@@ -115,6 +116,21 @@ function ensureMantineBrowserApis() {
       }),
     });
   }
+
+  if (typeof window.ResizeObserver !== 'function') {
+    Object.defineProperty(window, 'ResizeObserver', {
+      configurable: true,
+      value: class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    });
+  }
+
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
 }
 
 function renderCard(task: Task, props: Partial<React.ComponentProps<typeof TaskCard>> = {}) {
@@ -181,6 +197,32 @@ describe('TaskCard', () => {
     const card = screen.getByRole('article');
     fireEvent.click(card);
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('supports touch status changes without opening the task card', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const onStatusChange = vi.fn();
+    const task = createMockTask({ title: 'Touch status task', status: 'todo' });
+
+    renderCard(task, {
+      canChangeStatus: true,
+      onClick,
+      onStatusChange,
+      showStatusControl: true,
+      statusOptions: [
+        { value: 'todo', label: 'To Do' },
+        { value: 'in-progress', label: 'In Progress' },
+        { value: 'blocked', label: 'Blocked' },
+        { value: 'done', label: 'Done' },
+      ],
+    });
+
+    await user.click(screen.getByRole('combobox', { name: 'Change status for Touch status task' }));
+    await user.click(await screen.findByRole('option', { name: 'In Progress' }));
+
+    expect(onStatusChange).toHaveBeenCalledWith('in-progress');
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it('handles Enter key press', () => {

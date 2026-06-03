@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { Button, Code, Group, Modal, Paper, Stack, Text, Textarea, ThemeIcon } from '@mantine/core';
+import {
+  Button,
+  Code,
+  Group,
+  Modal,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  Textarea,
+  ThemeIcon,
+} from '@mantine/core';
 import { CheckCircle, XCircle, RefreshCcw, MessageSquare, GitMerge, Loader2 } from 'lucide-react';
 import { useMergeWorktree } from '@/hooks/useWorktree';
 import type { Task, ReviewDecision, ReviewState } from '@veritas-kanban/shared';
@@ -148,7 +159,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
               }
               minRows={3}
             />
-            <Group gap="xs">
+            <Group gap="xs" className="flex-col items-stretch sm:flex-row sm:items-center">
               <Button
                 onClick={() => submitReview(pendingDecision, summary || undefined)}
                 color={pendingDecision === 'rejected' ? 'red' : undefined}
@@ -172,7 +183,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
 
       {/* Action buttons */}
       {!currentReview?.decision && !showSummary && (
-        <Group gap="xs" grow>
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
           <Button
             onClick={() => handleDecision('approved')}
             color="green"
@@ -194,7 +205,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
           >
             Reject
           </Button>
-        </Group>
+        </SimpleGrid>
       )}
 
       <Modal
