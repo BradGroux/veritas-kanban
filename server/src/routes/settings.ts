@@ -11,10 +11,13 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { auditLog } from '../services/audit-service.js';
 import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
+import { getOutboundIntegrationService } from '../services/outbound-integration-service.js';
+import { createLogger } from '../lib/logger.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
 const codexHealthService = new CodexHealthService();
+const log = createLogger('settings-routes');
 
 /**
  * Sync feature settings to affected server-side services.
@@ -42,6 +45,13 @@ export function syncSettingsToServices(settings: FeatureSettings): void {
 
   // Sync enforcement settings
   setEnforcementSettings(settings.enforcement);
+
+  // Register outbound endpoints from legacy feature settings without exposing secrets.
+  void getOutboundIntegrationService()
+    .syncFeatureSettings(settings)
+    .catch((err) => {
+      log.warn({ err }, 'Failed to sync outbound integration endpoints from feature settings');
+    });
 }
 
 function sanitizeFeatureSettings(settings: FeatureSettings): FeatureSettings {

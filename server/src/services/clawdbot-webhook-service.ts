@@ -13,8 +13,8 @@
 
 import crypto from 'crypto';
 import { createLogger } from '../lib/logger.js';
-import { safeFetch } from '../utils/url-validation.js';
 import type { TaskChangeType } from './broadcast-service.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('webhook');
 
@@ -104,7 +104,13 @@ export function signPayload(body: string, secret: string): string {
  * POST a JSON payload to `url`. Returns true on 2xx, false on non-2xx,
  * and null when the URL is blocked by outbound URL policy.
  */
-async function postPayload(url: string, body: string, secret?: string): Promise<boolean | null> {
+async function postPayload(
+  url: string,
+  body: string,
+  secret?: string,
+  retryOf?: string,
+  attempt = 1
+): Promise<{ ok: boolean | null; attemptId: string }> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'VeritasKanban-Webhook/1.0',
@@ -114,16 +120,38 @@ async function postPayload(url: string, body: string, secret?: string): Promise<
     headers['X-Webhook-Signature'] = signPayload(body, secret);
   }
 
-  const res = await safeFetch(url, {
-    method: 'POST',
-    headers,
-    body,
-    signal: AbortSignal.timeout(10_000), // 10 s hard timeout per attempt
-  });
+  const delivery = await getOutboundIntegrationService().deliver(
+    {
+      id: 'broadcast.webhook',
+      type: 'broadcast-webhook',
+      displayName: 'Task and chat broadcast webhook',
+      url,
+      enabled: true,
+      auth: {
+        type: 'hmac-sha256',
+        headerName: 'X-Webhook-Signature',
+        secretRef: secret ? 'VERITAS_WEBHOOK_SECRET' : undefined,
+        hasSecret: Boolean(secret),
+      },
+      owner: {
+        source: process.env.VERITAS_WEBHOOK_URL ? 'env' : 'feature-settings',
+        resourceId: process.env.VERITAS_WEBHOOK_URL ? 'VERITAS_WEBHOOK_URL' : 'webhookUrl',
+      },
+    },
+    {
+      method: 'POST',
+      headers,
+      body,
+      timeoutMs: 10_000,
+      retryOf,
+      attempt,
+    }
+  );
 
-  if (!res) return null;
-
-  return res.ok;
+  return {
+    ok: delivery.status === 'blocked' ? null : delivery.ok,
+    attemptId: delivery.attemptId,
+  };
 }
 
 /**
@@ -137,9 +165,11 @@ export async function deliverWebhook(payload: WebhookPayload): Promise<void> {
 
   const body = JSON.stringify(payload);
   const secret = getWebhookSecret();
+  let firstAttemptId: string | undefined;
 
   try {
-    const ok = await postPayload(url, body, secret);
+    const { ok, attemptId } = await postPayload(url, body, secret);
+    firstAttemptId = attemptId;
     if (ok === null) {
       log.warn('Webhook URL blocked (SSRF prevention)');
       return;
@@ -156,7 +186,7 @@ export async function deliverWebhook(payload: WebhookPayload): Promise<void> {
   // --- single retry after 2 s ---
   setTimeout(async () => {
     try {
-      const ok = await postPayload(url, body, secret);
+      const { ok } = await postPayload(url, body, secret, firstAttemptId, 2);
       if (ok === null) {
         log.warn('Webhook retry URL blocked (SSRF prevention)');
         return;

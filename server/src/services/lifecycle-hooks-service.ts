@@ -19,6 +19,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { getRuntimeDir } from '../utils/paths.js';
 import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 const DATA_DIR = getRuntimeDir();
 const LEGACY_DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
 let migrationChecked = false;
@@ -207,7 +208,33 @@ class LifecycleHooksService {
       if (!url) {
         throw new Error('Webhook URL not configured');
       }
-      log.info({ taskId: ctx.taskId, url }, 'Webhook would fire (not implemented in core)');
+      const delivery = await getOutboundIntegrationService().deliver(
+        {
+          id: `lifecycle-hooks.${hook.id}`,
+          type: 'lifecycle-hook-webhook',
+          displayName: hook.name,
+          url,
+          enabled: hook.enabled,
+          owner: { source: 'hook', resourceId: hook.id },
+        },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hookId: hook.id,
+            hookName: hook.name,
+            event: hook.event,
+            context: ctx,
+          }),
+          timeoutMs: 10_000,
+        }
+      );
+
+      if (!delivery.ok) {
+        throw new Error(delivery.error || `Webhook delivery failed: ${delivery.status}`);
+      }
+
+      log.info({ taskId: ctx.taskId, hookId: hook.id }, 'Webhook delivered via lifecycle hook');
     });
   }
 

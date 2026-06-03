@@ -74,7 +74,7 @@ describe('squad webhook service', () => {
       secret: 'shhh',
     } as any);
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('https://example.test/hook');
     const body = init.body as string;
@@ -111,7 +111,8 @@ describe('squad webhook service', () => {
 
     expect(mockSafeFetch).toHaveBeenCalledWith(
       'https://gateway.test/tools/invoke',
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ allowHttp: true, allowLocalhost: true })
     );
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy.mock.calls[0][0]).toBe('https://gateway.test/tools/invoke');
@@ -155,7 +156,7 @@ describe('squad webhook service', () => {
       mode: 'generic',
       url: 'https://example.test/hook',
     } as any);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
   });
 
   it('swallows async generic webhook failures but propagates timeout helper behavior through logging path', async () => {

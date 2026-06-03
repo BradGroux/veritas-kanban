@@ -13,9 +13,9 @@ import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { policySchema } from '../schemas/policy-schemas.js';
 import { getPoliciesDir } from '../utils/paths.js';
-import { safeFetch } from '../utils/url-validation.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteAgentPolicyRepository } from '../storage/sqlite/audit-policy-repositories.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('policy-service');
 const PRESET_TIMESTAMP = new Date().toISOString();
@@ -591,24 +591,39 @@ export class PolicyService {
     policy: Extract<AgentPolicy, { type: 'webhook-check' }>,
     input: PolicyEvaluationRequest
   ): Promise<{ triggered: boolean; message: string; details: Record<string, unknown> }> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), policy.config.timeoutMs ?? 5_000);
     const body = policy.config.sendContext === false ? undefined : JSON.stringify(input);
 
     try {
-      const response = await safeFetch(policy.config.url, {
-        method: policy.config.method ?? 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
-        signal: controller.signal,
-      });
+      const delivery = await getOutboundIntegrationService().deliver(
+        {
+          id: `policy.${policy.id}`,
+          type: 'policy-webhook',
+          displayName: `${policy.name} webhook check`,
+          url: policy.config.url,
+          enabled: policy.enabled,
+          owner: { source: 'policy', resourceId: policy.id },
+        },
+        {
+          method: policy.config.method ?? 'POST',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body,
+          timeoutMs: policy.config.timeoutMs ?? 5_000,
+          responseBodyLimit: 200,
+        }
+      );
 
-      if (!response) {
+      if (delivery.status === 'blocked') {
         throw new Error('Webhook URL blocked by outbound URL policy');
       }
+      if (delivery.status === 'timeout') {
+        throw new Error('Webhook check timed out');
+      }
+      if (!delivery.responseStatus) {
+        throw new Error(delivery.error || 'Webhook delivery failed');
+      }
 
-      const text = await response.text().catch(() => '');
-      const statusMatches = response.status === (policy.config.expectedStatus ?? 200);
+      const text = delivery.responseText || '';
+      const statusMatches = delivery.responseStatus === (policy.config.expectedStatus ?? 200);
       const bodyMatches = policy.config.expectedBodyContains
         ? text.includes(policy.config.expectedBodyContains)
         : true;
@@ -619,12 +634,13 @@ export class PolicyService {
       return {
         triggered,
         message: triggered
-          ? `${policy.name} webhook ${triggerOn === 'success' ? 'succeeded' : 'failed'} with status ${response.status}.`
+          ? `${policy.name} webhook ${triggerOn === 'success' ? 'succeeded' : 'failed'} with status ${delivery.responseStatus}.`
           : '',
         details: {
-          status: response.status,
+          status: delivery.responseStatus,
           expectedStatus: policy.config.expectedStatus ?? 200,
           bodySnippet: text.slice(0, 200),
+          deliveryAttemptId: delivery.attemptId,
         },
       };
     } catch (error) {
@@ -637,8 +653,6 @@ export class PolicyService {
           error: message,
         },
       };
-    } finally {
-      clearTimeout(timeout);
     }
   }
 

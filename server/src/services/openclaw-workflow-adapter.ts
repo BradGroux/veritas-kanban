@@ -1,5 +1,6 @@
 import { createLogger } from '../lib/logger.js';
-import { safeFetch, type UrlValidationOptions } from '../utils/url-validation.js';
+import type { UrlValidationOptions } from '../utils/url-validation.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('openclaw-workflow-adapter');
 
@@ -181,74 +182,78 @@ export class HttpOpenClawWorkflowAdapter implements OpenClawWorkflowAdapter {
     timeoutSeconds: number
   ): Promise<Record<string, unknown>> {
     const url = `${this.gatewayUrl}/tools/invoke`;
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      Math.max(this.requestTimeoutMs, timeoutSeconds * 1000)
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    const delivery = await getOutboundIntegrationService().deliver(
+      {
+        id: 'workflow.openclawGateway',
+        type: 'openclaw-gateway',
+        displayName: 'Workflow OpenClaw gateway',
+        url,
+        enabled: true,
+        auth: {
+          type: 'bearer',
+          secretRef: this.token ? 'OPENCLAW_GATEWAY_TOKEN' : undefined,
+          hasSecret: Boolean(this.token),
+        },
+        owner: { source: 'runtime', resourceId: 'workflow-step-executor' },
+        validationOptions: this.validationOptions,
+      },
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          tool,
+          args,
+          sessionKey: this.sessionKey,
+        }),
+        timeoutMs: Math.max(this.requestTimeoutMs, timeoutSeconds * 1000),
+        responseBodyLimit: 2 * 1024 * 1024,
+      }
     );
 
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (this.token) {
-        headers.Authorization = `Bearer ${this.token}`;
-      }
-
-      const response = await safeFetch(
-        url,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            tool,
-            args,
-            sessionKey: this.sessionKey,
-          }),
-          signal: controller.signal,
-        },
-        this.validationOptions
-      );
-
-      if (!response) {
-        throw new Error('OpenClaw gateway URL was blocked by outbound URL policy');
-      }
-
-      const body = await this.readJson(response);
-
-      if (!response.ok) {
-        throw new Error(
-          this.extractError(body) || `OpenClaw gateway returned HTTP ${response.status}`
-        );
-      }
-
-      const envelope = this.asRecord(body);
-      if (envelope?.ok === false) {
-        throw new Error(this.extractError(envelope) || `OpenClaw ${tool} failed`);
-      }
-
-      const toolResult = this.unwrapToolResult(envelope?.result ?? body);
-      const status = this.readString(toolResult, 'status')?.toLowerCase();
-      if (status === 'error' || status === 'failed' || status === 'forbidden') {
-        throw new Error(
-          this.readString(toolResult, 'error') || `OpenClaw ${tool} returned ${status}`
-        );
-      }
-
-      return toolResult;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`OpenClaw ${tool} timed out after ${timeoutSeconds}s`);
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
+    if (delivery.status === 'blocked') {
+      throw new Error('OpenClaw gateway URL was blocked by outbound URL policy');
     }
+    if (delivery.status === 'timeout') {
+      throw new Error(`OpenClaw ${tool} timed out after ${timeoutSeconds}s`);
+    }
+
+    const body = this.parseJson(delivery.responseText);
+
+    if (!delivery.ok) {
+      throw new Error(
+        this.extractError(body) ||
+          `OpenClaw gateway returned HTTP ${delivery.responseStatus || 'unknown'}`
+      );
+    }
+
+    const envelope = this.asRecord(body);
+    if (envelope?.ok === false) {
+      throw new Error(this.extractError(envelope) || `OpenClaw ${tool} failed`);
+    }
+
+    const toolResult = this.unwrapToolResult(envelope?.result ?? body);
+    const status = this.readString(toolResult, 'status')?.toLowerCase();
+    if (status === 'error' || status === 'failed' || status === 'forbidden') {
+      throw new Error(
+        this.readString(toolResult, 'error') || `OpenClaw ${tool} returned ${status}`
+      );
+    }
+
+    return toolResult;
   }
 
-  private async readJson(response: Response): Promise<unknown> {
+  private parseJson(text: string | undefined): unknown {
+    if (!text) return undefined;
     try {
-      return await response.json();
+      return JSON.parse(text);
     } catch {
       return undefined;
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
@@ -23,15 +23,21 @@ vi.mock('../../services/config-service.js', () => ({
 }));
 
 import { integrationsRoutes } from '../../routes/integrations.js';
+import { getOutboundIntegrationService } from '../../services/outbound-integration-service.js';
 
 describe('integrations routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mockLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     app = express();
     app.use('/api/integrations', integrationsRoutes);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('blocks localhost/private targets (SSRF guard)', async () => {
@@ -90,5 +96,68 @@ describe('integrations routes', () => {
       expect.objectContaining({ method: 'HEAD', redirect: 'manual' })
     );
     fetchSpy.mockRestore();
+  });
+
+  it('exposes sanitized outbound endpoint and delivery history', async () => {
+    const endpointId = `route-test.${Date.now()}`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 202,
+        text: vi.fn().mockResolvedValue('accepted'),
+      })
+    );
+
+    const delivery = await getOutboundIntegrationService().deliver(
+      {
+        id: endpointId,
+        type: 'squad-webhook',
+        displayName: 'Route test webhook',
+        url: 'https://example.com/outbound?token=query-secret',
+        auth: {
+          type: 'bearer',
+          secretRef: 'featureSettings.squadWebhook.secret',
+          hasSecret: true,
+        },
+        owner: { source: 'runtime', resourceId: 'route-test' },
+      },
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer raw-token-value' },
+        body: '{}',
+      }
+    );
+
+    expect(delivery.ok).toBe(true);
+
+    const endpointsRes = await request(app).get('/api/integrations/outbound/endpoints');
+    expect(endpointsRes.status).toBe(200);
+    const endpoint = endpointsRes.body.find((entry: { id: string }) => entry.id === endpointId);
+    expect(endpoint).toMatchObject({
+      id: endpointId,
+      url: 'https://example.com/outbound',
+      auth: {
+        type: 'bearer',
+        secretRef: 'featureSettings.squadWebhook.secret',
+        hasSecret: true,
+      },
+    });
+
+    const deliveriesRes = await request(app).get('/api/integrations/outbound/deliveries?limit=10');
+    expect(deliveriesRes.status).toBe(200);
+    const attempt = deliveriesRes.body.find(
+      (entry: { endpointId: string }) => entry.endpointId === endpointId
+    );
+    expect(attempt).toMatchObject({
+      endpointId,
+      sanitizedUrl: 'https://example.com/outbound',
+      status: 'success',
+      responseStatus: 202,
+    });
+
+    const responsePayload = JSON.stringify({ endpoint, attempt });
+    expect(responsePayload).not.toContain('query-secret');
+    expect(responsePayload).not.toContain('raw-token-value');
   });
 });

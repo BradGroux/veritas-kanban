@@ -8,7 +8,7 @@
 import crypto from 'crypto';
 import type { SquadMessage, SquadWebhookSettings } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
-import { safeFetch } from '../utils/url-validation.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('squad-webhook');
 
@@ -87,29 +87,45 @@ async function fireOpenClawWake(
   const url = `${settings.openclawGatewayUrl}/tools/invoke`;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-    const response = await safeFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.openclawGatewayToken}`,
+    const delivery = await getOutboundIntegrationService().deliver(
+      {
+        id: 'squad.openclawWake',
+        type: 'openclaw-wake',
+        displayName: 'Squad Chat OpenClaw wake',
+        url,
+        enabled: settings.enabled && settings.mode === 'openclaw',
+        auth: {
+          type: 'bearer',
+          secretRef: 'featureSettings.squadWebhook.openclawGatewayToken',
+          hasSecret: Boolean(settings.openclawGatewayToken),
+        },
+        owner: { source: 'feature-settings', resourceId: 'squadWebhook.openclawGatewayUrl' },
+        validationOptions: { allowHttp: true, allowLocalhost: true },
       },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${settings.openclawGatewayToken}`,
+        },
+        body: JSON.stringify(payload),
+        timeoutMs: 5_000,
+      }
+    );
 
-    clearTimeout(timeout);
-
-    if (!response) {
-      log.warn({ url }, 'OpenClaw wake call URL blocked (SSRF prevention)');
+    if (delivery.status === 'blocked') {
+      log.warn('OpenClaw wake call URL blocked (SSRF prevention)');
       return;
     }
 
-    if (!response.ok) {
+    if (delivery.status === 'timeout') {
+      log.warn('OpenClaw wake call timed out after 5 seconds');
+      return;
+    }
+
+    if (!delivery.ok) {
       log.warn(
-        { status: response.status, statusText: response.statusText, url },
+        { status: delivery.responseStatus || delivery.status },
         'OpenClaw wake call returned non-2xx status'
       );
       return;
@@ -120,7 +136,7 @@ async function fireOpenClawWake(
     if (err.name === 'AbortError') {
       log.warn({ url }, 'OpenClaw wake call timed out after 5 seconds');
     } else {
-      log.error({ err: err.message, url }, 'OpenClaw wake call failed');
+      log.error({ err: err.message }, 'OpenClaw wake call failed');
     }
   }
 }
@@ -179,38 +195,54 @@ async function fireWebhookAsync(
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const delivery = await getOutboundIntegrationService().deliver(
+      {
+        id: 'squad.webhook',
+        type: 'squad-webhook',
+        displayName: 'Squad Chat webhook',
+        url,
+        enabled: true,
+        auth: {
+          type: 'hmac-sha256',
+          headerName: 'X-VK-Signature',
+          secretRef: secret ? 'featureSettings.squadWebhook.secret' : undefined,
+          hasSecret: Boolean(secret),
+        },
+        owner: { source: 'feature-settings', resourceId: 'squadWebhook.url' },
+      },
+      {
+        method: 'POST',
+        headers,
+        body,
+        timeoutMs: 5_000,
+      }
+    );
 
-    const response = await safeFetch(url, {
-      method: 'POST',
-      headers,
-      body,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!response) {
-      log.warn({ url }, 'Squad webhook URL blocked (SSRF prevention)');
+    if (delivery.status === 'blocked') {
+      log.warn('Squad webhook URL blocked (SSRF prevention)');
       return;
     }
 
-    if (!response.ok) {
+    if (delivery.status === 'timeout') {
+      log.warn('Squad webhook timed out after 5 seconds');
+      throw new Error('Webhook timeout');
+    }
+
+    if (!delivery.ok) {
       log.warn(
-        { status: response.status, statusText: response.statusText, url },
+        { status: delivery.responseStatus || delivery.status },
         'Squad webhook returned non-2xx status'
       );
       return;
     }
 
-    log.info({ messageId: payload.message.id, url }, 'Squad webhook fired successfully');
+    log.info({ messageId: payload.message.id }, 'Squad webhook fired successfully');
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      log.warn({ url }, 'Squad webhook timed out after 5 seconds');
+      log.warn('Squad webhook timed out after 5 seconds');
       throw new Error('Webhook timeout');
     }
-    log.error({ err: err.message, url }, 'Squad webhook request failed');
+    log.error({ err: err.message }, 'Squad webhook request failed');
     throw err;
   }
 }

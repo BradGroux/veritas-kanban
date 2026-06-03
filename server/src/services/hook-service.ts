@@ -17,10 +17,10 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import { safeFetch } from '../utils/url-validation.js';
 import type { Task, EnforcementSettings } from '@veritas-kanban/shared';
 import { getChatService } from './chat-service.js';
 import { getNotificationService } from './notification-service.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('hooks');
 
@@ -217,49 +217,66 @@ async function fireSquadChat(
  */
 async function fireWebhook(url: string, payload: HookPayload): Promise<void> {
   const body = JSON.stringify(payload);
+  const outbound = getOutboundIntegrationService();
 
-  const doFetch = async (): Promise<boolean> => {
-    const response = await safeFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-VK-Event': payload.event,
+  const deliver = async (retryOf?: string, attempt = 1) => {
+    return outbound.deliver(
+      {
+        id: `hooks.${payload.event}`,
+        type: 'lifecycle-hook-webhook',
+        displayName: `Lifecycle hook ${payload.event}`,
+        url,
+        owner: { source: 'feature-settings', resourceId: `hooks.${payload.event}` },
       },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!response) {
-      log.warn({ url }, 'Webhook URL blocked (SSRF prevention)');
-      return false;
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return true;
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-VK-Event': payload.event,
+        },
+        body,
+        timeoutMs: 10_000,
+        retryOf,
+        attempt,
+      }
+    );
   };
 
+  const assertDelivered = (result: Awaited<ReturnType<typeof deliver>>): void => {
+    if (result.ok) return;
+    if (result.status === 'blocked' || result.status === 'skipped') {
+      log.warn({ event: payload.event, status: result.status }, 'Webhook delivery skipped');
+      return;
+    }
+    throw new Error(result.error || `HTTP ${result.responseStatus || 'unknown'}`);
+  };
+
+  let firstAttemptId: string | undefined;
+
   try {
-    const delivered = await doFetch();
-    if (!delivered) return;
-    log.debug({ event: payload.event, url }, 'Webhook delivered');
+    const result = await deliver();
+    firstAttemptId = result.attemptId;
+    assertDelivered(result);
+    if (result.ok) {
+      log.debug({ event: payload.event }, 'Webhook delivered');
+    }
   } catch (err) {
     log.warn(
-      { event: payload.event, url, error: (err as Error).message },
+      { event: payload.event, error: (err as Error).message },
       'Webhook failed, retrying in 2s'
     );
 
     // Single retry after 2 seconds
     setTimeout(async () => {
       try {
-        const delivered = await doFetch();
-        if (!delivered) return;
-        log.debug({ event: payload.event, url }, 'Webhook retry succeeded');
+        const result = await deliver(firstAttemptId, 2);
+        assertDelivered(result);
+        if (result.ok) {
+          log.debug({ event: payload.event }, 'Webhook retry succeeded');
+        }
       } catch (retryErr) {
         log.error(
-          { event: payload.event, url, error: (retryErr as Error).message },
+          { event: payload.event, error: (retryErr as Error).message },
           'Webhook retry failed'
         );
       }

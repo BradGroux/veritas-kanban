@@ -11,10 +11,12 @@ import { ConfigService } from '../services/config-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { createLogger } from '../lib/logger.js';
 import type { CoolifyServiceConfig, CoolifyServicesConfig } from '@veritas-kanban/shared';
+import { getOutboundIntegrationService } from '../services/outbound-integration-service.js';
 
 const log = createLogger('integrations');
 const router = Router();
 const configService = new ConfigService();
+const outboundIntegrations = getOutboundIntegrationService();
 
 const SERVICE_NAMES = ['supabase', 'openpanel', 'n8n', 'plane', 'appsmith'] as const;
 type ServiceName = (typeof SERVICE_NAMES)[number];
@@ -147,6 +149,24 @@ router.get(
 
     log.debug({ results }, 'Integration status check complete');
     res.json({ data: results });
+  })
+);
+
+// GET /api/integrations/outbound/endpoints
+router.get(
+  '/outbound/endpoints',
+  asyncHandler(async (_req, res) => {
+    res.json(await outboundIntegrations.listEndpoints());
+  })
+);
+
+// GET /api/integrations/outbound/deliveries?limit=100
+router.get(
+  '/outbound/deliveries',
+  asyncHandler(async (req, res) => {
+    const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    const limit = Number.isFinite(rawLimit) ? rawLimit : 100;
+    res.json(await outboundIntegrations.listDeliveries(limit));
   })
 );
 

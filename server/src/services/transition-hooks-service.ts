@@ -11,7 +11,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../lib/logger.js';
-import { safeFetch } from '../utils/url-validation.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 import type { Task, TaskStatus } from '@veritas-kanban/shared';
 import type {
   TransitionHooksConfig,
@@ -20,8 +20,6 @@ import type {
   TransitionAction,
   GateCheckResult,
   TransitionValidationResult,
-  GateType,
-  ActionType,
 } from '@veritas-kanban/shared';
 import { DEFAULT_TRANSITION_HOOKS_CONFIG } from '@veritas-kanban/shared';
 
@@ -333,7 +331,7 @@ async function executeAction(
 
       case 'send-webhook':
         if (action.webhookUrl) {
-          await sendWebhook(action.webhookUrl, task, fromStatus, toStatus);
+          await sendWebhook(action, task, fromStatus, toStatus);
         }
         break;
 
@@ -371,11 +369,13 @@ async function executeAction(
  * Send a webhook for a transition.
  */
 async function sendWebhook(
-  url: string,
+  action: TransitionAction,
   task: Task,
   fromStatus: TaskStatus | undefined,
   toStatus: TaskStatus
 ): Promise<void> {
+  if (!action.webhookUrl) return;
+
   const payload = {
     event: 'status_transition',
     taskId: task.id,
@@ -387,26 +387,46 @@ async function sendWebhook(
     timestamp: new Date().toISOString(),
   };
 
-  const response = await safeFetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-VK-Event': 'status_transition',
+  const delivery = await getOutboundIntegrationService().deliver(
+    {
+      id: `transition-hooks.${action.id}`,
+      type: 'transition-hook-webhook',
+      displayName: action.name,
+      url: action.webhookUrl,
+      enabled: action.enabled,
+      owner: { source: 'hook', resourceId: action.id },
     },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
-  });
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-VK-Event': 'status_transition',
+      },
+      body: JSON.stringify(payload),
+      timeoutMs: 10_000,
+    }
+  );
 
-  if (!response) {
-    log.warn({ url }, 'Transition webhook URL blocked (SSRF prevention)');
+  if (delivery.status === 'blocked' || delivery.status === 'skipped') {
+    log.warn(
+      { actionId: action.id, status: delivery.status, deliveryAttemptId: delivery.attemptId },
+      'Transition webhook delivery skipped'
+    );
     return;
   }
 
-  if (!response.ok) {
-    throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
+  if (!delivery.ok) {
+    throw new Error(
+      delivery.responseStatus
+        ? `Webhook failed: ${delivery.responseStatus}`
+        : delivery.error || `Webhook failed: ${delivery.status}`
+    );
   }
 
-  log.debug({ taskId: task.id, url }, 'Transition webhook delivered');
+  log.debug(
+    { taskId: task.id, actionId: action.id, deliveryAttemptId: delivery.attemptId },
+    'Transition webhook delivered'
+  );
 }
 
 /**

@@ -14,7 +14,7 @@
 import { getNotificationService, type NotificationService } from './notification-service.js';
 import { getConfigService, type ConfigService } from './config-service.js';
 import type { TelemetryEventIngestion } from '../schemas/telemetry-schemas.js';
-import { safeFetch } from '../utils/url-validation.js';
+import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 // Deduplication cache: taskId -> last alert timestamp
 const recentAlerts = new Map<string, number>();
@@ -205,21 +205,33 @@ export class FailureAlertService {
         return false;
       }
 
-      const response = await safeFetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: message,
-        }),
-      });
+      const delivery = await getOutboundIntegrationService().deliver(
+        {
+          id: 'notifications.failureAlert',
+          type: 'failure-alert-webhook',
+          displayName: 'Failure alert webhook',
+          url: webhookUrl,
+          enabled: features.notifications.enabled && features.notifications.onAgentFailure,
+          owner: { source: 'feature-settings', resourceId: 'notifications.webhookUrl' },
+        },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: message,
+          }),
+        }
+      );
 
-      if (!response) {
+      if (delivery.status === 'blocked') {
         log.warn('[FailureAlert] Webhook URL blocked by outbound URL policy');
         return false;
       }
 
-      if (!response.ok) {
-        log.warn(`[FailureAlert] Webhook delivery failed: ${response.status}`);
+      if (!delivery.ok) {
+        log.warn(
+          `[FailureAlert] Webhook delivery failed: ${delivery.responseStatus || delivery.status}`
+        );
         return false;
       }
 
