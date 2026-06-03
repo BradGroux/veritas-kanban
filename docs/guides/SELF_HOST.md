@@ -4,6 +4,11 @@ This guide walks you through every self-hosting scenario — from running locall
 
 > **Credit:** This guide was originally contributed by [@xechehot](https://github.com/xechehot) in [PR #126](https://github.com/BradGroux/veritas-kanban/pull/126). It has been expanded here to cover additional deployment patterns.
 
+> **Remote security posture:** v5 remote access is designed around a trusted
+> same-origin host for the web client, `/api`, and `/ws`. Before exposing
+> Veritas beyond loopback, read
+> [ADR 0002: v5 Remote Server Mode and Network Security Posture](../architecture/ADR-0002-v5-remote-server-security-posture.md).
+
 ---
 
 ## Table of Contents
@@ -25,11 +30,11 @@ This guide walks you through every self-hosting scenario — from running locall
 
 ## Prerequisites
 
-| Requirement | Version  | Install                                   |
-|-------------|----------|-------------------------------------------|
-| Node.js     | 22.0.0+  | https://nodejs.org or `nvm install 22`    |
-| pnpm        | 9.0.0+   | `corepack enable && corepack prepare pnpm@9.15.4 --activate` |
-| Git         | any      | https://git-scm.com                       |
+| Requirement | Version | Install                                                      |
+| ----------- | ------- | ------------------------------------------------------------ |
+| Node.js     | 22.0.0+ | https://nodejs.org or `nvm install 22`                       |
+| pnpm        | 9.0.0+  | `corepack enable && corepack prepare pnpm@9.15.4 --activate` |
+| Git         | any     | https://git-scm.com                                          |
 
 Verify:
 
@@ -60,11 +65,11 @@ cp server/.env.example server/.env
 
 The build produces:
 
-| Path              | Contents                              |
-|-------------------|---------------------------------------|
-| `shared/dist/`    | Shared TypeScript types and utilities |
-| `server/dist/`    | Compiled Express API server           |
-| `web/dist/`       | Static React frontend (served by Express in production) |
+| Path           | Contents                                                |
+| -------------- | ------------------------------------------------------- |
+| `shared/dist/` | Shared TypeScript types and utilities                   |
+| `server/dist/` | Compiled Express API server                             |
+| `web/dist/`    | Static React frontend (served by Express in production) |
 
 ---
 
@@ -84,7 +89,12 @@ The app is now available at **http://localhost:3001**.
 - **WebSocket:** `ws://localhost:3001/ws`
 - **API Docs (Swagger):** `http://localhost:3001/api-docs`
 
-By default, `VERITAS_AUTH_LOCALHOST_BYPASS=true` in `.env.example`, so unauthenticated requests from `localhost` are allowed with the `read-only` role. Set `VERITAS_AUTH_LOCALHOST_ROLE=admin` if you want full access without a key on your local machine.
+The example env file keeps `VERITAS_AUTH_LOCALHOST_BYPASS=true` for local
+development convenience, so unauthenticated loopback requests can use the
+configured local role outside production. In `NODE_ENV=production`, the server
+does not honor localhost bypass for HTTP or WebSocket auth. Set
+`VERITAS_AUTH_LOCALHOST_ROLE=admin` only for trusted local development when you
+want full access without a key on your own machine.
 
 ### Development mode
 
@@ -103,6 +113,11 @@ pnpm dev
 ## LAN Access
 
 Serve Veritas Kanban to other devices on your local network (phones, other laptops, tablets).
+
+LAN access is server mode, not localhost mode. Keep `VERITAS_AUTH_ENABLED=true`,
+set `VERITAS_AUTH_LOCALHOST_BYPASS=false`, and use HTTPS, VPN, or a trusted
+tunnel for browser/mobile sessions unless the network is strictly private and
+temporary.
 
 ### 1. Bind to all interfaces
 
@@ -158,6 +173,10 @@ Your LAN URL will be `http://<your-ip>:3001`.
 ## Tailscale Serve
 
 Tailscale Serve lets you expose Veritas Kanban securely to your tailnet (all your devices) without opening firewall ports. This was the primary use case from [@xechehot's original PR #126](https://github.com/BradGroux/veritas-kanban/pull/126).
+
+Treat the Tailscale URL as a remote origin. Do not rely on localhost bypass for
+tailnet clients, and verify `/api`, `/ws`, `/health/ready`, and
+`/api/auth/status` through the served HTTPS URL.
 
 ### Option A: Root path (simplest)
 
@@ -232,6 +251,11 @@ tailscale funnel 443 on
 ## Reverse Proxy
 
 For production deployments with TLS, use a reverse proxy in front of Veritas Kanban. Always set `TRUST_PROXY` when behind a proxy.
+
+The supported reverse-proxy shape is same-origin: the proxy serves the app shell,
+API, WebSocket, health endpoints, and future PWA assets from the same public
+origin. Split-origin setups require exact `CORS_ORIGINS`, WebSocket upgrade
+testing, and explicit token handling as described in ADR 0002.
 
 ### nginx
 
@@ -386,8 +410,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
-      - VERITAS_ADMIN_KEY=your-secure-admin-key-here  # ≥ 32 chars
-      - VERITAS_JWT_SECRET=your-jwt-secret-here       # prevents session resets on restart
+      - VERITAS_ADMIN_KEY=your-secure-admin-key-here # ≥ 32 chars
+      - VERITAS_JWT_SECRET=your-jwt-secret-here # prevents session resets on restart
       # - CORS_ORIGINS=https://kanban.example.com
       # - TRUST_PROXY=1                               # if behind nginx/Caddy/Traefik
       # - VERITAS_API_KEYS=agent1:key1:agent,readonly:key2:read-only
@@ -464,6 +488,11 @@ VERITAS_JWT_SECRET=<output of openssl rand -hex 64>
 VERITAS_AUTH_LOCALHOST_BYPASS=false
 ```
 
+When exposing Veritas beyond loopback, also use `NODE_ENV=production` and keep
+the web client, `/api`, `/ws`, health endpoints, PWA assets, and service-worker
+scope on one trusted origin whenever possible. Split-origin deployments must set
+exact `CORS_ORIGINS` entries and confirm WebSocket origin/upgrade behavior.
+
 ### API keys for agents
 
 Grant agents scoped access without giving them the admin key:
@@ -476,11 +505,11 @@ VERITAS_API_KEYS=my-agent:vk_abc123:agent,dashboard:vk_xyz456:read-only
 
 Role permissions:
 
-| Role        | Access                                             |
-|-------------|----------------------------------------------------|
-| `admin`     | Full access to all endpoints                       |
-| `agent`     | Read/write tasks, run agents, manage worktrees     |
-| `read-only` | GET endpoints only (view tasks, read config)       |
+| Role        | Access                                         |
+| ----------- | ---------------------------------------------- |
+| `admin`     | Full access to all endpoints                   |
+| `agent`     | Read/write tasks, run agents, manage worktrees |
+| `read-only` | GET endpoints only (view tasks, read config)   |
 
 ### Authentication methods
 
@@ -494,6 +523,12 @@ curl -H "X-API-Key: <api-key>" http://localhost:3001/api/tasks
 # Query parameter (WebSocket)
 wscat -c "ws://localhost:3001/ws?api_key=<api-key>"
 ```
+
+HTTP requests must pass API keys in `Authorization: Bearer <key>` or
+`X-API-Key`. Do not put long-lived credentials in HTTP query strings, bookmarks,
+QR codes, screenshots, reverse-proxy logs, or shareable URLs. The WebSocket
+`api_key` query fallback exists for clients that cannot set headers during the
+upgrade.
 
 ### TRUST_PROXY
 
@@ -515,17 +550,17 @@ All variables live in `server/.env` (copy from `server/.env.example`).
 
 ### Server
 
-| Variable    | Default | Description                                              |
-|-------------|---------|----------------------------------------------------------|
-| `PORT`      | `3001`  | HTTP server port                                         |
-| `HOST`      | `127.0.0.1` | Bind address. Set `0.0.0.0` for LAN/container access |
-| `NODE_ENV`  | —       | `production` for production. **Never `development` in Docker** |
-| `LOG_LEVEL` | `info`  | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
+| Variable    | Default     | Description                                                    |
+| ----------- | ----------- | -------------------------------------------------------------- |
+| `PORT`      | `3001`      | HTTP server port                                               |
+| `HOST`      | `127.0.0.1` | Bind address. Set `0.0.0.0` for LAN/container access           |
+| `NODE_ENV`  | —           | `production` for production. **Never `development` in Docker** |
+| `LOG_LEVEL` | `info`      | `trace` / `debug` / `info` / `warn` / `error` / `fatal`        |
 
 ### Authentication
 
 | Variable                        | Default     | Description                                                            |
-|---------------------------------|-------------|------------------------------------------------------------------------|
+| ------------------------------- | ----------- | ---------------------------------------------------------------------- |
 | `VERITAS_AUTH_ENABLED`          | `true`      | Enable authentication. Set `false` only for trusted local use          |
 | `VERITAS_ADMIN_KEY`             | —           | Admin API key. **Must be ≥ 32 chars.** Required for production         |
 | `VERITAS_API_KEYS`              | —           | Additional keys. Format: `name:key:role,name2:key2:role2`              |
@@ -535,35 +570,35 @@ All variables live in `server/.env` (copy from `server/.env.example`).
 
 ### Networking
 
-| Variable         | Default                         | Description                                                                 |
-|------------------|---------------------------------|-----------------------------------------------------------------------------|
-| `CORS_ORIGINS`   | `http://localhost:3000,...`     | Comma-separated allowed CORS origins                                        |
-| `TRUST_PROXY`    | —                               | Express proxy trust. Use `1` for single-hop (nginx/Caddy). `true` is blocked |
-| `RATE_LIMIT_MAX` | `300`                           | Max API requests/minute/IP (localhost exempt)                               |
+| Variable         | Default                     | Description                                                                  |
+| ---------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| `CORS_ORIGINS`   | `http://localhost:3000,...` | Comma-separated allowed CORS origins                                         |
+| `TRUST_PROXY`    | —                           | Express proxy trust. Use `1` for single-hop (nginx/Caddy). `true` is blocked |
+| `RATE_LIMIT_MAX` | `300`                       | Max API requests/minute/IP (localhost exempt)                                |
 
 ### Data & Storage
 
-| Variable                   | Default              | Description                                              |
-|----------------------------|----------------------|----------------------------------------------------------|
-| `VERITAS_DATA_DIR`         | `.veritas-kanban`    | Config, logs, internal state (relative to project root)  |
-| `DATA_DIR`                 | `/app/data` (Docker) | Mapped data dir inside Docker container                  |
-| `TELEMETRY_RETENTION_DAYS` | `30`                 | Days to keep telemetry event files                       |
-| `TELEMETRY_COMPRESS_DAYS`  | `7`                  | Days after which telemetry files are gzip-compressed     |
+| Variable                   | Default              | Description                                             |
+| -------------------------- | -------------------- | ------------------------------------------------------- |
+| `VERITAS_DATA_DIR`         | `.veritas-kanban`    | Config, logs, internal state (relative to project root) |
+| `DATA_DIR`                 | `/app/data` (Docker) | Mapped data dir inside Docker container                 |
+| `TELEMETRY_RETENTION_DAYS` | `30`                 | Days to keep telemetry event files                      |
+| `TELEMETRY_COMPRESS_DAYS`  | `7`                  | Days after which telemetry files are gzip-compressed    |
 
 ### Frontend (build-time)
 
-| Variable         | Default | Description                                                                          |
-|------------------|---------|--------------------------------------------------------------------------------------|
-| `VITE_BASE_PATH` | `/`     | Sub-path prefix for the frontend (e.g., `/kanban/`). Set at build time, not runtime |
-| `VITE_ALLOWED_HOSTS` | —   | Comma-separated hostnames allowed by Vite dev server (dev only). `*` allows all      |
+| Variable             | Default | Description                                                                         |
+| -------------------- | ------- | ----------------------------------------------------------------------------------- |
+| `VITE_BASE_PATH`     | `/`     | Sub-path prefix for the frontend (e.g., `/kanban/`). Set at build time, not runtime |
+| `VITE_ALLOWED_HOSTS` | —       | Comma-separated hostnames allowed by Vite dev server (dev only). `*` allows all     |
 
 ### Integration
 
-| Variable                 | Default                      | Description                                      |
-|--------------------------|------------------------------|--------------------------------------------------|
-| `CLAWDBOT_GATEWAY`       | `http://127.0.0.1:18789`     | OpenClaw gateway URL for AI agent orchestration  |
-| `VERITAS_WEBHOOK_URL`    | —                            | Push task/chat events to an external service     |
-| `VERITAS_WEBHOOK_SECRET` | —                            | HMAC-SHA256 secret for webhook payload signing   |
+| Variable                 | Default                  | Description                                     |
+| ------------------------ | ------------------------ | ----------------------------------------------- |
+| `CLAWDBOT_GATEWAY`       | `http://127.0.0.1:18789` | OpenClaw gateway URL for AI agent orchestration |
+| `VERITAS_WEBHOOK_URL`    | —                        | Push task/chat events to an external service    |
+| `VERITAS_WEBHOOK_SECRET` | —                        | HMAC-SHA256 secret for webhook payload signing  |
 
 ---
 
@@ -678,4 +713,4 @@ curl -H "X-API-Key: your-admin-key" http://localhost:3001/api/auth/diagnostics
 
 ---
 
-*For general deployment (Docker, bare metal, systemd, reverse proxy) see also [docs/DEPLOYMENT.md](../DEPLOYMENT.md).*
+_For general deployment (Docker, bare metal, systemd, reverse proxy) see also [docs/DEPLOYMENT.md](../DEPLOYMENT.md)._

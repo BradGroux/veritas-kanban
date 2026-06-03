@@ -14,14 +14,17 @@ operator checklist for final release verification.
       attachments, workflow state, and audit history.
 - [ ] Multi-user mode verifies workspace switching, memberships, invitations,
       scoped API tokens, actor attribution, and RBAC denial paths.
-- [ ] Remote mode verifies pairing, trusted host validation, token/session
-      lifecycle, WebSocket sync, and local-only secret handling.
+- [ ] Remote mode verifies the
+      [ADR 0002 remote posture](architecture/ADR-0002-v5-remote-server-security-posture.md):
+      pairing, trusted-host validation, token/session lifecycle, WebSocket sync,
+      proxy headers, service-worker assumptions, and local-only secret handling.
 - [ ] Security review covers desktop bridge calls, auth/session handling,
       scoped tokens, remote access, workflow execution, and agent tool gates.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
       WebSocket fan-out, workflow run updates, and remote/mobile clients.
 - [ ] Docs cover upgrade, desktop install, remote access, admin operations,
-      backup/restore, diagnostics, and known platform limits.
+      backup/restore, diagnostics, and known platform limits, with ADR 0002 as
+      the remote/server-mode security baseline.
 
 ## Mantine component-system cleanup gate
 

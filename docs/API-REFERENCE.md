@@ -56,11 +56,11 @@ VK supports three authentication methods. All are optional when running locally 
 
 ### Methods
 
-| Method                 | Header / Param                  | Use Case                    |
-| ---------------------- | ------------------------------- | --------------------------- |
-| **Bearer Token** (JWT) | `Authorization: Bearer <token>` | Browser sessions, UI login  |
-| **API Key**            | `X-API-Key: <key>`              | Agent integrations, scripts |
-| **WS Query Param**     | `ws://host:port/ws?token=<key>` | WebSocket connections       |
+| Method                 | Header / Param                    | Use Case                    |
+| ---------------------- | --------------------------------- | --------------------------- |
+| **Bearer Token** (JWT) | `Authorization: Bearer <token>`   | Browser sessions, UI login  |
+| **API Key**            | `X-API-Key: <key>`                | Agent integrations, scripts |
+| **WS Query Param**     | `ws://host:port/ws?api_key=<key>` | WebSocket connections       |
 
 ### Roles
 
@@ -778,7 +778,7 @@ Three-tier health check system for container orchestration.
 ### Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3001/ws?token=YOUR_API_KEY');
+const ws = new WebSocket('ws://localhost:3001/ws?api_key=YOUR_API_KEY');
 ```
 
 - Max connections: 50
@@ -787,7 +787,9 @@ const ws = new WebSocket('ws://localhost:3001/ws?token=YOUR_API_KEY');
 
 ### Authentication
 
-Pass API key as `token` query parameter, or rely on localhost bypass if enabled.
+Pass API key as `api_key` query parameter only for WebSocket clients that cannot
+send headers during the upgrade. HTTP requests must use `Authorization: Bearer`
+or `X-API-Key`. In production, do not rely on localhost bypass.
 
 ### Client → Server Messages
 

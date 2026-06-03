@@ -53,6 +53,12 @@ Data is persisted in a Docker named volume (`kanban-data`), so it survives conta
 
 > **⚠️ Important:** Do not set `NODE_ENV=development` in your Docker environment — the UI won't load. See [NODE_ENV & Docker](#node_env--docker) for details.
 
+> **Remote security posture:** Exposing Veritas beyond loopback is v5 server
+> mode. Keep auth enabled, disable localhost bypass, use HTTPS/VPN/tunnel
+> protection for browser/mobile access, and prefer one trusted origin for `/`,
+> `/api`, and `/ws`. See
+> [ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md).
+
 ---
 
 ## Docker Configuration
@@ -264,6 +270,11 @@ The server:
 When running behind nginx (or any reverse proxy), set the `TRUST_PROXY` environment
 variable so Express can correctly detect the real client IP from `X-Forwarded-*`
 headers. This is required for accurate rate limiting and security logging.
+
+Reverse proxy deployments should follow the trusted-host model from
+[ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md): route
+the web app, `/api`, `/ws`, `/health`, and future PWA assets through the same
+public origin whenever possible.
 
 Common values:
 
@@ -717,6 +728,13 @@ The server exposes an unauthenticated health endpoint:
 curl http://localhost:3001/health
 # → {"status":"ok","timestamp":"2026-01-29T12:00:00.000Z"}
 ```
+
+Remote clients and desktop onboarding should also validate:
+
+- `GET /api/health` for the canonical Veritas API liveness payload.
+- `GET /health/ready` for storage, memory, and disk readiness.
+- `GET /api/auth/status` for setup/auth/session state.
+- `/ws` upgrade from the same origin used by the web app.
 
 The Docker image includes a built-in health check:
 

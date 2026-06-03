@@ -16,7 +16,9 @@ VERITAS_AUTH_ENABLED=true
 VERITAS_AUTH_LOCALHOST_BYPASS=true
 ```
 
-This allows unauthenticated requests from `localhost`/`127.0.0.1` while still requiring auth for remote connections.
+This allows unauthenticated requests from `localhost`/`127.0.0.1` while still requiring auth for remote connections during development.
+In `NODE_ENV=production`, localhost bypass is not honored for HTTP or WebSocket
+auth, even if an old `.env` file still enables it.
 
 ### Production
 
@@ -29,6 +31,15 @@ VERITAS_AUTH_LOCALHOST_BYPASS=false
 VERITAS_ADMIN_KEY=your-secure-admin-key
 VERITAS_API_KEYS=agent1:key1:agent,dashboard:key2:read-only
 ```
+
+### Remote/Server Mode
+
+Remote access must follow the v5 remote security posture in
+[ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md). In
+short: prefer one trusted origin for the web client, `/api`, and `/ws`; keep
+auth enabled; disable localhost bypass outside loopback; use HTTPS, VPN, or a
+trusted tunnel for browser/mobile sessions; and use exact origins instead of
+wildcard CORS.
 
 ## Authentication Methods
 
@@ -53,6 +64,10 @@ curl -H "X-API-Key: your-api-key" \
 ```javascript
 const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 ```
+
+HTTP requests do not accept API keys in query strings. Use headers for HTTP and
+reserve the WebSocket `api_key` query fallback for clients that cannot send auth
+headers during the upgrade.
 
 ## Roles and Permissions
 
@@ -108,12 +123,12 @@ classification.
 
 ### Environment Variables
 
-| Variable                        | Default | Description                                        |
-| ------------------------------- | ------- | -------------------------------------------------- |
-| `VERITAS_AUTH_ENABLED`          | `true`  | Enable/disable authentication                      |
-| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false` | Allow unauthenticated localhost requests           |
-| `VERITAS_ADMIN_KEY`             | (none)  | Admin API key with full access                     |
-| `VERITAS_API_KEYS`              | (none)  | Comma-separated API keys (format: `name:key:role`) |
+| Variable                        | Default | Description                                             |
+| ------------------------------- | ------- | ------------------------------------------------------- |
+| `VERITAS_AUTH_ENABLED`          | `true`  | Enable/disable authentication                           |
+| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false` | Allow unauthenticated localhost requests in development |
+| `VERITAS_ADMIN_KEY`             | (none)  | Admin API key with full access                          |
+| `VERITAS_API_KEYS`              | (none)  | Comma-separated API keys (format: `name:key:role`)      |
 
 ### API Key Format
 
@@ -225,6 +240,11 @@ ws.onclose = (event) => {
 4. **Principle of least privilege** - Use `read-only` for dashboards, `agent` for automation
 
 5. **Monitor access** - The server logs connection attempts with role information
+
+6. **Keep remote mode explicit** - Binding outside loopback, reverse proxying,
+   tunneling, or serving mobile/PWA clients requires auth enabled, localhost
+   bypass disabled, exact CORS/WebSocket origins, and redacted diagnostics. See
+   [ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md).
 
 ## Migrating from No Auth
 
