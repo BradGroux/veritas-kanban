@@ -40,6 +40,7 @@ export interface ClientAuthContext {
   authMethod?: ClientAuthMethod;
   tokenName?: string;
   permissions?: ClientAuthPermission[];
+  apiTokenId?: string;
   deviceSessionId?: string;
   deviceId?: string;
   clientId?: string;
@@ -186,7 +187,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
   { prefix: '/api/sprints', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/activity', read: 'telemetry:read', write: 'admin:manage' },
   { prefix: '/api/github', read: 'task:read', write: 'task:write' },
-  { prefix: '/api/preview', read: 'task:read' },
+  { prefix: '/api/preview', read: 'task:read', write: 'admin:manage' },
   { prefix: '/api/conflicts', read: 'task:read', write: 'task:write' },
   { prefix: '/api/telemetry', read: 'telemetry:read', write: 'telemetry:write' },
   { prefix: '/api/metrics', read: 'report:read' },

@@ -119,6 +119,11 @@ prefix, WebSocket event, CLI command, MCP tool, workflow step/action type,
 command palette action, or tracked background job is added without a permission
 classification.
 
+The v5.0 hardening review is recorded in
+[`docs/security/v5-security-review.md`](security/v5-security-review.md),
+including fixed high/critical findings, accepted hardening risks, and the
+remaining browser-session GA blocker.
+
 ## Configuration Reference
 
 ### Environment Variables

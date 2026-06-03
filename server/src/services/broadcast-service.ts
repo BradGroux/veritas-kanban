@@ -1,5 +1,6 @@
 import type { WebSocketServer, WebSocket } from 'ws';
 import type { AnyTelemetryEvent, SquadMessage } from '@veritas-kanban/shared';
+import type { AuthenticatedWebSocket } from '../middleware/auth.js';
 import {
   notifyTaskChange,
   notifyChatMessage,
@@ -25,6 +26,11 @@ let websocketEventSequence = 0;
 let workflowStatusFlushTimer: ReturnType<typeof setTimeout> | null = null;
 const pendingWorkflowStatusEvents = new Map<string, WorkflowStatusEvent>();
 
+export interface RevokedWebSocketCredential {
+  apiTokenId?: string;
+  deviceSessionId?: string;
+}
+
 export function initBroadcast(wss: WebSocketServer): void {
   wssRef = wss;
 }
@@ -33,6 +39,30 @@ export function nextWebSocketEventSequence(): number {
   websocketEventSequence =
     websocketEventSequence >= Number.MAX_SAFE_INTEGER ? 1 : websocketEventSequence + 1;
   return websocketEventSequence;
+}
+
+export function closeWebSocketClientsForRevokedCredential(
+  credential: RevokedWebSocketCredential
+): number {
+  if (!wssRef) return 0;
+  if (!credential.apiTokenId && !credential.deviceSessionId) return 0;
+
+  let closed = 0;
+  for (const client of wssRef.clients) {
+    const auth = (client as AuthenticatedWebSocket).auth;
+    if (!auth) continue;
+    const matchesApiToken =
+      credential.apiTokenId !== undefined && auth.apiTokenId === credential.apiTokenId;
+    const matchesDeviceSession =
+      credential.deviceSessionId !== undefined &&
+      auth.deviceSessionId === credential.deviceSessionId;
+    if (matchesApiToken || matchesDeviceSession) {
+      client.close(4001, 'Credential revoked');
+      closed++;
+    }
+  }
+
+  return closed;
 }
 
 function normalizeWorkspaceId(workspaceId?: string): string {
@@ -163,7 +193,12 @@ export function broadcastChatMessage(
     workspaceId: event.workspaceId ?? workspaceId,
   });
 
-  broadcastToClients(payload, { permissions: ['task:read'], workspaceId, channel: 'chat' });
+  broadcastToClients(payload, {
+    permissions: ['task:read'],
+    workspaceId,
+    channel: 'chat',
+    chatSessionId: sessionId,
+  });
 
   // Also notify via webhook (fire-and-forget)
   notifyChatMessage(

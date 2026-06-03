@@ -16,6 +16,7 @@ import {
   getDeviceSessionService,
   type DeviceSessionService,
 } from '../services/device-session-service.js';
+import { closeWebSocketClientsForRevokedCredential } from '../services/broadcast-service.js';
 import {
   getIdentityService,
   type IdentityActor,
@@ -238,6 +239,7 @@ export function createIdentityRoutes(
         actorFromRequest(req as AuthenticatedRequest),
         String(req.params.workspaceId)
       );
+      closeWebSocketClientsForRevokedCredential({ apiTokenId: token.id });
       res.json(token);
     })
   );
@@ -251,6 +253,7 @@ export function createIdentityRoutes(
         actorFromRequest(req as AuthenticatedRequest),
         String(req.params.workspaceId)
       );
+      closeWebSocketClientsForRevokedCredential({ apiTokenId: String(req.params.tokenId) });
       res.status(201).json(result);
     })
   );
@@ -302,6 +305,7 @@ export function createIdentityRoutes(
         actorFromRequest(req as AuthenticatedRequest),
         String(req.params.workspaceId)
       );
+      closeWebSocketClientsForRevokedCredential({ deviceSessionId: session.id });
       res.json(session);
     })
   );

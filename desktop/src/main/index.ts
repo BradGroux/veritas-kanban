@@ -8,6 +8,7 @@ import { registerDesktopBridge } from './bridge.js';
 import { DesktopCommandDispatcher } from './commands.js';
 import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
 import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
+import { hasSameOriginNavigation, openValidatedExternalUrl } from './navigation.js';
 import { DesktopNotificationCenter, ElectronNotificationAdapter } from './notifications.js';
 import { createDesktopPaths, resolveRepoRoot } from './paths.js';
 import { findAvailablePort } from './ports.js';
@@ -98,14 +99,14 @@ function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
     }
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    void openValidatedExternalUrl(shell, url);
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {
     const current = runtime?.getRendererOrigin();
-    if (current && !url.startsWith(current)) {
+    if (current && !hasSameOriginNavigation(url, current)) {
       event.preventDefault();
-      void shell.openExternal(url);
+      void openValidatedExternalUrl(shell, url);
     }
   });
   window.webContents.on('did-fail-load', (_event, _code, description) => {

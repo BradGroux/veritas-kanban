@@ -7,6 +7,7 @@ import {
   agentRegistryAccess,
   agentRoutingAccess,
   policyAccess,
+  previewAccess,
   scoringAccess,
   searchAccess,
   settingsAccess,
@@ -213,6 +214,23 @@ describe('v1 REST permission guard presets', () => {
         details: expect.objectContaining({ required: ['admin:manage'] }),
       })
     );
+  });
+
+  it('requires admin permission before preview routes can start local processes', () => {
+    expect(runGuard(previewAccess, mockRequest('GET', '/task_1')).next).toHaveBeenCalled();
+
+    const startAsAgent = runGuard(previewAccess, mockRequest('POST', '/task_1/start'));
+    expect(startAsAgent.next).not.toHaveBeenCalled();
+    expect(startAsAgent.res.status).toHaveBeenCalledWith(403);
+    expect(startAsAgent.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['admin:manage'] }),
+      })
+    );
+
+    expect(
+      runGuard(previewAccess, mockRequest('POST', '/task_1/start', 'admin')).next
+    ).toHaveBeenCalled();
   });
 
   it('keeps scoring evaluation read-like while guarding scoring profile mutations', () => {

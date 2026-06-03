@@ -80,6 +80,7 @@ export interface AuthContext {
   authMethod?: AuthMethod;
   tokenName?: string;
   permissions?: AuthPermission[];
+  apiTokenId?: string;
   deviceSessionId?: string;
   deviceId?: string;
   clientId?: string;
@@ -671,6 +672,7 @@ export interface WebSocketAuthResult {
   authMethod?: AuthMethod;
   tokenName?: string;
   permissions?: AuthPermission[];
+  apiTokenId?: string;
   deviceSessionId?: string;
   deviceId?: string;
   clientId?: string;

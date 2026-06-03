@@ -20,6 +20,11 @@ operator checklist for final release verification.
       proxy headers, service-worker assumptions, and local-only secret handling.
 - [ ] Security review covers desktop bridge calls, auth/session handling,
       scoped tokens, remote access, workflow execution, and agent tool gates.
+      Track evidence and blockers in
+      [v5.0 security review notes](security/v5-security-review.md). Browser
+      password sessions must become persisted per-user sessions before
+      multi-user/server-mode GA, or the release must explicitly limit password
+      sessions to single-owner local deployments.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
       WebSocket fan-out, workflow run updates, and remote/mobile clients.
 - [ ] Docs cover upgrade, desktop install, remote access, admin operations,

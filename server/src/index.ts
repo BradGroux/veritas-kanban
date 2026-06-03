@@ -63,7 +63,9 @@ import { metricsCollector } from './middleware/metrics-collector.js';
 import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
 import {
   canReceiveWebSocketEvent,
+  subscribeWebSocketChatSession,
   subscribeWebSocketChannel,
+  unsubscribeWebSocketChatSession,
   type WebSocketEventChannel,
 } from './services/websocket-permissions.js';
 
@@ -743,6 +745,13 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
     authMethod: authResult.authMethod,
     tokenName: authResult.tokenName,
     permissions: authResult.permissions,
+    apiTokenId: authResult.apiTokenId,
+    deviceSessionId: authResult.deviceSessionId,
+    deviceId: authResult.deviceId,
+    clientId: authResult.clientId,
+    clientMode: authResult.clientMode,
+    capabilities: authResult.capabilities,
+    degradedReason: authResult.degradedReason,
   };
 
   // ---- Heartbeat: mark alive on connect and on pong ----
@@ -858,10 +867,10 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
           sendWebSocketForbidden(ws, 'chat:subscribe', permissions, workspaceId);
           return;
         }
-        subscribeWebSocketChannel(ws, 'chat');
 
         // Unsubscribe from previous chat session
         if (subscribedChatSession) {
+          unsubscribeWebSocketChatSession(ws, subscribedChatSession);
           const subs = chatSubscriptions.get(subscribedChatSession);
           if (subs) {
             subs.delete(ws);
@@ -874,6 +883,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         // Subscribe to new chat session
         const sessionId: string = message.sessionId;
         subscribedChatSession = sessionId;
+        subscribeWebSocketChatSession(ws, sessionId);
         let sessionSubscribers = chatSubscriptions.get(sessionId);
         if (!sessionSubscribers) {
           sessionSubscribers = new Set();
@@ -1037,6 +1047,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
 
     // Clean up chat subscriptions
     if (subscribedChatSession) {
+      unsubscribeWebSocketChatSession(ws, subscribedChatSession);
       const subs = chatSubscriptions.get(subscribedChatSession);
       if (subs) {
         subs.delete(ws);

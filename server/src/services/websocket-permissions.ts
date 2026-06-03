@@ -23,16 +23,29 @@ export interface WebSocketDeliveryOptions {
   workspaceId?: string;
   permissions?: AuthPermission[];
   channel?: WebSocketEventChannel;
+  chatSessionId?: string;
 }
 
 export interface SubscribedWebSocket extends AuthenticatedWebSocket {
   subscribedChannels?: Set<WebSocketEventChannel>;
+  subscribedChatSessionIds?: Set<string>;
 }
 
 export function subscribeWebSocketChannel(client: WebSocket, channel: WebSocketEventChannel): void {
   const ws = client as SubscribedWebSocket;
   ws.subscribedChannels ??= new Set();
   ws.subscribedChannels.add(channel);
+}
+
+export function subscribeWebSocketChatSession(client: WebSocket, sessionId: string): void {
+  const ws = client as SubscribedWebSocket;
+  subscribeWebSocketChannel(client, 'chat');
+  ws.subscribedChatSessionIds ??= new Set();
+  ws.subscribedChatSessionIds.add(sessionId);
+}
+
+export function unsubscribeWebSocketChatSession(client: WebSocket, sessionId: string): void {
+  (client as SubscribedWebSocket).subscribedChatSessionIds?.delete(sessionId);
 }
 
 function hasChannelSubscription(client: WebSocket, channel?: WebSocketEventChannel): boolean {
@@ -42,6 +55,11 @@ function hasChannelSubscription(client: WebSocket, channel?: WebSocketEventChann
   // events if workspace and permission checks allow them.
   if (!subscriptions || subscriptions.size === 0) return true;
   return subscriptions.has(channel);
+}
+
+function hasChatSessionSubscription(client: WebSocket, sessionId?: string): boolean {
+  if (!sessionId) return true;
+  return (client as SubscribedWebSocket).subscribedChatSessionIds?.has(sessionId) === true;
 }
 
 export function isWebSocketBackpressured(client: WebSocket): boolean {
@@ -57,6 +75,7 @@ export function canReceiveWebSocketEvent(
   const auth = (client as AuthenticatedWebSocket).auth;
   if (!auth) return false;
   if (!hasChannelSubscription(client, options.channel)) return false;
+  if (!hasChatSessionSubscription(client, options.chatSessionId)) return false;
 
   const eventWorkspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   if (auth.role !== 'admin' && auth.workspaceId !== eventWorkspaceId) {

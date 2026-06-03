@@ -6,6 +6,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
 import type { WebSocketServer } from 'ws';
 import {
+  broadcastChatMessage,
+  closeWebSocketClientsForRevokedCredential,
   initBroadcast,
   broadcastTaskChange,
   broadcastTelemetryEvent,
@@ -17,6 +19,8 @@ type MockAuth = {
   role: 'admin' | 'agent' | 'read-only';
   isLocalhost: boolean;
   workspaceId?: string;
+  apiTokenId?: string;
+  deviceSessionId?: string;
 };
 
 type MockClient = {
@@ -24,9 +28,16 @@ type MockClient = {
   auth?: MockAuth;
   bufferedAmount: number;
   subscribedChannels?: Set<WebSocketEventChannel>;
+  subscribedChatSessionIds?: Set<string>;
   sent: string[];
   send: (data: string) => void;
   close: ReturnType<typeof vi.fn>;
+};
+
+type MockClientOptions = {
+  bufferedAmount?: number;
+  subscribedChannels?: Set<WebSocketEventChannel>;
+  subscribedChatSessionIds?: Set<string>;
 };
 
 // Minimal mock WebSocket server
@@ -39,7 +50,7 @@ function createMockWss() {
     addClient(
       readyState = 1,
       auth: MockAuth = { role: 'admin', isLocalhost: false, workspaceId: 'local' },
-      options: { bufferedAmount?: number; subscribedChannels?: Set<WebSocketEventChannel> } = {}
+      options: MockClientOptions = {}
     ) {
       const sent: string[] = [];
       const client = {
@@ -47,6 +58,7 @@ function createMockWss() {
         auth,
         bufferedAmount: options.bufferedAmount ?? 0,
         subscribedChannels: options.subscribedChannels,
+        subscribedChatSessionIds: options.subscribedChatSessionIds,
         sent,
         send: (data: string) => {
           sent.push(data);
@@ -215,6 +227,74 @@ describe('BroadcastService', () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
 
       expect(wss.sentMessages).toHaveLength(75);
+    });
+  });
+
+  describe('broadcastChatMessage()', () => {
+    it('delivers chat events only to clients subscribed to the matching session', () => {
+      const wss = createMockWss();
+      const sessionSubscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['chat']),
+        subscribedChatSessionIds: new Set(['session_a']),
+      });
+      const otherSessionSubscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['chat']),
+        subscribedChatSessionIds: new Set(['session_b']),
+      });
+      const chatChannelOnly = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['chat']),
+      });
+      const legacyUnsubscribed = wss.addClient(1);
+      initBroadcast(asWebSocketServer(wss));
+
+      broadcastChatMessage('session_a', {
+        type: 'chat:delta',
+        sessionId: 'session_a',
+        text: 'private response',
+      });
+
+      expect(sessionSubscriber.sent).toHaveLength(1);
+      expect(JSON.parse(sessionSubscriber.sent[0])).toMatchObject({
+        type: 'chat:delta',
+        sessionId: 'session_a',
+        text: 'private response',
+      });
+      expect(otherSessionSubscriber.sent).toHaveLength(0);
+      expect(chatChannelOnly.sent).toHaveLength(0);
+      expect(legacyUnsubscribed.sent).toHaveLength(0);
+      expect(wss.sentMessages).toHaveLength(1);
+    });
+  });
+
+  describe('closeWebSocketClientsForRevokedCredential()', () => {
+    it('closes active clients that authenticated with a revoked API token or device session', () => {
+      const wss = createMockWss();
+      const apiTokenClient = wss.addClient(1, {
+        role: 'agent',
+        isLocalhost: false,
+        workspaceId: 'local',
+        apiTokenId: 'token_1',
+      });
+      const deviceSessionClient = wss.addClient(1, {
+        role: 'read-only',
+        isLocalhost: false,
+        workspaceId: 'local',
+        deviceSessionId: 'session_1',
+      });
+      const unrelatedClient = wss.addClient(1, {
+        role: 'read-only',
+        isLocalhost: false,
+        workspaceId: 'local',
+        apiTokenId: 'token_2',
+      });
+      initBroadcast(asWebSocketServer(wss));
+
+      expect(closeWebSocketClientsForRevokedCredential({ apiTokenId: 'token_1' })).toBe(1);
+      expect(closeWebSocketClientsForRevokedCredential({ deviceSessionId: 'session_1' })).toBe(1);
+
+      expect(apiTokenClient.close).toHaveBeenCalledWith(4001, 'Credential revoked');
+      expect(deviceSessionClient.close).toHaveBeenCalledWith(4001, 'Credential revoked');
+      expect(unrelatedClient.close).not.toHaveBeenCalled();
     });
   });
 

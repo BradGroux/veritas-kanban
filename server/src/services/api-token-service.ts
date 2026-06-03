@@ -234,6 +234,7 @@ export class ApiTokenService {
         authMethod: 'api-key',
         tokenName: token.name,
         permissions: token.scopes,
+        apiTokenId: token.id,
       },
     };
   }

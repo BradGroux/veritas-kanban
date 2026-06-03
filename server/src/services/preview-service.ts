@@ -1,8 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
-import type { Task } from '@veritas-kanban/shared';
 import { expandPath } from '@veritas-kanban/shared';
+import { redactString } from '../lib/redact.js';
 
 export interface PreviewServer {
   taskId: string;
@@ -102,6 +102,30 @@ export class PreviewService {
     return readyPatterns.some((p) => p.test(output));
   }
 
+  private recordOutput(info: PreviewServer, output: string): void {
+    info.output.push(redactString(output));
+
+    // Calculate total output size
+    const totalSize = info.output.reduce((sum, line) => sum + line.length, 0);
+
+    // Enforce size limit
+    if (totalSize > this.MAX_OUTPUT_SIZE) {
+      // Truncate from the beginning, keep recent output
+      while (
+        info.output.length > 0 &&
+        info.output.reduce((sum, line) => sum + line.length, 0) > this.MAX_OUTPUT_SIZE * 0.8
+      ) {
+        info.output.shift();
+      }
+      info.output.unshift('...[output truncated due to size limit]...\n');
+    }
+
+    // Keep only last 100 lines as secondary limit
+    if (info.output.length > 100) {
+      info.output = info.output.slice(-100);
+    }
+  }
+
   /**
    * Start a preview server for a task
    */
@@ -177,27 +201,7 @@ export class PreviewService {
         // Collect output
         const handleOutput = (data: Buffer) => {
           const text = data.toString();
-          info.output.push(text);
-
-          // Calculate total output size
-          const totalSize = info.output.reduce((sum, line) => sum + line.length, 0);
-
-          // Enforce size limit
-          if (totalSize > this.MAX_OUTPUT_SIZE) {
-            // Truncate from the beginning, keep recent output
-            while (
-              info.output.length > 0 &&
-              info.output.reduce((sum, line) => sum + line.length, 0) > this.MAX_OUTPUT_SIZE * 0.8
-            ) {
-              info.output.shift();
-            }
-            info.output.unshift('...[output truncated due to size limit]...\n');
-          }
-
-          // Keep only last 100 lines as secondary limit
-          if (info.output.length > 100) {
-            info.output = info.output.slice(-100);
-          }
+          this.recordOutput(info, text);
 
           // Try to extract port if not set
           if (!info.port) {
@@ -228,9 +232,9 @@ export class PreviewService {
 
         proc.on('error', (err) => {
           info.status = 'error';
-          info.error = err.message;
+          info.error = redactString(err.message);
           runningServers.delete(taskId);
-          reject(new Error(`Failed to start dev server: ${err.message}`));
+          reject(new Error(`Failed to start dev server: ${redactString(err.message)}`));
         });
 
         proc.on('exit', (code) => {

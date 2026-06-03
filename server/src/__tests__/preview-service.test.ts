@@ -124,6 +124,29 @@ describe('PreviewService', () => {
       const output = service.getPreviewOutput('nonexistent-task');
       expect(output).toEqual([]);
     });
+
+    it('redacts secrets before retaining preview process output', () => {
+      const info = {
+        taskId: 'task_1',
+        repoName: 'repo',
+        pid: 123,
+        port: 3000,
+        url: 'http://localhost:3000',
+        status: 'running',
+        startedAt: '2026-06-02T00:00:00.000Z',
+        output: [],
+      };
+
+      (service as any).recordOutput(
+        info,
+        'dev server started with Authorization: Bearer abcdefghijklmnop and key vk_secret123456789'
+      );
+
+      expect(info.output[0]).toContain('Bearer [REDACTED]');
+      expect(info.output[0]).toContain('[REDACTED_API_KEY]');
+      expect(info.output[0]).not.toContain('abcdefghijklmnop');
+      expect(info.output[0]).not.toContain('vk_secret123456789');
+    });
   });
 
   describe('stopPreview', () => {

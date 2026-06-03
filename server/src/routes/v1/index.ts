@@ -32,6 +32,7 @@ import {
   feedbackAccess,
   notificationAccess,
   policyAccess,
+  previewAccess,
   promptRegistryAccess,
   reportAccess,
   reportRoutesAccess,
@@ -182,7 +183,7 @@ v1Router.use('/projects', settingsAccess, projectRoutes);
 v1Router.use('/sprints', settingsAccess, sprintRoutes);
 v1Router.use('/activity', activityAccess, activityRoutes);
 v1Router.use('/github', taskAccess, githubRoutes);
-v1Router.use('/preview', taskReadAccess, previewRoutes);
+v1Router.use('/preview', previewAccess, previewRoutes);
 v1Router.use('/conflicts', taskAccess, conflictRoutes);
 v1Router.use('/telemetry', telemetryAccess, telemetryRoutes);
 v1Router.use('/metrics', reportAccess, metricsRoutes);

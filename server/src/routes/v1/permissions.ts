@@ -36,6 +36,7 @@ export const policyAccess = routeAccess('policy:read', 'policy:read', [
   { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
 ]);
 export const backupAccess = routeAccess('backup:read', 'backup:write');
+export const previewAccess = routeAccess('task:read', 'admin:manage');
 export const workspaceAccess = routeAccess('workspace:read', 'admin:manage');
 export const notificationAccess = routeAccess('agent:read', 'comment:write');
 export const broadcastAccess = routeAccess('task:read', 'comment:write');
