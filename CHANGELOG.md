@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added v5 release readiness docs covering upgrade/install/admin paths,
+  compatibility matrix, release channels, rollback limits, release notes, and
+  deferred post-GA platform backlog.
+
+### Changed
+
+- Expanded release validation to cover the desktop package version and required
+  v5 release documentation.
+
 ## [4.3.2] - 2026-05-16
 
 ### Added

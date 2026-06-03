@@ -14,6 +14,7 @@ const packageFiles = [
   { label: 'web', file: 'web/package.json' },
   { label: 'cli', file: 'cli/package.json' },
   { label: 'mcp', file: 'mcp/package.json' },
+  { label: 'desktop', file: 'desktop/package.json' },
 ];
 
 const requiredFiles = [
@@ -44,6 +45,30 @@ const buildOutputs = [
   { label: 'web build output', file: 'web/dist/index.html' },
   { label: 'CLI build output', file: 'cli/dist/index.js' },
   { label: 'MCP build output', file: 'mcp/dist/index.js' },
+  { label: 'desktop build output', file: 'desktop/out/main/index.js' },
+];
+
+const requiredReleaseDocs = [
+  {
+    label: 'v5 compatibility and release policy',
+    file: 'docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md',
+    terms: ['Compatibility Matrix', 'Release Channels', 'Rollback Policy'],
+  },
+  {
+    label: 'v5 upgrade install admin guide',
+    file: 'docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md',
+    terms: ['Fresh Mac Desktop Install', 'v4 To v5 Upgrade', 'Multi-User Admin'],
+  },
+  {
+    label: 'v5 release notes',
+    file: 'docs/V5-RELEASE-NOTES.md',
+    terms: ['Breaking Changes And Migration Warnings', 'Release Artifacts'],
+  },
+  {
+    label: 'v5 GA checklist',
+    file: 'docs/V5-GA-CHECKLIST.md',
+    terms: ['Final Release Validation Commands', 'Post-GA backlog'],
+  },
 ];
 
 const checks = [];
@@ -241,6 +266,17 @@ async function main() {
     );
   }
 
+  const desktopPackage = packages.find((pkg) => pkg.label === 'desktop')?.json;
+  if (desktopPackage) {
+    for (const scriptName of ['package:mac:unsigned', 'release:mac']) {
+      check(
+        `Desktop release script exists: ${scriptName}`,
+        typeof desktopPackage.scripts?.[scriptName] === 'string',
+        desktopPackage.scripts?.[scriptName] ?? 'missing'
+      );
+    }
+  }
+
   check(
     'packageManager pins pnpm',
     /^pnpm@\d+\.\d+\.\d+$/.test(rootPackage.packageManager ?? ''),
@@ -277,6 +313,21 @@ async function main() {
     ).test(changelog),
     `expected ## [${expectedVersion}]`
   );
+
+  for (const doc of requiredReleaseDocs) {
+    const docExists = await exists(doc.file);
+    check(`Required release doc exists: ${doc.label}`, docExists, doc.file);
+    if (!docExists) continue;
+
+    const content = await readText(doc.file);
+    for (const term of doc.terms) {
+      check(
+        `Required release doc section exists: ${doc.label} -> ${term}`,
+        content.includes(term),
+        doc.file
+      );
+    }
+  }
 
   if (options.skipBuildOutput) {
     skip('Local build output validation', 'skipped by --skip-build-output');

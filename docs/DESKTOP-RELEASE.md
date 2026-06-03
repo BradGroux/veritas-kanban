@@ -65,6 +65,10 @@ available, downloading, ready, failed, and unsupported states. The menu enables
 download only when an update is available and install only when an update has
 downloaded.
 
+The full v5 channel, staged rollout, version-skew, stale-client, and rollback
+policy is tracked in
+[v5 Compatibility And Release Policy](V5-COMPATIBILITY-AND-RELEASE-POLICY.md).
+
 ## Release Checklist
 
 - Bump all workspace package versions together.
@@ -79,6 +83,8 @@ downloaded.
 - Confirm a first run creates the profile/workspace app data directories.
 - Confirm update check, download, install, failed-download, and rollback paths
   on the selected channel.
+- Confirm `pnpm validate:release` passes and verifies root/shared/server/web,
+  CLI, MCP, and desktop package versions plus required v5 release docs.
 
 ## Smoke Tests
 

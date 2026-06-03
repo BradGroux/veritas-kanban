@@ -124,6 +124,12 @@ The v5.0 hardening review is recorded in
 including fixed high/critical findings, accepted hardening risks, and the
 remaining browser-session GA blocker.
 
+Release compatibility, stale-client behavior, update channels, and rollback
+limits are tracked in
+[`docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md`](V5-COMPATIBILITY-AND-RELEASE-POLICY.md).
+Compatibility errors and debug bundles must redact tokens, cookies, private
+keys, local private paths, raw chat content, and task body text.
+
 ## Configuration Reference
 
 ### Environment Variables

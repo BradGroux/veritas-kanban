@@ -52,6 +52,26 @@ operator checklist for final release verification.
 - [ ] Docs cover upgrade, desktop install, remote access, admin operations,
       backup/restore, diagnostics, and known platform limits, with ADR 0002 as
       the remote/server-mode security baseline.
+- [ ] Compatibility and release policy covers desktop/server/API/SQLite/CLI/MCP,
+      PWA/mobile, workflow, WebSocket, migration, updater channel, staged
+      rollout, stale-client, and rollback behavior. Track the contract in
+      [v5 Compatibility And Release Policy](V5-COMPATIBILITY-AND-RELEASE-POLICY.md).
+- [ ] Upgrade, install, remote, mobile/PWA, admin, backup/restore, diagnostics,
+      and first-run setup docs are linked from
+      [v5 Upgrade, Install, Remote, And Admin Guide](V5-UPGRADE-INSTALL-ADMIN-GUIDE.md).
+- [ ] Release notes include breaking changes, migration warnings, artifact
+      requirements, documentation links, and deferred post-GA backlog. Track the
+      draft in [Draft v5.0 Release Notes](V5-RELEASE-NOTES.md).
+- [ ] `pnpm validate:release` passes after `pnpm build`, including root/shared,
+      server, web, CLI, MCP, and desktop package version alignment plus required
+      release documentation checks.
+- [ ] Post-GA backlog exists for deferred Linux, Windows, native mobile, cloud
+      sync/SaaS, and deeper desktop agent workbench scope:
+      [#541](https://github.com/BradGroux/veritas-kanban/issues/541),
+      [#542](https://github.com/BradGroux/veritas-kanban/issues/542),
+      [#543](https://github.com/BradGroux/veritas-kanban/issues/543),
+      [#544](https://github.com/BradGroux/veritas-kanban/issues/544), and
+      [#545](https://github.com/BradGroux/veritas-kanban/issues/545).
 
 ## Mantine component-system cleanup gate
 
@@ -78,6 +98,32 @@ Run this gate before closing #418, #417, or the v5 release checklist issue.
       `vendor-radix` bundle chunk is present.
 - [ ] Confirm bundle budgets remain within the `pnpm qa:mantine` thresholds or
       record an explicit release-risk acceptance.
+
+## Final Release Validation Commands
+
+Run these before publishing stable:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint:budget
+pnpm test:unit
+pnpm build
+pnpm validate:release
+pnpm desktop:package:mac:unsigned
+pnpm test:load:smoke
+```
+
+After the tag and GitHub release exist:
+
+```bash
+pnpm validate:release -- --github --repo BradGroux/veritas-kanban
+```
+
+Signed stable publishing requires the `Desktop Release` workflow with the Apple
+signing/notarization secrets from [Desktop Release](DESKTOP-RELEASE.md). Record
+the workflow run URL, artifact URLs, and updater metadata URLs in the release
+notes before marking GA complete.
 
 ## Final Sign-Off Notes
 

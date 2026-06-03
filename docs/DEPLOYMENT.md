@@ -717,7 +717,15 @@ sudo journalctl -u veritas-kanban --since "1 min ago"
 
 ### Migration Notes
 
-Veritas Kanban runs startup migrations automatically (`runStartupMigrations()` in `server/src/index.ts`). These are idempotent and safe to run on every startup — no manual migration steps are needed during upgrades.
+Veritas Kanban runs startup migrations automatically (`runStartupMigrations()`
+in `server/src/index.ts`). These are idempotent and safe to run on every
+startup.
+
+For v5 file-to-SQLite upgrades, run the dry-run migration, preserve the
+pre-migration backup and journal, and follow
+[v5 SQLite Migration Recovery](MIGRATION-RECOVERY.md). App rollback after a
+SQLite migration is limited by schema compatibility; restore the pre-migration
+file-backed backup when an older app cannot open a newer database.
 
 ---
 

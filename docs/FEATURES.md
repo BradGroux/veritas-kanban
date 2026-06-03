@@ -1871,7 +1871,7 @@ Production-ready deployment and development tooling.
 - **Concurrency control** — In-progress runs cancelled when new commits push
 - **Pipeline jobs** — Lint and warning budget, type check, workspace unit tests, production build, and security audit
 - **Scheduled QA** — Weekly and manually triggered Playwright and k6 gates run outside the fast PR path
-- **Release validation** — `pnpm validate:release` checks versions, release docs, built artifacts, and optional GitHub tag/release state
+- **Release validation** — `pnpm validate:release` checks root/shared/server/web/CLI/MCP/desktop versions, required v5 release docs, built artifacts, and optional GitHub tag/release state
 - **pnpm caching** — Dependency cache for faster CI runs
 
 ### Development
