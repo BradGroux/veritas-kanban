@@ -1,6 +1,10 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
-import { ClawdbotAgentService, clawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import {
+  AgentReadinessError,
+  ClawdbotAgentService,
+  clawdbotAgentService,
+} from '../services/clawdbot-agent-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getTaskService } from '../services/task-service.js';
 import type { AgentType, TokenTelemetryEvent } from '@veritas-kanban/shared';
@@ -14,6 +18,7 @@ const AgentTypeSchema = z.string().min(1).max(50);
 
 const startAgentSchema = z.object({
   agent: AgentTypeSchema.optional(),
+  overrideReason: z.string().trim().min(8).max(1000).optional(),
 });
 
 const completeAgentSchema = z.object({
@@ -36,15 +41,31 @@ router.post(
   '/:taskId/start',
   asyncHandler(async (req, res) => {
     let agent: AgentType | undefined;
+    let overrideReason: string | undefined;
     try {
-      ({ agent } = startAgentSchema.parse(req.body) as { agent?: AgentType });
+      ({ agent, overrideReason } = startAgentSchema.parse(req.body) as {
+        agent?: AgentType;
+        overrideReason?: string;
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);
       }
       throw error;
     }
-    const status = await clawdbotAgentService.startAgent(req.params.taskId as string, agent);
+    let status;
+    try {
+      status = await clawdbotAgentService.startAgent(req.params.taskId as string, agent, {
+        overrideReason,
+      });
+    } catch (error) {
+      if (error instanceof AgentReadinessError) {
+        throw new ValidationError(error.message, {
+          readiness: error.readiness,
+        });
+      }
+      throw error;
+    }
     res.status(201).json(status);
   })
 );

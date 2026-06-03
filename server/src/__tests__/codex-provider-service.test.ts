@@ -73,7 +73,7 @@ vi.mock('../services/circuit-registry.js', () => ({
   getBreaker: () => ({ execute: (fn: () => Promise<void>) => fn() }),
 }));
 
-import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { Task } from '@veritas-kanban/shared';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -130,7 +130,8 @@ describe('ClawdbotAgentService Codex providers', () => {
     task = {
       id: 'task_codex_fixture',
       title: 'Codex fixture task',
-      description: 'Exercise mocked Codex JSONL.',
+      description:
+        'Exercise mocked Codex JSONL and produce a report artifact with verification evidence.',
       type: 'code',
       status: 'todo',
       priority: 'medium',
@@ -138,7 +139,24 @@ describe('ClawdbotAgentService Codex providers', () => {
       project: 'veritas',
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
-      git: { worktreePath: tmpDir },
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'codex-fixture',
+        baseBranch: 'main',
+        worktreePath: tmpDir,
+      },
+      subtasks: [
+        {
+          id: 'sub_fixture',
+          title: 'Confirm fixture output',
+          completed: false,
+          created: new Date().toISOString(),
+          acceptanceCriteria: ['Codex fixture records the expected output artifact'],
+        },
+      ],
+      verificationSteps: [
+        { id: 'verify_fixture', description: 'Run mocked Codex provider test', checked: false },
+      ],
     } as Task;
 
     mockGetTask.mockResolvedValue(task);
@@ -247,5 +265,49 @@ describe('ClawdbotAgentService Codex providers', () => {
       expect.objectContaining({ attemptId: 'attempt_fixture', deliverableCount: 1 }),
       'codex'
     );
+  });
+
+  it('requires and records a readiness override for incomplete task starts', async () => {
+    task = {
+      ...task,
+      title: 'Fix',
+      description: 'Too short',
+      subtasks: [],
+      verificationSteps: [],
+    } as Task;
+    mockGetTask.mockResolvedValue(task);
+
+    const service = new ClawdbotAgentService();
+    (service as any).logsDir = tmpDir;
+
+    await expect(service.startAgent(task.id, 'codex')).rejects.toBeInstanceOf(AgentReadinessError);
+
+    mockSpawn.mockReturnValue(createFakeChild(path.join(fixtureDir, 'success.jsonl')));
+
+    const status = await service.startAgent(task.id, 'codex', {
+      overrideReason: 'Maintainer approved urgent fix',
+    });
+
+    expect(status.status).toBe('running');
+    expect(mockLogActivity).toHaveBeenCalledWith(
+      'agent_event',
+      task.id,
+      task.title,
+      expect.objectContaining({
+        event: 'readiness_override',
+        overrideReason: 'Maintainer approved urgent fix',
+        missingChecks: expect.arrayContaining([
+          expect.objectContaining({ id: 'acceptance' }),
+          expect.objectContaining({ id: 'verification' }),
+        ]),
+      }),
+      'codex'
+    );
+    await waitFor(() => {
+      expect(mockUpdateTask).toHaveBeenCalledWith(
+        task.id,
+        expect.objectContaining({ status: 'done' })
+      );
+    });
   });
 });

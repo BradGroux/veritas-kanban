@@ -28,6 +28,7 @@ export function useTemplateForm() {
           bt.title,
           bt.taskDefaults.descriptionTemplate || '',
           ...(bt.subtaskTemplates?.map((st) => st.title) || []),
+          ...(bt.subtaskTemplates?.flatMap((st) => st.acceptanceCriteria || []) || []),
         ])
         .join(' ');
 
@@ -53,6 +54,7 @@ export function useTemplateForm() {
     const allTemplateText = [
       template.taskDefaults.descriptionTemplate || '',
       ...(template.subtaskTemplates?.map((st) => st.title) || []),
+      ...(template.subtaskTemplates?.flatMap((st) => st.acceptanceCriteria || []) || []),
     ].join(' ');
 
     const customVarNames = extractCustomVariables(allTemplateText);
@@ -75,6 +77,10 @@ export function useTemplateForm() {
           title: st.title,
           completed: false,
           created: now,
+          ...(st.acceptanceCriteria?.length && {
+            acceptanceCriteria: st.acceptanceCriteria,
+            criteriaChecked: new Array(st.acceptanceCriteria.length).fill(false),
+          }),
         }));
       setSubtasks(templateSubtasks);
     } else {
@@ -131,6 +137,9 @@ export function useTemplateForm() {
       const interpolatedSubtasks = subtasks.map((st) => ({
         ...st,
         title: interpolateVariables(st.title, context),
+        acceptanceCriteria: st.acceptanceCriteria?.map((criterion) =>
+          interpolateVariables(criterion, context)
+        ),
       }));
 
       await createTask.mutateAsync({
@@ -175,6 +184,12 @@ export function useTemplateForm() {
           title: interpolateVariables(st.title, context),
           completed: false,
           created: now,
+          ...(st.acceptanceCriteria?.length && {
+            acceptanceCriteria: st.acceptanceCriteria.map((criterion) =>
+              interpolateVariables(criterion, context)
+            ),
+            criteriaChecked: new Array(st.acceptanceCriteria.length).fill(false),
+          }),
         };
       });
 

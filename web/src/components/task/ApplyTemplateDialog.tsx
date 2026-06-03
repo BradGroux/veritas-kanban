@@ -200,6 +200,7 @@ export function ApplyTemplateDialog({
     const allTemplateText = [
       selected.taskDefaults.descriptionTemplate || '',
       ...(selected.subtaskTemplates?.map((st) => st.title) || []),
+      ...(selected.subtaskTemplates?.flatMap((st) => st.acceptanceCriteria || []) || []),
     ].join(' ');
 
     const customVarNames = extractCustomVariables(allTemplateText);
@@ -260,6 +261,12 @@ export function ApplyTemplateDialog({
           title: interpolateVariables(st.title, context),
           completed: false,
           created: now,
+          ...(st.acceptanceCriteria?.length && {
+            acceptanceCriteria: st.acceptanceCriteria.map((criterion) =>
+              interpolateVariables(criterion, context)
+            ),
+            criteriaChecked: new Array(st.acceptanceCriteria.length).fill(false),
+          }),
         }));
 
       // Append to existing subtasks

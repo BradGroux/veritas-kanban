@@ -4,6 +4,11 @@
 import type { AgentType, AgentRoutingConfig, RoutingResult } from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
 
+export interface StartAgentRequest {
+  agent?: AgentType;
+  overrideReason?: string;
+}
+
 export const worktreeApi = {
   create: async (taskId: string): Promise<WorktreeInfo> => {
     const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree`, {
@@ -55,12 +60,17 @@ export const agentApi = {
     return handleResponse<GlobalAgentStatus>(response);
   },
 
-  start: async (taskId: string, agent?: AgentType): Promise<AgentStatus> => {
+  start: async (
+    taskId: string,
+    agentOrRequest?: AgentType | StartAgentRequest
+  ): Promise<AgentStatus> => {
+    const body =
+      typeof agentOrRequest === 'string' ? { agent: agentOrRequest } : (agentOrRequest ?? {});
     const response = await fetch(`${API_BASE}/agents/${taskId}/start`, {
       credentials: 'include',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent }),
+      body: JSON.stringify(body),
     });
     return handleResponse<AgentStatus>(response);
   },

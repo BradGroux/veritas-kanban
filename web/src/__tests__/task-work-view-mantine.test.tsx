@@ -117,6 +117,15 @@ describe('task work view Mantine surface', () => {
         { id: 'verify-1', description: 'Run tests', checked: true },
         { id: 'verify-2', description: 'Smoke desktop app', checked: false },
       ],
+      subtasks: [
+        {
+          id: 'sub-1',
+          title: 'Confirm release readiness',
+          completed: false,
+          created: '2026-06-01T11:15:00.000Z',
+          acceptanceCriteria: ['Release report includes verification evidence'],
+        },
+      ],
       deliverables: [
         {
           id: 'del-1',
@@ -169,11 +178,22 @@ describe('task work view Mantine surface', () => {
         branch: 'timeline',
         baseBranch: 'main',
       },
+      subtasks: [
+        {
+          id: 'sub-1',
+          title: 'Confirm timeline output',
+          completed: false,
+          created: '2026-06-01T11:00:00.000Z',
+          acceptanceCriteria: ['Timeline artifact shows ordered run events'],
+        },
+      ],
       verificationSteps: [{ id: 'verify-1', description: 'Run timeline test', checked: false }],
     });
 
     const readiness = getTaskReadinessChecks(task, true);
 
+    expect(readiness.map((check) => check.label)).toContain('Acceptance criteria');
+    expect(readiness.map((check) => check.label)).toContain('Risk level');
     expect(readiness.every((check) => check.passed)).toBe(true);
     expect(shouldDefaultTaskDetailToWork(task)).toBe(true);
     expect(shouldDefaultTaskDetailToWork(createMockTask({ type: 'feature' }))).toBe(false);

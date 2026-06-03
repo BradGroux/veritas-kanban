@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ActionIcon,
+  Alert,
   Badge,
   Button,
   Code,
@@ -11,6 +12,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Textarea,
   Tooltip,
 } from '@mantine/core';
 import { useConfig } from '@/hooks/useConfig';
@@ -40,6 +42,7 @@ import {
   XCircle,
   Clock,
 } from 'lucide-react';
+import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type { Task, AgentType, AttemptStatus } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { sanitizeText } from '@/lib/sanitize';
@@ -74,6 +77,8 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [readinessOverrideOpen, setReadinessOverrideOpen] = useState(false);
+  const [readinessOverrideReason, setReadinessOverrideReason] = useState('');
 
   const models = ['sonnet', 'opus', 'haiku'];
 
@@ -93,6 +98,19 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     label: `${agent.name}${agent.type === defaultAgent ? ' (default)' : ''}`,
   }));
   const modelOptions = models.map((model) => ({ value: model, label: model }));
+  const resolvedAgent =
+    selectedAgent ||
+    (task.agent && task.agent !== 'auto' ? task.agent : undefined) ||
+    routingResult?.agent ||
+    defaultAgent;
+  const readinessSummary = useMemo(
+    () =>
+      evaluateTaskReadiness(task, {
+        isCodeTask: task.type === 'code',
+        selectedAgent: resolvedAgent,
+      }),
+    [task, resolvedAgent]
+  );
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -109,24 +127,38 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     setAutoScroll(isAtBottom);
   };
 
-  const handleStart = () => {
+  const startAgentRun = (overrideReason?: string) => {
     clearOutputs();
     setViewingAttemptId(null); // Switch back to live view
     startAgent.mutate(
       {
         taskId: task.id,
-        agent:
-          selectedAgent ||
-          (task.agent && task.agent !== 'auto' ? task.agent : undefined) ||
-          routingResult?.agent ||
-          defaultAgent,
+        agent: resolvedAgent,
+        ...(overrideReason ? { overrideReason } : {}),
       },
       {
         onSuccess: () => {
           refetchAttempts();
+          setReadinessOverrideOpen(false);
+          setReadinessOverrideReason('');
         },
       }
     );
+  };
+
+  const handleStart = () => {
+    if (!readinessSummary.ready) {
+      setReadinessOverrideOpen(true);
+      return;
+    }
+
+    startAgentRun();
+  };
+
+  const handleReadinessOverride = () => {
+    const reason = readinessOverrideReason.trim();
+    if (reason.length < 8) return;
+    startAgentRun(reason);
   };
 
   const handleStop = () => {
@@ -196,6 +228,23 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         </Group>
 
         <Paper className="overflow-hidden bg-muted/30" radius="md" withBorder>
+          {!isAgentRunning && !readinessSummary.ready && (
+            <Alert
+              color="yellow"
+              icon={<AlertCircle className="h-4 w-4" />}
+              title="Task is not ready for agent execution"
+              className="m-2"
+            >
+              <Stack gap={4}>
+                {readinessSummary.missingRequired.map((check) => (
+                  <Text key={check.id} size="xs">
+                    {check.label}: {check.detail}
+                  </Text>
+                ))}
+              </Stack>
+            </Alert>
+          )}
+
           {/* Controls */}
           <Group gap="xs" className="border-b bg-card p-2">
             {!isAgentRunning ? (
@@ -215,12 +264,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                   </Text>
                 )}
                 <Select
-                  value={
-                    selectedAgent ||
-                    (task.agent && task.agent !== 'auto' ? task.agent : undefined) ||
-                    routingResult?.agent ||
-                    defaultAgent
-                  }
+                  value={resolvedAgent}
                   onChange={(value) => setSelectedAgent(value as AgentType)}
                   data={agentOptions}
                   placeholder="Select agent..."
@@ -473,6 +517,50 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
               </Button>
               <Button color="red" onClick={handleStop}>
                 Stop Agent
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal
+          opened={readinessOverrideOpen}
+          onClose={() => setReadinessOverrideOpen(false)}
+          title="Start with readiness override?"
+          centered
+        >
+          <Stack gap="md">
+            <Stack gap={6}>
+              {readinessSummary.missingRequired.map((check) => (
+                <Group key={check.id} gap="xs" align="flex-start" wrap="nowrap">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                  <div>
+                    <Text size="sm" fw={500}>
+                      {check.label}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {check.detail}
+                    </Text>
+                  </div>
+                </Group>
+              ))}
+            </Stack>
+            <Textarea
+              label="Override reason"
+              value={readinessOverrideReason}
+              onChange={(event) => setReadinessOverrideReason(event.currentTarget.value)}
+              rows={3}
+              placeholder="Why is this task safe to start before it is ready?"
+            />
+            <Group justify="flex-end" gap="xs">
+              <Button variant="default" onClick={() => setReadinessOverrideOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                color="yellow"
+                onClick={handleReadinessOverride}
+                disabled={readinessOverrideReason.trim().length < 8 || startAgent.isPending}
+              >
+                Start Anyway
               </Button>
             </Group>
           </Stack>

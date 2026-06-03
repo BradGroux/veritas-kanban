@@ -5,6 +5,12 @@ import { apiFetch, API_BASE } from '@/lib/api/helpers';
 import { useWebSocket, type WebSocketMessage } from './useWebSocket';
 import type { AgentType } from '@veritas-kanban/shared';
 
+export interface StartAgentInput {
+  taskId: string;
+  agent?: AgentType;
+  overrideReason?: string;
+}
+
 export interface AgentApprovalRequest {
   id: string;
   agentId: string;
@@ -30,8 +36,8 @@ export function useStartAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, agent }: { taskId: string; agent?: AgentType }) =>
-      api.agent.start(taskId, agent),
+    mutationFn: ({ taskId, agent, overrideReason }: StartAgentInput) =>
+      api.agent.start(taskId, { agent, overrideReason }),
     onSuccess: (_, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });

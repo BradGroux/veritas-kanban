@@ -108,6 +108,7 @@ const template: TaskTemplate = {
     {
       title: 'Verify {{custom:bugId}}',
       order: 1,
+      acceptanceCriteria: ['{{custom:bugId}} includes regression evidence'],
     },
   ],
   created: '2026-06-01T09:00:00Z',
@@ -192,7 +193,24 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     const user = userEvent.setup();
     const task = createMockTask({
       id: 'task-agent',
+      title: 'Run agent readiness path',
+      description:
+        'Start the configured agent and produce an evidence artifact after focused verification.',
+      type: 'code',
+      priority: 'medium',
       git: { repo: 'veritas', branch: 'feature/agent', baseBranch: 'main', worktreePath: '/tmp' },
+      subtasks: [
+        {
+          id: 'sub-ready',
+          title: 'Confirm agent output',
+          completed: false,
+          created: '2026-06-01T09:00:00Z',
+          acceptanceCriteria: ['Agent output includes verification evidence'],
+        },
+      ],
+      verificationSteps: [
+        { id: 'verify-ready', description: 'Run agent panel test', checked: false },
+      ],
     });
 
     const { baseElement, container } = renderWithProviders(<AgentPanel task={task} />);
@@ -211,6 +229,41 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     expect(mocks.clearOutputs).toHaveBeenCalled();
     expect(mocks.startAgentMutate).toHaveBeenCalledWith(
       { taskId: 'task-agent', agent: 'codex' },
+      { onSuccess: expect.any(Function) }
+    );
+  });
+
+  it('requires an override reason before starting an incomplete agent task', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-agent-incomplete',
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'feature/agent', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+
+    renderWithProviders(<AgentPanel task={task} />);
+
+    expect(screen.getByText('Task is not ready for agent execution')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Start with readiness override?' })
+    ).toBeDefined();
+    expect(mocks.startAgentMutate).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Override reason'), 'Maintainer approved urgent fix');
+    await user.click(screen.getByRole('button', { name: 'Start Anyway' }));
+
+    expect(mocks.clearOutputs).toHaveBeenCalled();
+    expect(mocks.startAgentMutate).toHaveBeenCalledWith(
+      {
+        taskId: 'task-agent-incomplete',
+        agent: 'codex',
+        overrideReason: 'Maintainer approved urgent fix',
+      },
       { onSuccess: expect.any(Function) }
     );
   });
@@ -292,7 +345,12 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
           priority: 'high',
           project: 'veritas',
           subtasks: expect.arrayContaining([
-            expect.objectContaining({ title: 'Verify BUG-42', completed: false }),
+            expect.objectContaining({
+              title: 'Verify BUG-42',
+              completed: false,
+              acceptanceCriteria: ['BUG-42 includes regression evidence'],
+              criteriaChecked: [false],
+            }),
           ]),
         }),
       });

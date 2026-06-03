@@ -304,4 +304,22 @@ describe('TaskCard', () => {
     renderCard(task);
     expect(screen.getByText('Snag')).toBeDefined();
   });
+
+  it('shows readiness metadata for code tasks', () => {
+    const task = createMockTask({
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'readiness',
+        baseBranch: 'main',
+      },
+    });
+
+    renderCard(task);
+
+    expect(screen.getByText('38% ready')).toBeDefined();
+    expect(screen.getByRole('article').getAttribute('aria-label')).toContain('Readiness: 38%');
+  });
 });

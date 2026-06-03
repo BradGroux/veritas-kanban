@@ -3,6 +3,7 @@ import { Tooltip } from '@mantine/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
+import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
 import {
   Check,
@@ -94,6 +95,10 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     if (pt.type !== nt.type) return false;
     if (pt.project !== nt.project) return false;
     if (pt.sprint !== nt.sprint) return false;
+    if (pt.agent !== nt.agent) return false;
+    if (pt.runMode !== nt.runMode) return false;
+    if (pt.git?.repo !== nt.git?.repo) return false;
+    if (pt.git?.baseBranch !== nt.git?.baseBranch) return false;
     if (pt.timeTracking?.totalSeconds !== nt.timeTracking?.totalSeconds) return false;
     if (pt.timeTracking?.isRunning !== nt.timeTracking?.isRunning) return false;
     if (pt.attempt?.status !== nt.attempt?.status) return false;
@@ -106,6 +111,12 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     if (pSubs.length !== nSubs.length) return false;
     for (let i = 0; i < pSubs.length; i++) {
       if (pSubs[i].completed !== nSubs[i].completed) return false;
+      const pCriteria = pSubs[i].acceptanceCriteria || [];
+      const nCriteria = nSubs[i].acceptanceCriteria || [];
+      if (pCriteria.length !== nCriteria.length) return false;
+      for (let criteriaIndex = 0; criteriaIndex < pCriteria.length; criteriaIndex++) {
+        if (pCriteria[criteriaIndex] !== nCriteria[criteriaIndex]) return false;
+      }
     }
     // Verification steps — compare count and checked state
     const pVSteps = pt.verificationSteps || [];
@@ -122,6 +133,13 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
       return false;
     if ((pt.dependencies?.blocks?.length || 0) !== (nt.dependencies?.blocks?.length || 0))
       return false;
+    if ((pt.blockedBy?.length || 0) !== (nt.blockedBy?.length || 0)) return false;
+    const pAgents = pt.agents || [];
+    const nAgents = nt.agents || [];
+    if (pAgents.length !== nAgents.length) return false;
+    for (let i = 0; i < pAgents.length; i++) {
+      if (pAgents[i] !== nAgents[i]) return false;
+    }
     // Checkpoint — compare existence and step
     if (!!pt.checkpoint !== !!nt.checkpoint) return false;
     if (pt.checkpoint?.step !== nt.checkpoint?.step) return false;
@@ -270,6 +288,17 @@ export const TaskCard = memo(function TaskCard({
     };
   }, [task.verificationSteps]);
 
+  const readinessSummary = useMemo(
+    () => (task.type === 'code' ? evaluateTaskReadiness(task, { isCodeTask: true }) : null),
+    [task]
+  );
+  const readinessColor = readinessSummary?.ready
+    ? 'bg-green-500/20 text-green-500'
+    : readinessSummary && readinessSummary.percent >= 60
+      ? 'bg-amber-500/20 text-amber-500'
+      : 'bg-red-500/20 text-red-500';
+  const readinessAria = readinessSummary ? `, Readiness: ${readinessSummary.percent}%` : '';
+
   // Suppress the outer card tooltip entirely during any drag operation
   const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging;
 
@@ -298,7 +327,7 @@ export const TaskCard = memo(function TaskCard({
         onKeyDown={handleKeyDown}
         role="article"
         tabIndex={0}
-        aria-label={`Task: ${task.title}, Priority: ${task.priority}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
+        aria-label={`Task: ${task.title}, Priority: ${task.priority}${readinessAria}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
         className={cn(
           'group bg-card border border-border rounded-md cursor-grab active:cursor-grabbing',
           isCompact ? 'p-2' : 'p-3',
@@ -492,6 +521,35 @@ export const TaskCard = memo(function TaskCard({
             >
               {task.priority}
             </span>
+          )}
+          {readinessSummary && (
+            <Tooltip
+              label={
+                <div>
+                  <p className="font-medium">Readiness Gate</p>
+                  <p className="text-sm">{readinessSummary.percent}% ready for agent start</p>
+                  {!readinessSummary.ready && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Missing:{' '}
+                      {readinessSummary.missingRequired
+                        .slice(0, 3)
+                        .map((check) => check.label)
+                        .join(', ')}
+                    </p>
+                  )}
+                </div>
+              }
+            >
+              <span
+                className={cn(
+                  'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
+                  readinessColor
+                )}
+              >
+                <ShieldCheck className="h-3 w-3" />
+                {readinessSummary.percent}% ready
+              </span>
+            </Tooltip>
           )}
           {/* Attachment indicator */}
           {task.attachments && task.attachments.length > 0 && (

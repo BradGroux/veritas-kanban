@@ -11,6 +11,7 @@ const templateService = new TemplateService();
 const subtaskTemplateSchema = z.object({
   title: z.string(),
   order: z.number(),
+  acceptanceCriteria: z.array(z.string()).optional(),
 });
 
 const blueprintTaskSchema = z.object({

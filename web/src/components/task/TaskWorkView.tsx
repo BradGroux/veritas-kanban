@@ -31,8 +31,16 @@ import {
   Workflow,
   XCircle,
 } from 'lucide-react';
-import type { Task, TaskAttempt, TaskStatus } from '@veritas-kanban/shared';
+import {
+  evaluateTaskReadiness,
+  getTaskReadinessChecks as getSharedTaskReadinessChecks,
+} from '@veritas-kanban/shared';
+import type { Task, TaskAttempt, TaskReadinessCheck, TaskStatus } from '@veritas-kanban/shared';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
+
+export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
+  return getSharedTaskReadinessChecks(task, { isCodeTask });
+}
 
 export type TaskWorkViewTarget =
   | 'details'
@@ -54,13 +62,6 @@ interface TaskWorkViewProps {
   onOpenTab: (target: TaskWorkViewTarget) => void;
   onOpenChat: () => void;
   onOpenWorkflow: () => void;
-}
-
-interface ReadinessCheck {
-  id: string;
-  label: string;
-  passed: boolean;
-  detail: string;
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -112,88 +113,9 @@ function getAttemptColor(status?: TaskAttempt['status']): string {
   }
 }
 
-function hasText(value: string | undefined, minLength = 12): boolean {
-  return Boolean(value && value.trim().length >= minLength);
-}
-
-export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): ReadinessCheck[] {
-  const blockers =
-    task.status === 'blocked' || Boolean(task.blockedReason) || Boolean(task.blockedBy?.length);
-  const dependencyCount =
-    (task.dependencies?.depends_on?.length ?? 0) + (task.blockedBy?.length ?? 0);
-  const verificationTotal = task.verificationSteps?.length ?? 0;
-  const expectedArtifact =
-    (task.deliverables?.length ?? 0) > 0 ||
-    (task.attachments?.length ?? 0) > 0 ||
-    task.description.toLowerCase().includes('deliverable') ||
-    task.description.toLowerCase().includes('artifact') ||
-    task.description.toLowerCase().includes('report');
-  const assignedAgent =
-    Boolean(task.agent && task.agent !== 'auto') || Boolean(task.agents && task.agents.length > 0);
-
-  return [
-    {
-      id: 'objective',
-      label: 'Clear objective',
-      passed: hasText(task.title, 6) && hasText(task.description, 24),
-      detail: hasText(task.description, 24)
-        ? 'Title and description provide enough context.'
-        : 'Add a concrete description of the expected outcome.',
-    },
-    {
-      id: 'verification',
-      label: 'Verification plan',
-      passed: verificationTotal > 0,
-      detail:
-        verificationTotal > 0
-          ? `${verificationTotal} verification step${verificationTotal === 1 ? '' : 's'} defined.`
-          : 'Add at least one verification step before execution.',
-    },
-    {
-      id: 'context',
-      label: isCodeTask ? 'Repository context' : 'Project context',
-      passed: isCodeTask ? Boolean(task.git?.repo && task.git?.baseBranch) : Boolean(task.project),
-      detail: isCodeTask
-        ? task.git?.repo
-          ? `${task.git.repo} targeting ${task.git.baseBranch || 'default branch'}.`
-          : 'Select a repository and base branch for code execution.'
-        : task.project
-          ? `Project ${task.project} is set.`
-          : 'Assign a project or add context in the task description.',
-    },
-    {
-      id: 'artifact',
-      label: 'Expected artifact',
-      passed: expectedArtifact,
-      detail: expectedArtifact
-        ? 'Expected output is represented by deliverables, attachments, or description.'
-        : 'State the expected handoff artifact, report, code change, or evidence packet.',
-    },
-    {
-      id: 'blockers',
-      label: 'Dependencies and blockers',
-      passed: !blockers,
-      detail: blockers
-        ? task.blockedReason?.note || 'Task is blocked or has unresolved blockers.'
-        : dependencyCount > 0
-          ? `${dependencyCount} dependency link${dependencyCount === 1 ? '' : 's'} recorded.`
-          : 'No active blockers detected.',
-    },
-    {
-      id: 'agent',
-      label: 'Agent or workflow path',
-      passed: assignedAgent || Boolean(task.runMode) || !isCodeTask,
-      detail:
-        assignedAgent || task.runMode
-          ? `Execution path: ${task.agent && task.agent !== 'auto' ? task.agent : task.runMode || 'configured'}.`
-          : 'Pick an agent, run mode, or workflow before starting.',
-    },
-  ];
-}
-
 function getNextAction(
   task: Task,
-  readinessChecks: ReadinessCheck[]
+  readinessChecks: TaskReadinessCheck[]
 ): {
   label: string;
   detail: string;
@@ -300,12 +222,13 @@ export function TaskWorkView({
   onOpenWorkflow,
 }: TaskWorkViewProps) {
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
-  const readinessChecks = useMemo(
-    () => getTaskReadinessChecks(task, isCodeTask),
+  const readinessSummary = useMemo(
+    () => evaluateTaskReadiness(task, { isCodeTask }),
     [task, isCodeTask]
   );
-  const passedReadiness = readinessChecks.filter((check) => check.passed).length;
-  const readinessPercent = Math.round((passedReadiness / readinessChecks.length) * 100);
+  const readinessChecks = readinessSummary.checks;
+  const passedReadiness = readinessSummary.passed;
+  const readinessPercent = readinessSummary.percent;
   const nextAction = getNextAction(task, readinessChecks);
   const verification = getVerificationSummary(task);
   const latestWorkProducts = workProducts.slice(0, 3);

@@ -24,6 +24,7 @@ import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
+import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type {
   Task,
   AgentType,
@@ -36,6 +37,7 @@ import type {
   RunCompletedEvent,
   RunErrorEvent,
   TokenTelemetryEvent,
+  TaskReadinessSummary,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('clawdbot-agent-service');
@@ -91,6 +93,20 @@ export interface AgentOutput {
   timestamp: string;
 }
 
+export interface AgentStartOptions {
+  overrideReason?: string;
+}
+
+export class AgentReadinessError extends Error {
+  constructor(
+    public readiness: TaskReadinessSummary,
+    message = 'Task readiness override required'
+  ) {
+    super(message);
+    this.name = 'AgentReadinessError';
+  }
+}
+
 // Track pending agent requests
 interface PendingAgent {
   taskId: string;
@@ -130,7 +146,11 @@ export class ClawdbotAgentService {
   /**
    * Start an agent on a task by delegating to Clawdbot
    */
-  async startAgent(taskId: string, agentType?: AgentType): Promise<AgentStatus> {
+  async startAgent(
+    taskId: string,
+    agentType?: AgentType,
+    options: AgentStartOptions = {}
+  ): Promise<AgentStatus> {
     // Get task
     const task = await this.taskService.getTask(taskId);
     if (!task) {
@@ -169,6 +189,38 @@ export class ClawdbotAgentService {
 
     const agentConfig = this.resolveAgentConfig(config.agents, agent);
     const provider = this.resolveAgentProvider(agentConfig, agent);
+    const readiness = evaluateTaskReadiness(task, { isCodeTask: true, selectedAgent: agent });
+    const overrideReason = options.overrideReason?.trim();
+
+    if (!readiness.ready && !overrideReason) {
+      throw new AgentReadinessError(readiness);
+    }
+
+    if (!readiness.ready && overrideReason && overrideReason.length < 8) {
+      throw new AgentReadinessError(
+        readiness,
+        'Task readiness override reason must be at least 8 characters'
+      );
+    }
+
+    if (!readiness.ready && overrideReason) {
+      await activityService.logActivity(
+        'agent_event',
+        taskId,
+        task.title,
+        {
+          event: 'readiness_override',
+          overrideReason,
+          readinessPercent: readiness.percent,
+          missingChecks: readiness.missingRequired.map((check) => ({
+            id: check.id,
+            label: check.label,
+            detail: check.detail,
+          })),
+        },
+        agent
+      );
+    }
 
     // Create attempt
     const attemptId = `attempt_${nanoid(8)}`;
