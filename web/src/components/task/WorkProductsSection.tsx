@@ -12,9 +12,12 @@ import {
   Stack,
   Table,
   Text,
+  Textarea,
+  TextInput,
   ThemeIcon,
   Tooltip,
 } from '@mantine/core';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useTaskWorkProducts, useWorkProductVersions } from '@/hooks/useWorkProducts';
 import { toast } from '@/hooks/useToast';
@@ -25,6 +28,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  Pencil,
   Sparkles,
 } from 'lucide-react';
 import type {
@@ -91,8 +95,14 @@ async function writeClipboardText(content: string): Promise<void> {
 }
 
 export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
+  const queryClient = useQueryClient();
   const { data: products = [], isLoading, error } = useTaskWorkProducts(taskId);
   const [historyProduct, setHistoryProduct] = useState<WorkProductPreview | null>(null);
+  const [editProduct, setEditProduct] = useState<WorkProductPreview | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
   const { data: versions = [], isLoading: versionsLoading } = useWorkProductVersions(
     historyProduct?.id ?? null
   );
@@ -118,6 +128,74 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
         description: err instanceof Error ? err.message : 'Could not copy work product.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const openEditor = async (product: WorkProductPreview) => {
+    setEditProduct(product);
+    setEditTitle(product.title);
+    setEditBody('');
+    setEditLoading(true);
+    try {
+      const content = await api.workProducts.export(product.id, {
+        format: 'markdown',
+        redacted: true,
+      });
+      setEditBody(content);
+    } catch (err) {
+      toast({
+        title: 'Edit load failed',
+        description:
+          err instanceof Error ? err.message : 'Could not load editable work product content.',
+        variant: 'destructive',
+      });
+      setEditProduct(null);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editProduct) return;
+    const title = editTitle.trim();
+    const markdown = editBody.trimEnd();
+    if (!title || !markdown) {
+      toast({
+        title: 'Edit not saved',
+        description: 'Title and content are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      await api.workProducts.update(editProduct.id, {
+        title,
+        render: {
+          schemaVersion: 1,
+          kind: 'markdown',
+          markdown,
+        },
+        changeType: 'manual',
+        changeSummary: 'Manual edit before handoff',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['tasks', taskId, 'work-products'] });
+      toast({
+        title: 'Work product updated',
+        description: `${title} was saved as a new version.`,
+      });
+      setEditProduct(null);
+      setEditTitle('');
+      setEditBody('');
+    } catch (err) {
+      toast({
+        title: 'Save failed',
+        description: err instanceof Error ? err.message : 'Could not save work product edit.',
+        variant: 'destructive',
+      });
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -246,6 +324,15 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                           <Clipboard className="h-4 w-4" />
                         </ActionIcon>
                       </Tooltip>
+                      <Tooltip label="Edit redacted markdown">
+                        <ActionIcon
+                          aria-label={`Edit ${product.title}`}
+                          variant="subtle"
+                          onClick={() => openEditor(product)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </ActionIcon>
+                      </Tooltip>
                       <Tooltip label="Export redacted markdown">
                         <ActionIcon
                           aria-label={`Export redacted ${product.title}`}
@@ -345,6 +432,48 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
               </Table.Tbody>
             </Table>
           </ScrollArea>
+        )}
+      </Modal>
+
+      <Modal
+        opened={Boolean(editProduct)}
+        onClose={() => {
+          if (!editSaving) setEditProduct(null);
+        }}
+        title={editProduct ? `Edit: ${editProduct.title}` : 'Edit work product'}
+        size="xl"
+      >
+        {editLoading ? (
+          <Group gap="sm">
+            <Loader size="sm" />
+            <Text size="sm" c="dimmed">
+              Loading editable content...
+            </Text>
+          </Group>
+        ) : (
+          <Stack gap="sm">
+            <TextInput
+              label="Title"
+              value={editTitle}
+              onChange={(event) => setEditTitle(event.currentTarget.value)}
+              disabled={editSaving}
+            />
+            <Textarea
+              label="Redacted markdown"
+              minRows={14}
+              value={editBody}
+              onChange={(event) => setEditBody(event.currentTarget.value)}
+              disabled={editSaving}
+            />
+            <Group justify="flex-end" gap="xs">
+              <Button variant="subtle" onClick={() => setEditProduct(null)} disabled={editSaving}>
+                Cancel
+              </Button>
+              <Button onClick={saveEdit} loading={editSaving}>
+                Save Version
+              </Button>
+            </Group>
+          </Stack>
         )}
       </Modal>
     </>

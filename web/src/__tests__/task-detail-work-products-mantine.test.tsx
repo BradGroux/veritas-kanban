@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   exportWorkProduct: vi.fn(),
   listForTask: vi.fn(),
   listVersions: vi.fn(),
+  updateWorkProduct: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -21,6 +22,7 @@ vi.mock('@/lib/api', () => ({
       export: mocks.exportWorkProduct,
       listForTask: mocks.listForTask,
       listVersions: mocks.listVersions,
+      update: mocks.updateWorkProduct,
     },
   },
 }));
@@ -28,6 +30,7 @@ vi.mock('@/lib/api', () => ({
 const listForTaskMock = vi.mocked(api.workProducts.listForTask);
 const exportWorkProductMock = vi.mocked(api.workProducts.export);
 const listVersionsMock = vi.mocked(api.workProducts.listVersions);
+const updateWorkProductMock = vi.mocked(api.workProducts.update);
 
 const product: WorkProductPreview = {
   id: 'wp_launch_readiness',
@@ -81,6 +84,21 @@ describe('task detail work products surface', () => {
     listForTaskMock.mockResolvedValue([product]);
     listVersionsMock.mockResolvedValue(versions);
     exportWorkProductMock.mockResolvedValue('# Redacted launch report');
+    updateWorkProductMock.mockResolvedValue({
+      id: product.id,
+      workspaceId: product.workspaceId,
+      kind: 'markdown',
+      title: 'Edited launch report',
+      status: 'active',
+      render: { schemaVersion: 1, kind: 'markdown', markdown: '# Edited launch report' },
+      version: 3,
+      taskId: product.taskId,
+      sourceRunId: product.sourceRunId,
+      agent: product.agent,
+      model: product.model,
+      createdAt: product.createdAt,
+      updatedAt: '2026-06-01T12:00:00.000Z',
+    });
     mocks.clipboardWrite.mockResolvedValue(undefined);
     mocks.execCommand.mockReturnValue(true);
 
@@ -166,6 +184,49 @@ describe('task detail work products surface', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:work-product');
     expect(appendSpy).toHaveBeenCalled();
     expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it('loads redacted markdown for manual edits and saves a new version', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<WorkProductsSection taskId="task-work-products" />);
+
+    await user.click(await screen.findByRole('button', { name: /edit launch readiness report/i }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Edit: Launch readiness report',
+    });
+    await waitFor(() =>
+      expect(exportWorkProductMock).toHaveBeenCalledWith(product.id, {
+        format: 'markdown',
+        redacted: true,
+      })
+    );
+
+    const title = within(dialog).getByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'Edited launch report');
+
+    const body = within(dialog).getByLabelText('Redacted markdown');
+    await user.clear(body);
+    await user.type(body, '# Edited launch report');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save Version' }));
+
+    await waitFor(() =>
+      expect(updateWorkProductMock).toHaveBeenCalledWith(
+        product.id,
+        expect.objectContaining({
+          title: 'Edited launch report',
+          render: {
+            schemaVersion: 1,
+            kind: 'markdown',
+            markdown: '# Edited launch report',
+          },
+          changeType: 'manual',
+          changeSummary: 'Manual edit before handoff',
+        })
+      )
+    );
   });
 
   it('opens version history without rendering raw version payloads', async () => {

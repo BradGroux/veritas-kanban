@@ -7,9 +7,11 @@ import type {
   WorkProduct,
   WorkProductListOptions,
   WorkProductPreview,
+  WorkProductPrimitive,
   WorkProductRedaction,
   WorkProductRender,
   WorkProductVersion,
+  Task,
 } from '@veritas-kanban/shared';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkProductRepository } from '../storage/sqlite/work-product-repository.js';
@@ -215,6 +217,39 @@ export class WorkProductService {
     return this.list({ query, limit });
   }
 
+  async generateCompletionPacket(
+    task: Task,
+    options: { sourceRunId?: string; changeSummary?: string } = {}
+  ): Promise<WorkProduct> {
+    const sourceRunId = options.sourceRunId ?? this.completionPacketSourceRunId(task);
+    const input = this.buildCompletionPacketInput(task, sourceRunId);
+    const existing = (
+      await this.list({
+        taskId: task.id,
+        kind: 'report',
+        includeArchived: true,
+        limit: 200,
+      })
+    ).find((product) => product.metadata?.packetType === 'completion_packet');
+
+    if (existing) {
+      const updated = await this.update(existing.id, {
+        ...input,
+        status: 'active',
+        changeType: 'regenerate',
+        changeSummary:
+          options.changeSummary ??
+          `Regenerated completion packet for task revision ${task.revision ?? 'unknown'}`,
+      });
+      if (updated) return updated;
+    }
+
+    return this.create({
+      ...input,
+      changeSummary: options.changeSummary ?? 'Generated completion packet',
+    });
+  }
+
   toPreview(product: WorkProduct): WorkProductPreview {
     const rawText = this.extractSearchText(product);
     const redactedText = this.redactText(rawText, product.redaction);
@@ -265,6 +300,282 @@ export class WorkProductService {
       body,
     ].filter((line): line is string => line !== null);
     return `${lines.join('\n')}\n`;
+  }
+
+  private buildCompletionPacketInput(task: Task, sourceRunId?: string): CreateWorkProductInput {
+    const sourceLinks = this.buildCompletionPacketSourceLinks(task, sourceRunId);
+    const render: WorkProductRender = {
+      schemaVersion: 1,
+      kind: 'report',
+      summary: this.completionSummary(task),
+      sections: [
+        { heading: 'Delivered', body: this.deliveredSection(task) },
+        { heading: 'Changed Files And Sources', body: this.changedFilesSection(task) },
+        { heading: 'Verification Evidence', body: this.verificationSection(task) },
+        { heading: 'Review And Approval', body: this.reviewSection(task) },
+        { heading: 'Cost And Duration', body: this.costDurationSection(task) },
+        { heading: 'Deliverables And Attachments', body: this.deliverablesSection(task) },
+        { heading: 'Unresolved Risks', body: this.risksSection(task) },
+      ],
+    };
+
+    return {
+      kind: 'report',
+      title: `Completion Packet: ${task.title}`,
+      render,
+      taskId: task.id,
+      sourceRunId,
+      agent: task.attempt?.agent ?? (task.agent === 'auto' ? undefined : task.agent),
+      model: task.attempt?.model,
+      redaction: {
+        level: 'standard',
+        containsSensitiveContent: false,
+        sensitiveFields: ['local paths', 'tokens', 'secrets'],
+        notes: [
+          'Completion packets intentionally summarize evidence instead of embedding raw logs.',
+        ],
+        exportDefault: 'redacted',
+      },
+      sourceLinks,
+      metadata: this.completionPacketMetadata(task, sourceRunId),
+    };
+  }
+
+  private completionPacketSourceRunId(task: Task): string | undefined {
+    if (task.attempt?.id) return task.attempt.id;
+    return [...(task.attempts ?? [])].reverse().find((attempt) => attempt.status === 'complete')
+      ?.id;
+  }
+
+  private completionPacketMetadata(
+    task: Task,
+    sourceRunId?: string
+  ): Record<string, WorkProductPrimitive> {
+    return {
+      packetType: 'completion_packet',
+      taskStatus: task.status,
+      generatedFromRevision: task.revision ?? null,
+      generatedFromTaskUpdatedAt: task.updated,
+      sourceRunId: sourceRunId ?? null,
+      verificationTotal: task.verificationSteps?.length ?? 0,
+      verificationPassed: task.verificationSteps?.filter((step) => step.checked).length ?? 0,
+      deliverableCount: task.deliverables?.length ?? 0,
+      attachmentCount: task.attachments?.length ?? 0,
+      reviewDecision: task.review?.decision ?? null,
+      qaGatePassed: task.qaGate?.passed ?? null,
+    };
+  }
+
+  private buildCompletionPacketSourceLinks(
+    task: Task,
+    sourceRunId?: string
+  ): CreateWorkProductInput['sourceLinks'] {
+    const links: NonNullable<CreateWorkProductInput['sourceLinks']> = [
+      {
+        label: 'Task',
+        href: `veritas://task/${encodeURIComponent(task.id)}?tab=work-products`,
+        type: 'task',
+      },
+    ];
+
+    if (sourceRunId) {
+      links.push({
+        label: 'Run timeline',
+        href: `veritas://task/${encodeURIComponent(task.id)}?tab=timeline&attempt=${encodeURIComponent(sourceRunId)}`,
+        type: 'run',
+      });
+    }
+
+    if (task.git?.prUrl) {
+      links.push({
+        label: `PR ${task.git.prNumber ?? ''}`.trim(),
+        href: task.git.prUrl,
+        type: 'pr',
+      });
+    }
+
+    if (task.github?.url) {
+      links.push({
+        label: `Issue #${task.github.issueNumber}`,
+        href: task.github.url,
+        type: 'url',
+      });
+    }
+
+    return links;
+  }
+
+  private completionSummary(task: Task): string {
+    const status = task.status === 'done' ? 'completed' : task.status;
+    const review = task.review?.decision ? ` Review: ${task.review.decision}.` : '';
+    const verificationTotal = task.verificationSteps?.length ?? 0;
+    const verificationPassed = task.verificationSteps?.filter((step) => step.checked).length ?? 0;
+    const verification =
+      verificationTotal > 0
+        ? ` Verification: ${verificationPassed}/${verificationTotal} checks complete.`
+        : ' Verification evidence is missing.';
+    return this.packetText(`${task.title} is ${status}.${review}${verification}`);
+  }
+
+  private deliveredSection(task: Task): string {
+    const lines = [
+      `Task: ${task.title}`,
+      task.description ? `Objective: ${task.description}` : 'Objective: No description recorded.',
+      task.automation?.result ? `Agent result: ${task.automation.result}` : null,
+      task.attempt?.status ? `Latest attempt: ${task.attempt.status}` : null,
+    ].filter((line): line is string => Boolean(line));
+    return this.packetText(lines.join('\n'));
+  }
+
+  private changedFilesSection(task: Task): string {
+    const changedFiles = new Set<string>();
+    for (const deliverable of task.deliverables ?? []) {
+      if (deliverable.path) changedFiles.add(deliverable.path);
+    }
+    for (const comment of task.reviewComments ?? []) {
+      if (comment.file) changedFiles.add(`${comment.file}:${comment.line}`);
+    }
+
+    const lines = [
+      task.git?.repo ? `Repository: ${task.git.repo}` : 'Repository: Not recorded.',
+      task.git?.branch || task.git?.baseBranch
+        ? `Branch: ${task.git.branch || task.git.baseBranch}`
+        : 'Branch: Not recorded.',
+      task.git?.prUrl ? `Pull request: ${task.git.prUrl}` : 'Pull request: Not recorded.',
+      task.git?.worktreePath ? `Worktree: ${task.git.worktreePath}` : 'Worktree: Not recorded.',
+      '',
+      changedFiles.size > 0
+        ? this.markdownList([...changedFiles].slice(0, 50))
+        : 'No changed files were recorded on the task.',
+    ];
+    return this.packetText(lines.join('\n'));
+  }
+
+  private verificationSection(task: Task): string {
+    const steps = task.verificationSteps ?? [];
+    if (steps.length === 0) {
+      return 'No verification steps were recorded. Treat this completion packet as missing verification evidence.';
+    }
+
+    const lines = steps.map(
+      (step) =>
+        `${step.checked ? '[x]' : '[ ]'} ${step.description}${step.checkedAt ? ` (${step.checkedAt})` : ''}`
+    );
+    const unchecked = steps.filter((step) => !step.checked).length;
+    if (unchecked > 0) {
+      lines.push(
+        '',
+        `${unchecked} verification step${unchecked === 1 ? '' : 's'} still unchecked.`
+      );
+    }
+    return this.packetText(lines.join('\n'));
+  }
+
+  private reviewSection(task: Task): string {
+    const lines = [
+      task.review?.decision ? `Decision: ${task.review.decision}` : 'Decision: Not recorded.',
+      task.review?.summary ? `Summary: ${task.review.summary}` : null,
+      task.reviewScores ? `Review scores: ${task.reviewScores.join('/')}` : null,
+      `Review comments: ${task.reviewComments?.length ?? 0}`,
+      task.qaGate?.required
+        ? `QA gate: ${task.qaGate.passed ? 'passed' : 'required and not passed'}`
+        : 'QA gate: Not required.',
+    ].filter((line): line is string => Boolean(line));
+    return this.packetText(lines.join('\n'));
+  }
+
+  private costDurationSection(task: Task): string {
+    const attemptDurationMs =
+      task.attempt?.started && task.attempt?.ended
+        ? new Date(task.attempt.ended).getTime() - new Date(task.attempt.started).getTime()
+        : undefined;
+    const lines = [
+      `Tracked time: ${this.formatDurationSeconds(task.timeTracking?.totalSeconds)}`,
+      `Attempt duration: ${this.formatDurationMs(attemptDurationMs)}`,
+      `Actual cost: ${this.formatCost(task.actualCost)}`,
+      task.costPrediction
+        ? `Predicted cost: ${this.formatCost(task.costPrediction.estimatedCost)} (${task.costPrediction.confidence} confidence)`
+        : 'Predicted cost: Not recorded.',
+    ];
+    return this.packetText(lines.join('\n'));
+  }
+
+  private deliverablesSection(task: Task): string {
+    const deliverables = task.deliverables ?? [];
+    const attachments = task.attachments ?? [];
+    const lines = [
+      'Deliverables:',
+      deliverables.length > 0
+        ? this.markdownList(
+            deliverables.map(
+              (deliverable) =>
+                `${deliverable.title} (${deliverable.status})${deliverable.path ? ` - ${deliverable.path}` : ''}`
+            )
+          )
+        : 'No deliverables recorded.',
+      '',
+      'Attachments:',
+      attachments.length > 0
+        ? this.markdownList(
+            attachments.map(
+              (attachment) =>
+                `${attachment.originalName || attachment.filename} (${attachment.mimeType}, ${attachment.validationStatus ?? 'unknown'})`
+            )
+          )
+        : 'No attachments recorded.',
+    ];
+    return this.packetText(lines.join('\n'));
+  }
+
+  private risksSection(task: Task): string {
+    const risks = [
+      task.blockedReason
+        ? `Blocked reason remains recorded: ${task.blockedReason.category}${task.blockedReason.note ? ` - ${task.blockedReason.note}` : ''}`
+        : null,
+      task.qaGate?.required && !task.qaGate.passed ? 'QA gate is required and not passed.' : null,
+      ...(task.verificationSteps ?? [])
+        .filter((step) => !step.checked)
+        .map((step) => `Unchecked verification: ${step.description}`),
+      task.review?.decision && task.review.decision !== 'approved'
+        ? `Review decision is ${task.review.decision}.`
+        : null,
+    ].filter((risk): risk is string => Boolean(risk));
+
+    return this.packetText(
+      risks.length > 0 ? this.markdownList(risks) : 'No unresolved risks were recorded.'
+    );
+  }
+
+  private markdownList(items: string[]): string {
+    return items.map((item) => `- ${item}`).join('\n');
+  }
+
+  private packetText(text: string): string {
+    return this.redactText(text, {
+      level: 'standard',
+      sensitiveFields: ['tokens', 'secrets', 'local paths'],
+    });
+  }
+
+  private formatCost(value?: number): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not recorded.';
+    if (value === 0) return '$0';
+    return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+  }
+
+  private formatDurationMs(value?: number): string {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 'Not recorded.';
+    return this.formatDurationSeconds(Math.round(value / 1000));
+  }
+
+  private formatDurationSeconds(value?: number): string {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 'Not recorded.';
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const seconds = Math.floor(value % 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
   }
 
   dispose(): void {

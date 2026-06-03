@@ -5,6 +5,7 @@ import {
   resetWorkProductServiceForTests,
 } from '../../services/work-product-service.js';
 import { getSearchService } from '../../services/search-service.js';
+import type { Task } from '@veritas-kanban/shared';
 
 describe('SQLite work products', () => {
   it('persists durable work products with version history, restore, preview redaction, and search', async () => {
@@ -104,6 +105,114 @@ describe('SQLite work products', () => {
           agent: 'codex',
         },
       });
+
+      const completedTask: Task = {
+        id: 'task_20260602_packet',
+        title: 'Ship completion packets',
+        description: 'Generate a durable handoff artifact when task work is done.',
+        type: 'code',
+        status: 'done',
+        priority: 'high',
+        project: 'veritas',
+        created: '2026-06-02T10:00:00.000Z',
+        updated: '2026-06-02T11:00:00.000Z',
+        revision: 7,
+        agent: 'codex',
+        git: {
+          repo: 'BradGroux/veritas-kanban',
+          branch: 'v5-completion-packets',
+          baseBranch: 'main',
+          worktreePath: '/Users/bradgroux/private/veritas-kanban',
+          prUrl: 'https://github.com/BradGroux/veritas-kanban/pull/999',
+          prNumber: 999,
+        },
+        attempt: {
+          id: 'attempt_packet',
+          agent: 'codex',
+          status: 'complete',
+          started: '2026-06-02T10:10:00.000Z',
+          ended: '2026-06-02T10:20:00.000Z',
+          model: 'gpt-5',
+        },
+        verificationSteps: [
+          {
+            id: 'verify_1',
+            description: 'pnpm --filter @veritas-kanban/server test -- completion-packets',
+            checked: true,
+            checkedAt: '2026-06-02T10:45:00.000Z',
+          },
+        ],
+        deliverables: [
+          {
+            id: 'deliverable_1',
+            title: 'Completion packet service',
+            type: 'code',
+            path: 'server/src/services/work-product-service.ts',
+            status: 'attached',
+            sourceRunId: 'attempt_packet',
+            created: '2026-06-02T10:40:00.000Z',
+          },
+        ],
+        attachments: [
+          {
+            id: 'attachment_1',
+            filename: 'packet-preview.png',
+            originalName: 'packet-preview.png',
+            mimeType: 'image/png',
+            size: 1200,
+            uploaded: '2026-06-02T10:50:00.000Z',
+            validationStatus: 'valid',
+          },
+        ],
+        review: {
+          decision: 'approved',
+          decidedAt: '2026-06-02T10:55:00.000Z',
+          summary: 'Ready to hand off',
+        },
+        timeTracking: {
+          entries: [],
+          totalSeconds: 900,
+          isRunning: false,
+        },
+        actualCost: 0.18,
+      };
+
+      const packet = await restarted.generateCompletionPacket(completedTask);
+      expect(packet).toMatchObject({
+        kind: 'report',
+        title: 'Completion Packet: Ship completion packets',
+        taskId: completedTask.id,
+        sourceRunId: 'attempt_packet',
+        metadata: {
+          packetType: 'completion_packet',
+          generatedFromRevision: 7,
+          verificationPassed: 1,
+        },
+      });
+      expect(packet.sourceLinks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: 'Run timeline',
+            href: expect.stringContaining('tab=timeline'),
+          }),
+          expect.objectContaining({ type: 'pr' }),
+        ])
+      );
+      expect(restarted.exportProduct(packet)).toContain('Verification Evidence');
+      expect(restarted.exportProduct(packet)).not.toContain('/Users/bradgroux/private');
+
+      const regenerated = await restarted.generateCompletionPacket({
+        ...completedTask,
+        updated: '2026-06-02T12:00:00.000Z',
+        revision: 8,
+        verificationSteps: [
+          ...(completedTask.verificationSteps ?? []),
+          { id: 'verify_2', description: 'Manual smoke test', checked: false },
+        ],
+      });
+      expect(regenerated.id).toBe(packet.id);
+      expect(regenerated.version).toBe(2);
+      await expect(restarted.listVersions(packet.id)).resolves.toHaveLength(2);
     } finally {
       service?.dispose();
       resetWorkProductServiceForTests();

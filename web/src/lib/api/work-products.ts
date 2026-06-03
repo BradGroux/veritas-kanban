@@ -1,4 +1,9 @@
-import type { WorkProductPreview, WorkProductVersion } from '@veritas-kanban/shared';
+import type {
+  UpdateWorkProductInput,
+  WorkProduct,
+  WorkProductPreview,
+  WorkProductVersion,
+} from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
 
 export type WorkProductExportFormat = 'markdown' | 'json';
@@ -62,6 +67,16 @@ export const workProductsApi = {
       credentials: 'include',
     });
     return handleResponse<WorkProductVersion[]>(response);
+  },
+
+  update: async (id: string, input: UpdateWorkProductInput): Promise<WorkProduct> => {
+    const response = await fetch(`${API_BASE}/work-products/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    return handleResponse<WorkProduct>(response);
   },
 
   export: async (id: string, options: WorkProductExportOptions = {}): Promise<string> => {

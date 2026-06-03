@@ -30,6 +30,7 @@ import {
   createTaskSyncToken,
   type TaskSyncContext,
 } from './agent-registry-service.js';
+import { getWorkProductService } from './work-product-service.js';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTaskRepository } from '../storage/sqlite/task-repository.js';
@@ -695,6 +696,7 @@ export class TaskService {
     const filepath = path.join(this.tasksDir, newFilename);
 
     let updatedTask!: Task;
+    let shouldGenerateCompletionPacket = false;
     const runMutation = async (callback: () => Promise<void>): Promise<void> => {
       if (this.sqliteTasks) {
         await this.runSqliteMutation(callback);
@@ -1004,8 +1006,18 @@ export class TaskService {
         ).catch((err) => {
           log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
         });
+
+        shouldGenerateCompletionPacket = updatedTask.status === 'done' && previousStatus !== 'done';
       }
     });
+
+    if (shouldGenerateCompletionPacket) {
+      try {
+        await getWorkProductService().generateCompletionPacket(updatedTask);
+      } catch (err) {
+        log.warn({ taskId: updatedTask.id }, 'Completion packet generation failed: %s', err);
+      }
+    }
 
     return updatedTask;
   }
