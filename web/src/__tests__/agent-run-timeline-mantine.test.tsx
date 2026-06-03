@@ -162,8 +162,46 @@ const trace: AgentRunTrace = {
       },
     },
     {
-      type: 'complete',
+      type: 'stream',
       sequence: 4,
+      startedAt: '2026-06-01T10:02:10.000Z',
+      endedAt: '2026-06-01T10:02:11.000Z',
+      durationMs: 1000,
+      metadata: {
+        eventType: 'stream.stdout',
+        stream: 'stdout',
+        summary: 'Running pnpm test with redacted output',
+        chunkBytes: 42,
+      },
+    },
+    {
+      type: 'retry',
+      sequence: 5,
+      startedAt: '2026-06-01T10:02:20.000Z',
+      endedAt: '2026-06-01T10:02:20.000Z',
+      durationMs: 0,
+      metadata: {
+        eventType: 'turn.retrying',
+        summary: 'Retrying after transient provider failure',
+        retryAttempt: 2,
+        retryDelayMs: 1250,
+      },
+    },
+    {
+      type: 'finalize',
+      sequence: 6,
+      startedAt: '2026-06-01T10:04:59.000Z',
+      endedAt: '2026-06-01T10:05:00.000Z',
+      durationMs: 1000,
+      metadata: {
+        eventType: 'run.finalizing',
+        exitCode: 0,
+        success: true,
+      },
+    },
+    {
+      type: 'complete',
+      sequence: 7,
       startedAt: '2026-06-01T10:05:00.000Z',
       endedAt: '2026-06-01T10:05:00.000Z',
       durationMs: 0,
@@ -312,7 +350,14 @@ describe('agent run timeline Mantine surface', () => {
     expect(events.some((event) => event.title.includes('Workflow blocked'))).toBe(true);
     expect(events.some((event) => event.title.includes('Deliverable attached'))).toBe(true);
     expect(events.some((event) => event.title.includes('Timeline notification'))).toBe(true);
+    expect(events.some((event) => event.title.includes('stream.stdout'))).toBe(true);
+    expect(events.some((event) => event.title.includes('turn.retrying'))).toBe(true);
+    expect(events.some((event) => event.title.includes('run.finalizing'))).toBe(true);
     expect(getTimelineEventType('execute', { eventType: 'tool.progress' })).toBe('tool');
+    expect(getTimelineEventType('stream', { eventType: 'stream.stdout' })).toBe('command');
+    expect(getTimelineEventType('retry', { eventType: 'turn.retrying' })).toBe('tool');
+    expect(getTimelineEventType('abort', { eventType: 'run.aborted' })).toBe('error');
+    expect(getTimelineEventType('finalize', { eventType: 'run.finalizing' })).toBe('result');
     expect(getTimelineEventType('error', { summary: 'failed' })).toBe('error');
   });
 
@@ -393,6 +438,9 @@ describe('agent run timeline Mantine surface', () => {
     expect(screen.getByText('Run Timeline')).toBeDefined();
     expect(screen.getByText('Stored replay')).toBeDefined();
     expect(screen.getByText('command.completed')).toBeDefined();
+    expect(screen.getByText('stream.stdout')).toBeDefined();
+    expect(screen.getByText('turn.retrying')).toBeDefined();
+    expect(screen.getByText('run.finalizing')).toBeDefined();
     expect(
       screen.getAllByText('Timeline replay captured with final result evidence.').length
     ).toBeGreaterThan(0);

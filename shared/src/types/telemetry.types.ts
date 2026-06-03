@@ -107,7 +107,15 @@ export interface TelemetryConfig {
 }
 
 /** Low-level trace step types captured during an agent attempt. */
-export type AgentRunTraceStepType = 'init' | 'execute' | 'complete' | 'error';
+export type AgentRunTraceStepType =
+  | 'init'
+  | 'execute'
+  | 'stream'
+  | 'retry'
+  | 'abort'
+  | 'finalize'
+  | 'complete'
+  | 'error';
 
 /** Additional run context persisted with each trace for replay/audit surfaces. */
 export interface AgentRunTraceMetadata {

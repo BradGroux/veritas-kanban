@@ -321,14 +321,21 @@ export function getTimelineEventType(
 ): AgentRunTimelineEventType {
   const text = `${stepType} ${eventText(metadata)}`.toLowerCase();
 
-  if (stepType === 'error' || /error|failed|failure|abort|exception/.test(text)) return 'error';
-  if (stepType === 'complete') return 'result';
+  if (
+    stepType === 'error' ||
+    stepType === 'abort' ||
+    /error|failed|failure|abort|exception/.test(text)
+  )
+    return 'error';
+  if (stepType === 'complete' || stepType === 'finalize') return 'result';
   if (/approval|approve|denied|deny|permission request/.test(text)) return 'approval';
   if (/policy|permission|sandbox|security|guard/.test(text)) return 'policy';
   if (/file|diff|patch|write|edit|created|modified|deleted/.test(text)) return 'file';
   if (/\b(command|shell|terminal|stdout|stderr)\b|exec[.:_-]/.test(text)) return 'command';
   if (/token|usage|cost|input_tokens|output_tokens/.test(text)) return 'usage';
+  if (stepType === 'stream') return 'command';
   if (/tool|function|mcp/.test(text)) return 'tool';
+  if (stepType === 'retry') return 'tool';
   if (/completed|final|result|finish/.test(text)) return 'result';
   return stepType === 'init' ? 'prompt' : 'tool';
 }

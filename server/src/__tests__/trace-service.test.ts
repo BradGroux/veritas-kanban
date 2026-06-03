@@ -108,6 +108,39 @@ describe('TraceService', () => {
       const trace = service.getActiveTrace('attempt-1');
       expect(trace!.steps).toHaveLength(1);
     });
+
+    it('should preserve stream, retry, abort, and finalize lifecycle steps', () => {
+      service.startTrace('attempt-lifecycle', 'task-1', 'veritas');
+      service.startStep('attempt-lifecycle', 'stream', {
+        eventType: 'stream.stdout',
+        content: 'partial output',
+      });
+      service.endStep('attempt-lifecycle', 'stream');
+      service.startStep('attempt-lifecycle', 'retry', {
+        eventType: 'turn.retrying',
+        retryAttempt: 2,
+      });
+      service.endStep('attempt-lifecycle', 'retry');
+      service.startStep('attempt-lifecycle', 'abort', {
+        eventType: 'run.aborted',
+        reason: 'Stopped by user',
+      });
+      service.endStep('attempt-lifecycle', 'abort');
+      service.startStep('attempt-lifecycle', 'finalize', {
+        eventType: 'run.finalizing',
+        exitCode: 143,
+      });
+      service.endStep('attempt-lifecycle', 'finalize');
+
+      const trace = service.getActiveTrace('attempt-lifecycle');
+      expect(trace!.steps.map((step) => step.type)).toEqual([
+        'stream',
+        'retry',
+        'abort',
+        'finalize',
+      ]);
+      expect(trace!.steps.every((step) => step.endedAt)).toBe(true);
+    });
   });
 
   describe('endStep', () => {

@@ -29,6 +29,7 @@ import type {
   Task,
   AgentType,
   AgentConfig,
+  AgentRunTraceStepType,
   AgentRunTraceMetadata,
   TaskAttempt,
   AttemptStatus,
@@ -304,6 +305,14 @@ export class ClawdbotAgentService {
       });
     } catch (error: any) {
       pendingAgents.delete(taskId);
+      this.recordTraceStep(attemptId, 'error', {
+        eventType: 'run.start_failed',
+        error: this.redactTraceText(error.message || `Failed to start ${adapter.label}`),
+        provider,
+        agent,
+        model: agentConfig?.model,
+      });
+      await getTraceService().completeTrace(attemptId, 'error');
       await this.taskService.updateTask(taskId, {
         status: 'todo',
         attempt: { ...attempt, status: 'failed', ended: new Date().toISOString() },
@@ -410,7 +419,7 @@ export class ClawdbotAgentService {
 
     const task = await this.taskService.getTask(taskId);
     const completionStepType = result.success ? 'complete' : 'error';
-    getTraceService().startStep(attemptId, completionStepType, {
+    this.recordTraceStep(attemptId, completionStepType, {
       eventType: result.success ? 'run.completed' : 'run.failed',
       summary: this.redactTraceText(summary),
       success: result.success,
@@ -421,7 +430,6 @@ export class ClawdbotAgentService {
       provider: pending.provider,
       model: pending.model,
     });
-    getTraceService().endStep(attemptId, completionStepType);
     await getTelemetryService().emit<RunCompletedEvent>({
       type: 'run.completed',
       taskId,
@@ -476,6 +484,14 @@ export class ClawdbotAgentService {
     }
 
     await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+    this.recordTraceStep(pending.attemptId, 'abort', {
+      eventType: 'run.aborted',
+      summary: 'Stopped by user',
+      reason: 'Stopped by user',
+      agent: pending.agent,
+      provider: pending.provider,
+      model: pending.model,
+    });
 
     // Mark as failed/stopped
     await this.completeAgent(taskId, {
@@ -627,6 +643,7 @@ export class ClawdbotAgentService {
 
     child.stdout.setEncoding('utf-8');
     child.stdout.on('data', (chunk: string) => {
+      this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stdout', chunk);
       stdoutBuffer += chunk;
       const lines = stdoutBuffer.split(/\r?\n/);
       stdoutBuffer = lines.pop() || '';
@@ -640,10 +657,18 @@ export class ClawdbotAgentService {
     child.stderr.setEncoding('utf-8');
     child.stderr.on('data', (chunk: string) => {
       stderrBuffer += chunk;
+      this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stderr', chunk);
       void this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
     });
 
     child.on('error', (error) => {
+      this.recordTraceStep(attemptId, 'error', {
+        eventType: 'process.error',
+        error: this.redactTraceText(error.message),
+        provider: 'codex-cli',
+        agent: agentConfig?.type || 'codex',
+        model: agentConfig?.model,
+      });
       void this.appendLog(logPath, `\n## Codex Process Error\n\n${error.message}\n`);
       emitter.emit('error', error);
     });
@@ -685,6 +710,16 @@ export class ClawdbotAgentService {
           logPath,
           `\n## Codex Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n`
         );
+        this.recordTraceStep(attemptId, 'finalize', {
+          eventType: 'run.finalizing',
+          exitCode: code,
+          signal,
+          success: code === 0,
+          durationMs: Date.now() - new Date(startedAt).getTime(),
+          provider: 'codex-cli',
+          agent: agentConfig?.type || 'codex',
+          model: agentConfig?.model,
+        });
 
         await this.completeAgent(task.id, {
           success: code === 0,
@@ -889,6 +924,39 @@ export class ClawdbotAgentService {
     );
   }
 
+  private recordTraceStep(
+    attemptId: string,
+    stepType: AgentRunTraceStepType,
+    metadata?: Record<string, unknown>
+  ): void {
+    const traceService = getTraceService();
+    traceService.startStep(attemptId, stepType, metadata);
+    traceService.endStep(attemptId, stepType);
+  }
+
+  private recordStreamChunk(
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    provider: AgentProvider,
+    stream: 'stdout' | 'stderr',
+    chunk: string
+  ): void {
+    const content = this.redactTraceText(chunk.trimEnd());
+    if (!content.trim()) return;
+    this.recordTraceStep(attemptId, 'stream', {
+      eventType: `stream.${stream}`,
+      stream,
+      summary: content,
+      content,
+      chunkBytes: Buffer.byteLength(chunk, 'utf-8'),
+      lineCount: chunk.split(/\r?\n/).filter((line) => line.trim()).length,
+      provider,
+      agent: agentConfig?.type || task.agent || 'codex',
+      model: agentConfig?.model,
+    });
+  }
+
   private buildTraceMetadata(
     task: Task,
     attemptId: string,
@@ -940,22 +1008,26 @@ export class ClawdbotAgentService {
     const tool = this.extractCodexTool(event, type);
     const error = this.extractCodexError(event, type);
     const sanitizedSummary = summary ? this.redactTraceText(summary) : undefined;
-    const stepType = this.codexTraceStepType(type);
-    getTraceService().startStep(attemptId, stepType, {
+    const stepType = this.codexTraceStepType(type, event);
+    const stream = this.extractCodexStream(event, type);
+    this.recordTraceStep(attemptId, stepType, {
       provider: agentConfig?.provider || 'codex-cli',
       eventType: type,
       summary: sanitizedSummary,
+      content: stepType === 'stream' ? sanitizedSummary : undefined,
+      stream,
       command: command ? this.redactTraceText(command) : undefined,
       tool,
       files,
       error: error ? this.redactTraceText(error) : undefined,
+      retryAttempt: this.extractCodexNumber(event, ['retryAttempt', 'retry_attempt', 'attempt']),
+      retryDelayMs: this.extractCodexNumber(event, ['retryDelayMs', 'retry_delay_ms', 'delayMs']),
       inputTokens: usage?.inputTokens,
       outputTokens: usage?.outputTokens,
       totalTokens: usage?.totalTokens,
       model: usage?.model || agentConfig?.model,
       finalResult: stepType === 'complete' ? sanitizedSummary : undefined,
     });
-    getTraceService().endStep(attemptId, stepType);
 
     if (this.shouldLogCodexActivity(type)) {
       await activityService.logActivity(
@@ -977,7 +1049,25 @@ export class ClawdbotAgentService {
     }
   }
 
-  private codexTraceStepType(type: string): 'execute' | 'complete' | 'error' {
+  private codexTraceStepType(type: string, event?: Record<string, unknown>): AgentRunTraceStepType {
+    const normalized = type.toLowerCase();
+    if (normalized.includes('retry')) return 'retry';
+    if (normalized.includes('abort') || normalized.includes('cancel')) return 'abort';
+    if (normalized.includes('failed') || normalized === 'error') return 'error';
+    if (normalized.includes('finaliz')) return 'finalize';
+    if (
+      normalized.includes('delta') ||
+      normalized.includes('stream') ||
+      normalized.includes('output') ||
+      normalized.includes('stdout') ||
+      normalized.includes('stderr')
+    ) {
+      return 'stream';
+    }
+    if (event && typeof event.item === 'object' && event.item !== null) {
+      const itemType = String((event.item as Record<string, unknown>).type || '').toLowerCase();
+      if (itemType.includes('delta') || itemType.includes('message_delta')) return 'stream';
+    }
     if (type.includes('failed') || type === 'error') return 'error';
     if (type === 'turn.completed' || type === 'response.completed') return 'complete';
     return 'execute';
@@ -988,6 +1078,8 @@ export class ClawdbotAgentService {
       type.includes('command') ||
       type.includes('tool') ||
       type.includes('file') ||
+      type.includes('retry') ||
+      type.includes('abort') ||
       type.includes('completed') ||
       type.includes('failed') ||
       type === 'error'
@@ -1066,6 +1158,49 @@ export class ClawdbotAgentService {
     if (!type.includes('failed') && type !== 'error') return undefined;
     const error = this.findCodexString(event, ['error', 'message']);
     return error;
+  }
+
+  private extractCodexStream(
+    event: Record<string, unknown>,
+    type: string
+  ): 'stdout' | 'stderr' | undefined {
+    const stream = this.findCodexString(event, ['stream', 'channel', 'fd']);
+    if (stream === 'stdout' || stream === 'stderr') return stream;
+    if (/stderr|error/i.test(type)) return 'stderr';
+    if (/stdout|delta|output|stream/i.test(type)) return 'stdout';
+    return undefined;
+  }
+
+  private extractCodexNumber(event: unknown, keys: string[]): number | undefined {
+    const wanted = new Set(keys);
+    const seen = new Set<unknown>();
+
+    const visit = (value: unknown, key?: string): number | undefined => {
+      if (!value) return undefined;
+      if (typeof value === 'number') {
+        return key && wanted.has(key) ? value : undefined;
+      }
+      if (typeof value === 'string' && key && wanted.has(key)) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const result = visit(item, key);
+          if (result !== undefined) return result;
+        }
+        return undefined;
+      }
+      if (typeof value !== 'object' || seen.has(value)) return undefined;
+      seen.add(value);
+      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+        const result = visit(childValue, childKey);
+        if (result !== undefined) return result;
+      }
+      return undefined;
+    };
+
+    return visit(event);
   }
 
   private findCodexString(event: unknown, keys: string[]): string | undefined {
@@ -1249,6 +1384,9 @@ export class ClawdbotAgentService {
         'final_message',
         'message',
         'text',
+        'delta',
+        'chunk',
+        'content',
         'output',
       ]) {
         const candidate = record[key];

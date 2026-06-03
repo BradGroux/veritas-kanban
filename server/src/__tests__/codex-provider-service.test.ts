@@ -74,9 +74,29 @@ vi.mock('../services/circuit-registry.js', () => ({
 }));
 
 import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
-import type { Task } from '@veritas-kanban/shared';
+import type { AgentConfig, Task } from '@veritas-kanban/shared';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
+
+type TestableClawdbotAgentService = ClawdbotAgentService & {
+  logsDir: string;
+  handleCodexEvent(
+    event: Record<string, unknown>,
+    logPath: string,
+    task?: Task,
+    attemptId?: string,
+    agentConfig?: Partial<AgentConfig>
+  ): {
+    summary?: string;
+    usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
+  };
+};
+
+function testableService(tmpDir: string): TestableClawdbotAgentService {
+  const service = new ClawdbotAgentService() as unknown as TestableClawdbotAgentService;
+  service.logsDir = tmpDir;
+  return service;
+}
 
 function createFakeChild(fixturePath: string, exitCode = 0) {
   const child = new EventEmitter() as EventEmitter & {
@@ -102,6 +122,25 @@ function createFakeChild(fixturePath: string, exitCode = 0) {
     setTimeout(() => child.emit('close', exitCode, null), 10);
   });
 
+  return child;
+}
+
+function createControllableChild() {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: PassThrough;
+    stderr: PassThrough;
+    pid: number;
+    killed: boolean;
+    kill: ReturnType<typeof vi.fn>;
+  };
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.pid = 12345;
+  child.killed = false;
+  child.kill = vi.fn(() => {
+    child.killed = true;
+    return true;
+  });
   return child;
 }
 
@@ -185,8 +224,7 @@ describe('ClawdbotAgentService Codex providers', () => {
 
   it('runs the Codex CLI adapter against mocked JSONL and records telemetry', async () => {
     mockSpawn.mockReturnValue(createFakeChild(path.join(fixtureDir, 'success.jsonl')));
-    const service = new ClawdbotAgentService();
-    (service as any).logsDir = tmpDir;
+    const service = testableService(tmpDir);
 
     const status = await service.startAgent(task.id, 'codex');
 
@@ -223,6 +261,27 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(mockStartStep).toHaveBeenCalledWith(
       expect.any(String),
+      'stream',
+      expect.objectContaining({
+        eventType: 'stream.stdout',
+        stream: 'stdout',
+        provider: 'codex-cli',
+        chunkBytes: expect.any(Number),
+      })
+    );
+    expect(mockStartStep).toHaveBeenCalledWith(
+      expect.any(String),
+      'finalize',
+      expect.objectContaining({
+        eventType: 'run.finalizing',
+        exitCode: 0,
+        signal: null,
+        success: true,
+        provider: 'codex-cli',
+      })
+    );
+    expect(mockStartStep).toHaveBeenCalledWith(
+      expect.any(String),
       'complete',
       expect.objectContaining({
         eventType: 'turn.completed',
@@ -244,12 +303,11 @@ describe('ClawdbotAgentService Codex providers', () => {
   });
 
   it('maps Codex file events to task deliverables linked to the attempt', async () => {
-    const service = new ClawdbotAgentService();
-    (service as any).logsDir = tmpDir;
+    const service = testableService(tmpDir);
     const logPath = path.join(tmpDir, 'codex.md');
     await fs.writeFile(logPath, '# log\n');
 
-    (service as any).handleCodexEvent(
+    service.handleCodexEvent(
       {
         type: 'item.completed',
         item: {
@@ -296,6 +354,76 @@ describe('ClawdbotAgentService Codex providers', () => {
     );
   });
 
+  it('classifies streamed output, retry, and abort lifecycle events in traces', async () => {
+    const service = testableService(tmpDir);
+    const logPath = path.join(tmpDir, 'codex.md');
+    await fs.writeFile(logPath, '# log\n');
+
+    service.handleCodexEvent(
+      {
+        type: 'response.output_text.delta',
+        delta: 'partial output OPENAI_API_KEY=sk-supersecret123456',
+        stream: 'stdout',
+      },
+      logPath,
+      task,
+      'attempt_fixture',
+      { type: 'codex', provider: 'codex-cli', model: 'gpt-5.5' }
+    );
+    service.handleCodexEvent(
+      {
+        type: 'turn.retrying',
+        message: 'Retrying after rate limit',
+        retryAttempt: 2,
+        retryDelayMs: 1250,
+      },
+      logPath,
+      task,
+      'attempt_fixture',
+      { type: 'codex', provider: 'codex-cli', model: 'gpt-5.5' }
+    );
+
+    expect(mockStartStep).toHaveBeenCalledWith(
+      'attempt_fixture',
+      'stream',
+      expect.objectContaining({
+        eventType: 'response.output_text.delta',
+        stream: 'stdout',
+        content: 'partial output OPENAI_API_KEY=[REDACTED]',
+      })
+    );
+    expect(mockStartStep).toHaveBeenCalledWith(
+      'attempt_fixture',
+      'retry',
+      expect.objectContaining({
+        eventType: 'turn.retrying',
+        summary: 'Retrying after rate limit',
+        retryAttempt: 2,
+        retryDelayMs: 1250,
+      })
+    );
+  });
+
+  it('records user stop requests as abort trace steps before completing the attempt', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+
+    await service.startAgent(task.id, 'codex');
+    await service.stopAgent(task.id);
+
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(mockStartStep).toHaveBeenCalledWith(
+      expect.any(String),
+      'abort',
+      expect.objectContaining({
+        eventType: 'run.aborted',
+        reason: 'Stopped by user',
+        provider: 'codex-cli',
+      })
+    );
+  });
+
   it('requires and records a readiness override for incomplete task starts', async () => {
     task = {
       ...task,
@@ -306,8 +434,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     } as Task;
     mockGetTask.mockResolvedValue(task);
 
-    const service = new ClawdbotAgentService();
-    (service as any).logsDir = tmpDir;
+    const service = testableService(tmpDir);
 
     await expect(service.startAgent(task.id, 'codex')).rejects.toBeInstanceOf(AgentReadinessError);
 
