@@ -113,6 +113,7 @@ const failedRuns = [
     timestamp: '2026-06-01T08:00:00Z',
     taskId: 'task-blocked',
     project: 'platform',
+    attemptId: 'attempt-failed-1',
     agent: 'claude-code',
     success: false,
     errorMessage: 'Unit test failed',
@@ -187,6 +188,7 @@ const notifications = [
     title: 'Review notification',
     taskTitle: 'Review generated PR',
     project: 'platform',
+    source: { attemptId: 'attempt-review-1' },
     delivered: false,
     createdAt: '2026-06-01T11:00:00Z',
   },
@@ -284,6 +286,12 @@ describe('needs attention queue', () => {
     expect(items.find((item) => item.source === 'blocked-task')?.reason).toContain(
       'Smoke test is failing'
     );
+    expect(items.find((item) => item.source === 'failed-run')?.timelineAttemptId).toBe(
+      'attempt-failed-1'
+    );
+    expect(items.find((item) => item.source === 'notification')?.destinationLabel).toBe(
+      'timeline:attempt-review-1'
+    );
   });
 
   it('renders queue items through Mantine controls and opens task targets', async () => {
@@ -305,7 +313,7 @@ describe('needs attention queue', () => {
 
     await user.click(screen.getAllByRole('button', { name: /Open task: Blocked queue task/i })[0]);
 
-    expect(onOpenTask).toHaveBeenCalledWith('task-blocked');
+    expect(onOpenTask).toHaveBeenCalledWith('task-blocked', undefined);
   });
 
   it('filters by source and marks notification items read when dismissed', async () => {

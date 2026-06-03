@@ -71,6 +71,7 @@ export interface NeedsAttentionItem {
   taskId?: string;
   taskTitle?: string;
   taskType?: string;
+  timelineAttemptId?: string;
   project?: string;
   destination: NeedsAttentionDestination;
   destinationLabel: string;
@@ -99,7 +100,7 @@ interface NeedsAttentionQueueProps {
   to?: string;
   onOpenDrift?: () => void;
   onOpenErrors?: () => void;
-  onOpenTask?: (taskId: string) => void;
+  onOpenTask?: (taskId: string, options?: { tab?: 'timeline'; timelineAttemptId?: string }) => void;
   onOpenWorkflows?: () => void;
 }
 
@@ -194,6 +195,14 @@ function getBlockedReason(task: Task): string {
 
 function maybeString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function notificationRunId(notification: AgentNotification): string | undefined {
+  return (
+    maybeString(notification.source?.attemptId) ??
+    maybeString(notification.source?.runId) ??
+    maybeString(notification.source?.sourceRunId)
+  );
 }
 
 function itemProject(task: Task | undefined, sourceProject?: string): string | undefined {
@@ -342,7 +351,7 @@ export function buildNeedsAttentionItems(
       dedupeKey: `failed-run:${run.taskId ?? run.agent}:${run.timestamp}`,
       title: task?.title ?? (run.taskId ? `Task ${run.taskId}` : `Failed ${run.agent} run`),
       reason: run.errorMessage ?? 'Agent run failed without an error message',
-      nextAction: task ? 'Open task' : 'Open failed runs',
+      nextAction: task && run.attemptId ? 'Open timeline' : task ? 'Open task' : 'Open failed runs',
       severity: 'high',
       source: 'failed-run',
       sourceLabel: SOURCE_LABELS['failed-run'],
@@ -352,9 +361,15 @@ export function buildNeedsAttentionItems(
       taskId: run.taskId,
       taskTitle: task?.title,
       taskType: task?.type,
+      timelineAttemptId: run.attemptId,
       project,
       destination: task ? 'task' : 'failed-runs',
-      destinationLabel: task ? `task:${task.id}` : 'dashboard:failed-runs',
+      destinationLabel:
+        task && run.attemptId
+          ? `timeline:${run.attemptId}`
+          : task
+            ? `task:${task.id}`
+            : 'dashboard:failed-runs',
     });
   }
 
@@ -479,6 +494,7 @@ export function buildNeedsAttentionItems(
     const task = notification.taskId ? taskById.get(notification.taskId) : undefined;
     const project = itemProject(task, notification.project);
     if (!projectMatches(input.project, project)) continue;
+    const runId = notificationRunId(notification);
 
     addItem(items, {
       id: `notification:${notification.id}`,
@@ -488,7 +504,12 @@ export function buildNeedsAttentionItems(
         notification.taskTitle ??
         `Notification for ${notification.targetAgent}`,
       reason: notification.content,
-      nextAction: notification.taskId ? 'Open task' : 'Open target',
+      nextAction:
+        notification.taskId && runId
+          ? 'Open timeline'
+          : notification.taskId
+            ? 'Open task'
+            : 'Open target',
       severity:
         notification.type.includes('failure') || notification.type.includes('review')
           ? 'high'
@@ -501,11 +522,16 @@ export function buildNeedsAttentionItems(
       taskId: notification.taskId,
       taskTitle: task?.title ?? notification.taskTitle,
       taskType: task?.type,
+      timelineAttemptId: runId,
       project,
       destination: notification.taskId ? 'task' : notification.targetUrl ? 'url' : 'failed-runs',
       destinationLabel:
         notification.targetUrl ??
-        (notification.taskId ? `task:${notification.taskId}` : 'notification'),
+        (notification.taskId && runId
+          ? `timeline:${runId}`
+          : notification.taskId
+            ? `task:${notification.taskId}`
+            : 'notification'),
       targetUrl: notification.targetUrl,
       notificationId: notification.id,
     });
@@ -718,7 +744,12 @@ export function NeedsAttentionQueue({
 
   const openItem = (item: NeedsAttentionItem) => {
     if (item.taskId) {
-      onOpenTask?.(item.taskId);
+      onOpenTask?.(
+        item.taskId,
+        item.timelineAttemptId
+          ? { tab: 'timeline', timelineAttemptId: item.timelineAttemptId }
+          : undefined
+      );
       return;
     }
     if (item.destination === 'drift') {

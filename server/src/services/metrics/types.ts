@@ -151,6 +151,7 @@ export interface FailedRunDetails {
   timestamp: string;
   taskId?: string;
   project?: string;
+  attemptId?: string;
   agent: string;
   success: boolean;
   errorMessage?: string;

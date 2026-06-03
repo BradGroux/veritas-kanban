@@ -38,20 +38,25 @@ import type {
   AgentRunTrace,
   AgentRunTraceStep,
   AnyTelemetryEvent,
+  Deliverable,
   Task,
   TelemetryEventType,
   WorkProductPreview,
 } from '@veritas-kanban/shared';
+import { usePendingAgentApprovals, type AgentApprovalRequest } from '@/hooks/useAgent';
 import { useAgentRunTraces, useTaskTelemetryEvents } from '@/hooks/useAgentRunTimeline';
+import { useTaskNotifications, type AgentNotification } from '@/hooks/useNotifications';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
+import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
 
-type TimelineTabTarget = 'agent' | 'changes' | 'review' | 'work-products';
+type TimelineTabTarget = 'agent' | 'changes' | 'details' | 'review' | 'work-products';
 
 interface AgentRunTimelinePanelProps {
   task: Task;
   initialAttemptId?: string | null;
   onOpenTab?: (target: TimelineTabTarget) => void;
+  onOpenWorkflow?: (runId?: string) => void;
 }
 
 const EVENT_TYPES: AgentRunTimelineEventType[] = [
@@ -169,6 +174,56 @@ function safeString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const sanitized = sanitizeText(value.trim());
   return sanitized.length > 0 ? sanitized : undefined;
+}
+
+function safeExternalHref(value: unknown): string | undefined {
+  const href = safeString(value);
+  if (!href) return undefined;
+  try {
+    const parsed = new URL(href);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sourceRunIdFromRecord(source?: Record<string, unknown>): string | undefined {
+  return (
+    safeString(source?.attemptId) ?? safeString(source?.runId) ?? safeString(source?.sourceRunId)
+  );
+}
+
+function sourceRunMatches(selectedAttemptId: string | undefined, sourceRunId?: string): boolean {
+  return !selectedAttemptId || !sourceRunId || sourceRunId === selectedAttemptId;
+}
+
+function workflowTaskId(run: WorkflowRun): string | undefined {
+  return run.taskId ?? safeString(run.context?.taskId);
+}
+
+function workflowStartedAt(run: WorkflowRun): string {
+  return run.lastCheckpoint ?? run.completedAt ?? run.startedAt;
+}
+
+function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
+  const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
+  const href = safeExternalHref(sourceLink?.href);
+  if (sourceLink && href) {
+    return {
+      label: sourceLink.label || 'Open source',
+      href,
+      target: 'external',
+    };
+  }
+  return { label: 'Work products', href: '#work-products', target: 'work-products' };
+}
+
+function deliverableLink(deliverable: Deliverable): AgentRunTimelineEvent['link'] {
+  const href = safeExternalHref(deliverable.path);
+  if (href) {
+    return { label: 'Open deliverable', href, target: 'external' };
+  }
+  return { label: 'Task details', href: '#details', target: 'details' };
 }
 
 export function redactTimelineText(value: string): string {
@@ -318,16 +373,22 @@ function sortTimelineEvents(events: AgentRunTimelineEvent[]): AgentRunTimelineEv
 
 interface BuildTimelineOptions {
   task: Task;
+  approvals?: AgentApprovalRequest[];
+  notifications?: AgentNotification[];
   traces: AgentRunTrace[];
   telemetryEvents: AnyTelemetryEvent[];
+  workflowRuns?: WorkflowRun[];
   workProducts: WorkProductPreview[];
   selectedAttemptId?: string | null;
 }
 
 export function buildAgentRunTimelineEvents({
   task,
+  approvals = [],
+  notifications = [],
   traces,
   telemetryEvents,
+  workflowRuns = [],
   workProducts,
   selectedAttemptId,
 }: BuildTimelineOptions): AgentRunTimelineEvent[] {
@@ -476,6 +537,96 @@ export function buildAgentRunTimelineEvents({
     });
   }
 
+  for (const comment of task.reviewComments ?? []) {
+    events.push({
+      id: `review-comment-${comment.id}`,
+      sequence: nextSequence++,
+      type: 'file',
+      source: 'derived',
+      timestamp: comment.created,
+      title: `Review comment: ${comment.file}:${comment.line}`,
+      detail: comment.content,
+      metadata: comment as unknown as Record<string, unknown>,
+      link: { label: 'Changes', href: '#changes', target: 'changes' },
+    });
+  }
+
+  if (task.qaGate) {
+    events.push({
+      id: `qa-gate-${task.id}`,
+      sequence: nextSequence++,
+      type: task.qaGate.passed ? 'approval' : 'policy',
+      source: 'derived',
+      timestamp: task.qaGate.passedAt || task.updated,
+      title: task.qaGate.passed ? 'QA gate approved' : 'QA gate pending',
+      detail: task.qaGate.required
+        ? 'Task requires QA approval before completion'
+        : 'QA gate is not required',
+      metadata: task.qaGate as unknown as Record<string, unknown>,
+      link: { label: 'Task details', href: '#details', target: 'details' },
+    });
+  }
+
+  for (const approval of approvals) {
+    if (approval.taskId !== task.id) continue;
+    events.push({
+      id: `approval-request-${approval.id}`,
+      sequence: nextSequence++,
+      type: approval.status === 'rejected' ? 'error' : 'approval',
+      source: 'derived',
+      timestamp: approval.reviewedAt || approval.createdAt,
+      title: `Permission ${approval.status}: ${approval.action}`,
+      detail: approval.details,
+      metadata: approval as unknown as Record<string, unknown>,
+      link: { label: 'Agent', href: '#agent', target: 'agent' },
+    });
+  }
+
+  for (const run of workflowRuns) {
+    if (workflowTaskId(run) !== task.id) continue;
+    const workflowSourceRunId =
+      safeString(run.context?.attemptId) ?? safeString(run.context?.runId);
+    if (!sourceRunMatches(attemptId, workflowSourceRunId)) continue;
+    events.push({
+      id: `workflow-run-${run.id}`,
+      sequence: nextSequence++,
+      type:
+        run.status === 'blocked'
+          ? 'approval'
+          : run.status === 'failed'
+            ? 'error'
+            : run.status === 'completed'
+              ? 'result'
+              : 'tool',
+      source: 'derived',
+      timestamp: workflowStartedAt(run),
+      title: `Workflow ${run.status}: ${run.workflowId}`,
+      detail: run.currentStep
+        ? `Current step: ${run.currentStep}`
+        : run.error || `${run.steps.length} step${run.steps.length === 1 ? '' : 's'}`,
+      durationMs:
+        run.completedAt && run.startedAt
+          ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
+          : undefined,
+      metadata: {
+        runId: run.id,
+        workflowId: run.workflowId,
+        workflowVersion: run.workflowVersion,
+        status: run.status,
+        currentStep: run.currentStep,
+        context: run.context,
+        steps: run.steps.map((step) => ({
+          stepId: step.stepId,
+          status: step.status,
+          agent: step.agent,
+          error: step.error,
+          retries: step.retries,
+        })),
+      },
+      link: { label: 'Workflow run', href: `#workflow:${run.id}`, target: 'workflow' },
+    });
+  }
+
   for (const product of workProducts) {
     if (attemptId && product.sourceRunId && product.sourceRunId !== attemptId) continue;
     events.push({
@@ -494,8 +645,58 @@ export function buildAgentRunTimelineEvents({
         agent: product.agent,
         model: product.model,
         redacted: product.redacted,
+        sourceLinks: product.sourceLinks,
       },
-      link: { label: 'Work products', href: '#work-products', target: 'work-products' },
+      link: workProductLink(product),
+    });
+  }
+
+  for (const deliverable of task.deliverables ?? []) {
+    if (!sourceRunMatches(attemptId, deliverable.sourceRunId)) continue;
+    events.push({
+      id: `deliverable-${deliverable.id}`,
+      sequence: nextSequence++,
+      type: 'file',
+      source: 'derived',
+      timestamp: deliverable.updated || deliverable.created,
+      title: `Deliverable attached: ${deliverable.title}`,
+      detail: deliverable.description || deliverable.path,
+      metadata: deliverable as unknown as Record<string, unknown>,
+      link: deliverableLink(deliverable),
+    });
+  }
+
+  for (const notification of notifications) {
+    if (notification.taskId !== task.id) continue;
+    const notificationRunId = sourceRunIdFromRecord(notification.source);
+    if (!sourceRunMatches(attemptId, notificationRunId)) continue;
+    const targetHref = safeExternalHref(notification.targetUrl);
+    events.push({
+      id: `notification-${notification.id}`,
+      sequence: nextSequence++,
+      type:
+        notification.type.includes('failure') || notification.type.includes('error')
+          ? 'error'
+          : notification.type.includes('approval') || notification.type.includes('review')
+            ? 'approval'
+            : 'tool',
+      source: 'derived',
+      timestamp: notification.deliveredAt || notification.createdAt,
+      title: notification.title || `Notification: ${notification.type}`,
+      detail: notification.content,
+      metadata: {
+        id: notification.id,
+        targetAgent: notification.targetAgent,
+        fromAgent: notification.fromAgent,
+        type: notification.type,
+        delivered: notification.delivered,
+        deliveredAt: notification.deliveredAt,
+        dedupeKey: notification.dedupeKey,
+        source: notification.source,
+      },
+      link: targetHref
+        ? { label: 'Notification target', href: targetHref, target: 'external' }
+        : { label: 'Agent', href: '#agent', target: 'agent' },
     });
   }
 
@@ -522,7 +723,9 @@ function getRunOptions(
   task: Task,
   traces: AgentRunTrace[],
   telemetryEvents: AnyTelemetryEvent[],
-  workProducts: WorkProductPreview[]
+  workProducts: WorkProductPreview[],
+  notifications: AgentNotification[],
+  workflowRuns: WorkflowRun[]
 ): Array<{ value: string; label: string }> {
   const attempts = new Map<string, string>();
   const addAttempt = (id: string | undefined, label: string) => {
@@ -543,6 +746,18 @@ function getRunOptions(
   for (const product of workProducts) {
     addAttempt(product.sourceRunId, `${product.sourceRunId} (work product)`);
   }
+  for (const deliverable of task.deliverables ?? []) {
+    addAttempt(deliverable.sourceRunId, `${deliverable.sourceRunId} (deliverable)`);
+  }
+  for (const notification of notifications) {
+    const sourceRunId = sourceRunIdFromRecord(notification.source);
+    addAttempt(sourceRunId, `${sourceRunId} (notification)`);
+  }
+  for (const run of workflowRuns) {
+    addAttempt(run.id, `${run.id} (workflow run)`);
+    const sourceRunId = safeString(run.context?.attemptId) ?? safeString(run.context?.runId);
+    addAttempt(sourceRunId, `${sourceRunId} (workflow)`);
+  }
 
   return Array.from(attempts.entries()).map(([value, label]) => ({ value, label }));
 }
@@ -554,15 +769,19 @@ function typeFilterLabel(type: AgentRunTimelineEventType): string {
 function EventRow({
   event,
   onOpenTab,
+  onOpenWorkflow,
 }: {
   event: AgentRunTimelineEvent;
   onOpenTab?: (target: TimelineTabTarget) => void;
+  onOpenWorkflow?: (runId?: string) => void;
 }) {
   const Icon = EVENT_ICONS[event.type];
   const metadata = stringifyMetadata(event.metadata);
   const linkTarget = event.link?.target;
   const canOpenInternal =
     linkTarget && linkTarget !== 'external' && linkTarget !== 'workflow' && onOpenTab;
+  const canOpenWorkflow = linkTarget === 'workflow' && onOpenWorkflow;
+  const canOpenExternal = linkTarget === 'external' && event.link?.href;
 
   return (
     <Paper withBorder p="sm" radius="md">
@@ -604,15 +823,38 @@ function EventRow({
             {metadata}
           </Code>
         )}
-        {canOpenInternal && event.link && linkTarget && (
+        {(canOpenInternal || canOpenWorkflow || canOpenExternal) && event.link && (
           <Group gap="xs">
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              onClick={() => onOpenTab?.(linkTarget as TimelineTabTarget)}
-            >
-              {event.link.label}
-            </Button>
+            {canOpenInternal && linkTarget && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                onClick={() => onOpenTab?.(linkTarget as TimelineTabTarget)}
+              >
+                {event.link.label}
+              </Button>
+            )}
+            {canOpenWorkflow && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                onClick={() => onOpenWorkflow?.(safeString(event.metadata?.runId))}
+              >
+                {event.link.label}
+              </Button>
+            )}
+            {canOpenExternal && (
+              <Button
+                component="a"
+                href={event.link.href}
+                rel="noopener noreferrer"
+                size="compact-xs"
+                target="_blank"
+                variant="subtle"
+              >
+                {event.link.label}
+              </Button>
+            )}
           </Group>
         )}
       </Stack>
@@ -624,6 +866,7 @@ export function AgentRunTimelinePanel({
   task,
   initialAttemptId,
   onOpenTab,
+  onOpenWorkflow,
 }: AgentRunTimelinePanelProps) {
   const hasLiveAttempt = task.attempt?.status === 'running';
   const { data: traces = [], isLoading: tracesLoading } = useAgentRunTraces(task.id, {
@@ -634,6 +877,12 @@ export function AgentRunTimelinePanel({
     { live: hasLiveAttempt }
   );
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
+  const { data: notifications = [], isLoading: notificationsLoading } = useTaskNotifications(
+    task.id
+  );
+  const { data: approvals = [], isLoading: approvalsLoading } = usePendingAgentApprovals();
+  const { data: activeRuns = [], isLoading: activeRunsLoading } = useActiveRuns();
+  const { data: recentRuns = [], isLoading: recentRunsLoading } = useRecentRuns();
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(
     initialAttemptId ?? task.attempt?.id ?? null
   );
@@ -647,8 +896,12 @@ export function AgentRunTimelinePanel({
   }, [initialAttemptId]);
 
   const runOptions = useMemo(
-    () => getRunOptions(task, traces, telemetryEvents, workProducts),
-    [task, traces, telemetryEvents, workProducts]
+    () =>
+      getRunOptions(task, traces, telemetryEvents, workProducts, notifications, [
+        ...activeRuns,
+        ...recentRuns,
+      ]),
+    [activeRuns, notifications, recentRuns, task, traces, telemetryEvents, workProducts]
   );
 
   useEffect(() => {
@@ -670,12 +923,25 @@ export function AgentRunTimelinePanel({
     () =>
       buildAgentRunTimelineEvents({
         task,
+        approvals,
+        notifications,
         traces,
         telemetryEvents,
+        workflowRuns: [...activeRuns, ...recentRuns],
         workProducts,
         selectedAttemptId,
       }),
-    [task, traces, telemetryEvents, workProducts, selectedAttemptId]
+    [
+      activeRuns,
+      approvals,
+      notifications,
+      recentRuns,
+      task,
+      traces,
+      telemetryEvents,
+      workProducts,
+      selectedAttemptId,
+    ]
   );
 
   const filteredEvents = useMemo(
@@ -684,7 +950,14 @@ export function AgentRunTimelinePanel({
   );
   const visibleEvents = filteredEvents.slice(0, visibleCount);
   const canLoadMore = filteredEvents.length > visibleEvents.length;
-  const isLoading = tracesLoading || telemetryLoading || workProductsLoading;
+  const isLoading =
+    tracesLoading ||
+    telemetryLoading ||
+    workProductsLoading ||
+    notificationsLoading ||
+    approvalsLoading ||
+    activeRunsLoading ||
+    recentRunsLoading;
   const source = sourceForTrace(selectedTrace);
   const linkedWorkProducts = workProducts.filter(
     (product) => !selectedAttemptId || product.sourceRunId === selectedAttemptId
@@ -889,7 +1162,12 @@ export function AgentRunTimelinePanel({
         <Stack gap="xs" pr="xs">
           {visibleEvents.length > 0 ? (
             visibleEvents.map((event) => (
-              <EventRow key={event.id} event={event} onOpenTab={onOpenTab} />
+              <EventRow
+                key={event.id}
+                event={event}
+                onOpenTab={onOpenTab}
+                onOpenWorkflow={onOpenWorkflow}
+              />
             ))
           ) : (
             <Paper withBorder p="md" radius="md">

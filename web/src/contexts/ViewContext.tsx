@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { VIEW_PATHS, type AppView } from '@/lib/views';
+import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
 const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 
@@ -29,9 +30,11 @@ interface ViewContextValue {
   view: AppView;
   setView: (view: AppView) => void;
   /** Navigate to a specific task by opening the board and setting selectedTaskId. */
-  navigateToTask: (taskId: string) => void;
+  navigateToTask: (taskId: string, target?: TaskDetailNavigationTarget) => void;
   /** The task ID requested by view navigation (consumed once by the board). */
   pendingTaskId: string | null;
+  /** Optional tab/run target for the pending task navigation. */
+  pendingTaskTarget: TaskDetailNavigationTarget | null;
   clearPendingTask: () => void;
 }
 
@@ -40,12 +43,16 @@ const ViewContext = createContext<ViewContextValue>({
   setView: () => {},
   navigateToTask: () => {},
   pendingTaskId: null,
+  pendingTaskTarget: null,
   clearPendingTask: () => {},
 });
 
 export function ViewProvider({ children }: { children: ReactNode }) {
   const [view, setViewState] = useState<AppView>(() => getViewFromLocation());
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [pendingTaskTarget, setPendingTaskTarget] = useState<TaskDetailNavigationTarget | null>(
+    null
+  );
 
   const setView = useCallback((nextView: AppView) => {
     setViewState(nextView);
@@ -61,8 +68,9 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const navigateToTask = useCallback(
-    (taskId: string) => {
+    (taskId: string, target?: TaskDetailNavigationTarget) => {
       setPendingTaskId(taskId);
+      setPendingTaskTarget(target ?? null);
       setView('board');
     },
     [setView]
@@ -70,11 +78,19 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const clearPendingTask = useCallback(() => {
     setPendingTaskId(null);
+    setPendingTaskTarget(null);
   }, []);
 
   const value = useMemo(
-    () => ({ view, setView, navigateToTask, pendingTaskId, clearPendingTask }),
-    [view, setView, navigateToTask, pendingTaskId, clearPendingTask]
+    () => ({
+      view,
+      setView,
+      navigateToTask,
+      pendingTaskId,
+      pendingTaskTarget,
+      clearPendingTask,
+    }),
+    [view, setView, navigateToTask, pendingTaskId, pendingTaskTarget, clearPendingTask]
   );
 
   useEffect(() => {

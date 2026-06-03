@@ -30,6 +30,20 @@ export function useUndeliveredNotifications(limit = 50) {
   });
 }
 
+export function useTaskNotifications(taskId: string | undefined, limit = 100) {
+  return useQuery({
+    queryKey: ['notifications', 'task', taskId, limit],
+    queryFn: async () => {
+      const notifications = await apiFetch<AgentNotification[]>(
+        `${API_BASE}/notifications?limit=${encodeURIComponent(String(limit))}`
+      );
+      return notifications.filter((notification) => notification.taskId === taskId);
+    },
+    enabled: !!taskId,
+    staleTime: 30_000,
+  });
+}
+
 export function useMarkNotificationDelivered() {
   const queryClient = useQueryClient();
 

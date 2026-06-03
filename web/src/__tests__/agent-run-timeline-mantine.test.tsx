@@ -18,8 +18,13 @@ import type {
 
 const mocks = vi.hoisted(() => ({
   onOpenTab: vi.fn(),
+  onOpenWorkflow: vi.fn(),
   useAgentRunTraces: vi.fn(),
+  useActiveRuns: vi.fn(),
+  usePendingAgentApprovals: vi.fn(),
+  useRecentRuns: vi.fn(),
   useTaskTelemetryEvents: vi.fn(),
+  useTaskNotifications: vi.fn(),
   useTaskWorkProducts: vi.fn(),
 }));
 
@@ -28,8 +33,21 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
   useTaskTelemetryEvents: mocks.useTaskTelemetryEvents,
 }));
 
+vi.mock('@/hooks/useAgent', () => ({
+  usePendingAgentApprovals: mocks.usePendingAgentApprovals,
+}));
+
+vi.mock('@/hooks/useNotifications', () => ({
+  useTaskNotifications: mocks.useTaskNotifications,
+}));
+
 vi.mock('@/hooks/useWorkProducts', () => ({
   useTaskWorkProducts: mocks.useTaskWorkProducts,
+}));
+
+vi.mock('@/hooks/useWorkflowStats', () => ({
+  useActiveRuns: mocks.useActiveRuns,
+  useRecentRuns: mocks.useRecentRuns,
 }));
 
 const task: Task = createMockTask({
@@ -60,6 +78,33 @@ const task: Task = createMockTask({
     decidedAt: '2026-06-01T10:07:00.000Z',
     summary: 'Ready to merge',
   },
+  reviewComments: [
+    {
+      id: 'comment-1',
+      file: 'web/src/App.tsx',
+      line: 42,
+      content: 'Check the timeline entry point',
+      created: '2026-06-01T10:08:00.000Z',
+    },
+  ],
+  qaGate: {
+    required: true,
+    passed: false,
+  },
+  deliverables: [
+    {
+      id: 'deliverable-1',
+      title: 'Replay evidence log',
+      type: 'document',
+      path: 'reports/replay.md',
+      status: 'attached',
+      agent: 'veritas',
+      sourceRunId: 'attempt-1',
+      version: 1,
+      created: '2026-06-01T10:06:20.000Z',
+      description: 'Timeline replay evidence',
+    },
+  ],
   verificationSteps: [{ id: 'verify-1', description: 'Run tests', checked: true }],
 });
 
@@ -150,11 +195,59 @@ const product: WorkProductPreview = {
   updatedAt: '2026-06-01T10:06:30.000Z',
 };
 
+const approval = {
+  id: 'approval-1',
+  agentId: 'veritas',
+  action: 'write_file',
+  taskId: 'task-timeline',
+  details: 'Needs permission to update replay docs',
+  status: 'pending' as const,
+  createdAt: '2026-06-01T10:02:00.000Z',
+};
+
+const notification = {
+  id: 'notification-1',
+  taskId: 'task-timeline',
+  targetAgent: 'veritas',
+  fromAgent: 'system',
+  content: 'Run replay needs review',
+  type: 'review_needed',
+  title: 'Timeline notification',
+  delivered: false,
+  createdAt: '2026-06-01T10:06:45.000Z',
+  source: { attemptId: 'attempt-1' },
+};
+
+const workflowRun = {
+  id: 'workflow-run-1',
+  workflowId: 'wf-release',
+  workflowVersion: 1,
+  taskId: 'task-timeline',
+  status: 'blocked' as const,
+  currentStep: 'approval',
+  context: { attemptId: 'attempt-1', taskId: 'task-timeline' },
+  startedAt: '2026-06-01T10:03:00.000Z',
+  lastCheckpoint: '2026-06-01T10:03:30.000Z',
+  steps: [
+    {
+      stepId: 'approval',
+      status: 'failed',
+      agent: 'veritas',
+      retries: 1,
+      error: 'Approval required',
+    },
+  ],
+};
+
 describe('agent run timeline Mantine surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useAgentRunTraces.mockReturnValue({ data: [trace], isLoading: false });
+    mocks.useActiveRuns.mockReturnValue({ data: [workflowRun], isLoading: false });
+    mocks.usePendingAgentApprovals.mockReturnValue({ data: [approval], isLoading: false });
+    mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskTelemetryEvents.mockReturnValue({ data: telemetryEvents, isLoading: false });
+    mocks.useTaskNotifications.mockReturnValue({ data: [notification], isLoading: false });
     mocks.useTaskWorkProducts.mockReturnValue({ data: [product], isLoading: false });
   });
 
@@ -165,8 +258,11 @@ describe('agent run timeline Mantine surface', () => {
   it('builds chronological timeline events with trace, telemetry, and work product context', () => {
     const events = buildAgentRunTimelineEvents({
       task,
+      approvals: [approval],
+      notifications: [notification],
       traces: [trace],
       telemetryEvents,
+      workflowRuns: [workflowRun],
       workProducts: [product],
       selectedAttemptId: 'attempt-1',
     });
@@ -176,6 +272,10 @@ describe('agent run timeline Mantine surface', () => {
     expect(events.some((event) => event.type === 'command')).toBe(true);
     expect(events.some((event) => event.type === 'usage')).toBe(true);
     expect(events.some((event) => event.title.includes('Work product saved'))).toBe(true);
+    expect(events.some((event) => event.title.includes('Permission pending'))).toBe(true);
+    expect(events.some((event) => event.title.includes('Workflow blocked'))).toBe(true);
+    expect(events.some((event) => event.title.includes('Deliverable attached'))).toBe(true);
+    expect(events.some((event) => event.title.includes('Timeline notification'))).toBe(true);
     expect(getTimelineEventType('execute', { eventType: 'tool.progress' })).toBe('tool');
     expect(getTimelineEventType('error', { summary: 'failed' })).toBe('error');
   });
@@ -191,16 +291,61 @@ describe('agent run timeline Mantine surface', () => {
     expect(redacted).not.toContain('sk-supersecret123456');
   });
 
+  it('falls back to internal links when derived external targets are not http urls', () => {
+    const events = buildAgentRunTimelineEvents({
+      task,
+      notifications: [
+        {
+          ...notification,
+          id: 'notification-unsafe',
+          targetUrl: 'javascript:alert(1)',
+        },
+      ],
+      traces: [],
+      telemetryEvents: [],
+      workProducts: [
+        {
+          ...product,
+          id: 'wp-unsafe',
+          sourceLinks: [{ label: 'Unsafe source', href: 'javascript:alert(1)', type: 'url' }],
+        },
+      ],
+      selectedAttemptId: 'attempt-1',
+    });
+
+    expect(events.find((event) => event.id === 'work-product-wp-unsafe')?.link).toMatchObject({
+      target: 'work-products',
+    });
+    expect(
+      events.find((event) => event.id === 'notification-notification-unsafe')?.link
+    ).toMatchObject({
+      target: 'agent',
+    });
+  });
+
   it('renders run replay controls, filters by event type, and links back to task surfaces', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentRunTimelinePanel task={task} onOpenTab={mocks.onOpenTab} />);
+    renderWithProviders(
+      <AgentRunTimelinePanel
+        task={task}
+        onOpenTab={mocks.onOpenTab}
+        onOpenWorkflow={mocks.onOpenWorkflow}
+      />
+    );
 
     expect(screen.getByText('Run Timeline')).toBeDefined();
     expect(screen.getByText('Stored replay')).toBeDefined();
     expect(screen.getByText('command.completed')).toBeDefined();
     expect(screen.getByText('Run replay report')).toBeDefined();
+    expect(screen.getByText('Timeline notification')).toBeDefined();
+    expect(screen.getByText('Workflow blocked: wf-release')).toBeDefined();
+    expect(screen.getByText('Deliverable attached: Replay evidence log')).toBeDefined();
     expect(screen.queryByText('super-secret-token')).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Agent logs' }).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Workflow run' }));
+
+    expect(mocks.onOpenWorkflow).toHaveBeenCalledWith('workflow-run-1');
 
     await user.click(screen.getByRole('button', { name: 'Usage' }));
 
@@ -227,18 +372,22 @@ describe('agent run timeline Mantine surface', () => {
       })),
     };
     mocks.useAgentRunTraces.mockReturnValue({ data: [longTrace], isLoading: false });
+    mocks.useActiveRuns.mockReturnValue({ data: [], isLoading: false });
+    mocks.usePendingAgentApprovals.mockReturnValue({ data: [], isLoading: false });
+    mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskTelemetryEvents.mockReturnValue({ data: [], isLoading: false });
+    mocks.useTaskNotifications.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskWorkProducts.mockReturnValue({ data: [], isLoading: false });
 
     renderWithProviders(<AgentRunTimelinePanel task={task} onOpenTab={mocks.onOpenTab} />);
 
-    expect(screen.getByText('Showing 80 of 146 filtered events.')).toBeDefined();
+    expect(screen.getByText('Showing 80 of 149 filtered events.')).toBeDefined();
     expect(screen.getByText('Progress event 1')).toBeDefined();
     expect(screen.queryByText('Progress event 140')).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'Load 66 more' }));
+    await user.click(screen.getByRole('button', { name: 'Load 69 more' }));
 
-    expect(screen.getByText('Showing 146 of 146 filtered events.')).toBeDefined();
+    expect(screen.getByText('Showing 149 of 149 filtered events.')).toBeDefined();
     expect(screen.getByText('Progress event 140')).toBeDefined();
   });
 });

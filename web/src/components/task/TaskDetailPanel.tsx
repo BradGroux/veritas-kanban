@@ -60,9 +60,10 @@ interface TaskDetailPanelProps {
   onOpenChange: (open: boolean) => void;
   readOnly?: boolean;
   onRestore?: (taskId: string) => void;
+  navigationTarget?: TaskDetailNavigationTarget | null;
 }
 
-type TaskDetailTabId =
+export type TaskDetailTabId =
   | 'work'
   | 'details'
   | 'progress'
@@ -75,6 +76,11 @@ type TaskDetailTabId =
   | 'changes'
   | 'review'
   | 'metrics';
+
+export interface TaskDetailNavigationTarget {
+  tab?: TaskDetailTabId;
+  timelineAttemptId?: string | null;
+}
 
 interface TaskDetailTabDefinition {
   id: TaskDetailTabId;
@@ -169,6 +175,7 @@ export function TaskDetailPanel({
   onOpenChange,
   readOnly = false,
   onRestore,
+  navigationTarget,
 }: TaskDetailPanelProps) {
   const { data: taskTypes = [] } = useTaskTypes();
   const { settings: featureSettings } = useFeatureSettings();
@@ -222,12 +229,27 @@ export function TaskDetailPanel({
   useEffect(() => {
     if (!activeTaskId) {
       lastDefaultedTaskIdRef.current = undefined;
+      setTimelineAttemptId(null);
       return;
     }
     if (lastDefaultedTaskIdRef.current === activeTaskId) return;
     lastDefaultedTaskIdRef.current = activeTaskId;
+    setTimelineAttemptId(null);
     setActiveTab(defaultTab);
   }, [activeTaskId, defaultTab]);
+
+  useEffect(() => {
+    if (!activeTaskId || !navigationTarget) return;
+    if (navigationTarget.timelineAttemptId !== undefined) {
+      setTimelineAttemptId(navigationTarget.timelineAttemptId ?? null);
+    }
+    if (
+      navigationTarget.tab &&
+      visibleTabs.some((tab) => tab.id === navigationTarget.tab && !tab.disabled)
+    ) {
+      setActiveTab(navigationTarget.tab);
+    }
+  }, [activeTaskId, navigationTarget, visibleTabs]);
 
   if (!localTask) return null;
 
@@ -302,6 +324,7 @@ export function TaskDetailPanel({
             task={localTask}
             initialAttemptId={timelineAttemptId}
             onOpenTab={setActiveTab}
+            onOpenWorkflow={() => setWorkflowOpen(true)}
           />
         );
       case 'changes':

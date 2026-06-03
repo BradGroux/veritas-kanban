@@ -33,10 +33,12 @@ import {
   PlayCircle,
   Clock,
   Pause,
+  History,
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
+import { useView } from '@/contexts/ViewContext';
 
 interface WorkflowRunViewProps {
   runId: string;
@@ -62,10 +64,12 @@ interface WorkflowRun {
   id: string;
   workflowId: string;
   workflowVersion: number;
+  taskId?: string;
   status: WorkflowRunStatus;
   currentStep?: string;
   startedAt: string;
   completedAt?: string;
+  context?: Record<string, unknown>;
   error?: string;
   steps: StepRun[];
 }
@@ -90,6 +94,20 @@ function isWorkflowStatusMessage(msg: WebSocketMessage): msg is WorkflowStatusMe
   return msg.type === 'workflow:status' && typeof msg.data === 'object' && msg.data !== null;
 }
 
+function safeContextString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function workflowTaskId(run: WorkflowRun): string | undefined {
+  return run.taskId ?? safeContextString(run.context?.taskId);
+}
+
+function workflowTimelineAttemptId(run: WorkflowRun): string {
+  return (
+    safeContextString(run.context?.attemptId) ?? safeContextString(run.context?.runId) ?? run.id
+  );
+}
+
 export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowDefinition | null>(null);
@@ -97,6 +115,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(true);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { navigateToTask } = useView();
 
   // Fetch run details
   const fetchRun = useCallback(async () => {
@@ -213,6 +232,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   }
 
   const workflowName = workflow?.name ?? `Workflow ${run.workflowId}`;
+  const taskTimelineId = workflowTaskId(run);
   const stepDefinitions =
     workflow?.steps ??
     run.steps?.map((step) => ({ id: step.stepId, name: step.stepId, agent: step.agent }));
@@ -296,6 +316,21 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
               onClick={handleResume}
             >
               Resume
+            </Button>
+          )}
+          {taskTimelineId && (
+            <Button
+              size="sm"
+              variant="light"
+              leftSection={<History className="h-4 w-4" />}
+              onClick={() => {
+                navigateToTask(taskTimelineId, {
+                  tab: 'timeline',
+                  timelineAttemptId: workflowTimelineAttemptId(run),
+                });
+              }}
+            >
+              Task Timeline
             </Button>
           )}
         </Group>

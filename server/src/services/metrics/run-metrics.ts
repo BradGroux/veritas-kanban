@@ -233,6 +233,7 @@ export async function computeFailedRuns(
               timestamp: event.timestamp,
               taskId: event.taskId,
               project: event.project,
+              attemptId: event.attemptId,
               agent: event.agent || 'veritas',
               success: false,
               errorMessage: event.error,

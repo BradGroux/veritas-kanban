@@ -25,6 +25,7 @@ import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 import { useView } from '@/contexts/ViewContext';
 import { useIdentity } from '@/hooks/useIdentity';
+import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
 // Lazy-load Dashboard to split recharts + d3 (~800KB) out of main bundle
 const Dashboard = lazy(() =>
@@ -55,6 +56,8 @@ export function KanbanBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailPanelMounted, setDetailPanelMounted] = useState(false);
+  const [detailNavigationTarget, setDetailNavigationTarget] =
+    useState<TaskDetailNavigationTarget | null>(null);
 
   // Initialize filters from URL
   const [filters, setFilters] = useState<FilterState>(() => {
@@ -66,7 +69,7 @@ export function KanbanBoard() {
 
   const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
   const { isSelecting, toggleSelecting } = useBulkActions();
-  const { pendingTaskId, clearPendingTask } = useView();
+  const { pendingTaskId, pendingTaskTarget, clearPendingTask } = useView();
 
   // Handle navigation from other views (e.g., Activity page clicking on a task)
   useEffect(() => {
@@ -77,6 +80,7 @@ export function KanbanBoard() {
       const localTask = tasks?.find((t) => t.id === pendingTaskId);
       if (localTask) {
         setDetailPanelMounted(true);
+        setDetailNavigationTarget(pendingTaskTarget);
         setSelectedTask(localTask);
         setDetailOpen(true);
         clearPendingTask();
@@ -89,6 +93,7 @@ export function KanbanBoard() {
         const fetchedTask = await api.tasks.get(pendingTaskId);
         if (fetchedTask) {
           setDetailPanelMounted(true);
+          setDetailNavigationTarget(pendingTaskTarget);
           setSelectedTask(fetchedTask);
           setDetailOpen(true);
         }
@@ -99,7 +104,7 @@ export function KanbanBoard() {
     };
 
     openPendingTask();
-  }, [pendingTaskId, tasks, clearPendingTask]);
+  }, [pendingTaskId, pendingTaskTarget, tasks, clearPendingTask]);
 
   // Sync filters to URL
   useEffect(() => {
@@ -124,22 +129,50 @@ export function KanbanBoard() {
   }, [filteredTasks, setTasks]);
 
   // Handler for opening a task
-  const handleTaskClick = useCallback((task: Task) => {
+  const handleTaskClick = useCallback((task: Task, target?: TaskDetailNavigationTarget) => {
     setDetailPanelMounted(true);
+    setDetailNavigationTarget(target ?? null);
     setSelectedTask(task);
     setDetailOpen(true);
   }, []);
 
+  const handleTaskIdClick = useCallback(
+    async (taskId: string, target?: TaskDetailNavigationTarget) => {
+      const localTask = tasks?.find((t) => t.id === taskId);
+      if (localTask) {
+        handleTaskClick(localTask, target);
+        return;
+      }
+
+      try {
+        const { api } = await import('@/lib/api');
+        const fetchedTask = await api.tasks.get(taskId);
+        if (fetchedTask) {
+          handleTaskClick(fetchedTask, target);
+        }
+      } catch {
+        // Task no longer exists — ignore silently
+      }
+    },
+    [handleTaskClick, tasks]
+  );
+
   // Listen for open-task events from dashboard drill-downs
   useEffect(() => {
     const handler = async (e: Event) => {
-      const taskId = (e as CustomEvent).detail?.taskId;
+      const detail = (e as CustomEvent).detail;
+      const taskId = detail?.taskId;
       if (!taskId) return;
+      const target: TaskDetailNavigationTarget = {
+        tab: detail?.tab,
+        timelineAttemptId: detail?.timelineAttemptId,
+      };
 
       // Try local task list first
       const localTask = tasks?.find((t) => t.id === taskId);
       if (localTask) {
         setDetailPanelMounted(true);
+        setDetailNavigationTarget(target);
         setSelectedTask(localTask);
         setDetailOpen(true);
         return;
@@ -151,6 +184,7 @@ export function KanbanBoard() {
         const fetchedTask = await api.tasks.get(taskId);
         if (fetchedTask) {
           setDetailPanelMounted(true);
+          setDetailNavigationTarget(target);
           setSelectedTask(fetchedTask);
           setDetailOpen(true);
         }
@@ -319,13 +353,7 @@ export function KanbanBoard() {
 
           <BoardSidebar
             onTaskClick={(taskId) => {
-              const task = filteredTasks.find((t) => t.id === taskId);
-              if (task) {
-                handleTaskClick(task);
-              } else {
-                // Task may be archived or not on board — fire open-task event for API fallback
-                window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
-              }
+              void handleTaskIdClick(taskId);
             }}
           />
         </div>
@@ -342,7 +370,11 @@ export function KanbanBoard() {
             }
           >
             <div className="mt-6 border-t pt-4">
-              <Dashboard />
+              <Dashboard
+                onTaskClick={(taskId, target) => {
+                  void handleTaskIdClick(taskId, target);
+                }}
+              />
             </div>
           </Suspense>
         )}
@@ -355,6 +387,7 @@ export function KanbanBoard() {
             open={detailOpen}
             onOpenChange={handleDetailClose}
             readOnly={!canWriteTasks}
+            navigationTarget={detailNavigationTarget}
           />
         </Suspense>
       )}

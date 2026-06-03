@@ -33,6 +33,7 @@ import { SessionMetrics } from './SessionMetrics';
 import { EnforcementIndicator } from './EnforcementIndicator';
 import { NeedsAttentionQueue } from './NeedsAttentionQueue';
 import { useView } from '@/contexts/ViewContext';
+import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
@@ -117,14 +118,18 @@ function StatRow({ label, value, subLabel, highlight }: StatRowProps) {
   );
 }
 
-export function Dashboard() {
+interface DashboardProps {
+  onTaskClick?: (taskId: string, target?: TaskDetailNavigationTarget) => void;
+}
+
+export function Dashboard({ onTaskClick }: DashboardProps = {}) {
   const [period, setPeriod] = useState<MetricsPeriod>('7d');
   const [customFrom, setCustomFrom] = useState<string | undefined>();
   const [customTo, setCustomTo] = useState<string | undefined>();
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const { setView } = useView();
+  const { navigateToTask, setView } = useView();
 
   const { settings } = useFeatureSettings();
   const widgets: DashboardWidgetSettings = settings.board.dashboardWidgets ?? {
@@ -179,11 +184,14 @@ export function Dashboard() {
     }
   };
 
-  const handleTaskClick = (taskId: string) => {
+  const handleTaskClick = (taskId: string, options?: TaskDetailNavigationTarget) => {
     // Close drill-down and navigate to task (you may want to integrate with your task panel)
     setDrillDown(null);
-    // This could dispatch an event or call a callback to open the task detail panel
-    window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }));
+    if (onTaskClick) {
+      onTaskClick(taskId, options);
+      return;
+    }
+    navigateToTask(taskId, options);
   };
 
   return (
