@@ -180,6 +180,23 @@ export interface GeneralSettings {
   humanDisplayName: string; // Display name for human user in Squad Chat (default: "Human")
 }
 
+export type ProductModeId =
+  | 'board-only'
+  | 'agent-ready'
+  | 'solo-coding'
+  | 'pm-orchestration'
+  | 'qa-review'
+  | 'research'
+  | 'operations'
+  | 'advanced'
+  | 'custom';
+
+export interface ProductModeSettings {
+  selectedMode: ProductModeId;
+  lastSelectedAt?: string;
+  dismissedHints: string[];
+}
+
 /** Board display settings */
 export interface BoardSettings {
   showDashboard: boolean;
@@ -334,6 +351,7 @@ export interface SquadWebhookSettings {
 /** All feature settings combined */
 export interface FeatureSettings {
   general: GeneralSettings;
+  productMode: ProductModeSettings;
   board: BoardSettings;
   tasks: TaskBehaviorSettings;
   markdown: MarkdownSettings;
@@ -353,6 +371,10 @@ export interface FeatureSettings {
 export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   general: {
     humanDisplayName: 'Human',
+  },
+  productMode: {
+    selectedMode: 'advanced',
+    dismissedHints: [],
   },
   board: {
     showDashboard: true,

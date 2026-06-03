@@ -97,6 +97,7 @@ describe('workflow authoring routes', () => {
     expect(recipes.body.map((recipe: { id: string }) => recipe.id)).toContain(
       'task-implementation'
     );
+    expect(recipes.body.map((recipe: { id: string }) => recipe.id)).toContain('openclaw-audit');
 
     const materialized = await request(app)
       .post('/api/workflows/recipes/task-implementation/materialize')
@@ -119,6 +120,85 @@ describe('workflow authoring routes', () => {
     ).toEqual(['task-update', 'work-product', 'completion-packet']);
     expect(materialized.body.yaml).toContain('outputTargets:');
     expect(materialized.body.lint.ok).toBe(true);
+  });
+
+  it('materializes the OpenClaw audit recipe with an orchestrated subagent pipeline', async () => {
+    const materialized = await request(app)
+      .post('/api/workflows/recipes/openclaw-audit/materialize')
+      .send({
+        inputs: {
+          workflowName: '.openclaw Audit Test',
+          outputPath: 'work-products/openclaw-audit-test.md',
+        },
+        context: { clientMode: 'local' },
+      });
+
+    expect(materialized.status).toBe(200);
+    expect(materialized.body.workflow.pipeline).toMatchObject({
+      mode: 'orchestrated',
+      parentAgent: 'orchestrator',
+    });
+    expect(materialized.body.preview.pipeline).toMatchObject({
+      totals: { roles: 5, required: 5 },
+    });
+    expect(materialized.body.preview.pipeline.roles.map((role: { id: string }) => role.id)).toEqual(
+      expect.arrayContaining(['config-auditor', 'security-auditor', 'task-creator'])
+    );
+    expect(materialized.body.lint.ok).toBe(true);
+    expect(materialized.body.yaml).toContain('pipeline:');
+  });
+
+  it('dry-runs pipeline contracts and reports missing role dependencies', async () => {
+    const draft = workflow({
+      pipeline: {
+        mode: 'orchestrated',
+        parentAgent: 'missing-parent',
+        roles: [
+          {
+            id: 'researcher',
+            label: 'Researcher',
+            agent: 'missing-agent',
+            scope: '',
+            taskBrief: '',
+            deliverable: '',
+            verification: [],
+            dependsOn: ['missing-role'],
+          },
+        ],
+      },
+    });
+
+    const response = await request(app)
+      .post('/api/workflows/authoring/dry-run')
+      .send({ workflow: draft, context: { clientMode: 'local' } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('blocked');
+    expect(response.body.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'pipeline',
+          label: 'Orchestration pipeline',
+          status: 'fail',
+        }),
+      ])
+    );
+    expect(response.body.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'pipeline',
+          message: 'Orchestrated pipeline references a missing parent agent.',
+        }),
+        expect.objectContaining({
+          category: 'pipeline',
+          message: 'Pipeline role researcher references a missing agent.',
+        }),
+        expect.objectContaining({
+          category: 'pipeline',
+          message: 'Pipeline role researcher depends on missing role missing-role.',
+        }),
+      ])
+    );
   });
 
   it('dry-runs drafts and reports missing context, policies, secrets, and schedules', async () => {

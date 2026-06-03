@@ -6,6 +6,12 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
+import {
+  buildWorkflowPipelineSummary,
+  type WorkflowPipelineRoleStatusPatch,
+  type WorkflowSubagentRunStatus,
+  type WorkflowSubagentTelemetry,
+} from '@veritas-kanban/shared';
 import type { WorkflowRun, StepRun, WorkflowDefinition, WorkflowStep } from '../types/workflow.js';
 import { getWorkflowService } from './workflow-service.js';
 import { WorkflowStepExecutor } from './workflow-step-executor.js';
@@ -88,6 +94,108 @@ export class WorkflowRunService {
     return trimmed;
   }
 
+  private syncPipelineSummary(run: WorkflowRun, workflow: WorkflowDefinition): void {
+    const baseSummary = buildWorkflowPipelineSummary(workflow);
+    if (!baseSummary) return;
+
+    const patches: WorkflowPipelineRoleStatusPatch = {};
+    for (const role of baseSummary.roles) {
+      patches[role.id] = this.pipelineRoleStatusPatch(role.agent, run, workflow);
+    }
+    run.context.pipeline = buildWorkflowPipelineSummary(workflow, patches);
+  }
+
+  private pipelineRoleStatusPatch(
+    agentId: string,
+    run: WorkflowRun,
+    workflow: WorkflowDefinition
+  ): { status: WorkflowSubagentRunStatus; telemetry: WorkflowSubagentTelemetry } {
+    const statuses: WorkflowSubagentRunStatus[] = [];
+    const telemetry: WorkflowSubagentTelemetry = {};
+    let durationSeconds = 0;
+
+    for (const step of workflow.steps) {
+      const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
+      if (!stepRun) continue;
+
+      if (step.agent === agentId) {
+        statuses.push(this.stepStatusForPipeline(stepRun, run));
+        this.mergeStepTelemetry(telemetry, stepRun);
+        durationSeconds += stepRun.duration ?? 0;
+      }
+
+      for (const subStep of step.parallel?.steps ?? []) {
+        if (subStep.agent !== agentId) continue;
+        statuses.push(this.parallelSubstepStatus(step, subStep.id, stepRun, run));
+        this.mergeStepTelemetry(telemetry, stepRun);
+        durationSeconds += stepRun.duration ?? 0;
+      }
+    }
+
+    if (durationSeconds > 0) {
+      telemetry.durationSeconds = durationSeconds;
+    }
+
+    return {
+      status: this.resolvePipelineStatus(statuses),
+      telemetry,
+    };
+  }
+
+  private stepStatusForPipeline(stepRun: StepRun, run: WorkflowRun): WorkflowSubagentRunStatus {
+    if (run.status === 'blocked' && run.currentStep === stepRun.stepId) return 'blocked';
+    return stepRun.status;
+  }
+
+  private parallelSubstepStatus(
+    step: WorkflowStep,
+    subStepId: string,
+    stepRun: StepRun,
+    run: WorkflowRun
+  ): WorkflowSubagentRunStatus {
+    const output = run.context[step.id];
+    const subSteps =
+      output &&
+      typeof output === 'object' &&
+      Array.isArray((output as { subSteps?: unknown }).subSteps)
+        ? (output as { subSteps: Array<{ id?: string; status?: string }> }).subSteps
+        : [];
+    const subStepOutput = subSteps.find((candidate) => candidate.id === subStepId);
+    if (subStepOutput?.status === 'fulfilled') return 'completed';
+    if (subStepOutput?.status === 'rejected') return 'failed';
+    if (run.status === 'blocked' && run.currentStep === step.id) return 'blocked';
+    if (stepRun.status === 'running') return 'running';
+    if (stepRun.status === 'failed') return 'failed';
+    if (stepRun.status === 'skipped') return 'skipped';
+    return 'pending';
+  }
+
+  private resolvePipelineStatus(statuses: WorkflowSubagentRunStatus[]): WorkflowSubagentRunStatus {
+    if (statuses.length === 0) return 'pending';
+    if (statuses.includes('failed')) return 'failed';
+    if (statuses.includes('blocked')) return 'blocked';
+    if (statuses.includes('running')) return 'running';
+    if (statuses.every((status) => status === 'completed')) return 'completed';
+    if (statuses.every((status) => status === 'skipped')) return 'skipped';
+    if (statuses.includes('completed')) return 'completed';
+    return 'pending';
+  }
+
+  private mergeStepTelemetry(telemetry: WorkflowSubagentTelemetry, stepRun: StepRun): void {
+    if (stepRun.startedAt) {
+      telemetry.startedAt =
+        !telemetry.startedAt || stepRun.startedAt < telemetry.startedAt
+          ? stepRun.startedAt
+          : telemetry.startedAt;
+    }
+    if (stepRun.completedAt) {
+      telemetry.completedAt =
+        !telemetry.completedAt || stepRun.completedAt > telemetry.completedAt
+          ? stepRun.completedAt
+          : telemetry.completedAt;
+    }
+  }
+
   /**
    * Start a new workflow run
    */
@@ -131,6 +239,9 @@ export class WorkflowRunService {
 
         // Custom initial context (from API caller)
         ...initialContext,
+
+        // Orchestrator/subagent pipeline summary for run views and completion handoff.
+        ...(workflow.pipeline ? { pipeline: buildWorkflowPipelineSummary(workflow) } : {}),
 
         // Run metadata
         workflow: {
@@ -197,6 +308,7 @@ export class WorkflowRunService {
         const stepRun = existingStepRun;
         stepRun.status = 'running';
         stepRun.startedAt = new Date().toISOString();
+        this.syncPipelineSummary(run, workflow);
         await this.saveRun(run);
 
         try {
@@ -213,6 +325,7 @@ export class WorkflowRunService {
           // Merge step output into run context
           run.context[step.id] = result.output;
 
+          this.syncPipelineSummary(run, workflow);
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
         } catch (err: unknown) {
@@ -220,6 +333,7 @@ export class WorkflowRunService {
           stepRun.status = 'failed';
           stepRun.error = err instanceof Error ? err.message : 'Unknown error';
           stepRun.completedAt = new Date().toISOString();
+          this.syncPipelineSummary(run, workflow);
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
 
@@ -245,6 +359,7 @@ export class WorkflowRunService {
       // All steps completed
       run.status = 'completed';
       run.completedAt = new Date().toISOString();
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       broadcastWorkflowStatus(run);
 
@@ -253,6 +368,7 @@ export class WorkflowRunService {
       run.status = 'failed';
       run.error = err instanceof Error ? err.message : 'Unknown error';
       run.completedAt = new Date().toISOString();
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       broadcastWorkflowStatus(run);
 
@@ -295,6 +411,7 @@ export class WorkflowRunService {
       // Re-queue this step at the front
       stepQueue.unshift(step.id);
 
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       log.info({ stepId: step.id, retry: stepRun.retries }, 'Retrying step');
       return true;
@@ -328,6 +445,7 @@ export class WorkflowRunService {
         retries: stepRun.retries,
       };
 
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       log.info({ failedStep: step.id, retryStep: retryStep.id }, 'Routing to retry step');
       return true;
@@ -337,6 +455,7 @@ export class WorkflowRunService {
     if (policy.escalate_to === 'human') {
       run.status = 'blocked';
       run.error = policy.escalate_message || `Step ${step.id} failed`;
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
 
       log.warn({ runId: run.id, stepId: step.id }, 'Workflow blocked');
@@ -345,6 +464,7 @@ export class WorkflowRunService {
 
     if (policy.escalate_to === 'skip') {
       stepRun.status = 'skipped';
+      this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       log.info({ stepId: step.id }, 'Skipping failed step');
       return true;
@@ -418,7 +538,11 @@ export class WorkflowRunService {
     }
 
     // Sort by startedAt descending
-    runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    runs.sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
+        b.id.localeCompare(a.id)
+    );
 
     return runs;
   }
@@ -498,7 +622,11 @@ export class WorkflowRunService {
     }
 
     // Sort by startedAt descending
-    metadata.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    metadata.sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
+        b.id.localeCompare(a.id)
+    );
 
     log.info({ count: metadata.length }, 'Listed run metadata');
     return metadata;
@@ -527,6 +655,9 @@ export class WorkflowRunService {
     if (!workflow) {
       throw new NotFoundError(`Workflow ${run.workflowId} not found`);
     }
+
+    this.syncPipelineSummary(run, workflow);
+    await this.saveRun(run);
 
     log.info({ runId }, 'Resuming workflow run');
 

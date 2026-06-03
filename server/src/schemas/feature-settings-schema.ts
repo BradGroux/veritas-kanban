@@ -19,6 +19,27 @@ const GeneralSettingsSchema = z
   .strict()
   .optional();
 
+const ProductModeSettingsSchema = z
+  .object({
+    selectedMode: z
+      .enum([
+        'board-only',
+        'agent-ready',
+        'solo-coding',
+        'pm-orchestration',
+        'qa-review',
+        'research',
+        'operations',
+        'advanced',
+        'custom',
+      ])
+      .optional(),
+    lastSelectedAt: z.string().datetime().optional(),
+    dismissedHints: z.array(z.string().max(80)).max(50).optional(),
+  })
+  .strict()
+  .optional();
+
 const DashboardWidgetSettingsSchema = z
   .object({
     showTokenUsage: z.boolean().optional(),
@@ -230,6 +251,7 @@ const SharedResourcesSettingsSchema = z
 const FeatureSettingsPatchObjectSchema = z
   .object({
     general: GeneralSettingsSchema,
+    productMode: ProductModeSettingsSchema,
     board: BoardSettingsSchema,
     tasks: TaskBehaviorSettingsSchema,
     markdown: MarkdownSettingsSchema,

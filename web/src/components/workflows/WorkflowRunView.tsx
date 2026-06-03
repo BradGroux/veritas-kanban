@@ -10,6 +10,12 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import {
+  buildWorkflowPipelineSummary,
+  type WorkflowDefinition as SharedWorkflowDefinition,
+  type WorkflowPipelineSummary,
+  type WorkflowSubagentRunStatus,
+} from '@veritas-kanban/shared';
 import { API_BASE } from '@/lib/config';
 import {
   Alert,
@@ -34,6 +40,7 @@ import {
   Clock,
   Pause,
   History,
+  Users,
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -78,6 +85,7 @@ interface WorkflowDefinition {
   id: string;
   name: string;
   version: number;
+  pipeline?: SharedWorkflowDefinition['pipeline'];
   steps: Array<{
     id: string;
     name: string;
@@ -106,6 +114,32 @@ function workflowTimelineAttemptId(run: WorkflowRun): string {
   return (
     safeContextString(run.context?.attemptId) ?? safeContextString(run.context?.runId) ?? run.id
   );
+}
+
+function isWorkflowPipelineSummary(value: unknown): value is WorkflowPipelineSummary {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as { roles?: unknown }).roles) &&
+    typeof (value as { totals?: unknown }).totals === 'object'
+  );
+}
+
+function pipelineStatusColor(status: WorkflowSubagentRunStatus): string {
+  if (status === 'completed') return 'green';
+  if (status === 'failed') return 'red';
+  if (status === 'blocked') return 'yellow';
+  if (status === 'running') return 'blue';
+  if (status === 'skipped') return 'gray';
+  return 'gray';
+}
+
+function formatPipelineDuration(seconds?: number): string {
+  if (!seconds || seconds <= 0) return 'time pending';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
 }
 
 export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
@@ -281,6 +315,11 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   const config = statusConfig[run.status];
   const Icon = config.icon;
+  const pipelineSummary = isWorkflowPipelineSummary(run.context?.pipeline)
+    ? run.context.pipeline
+    : workflow?.pipeline
+      ? buildWorkflowPipelineSummary(workflow as SharedWorkflowDefinition)
+      : undefined;
 
   return (
     <Stack gap="lg">
@@ -372,6 +411,8 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
         </Stack>
       </Paper>
 
+      {pipelineSummary && <WorkflowPipelineCard pipeline={pipelineSummary} />}
+
       {/* Step Timeline */}
       <Stack gap="sm">
         <Title order={2} className="text-lg">
@@ -396,6 +437,87 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
         })}
       </Stack>
     </Stack>
+  );
+}
+
+function WorkflowPipelineCard({ pipeline }: { pipeline: WorkflowPipelineSummary }) {
+  return (
+    <Paper className="p-6" radius="md" withBorder>
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start">
+          <div className="space-y-1">
+            <Group gap="xs">
+              <ThemeIcon variant="light" color="cyan">
+                <Users className="h-4 w-4" />
+              </ThemeIcon>
+              <Title order={2} className="text-lg">
+                Orchestration Pipeline
+              </Title>
+            </Group>
+            <Text size="sm" c="dimmed">
+              {pipeline.parentAgent ? `Parent: ${pipeline.parentAgent}` : 'No parent agent'} ·{' '}
+              {pipeline.completion}
+            </Text>
+          </div>
+          <Group gap="xs">
+            <Badge variant="light">{pipeline.mode}</Badge>
+            <Badge variant="outline">
+              {pipeline.totals.completed}/{pipeline.totals.roles} complete
+            </Badge>
+          </Group>
+        </Group>
+
+        {pipeline.handoff && (
+          <Text size="sm" c="dimmed">
+            {pipeline.handoff}
+          </Text>
+        )}
+
+        <Stack gap="xs">
+          {pipeline.roles.map((role) => (
+            <div key={role.id} className="rounded-md border bg-background/50 p-3">
+              <Group justify="space-between" align="flex-start" gap="md">
+                <div className="min-w-0 space-y-1">
+                  <Group gap="xs">
+                    <Text fw={600}>{role.label}</Text>
+                    <Badge size="xs" variant="outline">
+                      {role.agent}
+                    </Badge>
+                    {role.required !== false && (
+                      <Badge size="xs" variant="light" color="gray">
+                        required
+                      </Badge>
+                    )}
+                  </Group>
+                  <Text size="sm" c="dimmed">
+                    {role.scope}
+                  </Text>
+                  <Text size="sm">Deliverable: {role.deliverable}</Text>
+                  <Text size="xs" c="dimmed">
+                    {role.verification.length} verification step
+                    {role.verification.length === 1 ? '' : 's'}
+                    {role.dependsOn?.length ? ` · depends on ${role.dependsOn.join(', ')}` : ''}
+                  </Text>
+                </div>
+                <Stack gap={4} align="flex-end">
+                  <Badge color={pipelineStatusColor(role.status)} variant="light">
+                    {role.status}
+                  </Badge>
+                  <Text size="xs" c="dimmed">
+                    {formatPipelineDuration(role.telemetry.durationSeconds)}
+                  </Text>
+                  {role.telemetry.tokensUsed !== undefined && (
+                    <Text size="xs" c="dimmed">
+                      {role.telemetry.tokensUsed.toLocaleString()} tokens
+                    </Text>
+                  )}
+                </Stack>
+              </Group>
+            </div>
+          ))}
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }
 

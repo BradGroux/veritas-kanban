@@ -51,6 +51,7 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
   useFeatureSettings: () => ({
     settings: {
       general: { humanDisplayName: 'Human' },
+      productMode: { selectedMode: 'advanced', dismissedHints: [] },
     },
   }),
   useDebouncedFeatureUpdate: () => ({
@@ -68,6 +69,7 @@ vi.mock('@/hooks/useTheme', () => ({
 describe('General settings Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.validatePath.mockResolvedValue({ valid: true, branches: ['main', 'develop'] });
   });
 
@@ -75,10 +77,12 @@ describe('General settings Mantine migration', () => {
     cleanup();
   });
 
-  it('renders the base general settings controls through direct Mantine primitives', () => {
+  it('renders the base general settings controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<GeneralTab />);
 
     expect(screen.getByRole('switch', { name: 'Toggle dark mode' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Product Mode' })).toBeDefined();
+    expect(screen.getAllByText('Advanced / Operator').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('textbox', { name: 'Display Name (Squad Chat)' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Add Repo' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Default' })).toBeDefined();
@@ -90,6 +94,13 @@ describe('General settings Mantine migration', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle dark mode' }));
 
     expect(mocks.setTheme).toHaveBeenCalledWith('light');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Product Mode' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'QA Review' }));
+
+    expect(mocks.debouncedUpdate).toHaveBeenCalledWith({
+      productMode: expect.objectContaining({ selectedMode: 'qa-review' }),
+    });
   });
 
   it('renders add repository controls and branch selection through Mantine inputs', async () => {

@@ -279,6 +279,17 @@ describe('Feature Settings Schema', () => {
     expect(result.agents?.timeoutMinutes).toBe(30);
   });
 
+  it('should accept product mode settings', () => {
+    const result = FeatureSettingsPatchSchema.parse({
+      productMode: {
+        selectedMode: 'qa-review',
+        lastSelectedAt: '2026-06-03T12:00:00.000Z',
+        dismissedHints: ['workflow-panel'],
+      },
+    });
+    expect(result.productMode?.selectedMode).toBe('qa-review');
+  });
+
   it('should accept telemetry settings', () => {
     const result = FeatureSettingsPatchSchema.parse({
       telemetry: { enabled: true, retentionDays: 30 },

@@ -1,5 +1,9 @@
 import yaml from 'yaml';
-import type { WorkflowSkillAuditSummary } from '@veritas-kanban/shared';
+import {
+  buildWorkflowPipelineSummary,
+  type WorkflowPipelineSummary,
+  type WorkflowSkillAuditSummary,
+} from '@veritas-kanban/shared';
 import type {
   ToolPolicy,
   WorkflowDefinition,
@@ -21,6 +25,7 @@ export type WorkflowLintCategory =
   | 'policy'
   | 'secret'
   | 'skill'
+  | 'pipeline'
   | 'client'
   | 'output'
   | 'schedule';
@@ -62,6 +67,7 @@ export interface WorkflowRecipeMaterialization {
   lint: WorkflowLintResult;
   preview: {
     steps: Array<{ id: string; name: string; type: WorkflowStep['type']; agent?: string }>;
+    pipeline?: WorkflowPipelineSummary;
     outputTargets: WorkflowOutputTarget[];
     schedule?: WorkflowSchedule;
   };
@@ -88,6 +94,7 @@ export interface WorkflowLintResult {
   ok: boolean;
   yaml?: string;
   messages: WorkflowLintMessage[];
+  pipelineSummary?: WorkflowPipelineSummary;
   summary: {
     errors: number;
     warnings: number;
@@ -107,6 +114,7 @@ export interface WorkflowDryRunResult extends WorkflowLintResult {
   canRun: boolean;
   checks: WorkflowDryRunCheck[];
   skillAudit?: WorkflowSkillAuditSummary;
+  pipelineSummary?: WorkflowPipelineSummary;
   workflow?: WorkflowDefinition;
 }
 
@@ -372,6 +380,264 @@ const RECIPES: WorkflowRecipeDefinition[] = [
             agent: 'reviewer',
             input: 'Review the implementation, verification output, and completion packet.',
             output: { file: 'completion-packet.md' },
+          },
+        ],
+      };
+    },
+  },
+  {
+    id: 'openclaw-audit',
+    name: '.openclaw Audit',
+    description:
+      'Delegate an OpenClaw configuration audit across scoped subagents and reconcile the findings.',
+    tags: ['openclaw', 'audit', 'orchestrator', 'subagents'],
+    inputs: [
+      {
+        id: 'workflowName',
+        label: 'Workflow name',
+        type: 'text',
+        required: true,
+        defaultValue: '.openclaw Audit Workflow',
+      },
+      {
+        id: 'scope',
+        label: 'Audit scope',
+        type: 'textarea',
+        required: true,
+        defaultValue:
+          '.openclaw config, gateway routing, storage retention, session cache, docs, and task follow-ups',
+      },
+      {
+        id: 'outputPath',
+        label: 'Audit report path',
+        type: 'text',
+        required: true,
+        defaultValue: 'work-products/openclaw-audit.md',
+      },
+    ],
+    defaultOutputTargets: [
+      outputTarget('dashboard-queue-item', 'OpenClaw audit queue item', { required: true }),
+      outputTarget('work-product', 'OpenClaw audit report', {
+        required: true,
+        path: 'work-products/openclaw-audit.md',
+      }),
+      outputTarget('completion-packet', 'Completion packet'),
+    ],
+    schedule: manualSchedule(),
+    build: (inputs) => {
+      const name = workflowName(inputs, '.openclaw Audit Workflow');
+      const scope = inputString(
+        inputs,
+        'scope',
+        '.openclaw config, gateway routing, storage retention, session cache, docs, and task follow-ups'
+      );
+      return {
+        id: workflowId(inputString(inputs, 'workflowId', name), 'openclaw-audit'),
+        name,
+        version: 1,
+        description:
+          'Fan out an OpenClaw audit to scoped subagents, reconcile evidence, and create follow-up tasks.',
+        pipeline: {
+          mode: 'orchestrated',
+          parentAgent: 'orchestrator',
+          completion: 'all-required',
+          handoff:
+            'Subagents return findings, evidence, task suggestions, and blockers to the orchestrator for reconciliation.',
+          roles: [
+            {
+              id: 'config-auditor',
+              label: 'Config Auditor',
+              agent: 'config-auditor',
+              scope: '.openclaw config, gateway, and channel routing settings.',
+              taskBrief:
+                'Inspect documented config paths and report drift, missing keys, or unsafe defaults.',
+              deliverable: 'Config findings with source file references and remediation notes.',
+              verification: [
+                'Config keys are source-backed.',
+                'No secret values are copied into findings.',
+              ],
+              telemetry: { timeBudgetMinutes: 20, tokenBudget: 12000 },
+            },
+            {
+              id: 'storage-auditor',
+              label: 'Storage Auditor',
+              agent: 'storage-auditor',
+              scope: 'Persistence, retention, cache, and backup behavior.',
+              taskBrief: 'Review storage lifecycle, cache cleanup, and backup portability notes.',
+              deliverable: 'Storage risk table with retained, cleanup, and blocked states.',
+              verification: [
+                'Retention claims cite code or docs.',
+                'Data deletion is not performed.',
+              ],
+              telemetry: { timeBudgetMinutes: 20, tokenBudget: 10000 },
+            },
+            {
+              id: 'security-auditor',
+              label: 'Security Auditor',
+              agent: 'security-auditor',
+              scope: 'Auth, permissions, tokens, logs, and remote gateway exposure.',
+              taskBrief:
+                'Find security regressions and secret leakage risks in the OpenClaw surface.',
+              deliverable: 'Security blockers first, followed by warnings and mitigations.',
+              verification: [
+                'Secrets are redacted.',
+                'Findings include affected route, config, or log surface.',
+              ],
+              telemetry: { timeBudgetMinutes: 25, tokenBudget: 14000 },
+            },
+            {
+              id: 'docs-auditor',
+              label: 'Docs Auditor',
+              agent: 'docs-auditor',
+              scope: 'README, SOP, config reference, and troubleshooting docs.',
+              taskBrief:
+                'Compare docs against the inspected runtime and list stale or missing guidance.',
+              deliverable: 'Docs freshness findings and suggested patch targets.',
+              verification: [
+                'Each docs issue names a source doc.',
+                'No external vendor references are invented.',
+              ],
+              telemetry: { timeBudgetMinutes: 15, tokenBudget: 8000 },
+            },
+            {
+              id: 'task-creator',
+              label: 'Follow-up Task Creator',
+              agent: 'task-creator',
+              scope: 'Confirmed audit findings only.',
+              taskBrief:
+                'Turn confirmed blockers and high-confidence warnings into actionable Veritas tasks.',
+              deliverable:
+                'Candidate task list with title, owner surface, priority, and acceptance criteria.',
+              verification: [
+                'Every task traces to a finding.',
+                'Duplicate tasks are called out instead of recreated.',
+              ],
+              dependsOn: ['config-auditor', 'storage-auditor', 'security-auditor', 'docs-auditor'],
+              telemetry: { timeBudgetMinutes: 15, tokenBudget: 8000 },
+            },
+          ],
+        },
+        schedule: manualSchedule(),
+        variables: {
+          scope,
+          recipe: 'openclaw-audit',
+        },
+        outputTargets: [
+          outputTarget('dashboard-queue-item', 'OpenClaw audit queue item', { required: true }),
+          outputTarget('work-product', 'OpenClaw audit report', {
+            required: true,
+            path: targetPath(inputs, 'work-products/openclaw-audit.md'),
+          }),
+          outputTarget('completion-packet', 'Completion packet'),
+        ],
+        agents: [
+          {
+            id: 'orchestrator',
+            name: 'Orchestrator',
+            role: 'planner',
+            description: 'Owns scope, delegation, synthesis, and final handoff.',
+            tools: ['Read', 'web_search'],
+          },
+          {
+            id: 'config-auditor',
+            name: 'Config Auditor',
+            role: 'reviewer',
+            description: 'Reviews OpenClaw config and gateway routing.',
+            tools: ['Read', 'exec', 'web_search'],
+          },
+          {
+            id: 'storage-auditor',
+            name: 'Storage Auditor',
+            role: 'reviewer',
+            description: 'Reviews storage lifecycle, cache, and backup behavior.',
+            tools: ['Read', 'exec', 'web_search'],
+          },
+          {
+            id: 'security-auditor',
+            name: 'Security Auditor',
+            role: 'reviewer',
+            description: 'Reviews auth, permissions, remote exposure, and redaction risks.',
+            tools: ['Read', 'exec', 'web_search'],
+          },
+          {
+            id: 'docs-auditor',
+            name: 'Docs Auditor',
+            role: 'reviewer',
+            description: 'Checks docs freshness against runtime behavior.',
+            tools: ['Read', 'web_search'],
+          },
+          {
+            id: 'task-creator',
+            name: 'Task Creator',
+            role: 'planner',
+            description: 'Creates issue-ready follow-up task candidates.',
+            tools: ['Read', 'web_search'],
+          },
+        ],
+        steps: [
+          {
+            id: 'brief',
+            name: 'Prepare delegation brief',
+            type: 'agent',
+            agent: 'orchestrator',
+            input: 'Prepare scoped audit briefs for {{ workflow.variables.scope }}.',
+            output: { file: 'openclaw-audit-brief.md' },
+          },
+          {
+            id: 'delegated-audit',
+            name: 'Run delegated audit',
+            type: 'parallel',
+            parallel: {
+              completion: 'all',
+              fail_fast: false,
+              timeout: 1800,
+              steps: [
+                {
+                  id: 'config-audit',
+                  agent: 'config-auditor',
+                  input:
+                    'Use the audit brief to inspect OpenClaw config and gateway routing. Return findings, evidence, verification, and blockers.',
+                },
+                {
+                  id: 'storage-audit',
+                  agent: 'storage-auditor',
+                  input:
+                    'Use the audit brief to inspect storage retention, caches, backups, and cleanup behavior. Return findings, evidence, verification, and blockers.',
+                },
+                {
+                  id: 'security-audit',
+                  agent: 'security-auditor',
+                  input:
+                    'Use the audit brief to inspect auth, permissions, remote exposure, and redaction risks. Return blockers first.',
+                },
+                {
+                  id: 'docs-audit',
+                  agent: 'docs-auditor',
+                  input:
+                    'Use the audit brief to inspect docs freshness and troubleshooting coverage. Return stale, missing, or risky guidance.',
+                },
+              ],
+            },
+            output: { file: 'delegated-audit-results.json' },
+            acceptance_criteria: ['completed'],
+          },
+          {
+            id: 'follow-up-tasks',
+            name: 'Prepare follow-up tasks',
+            type: 'agent',
+            agent: 'task-creator',
+            input:
+              'Read delegated audit results and produce issue-ready tasks only for confirmed findings.',
+            output: { file: 'openclaw-follow-up-tasks.md' },
+          },
+          {
+            id: 'reconcile',
+            name: 'Reconcile completion packet',
+            type: 'agent',
+            agent: 'orchestrator',
+            input:
+              'Reconcile subagent findings, evidence, follow-up tasks, verification, and blockers into the final audit report and completion packet.',
+            output: { file: 'openclaw-audit.md' },
           },
         ],
       };
@@ -697,6 +963,7 @@ export class WorkflowAuthoringService {
       lint,
       preview: {
         steps: workflow.steps.map(stepPreview),
+        pipeline: lint.pipelineSummary,
         outputTargets: workflow.outputTargets ?? [],
         schedule: workflow.schedule,
       },
@@ -748,6 +1015,7 @@ export class WorkflowAuthoringService {
       canRun: lint.summary.errors === 0,
       checks: this.buildChecks(lint.messages),
       skillAudit: lint.skillAudit,
+      pipelineSummary: lint.pipelineSummary,
       workflow: parsed.workflow,
     };
   }
@@ -763,10 +1031,16 @@ export class WorkflowAuthoringService {
   private async lintWorkflow(
     workflow: WorkflowDefinition,
     context: WorkflowDryRunContext
-  ): Promise<WorkflowLintResult & { skillAudit?: WorkflowSkillAuditSummary }> {
+  ): Promise<
+    WorkflowLintResult & {
+      skillAudit?: WorkflowSkillAuditSummary;
+      pipelineSummary?: WorkflowPipelineSummary;
+    }
+  > {
     const messages: WorkflowLintMessage[] = [];
 
     this.lintDefinition(workflow, messages);
+    const pipelineSummary = this.lintPipeline(workflow, messages);
     await this.lintToolPolicies(workflow, messages);
     const skillAudit = await this.lintSkillAudit(workflow, context, messages);
     this.lintSecrets(workflow, context, messages);
@@ -779,6 +1053,7 @@ export class WorkflowAuthoringService {
       ...this.resultFromMessages(messages),
       yaml: this.toYaml(workflow),
       skillAudit,
+      pipelineSummary,
     };
   }
 
@@ -1008,6 +1283,34 @@ export class WorkflowAuthoringService {
           )
         );
       }
+      if (step.type === 'parallel' && step.parallel?.steps) {
+        for (const duplicate of duplicateValues(
+          step.parallel.steps.map((subStep) => subStep.id).filter(Boolean)
+        )) {
+          messages.push(
+            message(
+              'error',
+              'definition',
+              `${path}.parallel.steps.${duplicate}`,
+              `Parallel step ${step.id || index} has duplicate substep ID ${duplicate}.`,
+              'Use unique parallel substep IDs.'
+            )
+          );
+        }
+        for (const [subIndex, subStep] of step.parallel.steps.entries()) {
+          if (!subStep.agent || !agentIds.has(subStep.agent)) {
+            messages.push(
+              message(
+                'error',
+                'definition',
+                `${path}.parallel.steps[${subIndex}].agent`,
+                `Parallel substep ${subStep.id || subIndex} references a missing agent.`,
+                'Select an existing agent for this parallel substep.'
+              )
+            );
+          }
+        }
+      }
       if (step.on_fail?.retry_step && !stepIds.has(step.on_fail.retry_step)) {
         messages.push(
           message(
@@ -1031,6 +1334,183 @@ export class WorkflowAuthoringService {
         );
       }
     }
+  }
+
+  private lintPipeline(
+    workflow: WorkflowDefinition,
+    messages: WorkflowLintMessage[]
+  ): WorkflowPipelineSummary | undefined {
+    const pipeline = workflow.pipeline;
+    if (!pipeline) return undefined;
+
+    if (pipeline.mode !== 'single-agent' && pipeline.mode !== 'orchestrated') {
+      messages.push(
+        message(
+          'error',
+          'pipeline',
+          'pipeline.mode',
+          `Unsupported pipeline mode ${String(pipeline.mode)}.`,
+          'Choose single-agent or orchestrated.'
+        )
+      );
+      return buildWorkflowPipelineSummary(workflow);
+    }
+
+    if (pipeline.mode === 'single-agent') {
+      return buildWorkflowPipelineSummary(workflow);
+    }
+
+    const agentIds = new Set(toArray(workflow.agents).map((agent) => agent.id));
+    const stepAgentIds = new Set(
+      toArray(workflow.steps).flatMap((step) => [
+        ...(step.agent ? [step.agent] : []),
+        ...(step.parallel?.steps ?? []).map((subStep) => subStep.agent),
+      ])
+    );
+    const roles = pipeline.roles ?? [];
+
+    if (!pipeline.parentAgent || !agentIds.has(pipeline.parentAgent)) {
+      messages.push(
+        message(
+          'error',
+          'pipeline',
+          'pipeline.parentAgent',
+          'Orchestrated pipeline references a missing parent agent.',
+          'Set pipeline.parentAgent to an existing workflow agent.'
+        )
+      );
+    }
+
+    if (roles.length === 0) {
+      messages.push(
+        message(
+          'error',
+          'pipeline',
+          'pipeline.roles',
+          'Orchestrated pipeline has no subagent roles.',
+          'Add scoped subagent roles with briefs, deliverables, and verification steps.'
+        )
+      );
+    }
+
+    for (const duplicate of duplicateValues(roles.map((role) => role.id).filter(Boolean))) {
+      messages.push(
+        message(
+          'error',
+          'pipeline',
+          `pipeline.roles.${duplicate}`,
+          `Duplicate pipeline role ID ${duplicate}.`,
+          'Use unique role IDs so handoffs and telemetry can be reconciled.'
+        )
+      );
+    }
+
+    const roleIds = new Set(roles.map((role) => role.id));
+    for (const [index, role] of roles.entries()) {
+      const path = `pipeline.roles[${index}]`;
+      if (!role.id) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.id`,
+            'Pipeline role ID is required.',
+            'Add a stable role ID.'
+          )
+        );
+      }
+      if (!role.label) {
+        messages.push(
+          message(
+            'warning',
+            'pipeline',
+            `${path}.label`,
+            `Pipeline role ${role.id || index} has no label.`,
+            'Add a user-facing role label for run views.'
+          )
+        );
+      }
+      if (!role.agent || !agentIds.has(role.agent)) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.agent`,
+            `Pipeline role ${role.id || index} references a missing agent.`,
+            'Attach each subagent role to an existing workflow agent.'
+          )
+        );
+      } else if (!stepAgentIds.has(role.agent)) {
+        messages.push(
+          message(
+            'warning',
+            'pipeline',
+            `${path}.agent`,
+            `Pipeline role ${role.id || index} is not used by a workflow step.`,
+            'Add an agent or parallel substep that delegates work to this role.'
+          )
+        );
+      }
+      if (!role.scope) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.scope`,
+            `Pipeline role ${role.id || index} has no scope.`,
+            'Define the subagent scope so the orchestrator can delegate safely.'
+          )
+        );
+      }
+      if (!role.taskBrief) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.taskBrief`,
+            `Pipeline role ${role.id || index} has no task brief.`,
+            'Add the brief template the subagent receives.'
+          )
+        );
+      }
+      if (role.required !== false && !role.deliverable) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.deliverable`,
+            `Required pipeline role ${role.id || index} has no deliverable contract.`,
+            'Describe the output the orchestrator must reconcile.'
+          )
+        );
+      }
+      if (role.required !== false && (!role.verification || role.verification.length === 0)) {
+        messages.push(
+          message(
+            'error',
+            'pipeline',
+            `${path}.verification`,
+            `Required pipeline role ${role.id || index} has no verification steps.`,
+            'Add at least one verification step for the role output.'
+          )
+        );
+      }
+      for (const dependency of role.dependsOn ?? []) {
+        if (!roleIds.has(dependency)) {
+          messages.push(
+            message(
+              'error',
+              'pipeline',
+              `${path}.dependsOn`,
+              `Pipeline role ${role.id || index} depends on missing role ${dependency}.`,
+              'Point dependencies at existing pipeline role IDs.'
+            )
+          );
+        }
+      }
+    }
+
+    return buildWorkflowPipelineSummary(workflow);
   }
 
   private async lintToolPolicies(
@@ -1374,6 +1854,7 @@ export class WorkflowAuthoringService {
       this.checkFor('permission', 'Permissions', messages),
       this.checkFor('policy', 'Policy gates and tools', messages),
       this.checkFor('skill', 'Skill audit', messages),
+      this.checkFor('pipeline', 'Orchestration pipeline', messages),
       this.checkFor('secret', 'Secrets', messages),
       this.checkFor('client', 'Client mode', messages),
       this.checkFor('output', 'Output targets', messages),

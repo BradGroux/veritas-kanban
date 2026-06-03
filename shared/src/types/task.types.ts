@@ -52,6 +52,7 @@ export interface TaskAttempt {
   threadId?: string;
   cloudUrl?: string;
   cloudTarget?: string;
+  orchestration?: import('./workflow.js').WorkflowPipelineSummary;
 }
 
 export interface Subtask {

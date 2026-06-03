@@ -40,6 +40,42 @@ const workflowRun = {
   status: 'running' as const,
   currentStep: 'build',
   startedAt: '2026-06-01T10:00:00Z',
+  context: {
+    pipeline: {
+      mode: 'orchestrated',
+      parentAgent: 'orchestrator',
+      completion: 'all-required',
+      roles: [
+        {
+          id: 'builder',
+          label: 'Builder',
+          agent: 'codex',
+          scope: 'Build the release artifact.',
+          taskBrief: 'Build the artifact.',
+          deliverable: 'Release artifact',
+          verification: ['Artifact exists.'],
+          dependsOn: [],
+          required: true,
+          status: 'completed',
+          telemetry: { durationSeconds: 120 },
+        },
+        {
+          id: 'smoke',
+          label: 'Smoke Tester',
+          agent: 'codex',
+          scope: 'Run smoke coverage.',
+          taskBrief: 'Smoke the artifact.',
+          deliverable: 'Smoke report',
+          verification: ['Smoke test passes.'],
+          dependsOn: ['builder'],
+          required: true,
+          status: 'running',
+          telemetry: {},
+        },
+      ],
+      totals: { roles: 2, required: 2, completed: 1, blocked: 0, failed: 0 },
+    },
+  },
   steps: [
     {
       stepId: 'build',
@@ -220,6 +256,27 @@ describe('workflow surfaces Mantine migration', () => {
           missingInputs: [],
           lint: { ok: true, messages: [], summary: { errors: 0, warnings: 0, info: 0 } },
           preview: {
+            pipeline: {
+              mode: 'orchestrated',
+              parentAgent: 'orchestrator',
+              completion: 'all-required',
+              roles: [
+                {
+                  id: 'builder',
+                  label: 'Builder',
+                  agent: 'worker',
+                  scope: 'Build the task.',
+                  taskBrief: 'Implement the task.',
+                  deliverable: 'Implementation summary',
+                  verification: ['Tests pass.'],
+                  dependsOn: [],
+                  required: true,
+                  status: 'pending',
+                  telemetry: {},
+                },
+              ],
+              totals: { roles: 1, required: 1, completed: 0, blocked: 0, failed: 0 },
+            },
             steps: [{ id: 'work', name: 'Do work', type: 'agent', agent: 'worker' }],
             outputTargets: [
               { type: 'task-update', label: 'Task update' },
@@ -244,6 +301,8 @@ describe('workflow surfaces Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Build Recipe' }));
 
     expect((await screen.findAllByText('Task update')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Orchestration Pipeline')).toBeDefined();
+    expect(screen.getByText(/Implementation summary/)).toBeDefined();
     expect(screen.getByText('No lint messages.')).toBeDefined();
 
     await user.click(screen.getByRole('button', { name: 'Save Workflow' }));
@@ -317,6 +376,8 @@ describe('workflow surfaces Mantine migration', () => {
 
     expect(await screen.findByText('Release workflow')).toBeDefined();
     expect(screen.getByText('Overall Progress')).toBeDefined();
+    expect(screen.getByText('Orchestration Pipeline')).toBeDefined();
+    expect(screen.getByText(/Smoke report/)).toBeDefined();
     expect(screen.queryByText('artifact ready')).toBeNull();
     expect(container.querySelector('.mantine-Progress-root')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Paper-root').length).toBeGreaterThanOrEqual(3);

@@ -133,6 +133,47 @@ describe('SQLite work products', () => {
           started: '2026-06-02T10:10:00.000Z',
           ended: '2026-06-02T10:20:00.000Z',
           model: 'gpt-5',
+          orchestration: {
+            mode: 'orchestrated',
+            parentAgent: 'orchestrator',
+            completion: 'all-required',
+            handoff: 'Subagents returned findings for reconciliation.',
+            totals: {
+              roles: 2,
+              required: 2,
+              completed: 1,
+              blocked: 1,
+              failed: 0,
+            },
+            roles: [
+              {
+                id: 'researcher',
+                label: 'Researcher',
+                agent: 'researcher',
+                scope: 'Inspect source material.',
+                taskBrief: 'Find relevant facts.',
+                deliverable: 'Research findings.',
+                verification: ['Cites source material.'],
+                dependsOn: [],
+                required: true,
+                status: 'completed',
+                telemetry: { durationSeconds: 120, tokensUsed: 1200 },
+              },
+              {
+                id: 'reviewer',
+                label: 'Reviewer',
+                agent: 'reviewer',
+                scope: 'Check the research.',
+                taskBrief: 'Validate findings.',
+                deliverable: 'Review notes.',
+                verification: ['Lists blockers first.'],
+                dependsOn: ['researcher'],
+                required: true,
+                status: 'blocked',
+                telemetry: { durationSeconds: 60 },
+              },
+            ],
+          },
         },
         verificationSteps: [
           {
@@ -187,6 +228,8 @@ describe('SQLite work products', () => {
           packetType: 'completion_packet',
           generatedFromRevision: 7,
           verificationPassed: 1,
+          orchestrationRoles: 2,
+          orchestrationBlocked: 1,
         },
       });
       expect(packet.sourceLinks).toEqual(
@@ -199,6 +242,8 @@ describe('SQLite work products', () => {
         ])
       );
       expect(restarted.exportProduct(packet)).toContain('Verification Evidence');
+      expect(restarted.exportProduct(packet)).toContain('Orchestration Pipeline');
+      expect(restarted.exportProduct(packet)).toContain('Reviewer is blocked');
       expect(restarted.exportProduct(packet)).not.toContain('/Users/bradgroux/private');
 
       const regenerated = await restarted.generateCompletionPacket({

@@ -11,6 +11,7 @@ export interface WorkflowDefinition {
   version: number;
   description: string;
   config?: WorkflowConfig;
+  pipeline?: WorkflowPipeline;
   outputTargets?: WorkflowOutputTarget[];
   schedule?: WorkflowSchedule;
   agents: WorkflowAgent[];
@@ -29,6 +30,76 @@ export interface WorkflowConfig {
   progress_file?: string;
   telemetry_tags?: string[];
 }
+
+export type WorkflowPipelineMode = 'single-agent' | 'orchestrated';
+export type WorkflowPipelineCompletion = 'all-required' | 'any-success' | 'manual-review';
+export type WorkflowSubagentRunStatus =
+  | 'pending'
+  | 'running'
+  | 'blocked'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
+
+export interface WorkflowSubagentTelemetry {
+  tokenBudget?: number;
+  tokensUsed?: number;
+  timeBudgetMinutes?: number;
+  durationSeconds?: number;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface WorkflowSubagentRole {
+  id: string;
+  label: string;
+  agent: string;
+  scope: string;
+  taskBrief: string;
+  deliverable: string;
+  verification: string[];
+  dependsOn?: string[];
+  required?: boolean;
+  telemetry?: WorkflowSubagentTelemetry;
+}
+
+export interface WorkflowPipeline {
+  mode: WorkflowPipelineMode;
+  parentAgent?: string;
+  completion?: WorkflowPipelineCompletion;
+  handoff?: string;
+  roles?: WorkflowSubagentRole[];
+}
+
+export interface WorkflowSubagentRoleSummary extends WorkflowSubagentRole {
+  status: WorkflowSubagentRunStatus;
+  telemetry: WorkflowSubagentTelemetry;
+}
+
+export interface WorkflowPipelineSummary {
+  mode: WorkflowPipelineMode;
+  parentAgent?: string;
+  completion: WorkflowPipelineCompletion;
+  handoff?: string;
+  roles: WorkflowSubagentRoleSummary[];
+  totals: {
+    roles: number;
+    required: number;
+    completed: number;
+    blocked: number;
+    failed: number;
+  };
+}
+
+export type WorkflowPipelineRoleStatusPatch = Partial<
+  Record<
+    string,
+    {
+      status?: WorkflowSubagentRunStatus;
+      telemetry?: WorkflowSubagentTelemetry;
+    }
+  >
+>;
 
 export type WorkflowOutputTargetType =
   | 'task-update'

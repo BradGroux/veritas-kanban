@@ -14,6 +14,7 @@ import type {
   WorkProductRender,
   WorkProductVersion,
   Task,
+  WorkflowPipelineSummary,
 } from '@veritas-kanban/shared';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkProductRepository } from '../storage/sqlite/work-product-repository.js';
@@ -422,6 +423,7 @@ export class WorkProductService {
         { heading: 'Delivered', body: this.deliveredSection(task) },
         { heading: 'Changed Files And Sources', body: this.changedFilesSection(task) },
         { heading: 'Verification Evidence', body: this.verificationSection(task) },
+        { heading: 'Orchestration Pipeline', body: this.orchestrationSection(task) },
         { heading: 'Review And Approval', body: this.reviewSection(task) },
         { heading: 'Cost And Duration', body: this.costDurationSection(task) },
         { heading: 'Deliverables And Attachments', body: this.deliverablesSection(task) },
@@ -473,6 +475,9 @@ export class WorkProductService {
       attachmentCount: task.attachments?.length ?? 0,
       reviewDecision: task.review?.decision ?? null,
       qaGatePassed: task.qaGate?.passed ?? null,
+      orchestrationRoles: task.attempt?.orchestration?.totals.roles ?? 0,
+      orchestrationBlocked: task.attempt?.orchestration?.totals.blocked ?? 0,
+      orchestrationFailed: task.attempt?.orchestration?.totals.failed ?? 0,
     };
   }
 
@@ -579,6 +584,47 @@ export class WorkProductService {
       );
     }
     return this.packetText(lines.join('\n'));
+  }
+
+  private orchestrationSection(task: Task): string {
+    const orchestration = task.attempt?.orchestration;
+    if (!orchestration) {
+      return 'No orchestrator/subagent pipeline summary was recorded for this task attempt.';
+    }
+
+    const lines = [
+      `Mode: ${orchestration.mode}`,
+      orchestration.parentAgent ? `Parent agent: ${orchestration.parentAgent}` : null,
+      `Completion policy: ${orchestration.completion}`,
+      orchestration.handoff ? `Handoff: ${orchestration.handoff}` : null,
+      `Roles: ${orchestration.totals.completed}/${orchestration.totals.roles} completed, ${orchestration.totals.blocked} blocked, ${orchestration.totals.failed} failed.`,
+      '',
+      ...orchestration.roles.map((role) => this.orchestrationRoleLine(role)),
+    ].filter((line): line is string => line !== null);
+
+    const blockers = orchestration.roles.filter(
+      (role) => role.status === 'blocked' || role.status === 'failed'
+    );
+    if (blockers.length > 0) {
+      lines.push(
+        '',
+        'Blockers:',
+        this.markdownList(
+          blockers.map((role) => `${role.label} is ${role.status}: ${role.deliverable}`)
+        )
+      );
+    }
+
+    return this.packetText(lines.join('\n'));
+  }
+
+  private orchestrationRoleLine(role: WorkflowPipelineSummary['roles'][number]): string {
+    const verification =
+      role.verification.length > 0
+        ? `${role.verification.length} verification step(s)`
+        : 'no verification steps';
+    const duration = this.formatDurationSeconds(role.telemetry.durationSeconds);
+    return `- ${role.label} (${role.agent}) is ${role.status}. Scope: ${role.scope}. Deliverable: ${role.deliverable}. Verification: ${verification}. Duration: ${duration}`;
   }
 
   private reviewSection(task: Task): string {

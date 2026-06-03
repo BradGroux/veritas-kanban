@@ -73,6 +73,7 @@ const workflowCreateSchema = z.object({
   version: z.number().int().min(0),
   description: z.string().max(2000),
   config: z.unknown().optional(),
+  pipeline: z.record(z.string(), z.unknown()).optional(),
   outputTargets: z.array(z.record(z.string(), z.unknown())).max(12).optional(),
   schedule: z.record(z.string(), z.unknown()).optional(),
   agents: z.array(z.unknown()).min(1).max(20),

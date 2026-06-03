@@ -6,6 +6,7 @@ import {
   DESKTOP_ONBOARDING_STORAGE_KEY,
   DesktopOnboardingPanel,
 } from '@/components/auth/DesktopOnboarding';
+import { PRODUCT_MODE_PENDING_STORAGE_KEY } from '@/lib/product-modes';
 import { SetupScreen } from '@/components/auth/SetupScreen';
 import { AuthProvider } from '@/hooks/useAuth';
 
@@ -51,6 +52,7 @@ describe('desktop onboarding', () => {
 
     expect(screen.getByText('Secure Your Board')).toBeDefined();
     expect(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY)).toBe('true');
+    expect(window.localStorage.getItem(PRODUCT_MODE_PENDING_STORAGE_KEY)).toBe('board-only');
   });
 
   it('validates a remote URL through the desktop bridge', async () => {

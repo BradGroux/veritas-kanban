@@ -22,6 +22,7 @@ import { SystemHealthBar } from './components/layout/SystemHealthBar';
 import { MobileShell } from './components/layout/MobileShell';
 import { PwaStatusBanner } from './components/layout/PwaStatusBanner';
 import { VIEW_BY_ID, type AppView } from './lib/views';
+import { usePendingProductMode } from './hooks/usePendingProductMode';
 
 // Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
 const ActivityFeed = lazy(() =>
@@ -174,6 +175,7 @@ function AppContent() {
   const { isConnected, connectionState, reconnectAttempt, reconnect } = useTaskSync();
   const { status: authStatus, refreshStatus } = useAuth();
   const [showDesktopOnboarding, setShowDesktopOnboarding] = useState(false);
+  usePendingProductMode();
 
   useEffect(() => {
     const openDiagnostics = () => setShowDesktopOnboarding(true);

@@ -3,6 +3,7 @@ import type {
   WorkflowAgent,
   WorkflowDefinition,
   WorkflowOutputTarget,
+  WorkflowPipelineSummary,
   WorkflowOutputTargetType,
   WorkflowSchedule,
   WorkflowStep,
@@ -605,6 +606,13 @@ function WorkflowMaterializationPreview({
 
         <Divider />
 
+        {materialized.preview.pipeline && (
+          <>
+            <PipelineSummaryPanel pipeline={materialized.preview.pipeline} />
+            <Divider />
+          </>
+        )}
+
         <Stack gap={6}>
           {materialized.preview.steps.map((step) => (
             <Group key={step.id} justify="space-between">
@@ -629,6 +637,54 @@ function WorkflowMaterializationPreview({
         <MessageList messages={materialized.lint.messages} />
       </Stack>
     </Paper>
+  );
+}
+
+function PipelineSummaryPanel({ pipeline }: { pipeline: WorkflowPipelineSummary }) {
+  return (
+    <Stack gap="xs">
+      <Group justify="space-between" align="center">
+        <Text fw={600} size="sm">
+          Orchestration Pipeline
+        </Text>
+        <Group gap={6}>
+          <Badge size="xs" variant="light">
+            {pipeline.mode}
+          </Badge>
+          <Badge size="xs" variant="outline">
+            {pipeline.totals.roles} roles
+          </Badge>
+        </Group>
+      </Group>
+      {pipeline.roles.slice(0, 6).map((role) => (
+        <Paper key={role.id} p="xs" radius="sm" withBorder>
+          <Group justify="space-between" align="flex-start" gap="sm">
+            <div className="min-w-0">
+              <Text size="sm" fw={600}>
+                {role.label}
+              </Text>
+              <Text size="xs" c="dimmed" lineClamp={2}>
+                {role.scope}
+              </Text>
+              <Text size="xs" c="dimmed" lineClamp={2}>
+                Deliverable: {role.deliverable}
+              </Text>
+            </div>
+            <Stack gap={4} align="flex-end">
+              <Badge size="xs" variant="outline">
+                {role.agent}
+              </Badge>
+              <Badge size="xs" color={role.status === 'failed' ? 'red' : 'gray'} variant="light">
+                {role.status}
+              </Badge>
+              <Text size="xs" c="dimmed">
+                {role.verification.length} checks
+              </Text>
+            </Stack>
+          </Group>
+        </Paper>
+      ))}
+    </Stack>
   );
 }
 
@@ -1156,6 +1212,8 @@ function DryRunResultPanel({ result }: { result: WorkflowDryRunResult }) {
             )}
           </Stack>
         )}
+
+        {result.pipelineSummary && <PipelineSummaryPanel pipeline={result.pipelineSummary} />}
 
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xs">
           {result.checks.map((check) => (

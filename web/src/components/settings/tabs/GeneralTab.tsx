@@ -6,6 +6,7 @@ import {
   Group,
   Modal,
   Select,
+  SimpleGrid,
   Stack,
   Switch,
   Text,
@@ -32,10 +33,16 @@ import {
   Sun,
   User,
 } from 'lucide-react';
-import type { RepoConfig, AgentConfig } from '@veritas-kanban/shared';
+import type { RepoConfig, AgentConfig, ProductModeId } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
+import { PRODUCT_MODE_DEFINITIONS, productModeDefinition } from '@/lib/product-modes';
+
+const PRODUCT_MODE_OPTIONS = PRODUCT_MODE_DEFINITIONS.map((mode) => ({
+  value: mode.id,
+  label: mode.label,
+}));
 
 export function GeneralTab() {
   const { data: config, isLoading } = useConfig();
@@ -43,6 +50,9 @@ export function GeneralTab() {
   const { theme, setTheme } = useTheme();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
+  const selectedProductMode =
+    settings.productMode?.selectedMode ?? DEFAULT_FEATURE_SETTINGS.productMode.selectedMode;
+  const activeProductMode = productModeDefinition(selectedProductMode);
   const [localDisplayName, setLocalDisplayName] = useState(
     settings.general?.humanDisplayName ?? DEFAULT_FEATURE_SETTINGS.general.humanDisplayName
   );
@@ -72,6 +82,50 @@ export function GeneralTab() {
             aria-label="Toggle dark mode"
             size="sm"
           />
+        </div>
+      </div>
+
+      {/* Product Mode */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium">Product Mode</h3>
+        <div className="rounded-md border p-4 bg-card space-y-4">
+          <Group justify="space-between" align="flex-start" gap="md">
+            <div className="min-w-0 flex-1 space-y-1">
+              <Group gap={8}>
+                <Badge variant="light" color={selectedProductMode === 'advanced' ? 'gray' : 'cyan'}>
+                  {activeProductMode.label}
+                </Badge>
+                <Text size="sm" fw={600}>
+                  Focus preset
+                </Text>
+              </Group>
+              <Text size="sm" c="dimmed">
+                {activeProductMode.description}
+              </Text>
+            </div>
+            <Select
+              label="Product Mode"
+              value={selectedProductMode}
+              data={PRODUCT_MODE_OPTIONS}
+              allowDeselect={false}
+              maw={260}
+              onChange={(value) => {
+                if (!value) return;
+                debouncedUpdate({
+                  productMode: {
+                    selectedMode: value as ProductModeId,
+                    lastSelectedAt: new Date().toISOString(),
+                  },
+                });
+              }}
+            />
+          </Group>
+
+          <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
+            <ModeDetail label="Surfaces" items={activeProductMode.visibleSurfaces} />
+            <ModeDetail label="Task Template" items={[activeProductMode.defaultTaskTemplate]} />
+            <ModeDetail label="Shortcuts" items={activeProductMode.commandShortcuts} />
+          </SimpleGrid>
         </div>
       </div>
 
@@ -154,6 +208,23 @@ export function GeneralTab() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ModeDetail({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-md border bg-background/50 p-3">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
+        {label}
+      </Text>
+      <Group gap={6} mt={8}>
+        {items.slice(0, 4).map((item) => (
+          <Badge key={item} size="xs" variant="outline" color="gray">
+            {item}
+          </Badge>
+        ))}
+      </Group>
     </div>
   );
 }

@@ -853,7 +853,7 @@ export class WorkflowStepExecutor {
     const prompt = this.renderTemplate(subStep.input, context);
 
     // Placeholder: Simulate agent execution
-    const result = `Agent ${subStep.agent} executed sub-step ${subStep.id}\n\nPrompt:\n${prompt}\n\nSTATUS: done\nOUTPUT: Sub-step ${subStep.id} complete`;
+    const result = `Delegation event: ${parentStepId} -> ${subStep.id} (${subStep.agent})\n\nAgent ${subStep.agent} executed sub-step ${subStep.id}\n\nPrompt:\n${prompt}\n\nSTATUS: done\nOUTPUT: Sub-step ${subStep.id} complete`;
 
     // Parse output
     const parsed = this.parseStepOutput(result, {

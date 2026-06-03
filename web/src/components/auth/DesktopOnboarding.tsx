@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { persistPendingProductMode, productModeForSetupMode } from '@/lib/product-modes';
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = 'veritas-desktop-onboarding-complete';
 
@@ -578,6 +579,7 @@ export function DesktopOnboardingPanel({
               className="sm:min-w-44"
               disabled={!canContinue}
               onClick={() => {
+                persistPendingProductMode(productModeForSetupMode(selectedMode));
                 markDesktopOnboardingComplete();
                 onContinue();
               }}

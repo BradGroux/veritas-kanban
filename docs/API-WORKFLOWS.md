@@ -438,6 +438,23 @@ tools, steps, variables, inputs, and descriptions. Local mode warns on unscanned
 skills. Remote and cloud modes fail missing, unscanned, or blocked skills unless
 the skill has an active reviewed exception.
 
+Dry-run responses may include `pipelineSummary` when a workflow declares
+`pipeline`. Pipeline lint validates the parent agent, subagent role references,
+deliverable contracts, verification steps, dependencies, and whether each role is
+used by a workflow step or parallel substep.
+
+### GET /api/workflows/recipes
+
+Returns reusable workflow recipes. v5 recipes include `.openclaw Audit`, which
+materializes an orchestrated pipeline with config, storage, security, docs, and
+follow-up task subagent roles.
+
+### POST /api/workflows/recipes/:recipeId/materialize
+
+Materializes a recipe into workflow JSON/YAML and a preview. When a recipe has a
+pipeline, `preview.pipeline` contains role, status, scope, deliverable,
+dependency, verification, and telemetry-budget metadata for the authoring UI.
+
 ### POST /api/workflows/:id/dry-run
 
 Dry-run a saved workflow definition with the same response shape and context
@@ -481,7 +498,8 @@ curl -X POST http://localhost:3001/api/workflows/feature-dev/runs \
 Before a run starts, the server dry-runs the saved workflow and blocks remote or
 cloud execution when a referenced shared skill is missing, unscanned, or blocked.
 The run context includes the resulting `skillAudit` summary when execution is
-allowed.
+allowed. Workflows with `pipeline` metadata also include `context.pipeline`,
+which rolls subagent role status and time/token telemetry into the run record.
 
 **Response**:
 

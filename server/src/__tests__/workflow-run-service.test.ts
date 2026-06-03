@@ -94,6 +94,88 @@ describe('WorkflowRunService', () => {
     expect(mockBroadcastWorkflowStatus).toHaveBeenCalled();
   });
 
+  it('rolls orchestrated pipeline roles into workflow run context', async () => {
+    mockLoadWorkflow.mockResolvedValue(
+      makeWorkflow({
+        agents: [
+          { id: 'orchestrator', name: 'Orchestrator' },
+          { id: 'researcher', name: 'Researcher' },
+          { id: 'reviewer', name: 'Reviewer' },
+        ],
+        pipeline: {
+          mode: 'orchestrated',
+          parentAgent: 'orchestrator',
+          completion: 'all-required',
+          roles: [
+            {
+              id: 'researcher',
+              label: 'Researcher',
+              agent: 'researcher',
+              scope: 'Inspect source material.',
+              taskBrief: 'Find relevant facts.',
+              deliverable: 'Research findings.',
+              verification: ['Cites source material.'],
+            },
+            {
+              id: 'reviewer',
+              label: 'Reviewer',
+              agent: 'reviewer',
+              scope: 'Check the research.',
+              taskBrief: 'Validate findings.',
+              deliverable: 'Review notes.',
+              verification: ['Lists blockers first.'],
+              dependsOn: ['researcher'],
+            },
+          ],
+        },
+        steps: [
+          {
+            id: 'delegate',
+            type: 'parallel',
+            parallel: {
+              completion: 'all',
+              steps: [
+                { id: 'research', agent: 'researcher', input: 'Research.' },
+                { id: 'review', agent: 'reviewer', input: 'Review.' },
+              ],
+            },
+          },
+        ],
+      })
+    );
+    mockExecuteStep.mockImplementation(async (step: any) => ({
+      output: {
+        subSteps: step.parallel.steps.map((subStep: any) => ({
+          id: subStep.id,
+          status: 'fulfilled',
+          output: `done ${subStep.id}`,
+        })),
+        completed: step.parallel.steps.length,
+        failed: 0,
+      },
+      outputPath: `/tmp/${step.id}.json`,
+    }));
+
+    const run = await service.startRun('wf-1');
+
+    expect(run.context.pipeline).toMatchObject({
+      totals: { roles: 2, completed: 0 },
+    });
+
+    await vi.waitFor(async () => {
+      const saved = await service.getRun(run.id);
+      expect(saved.context.pipeline).toMatchObject({
+        totals: { roles: 2, completed: 2, failed: 0 },
+      });
+      expect(saved.context.pipeline.roles).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'researcher', status: 'completed' }),
+          expect.objectContaining({ id: 'reviewer', status: 'completed' }),
+        ])
+      );
+    });
+  });
+
   it('handles retry, retry_step, skip, block, and workflow failure', async () => {
     const delaySpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any) => {
       fn();

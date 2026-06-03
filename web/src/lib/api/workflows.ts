@@ -1,6 +1,7 @@
 import type {
   WorkflowDefinition,
   WorkflowOutputTarget,
+  WorkflowPipelineSummary,
   WorkflowSchedule,
   WorkflowStep,
   WorkflowSkillAuditSummary,
@@ -17,6 +18,7 @@ export type WorkflowLintCategory =
   | 'policy'
   | 'secret'
   | 'skill'
+  | 'pipeline'
   | 'client'
   | 'output'
   | 'schedule';
@@ -84,6 +86,7 @@ export interface WorkflowDryRunResult extends WorkflowLintResult {
   canRun: boolean;
   checks: WorkflowDryRunCheck[];
   skillAudit?: WorkflowSkillAuditSummary;
+  pipelineSummary?: WorkflowPipelineSummary;
   workflow?: WorkflowDefinition;
 }
 
@@ -102,6 +105,7 @@ export interface WorkflowRecipeMaterialization {
   lint: WorkflowLintResult;
   preview: {
     steps: Array<{ id: string; name: string; type: WorkflowStep['type']; agent?: string }>;
+    pipeline?: WorkflowPipelineSummary;
     outputTargets: WorkflowOutputTarget[];
     schedule?: WorkflowSchedule;
   };
