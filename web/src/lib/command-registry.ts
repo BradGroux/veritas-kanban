@@ -111,7 +111,8 @@ const BOARD_SHORTCUTS: readonly CommandDescriptor[] = [
     icon: 'Keyboard',
     category: 'Board',
     action: { type: 'board-shortcut', shortcut: 'open-task' },
-    keywords: ['view', 'detail', 'open'],
+    keywords: ['view', 'detail', 'open', 'work', 'work view'],
+    aliases: ['open work view', 'task work'],
     disabledReason: SELECTED_TASK_REQUIRED,
   },
 ];

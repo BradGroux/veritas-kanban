@@ -47,4 +47,12 @@ describe('command registry', () => {
 
     expect(boardCommand?.disabledReason).toBe('Select a task on the board to use this shortcut.');
   });
+
+  it('makes the selected-task Work View path discoverable from command search', () => {
+    const commands = createCommandRegistry({ theme: 'dark' });
+    const openTask = commands.find((command) => command.id === 'open-task');
+
+    expect(openTask?.keywords).toEqual(expect.arrayContaining(['work', 'work view']));
+    expect(openTask?.aliases).toEqual(expect.arrayContaining(['open work view', 'task work']));
+  });
 });
