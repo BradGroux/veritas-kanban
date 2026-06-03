@@ -879,7 +879,7 @@ Role-based tool restrictions for least-privilege security.
 
 **Enforcement:**
 
-- Tool filter passed to OpenClaw `sessions_spawn` (ready for integration)
+- Tool filters are resolved before OpenClaw workflow session execution and passed through the provider-adapter boundary.
 - Denied list takes precedence over allowed list
 
 ### Session Isolation
