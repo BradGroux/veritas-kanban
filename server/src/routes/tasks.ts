@@ -1,4 +1,4 @@
-import { Router, type Router as RouterType } from 'express';
+import { Router, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getTaskService } from '../services/task-service.js';
 import { WorktreeService } from '../services/worktree-service.js';
@@ -17,6 +17,7 @@ import { sanitizeTaskFields } from '../utils/sanitize.js';
 import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
+import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -24,6 +25,18 @@ const worktreeService = new WorktreeService();
 const blockingService = getBlockingService();
 const delegationService = getDelegationService();
 const progressService = getProgressService();
+
+function attachTaskIdentityDiagnostics(res: Response, diagnostics: TaskIdentityDiagnostics): void {
+  if (!diagnostics.hasConflicts) return;
+
+  res.set('X-Veritas-Task-Identity-Conflicts', String(diagnostics.conflictCount));
+  res.locals.taskIdentityDiagnostics = diagnostics;
+}
+
+async function getRouteTaskIdentityDiagnostics(): Promise<TaskIdentityDiagnostics> {
+  const { getBacklogService } = await import('../services/backlog-service.js');
+  return getBacklogService().getTaskIdentityDiagnostics();
+}
 
 // Validation schemas
 const reviewCommentSchema = z.object({
@@ -226,6 +239,7 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     let tasks = await taskService.listTasks();
+    attachTaskIdentityDiagnostics(res, await getRouteTaskIdentityDiagnostics());
 
     // --- Filtering ---
     const statusFilter = req.query.status as string | undefined;

@@ -31,9 +31,18 @@ import {
   type TaskSyncContext,
 } from './agent-registry-service.js';
 import { getWorkProductService } from './work-product-service.js';
-import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
+import { getTasksActiveDir, getTasksArchiveDir, getTasksBacklogDir } from '../utils/paths.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTaskRepository } from '../storage/sqlite/task-repository.js';
+import {
+  buildTaskIdentityConflictDetails,
+  filterTaskIdentityDiagnostics,
+  scanTaskIdentityDiagnostics,
+  type TaskIdentityCandidate,
+  type TaskIdentityDiagnostics,
+  type TaskIdentityLocation,
+  type TaskIdentityScanSource,
+} from './task-identity-diagnostics.js';
 
 const log = createLogger('task-cache');
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
@@ -73,6 +82,7 @@ const DEFAULT_ARCHIVE_DIR = getTasksArchiveDir();
 export interface TaskServiceOptions {
   tasksDir?: string;
   archiveDir?: string;
+  backlogDir?: string;
   telemetryService?: TelemetryService;
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
@@ -85,6 +95,7 @@ const WRITE_DEBOUNCE_MS = 200;
 export class TaskService {
   private tasksDir: string;
   private archiveDir: string;
+  private backlogDir: string | null;
   private telemetry: TelemetryService;
   private sqliteDatabase: SqliteDatabase | null = null;
   private sqliteTasks: SqliteTaskRepository | null = null;
@@ -103,6 +114,8 @@ export class TaskService {
   constructor(options: TaskServiceOptions = {}) {
     this.tasksDir = options.tasksDir || DEFAULT_TASKS_DIR;
     this.archiveDir = options.archiveDir || DEFAULT_ARCHIVE_DIR;
+    this.backlogDir =
+      options.backlogDir ?? (options.tasksDir || options.archiveDir ? null : getTasksBacklogDir());
     this.telemetry = options.telemetryService || getTelemetryService();
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
@@ -366,6 +379,99 @@ export class TaskService {
     await fs.mkdir(this.archiveDir, { recursive: true });
   }
 
+  getIdentityScanSources(): TaskIdentityScanSource[] {
+    if (this.sqliteTasks) return [];
+    const sources: TaskIdentityScanSource[] = [
+      { location: 'active', dir: this.tasksDir },
+      { location: 'archive', dir: this.archiveDir },
+    ];
+    if (this.backlogDir) {
+      sources.push({ location: 'backlog', dir: this.backlogDir });
+    }
+    return sources;
+  }
+
+  getActiveTasksDir(): string {
+    return this.tasksDir;
+  }
+
+  getActiveTasksDestinationPath(): string {
+    return this.diagnosticPath(this.tasksDir);
+  }
+
+  async getTaskIdentityDiagnostics(
+    extraSources: TaskIdentityScanSource[] = []
+  ): Promise<TaskIdentityDiagnostics> {
+    return scanTaskIdentityDiagnostics([...this.getIdentityScanSources(), ...extraSources]);
+  }
+
+  async assertTaskIdentityIntegrity(
+    operation: string,
+    taskId?: string,
+    options: {
+      allowSameLocationTaskIdDuplicates?: boolean;
+      candidates?: TaskIdentityCandidate[];
+      destinationPath?: string;
+      excludeTaskIds?: string[];
+      extraSources?: TaskIdentityScanSource[];
+    } = {}
+  ): Promise<void> {
+    let diagnostics = filterTaskIdentityDiagnostics(
+      await scanTaskIdentityDiagnostics(
+        [...this.getIdentityScanSources(), ...(options.extraSources ?? [])],
+        {
+          candidates: options.candidates,
+          excludeTaskIds: options.excludeTaskIds,
+        }
+      ),
+      taskId
+    );
+
+    if (options.allowSameLocationTaskIdDuplicates && taskId) {
+      const conflicts = diagnostics.conflicts.filter((conflict) => {
+        if (conflict.kind !== 'task-id') return true;
+        if (conflict.id !== taskId) return true;
+        const locations = new Set(conflict.sources.map((source) => source.location));
+        return locations.size > 1;
+      });
+      diagnostics = {
+        hasConflicts: conflicts.length > 0,
+        conflictCount: conflicts.length,
+        conflicts,
+      };
+    }
+
+    if (!diagnostics.hasConflicts) return;
+
+    throw new ConflictError(
+      'Duplicate task identity detected',
+      buildTaskIdentityConflictDetails(diagnostics, operation, {
+        taskId,
+        destinationPath: options.destinationPath,
+      })
+    );
+  }
+
+  private taskIdentityCandidate(
+    task: Task,
+    location: TaskIdentityLocation,
+    filepath: string
+  ): TaskIdentityCandidate {
+    return {
+      location,
+      path: filepath,
+      filename: path.basename(filepath),
+      taskId: task.id,
+      title: task.title,
+      git: task.git,
+      github: task.github,
+    };
+  }
+
+  private diagnosticPath(filepath: string): string {
+    return path.relative(path.dirname(this.tasksDir), filepath);
+  }
+
   private generateId(): string {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return `task_${date}_${nanoid(6)}`;
@@ -594,6 +700,11 @@ export class TaskService {
   }
 
   async getTask(id: string): Promise<Task | null> {
+    await this.assertTaskIdentityIntegrity('task.get', id);
+    return this.getTaskWithoutIdentityCheck(id);
+  }
+
+  private async getTaskWithoutIdentityCheck(id: string): Promise<Task | null> {
     if (this.sqliteTasks) {
       return this.sqliteTasks.findById(id);
     }
@@ -647,6 +758,11 @@ export class TaskService {
       const filepath = path.join(this.tasksDir, filename);
       const content = this.taskToMarkdown(task);
 
+      await this.assertTaskIdentityIntegrity('task.create', task.id, {
+        candidates: [this.taskIdentityCandidate(task, 'active', filepath)],
+        destinationPath: this.diagnosticPath(filepath),
+      });
+
       await withFileLock(filepath, async () => {
         this.markWrite();
         await fs.writeFile(filepath, content, 'utf-8');
@@ -673,10 +789,12 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
+    await this.assertTaskIdentityIntegrity('task.update', id);
+
     // Initial read to check existence and compute the lock filepath.
     // NOTE: this data may be stale by the time we acquire the lock —
     // the actual merge happens inside the lock with a fresh cache read.
-    const task = await this.getTask(id);
+    const task = await this.getTaskWithoutIdentityCheck(id);
     if (!task) return null;
 
     // Handle git field separately to merge properly
@@ -883,6 +1001,12 @@ export class TaskService {
       if (this.sqliteTasks) {
         await this.sqliteTasks.replaceActive(updatedTask);
       } else {
+        await this.assertTaskIdentityIntegrity('task.update', id, {
+          candidates: [this.taskIdentityCandidate(updatedTask, 'active', filepath)],
+          destinationPath: this.diagnosticPath(filepath),
+          excludeTaskIds: [id],
+        });
+
         const content = this.taskToMarkdown(updatedTask);
         this.markWrite();
 
@@ -1023,7 +1147,11 @@ export class TaskService {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const task = await this.getTask(id);
+    await this.assertTaskIdentityIntegrity('task.delete', id, {
+      allowSameLocationTaskIdDuplicates: true,
+    });
+
+    const task = await this.getTaskWithoutIdentityCheck(id);
     if (!task) return false;
 
     if (this.sqliteTasks) {
@@ -1062,7 +1190,11 @@ export class TaskService {
   }
 
   async archiveTask(id: string): Promise<boolean> {
-    const task = await this.getTask(id);
+    await this.assertTaskIdentityIntegrity('task.archive', id, {
+      allowSameLocationTaskIdDuplicates: true,
+    });
+
+    const task = await this.getTaskWithoutIdentityCheck(id);
     if (!task) return false;
 
     if (this.sqliteTasks) {
@@ -1171,6 +1303,8 @@ export class TaskService {
   }
 
   async restoreTask(id: string): Promise<Task | null> {
+    await this.assertTaskIdentityIntegrity('task.restore', id);
+
     if (this.sqliteTasks) {
       const sqliteTasks = this.sqliteTasks;
       const restoredTask = await this.runSqliteMutation(() => sqliteTasks.restore(id));

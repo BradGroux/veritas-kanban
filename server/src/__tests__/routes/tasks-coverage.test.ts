@@ -7,32 +7,45 @@ import request from 'supertest';
 import express from 'express';
 
 // Use vi.hoisted to declare mocks that vi.mock factories can reference
-const { mockTaskService, mockWorktreeService, mockBlockingService, mockActivityService } =
-  vi.hoisted(() => ({
-    mockTaskService: {
-      listTasks: vi.fn(),
-      getTask: vi.fn(),
-      createTask: vi.fn(),
-      updateTask: vi.fn(),
-      deleteTask: vi.fn(),
-      reorderTasks: vi.fn(),
-    },
-    mockWorktreeService: {
-      createWorktree: vi.fn(),
-      getWorktreeStatus: vi.fn(),
-      deleteWorktree: vi.fn(),
-      rebaseWorktree: vi.fn(),
-      mergeWorktree: vi.fn(),
-      openInVSCode: vi.fn(),
-    },
-    mockBlockingService: {
-      getBlockingStatus: vi.fn(),
-      canMoveToInProgress: vi.fn(),
-    },
-    mockActivityService: {
-      logActivity: vi.fn().mockResolvedValue(undefined),
-    },
-  }));
+const {
+  mockTaskService,
+  mockWorktreeService,
+  mockBlockingService,
+  mockActivityService,
+  mockBacklogService,
+} = vi.hoisted(() => ({
+  mockTaskService: {
+    listTasks: vi.fn(),
+    getTask: vi.fn(),
+    createTask: vi.fn(),
+    updateTask: vi.fn(),
+    deleteTask: vi.fn(),
+    reorderTasks: vi.fn(),
+    getIdentityScanSources: vi.fn().mockReturnValue([]),
+  },
+  mockWorktreeService: {
+    createWorktree: vi.fn(),
+    getWorktreeStatus: vi.fn(),
+    deleteWorktree: vi.fn(),
+    rebaseWorktree: vi.fn(),
+    mergeWorktree: vi.fn(),
+    openInVSCode: vi.fn(),
+  },
+  mockBlockingService: {
+    getBlockingStatus: vi.fn(),
+    canMoveToInProgress: vi.fn(),
+  },
+  mockActivityService: {
+    logActivity: vi.fn().mockResolvedValue(undefined),
+  },
+  mockBacklogService: {
+    getTaskIdentityDiagnostics: vi
+      .fn()
+      .mockResolvedValue({ hasConflicts: false, conflictCount: 0, conflicts: [] }),
+    getBacklogCount: vi.fn().mockResolvedValue(0),
+    demoteToBacklog: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/task-service.js', () => ({
   getTaskService: () => mockTaskService,
@@ -53,6 +66,10 @@ vi.mock('../../services/blocking-service.js', () => ({
 
 vi.mock('../../services/activity-service.js', () => ({
   activityService: mockActivityService,
+}));
+
+vi.mock('../../services/backlog-service.js', () => ({
+  getBacklogService: () => mockBacklogService,
 }));
 
 vi.mock('../../services/broadcast-service.js', () => ({
@@ -105,6 +122,41 @@ describe('Tasks Routes (actual module)', () => {
       const res = await request(app).get('/api/tasks');
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
+    });
+
+    it('should expose duplicate identity diagnostics as a response header', async () => {
+      mockTaskService.listTasks.mockResolvedValue([]);
+      mockBacklogService.getTaskIdentityDiagnostics.mockResolvedValueOnce({
+        hasConflicts: true,
+        conflictCount: 1,
+        conflicts: [
+          {
+            kind: 'task-id',
+            id: 'task_20260603_dup',
+            sources: [
+              {
+                location: 'active',
+                path: 'active/task_20260603_dup-active.md',
+                filename: 'task_20260603_dup-active.md',
+                taskId: 'task_20260603_dup',
+                businessIds: [],
+              },
+              {
+                location: 'backlog',
+                path: 'backlog/task_20260603_dup-backlog.md',
+                filename: 'task_20260603_dup-backlog.md',
+                taskId: 'task_20260603_dup',
+                businessIds: [],
+              },
+            ],
+          },
+        ],
+      });
+
+      const res = await request(app).get('/api/tasks');
+
+      expect(res.status).toBe(200);
+      expect(res.headers['x-veritas-task-identity-conflicts']).toBe('1');
     });
   });
 
