@@ -221,6 +221,26 @@ describe('ClawdbotAgentService Codex providers', () => {
         'codex'
       );
     });
+    expect(mockStartStep).toHaveBeenCalledWith(
+      expect.any(String),
+      'complete',
+      expect.objectContaining({
+        eventType: 'turn.completed',
+        totalTokens: 20,
+        model: 'gpt-5.5',
+        finalResult: 'Codex completed the task.',
+      })
+    );
+    expect(mockStartStep).toHaveBeenCalledWith(
+      expect.any(String),
+      'complete',
+      expect.objectContaining({
+        eventType: 'run.completed',
+        success: true,
+        provider: 'codex-cli',
+        model: 'gpt-5.5',
+      })
+    );
   });
 
   it('maps Codex file events to task deliverables linked to the attempt', async () => {
@@ -258,6 +278,15 @@ describe('ClawdbotAgentService Codex providers', () => {
         })
       );
     });
+    expect(mockStartStep).toHaveBeenCalledWith(
+      'attempt_fixture',
+      'execute',
+      expect.objectContaining({
+        eventType: 'item.completed',
+        tool: 'file_change',
+        files: ['server/src/services/codex-provider.ts'],
+      })
+    );
     expect(mockLogActivity).toHaveBeenCalledWith(
       'deliverable_added',
       task.id,

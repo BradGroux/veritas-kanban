@@ -149,6 +149,30 @@ const trace: AgentRunTrace = {
         summary: 'pnpm test TOKEN=super-secret-token',
       },
     },
+    {
+      type: 'execute',
+      sequence: 3,
+      startedAt: '2026-06-01T10:02:00.000Z',
+      endedAt: '2026-06-01T10:02:02.000Z',
+      durationMs: 2000,
+      metadata: {
+        eventType: 'item.completed',
+        tool: 'file_change',
+        files: ['web/src/components/task/AgentRunTimelinePanel.tsx'],
+      },
+    },
+    {
+      type: 'complete',
+      sequence: 4,
+      startedAt: '2026-06-01T10:05:00.000Z',
+      endedAt: '2026-06-01T10:05:00.000Z',
+      durationMs: 0,
+      metadata: {
+        eventType: 'turn.completed',
+        summary: 'Timeline replay captured with final result evidence.',
+        finalResult: 'Timeline replay captured with final result evidence.',
+      },
+    },
   ],
 };
 
@@ -173,6 +197,16 @@ const telemetryEvents: AnyTelemetryEvent[] = [
     outputTokens: 800,
     totalTokens: 2000,
     cost: 0.14,
+    attemptId: 'attempt-1',
+  },
+  {
+    id: 'evt-completed',
+    type: 'run.completed',
+    timestamp: '2026-06-01T10:05:00.000Z',
+    taskId: 'task-timeline',
+    agent: 'veritas',
+    durationMs: 300000,
+    success: true,
     attemptId: 'attempt-1',
   },
 ];
@@ -215,6 +249,7 @@ const notification = {
   title: 'Timeline notification',
   delivered: false,
   createdAt: '2026-06-01T10:06:45.000Z',
+  targetUrl: 'veritas://task/task-timeline?tab=timeline&attempt=attempt-1',
   source: { attemptId: 'attempt-1' },
 };
 
@@ -270,6 +305,7 @@ describe('agent run timeline Mantine surface', () => {
     expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index + 1));
     expect(events.some((event) => event.type === 'prompt')).toBe(true);
     expect(events.some((event) => event.type === 'command')).toBe(true);
+    expect(events.some((event) => event.type === 'file')).toBe(true);
     expect(events.some((event) => event.type === 'usage')).toBe(true);
     expect(events.some((event) => event.title.includes('Work product saved'))).toBe(true);
     expect(events.some((event) => event.title.includes('Permission pending'))).toBe(true);
@@ -321,6 +357,27 @@ describe('agent run timeline Mantine surface', () => {
     ).toMatchObject({
       target: 'agent',
     });
+
+    const deepLinkEvents = buildAgentRunTimelineEvents({
+      task,
+      notifications: [
+        {
+          ...notification,
+          id: 'notification-deeplink',
+        },
+      ],
+      traces: [],
+      telemetryEvents: [],
+      workProducts: [],
+      selectedAttemptId: 'attempt-1',
+    });
+
+    expect(
+      deepLinkEvents.find((event) => event.id === 'notification-notification-deeplink')?.link
+    ).toMatchObject({
+      href: 'veritas://task/task-timeline?tab=timeline&attempt=attempt-1',
+      target: 'external',
+    });
   });
 
   it('renders run replay controls, filters by event type, and links back to task surfaces', async () => {
@@ -336,6 +393,11 @@ describe('agent run timeline Mantine surface', () => {
     expect(screen.getByText('Run Timeline')).toBeDefined();
     expect(screen.getByText('Stored replay')).toBeDefined();
     expect(screen.getByText('command.completed')).toBeDefined();
+    expect(
+      screen.getAllByText('Timeline replay captured with final result evidence.').length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('2,000 tokens / $0.14')).toBeDefined();
+    expect(screen.getByText('5m 0s')).toBeDefined();
     expect(screen.getByText('Run replay report')).toBeDefined();
     expect(screen.getByText('Timeline notification')).toBeDefined();
     expect(screen.getByText('Workflow blocked: wf-release')).toBeDefined();

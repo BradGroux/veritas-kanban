@@ -47,6 +47,18 @@ const LOGS_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'logs');
 const CLAWDBOT_GATEWAY = process.env.CLAWDBOT_GATEWAY || 'http://127.0.0.1:18789';
 export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
 
+const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
+  [/\bsk-[A-Za-z0-9_-]{12,}/g, 'sk-[REDACTED]'],
+  [/\bghp_[A-Za-z0-9_]{12,}/g, 'ghp_[REDACTED]'],
+  [/\bgithub_pat_[A-Za-z0-9_]{12,}/g, 'github_pat_[REDACTED]'],
+  [
+    /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)\s*=\s*([^\s"'`]+)/gi,
+    '$1=[REDACTED]',
+  ],
+  [/\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi, '$1=[REDACTED]'],
+];
+
 export interface AgentProviderStartContext {
   task: Task;
   agentConfig?: AgentConfig;
@@ -397,6 +409,19 @@ export class ClawdbotAgentService {
     emitter.emit('complete', { status, summary });
 
     const task = await this.taskService.getTask(taskId);
+    const completionStepType = result.success ? 'complete' : 'error';
+    getTraceService().startStep(attemptId, completionStepType, {
+      eventType: result.success ? 'run.completed' : 'run.failed',
+      summary: this.redactTraceText(summary),
+      success: result.success,
+      status,
+      error: result.error ? this.redactTraceText(result.error) : undefined,
+      durationMs,
+      agent: pending.agent,
+      provider: pending.provider,
+      model: pending.model,
+    });
+    getTraceService().endStep(attemptId, completionStepType);
     await getTelemetryService().emit<RunCompletedEvent>({
       type: 'run.completed',
       taskId,
@@ -846,7 +871,14 @@ export class ClawdbotAgentService {
       task.project,
       this.buildTraceMetadata(task, attemptId, provider, agentConfig)
     );
-    getTraceService().startStep(attemptId, 'init', { provider });
+    getTraceService().startStep(attemptId, 'init', {
+      provider,
+      eventType: 'run.started',
+      summary: 'Agent run initialized',
+      agent,
+      model: agentConfig?.model,
+      worktreePath: task.git?.worktreePath,
+    });
     getTraceService().endStep(attemptId, 'init');
     await activityService.logActivity(
       'agent_started',
@@ -902,12 +934,28 @@ export class ClawdbotAgentService {
   ): Promise<void> {
     const agent =
       agentConfig?.type || (agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex');
-    getTraceService().startStep(attemptId, this.codexTraceStepType(type), {
+    const files = this.extractCodexFiles(event);
+    const usage = this.extractCodexUsage(event);
+    const command = this.extractCodexCommand(event);
+    const tool = this.extractCodexTool(event, type);
+    const error = this.extractCodexError(event, type);
+    const sanitizedSummary = summary ? this.redactTraceText(summary) : undefined;
+    const stepType = this.codexTraceStepType(type);
+    getTraceService().startStep(attemptId, stepType, {
       provider: agentConfig?.provider || 'codex-cli',
       eventType: type,
-      summary,
+      summary: sanitizedSummary,
+      command: command ? this.redactTraceText(command) : undefined,
+      tool,
+      files,
+      error: error ? this.redactTraceText(error) : undefined,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      totalTokens: usage?.totalTokens,
+      model: usage?.model || agentConfig?.model,
+      finalResult: stepType === 'complete' ? sanitizedSummary : undefined,
     });
-    getTraceService().endStep(attemptId, this.codexTraceStepType(type));
+    getTraceService().endStep(attemptId, stepType);
 
     if (this.shouldLogCodexActivity(type)) {
       await activityService.logActivity(
@@ -918,13 +966,12 @@ export class ClawdbotAgentService {
           attemptId,
           provider: agentConfig?.provider || 'codex-cli',
           eventType: type,
-          summary,
+          summary: sanitizedSummary,
         },
         agent
       );
     }
 
-    const files = this.extractCodexFiles(event);
     if (files.length > 0) {
       await this.attachCodexDeliverables(task, attemptId, agent, files);
     }
@@ -932,7 +979,7 @@ export class ClawdbotAgentService {
 
   private codexTraceStepType(type: string): 'execute' | 'complete' | 'error' {
     if (type.includes('failed') || type === 'error') return 'error';
-    if (type.includes('completed')) return 'complete';
+    if (type === 'turn.completed' || type === 'response.completed') return 'complete';
     return 'execute';
   }
 
@@ -980,6 +1027,113 @@ export class ClawdbotAgentService {
 
     visit(event);
     return [...files].slice(0, 25);
+  }
+
+  private extractCodexCommand(event: unknown): string | undefined {
+    const command = this.findCodexString(event, [
+      'command',
+      'cmd',
+      'shell_command',
+      'shellCommand',
+    ]);
+    const args = this.findCodexStringArray(event, ['args', 'argv']);
+    if (command && args.length > 0) return `${command} ${args.join(' ')}`;
+    return command ?? (args.length > 0 ? args.join(' ') : undefined);
+  }
+
+  private extractCodexTool(event: unknown, fallbackType: string): string | undefined {
+    const tool = this.findCodexString(event, [
+      'tool',
+      'tool_name',
+      'toolName',
+      'function_name',
+      'functionName',
+    ]);
+    if (tool) return tool;
+
+    if (event && typeof event === 'object') {
+      const item = (event as Record<string, unknown>).item;
+      if (item && typeof item === 'object') {
+        const itemType = (item as Record<string, unknown>).type;
+        if (typeof itemType === 'string' && itemType.trim()) return itemType.trim();
+      }
+    }
+
+    return fallbackType;
+  }
+
+  private extractCodexError(event: unknown, type: string): string | undefined {
+    if (!type.includes('failed') && type !== 'error') return undefined;
+    const error = this.findCodexString(event, ['error', 'message']);
+    return error;
+  }
+
+  private findCodexString(event: unknown, keys: string[]): string | undefined {
+    const wanted = new Set(keys);
+    const seen = new Set<unknown>();
+
+    const visit = (value: unknown, key?: string): string | undefined => {
+      if (!value) return undefined;
+      if (typeof value === 'string') {
+        if (key && wanted.has(key) && value.trim()) return value.trim();
+        return undefined;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const result = visit(item, key);
+          if (result) return result;
+        }
+        return undefined;
+      }
+      if (typeof value !== 'object' || seen.has(value)) return undefined;
+      seen.add(value);
+      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+        const result = visit(childValue, childKey);
+        if (result) return result;
+      }
+      return undefined;
+    };
+
+    return visit(event);
+  }
+
+  private findCodexStringArray(event: unknown, keys: string[]): string[] {
+    const wanted = new Set(keys);
+    const seen = new Set<unknown>();
+
+    const visit = (value: unknown, key?: string): string[] => {
+      if (!value) return [];
+      if (Array.isArray(value)) {
+        if (key && wanted.has(key)) {
+          return value
+            .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+            .map((item) => item.trim())
+            .slice(0, 20);
+        }
+        for (const item of value) {
+          const result = visit(item, key);
+          if (result.length > 0) return result;
+        }
+        return [];
+      }
+      if (typeof value !== 'object' || seen.has(value)) return [];
+      seen.add(value);
+      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+        const result = visit(childValue, childKey);
+        if (result.length > 0) return result;
+      }
+      return [];
+    };
+
+    return visit(event);
+  }
+
+  private redactTraceText(value: string): string {
+    let redacted = value;
+    for (const [pattern, replacement] of TRACE_SECRET_PATTERNS) {
+      redacted = redacted.replace(pattern, replacement);
+    }
+    return redacted.length > 2000 ? `${redacted.slice(0, 2000)}...` : redacted;
   }
 
   private looksLikeFilePath(value: string): boolean {

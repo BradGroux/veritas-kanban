@@ -166,6 +166,50 @@ function formatDurationMs(value?: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
+function formatTokenCount(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 'Not recorded';
+  return `${Math.round(value).toLocaleString()} tokens`;
+}
+
+function formatCost(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 'No cost recorded';
+  return `$${value.toFixed(2)}`;
+}
+
+function formatRunStatus(value?: string): string {
+  switch (value) {
+    case 'complete':
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+    case 'error':
+      return 'Failed';
+    case 'running':
+      return 'Running';
+    case 'pending':
+      return 'Pending';
+    default:
+      return 'Unknown';
+  }
+}
+
+function runStatusColor(value?: string): string {
+  switch (value) {
+    case 'complete':
+    case 'completed':
+      return 'green';
+    case 'failed':
+    case 'error':
+      return 'red';
+    case 'running':
+      return 'blue';
+    case 'pending':
+      return 'yellow';
+    default:
+      return 'gray';
+  }
+}
+
 function getEventAttemptId(event: AnyTelemetryEvent): string | undefined {
   return isRunEvent(event) ? event.attemptId : undefined;
 }
@@ -176,12 +220,13 @@ function safeString(value: unknown): string | undefined {
   return sanitized.length > 0 ? sanitized : undefined;
 }
 
-function safeExternalHref(value: unknown): string | undefined {
+function safeTimelineHref(value: unknown): string | undefined {
   const href = safeString(value);
   if (!href) return undefined;
+  if (href.startsWith('/') && !href.startsWith('//')) return href;
   try {
     const parsed = new URL(href);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? href : undefined;
+    return ['http:', 'https:', 'veritas:'].includes(parsed.protocol) ? href : undefined;
   } catch {
     return undefined;
   }
@@ -207,7 +252,7 @@ function workflowStartedAt(run: WorkflowRun): string {
 
 function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
   const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
-  const href = safeExternalHref(sourceLink?.href);
+  const href = safeTimelineHref(sourceLink?.href);
   if (sourceLink && href) {
     return {
       label: sourceLink.label || 'Open source',
@@ -219,7 +264,7 @@ function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['li
 }
 
 function deliverableLink(deliverable: Deliverable): AgentRunTimelineEvent['link'] {
-  const href = safeExternalHref(deliverable.path);
+  const href = safeTimelineHref(deliverable.path);
   if (href) {
     return { label: 'Open deliverable', href, target: 'external' };
   }
@@ -291,8 +336,14 @@ export function getTimelineEventType(
 function titleForStep(type: AgentRunTimelineEventType, step: AgentRunTraceStep): string {
   const eventType = safeString(step.metadata?.eventType);
   const summary = safeString(step.metadata?.summary);
+  const command = safeString(step.metadata?.command);
+  const tool = safeString(step.metadata?.tool);
+  const error = safeString(step.metadata?.error);
   if (eventType) return eventType;
   if (summary) return summary.length > 80 ? `${summary.slice(0, 77)}...` : summary;
+  if (command) return command.length > 80 ? `${command.slice(0, 77)}...` : command;
+  if (error) return error.length > 80 ? `${error.slice(0, 77)}...` : error;
+  if (tool) return tool;
 
   switch (type) {
     case 'prompt':
@@ -304,6 +355,22 @@ function titleForStep(type: AgentRunTimelineEventType, step: AgentRunTraceStep):
     default:
       return `${EVENT_LABELS[type]} event`;
   }
+}
+
+function detailForStep(step: AgentRunTraceStep): string | undefined {
+  const summary = safeString(step.metadata?.summary);
+  if (summary) return summary;
+  const error = safeString(step.metadata?.error);
+  if (error) return error;
+  const command = safeString(step.metadata?.command);
+  if (command) return command;
+  const tool = safeString(step.metadata?.tool);
+  if (tool) return tool;
+  const files = Array.isArray(step.metadata?.files)
+    ? step.metadata.files.filter((file): file is string => typeof file === 'string')
+    : [];
+  if (files.length > 0) return files.slice(0, 3).join(', ');
+  return undefined;
 }
 
 function telemetryTitle(event: AnyTelemetryEvent): string {
@@ -358,6 +425,63 @@ function metadataForTaskPrompt(task: Task, trace?: AgentRunTrace): Record<string
     workspaceId: trace?.metadata?.workspaceId,
     sessionKey: trace?.metadata?.sessionKey,
     runKey: trace?.metadata?.runKey || task.attempt?.id,
+  };
+}
+
+interface TimelineRunSummary {
+  status: string;
+  durationMs?: number;
+  totalTokens?: number;
+  cost?: number;
+  finalResult?: string;
+}
+
+function summarizeTimelineRun(
+  task: Task,
+  trace: AgentRunTrace | undefined,
+  telemetryEvents: AnyTelemetryEvent[],
+  selectedAttemptId: string | null
+): TimelineRunSummary {
+  const attempt =
+    task.attempt?.id === selectedAttemptId || (!selectedAttemptId && task.attempt)
+      ? task.attempt
+      : task.attempts?.find((candidate) => candidate.id === selectedAttemptId);
+  const relevantRunEvents = telemetryEvents.filter(isRunEvent).filter((event) => {
+    if (event.taskId !== task.id) return false;
+    return !selectedAttemptId || getEventAttemptId(event) === selectedAttemptId;
+  });
+  const completionEvent = [...relevantRunEvents]
+    .reverse()
+    .find((event) => event.type === 'run.completed' || event.type === 'run.error');
+  const usageEvent = [...relevantRunEvents].reverse().find((event) => event.type === 'run.tokens');
+  const traceResultStep = [...(trace?.steps ?? [])]
+    .reverse()
+    .find((step) => step.type === 'complete' || step.type === 'error');
+  const startedAt = attempt?.started ? new Date(attempt.started).getTime() : undefined;
+  const endedAt = attempt?.ended ? new Date(attempt.ended).getTime() : undefined;
+  const attemptDuration =
+    startedAt !== undefined && endedAt !== undefined && Number.isFinite(endedAt - startedAt)
+      ? endedAt - startedAt
+      : undefined;
+
+  return {
+    status:
+      trace?.status ||
+      attempt?.status ||
+      (completionEvent?.type === 'run.error' || completionEvent?.success === false
+        ? 'failed'
+        : completionEvent?.type === 'run.completed'
+          ? 'completed'
+          : undefined) ||
+      'unknown',
+    durationMs: trace?.totalDurationMs ?? completionEvent?.durationMs ?? attemptDuration,
+    totalTokens: usageEvent?.totalTokens,
+    cost: usageEvent?.cost,
+    finalResult:
+      safeString(traceResultStep?.metadata?.finalResult) ??
+      safeString(traceResultStep?.metadata?.summary) ??
+      safeString(traceResultStep?.metadata?.error) ??
+      completionEvent?.error,
   };
 }
 
@@ -423,7 +547,7 @@ export function buildAgentRunTimelineEvents({
         source,
         timestamp: step.startedAt,
         title: titleForStep(eventType, step),
-        detail: safeString(step.metadata?.summary),
+        detail: detailForStep(step),
         durationMs: step.durationMs,
         metadata: {
           traceStepType: step.type,
@@ -670,7 +794,7 @@ export function buildAgentRunTimelineEvents({
     if (notification.taskId !== task.id) continue;
     const notificationRunId = sourceRunIdFromRecord(notification.source);
     if (!sourceRunMatches(attemptId, notificationRunId)) continue;
-    const targetHref = safeExternalHref(notification.targetUrl);
+    const targetHref = safeTimelineHref(notification.targetUrl);
     events.push({
       id: `notification-${notification.id}`,
       sequence: nextSequence++,
@@ -918,6 +1042,10 @@ export function AgentRunTimelinePanel({
     () => traces.find((trace) => trace.traceId === selectedAttemptId),
     [selectedAttemptId, traces]
   );
+  const runSummary = useMemo(
+    () => summarizeTimelineRun(task, selectedTrace, telemetryEvents, selectedAttemptId),
+    [selectedAttemptId, selectedTrace, task, telemetryEvents]
+  );
 
   const events = useMemo(
     () =>
@@ -1127,6 +1255,53 @@ export function AgentRunTimelinePanel({
               </Text>
               <Text size="sm" fw={600} truncate>
                 {selectedTrace?.metadata?.policyProfile || task.runMode || 'Default'}
+              </Text>
+            </div>
+          </Group>
+        </Paper>
+      </SimpleGrid>
+
+      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+        <Paper withBorder p="sm" radius="md">
+          <Group gap="xs" wrap="nowrap">
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+            <div className="min-w-0">
+              <Text size="xs" c="dimmed">
+                Result
+              </Text>
+              <Group gap="xs" wrap="nowrap">
+                <Badge size="xs" color={runStatusColor(runSummary.status)} variant="light">
+                  {formatRunStatus(runSummary.status)}
+                </Badge>
+                <Text size="sm" fw={600} truncate>
+                  {runSummary.finalResult || 'No final result recorded'}
+                </Text>
+              </Group>
+            </div>
+          </Group>
+        </Paper>
+        <Paper withBorder p="sm" radius="md">
+          <Group gap="xs" wrap="nowrap">
+            <Timer className="h-4 w-4 text-muted-foreground" />
+            <div className="min-w-0">
+              <Text size="xs" c="dimmed">
+                Duration
+              </Text>
+              <Text size="sm" fw={600} truncate>
+                {formatDurationMs(runSummary.durationMs)}
+              </Text>
+            </div>
+          </Group>
+        </Paper>
+        <Paper withBorder p="sm" radius="md">
+          <Group gap="xs" wrap="nowrap">
+            <Terminal className="h-4 w-4 text-muted-foreground" />
+            <div className="min-w-0">
+              <Text size="xs" c="dimmed">
+                Usage / cost
+              </Text>
+              <Text size="sm" fw={600} truncate>
+                {formatTokenCount(runSummary.totalTokens)} / {formatCost(runSummary.cost)}
               </Text>
             </div>
           </Group>
