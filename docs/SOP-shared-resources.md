@@ -201,11 +201,25 @@ Rules:
 - Avoid `*` or `all`; wildcard declarations are treated as review findings.
 - Keep declarations narrower than the agent role. The skill declares what it
   needs, not what the operator could technically grant.
+- Run the skill security scanner before installing or updating local skills that
+  include scripts, assets, package manifests, broad triggers, network behavior,
+  credential handling, or persistence hooks. Use
+  `POST /api/skills/security/scan` or the Maintenance action
+  `POST /api/maintenance/skill-security/scan`.
 - If the profile reports observed behavior that exceeds declarations, create a
   remediation task from the Shared Resources panel and either narrow the skill or
   add a reviewer-approved declaration.
 - Evidence snippets are redacted, but skill authors should still avoid embedding
   example secrets or real customer data in shared skill text.
+
+Scanner reports are stored as JSON and Markdown under
+`.veritas-kanban/skill-security-scans/` unless `persist` is `false`. The scanner
+checks the local `SKILL.md`, referenced `scripts/` and `assets/`, package
+manifests, declared-vs-observed capability mismatches, prompt-injection markers,
+credential access, exfiltration, unsafe execution, persistence, memory poisoning,
+overbroad triggers, and unpinned or non-registry dependencies where detectable.
+Fixture contracts live in
+`server/src/__fixtures__/skill-security/` and cover malicious plus benign cases.
 
 ---
 

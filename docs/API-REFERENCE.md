@@ -38,18 +38,19 @@
 25. [Agent Routing](#agent-routing)
 26. [Shared Resources](#shared-resources)
 27. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-28. [Doc Freshness](#doc-freshness)
-29. [Cost Prediction](#cost-prediction)
-30. [Error Learning](#error-learning)
-31. [Tool Policies](#tool-policies)
-32. [Traces](#traces)
-33. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-34. [Audit](#audit)
-35. [Maintenance Center](#maintenance-center-apiv1maintenance)
-36. [Common Workflows](#common-workflows)
-37. [Versioning & Deprecation](#versioning--deprecation)
-38. [Rate Limits](#rate-limits)
-39. [Additional Endpoint Groups](#additional-endpoint-groups)
+28. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+29. [Doc Freshness](#doc-freshness)
+30. [Cost Prediction](#cost-prediction)
+31. [Error Learning](#error-learning)
+32. [Tool Policies](#tool-policies)
+33. [Traces](#traces)
+34. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+35. [Audit](#audit)
+36. [Maintenance Center](#maintenance-center-apiv1maintenance)
+37. [Common Workflows](#common-workflows)
+38. [Versioning & Deprecation](#versioning--deprecation)
+39. [Rate Limits](#rate-limits)
+40. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1533,6 +1534,93 @@ POST /api/skills/capabilities/shared_123/remediation-task
 ```
 
 Returns the refreshed profile and created task.
+
+---
+
+## Skill Security Scanner (`/api/skills/security`)
+
+Static security review for local skill directories or a single `SKILL.md`.
+Reads require `policy:read`; scans require `admin:manage` because scan requests
+read local filesystem paths. Scan evidence is redacted before it is returned or
+persisted.
+
+| Method | Path                                   | Description                                 |
+| ------ | -------------------------------------- | ------------------------------------------- |
+| `GET`  | `/api/skills/security/patterns`        | List scanner pattern definitions            |
+| `POST` | `/api/skills/security/scan`            | Scan a skill path and optionally persist it |
+| `GET`  | `/api/skills/security/scans`           | List persisted scan summaries               |
+| `GET`  | `/api/skills/security/scans/:id`       | Get one persisted JSON report               |
+| `POST` | `/api/maintenance/skill-security/scan` | Maintenance action alias for scan execution |
+
+The scanner emits JSON plus a Markdown report when `persist` is not `false`.
+Persisted artifacts are written under
+`.veritas-kanban/skill-security-scans/`.
+
+Detector families:
+
+- Prompt injection: hidden instruction overrides, hidden comments, zero-width
+  text.
+- Credential access: environment, token, API key, keychain, password, and
+  authorization references.
+- Exfiltration: remote egress, remote script fetch/execute, and file-to-network
+  paths.
+- Unsafe execution: shell, subprocess, eval, dynamic code execution.
+- Persistence: cron, launch agents, daemons, watchers, background jobs,
+  self-modification, and durable memory writes.
+- Trigger risk: broad activation language.
+- Capability mismatch: observed behavior that exceeds declared skill
+  capabilities.
+- Dependency risk: unpinned or non-registry package references where statically
+  detectable.
+
+### Scan Request
+
+```http
+POST /api/skills/security/scan
+```
+
+**Body**:
+
+```json
+{
+  "path": "/Users/example/.codex/skills/review-helper",
+  "persist": true,
+  "includeReferencedFiles": true
+}
+```
+
+`path` can point at a directory containing `SKILL.md` or at a single
+`SKILL.md`. Single-file scans include referenced `scripts/` and `assets/` files
+by default.
+
+### Scan Response
+
+```json
+{
+  "id": "skillscan_1770000000000_ab12cd34",
+  "targetType": "skill-directory",
+  "skillName": "Review Helper",
+  "severity": "critical",
+  "riskScore": 90,
+  "recommendation": "do-not-install",
+  "findingCount": 3,
+  "files": [{ "path": "SKILL.md", "role": "skill", "bytes": 420, "truncated": false }],
+  "findings": [
+    {
+      "patternId": "credential.env-harvest",
+      "severity": "critical",
+      "category": "credential-access",
+      "evidence": [{ "file": "SKILL.md", "line": 12, "excerpt": "[REDACTED_API_KEY]" }]
+    }
+  ],
+  "persistedJsonPath": ".../skill-security-scans/skillscan_1770000000000_ab12cd34.json",
+  "persistedMarkdownPath": ".../skill-security-scans/skillscan_1770000000000_ab12cd34.md"
+}
+```
+
+Recommendation values are `safe`, `caution`, and `do-not-install`. A scan also
+writes an audit event with scan id, severity, risk score, recommendation, and
+finding count.
 
 ---
 

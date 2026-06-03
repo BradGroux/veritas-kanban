@@ -264,6 +264,12 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       },
     ],
   },
+  {
+    prefix: '/api/skills/security',
+    read: 'policy:read',
+    write: 'admin:manage',
+    overrides: [{ methods: ['POST'], path: /^\/scan\/?$/, permissions: 'admin:manage' }],
+  },
   { prefix: '/api/integrations', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/transcripts', read: 'workspace:read', write: 'workflow:execute' },
   {
@@ -294,7 +300,14 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   { prefix: '/api/sqlite', read: 'backup:read', write: 'backup:write' },
-  { prefix: '/api/maintenance', read: 'backup:read', write: 'backup:write' },
+  {
+    prefix: '/api/maintenance',
+    read: 'backup:read',
+    write: 'backup:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/skill-security\/scan\/?$/, permissions: 'admin:manage' },
+    ],
+  },
   { prefix: '/api/identity', read: 'workspace:read', write: 'admin:manage' },
 ];
 

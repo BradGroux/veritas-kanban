@@ -42,7 +42,12 @@ export const skillCapabilityAccess = routeAccess('policy:read', 'policy:write', 
     permissions: ['policy:write', 'task:write'],
   },
 ]);
-export const backupAccess = routeAccess('backup:read', 'backup:write');
+export const skillSecurityAccess = routeAccess('policy:read', 'admin:manage', [
+  { methods: ['POST'], path: /^\/scan\/?$/, permissions: 'admin:manage' },
+]);
+export const backupAccess = routeAccess('backup:read', 'backup:write', [
+  { methods: ['POST'], path: /^\/skill-security\/scan\/?$/, permissions: 'admin:manage' },
+]);
 export const previewAccess = routeAccess('task:read', 'admin:manage');
 export const workspaceAccess = routeAccess('workspace:read', 'admin:manage');
 export const notificationAccess = routeAccess('agent:read', 'comment:write');

@@ -1,0 +1,16 @@
+{
+  "expectedFindings": [],
+  "absentPatternIds": [
+    "prompt.hidden-instruction",
+    "credential.env-harvest",
+    "exfil.network-egress",
+    "exfil.file-to-network",
+    "execution.subprocess-or-eval",
+    "persistence.background-execution",
+    "memory.poisoning",
+    "trigger.overbroad",
+    "capability.undeclared-observed"
+  ],
+  "maxSeverity": "low",
+  "recommendation": "safe"
+}

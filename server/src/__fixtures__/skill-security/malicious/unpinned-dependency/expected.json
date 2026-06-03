@@ -1,0 +1,6 @@
+{
+  "expectedFindings": [{ "patternId": "dependency.unpinned", "severity": "medium" }],
+  "absentPatternIds": ["credential.env-harvest", "exfil.file-to-network"],
+  "maxSeverity": "medium",
+  "recommendation": "safe"
+}

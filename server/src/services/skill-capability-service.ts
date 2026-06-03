@@ -624,51 +624,7 @@ export class SkillCapabilityService {
   }
 
   private profileResource(resource: SharedResource): SkillCapabilityProfile {
-    const declaration = parseDeclaredCapabilities(resource.content);
-    const observed = observeCapabilities(resource.content);
-    const observedIds = observed.map((item) => item.capability);
-    const declaredSet = new Set(declaration.capabilities);
-    const observedSet = new Set(observedIds);
-    const matched = declaration.wildcard
-      ? [...observedSet]
-      : [...observedSet].filter((capability) => declaredSet.has(capability));
-    const undeclared = declaration.wildcard
-      ? []
-      : [...observedSet].filter((capability) => !declaredSet.has(capability));
-    const unobserved = [...declaredSet].filter((capability) => !observedSet.has(capability));
-    const findings = buildFindings({
-      declared: declaration.capabilities,
-      observed,
-      wildcard: declaration.wildcard,
-      matched,
-      undeclared,
-      unobserved,
-    });
-    const status =
-      declaration.capabilities.length === 0 && !declaration.wildcard && observed.length > 0
-        ? 'missing-declaration'
-        : findings.some((finding) => finding.kind !== 'declared-unobserved')
-          ? 'mismatch'
-          : 'aligned';
-
-    return {
-      id: `skillcap_${resource.id}`,
-      skillId: resource.id,
-      name: resource.name,
-      version: resource.version,
-      tags: resource.tags,
-      mountedIn: resource.mountedIn,
-      scannedAt: new Date().toISOString(),
-      declaredCapabilities: declaration.capabilities,
-      observedCapabilities: observed,
-      matchedCapabilities: matched.sort(),
-      undeclaredObservedCapabilities: undeclared.sort(),
-      declaredUnobservedCapabilities: unobserved.sort(),
-      declarationSources: declaration.sources,
-      status,
-      severity: findings.length ? maxSeverity(findings.map((finding) => finding.severity)) : 'low',
-      findings,
-    };
+    return profileSkillResource(resource);
   }
 
   private async auditMismatches(profiles: SkillCapabilityProfile[]): Promise<void> {
@@ -698,6 +654,54 @@ export class SkillCapabilityService {
         })
     );
   }
+}
+
+export function profileSkillResource(resource: SharedResource): SkillCapabilityProfile {
+  const declaration = parseDeclaredCapabilities(resource.content);
+  const observed = observeCapabilities(resource.content);
+  const observedIds = observed.map((item) => item.capability);
+  const declaredSet = new Set(declaration.capabilities);
+  const observedSet = new Set(observedIds);
+  const matched = declaration.wildcard
+    ? [...observedSet]
+    : [...observedSet].filter((capability) => declaredSet.has(capability));
+  const undeclared = declaration.wildcard
+    ? []
+    : [...observedSet].filter((capability) => !declaredSet.has(capability));
+  const unobserved = [...declaredSet].filter((capability) => !observedSet.has(capability));
+  const findings = buildFindings({
+    declared: declaration.capabilities,
+    observed,
+    wildcard: declaration.wildcard,
+    matched,
+    undeclared,
+    unobserved,
+  });
+  const status =
+    declaration.capabilities.length === 0 && !declaration.wildcard && observed.length > 0
+      ? 'missing-declaration'
+      : findings.some((finding) => finding.kind !== 'declared-unobserved')
+        ? 'mismatch'
+        : 'aligned';
+
+  return {
+    id: `skillcap_${resource.id}`,
+    skillId: resource.id,
+    name: resource.name,
+    version: resource.version,
+    tags: resource.tags,
+    mountedIn: resource.mountedIn,
+    scannedAt: new Date().toISOString(),
+    declaredCapabilities: declaration.capabilities,
+    observedCapabilities: observed,
+    matchedCapabilities: matched.sort(),
+    undeclaredObservedCapabilities: undeclared.sort(),
+    declaredUnobservedCapabilities: unobserved.sort(),
+    declarationSources: declaration.sources,
+    status,
+    severity: findings.length ? maxSeverity(findings.map((finding) => finding.severity)) : 'low',
+    findings,
+  };
 }
 
 let instance: SkillCapabilityService | null = null;

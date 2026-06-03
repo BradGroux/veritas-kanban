@@ -1,0 +1,10 @@
+{
+  "expectedFindings": [
+    { "patternId": "exfil.remote-script-fetch", "severity": "critical" },
+    { "patternId": "exfil.network-egress", "severity": "high" },
+    { "patternId": "execution.subprocess-or-eval", "severity": "high" }
+  ],
+  "absentPatternIds": ["credential.env-harvest"],
+  "maxSeverity": "critical",
+  "recommendation": "do-not-install"
+}

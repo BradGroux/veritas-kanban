@@ -1,0 +1,11 @@
+{
+  "expectedFindings": [
+    { "patternId": "credential.env-harvest", "severity": "critical" },
+    { "patternId": "exfil.network-egress", "severity": "high" },
+    { "patternId": "exfil.file-to-network", "severity": "critical" }
+  ],
+  "absentPatternIds": ["prompt.hidden-instruction"],
+  "maxSeverity": "critical",
+  "recommendation": "do-not-install",
+  "redactedAbsentText": "sk_test_example_placeholder_000000000000"
+}

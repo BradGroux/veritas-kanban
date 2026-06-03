@@ -1,0 +1,10 @@
+{
+  "expectedFindings": [
+    { "patternId": "persistence.background-execution", "severity": "high" },
+    { "patternId": "persistence.self-modification", "severity": "high" },
+    { "patternId": "memory.poisoning", "severity": "high" }
+  ],
+  "absentPatternIds": ["exfil.file-to-network"],
+  "maxSeverity": "high",
+  "recommendation": "do-not-install"
+}

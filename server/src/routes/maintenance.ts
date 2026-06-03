@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { getMaintenanceService } from '../services/maintenance-service.js';
 import { getSqlitePortabilityService } from '../services/sqlite-portability-service.js';
+import { scanSkill } from './skill-security.js';
 
 const router: RouterType = Router();
 
@@ -73,6 +74,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const input = parse(sqliteImportSchema, req.body);
     res.json(await getSqlitePortabilityService().importSqliteBackup(input));
+  })
+);
+
+router.post(
+  '/skill-security/scan',
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await scanSkill(req.body));
   })
 );
 

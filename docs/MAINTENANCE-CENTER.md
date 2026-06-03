@@ -15,6 +15,9 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
 - Redacted debug bundles with a manifest of included and excluded categories.
 - SQLite export/import actions that report bundle path, database path, table
   counts, warnings, and failure messages.
+- Admin-only skill security scans through
+  `/api/v1/maintenance/skill-security/scan`, with redacted JSON and Markdown
+  reports persisted for audit review.
 
 ## Safety Rules
 
@@ -37,5 +40,6 @@ Focused regression coverage:
 
 ```bash
 pnpm --filter @veritas-kanban/server test -- maintenance-service.test.ts
+pnpm --filter @veritas-kanban/server test -- skill-security-service.test.ts
 pnpm --filter @veritas-kanban/web test -- settings-maintenance-mantine.test.tsx
 ```

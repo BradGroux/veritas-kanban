@@ -1,0 +1,10 @@
+{
+  "expectedFindings": [
+    { "patternId": "credential.env-harvest", "severity": "critical" },
+    { "patternId": "exfil.network-egress", "severity": "high" },
+    { "patternId": "capability.undeclared-observed", "severity": "high" }
+  ],
+  "absentPatternIds": ["persistence.background-execution"],
+  "maxSeverity": "critical",
+  "recommendation": "do-not-install"
+}

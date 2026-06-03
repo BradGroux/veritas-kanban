@@ -21,6 +21,7 @@ import { workProductsApi } from './work-products';
 import { tracesApi } from './traces';
 import { maintenanceApi } from './maintenance';
 import { skillCapabilitiesApi } from './skill-capabilities';
+import { skillSecurityApi } from './skill-security';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -52,6 +53,7 @@ export const api = {
   traces: tracesApi,
   maintenance: maintenanceApi,
   skillCapabilities: skillCapabilitiesApi,
+  skillSecurity: skillSecurityApi,
 };
 
 export type {

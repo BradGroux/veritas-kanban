@@ -33,6 +33,7 @@ import {
   notificationAccess,
   policyAccess,
   skillCapabilityAccess,
+  skillSecurityAccess,
   previewAccess,
   promptRegistryAccess,
   reportAccess,
@@ -122,6 +123,7 @@ import { sqlitePortabilityRoutes } from '../sqlite-portability.js';
 import { maintenanceRoutes } from '../maintenance.js';
 import { identityRoutes } from '../identity.js';
 import { skillCapabilityRoutes } from '../skill-capabilities.js';
+import { skillSecurityRoutes } from '../skill-security.js';
 
 const v1Router: IRouter = Router();
 
@@ -216,6 +218,7 @@ v1Router.use('/workflows', workflowAccess, workflowRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);
 v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);
+v1Router.use('/skills/security', skillSecurityAccess, skillSecurityRoutes);
 v1Router.use('/integrations', settingsAccess, integrationsRoutes);
 v1Router.use('/transcripts', transcriptAccess, transcriptRoutes);
 v1Router.use('/scoring', scoringAccess, scoringRoutes);

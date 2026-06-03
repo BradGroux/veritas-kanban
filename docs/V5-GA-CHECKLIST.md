@@ -39,6 +39,10 @@ operator checklist for final release verification.
       capabilities, observed static behavior is classified through the canonical
       taxonomy, mismatches write audit events, remediation tasks can be created,
       and the Shared Resources UI exposes declared, observed, and mismatch state.
+- [ ] Skill security scanner verifies local skill directories and single
+      `SKILL.md` files, produces redacted JSON and Markdown reports, persists
+      audit artifacts, exposes an admin-only maintenance scan action, and keeps
+      malicious plus benign fixture contracts in CI.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
       WebSocket fan-out, workflow run updates, and remote/mobile clients. Track
       evidence and limits in

@@ -1,0 +1,9 @@
+{
+  "expectedFindings": [
+    { "patternId": "prompt.hidden-instruction", "severity": "high" },
+    { "patternId": "prompt.zero-width-or-comment", "severity": "medium" }
+  ],
+  "absentPatternIds": ["credential.env-harvest", "exfil.file-to-network"],
+  "maxSeverity": "high",
+  "recommendation": "caution"
+}
