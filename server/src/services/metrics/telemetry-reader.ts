@@ -240,7 +240,7 @@ function visitSqliteTelemetryEvents(
           SELECT payload_json
           FROM telemetry_events
           WHERE ${clauses.join(' AND ')}
-          ORDER BY datetime(created_at) ASC, id ASC
+          ORDER BY created_at ASC, id ASC
         `
       )
       .all(...params) as unknown as SqliteTelemetryPayloadRow[];

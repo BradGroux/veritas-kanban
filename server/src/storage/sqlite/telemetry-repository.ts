@@ -336,7 +336,7 @@ export class SqliteTelemetryRepository implements TelemetryRepository {
         SELECT payload_json
         FROM telemetry_events
         WHERE ${clauses.join(' AND ')}
-        ORDER BY datetime(created_at) DESC, id DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `,
       params,

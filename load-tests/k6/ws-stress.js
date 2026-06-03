@@ -22,7 +22,7 @@ export const options = {
 };
 
 export default function () {
-  const url = `${WS_URL}?apiKey=${API_KEY}`;
+  const url = `${WS_URL}?api_key=${encodeURIComponent(API_KEY)}`;
 
   const res = ws.connect(url, {}, function (socket) {
     socket.on('open', () => {

@@ -26,7 +26,9 @@ operator checklist for final release verification.
       multi-user/server-mode GA, or the release must explicitly limit password
       sessions to single-owner local deployments.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
-      WebSocket fan-out, workflow run updates, and remote/mobile clients.
+      WebSocket fan-out, workflow run updates, and remote/mobile clients. Track
+      evidence and limits in
+      [v5.0 performance and load test notes](testing/v5-performance-load.md).
 - [ ] Docs cover upgrade, desktop install, remote access, admin operations,
       backup/restore, diagnostics, and known platform limits, with ADR 0002 as
       the remote/server-mode security baseline.
