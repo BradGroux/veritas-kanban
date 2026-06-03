@@ -1,6 +1,6 @@
 /**
  * WorkflowStepExecutor — Executes individual workflow steps
- * Phase 1: Core Engine (agent steps only, OpenClaw integration placeholder)
+ * Executes workflow steps through provider-specific agent adapters.
  */
 
 import fs from 'fs/promises';
@@ -17,16 +17,28 @@ import type {
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
+import {
+  HttpOpenClawWorkflowAdapter,
+  type OpenClawWorkflowAdapter,
+  type OpenClawWorkflowSessionInput,
+  type OpenClawWorkflowSessionResult,
+} from './openclaw-workflow-adapter.js';
 import { getToolPolicyService } from './tool-policy-service.js';
 
 const log = createLogger('workflow-step-executor');
 
+interface WorkflowStepExecutorOptions {
+  openClawAdapter?: OpenClawWorkflowAdapter;
+}
+
 export class WorkflowStepExecutor {
   private runsDir: string;
+  private openClawAdapter: OpenClawWorkflowAdapter;
   private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
 
-  constructor(runsDir?: string) {
+  constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
     this.runsDir = runsDir || getWorkflowRunsDir();
+    this.openClawAdapter = options.openClawAdapter || new HttpOpenClawWorkflowAdapter();
   }
 
   /**
@@ -50,14 +62,18 @@ export class WorkflowStepExecutor {
   }
 
   /**
-   * Execute an agent step (spawns OpenClaw session)
+   * Execute an agent step through its configured provider.
    * Integrated features: #108 (progress), #110 (tool policies), #111 (session management)
    */
   private async executeAgentStep(
     step: WorkflowStep,
     run: WorkflowRun
   ): Promise<StepExecutionResult> {
-    const agentDef = this.getAgentDefinition(run, step.agent!);
+    if (!step.agent) {
+      throw new Error(`Agent step ${step.id} missing agent`);
+    }
+
+    const agentDef = this.getAgentDefinition(run, step.agent);
     const workflowConfig = run.context.workflow as
       | { config?: { fresh_session_default?: boolean } }
       | undefined;
@@ -95,65 +111,219 @@ export class WorkflowStepExecutor {
       return this.executeCodexAgentStep(step, run, agentDef, prompt, sessionConfig);
     }
 
-    // TODO: OpenClaw integration (sessions_spawn)
-    // This is the placeholder for actual session spawning.
-    // When OpenClaw sessions API is integrated, replace this with:
-    //
-    // if (sessionConfig.mode === 'reuse') {
-    //   const lastSessionKey = run.context._sessions?.[step.agent!];
-    //   if (lastSessionKey) {
-    //     // Continue existing session
-    //     const result = await this.continueSession(lastSessionKey, prompt);
-    //   } else {
-    //     // No existing session, fall back to fresh
-    //     const sessionKey = await this.spawnAgent({
-    //       agentId: step.agent!,
-    //       prompt,
-    //       taskId: run.taskId,
-    //       model: agentDef?.model,
-    //       toolFilter: toolPolicyFilter,
-    //       timeout: sessionConfig.timeout,
-    //     });
-    //     run.context._sessions = { ...run.context._sessions, [step.agent!]: sessionKey };
-    //   }
-    // } else {
-    //   // Fresh session
-    //   const sessionKey = await this.spawnAgent({
-    //     agentId: step.agent!,
-    //     prompt,
-    //     taskId: run.taskId,
-    //     model: agentDef?.model,
-    //     toolFilter: toolPolicyFilter,
-    //     timeout: sessionConfig.timeout,
-    //   });
-    //   run.context._sessions = { ...run.context._sessions, [step.agent!]: sessionKey };
-    // }
-    // const result = await this.waitForSession(sessionKey);
-    //
-    // After session completes:
-    // if (sessionConfig.cleanup === 'delete') {
-    //   await this.cleanupSession(sessionKey);
-    // }
+    return this.executeOpenClawAgentStep(
+      step,
+      run,
+      agentDef,
+      prompt,
+      sessionConfig,
+      sessionContext,
+      toolPolicyFilter
+    );
+  }
 
-    // Placeholder: Simulate agent execution (Phase 1 only)
-    const result = `Agent ${step.agent} (role: ${agentDef?.role || 'unknown'}) executed step ${step.id}\n\nSession Config:\n- Mode: ${sessionConfig.mode}\n- Context: ${sessionConfig.context}\n- Cleanup: ${sessionConfig.cleanup}\n- Timeout: ${sessionConfig.timeout}s\n\nTool Policy:\n- Allowed: ${toolPolicyFilter.allowed?.join(', ') || 'all'}\n- Denied: ${toolPolicyFilter.denied?.join(', ') || 'none'}\n\nPrompt:\n${prompt}\n\nSTATUS: done\nOUTPUT: Placeholder result`;
+  private async executeOpenClawAgentStep(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    agentDef: WorkflowAgent | null,
+    prompt: string,
+    sessionConfig: StepSessionConfig,
+    sessionContext: Record<string, unknown>,
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+  ): Promise<StepExecutionResult> {
+    const agentId = step.agent || agentDef?.id || step.id;
+    const sessionMap = (run.context._sessions as Record<string, string> | undefined) || {};
+    const existingSessionKey = sessionConfig.mode === 'reuse' ? sessionMap[agentId] : undefined;
 
-    // Parse output
-    const parsed = this.parseStepOutput(result, step);
+    let sessionKey = existingSessionKey;
+    let ownedSession = false;
+    let adapterResult: OpenClawWorkflowSessionResult | undefined;
 
-    // Validate acceptance criteria
-    await this.validateAcceptanceCriteria(step, result, parsed);
-
-    // Write output to step-outputs/
-    const outputPath = await this.saveStepOutput(run.id, step.id, result);
-
-    // Append to progress file (#108)
-    await this.appendProgressFile(run.id, step.id, result);
-
-    return {
-      output: parsed,
-      outputPath,
+    const baseInput: Omit<OpenClawWorkflowSessionInput, 'sessionKey' | 'prompt'> = {
+      workflowId: run.workflowId,
+      runId: run.id,
+      stepId: step.id,
+      taskId: run.taskId,
+      agentId,
+      timeoutSeconds: sessionConfig.timeout,
+      toolFilter: toolPolicyFilter,
     };
+
+    try {
+      if (sessionKey) {
+        this.recordWorkflowSession(run, step, agentId, sessionKey);
+        adapterResult = await this.openClawAdapter.send({
+          ...baseInput,
+          sessionKey,
+          prompt,
+        });
+      } else {
+        adapterResult = await this.openClawAdapter.spawn({
+          ...baseInput,
+          agentName: agentDef?.name,
+          model: agentDef?.model,
+          prompt,
+          sessionMode: sessionConfig.mode,
+          contextMode: sessionConfig.context,
+          cleanup: sessionConfig.cleanup,
+          taskContext: sessionContext.task,
+        });
+        sessionKey = adapterResult.sessionKey;
+        ownedSession = true;
+        this.recordWorkflowSession(run, step, agentId, sessionKey);
+
+        if (!adapterResult.output) {
+          adapterResult = await this.openClawAdapter.wait({
+            ...baseInput,
+            sessionKey,
+            prompt,
+          });
+        }
+      }
+
+      this.assertOpenClawResult(step, adapterResult);
+
+      const result = this.buildOpenClawStepResult(
+        step,
+        run,
+        agentDef,
+        adapterResult,
+        sessionConfig
+      );
+      const parsed = this.parseStepOutput(result, step);
+      await this.validateAcceptanceCriteria(step, result, parsed);
+      const outputPath = await this.saveStepOutput(run.id, step.id, result, step.output?.file);
+      await this.appendProgressFile(run.id, step.id, result);
+
+      return {
+        output: parsed,
+        outputPath,
+      };
+    } catch (err) {
+      const message = this.sanitizeProviderError(err, prompt);
+      throw new Error(`OpenClaw workflow step ${step.id} failed: ${message}`);
+    } finally {
+      if (ownedSession && sessionKey && sessionConfig.cleanup === 'delete') {
+        try {
+          await this.openClawAdapter.cleanup({
+            workflowId: run.workflowId,
+            runId: run.id,
+            stepId: step.id,
+            taskId: run.taskId,
+            agentId,
+            sessionKey,
+          });
+        } catch (err) {
+          log.warn(
+            { runId: run.id, stepId: step.id, sessionKey, err },
+            'OpenClaw workflow session cleanup failed'
+          );
+        }
+      }
+    }
+  }
+
+  private recordWorkflowSession(
+    run: WorkflowRun,
+    step: WorkflowStep,
+    agentId: string,
+    sessionKey: string
+  ): void {
+    run.context._sessions = {
+      ...((run.context._sessions as Record<string, string> | undefined) || {}),
+      [agentId]: sessionKey,
+    };
+
+    const stepRun = run.steps.find((s) => s.stepId === step.id);
+    if (stepRun) {
+      stepRun.sessionKey = sessionKey;
+    }
+  }
+
+  private assertOpenClawResult(
+    step: WorkflowStep,
+    result: OpenClawWorkflowSessionResult | undefined
+  ): asserts result is OpenClawWorkflowSessionResult {
+    if (!result) {
+      throw new Error('OpenClaw adapter did not return a result');
+    }
+
+    const status = result.status?.toLowerCase();
+    if (status === 'timeout' || status === 'timed_out') {
+      throw new Error(`OpenClaw session ${result.sessionKey} timed out`);
+    }
+    if (status === 'error' || status === 'failed' || status === 'failure') {
+      throw new Error(result.error || `OpenClaw session ${result.sessionKey} returned ${status}`);
+    }
+
+    if (!result.sessionKey) {
+      throw new Error(`OpenClaw step ${step.id} completed without a session key`);
+    }
+  }
+
+  private buildOpenClawStepResult(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    agentDef: WorkflowAgent | null,
+    result: OpenClawWorkflowSessionResult,
+    sessionConfig: StepSessionConfig
+  ): string {
+    const output = result.output?.trim() || 'OpenClaw completed without a final response.';
+    const hasStatus = /\bSTATUS\s*:/i.test(output);
+    const hasOutput = /\bOUTPUT\s*:/i.test(output);
+    const lines = [
+      `# OpenClaw Workflow Step: ${step.name || step.id}`,
+      '',
+      `Agent: ${agentDef?.name || step.agent}`,
+      `Provider: ${agentDef?.provider || 'openclaw'}`,
+      `Model: ${agentDef?.model || 'default'}`,
+      `Session: ${result.sessionKey}`,
+      `OpenClaw run: ${result.runId || run.id}`,
+      `Session mode: ${sessionConfig.mode}`,
+      `Session cleanup: ${sessionConfig.cleanup}`,
+      '',
+      '## Final Response',
+      '',
+      output,
+    ];
+
+    if (!hasStatus) {
+      lines.push('', 'STATUS: done');
+    }
+    if (!hasOutput) {
+      lines.push(`OUTPUT: ${output}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  private sanitizeProviderError(err: unknown, prompt?: string): string {
+    let message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
+    if (prompt) {
+      message = message.split(prompt).join('[REDACTED_PROMPT]');
+    }
+
+    const replacements: Array<[RegExp, string]> = [
+      [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
+      [/\bsk-[A-Za-z0-9_-]{12,}/g, 'sk-[REDACTED]'],
+      [/\bghp_[A-Za-z0-9_]{12,}/g, 'ghp_[REDACTED]'],
+      [/\bgithub_pat_[A-Za-z0-9_]{12,}/g, 'github_pat_[REDACTED]'],
+      [
+        /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)\s*=\s*([^\s"'`]+)/gi,
+        '$1=[REDACTED]',
+      ],
+      [
+        /\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi,
+        '$1=[REDACTED]',
+      ],
+    ];
+
+    for (const [pattern, replacement] of replacements) {
+      message = message.replace(pattern, replacement);
+    }
+
+    return message.slice(0, 1000);
   }
 
   private async executeCodexAgentStep(
@@ -1007,12 +1177,16 @@ export class WorkflowStepExecutor {
   }
 
   /**
-   * Cleanup OpenClaw session (Phase 2 tracked in #110)
+   * Cleanup OpenClaw session.
    */
   async cleanupSession(sessionKey: string): Promise<void> {
-    log.info({ sessionKey }, 'Session cleanup (placeholder)');
-    // Phase 2 (tracked in #110): Call OpenClaw session cleanup API
-    // Will integrate with sessions API for proper resource cleanup
+    await this.openClawAdapter.cleanup({
+      workflowId: 'manual',
+      runId: 'manual',
+      stepId: 'manual',
+      agentId: 'unknown',
+      sessionKey,
+    });
   }
 
   // ==================== Phase 2: Progress File Integration (#108) ====================
