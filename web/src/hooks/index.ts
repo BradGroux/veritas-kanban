@@ -32,6 +32,7 @@ export * from './useKeyboard';
 export * from './useManagedList';
 export * from './useMetrics';
 export * from './useBudgetMetrics';
+export * from './useNotifications';
 export * from './usePreview';
 export * from './useProjects';
 export * from './useSprints';

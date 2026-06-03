@@ -1,8 +1,21 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, AgentOutput } from '@/lib/api';
+import { apiFetch, API_BASE } from '@/lib/api/helpers';
 import { useWebSocket, type WebSocketMessage } from './useWebSocket';
 import type { AgentType } from '@veritas-kanban/shared';
+
+export interface AgentApprovalRequest {
+  id: string;
+  agentId: string;
+  action: string;
+  taskId?: string;
+  details?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
 
 export function useAgentStatus(taskId: string | undefined) {
   return useQuery({
@@ -58,6 +71,21 @@ export function useAgentLog(taskId: string | undefined, attemptId: string | unde
     queryKey: ['agent', 'log', taskId, attemptId],
     queryFn: () => api.agent.getLog(taskId!, attemptId!),
     enabled: !!taskId && !!attemptId,
+  });
+}
+
+export function usePendingAgentApprovals(agentId?: string) {
+  return useQuery({
+    queryKey: ['agent', 'permissions', 'approvals', agentId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (agentId) params.set('agentId', agentId);
+      const query = params.toString();
+      return apiFetch<AgentApprovalRequest[]>(
+        `${API_BASE}/agents/permissions/approvals${query ? `?${query}` : ''}`
+      );
+    },
+    staleTime: 30_000,
   });
 }
 

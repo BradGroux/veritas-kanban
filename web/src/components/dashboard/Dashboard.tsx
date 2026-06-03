@@ -31,6 +31,8 @@ import { HourlyActivityChart } from './HourlyActivityChart';
 import { WallTimeToggle } from './WallTimeToggle';
 import { SessionMetrics } from './SessionMetrics';
 import { EnforcementIndicator } from './EnforcementIndicator';
+import { NeedsAttentionQueue } from './NeedsAttentionQueue';
+import { useView } from '@/contexts/ViewContext';
 
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
@@ -122,6 +124,7 @@ export function Dashboard() {
   const [project, setProject] = useState<string | undefined>(undefined);
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const { setView } = useView();
 
   const { settings } = useFeatureSettings();
   const widgets: DashboardWidgetSettings = settings.board.dashboardWidgets ?? {
@@ -214,6 +217,17 @@ export function Dashboard() {
         onOpenChange={setExportDialogOpen}
         project={project}
         projects={projects}
+      />
+
+      <NeedsAttentionQueue
+        period={period}
+        project={project}
+        from={customFrom}
+        to={customTo}
+        onOpenTask={handleTaskClick}
+        onOpenErrors={() => setDrillDown('errors')}
+        onOpenDrift={() => setView('drift')}
+        onOpenWorkflows={() => setView('workflows')}
       />
 
       {/* Agent Operations Row */}

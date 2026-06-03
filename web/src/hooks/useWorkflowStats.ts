@@ -10,14 +10,24 @@ export interface WorkflowRun {
   id: string;
   workflowId: string;
   workflowVersion: number;
+  taskId?: string;
   status: WorkflowRunStatus;
   currentStep?: string;
+  context?: Record<string, unknown>;
   startedAt: string;
   completedAt?: string;
+  lastCheckpoint?: string;
   error?: string;
   steps: Array<{
     stepId: string;
     status: string;
+    agent?: string;
+    startedAt?: string;
+    completedAt?: string;
+    duration?: number;
+    retries?: number;
+    output?: string;
+    error?: string;
   }>;
 }
 
