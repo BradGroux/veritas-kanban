@@ -37,18 +37,19 @@
 24. [Agent Permissions](#agent-permissions)
 25. [Agent Routing](#agent-routing)
 26. [Shared Resources](#shared-resources)
-27. [Doc Freshness](#doc-freshness)
-28. [Cost Prediction](#cost-prediction)
-29. [Error Learning](#error-learning)
-30. [Tool Policies](#tool-policies)
-31. [Traces](#traces)
-32. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-33. [Audit](#audit)
-34. [Maintenance Center](#maintenance-center-apiv1maintenance)
-35. [Common Workflows](#common-workflows)
-36. [Versioning & Deprecation](#versioning--deprecation)
-37. [Rate Limits](#rate-limits)
-38. [Additional Endpoint Groups](#additional-endpoint-groups)
+27. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+28. [Doc Freshness](#doc-freshness)
+29. [Cost Prediction](#cost-prediction)
+30. [Error Learning](#error-learning)
+31. [Tool Policies](#tool-policies)
+32. [Traces](#traces)
+33. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+34. [Audit](#audit)
+35. [Maintenance Center](#maintenance-center-apiv1maintenance)
+36. [Common Workflows](#common-workflows)
+37. [Versioning & Deprecation](#versioning--deprecation)
+38. [Rate Limits](#rate-limits)
+39. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1420,6 +1421,118 @@ POST /api/shared-resources/:id/unmount
   "projectIds": ["rubicon", "brainmeld"]
 }
 ```
+
+---
+
+## Skill Capability Profiles (`/api/skills/capabilities`)
+
+Declared-vs-observed capability profiles for shared resources with `type:
+"skill"`. Reads require `policy:read`. Creating remediation tasks requires
+`policy:write` and `task:write`.
+
+| Method | Path                                                 | Description                                 |
+| ------ | ---------------------------------------------------- | ------------------------------------------- |
+| `GET`  | `/api/skills/capabilities/taxonomy`                  | List canonical skill capability definitions |
+| `GET`  | `/api/skills/capabilities`                           | List skill profiles with optional filters   |
+| `GET`  | `/api/skills/capabilities/:skillId`                  | Get one skill capability profile            |
+| `POST` | `/api/skills/capabilities/:skillId/remediation-task` | Create a task for capability mismatches     |
+
+List filters:
+
+- `status`: `aligned`, `mismatch`, or `missing-declaration`
+- `severity`: minimum severity, one of `low`, `medium`, `high`, `critical`
+- `capability`: a taxonomy id such as `network.egress`
+- `q`: skill name, id, tag, or finding text search
+
+### Skill Declaration Syntax
+
+Skills declare capabilities in frontmatter:
+
+```markdown
+---
+capabilities:
+  - filesystem.read
+  - network.egress
+---
+```
+
+or in a Markdown section:
+
+```markdown
+## Declared Capabilities
+
+- `filesystem.read`
+- `browser.session`
+```
+
+Canonical capability ids:
+
+| Capability          | Meaning                                      |
+| ------------------- | -------------------------------------------- |
+| `filesystem.read`   | Reads local files or repository content      |
+| `filesystem.write`  | Writes, edits, moves, or deletes files       |
+| `shell.execute`     | Runs shell commands or subprocesses          |
+| `network.egress`    | Calls remote URLs, APIs, or webhooks         |
+| `credential.access` | Reads secrets, tokens, env vars, or keychain |
+| `external.message`  | Sends messages, comments, issues, or PRs     |
+| `memory.write`      | Writes durable agent memory                  |
+| `task.mutate`       | Creates or changes tasks, issues, or PRs     |
+| `schedule.persist`  | Creates recurring or background execution    |
+| `browser.session`   | Uses browser automation or sessions          |
+| `mcp.tool`          | Invokes MCP/plugin/tool runtimes             |
+
+### Profile Response
+
+```json
+{
+  "skillId": "shared_123",
+  "name": "Review Helper",
+  "declaredCapabilities": ["filesystem.read"],
+  "observedCapabilities": [
+    {
+      "capability": "filesystem.read",
+      "confidence": 0.82,
+      "evidence": [{ "source": "content-pattern", "label": "File read reference" }]
+    },
+    {
+      "capability": "network.egress",
+      "confidence": 0.86,
+      "evidence": [{ "source": "content-pattern", "label": "Remote network call reference" }]
+    }
+  ],
+  "undeclaredObservedCapabilities": ["network.egress"],
+  "status": "mismatch",
+  "severity": "high",
+  "findings": [
+    {
+      "kind": "undeclared-observed",
+      "capability": "network.egress",
+      "severity": "high",
+      "message": "network.egress is observed but not declared."
+    }
+  ]
+}
+```
+
+Mismatch detection writes an audit event once per skill version and finding
+signature. Evidence snippets are redacted before they are returned.
+
+### Create Remediation Task
+
+```http
+POST /api/skills/capabilities/shared_123/remediation-task
+```
+
+**Body**:
+
+```json
+{
+  "project": "Security",
+  "priority": "high"
+}
+```
+
+Returns the refreshed profile and created task.
 
 ---
 

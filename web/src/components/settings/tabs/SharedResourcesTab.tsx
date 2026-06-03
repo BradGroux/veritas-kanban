@@ -2,6 +2,7 @@ import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatur
 import { Checkbox, NumberInput } from '@mantine/core';
 import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings } from '@veritas-kanban/shared';
 import { ToggleRow, SectionHeader, SaveIndicator, SettingRow } from '../shared';
+import { SkillCapabilityProfilesPanel } from './SkillCapabilityProfilesPanel';
 
 const TYPE_OPTIONS: Array<{
   key: 'prompt' | 'guideline' | 'skill' | 'config' | 'template';
@@ -98,6 +99,10 @@ export function SharedResourcesTab() {
             ))}
           </div>
         </div>
+      )}
+
+      {sharedResources.enabled && allowedTypes.includes('skill') && (
+        <SkillCapabilityProfilesPanel />
       )}
     </div>
   );

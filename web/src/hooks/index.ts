@@ -58,3 +58,4 @@ export * from './useToast';
 export * from './useWebSocket';
 export * from './useWorktree';
 export * from './useStatusHistory';
+export * from './useSkillCapabilities';

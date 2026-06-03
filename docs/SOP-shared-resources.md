@@ -155,6 +155,60 @@ Publish shared resources as a package:
 
 ---
 
+## Skill Capability Declarations
+
+Shared resources with `type: skill` should declare the capabilities they need.
+Veritas compares declared capabilities with observed static behavior and shows
+the result in Settings -> Shared Resources -> Skill Capability Profiles.
+
+Preferred frontmatter:
+
+```markdown
+---
+capabilities:
+  - filesystem.read
+  - network.egress
+---
+```
+
+Markdown section alternative:
+
+```markdown
+## Declared Capabilities
+
+- `filesystem.read`
+- `browser.session`
+```
+
+Canonical ids:
+
+| Capability          | Use when the skill needs to...               |
+| ------------------- | -------------------------------------------- |
+| `filesystem.read`   | Read local files or repository content       |
+| `filesystem.write`  | Create, edit, move, or delete files          |
+| `shell.execute`     | Run shell commands, package scripts, or CLIs |
+| `network.egress`    | Call remote APIs, webhooks, or downloads     |
+| `credential.access` | Read env vars, tokens, secrets, or keychains |
+| `external.message`  | Send chat, email, comments, issues, or PRs   |
+| `memory.write`      | Write durable agent memory                   |
+| `task.mutate`       | Create or change tasks, issues, or PRs       |
+| `schedule.persist`  | Create recurring jobs or background watchers |
+| `browser.session`   | Use browser automation or authenticated tabs |
+| `mcp.tool`          | Invoke MCP servers, plugins, or connectors   |
+
+Rules:
+
+- Avoid `*` or `all`; wildcard declarations are treated as review findings.
+- Keep declarations narrower than the agent role. The skill declares what it
+  needs, not what the operator could technically grant.
+- If the profile reports observed behavior that exceeds declarations, create a
+  remediation task from the Shared Resources panel and either narrow the skill or
+  add a reviewer-approved declaration.
+- Evidence snippets are redacted, but skill authors should still avoid embedding
+  example secrets or real customer data in shared skill text.
+
+---
+
 ## Referencing Shared Resources
 
 ### In Task Descriptions

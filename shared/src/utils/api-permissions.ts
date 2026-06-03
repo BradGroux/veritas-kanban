@@ -252,6 +252,18 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
     ],
   },
+  {
+    prefix: '/api/skills/capabilities',
+    read: 'policy:read',
+    write: 'policy:write',
+    overrides: [
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/remediation-task\/?$/,
+        permissions: ['policy:write', 'task:write'],
+      },
+    ],
+  },
   { prefix: '/api/integrations', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/transcripts', read: 'workspace:read', write: 'workflow:execute' },
   {

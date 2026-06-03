@@ -35,6 +35,10 @@ operator checklist for final release verification.
       routing, and workflow-gate decisions include matched rules, remediation,
       redacted raw detail, API access through `/api/governance/traces`, and UI
       drilldown from the Decision Audit Trail.
+- [ ] Skill capability profiles verify shared skill resources declare required
+      capabilities, observed static behavior is classified through the canonical
+      taxonomy, mismatches write audit events, remediation tasks can be created,
+      and the Shared Resources UI exposes declared, observed, and mismatch state.
 - [ ] Performance/load review covers SQLite read/write paths, dashboard queries,
       WebSocket fan-out, workflow run updates, and remote/mobile clients. Track
       evidence and limits in

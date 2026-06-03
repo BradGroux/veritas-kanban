@@ -32,6 +32,7 @@ import {
   feedbackAccess,
   notificationAccess,
   policyAccess,
+  skillCapabilityAccess,
   previewAccess,
   promptRegistryAccess,
   reportAccess,
@@ -120,6 +121,7 @@ import promptRegistryRoutes from '../prompt-registry.js';
 import { sqlitePortabilityRoutes } from '../sqlite-portability.js';
 import { maintenanceRoutes } from '../maintenance.js';
 import { identityRoutes } from '../identity.js';
+import { skillCapabilityRoutes } from '../skill-capabilities.js';
 
 const v1Router: IRouter = Router();
 
@@ -213,6 +215,7 @@ v1Router.use('/delegation', delegationAccess, delegationRoutes);
 v1Router.use('/workflows', workflowAccess, workflowRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);
+v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);
 v1Router.use('/integrations', settingsAccess, integrationsRoutes);
 v1Router.use('/transcripts', transcriptAccess, transcriptRoutes);
 v1Router.use('/scoring', scoringAccess, scoringRoutes);

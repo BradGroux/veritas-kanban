@@ -32,6 +32,48 @@ const policies = [
   },
 ];
 
+const skillProfiles = [
+  {
+    id: 'skillcap_skill_1',
+    skillId: 'skill_1',
+    name: 'Review Helper',
+    version: 1,
+    tags: ['review'],
+    mountedIn: [],
+    scannedAt: '2026-06-03T00:00:00.000Z',
+    declaredCapabilities: ['filesystem.read'],
+    observedCapabilities: [
+      {
+        capability: 'filesystem.read',
+        confidence: 0.9,
+        evidence: [],
+      },
+      {
+        capability: 'network.egress',
+        confidence: 0.85,
+        evidence: [],
+      },
+    ],
+    matchedCapabilities: ['filesystem.read'],
+    undeclaredObservedCapabilities: ['network.egress'],
+    declaredUnobservedCapabilities: [],
+    declarationSources: ['frontmatter'],
+    status: 'mismatch',
+    severity: 'high',
+    findings: [
+      {
+        id: 'undeclared-observed:network.egress',
+        kind: 'undeclared-observed',
+        capability: 'network.egress',
+        severity: 'high',
+        message: 'network.egress is observed but not declared.',
+        remediation: 'Declare network.egress or remove the behavior.',
+        evidence: [],
+      },
+    ],
+  },
+];
+
 vi.mock('@/lib/api/helpers', () => ({
   apiFetch: mocks.apiFetch,
 }));
@@ -54,6 +96,12 @@ describe('Settings governance Mantine controls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.apiFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/skills/capabilities') {
+        return skillProfiles;
+      }
+      if (url === '/api/skills/capabilities/skill_1/remediation-task') {
+        return { profile: skillProfiles[0], task: { id: 'task_1', title: 'Review skill' } };
+      }
       if (url === '/api/tool-policies') {
         return policies;
       }
@@ -65,7 +113,7 @@ describe('Settings governance Mantine controls', () => {
     cleanup();
   });
 
-  it('renders Shared Resources checkbox and number controls through direct Mantine primitives', () => {
+  it('renders Shared Resources checkbox, number, and skill capability controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<SharedResourcesTab />);
 
     expect(screen.getByRole('textbox', { name: 'Max Resources' })).toBeDefined();
@@ -82,6 +130,12 @@ describe('Settings governance Mantine controls', () => {
         allowedTypes: ['prompt', 'skill', 'template'],
       }),
     });
+
+    expect(await screen.findByText('Skill Capability Profiles')).toBeDefined();
+    expect(await screen.findByText('Review Helper')).toBeDefined();
+    expect(screen.getByText('mismatch')).toBeDefined();
+    expect(screen.getByText('network.egress')).toBeDefined();
+    expect(container.querySelector('.mantine-Table-root')).toBeDefined();
   });
 
   it('renders Tool Policies list and editor through direct Mantine primitives', async () => {

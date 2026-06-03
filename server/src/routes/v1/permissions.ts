@@ -35,6 +35,13 @@ export const telemetryAccess = routeAccess('telemetry:read', 'telemetry:write');
 export const policyAccess = routeAccess('policy:read', 'policy:read', [
   { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
 ]);
+export const skillCapabilityAccess = routeAccess('policy:read', 'policy:write', [
+  {
+    methods: ['POST'],
+    path: /^\/[^/]+\/remediation-task\/?$/,
+    permissions: ['policy:write', 'task:write'],
+  },
+]);
 export const backupAccess = routeAccess('backup:read', 'backup:write');
 export const previewAccess = routeAccess('task:read', 'admin:manage');
 export const workspaceAccess = routeAccess('workspace:read', 'admin:manage');

@@ -25,3 +25,4 @@ export * from './workflow.js';
 export * from './work-product.types.js';
 export * from './maintenance.types.js';
 export * from './governance-trace.types.js';
+export * from './skill-capability.types.js';
