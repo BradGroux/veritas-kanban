@@ -62,7 +62,8 @@ export class SqliteTaskRepository implements TaskRepository {
           `
             SELECT t.task_json
             FROM tasks t
-            WHERE t.storage_state = 'active'
+            WHERE t.workspace_id = 'local'
+              AND t.storage_state = 'active'
               AND t.deleted_at IS NULL
               AND (
                 lower(t.id) LIKE ?
@@ -72,7 +73,7 @@ export class SqliteTaskRepository implements TaskRepository {
                   WHERE task_search MATCH ?
                 )
               )
-            ORDER BY datetime(t.updated_at) DESC
+            ORDER BY t.updated_at DESC
           `
         )
         .all(likeQuery, ftsQuery) as unknown as TaskRow[];
@@ -84,14 +85,15 @@ export class SqliteTaskRepository implements TaskRepository {
           `
             SELECT task_json
             FROM tasks
-            WHERE storage_state = 'active'
+            WHERE workspace_id = 'local'
+              AND storage_state = 'active'
               AND deleted_at IS NULL
               AND (
                 lower(id) LIKE ?
                 OR lower(title) LIKE ?
                 OR lower(description) LIKE ?
               )
-            ORDER BY datetime(updated_at) DESC
+            ORDER BY updated_at DESC
           `
         )
         .all(likeQuery, likeQuery, likeQuery) as unknown as TaskRow[];
@@ -185,9 +187,10 @@ export class SqliteTaskRepository implements TaskRepository {
         `
           SELECT task_json
           FROM tasks
-          WHERE storage_state = ?
+          WHERE workspace_id = 'local'
+            AND storage_state = ?
             AND deleted_at IS NULL
-          ORDER BY datetime(updated_at) DESC
+          ORDER BY updated_at DESC
         `
       )
       .all(state) as unknown as TaskRow[];
@@ -202,7 +205,8 @@ export class SqliteTaskRepository implements TaskRepository {
         `
           SELECT task_json
           FROM tasks
-          WHERE id = ?
+          WHERE workspace_id = 'local'
+            AND id = ?
             AND storage_state = ?
             AND deleted_at IS NULL
         `

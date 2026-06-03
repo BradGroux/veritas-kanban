@@ -112,7 +112,7 @@ jobs:
           mkdir -p k6-results
 
           if [ "$K6_PROFILE" = "full" ]; then
-            scripts="smoke read-load write-load mixed-load ws-stress"
+            scripts="smoke read-load write-load mixed-load ws-stress v5-remote-mix"
           else
             scripts="smoke"
           fi
@@ -122,6 +122,12 @@ jobs:
               -e BASE_URL=http://127.0.0.1:3001 \
               -e WS_URL=ws://127.0.0.1:3001/ws \
               -e API_KEY="$VERITAS_ADMIN_KEY" \
+              -e V5_SEED_TASKS=120 \
+              -e V5_SEED_CHATS=12 \
+              -e V5_HTTP_VUS=20 \
+              -e V5_WS_VUS=30 \
+              -e V5_DURATION=45s \
+              -e V5_WS_HOLD_MS=40000 \
               -v "$PWD:/work" \
               -w /work \
               grafana/k6:latest run \

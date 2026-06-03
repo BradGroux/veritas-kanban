@@ -286,7 +286,7 @@ export class SqliteWorkflowRunRepository {
             error
           FROM workflow_runs
           WHERE ${clauses.join(' AND ')}
-          ORDER BY datetime(started_at) DESC, id DESC
+          ORDER BY started_at DESC, id DESC
         `
       )
       .all(...params) as unknown as WorkflowRunMetadataRow[];
@@ -393,7 +393,7 @@ export class SqliteWorkflowRunRepository {
           SELECT run_json
           FROM workflow_runs
           WHERE ${clauses.join(' AND ')}
-          ORDER BY datetime(started_at) DESC, id DESC
+          ORDER BY started_at DESC, id DESC
         `
       )
       .all(...params) as unknown as WorkflowRunRow[];

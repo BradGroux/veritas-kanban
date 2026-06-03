@@ -59,7 +59,7 @@ export class SqliteChatRepository {
           FROM chat_sessions
           WHERE workspace_id = 'local'
             AND task_id IS NULL
-          ORDER BY datetime(updated_at) DESC, id DESC
+          ORDER BY updated_at DESC, id DESC
         `
       )
       .all() as unknown as ChatSessionRow[];
@@ -238,7 +238,7 @@ export class SqliteChatRepository {
           SELECT message_json
           FROM squad_messages
           WHERE ${clauses.join(' AND ')}
-          ORDER BY datetime(timestamp) ${limit ? 'DESC' : 'ASC'}, id ${limit ? 'DESC' : 'ASC'}
+          ORDER BY timestamp ${limit ? 'DESC' : 'ASC'}, id ${limit ? 'DESC' : 'ASC'}
           ${limit ? 'LIMIT ?' : ''}
         `
       )
@@ -263,7 +263,7 @@ export class SqliteChatRepository {
           FROM chat_messages
           WHERE workspace_id = 'local'
             AND session_id = ?
-          ORDER BY datetime(created_at) ASC, rowid ASC
+          ORDER BY created_at ASC, rowid ASC
         `
       )
       .all(sessionId) as unknown as ChatMessageRow[];
