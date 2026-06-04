@@ -519,10 +519,11 @@ describe('governance surfaces Mantine migration', () => {
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Textarea-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
+    expect(screen.queryByText('Composite Score Trend')).toBeNull();
 
     await user.click(screen.getByRole('tab', { name: /score explorer/i }));
 
-    expect(screen.getByText('Composite Score Trend')).toBeDefined();
+    expect(await screen.findByText('Composite Score Trend')).toBeDefined();
     expect(baseElement.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(2);
     expectNoLegacySlots(baseElement);
   });

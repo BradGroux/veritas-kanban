@@ -23,13 +23,14 @@ import { CheckSquare } from 'lucide-react';
 import { Button } from '@mantine/core';
 import { ArchiveSuggestionBanner } from './ArchiveSuggestionBanner';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
+import { LazyOnVisible } from '@/components/shared/LazyOnVisible';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 import { useView } from '@/contexts/ViewContext';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
-// Lazy-load Dashboard to split recharts + d3 (~800KB) out of main bundle
+// Lazy-load Dashboard so board startup does not include dashboard-heavy code paths.
 const Dashboard = lazy(() =>
   import('@/components/dashboard/Dashboard').then((mod) => ({
     default: mod.Dashboard,
@@ -381,24 +382,20 @@ export function KanbanBoard() {
         </div>
 
         {featureSettings.board.showDashboard && (
-          <Suspense
-            fallback={
-              <div
-                className="mt-6 border-t pt-4 flex items-center justify-center py-8 text-muted-foreground"
-                role="status"
-              >
-                Loading dashboard…
-              </div>
-            }
+          <LazyOnVisible
+            className="mt-6 border-t pt-4"
+            fallback={<DashboardLoadingFallback />}
+            minHeight={192}
+            rootMargin="0px 0px"
           >
-            <div className="mt-6 border-t pt-4">
+            <Suspense fallback={<DashboardLoadingFallback />}>
               <Dashboard
                 onTaskClick={(taskId, target) => {
                   void handleTaskIdClick(taskId, target);
                 }}
               />
-            </div>
-          </Suspense>
+            </Suspense>
+          </LazyOnVisible>
         )}
       </FeatureErrorBoundary>
 
@@ -414,5 +411,16 @@ export function KanbanBoard() {
         </Suspense>
       )}
     </>
+  );
+}
+
+function DashboardLoadingFallback() {
+  return (
+    <div
+      className="flex min-h-48 items-center justify-center py-8 text-muted-foreground"
+      role="status"
+    >
+      Loading dashboard…
+    </div>
   );
 }

@@ -35,6 +35,7 @@ export default defineConfig({
     testTimeout: 15_000,
   },
   build: {
+    chunkSizeWarningLimit: 400,
     rollupOptions: {
       output: {
         manualChunks(id) {

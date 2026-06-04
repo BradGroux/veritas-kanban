@@ -9,7 +9,7 @@
  * - Empty state when no workflows exist
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Badge,
   Button,
@@ -25,10 +25,13 @@ import {
 import { ArrowLeft, Search, Play, Users, ListOrdered, BarChart3 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { WorkflowRunList } from './WorkflowRunList';
-import { WorkflowDashboard } from './WorkflowDashboard';
 import { WorkflowAuthoringPanel } from './WorkflowAuthoringPanel';
 import { useIdentity } from '@/hooks/useIdentity';
 import { workflowsApi, type WorkflowSummary } from '@/lib/api/workflows';
+
+const WorkflowDashboard = lazy(() =>
+  import('./WorkflowDashboard').then((mod) => ({ default: mod.WorkflowDashboard }))
+);
 
 interface WorkflowsPageProps {
   onBack: () => void;
@@ -99,7 +102,19 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   };
 
   if (showDashboard) {
-    return <WorkflowDashboard onBack={() => setShowDashboard(false)} />;
+    return (
+      <Suspense
+        fallback={
+          <Stack gap="md">
+            <Skeleton h={36} w={240} />
+            <Skeleton h={160} />
+            <Skeleton h={240} />
+          </Stack>
+        }
+      >
+        <WorkflowDashboard onBack={() => setShowDashboard(false)} />
+      </Suspense>
+    );
   }
 
   if (selectedWorkflowId) {

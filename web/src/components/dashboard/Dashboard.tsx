@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Skeleton } from '@mantine/core';
 import {
   useMetrics,
@@ -22,7 +22,6 @@ import { TasksDrillDown } from './TasksDrillDown';
 import { ErrorsDrillDown } from './ErrorsDrillDown';
 import { TokensDrillDown } from './TokensDrillDown';
 import { DurationDrillDown } from './DurationDrillDown';
-import { TrendsCharts } from './TrendsCharts';
 import { StatusTimeline } from './StatusTimeline';
 import { AgentComparison } from './AgentComparison';
 import { WhereTimeWent } from './WhereTimeWent';
@@ -34,6 +33,11 @@ import { EnforcementIndicator } from './EnforcementIndicator';
 import { NeedsAttentionQueue } from './NeedsAttentionQueue';
 import { useView } from '@/contexts/ViewContext';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
+import { LazyOnVisible } from '@/components/shared/LazyOnVisible';
+
+const LazyTrendsCharts = lazy(() =>
+  import('./TrendsCharts').then((mod) => ({ default: mod.TrendsCharts }))
+);
 
 // Trend indicator component
 // direction: 'up' always means improvement, 'down' means decline (from backend)
@@ -114,6 +118,15 @@ function StatRow({ label, value, subLabel, highlight }: StatRowProps) {
         <span className={cn('font-semibold', highlight && 'text-primary')}>{value}</span>
         {subLabel && <span className="text-xs text-muted-foreground ml-1">({subLabel})</span>}
       </div>
+    </div>
+  );
+}
+
+function DeferredDashboardSection({ title }: { title: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4" role="status" aria-label={`Loading ${title}`}>
+      <div className="mb-3 text-sm font-medium text-muted-foreground">{title}</div>
+      <Skeleton className="h-[260px] rounded-md" />
     </div>
   );
 }
@@ -465,9 +478,16 @@ export function Dashboard({ onTaskClick }: DashboardProps = {}) {
 
       {/* Historical Trends Charts (full width) */}
       {widgets.showTrendsCharts && (
-        <div className="col-span-full">
-          <TrendsCharts project={project} />
-        </div>
+        <LazyOnVisible
+          className="col-span-full"
+          minHeight={320}
+          rootMargin="0px 0px"
+          fallback={<DeferredDashboardSection title="Historical Trends" />}
+        >
+          <Suspense fallback={<DeferredDashboardSection title="Historical Trends" />}>
+            <LazyTrendsCharts project={project} />
+          </Suspense>
+        </LazyOnVisible>
       )}
 
       {/* Drill-Down Panel */}

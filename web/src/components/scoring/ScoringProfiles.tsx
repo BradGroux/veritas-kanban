@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type {
   CreateScoringProfileInput,
   EvaluationRequest,
@@ -25,7 +25,10 @@ import {
   useScoringProfiles,
   useUpdateScoringProfile,
 } from '@/hooks/useScoring';
-import { ScoreExplorer } from './ScoreExplorer';
+
+const ScoreExplorer = lazy(() =>
+  import('./ScoreExplorer').then((mod) => ({ default: mod.ScoreExplorer }))
+);
 
 interface ScoringProfilesProps {
   onBack: () => void;
@@ -269,6 +272,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
         <Tabs
           value={activeTab}
           onChange={(value) => setActiveTab(value ?? 'profiles')}
+          keepMounted={false}
           className="flex h-full flex-col gap-4"
         >
           <Tabs.List className="w-fit">
@@ -746,7 +750,15 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
           </Tabs.Panel>
 
           <Tabs.Panel value="explorer" className="m-0 min-h-0 flex-1 overflow-auto">
-            <ScoreExplorer profiles={profiles} />
+            <Suspense
+              fallback={
+                <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                  Loading score explorer...
+                </div>
+              }
+            >
+              <ScoreExplorer profiles={profiles} />
+            </Suspense>
           </Tabs.Panel>
         </Tabs>
       </div>
