@@ -22,7 +22,6 @@ import {
   searchParamsToFilters,
 } from './FilterBar';
 import { BulkActionsBar } from './BulkActionsBar';
-import { BoardSidebar } from './BoardSidebar';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import {
   areBoardViewFiltersEqual,
@@ -54,6 +53,12 @@ const Dashboard = lazy(() =>
 const TaskDetailPanel = lazy(() =>
   import('@/components/task/TaskDetailPanel').then((mod) => ({
     default: mod.TaskDetailPanel,
+  }))
+);
+
+const BoardSidebar = lazy(() =>
+  import('./BoardSidebar').then((mod) => ({
+    default: mod.BoardSidebar,
   }))
 );
 
@@ -549,11 +554,17 @@ export function KanbanBoard() {
             )}
           </section>
 
-          <BoardSidebar
-            onTaskClick={(taskId) => {
-              void handleTaskIdClick(taskId);
-            }}
-          />
+          <Suspense
+            fallback={
+              <aside className="min-h-24 rounded-md border border-dashed border-border/70" />
+            }
+          >
+            <BoardSidebar
+              onTaskClick={(taskId) => {
+                void handleTaskIdClick(taskId);
+              }}
+            />
+          </Suspense>
         </div>
 
         {boardSettings.showDashboard && (

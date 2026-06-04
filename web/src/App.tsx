@@ -12,15 +12,10 @@ import { WebSocketStatusProvider } from './contexts/WebSocketContext';
 import { ViewProvider, useView } from './contexts/ViewContext';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { IdentityProvider } from './hooks/useIdentity';
-import { AuthGuard } from './components/auth';
-import { DesktopOnboardingDialog } from './components/auth/DesktopOnboarding';
+import { AuthGuard } from './components/auth/AuthGuard';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
-import { FloatingChat } from './components/chat/FloatingChat';
-import { SystemHealthBar } from './components/layout/SystemHealthBar';
-import { MobileShell } from './components/layout/MobileShell';
-import { PwaStatusBanner } from './components/layout/PwaStatusBanner';
 import { NAVIGATION_VIEWS, VIEW_BY_ID, type AppView, type NavigationView } from './lib/views';
 import { usePendingProductMode } from './hooks/usePendingProductMode';
 
@@ -32,6 +27,36 @@ const LAZY_VIEW_COMPONENTS = Object.fromEntries(
     return [definition.view, lazy(definition.loadComponent)];
   })
 ) as Record<NavigationView, ReturnType<typeof lazy>>;
+
+const FloatingChat = lazy(() =>
+  import('./components/chat/FloatingChat').then((mod) => ({
+    default: mod.FloatingChat,
+  }))
+);
+
+const DesktopOnboardingDialog = lazy(() =>
+  import('./components/auth/DesktopOnboarding').then((mod) => ({
+    default: mod.DesktopOnboardingDialog,
+  }))
+);
+
+const MobileShell = lazy(() =>
+  import('./components/layout/MobileShell').then((mod) => ({
+    default: mod.MobileShell,
+  }))
+);
+
+const PwaStatusBanner = lazy(() =>
+  import('./components/layout/PwaStatusBanner').then((mod) => ({
+    default: mod.PwaStatusBanner,
+  }))
+);
+
+const SystemHealthBar = lazy(() =>
+  import('./components/layout/SystemHealthBar').then((mod) => ({
+    default: mod.SystemHealthBar,
+  }))
+);
 
 function ViewLoading({ view }: { view: AppView }) {
   return (
@@ -107,11 +132,19 @@ function AppContent() {
                   <Box className="min-h-screen bg-background">
                     <SkipToContent />
                     <Header />
-                    <SystemHealthBar />
-                    <PwaStatusBanner
-                      sessionExpiry={authStatus?.sessionExpiry}
-                      onRefreshAuth={refreshStatus}
-                    />
+                    <Suspense
+                      fallback={
+                        <div className="h-7 border-b border-border bg-muted/30" aria-hidden />
+                      }
+                    >
+                      <SystemHealthBar />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                      <PwaStatusBanner
+                        sessionExpiry={authStatus?.sessionExpiry}
+                        onRefreshAuth={refreshStatus}
+                      />
+                    </Suspense>
                     <Box
                       component="main"
                       id="main-content"
@@ -126,12 +159,20 @@ function AppContent() {
                     </Box>
                     <Toaster />
                     <CommandPalette />
-                    <FloatingChat />
-                    <MobileShell />
-                    <DesktopOnboardingDialog
-                      open={showDesktopOnboarding}
-                      onOpenChange={setShowDesktopOnboarding}
-                    />
+                    <Suspense fallback={null}>
+                      <FloatingChat />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                      <MobileShell />
+                    </Suspense>
+                    {showDesktopOnboarding && (
+                      <Suspense fallback={null}>
+                        <DesktopOnboardingDialog
+                          open={showDesktopOnboarding}
+                          onOpenChange={setShowDesktopOnboarding}
+                        />
+                      </Suspense>
+                    )}
                   </Box>
                 </IdentityProvider>
               </ViewProvider>
