@@ -2,6 +2,7 @@
 
 import type { AgentType, TaskPriority } from './task.types.js';
 import type { TelemetryConfig } from './telemetry.types.js';
+import type { WatcherContinuationSettings } from './watcher-policy.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -365,6 +366,9 @@ export interface SquadWebhookSettings {
   openclawGatewayToken?: string; // Auth token
 }
 
+/** Watcher continuation policy settings. Disabled by default. */
+export type { WatcherContinuationSettings } from './watcher-policy.types.js';
+
 /** All feature settings combined */
 export interface FeatureSettings {
   general: GeneralSettings;
@@ -382,6 +386,7 @@ export interface FeatureSettings {
   sharedResources: SharedResourcesSettings;
   docFreshness: DocFreshnessSettings;
   squadWebhook: SquadWebhookSettings;
+  watcherContinuations: WatcherContinuationSettings;
 }
 
 /** Default feature settings — matches current app behavior */
@@ -498,5 +503,21 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     notifyOnAgent: false,
     openclawGatewayUrl: '',
     openclawGatewayToken: '',
+  },
+  watcherContinuations: {
+    enabled: false,
+    globalKillSwitch: true,
+    defaultMode: 'ask_always',
+    maxContinuationsPerRun: 3,
+    spendCapUsd: 5,
+    riskClasses: [
+      'destructive_command',
+      'credential_reference',
+      'recent_test_failure',
+      'provider_error',
+      'policy_violation',
+    ],
+    dispatchDenyPatterns: [],
+    policies: [],
   },
 };

@@ -258,6 +258,42 @@ const SquadWebhookSettingsSchema = z
   .strict()
   .optional();
 
+const WatcherRiskClassSchema = z.enum([
+  'destructive_command',
+  'credential_reference',
+  'recent_test_failure',
+  'provider_error',
+  'policy_violation',
+]);
+
+const WatcherContinuationPolicySchema = z
+  .object({
+    id: z.string().min(1).max(120),
+    enabled: z.boolean(),
+    project: z.string().min(1).max(160).optional(),
+    agent: z.string().min(1).max(120).optional(),
+    mode: z.enum(['ask_always', 'ask_on_risk', 'auto']).optional(),
+    maxContinuations: z.number().int().min(0).max(100).optional(),
+    spendCapUsd: z.number().min(0).max(100000).optional(),
+    riskClasses: z.array(WatcherRiskClassSchema).max(20).optional(),
+    dispatchDenyPatterns: z.array(z.string().min(1).max(200)).max(100).optional(),
+  })
+  .strict();
+
+const WatcherContinuationSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    globalKillSwitch: z.boolean().optional(),
+    defaultMode: z.enum(['ask_always', 'ask_on_risk', 'auto']).optional(),
+    maxContinuationsPerRun: z.number().int().min(0).max(100).optional(),
+    spendCapUsd: z.number().min(0).max(100000).optional(),
+    riskClasses: z.array(WatcherRiskClassSchema).max(20).optional(),
+    dispatchDenyPatterns: z.array(z.string().min(1).max(200)).max(100).optional(),
+    policies: z.array(WatcherContinuationPolicySchema).max(200).optional(),
+  })
+  .strict()
+  .optional();
+
 const SharedResourcesSettingsSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -286,6 +322,7 @@ const FeatureSettingsPatchObjectSchema = z
     sharedResources: SharedResourcesSettingsSchema,
     docFreshness: DocFreshnessSettingsSchema,
     squadWebhook: SquadWebhookSettingsSchema,
+    watcherContinuations: WatcherContinuationSettingsSchema,
   })
   .strict()
   .refine((val) => !hasDangerousKeys(val), {

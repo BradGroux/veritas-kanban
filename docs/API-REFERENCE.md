@@ -43,14 +43,15 @@
 30. [Cost Prediction](#cost-prediction)
 31. [Error Learning](#error-learning)
 32. [Tool Policies](#tool-policies)
-33. [Traces](#traces)
-34. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-35. [Audit](#audit)
-36. [Maintenance Center](#maintenance-center-apiv1maintenance)
-37. [Common Workflows](#common-workflows)
-38. [Versioning & Deprecation](#versioning--deprecation)
-39. [Rate Limits](#rate-limits)
-40. [Additional Endpoint Groups](#additional-endpoint-groups)
+33. [Watcher Continuation Policies](#watcher-continuation-policies)
+34. [Traces](#traces)
+35. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+36. [Audit](#audit)
+37. [Maintenance Center](#maintenance-center-apiv1maintenance)
+38. [Common Workflows](#common-workflows)
+39. [Versioning & Deprecation](#versioning--deprecation)
+40. [Rate Limits](#rate-limits)
+41. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2065,6 +2066,69 @@ POST /api/tool-policies/:role/validate
 
 ---
 
+## Watcher Continuation Policies
+
+Deterministic guardrail endpoint for agent runners that want to continue a run.
+The server decides before execution whether the continuation is allowed, needs
+approval, or is blocked by the global kill switch, dispatch filters, risk
+classes, continuation caps, or spend caps. Decisions are written to the
+hash-chained audit log without storing prompt or command payloads.
+
+Mounted at `/api/watcher-policies`.
+
+| Method | Path                             | Description                                      |
+| ------ | -------------------------------- | ------------------------------------------------ |
+| `GET`  | `/api/watcher-policies`          | Return current watcher continuation settings     |
+| `POST` | `/api/watcher-policies/evaluate` | Evaluate one proposed continuation before launch |
+
+### Evaluate Continuation
+
+```
+POST /api/watcher-policies/evaluate
+```
+
+**Body**:
+
+```json
+{
+  "runId": "run_123",
+  "taskId": "task_456",
+  "project": "core",
+  "agent": "codex",
+  "prompt": "Continue with the next test fix.",
+  "continuationCount": 1,
+  "monthlySpendUsd": 1.25,
+  "hasRecentTestFailures": false,
+  "recentProviderErrors": 0
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "decision": "allow",
+  "mode": "auto",
+  "riskLevel": "low",
+  "riskClasses": [],
+  "reasons": ["Continuation is within policy, dispatch, and cap limits."],
+  "evidence": [],
+  "caps": {
+    "maxContinuations": 3,
+    "spendCapUsd": 5
+  },
+  "auditLogged": true,
+  "evaluatedAt": "2026-06-04T22:00:00.000Z"
+}
+```
+
+Settings live under `features.watcherContinuations` and are updated through
+`PATCH /api/settings/features`. Defaults preserve current behavior:
+continuations are disabled and the global kill switch is active until explicitly
+configured.
+
+---
+
 ## Traces
 
 Distributed execution tracing — record and query traces for agent task attempts.
@@ -2287,6 +2351,7 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/summary`                   | Board summaries                               |
 | `/api/github`                    | GitHub integration                            |
 | `/api/conflicts`                 | Merge conflict detection                      |
+| `/api/watcher-policies`          | Agent continuation guardrail decisions        |
 | `/api/metrics`                   | Prometheus-style metrics                      |
 | `/api/traces`                    | Distributed tracing                           |
 | `/api/cost-prediction`           | Token cost forecasting                        |

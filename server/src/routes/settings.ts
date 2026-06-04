@@ -4,6 +4,7 @@ import { CodexHealthService } from '../services/codex-health-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getAttachmentService } from '../services/attachment-service.js';
 import { setEnforcementSettings, setHooksSettings } from '../services/hook-service.js';
+import { setWatcherContinuationSettings } from '../services/watcher-policy-service.js';
 import type { FeatureSettings } from '@veritas-kanban/shared';
 import { FeatureSettingsPatchSchema } from '../schemas/feature-settings-schema.js';
 import { strictRateLimit } from '../middleware/rate-limit.js';
@@ -45,6 +46,9 @@ export function syncSettingsToServices(settings: FeatureSettings): void {
 
   // Sync enforcement settings
   setEnforcementSettings(settings.enforcement);
+
+  // Sync watcher continuation policy settings
+  setWatcherContinuationSettings(settings.watcherContinuations);
 
   // Register outbound endpoints from legacy feature settings without exposing secrets.
   void getOutboundIntegrationService()

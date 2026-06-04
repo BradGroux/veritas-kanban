@@ -47,6 +47,7 @@ import {
   taskReadAccess,
   telemetryAccess,
   transcriptAccess,
+  watcherPolicyAccess,
   workflowAccess,
   workProductAccess,
   workspaceAccess,
@@ -124,6 +125,7 @@ import { maintenanceRoutes } from '../maintenance.js';
 import { identityRoutes } from '../identity.js';
 import { skillCapabilityRoutes } from '../skill-capabilities.js';
 import { skillSecurityRoutes } from '../skill-security.js';
+import { watcherPolicyRoutes } from '../watcher-policies.js';
 
 const v1Router: IRouter = Router();
 
@@ -215,6 +217,7 @@ v1Router.use('/audit', adminAccess, auditRoutes);
 v1Router.use('/lessons', taskReadAccess, lessonsRoutes);
 v1Router.use('/delegation', delegationAccess, delegationRoutes);
 v1Router.use('/workflows', workflowAccess, workflowRoutes);
+v1Router.use('/watcher-policies', watcherPolicyAccess, watcherPolicyRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);
 v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);

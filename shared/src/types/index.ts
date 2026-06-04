@@ -27,3 +27,4 @@ export * from './maintenance.types.js';
 export * from './governance-trace.types.js';
 export * from './skill-capability.types.js';
 export * from './skill-security.types.js';
+export * from './watcher-policy.types.js';

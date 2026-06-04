@@ -78,6 +78,10 @@ export const workflowAccess = routeAccess('workflow:read', 'workflow:write', [
   },
 ]);
 
+export const watcherPolicyAccess = routeAccess('policy:read', 'policy:write', [
+  { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
+]);
+
 export const reportRoutesAccess = routeAccess('report:read', 'settings:write', [
   { methods: ['POST'], path: /^\/generate\/?$/, permissions: 'report:read' },
 ]);

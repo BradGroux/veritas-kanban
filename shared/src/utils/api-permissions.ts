@@ -239,6 +239,14 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   {
+    prefix: '/api/watcher-policies',
+    read: 'policy:read',
+    write: 'policy:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
+    ],
+  },
+  {
     prefix: '/api/tool-policies',
     read: 'policy:read',
     overrides: [
