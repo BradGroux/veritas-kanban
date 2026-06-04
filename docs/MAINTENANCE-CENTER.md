@@ -13,6 +13,8 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
   safe-to-review generated data.
 - Redacted log tails from allowlisted sources only.
 - Redacted debug bundles with a manifest of included and excluded categories.
+- CLI runtime snapshots through `vk snapshot`, with JSON or Markdown output
+  safe to paste into support handoffs by default.
 - SQLite export/import actions that report bundle path, database path, table
   counts, warnings, and failure messages.
 - Admin-only skill security scans through

@@ -411,6 +411,7 @@ Run the deeper setup health command before collecting manual diagnostics:
 ```bash
 vk doctor
 vk doctor --json
+vk snapshot --format markdown
 ```
 
 `vk doctor` exits non-zero for critical blockers such as API/auth failures,
@@ -418,6 +419,13 @@ duplicate task IDs, missing enabled agent executables, or routing rules that
 point at unavailable agents. JSON output is copy/paste safe by default: local
 paths and webhook delivery URLs are redacted. Use `--show-paths` only when local
 path details are needed for a private support handoff.
+
+Use `vk snapshot --format markdown` when the support handoff needs runtime
+context instead of pass/fail setup checks. It exports versions, API reachability,
+project/sprint lists, agent status/routing summaries, prompt registry counts,
+task counts by status/priority/type, duplicate ID diagnostics,
+notification/webhook enabled states, and maintenance health. Add
+`--output <path>` to write the snapshot to disk.
 
 ### CLI or MCP can read but cannot write
 
