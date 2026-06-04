@@ -5,6 +5,10 @@
 # Then open: http://localhost:3099
 #
 # Automatically seeds demo data on first run via the seed sidecar.
+#
+# LOCAL DEMO ONLY:
+# - Defaults to DEMO_BIND=127.0.0.1 and VERITAS_AUTH_ENABLED=false.
+# - Do not set DEMO_BIND=0.0.0.0 unless auth is enabled and credentials are replaced.
 # =============================================================================
 
 services:
@@ -15,12 +19,14 @@ services:
     container_name: vk-demo
     working_dir: /app/server
     ports:
-      - '${DEMO_PORT:-3099}:3001'
+      - '${DEMO_BIND:-127.0.0.1}:${DEMO_PORT:-3099}:3001'
     environment:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
+      # Fixed local demo credential. Replace before enabling non-loopback access.
       - VERITAS_ADMIN_KEY=${VERITAS_ADMIN_KEY:-demo-admin-key-2026}
+      # Auth-disabled mode is safe only with DEMO_BIND left at 127.0.0.1.
       - VERITAS_AUTH_ENABLED=${VERITAS_AUTH_ENABLED:-false}
       - VERITAS_AUTH_LOCALHOST_BYPASS=true
       - VERITAS_AUTH_LOCALHOST_ROLE=admin

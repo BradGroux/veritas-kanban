@@ -6,6 +6,10 @@
 #   docker compose up -d             # Start in background
 #   docker compose down              # Stop and remove
 #   docker compose logs -f           # Follow logs
+#
+# LOCAL TESTING ONLY:
+# - Binds to 127.0.0.1 by default. Do not use this file as production config.
+# - The demo key below is not a deployment credential.
 # =============================================================================
 
 services:
@@ -18,12 +22,12 @@ services:
     working_dir: /app/server
     ports:
       # Demo instance port (do NOT use production 3001)
-      - '3099:3001'
+      - '127.0.0.1:3099:3001'
     environment:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
-      # Demo auth key (Arcade walkthrough)
+      # Demo auth key (Arcade walkthrough). Replace before reusing this config.
       - VERITAS_ADMIN_KEY=demo-admin-key-for-product-hunt-2026
       # Host -> container requests come from bridge IP (not 127.0.0.1), so keep API key enabled.
       - VERITAS_AUTH_LOCALHOST_BYPASS=false

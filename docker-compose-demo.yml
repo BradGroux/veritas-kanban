@@ -5,6 +5,11 @@
 #   docker compose -f docker-compose-demo.yml up --build -d
 #   docker compose -f docker-compose-demo.yml down
 #   docker compose -f docker-compose-demo.yml logs -f
+#
+# LOCAL DEMO ONLY:
+# - Binds to 127.0.0.1 by default so this auth-disabled demo is not exposed on
+#   LAN, VPS, tunnel, or reverse-proxy interfaces by accident.
+# - The admin key below is a throwaway demo value. Do not reuse it for deploys.
 # =============================================================================
 
 services:
@@ -16,14 +21,16 @@ services:
     # IMPORTANT: must match Dockerfile WORKDIR for relative CMD (node dist/index.js)
     working_dir: /app/server
     ports:
-      - '3099:3001'
+      - '127.0.0.1:3099:3001'
     environment:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
+      # Fixed local demo credential. Replace with a generated 32+ char secret for any deployment.
       - VERITAS_ADMIN_KEY=demo-admin-key-for-product-hunt-2026
       - VERITAS_AUTH_LOCALHOST_BYPASS=true
       - VERITAS_AUTH_LOCALHOST_ROLE=admin
+      # Auth-disabled mode is safe only with the loopback port binding above.
       - VERITAS_AUTH_ENABLED=false
       - CORS_ORIGINS=http://localhost:3099
     volumes:

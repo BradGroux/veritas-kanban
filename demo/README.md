@@ -14,6 +14,8 @@ docker compose -f demo/docker-compose.demo.yml up --build
 
 Then open **http://localhost:3099**
 
+The demo binds to `127.0.0.1` and disables auth by default. Keep it local. For LAN, tunnel, VPS, or reverse-proxy access, set `VERITAS_AUTH_ENABLED=true`, replace `VERITAS_ADMIN_KEY`, and intentionally set `DEMO_BIND` to the required interface.
+
 ## What's Included
 
 The demo seeds realistic data showcasing VK's features:
@@ -34,11 +36,12 @@ Copy `.env.example` to `.env` to customize:
 cp demo/.env.example demo/.env
 ```
 
-| Variable               | Default               | Description                |
-| ---------------------- | --------------------- | -------------------------- |
-| `DEMO_PORT`            | `3099`                | Host port for the UI       |
-| `VERITAS_ADMIN_KEY`    | `demo-admin-key-2026` | API admin key              |
-| `VERITAS_AUTH_ENABLED` | `false`               | Set `true` to require auth |
+| Variable               | Default               | Description                                      |
+| ---------------------- | --------------------- | ------------------------------------------------ |
+| `DEMO_PORT`            | `3099`                | Host port for the UI                             |
+| `DEMO_BIND`            | `127.0.0.1`           | Host interface for the published port            |
+| `VERITAS_ADMIN_KEY`    | `demo-admin-key-2026` | Throwaway local demo key                         |
+| `VERITAS_AUTH_ENABLED` | `false`               | Set `true` before any non-loopback demo exposure |
 
 ## Reset Demo Data
 
@@ -58,3 +61,13 @@ docker compose -f demo/docker-compose.demo.yml up --build
 4. The sidecar exits; VK keeps running with seeded data
 
 Data persists in a Docker volume (`demo-data`) across restarts. The seed script is idempotent — it skips if tasks already exist.
+
+## Validate Compose Output
+
+Before changing bind/auth settings, inspect the generated config:
+
+```bash
+docker compose -f demo/docker-compose.demo.yml config
+```
+
+The default `ports` output should include `127.0.0.1:3099:3001`.

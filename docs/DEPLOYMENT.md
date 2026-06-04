@@ -30,6 +30,8 @@ This guide covers deploying Veritas Kanban in production using Docker (recommend
 
 The fastest way to get Veritas Kanban running in production:
 
+Use the production compose example in this guide for deployed instances. The repo's demo Compose files are local-only and may disable auth for walkthroughs; do not expose them on LAN, tunnel, VPS, or reverse-proxy interfaces.
+
 ```bash
 # Clone the repository
 git clone https://github.com/BradGroux/veritas-kanban.git

@@ -376,6 +376,8 @@ location /kanban/ws {
 
 Docker is the recommended approach for production deployments.
 
+Do not use the demo Compose files (`docker-compose-demo.yml` or `demo/docker-compose.demo.yml`) for production or shared-network deployments. They are local demo configs and may disable auth for convenience. Use the authenticated production compose example below and generate fresh secrets.
+
 ### Quick start
 
 ```bash
