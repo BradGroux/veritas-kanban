@@ -56,6 +56,7 @@ For a deeper support-safe setup check, run:
 ```bash
 vk doctor
 vk doctor --json
+vk snapshot --format markdown
 ```
 
 `vk doctor` checks the CLI link, API reachability, auth context, task identity
@@ -63,6 +64,11 @@ conflicts, configured agent executables, routing fallbacks, prompt registry,
 Codex readiness, and notification/webhook configuration. Output redacts local
 paths and delivery URLs by default; use `--show-paths` only when you explicitly
 want local paths in the report.
+
+`vk snapshot` exports a paste-safe runtime support snapshot with version,
+project, sprint, agent, global agent status, routing, prompt, task-count,
+notification, and maintenance-health sections. Use `--output <path>` to write
+JSON or Markdown to a file.
 
 ### Manual Setup
 
