@@ -29,6 +29,11 @@ Hosted cloud sync and hosted SaaS are post-GA and must follow
 and self-hosted releases must not require hosted account state, hosted billing,
 or a default hosted endpoint.
 
+Deeper desktop agent workbench features are post-GA and must follow
+[Post-GA Desktop Agent Workbench Spec](DESKTOP-AGENT-WORKBENCH.md). v5 clients
+must keep run controls, evidence views, and approval boundaries server-owned
+and client-mode aware.
+
 ## Version Negotiation Rules
 
 1. API clients may send `X-API-Version: v1`; unsupported values fail before the

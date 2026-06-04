@@ -188,6 +188,8 @@ admin credentials for routine agent writes.
   [ADR 0004](architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md); v5 Mac
   GA has no hosted endpoint, hosted account requirement, or automatic cloud
   sync default.
-- Deeper desktop agent workbench features are tracked in #545.
+- Deeper desktop agent workbench features are defined in
+  [Post-GA Desktop Agent Workbench Spec](DESKTOP-AGENT-WORKBENCH.md);
+  implementation remains post-GA.
 - App rollback after SQLite migration is limited by schema compatibility. Use
   the pre-migration backup when an older app cannot open a newer schema.

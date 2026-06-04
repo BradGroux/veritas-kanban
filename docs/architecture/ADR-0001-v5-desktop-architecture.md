@@ -379,6 +379,11 @@ Main process may project safe commands into native menus or deep-link handlers,
 but command execution still flows through API or typed bridge calls with explicit
 capabilities. The renderer cannot register native commands at runtime.
 
+Post-GA desktop agent workbench extensions must follow the
+[Post-GA Desktop Agent Workbench Spec](../DESKTOP-AGENT-WORKBENCH.md), including
+server-owned run controls, evidence preservation, approval freshness, and
+client-mode action classes.
+
 Diagnostics are split:
 
 - Server diagnostics expose health, readiness, storage, WebSocket count, and
