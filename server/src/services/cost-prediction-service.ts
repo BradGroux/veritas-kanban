@@ -182,7 +182,12 @@ class CostPredictionService {
     };
 
     log.info(
-      { type: task.type, priority: task.priority, estimatedCost: prediction.estimatedCost, confidence },
+      {
+        type: task.type,
+        priority: task.priority,
+        estimatedCost: prediction.estimatedCost,
+        confidence,
+      },
       'Cost prediction generated'
     );
 
@@ -256,7 +261,9 @@ class CostPredictionService {
     const meanAccuracy = accuracies.reduce((sum, a) => sum + a, 0) / accuracies.length;
     const medianAccuracy =
       sortedAccuracies.length % 2 === 0
-        ? (sortedAccuracies[sortedAccuracies.length / 2 - 1]! + sortedAccuracies[sortedAccuracies.length / 2]!) / 2
+        ? (sortedAccuracies[sortedAccuracies.length / 2 - 1]! +
+            sortedAccuracies[sortedAccuracies.length / 2]!) /
+          2
         : sortedAccuracies[Math.floor(sortedAccuracies.length / 2)]!;
 
     const within20 = accuracy.filter((a) => a.accuracy >= 80 && a.accuracy <= 120).length;
@@ -274,8 +281,10 @@ class CostPredictionService {
       byType[type].meanError += item.error;
     }
     for (const type of Object.keys(byType)) {
-      byType[type].meanAccuracy = Math.round((byType[type].meanAccuracy / byType[type].count) * 10) / 10;
-      byType[type].meanError = Math.round((byType[type].meanError / byType[type].count) * 100) / 100;
+      byType[type].meanAccuracy =
+        Math.round((byType[type].meanAccuracy / byType[type].count) * 10) / 10;
+      byType[type].meanError =
+        Math.round((byType[type].meanError / byType[type].count) * 100) / 100;
     }
 
     return {
@@ -293,8 +302,8 @@ class CostPredictionService {
    * Get historical average cost for similar tasks.
    */
   private async getHistoricalBaseCost(
-    type?: string,
-    project?: string
+    _type?: string,
+    _project?: string
   ): Promise<{ avgCost: number; sampleSize: number }> {
     try {
       const telemetry = getTelemetryService();
@@ -316,8 +325,7 @@ class CostPredictionService {
 
         const inputTokens = (e.inputTokens as number) || 0;
         const outputTokens = (e.outputTokens as number) || 0;
-        const eventCost =
-          (e.cost as number) || inputTokens * 0.00001 + outputTokens * 0.00003;
+        const eventCost = (e.cost as number) || inputTokens * 0.00001 + outputTokens * 0.00003;
 
         taskCosts.set(taskId, (taskCosts.get(taskId) || 0) + eventCost);
       }

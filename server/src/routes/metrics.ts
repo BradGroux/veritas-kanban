@@ -1,7 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { getMetricsService } from '../services/metrics/index.js';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { ValidationError } from '../middleware/error-handler.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
 import {
   MetricsQuerySchema,
@@ -27,7 +26,7 @@ router.get(
   validate({ query: TaskMetricsQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, TaskMetricsQuery>, res) => {
     const metrics = getMetricsService();
-    const { project, period, from, to } = req.validated.query!;
+    const { project, period, from } = req.validated.query!;
     const { getPeriodStart } = await import('../services/metrics/helpers.js');
     const since = getPeriodStart(period, from);
     const result = await metrics.getTaskMetrics(project, since);

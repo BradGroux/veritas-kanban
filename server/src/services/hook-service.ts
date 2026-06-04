@@ -169,7 +169,7 @@ export async function fireHook(
 async function fireSquadChat(
   event: HookEvent,
   task: Pick<Task, 'id' | 'title' | 'status' | 'project' | 'sprint' | 'agent'>,
-  previousStatus?: string
+  _previousStatus?: string
 ): Promise<void> {
   const chatService = getChatService();
 

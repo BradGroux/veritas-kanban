@@ -47,7 +47,6 @@ const log = createLogger('clawdbot-agent-service');
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const LOGS_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'logs');
-const CLAWDBOT_GATEWAY = process.env.CLAWDBOT_GATEWAY || 'http://127.0.0.1:18789';
 export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [

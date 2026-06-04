@@ -1,14 +1,14 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { BadRequestError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { feedbackService } from '../services/feedback-service.js';
 import { paramStr, qNum, qStr } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
 
 const CATEGORIES = ['quality', 'performance', 'accuracy', 'safety', 'ux'] as const;
-const SENTIMENTS = ['positive', 'neutral', 'negative'] as const;
+type FeedbackSentiment = 'positive' | 'neutral' | 'negative';
 
 const createFeedbackSchema = z.object({
   taskId: z.string().min(1),
@@ -43,14 +43,13 @@ router.get(
   asyncHandler(async (req, res) => {
     const limit = qNum(req.query.limit);
     const resolvedRaw = qStr(req.query.resolved);
-    const resolved =
-      resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
+    const resolved = resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
 
     const items = await feedbackService.list({
       taskId: qStr(req.query.taskId),
       agent: qStr(req.query.agent),
       category: qStr(req.query.category) as (typeof CATEGORIES)[number] | undefined,
-      sentiment: qStr(req.query.sentiment) as (typeof SENTIMENTS)[number] | undefined,
+      sentiment: qStr(req.query.sentiment) as FeedbackSentiment | undefined,
       resolved,
       since: qStr(req.query.since),
       until: qStr(req.query.until),
@@ -70,7 +69,7 @@ router.get(
       taskId: qStr(req.query.taskId),
       agent: qStr(req.query.agent),
       category: qStr(req.query.category) as (typeof CATEGORIES)[number] | undefined,
-      sentiment: qStr(req.query.sentiment) as (typeof SENTIMENTS)[number] | undefined,
+      sentiment: qStr(req.query.sentiment) as FeedbackSentiment | undefined,
       since: qStr(req.query.since),
       until: qStr(req.query.until),
     });

@@ -22,10 +22,6 @@ const updateSubtaskSchema = z.object({
   criteriaChecked: z.array(z.boolean()).optional(),
 });
 
-const toggleCriteriaSchema = z.object({
-  criteriaIndex: z.number().int().min(0),
-});
-
 // POST /api/tasks/:id/subtasks - Add subtask
 router.post(
   '/:id/subtasks',

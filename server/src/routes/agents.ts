@@ -1,10 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
-import {
-  AgentReadinessError,
-  ClawdbotAgentService,
-  clawdbotAgentService,
-} from '../services/clawdbot-agent-service.js';
+import { AgentReadinessError, clawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getTaskService } from '../services/task-service.js';
 import type { AgentType, TokenTelemetryEvent } from '@veritas-kanban/shared';

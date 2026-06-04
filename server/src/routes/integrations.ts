@@ -104,7 +104,7 @@ async function pingService(service: CoolifyServiceConfig): Promise<ServiceStatus
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
 
   try {
-    const response = await fetch(validated.href, {
+    await fetch(validated.href, {
       method: 'HEAD',
       signal: controller.signal,
       redirect: 'manual',

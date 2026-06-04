@@ -6,7 +6,7 @@ import { activityService } from '../services/activity-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText } from '../utils/sanitize.js';
-import type { Task, Observation, ObservationType } from '@veritas-kanban/shared';
+import type { Observation, ObservationType } from '@veritas-kanban/shared';
 import { qStr, qStrD, qNum, qNumD, paramStr } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();

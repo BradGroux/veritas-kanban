@@ -3,9 +3,7 @@ import path from 'path';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
-import type { Task } from '@veritas-kanban/shared';
 import { spawn } from 'child_process';
-import { promisify } from 'util';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('worktree-service');
 
@@ -205,7 +203,7 @@ export class WorktreeService {
     // Get ahead/behind info
     let aheadBehind = { ahead: 0, behind: 0 };
     try {
-      const { git: repoGit, repoPath: mainRepoPath } = await this.getRepoGit(task.git.repo);
+      const { repoPath: mainRepoPath } = await this.getRepoGit(task.git.repo);
 
       // Fetch to get latest with timeout (intentionally silent: may be offline)
       await this.execGitWithTimeout(mainRepoPath, ['fetch']).catch(() => {});
@@ -252,7 +250,7 @@ export class WorktreeService {
     }
 
     // Get main repo git
-    const { git: repoGit, repoPath } = await this.getRepoGit(task.git.repo);
+    const { repoPath } = await this.getRepoGit(task.git.repo);
 
     // Remove worktree with timeout
     const args = ['worktree', 'remove', worktreePath];
@@ -291,7 +289,7 @@ export class WorktreeService {
       throw new Error('Task does not have an active worktree');
     }
 
-    const { git: repoGit, repoPath } = await this.getRepoGit(task.git.repo);
+    const { repoPath } = await this.getRepoGit(task.git.repo);
 
     // Checkout base branch in main repo with timeout
     await this.execGitWithTimeout(repoPath, ['checkout', task.git.baseBranch]);

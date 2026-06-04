@@ -1,4 +1,3 @@
-import { Router } from 'express';
 import { z } from 'zod';
 import { SprintService } from '../services/sprint-service.js';
 import { getTaskService } from '../services/task-service.js';

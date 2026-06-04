@@ -8,7 +8,12 @@ import { TELEMETRY_DIR } from './helpers.js';
 import { computeTaskMetrics, computeVelocityMetrics } from './task-metrics.js';
 import { computeRunMetrics, computeDurationMetrics, computeFailedRuns } from './run-metrics.js';
 import { computeTokenMetrics, computeBudgetMetrics } from './token-metrics.js';
-import { computeAllMetrics, computeTrends, computeAgentComparison, computeUtilization } from './dashboard-metrics.js';
+import {
+  computeAllMetrics,
+  computeTrends,
+  computeAgentComparison,
+  computeUtilization,
+} from './dashboard-metrics.js';
 import type {
   MetricsPeriod,
   TaskMetrics,
@@ -130,7 +135,7 @@ export class MetricsService {
     period: MetricsPeriod,
     from?: string,
     to?: string,
-    utcOffsetHours?: number,
+    utcOffsetHours?: number
   ): Promise<import('./types.js').UtilizationMetrics> {
     // Use telemetry-based computation (reliable data source)
     return computeUtilization(this.telemetryDir, period, from, to, utcOffsetHours);
@@ -140,8 +145,8 @@ export class MetricsService {
     period: MetricsPeriod,
     project?: string,
     limit = 50,
-    from?: string,
-    to?: string
+    _from?: string,
+    _to?: string
   ): Promise<FailedRunDetails[]> {
     return computeFailedRuns(this.telemetryDir, period, project, limit);
   }

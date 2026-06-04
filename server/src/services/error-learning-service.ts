@@ -13,7 +13,6 @@
  */
 
 import { getTaskService } from './task-service.js';
-import { getTelemetryService } from './telemetry-service.js';
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -114,7 +113,12 @@ class ErrorLearningService {
   private async ensureLoaded(): Promise<void> {
     if (!migrationChecked) {
       migrationChecked = true;
-      await migrateLegacyFiles(LEGACY_DATA_DIR, DATA_DIR, ['error-analyses.json'], 'error analysis');
+      await migrateLegacyFiles(
+        LEGACY_DATA_DIR,
+        DATA_DIR,
+        ['error-analyses.json'],
+        'error analysis'
+      );
     }
 
     if (this.loaded) return;

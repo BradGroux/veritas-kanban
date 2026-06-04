@@ -22,8 +22,6 @@ const log = createLogger('chat-service');
 
 // Default paths - resolve via shared paths helper to .veritas-kanban/chats/
 const DEFAULT_CHATS_DIR = getChatsDir();
-const DEFAULT_SESSIONS_DIR = path.join(DEFAULT_CHATS_DIR, 'sessions');
-const DEFAULT_SQUAD_DIR = path.join(DEFAULT_CHATS_DIR, 'squad');
 
 export interface ChatServiceOptions {
   chatsDir?: string;

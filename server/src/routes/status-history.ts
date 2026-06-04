@@ -1,5 +1,4 @@
 import { Router, type Router as RouterType } from 'express';
-import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { authorize } from '../middleware/auth.js';

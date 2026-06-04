@@ -3,7 +3,7 @@
  * Handles ACL checks for workflow operations
  */
 
-import type { WorkflowACL, WorkflowPermission } from '../types/workflow.js';
+import type { WorkflowPermission } from '../types/workflow.js';
 import { getWorkflowService } from '../services/workflow-service.js';
 import { ForbiddenError } from './error-handler.js';
 

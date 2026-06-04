@@ -1,5 +1,4 @@
-import { createLogger } from '../lib/logger.js';
-import type { Task, TimeEntry } from '@veritas-kanban/shared';
+import type { Task } from '@veritas-kanban/shared';
 import { getTaskService } from './task-service.js';
 import { StatusHistoryService } from './status-history-service.js';
 import type {
@@ -11,8 +10,6 @@ import type {
   TimelineQuery,
   MetricsQuery,
 } from '../schemas/analytics-schemas.js';
-
-const log = createLogger('analytics-service');
 
 /**
  * Time period with task info
@@ -209,7 +206,7 @@ export class AnalyticsService {
       leadTimes.length > 0 ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length : 0;
 
     // Calculate agent utilization
-    const agentPeriods = this.calculateAgentUtilization(tasksWithTime, from, to);
+    const agentPeriods = this.calculateAgentUtilization(tasksWithTime);
 
     // Total tracked time
     const totalTrackedTime =
@@ -421,7 +418,7 @@ export class AnalyticsService {
   /**
    * Calculate agent utilization (working time per agent)
    */
-  private calculateAgentUtilization(tasks: Task[], from: Date, to: Date): AgentPeriod[] {
+  private calculateAgentUtilization(tasks: Task[]): AgentPeriod[] {
     const agentMap = new Map<
       string,
       { startTime: number; endTime: number; totalDuration: number; taskCount: number }

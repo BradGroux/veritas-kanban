@@ -8,7 +8,6 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   ReviewComment,
-  Subtask,
   TaskTelemetryEvent,
   TimeTracking,
   RunStartedEvent,

@@ -344,8 +344,6 @@ router.post(
     const squadChatEnabled = settings.enforcement?.squadChat ?? false;
     if (squadChatEnabled) {
       try {
-        // Import fireHook to post to squad chat
-        const { fireHook } = await import('../services/hook-service.js');
         // Create a synthetic task for the squad chat message
         const violationMessage = `⚠️ Delegation Violation: ${agent} performed "${action}" directly instead of delegating to a sub-agent.${details ? ` Details: ${details}` : ''}${taskId ? ` (Task: ${taskId})` : ''}`;
 

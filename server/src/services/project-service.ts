@@ -59,9 +59,6 @@ export class ProjectService extends ManagedListService<ProjectConfig> {
    * Seed migration: scan all tasks and create ProjectConfig entries for unique projects
    */
   private async seedProjectsFromTasks(): Promise<void> {
-    const configDir = resolve(process.cwd(), '..', '.veritas-kanban');
-    const projectsFile = resolve(configDir, 'projects.json');
-
     // Only seed if the file is empty or has no items
     const existingProjects = await this.list(true);
     if (existingProjects.length > 0) {

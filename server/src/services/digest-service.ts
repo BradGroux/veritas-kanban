@@ -1,13 +1,7 @@
-import {
-  getMetricsService,
-  type MetricsService,
-  type TaskMetrics,
-  type RunMetrics,
-  type TokenMetrics,
-} from './metrics/index.js';
+import { getMetricsService, type MetricsService } from './metrics/index.js';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
-import type { Task, TaskTelemetryEvent } from '@veritas-kanban/shared';
+import type { TaskTelemetryEvent } from '@veritas-kanban/shared';
 
 export interface DailyDigest {
   period: {

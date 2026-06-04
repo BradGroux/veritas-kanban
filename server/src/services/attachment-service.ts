@@ -2,7 +2,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
-import mime from 'mime-types';
 import type { Attachment, AttachmentLimits } from '@veritas-kanban/shared';
 import { DEFAULT_ATTACHMENT_LIMITS, ALLOWED_MIME_TYPES } from '@veritas-kanban/shared';
 import { validateMimeType, getAllowedTypesDescription } from './mime-validation.js';

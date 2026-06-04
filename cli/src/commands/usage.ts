@@ -250,7 +250,7 @@ async function displayTaskUsage(taskId: string, period: string, json: boolean): 
 }
 
 export function registerUsageCommands(program: Command): void {
-  const usage = program
+  program
     .command('usage')
     .description('Display usage statistics (tokens, costs, time)')
     .option(

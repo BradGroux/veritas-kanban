@@ -45,9 +45,6 @@ export class SprintService extends ManagedListService<SprintConfig> {
    * Seed migration: scan all tasks and create SprintConfig entries for unique sprints
    */
   private async seedSprintsFromTasks(): Promise<void> {
-    const configDir = resolve(process.cwd(), '..', '.veritas-kanban');
-    const sprintsFile = resolve(configDir, 'sprints.json');
-
     // Only seed if the file is empty or has no items
     const existingSprints = await this.list(true);
     if (existingSprints.length > 0) {

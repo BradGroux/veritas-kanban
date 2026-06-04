@@ -11,7 +11,6 @@ import type {
   UpdatePromptTemplateInput,
   RenderPreviewRequest,
   RenderPreviewResponse,
-  PromptCategory,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';

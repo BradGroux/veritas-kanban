@@ -31,8 +31,8 @@ This audit covered the server, web app, shared package, CLI, MCP server, docs, s
 - `pnpm test:unit` passes across server and web packages.
 - Targeted regressions pass for URL validation, squad webhooks, task checkpoint/dependency behavior, auth, feedback, and web API helpers.
 - `pnpm build` passes across shared, server, web, CLI, and MCP after expanding the root build.
-- `pnpm lint` exits 0 and currently reports 714 warnings, down from 728, mostly `any`, non-null assertions, and hook dependency warnings.
-- `pnpm lint:budget` enforces the current warning ceiling so future cleanup can ratchet it down.
+- `pnpm lint` exits 0 and currently reports 601 warnings, down from 728, mostly `any`, non-null assertions, and test-only unused values.
+- `pnpm lint:budget` enforces the current warning ceiling and prints package/rule counts so future cleanup can ratchet it down.
 - `pnpm validate:release -- --github` passes for v4.3.1, including local tag, origin tag, and published GitHub release checks.
 - Scheduled QA workflow YAML parses successfully.
 - The Vite production build no longer emits oversized chunk warnings; the largest app chunk is the lazy `TaskDetailPanel` chunk at 473.98 kB.

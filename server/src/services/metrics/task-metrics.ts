@@ -8,7 +8,6 @@ import { TaskService } from '../task-service.js';
 import { PROJECT_ROOT } from './helpers.js';
 import type {
   TaskMetrics,
-  MetricsPeriod,
   VelocityTrend,
   SprintVelocityPoint,
   CurrentSprintProgress,

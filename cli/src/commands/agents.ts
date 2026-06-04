@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { api } from '../utils/api.js';
 import { findTask } from '../utils/find.js';
-import type { Task } from '../utils/types.js';
 
 export function registerAgentCommands(program: Command): void {
   // Start agent on task

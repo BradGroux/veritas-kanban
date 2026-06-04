@@ -97,7 +97,7 @@ export async function parseTemplateFile(
   let text: string;
   try {
     text = await file.text();
-  } catch (err) {
+  } catch {
     throw new Error('Failed to read file');
   }
 
@@ -105,7 +105,7 @@ export async function parseTemplateFile(
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch (err) {
+  } catch {
     throw new Error('Invalid JSON format');
   }
 

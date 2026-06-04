@@ -1,4 +1,4 @@
-import type { WebSocketServer, WebSocket } from 'ws';
+import type { WebSocketServer } from 'ws';
 import type { AnyTelemetryEvent, SquadMessage } from '@veritas-kanban/shared';
 import type { AuthenticatedWebSocket } from '../middleware/auth.js';
 import {

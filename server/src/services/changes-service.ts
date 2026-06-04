@@ -5,13 +5,7 @@
 
 import { getTaskService } from './task-service.js';
 import { activityService } from './activity-service.js';
-import type {
-  ChangesResponse,
-  ChangesQueryParams,
-  TaskChanges,
-  CommentChange,
-  BroadcastMessage,
-} from '@veritas-kanban/shared';
+import type { ChangesResponse, ChangesQueryParams, CommentChange } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('changes-service');

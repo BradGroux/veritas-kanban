@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { api } from '../utils/api.js';
 import { findTask } from '../utils/find.js';
-import type { Task } from '../utils/types.js';
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);

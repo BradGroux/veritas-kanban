@@ -3,7 +3,7 @@ import { WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { getSecurityConfig, getJwtSecret, getValidJwtSecrets } from '../config/security.js';
+import { getSecurityConfig, getValidJwtSecrets } from '../config/security.js';
 import { createLogger } from '../lib/logger.js';
 import { validateScopedApiToken } from '../services/api-token-service.js';
 import { validateDeviceSessionSecret } from '../services/device-session-service.js';
@@ -389,14 +389,12 @@ function requestRemoteAddress(req: Request | IncomingMessage): string | null {
  */
 function verifyJwtToken(token: string): { valid: boolean; error?: string } {
   const secrets = getValidJwtSecrets();
-  let lastError: Error | null = null;
 
   for (const secret of secrets) {
     try {
       jwt.verify(token, secret, { algorithms: ['HS256'] });
       return { valid: true };
     } catch (err) {
-      lastError = err as Error;
       // If the token is expired, no point trying other secrets
       if (err instanceof jwt.TokenExpiredError) {
         return { valid: false, error: 'Session expired' };

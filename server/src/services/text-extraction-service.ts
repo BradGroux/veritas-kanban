@@ -1,5 +1,4 @@
 import fs from 'fs/promises';
-import path from 'path';
 import { extractText as unpdfExtract } from 'unpdf';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
@@ -133,13 +132,13 @@ export class TextExtractionService {
       // Extract all sheets
       const sheets: string[] = [];
 
-      workbook.eachSheet((worksheet, sheetId) => {
+      workbook.eachSheet((worksheet) => {
         const rows: string[] = [];
 
-        worksheet.eachRow((row, rowNumber) => {
+        worksheet.eachRow((row) => {
           const values: string[] = [];
 
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          row.eachCell({ includeEmpty: true }, (cell) => {
             // Get cell value as string
             const value = cell.value;
 

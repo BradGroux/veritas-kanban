@@ -137,7 +137,7 @@ router.post(
         } else {
           failed.push(id);
         }
-      } catch (error) {
+      } catch {
         failed.push(id);
       }
     }

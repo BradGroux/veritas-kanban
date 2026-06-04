@@ -1,7 +1,6 @@
 /**
  * Shared utility functions for metrics calculations.
  */
-import path from 'path';
 import type { MetricsPeriod, TrendDirection } from './types.js';
 import { getProjectRoot, getTelemetryDir } from '../../utils/paths.js';
 

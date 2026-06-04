@@ -1,6 +1,5 @@
 import { simpleGit } from 'simple-git';
 import { TaskService } from './task-service.js';
-import type { Task } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('diff-service');
 

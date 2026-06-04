@@ -14,7 +14,7 @@ import { ConfigService } from '../services/config-service.js';
 import { getVeritasContextService } from '../services/veritas-context-service.js';
 import type { ChatSendInput } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { NotFoundError } from '../middleware/error-handler.js';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('chat');
