@@ -54,7 +54,7 @@ jobs:
         run: pnpm exec electron-builder --mac dmg zip --publish never --config.mac.identity=null --config.mac.notarize=false
 
       - name: Upload desktop artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: veritas-kanban-mac-unsigned
           path: |
@@ -97,7 +97,7 @@ jobs:
         run: pnpm exec electron-builder --linux AppImage deb rpm --x64 --publish never
 
       - name: Upload Linux desktop artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: veritas-kanban-linux-unsigned
           path: |
@@ -138,7 +138,7 @@ jobs:
         run: pnpm exec electron-builder --win nsis zip --x64 --publish never
 
       - name: Upload Windows desktop artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: veritas-kanban-windows-unsigned
           path: |
