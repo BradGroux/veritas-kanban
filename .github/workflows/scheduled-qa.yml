@@ -23,6 +23,7 @@ concurrency:
 
 env:
   NODE_VERSION: '22'
+  K6_IMAGE: grafana/k6:1.7.1
   LOG_LEVEL: warn
   VERITAS_ADMIN_KEY: scheduled-qa-admin-key-000000000000
   VERITAS_AUTH_LOCALHOST_BYPASS: 'true'
@@ -34,8 +35,6 @@ jobs:
     name: Playwright E2E
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      VERITAS_DATA_DIR: ${{ runner.temp }}/veritas-playwright-data
     steps:
       - uses: actions/checkout@v6
 
@@ -48,6 +47,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure isolated Playwright data directory
+        run: |
+          echo "VERITAS_DATA_DIR=$RUNNER_TEMP/veritas-playwright-data" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/veritas-playwright-data"
+
+      - name: Build shared package
+        run: pnpm --filter @veritas-kanban/shared build
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
@@ -75,7 +82,6 @@ jobs:
     timeout-minutes: 30
     env:
       K6_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || 'smoke' }}
-      VERITAS_DATA_DIR: ${{ runner.temp }}/veritas-k6-data
     steps:
       - uses: actions/checkout@v6
 
@@ -88,6 +94,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure isolated k6 data directory
+        run: |
+          echo "VERITAS_DATA_DIR=$RUNNER_TEMP/veritas-k6-data" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/veritas-k6-data"
 
       - name: Build runtime packages
         run: pnpm build
@@ -116,6 +127,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p k6-results
+          chmod 0777 k6-results
 
           if [ "$K6_PROFILE" = "full" ]; then
             scripts="smoke read-load write-load mixed-load ws-stress v5-remote-mix"
@@ -136,7 +148,7 @@ jobs:
               -e V5_WS_HOLD_MS=40000 \
               -v "$PWD:/work" \
               -w /work \
-              grafana/k6:latest run \
+              "$K6_IMAGE" run \
               --summary-export "k6-results/${script}.json" \
               "load-tests/k6/${script}.js" 2>&1 | tee "k6-results/${script}.log"
           done

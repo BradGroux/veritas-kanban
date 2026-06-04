@@ -27,14 +27,10 @@ export const options = {
 export default function () {
   // ── CREATE ─────────────────────────────────────────────────
   const payload = makeTask('write-load');
-  const createRes = http.post(
-    `${API_BASE}/tasks`,
-    JSON.stringify(payload),
-    {
-      headers: defaultHeaders,
-      tags: { name: 'POST /tasks' },
-    }
-  );
+  const createRes = http.post(`${API_BASE}/tasks`, JSON.stringify(payload), {
+    headers: defaultHeaders,
+    tags: { name: 'POST /tasks' },
+  });
 
   const createOk = check(createRes, {
     'create → 201': (r) => r.status === 201,
@@ -47,7 +43,7 @@ export default function () {
   }
 
   const created = JSON.parse(createRes.body);
-  const taskId = created.id || created.task?.id;
+  const taskId = created.id || created.task?.id || created.data?.id || created.data?.task?.id;
 
   sleep(0.2);
 

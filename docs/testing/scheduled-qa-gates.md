@@ -7,6 +7,19 @@ the fast pull-request path. Pull requests stay limited to lint, typecheck,
 workspace unit tests, build, production dependency audit, and the desktop
 artifact gate when relevant.
 
+The 2026-06-04 audit found the workflow failing before job creation because
+job-level `env` used the `runner.temp` context. GitHub does not expose the
+`runner` context until a job is running, so manual dispatch returned a parse
+error instead of producing logs. The workflow now writes `VERITAS_DATA_DIR`
+from `$RUNNER_TEMP` during job setup.
+
+Playwright and `pnpm qa:mantine` remain scheduled/manual gates while #568 and
+#569 are open. Adding them to PR CI before those gates are stable would create
+red PR checks with known non-PR-specific failures. Once both gates pass on
+`main`, either add a small PR smoke job for `pnpm qa:mantine` and
+`pnpm test:e2e -- e2e/mantine-qa-gate.spec.ts`, or record the release decision
+to keep them scheduled-only here.
+
 ## Workflow
 
 Workflow file:
@@ -54,7 +67,11 @@ Retention: 7 days.
 ## k6 Gate
 
 The k6 job starts the built API server, waits for `/api/health`, then runs the
-selected profile through the official k6 Docker image.
+selected profile through the pinned official k6 Docker image:
+
+```text
+grafana/k6:1.7.1
+```
 
 Default scheduled profile:
 

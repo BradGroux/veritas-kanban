@@ -44,7 +44,9 @@ export default function () {
   let taskId = null;
   try {
     const body = JSON.parse(listRes.body);
-    const tasks = Array.isArray(body) ? body : body.tasks || [];
+    const tasks = Array.isArray(body)
+      ? body
+      : body.tasks || (Array.isArray(body.data) ? body.data : body.data?.tasks) || [];
     if (tasks.length > 0) {
       // Pick a random task
       taskId = tasks[Math.floor(Math.random() * tasks.length)].id;

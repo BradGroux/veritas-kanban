@@ -36,7 +36,9 @@ function readScenario() {
   // Read a random task from the list
   try {
     const body = JSON.parse(listRes.body);
-    const tasks = Array.isArray(body) ? body : body.tasks || [];
+    const tasks = Array.isArray(body)
+      ? body
+      : body.tasks || (Array.isArray(body.data) ? body.data : body.data?.tasks) || [];
     if (tasks.length > 0) {
       const id = tasks[Math.floor(Math.random() * tasks.length)].id;
       const detailRes = http.get(`${API_BASE}/tasks/${id}`, {
@@ -56,14 +58,10 @@ function readScenario() {
 // ── Write scenario (30 %) ────────────────────────────────────
 function writeScenario() {
   const payload = makeTask('mixed');
-  const createRes = http.post(
-    `${API_BASE}/tasks`,
-    JSON.stringify(payload),
-    {
-      headers: defaultHeaders,
-      tags: { name: 'POST /tasks' },
-    }
-  );
+  const createRes = http.post(`${API_BASE}/tasks`, JSON.stringify(payload), {
+    headers: defaultHeaders,
+    tags: { name: 'POST /tasks' },
+  });
 
   const createOk = check(createRes, { 'create → 201': (r) => r.status === 201 });
   errorRate.add(!createOk);
@@ -74,7 +72,7 @@ function writeScenario() {
   }
 
   const created = JSON.parse(createRes.body);
-  const taskId = created.id || created.task?.id;
+  const taskId = created.id || created.task?.id || created.data?.id || created.data?.task?.id;
 
   sleep(0.2);
 

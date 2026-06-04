@@ -87,7 +87,9 @@ function createTask(prefix) {
     tags: { name: 'POST /tasks' },
   });
   const body = parseJson(response);
-  return response.status === 201 ? body?.id || body?.task?.id || null : null;
+  return response.status === 201
+    ? body?.id || body?.task?.id || body?.data?.id || body?.data?.task?.id || null
+    : null;
 }
 
 export function setup() {
@@ -117,8 +119,9 @@ export function setup() {
       }
     );
     const body = parseJson(response);
-    if (response.status === 200 && body?.sessionId) {
-      sessionIds.push(body.sessionId);
+    const sessionId = body?.sessionId || body?.data?.sessionId;
+    if (response.status === 200 && sessionId) {
+      sessionIds.push(sessionId);
     }
   }
 

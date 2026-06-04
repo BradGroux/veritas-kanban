@@ -21,18 +21,16 @@ export const options = {
 export default function () {
   // ── CREATE ─────────────────────────────────────────────────
   const payload = makeTask('smoke');
-  const createRes = http.post(
-    `${API_BASE}/tasks`,
-    JSON.stringify(payload),
-    { headers: defaultHeaders }
-  );
+  const createRes = http.post(`${API_BASE}/tasks`, JSON.stringify(payload), {
+    headers: defaultHeaders,
+  });
 
   const createOk = check(createRes, {
     'POST /tasks → 201': (r) => r.status === 201,
     'POST /tasks → has id': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return !!(body.id || (body.task && body.task.id));
+        return !!(body.id || body.task?.id || body.data?.id || body.data?.task?.id);
       } catch {
         return false;
       }
@@ -45,7 +43,7 @@ export default function () {
   }
 
   const created = JSON.parse(createRes.body);
-  const taskId = created.id || created.task?.id;
+  const taskId = created.id || created.task?.id || created.data?.id || created.data?.task?.id;
 
   sleep(0.3);
 
@@ -83,7 +81,12 @@ export default function () {
     'GET /tasks → is array or has tasks': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return Array.isArray(body) || Array.isArray(body.tasks);
+        return (
+          Array.isArray(body) ||
+          Array.isArray(body.tasks) ||
+          Array.isArray(body.data) ||
+          Array.isArray(body.data?.tasks)
+        );
       } catch {
         return false;
       }
@@ -98,7 +101,6 @@ export default function () {
   });
 
   check(delRes, {
-    'DELETE /tasks/:id → 200 or 204': (r) =>
-      r.status === 200 || r.status === 204,
+    'DELETE /tasks/:id → 200 or 204': (r) => r.status === 200 || r.status === 204,
   });
 }
