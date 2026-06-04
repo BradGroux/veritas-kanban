@@ -39,10 +39,8 @@ import {
 import { extractTaskId } from '@/lib/search-utils';
 import { cn } from '@/lib/utils';
 import { VIEW_BY_ID, type AppView } from '@/lib/views';
-import type {
-  TaskDetailNavigationTarget,
-  TaskDetailTabId,
-} from '@/components/task/TaskDetailPanel';
+import type { TaskDetailNavigationTarget, TaskDetailTabId } from '@/lib/task-detail-tabs';
+import { isTaskDetailTabId } from '@/lib/task-detail-tabs';
 
 const COLLECTIONS: { id: SearchCollection; label: string }[] = [
   { id: 'tasks-active', label: 'Active' },
@@ -74,21 +72,6 @@ const BACKENDS: { id: SearchBackend; label: string }[] = [
   { id: 'keyword', label: 'Keyword' },
   { id: 'qmd', label: 'QMD' },
 ];
-
-const TASK_DETAIL_TABS = new Set<TaskDetailTabId>([
-  'work',
-  'details',
-  'progress',
-  'work-products',
-  'observations',
-  'attachments',
-  'git',
-  'agent',
-  'timeline',
-  'changes',
-  'review',
-  'metrics',
-]);
 
 interface SearchDialogProps {
   open: boolean;
@@ -127,9 +110,7 @@ function isAppView(value: string | undefined): value is AppView {
 
 function taskNavigationTarget(target: SearchTarget): TaskDetailNavigationTarget | undefined {
   if (target.type !== 'task') return undefined;
-  const tab = TASK_DETAIL_TABS.has(target.tab as TaskDetailTabId)
-    ? (target.tab as TaskDetailTabId)
-    : undefined;
+  const tab: TaskDetailTabId | undefined = isTaskDetailTabId(target.tab) ? target.tab : undefined;
 
   if (!tab && !target.timelineAttemptId) return undefined;
 

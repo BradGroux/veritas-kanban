@@ -140,6 +140,47 @@ describe('SearchDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('uses the shared task-detail tab registry for task result targets', async () => {
+    const onTaskOpen = vi.fn();
+    const onOpenChange = vi.fn();
+    queryMock.mockResolvedValue({
+      query: 'timeline',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 2,
+      results: [
+        {
+          id: 'task-timeline-result',
+          title: 'Open run timeline',
+          path: 'tasks/active/task_20260504_abc123-run.md',
+          collection: 'tasks-active',
+          snippet: '',
+          score: 2,
+          metadata: {
+            target: {
+              type: 'task',
+              taskId: 'task_20260504_abc123',
+              tab: 'timeline',
+              timelineAttemptId: 'attempt-1',
+            },
+          },
+        },
+      ],
+    });
+
+    renderWithProviders(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
+
+    await userEvent.type(screen.getByPlaceholderText(/search tasks/i), 'timeline');
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+    fireEvent.click(await screen.findByText('Open run timeline'));
+
+    expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', {
+      tab: 'timeline',
+      timelineAttemptId: 'attempt-1',
+    });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('opens settings results through the supplied settings callback', async () => {
     const onSettingsOpen = vi.fn();
     const onOpenChange = vi.fn();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Badge,
@@ -14,47 +14,27 @@ import {
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
-import { TaskDetailsTab } from './detail/TaskDetailsTab';
-import { ProgressTab } from './detail/ProgressTab';
-import { GitSection } from './GitSection';
-import { AgentPanel } from './AgentPanel';
-import { DiffViewer } from './DiffViewer';
-import { ReviewPanel } from './ReviewPanel';
-import { PreviewPanel } from './PreviewPanel';
-import { AttachmentsSection } from './AttachmentsSection';
-import { ObservationsSection } from './ObservationsSection';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
-import { TaskMetricsPanel } from './TaskMetricsPanel';
 import { WorkflowSection } from './WorkflowSection';
-import { WorkProductsSection } from './WorkProductsSection';
-import { AgentRunTimelinePanel } from './AgentRunTimelinePanel';
-import { shouldDefaultTaskDetailToWork, TaskWorkView } from './TaskWorkView';
+import { shouldDefaultTaskDetailToWork } from './TaskWorkView';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useIdentity } from '@/hooks/useIdentity';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
-import {
-  BriefcaseBusiness,
-  GitBranch,
-  Bot,
-  FileDiff,
-  ClipboardCheck,
-  Monitor,
-  FileCode,
-  Paperclip,
-  Archive,
-  BarChart3,
-  MessageSquare,
-  NotebookPen,
-  Workflow,
-  Eye,
-  Files,
-  History,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
-import type { Task, ReviewComment, ReviewState } from '@veritas-kanban/shared';
+import { Monitor, FileCode, Archive, MessageSquare, Workflow, X } from 'lucide-react';
+import type { Task } from '@veritas-kanban/shared';
 import { useAddObservation, useDeleteObservation } from '@/hooks/useTasks';
+import { PreviewPanel } from './PreviewPanel';
+import {
+  getAvailableTaskDetailTabs,
+  getFallbackTaskDetailTabId,
+  isTaskDetailTabAvailable,
+  isTaskDetailTabId,
+  type TaskDetailObservationInput,
+  type TaskDetailNavigationTarget,
+  type TaskDetailRenderContext,
+  type TaskDetailTabId,
+} from './task-detail-tabs';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -65,111 +45,7 @@ interface TaskDetailPanelProps {
   navigationTarget?: TaskDetailNavigationTarget | null;
 }
 
-export type TaskDetailTabId =
-  | 'work'
-  | 'details'
-  | 'progress'
-  | 'work-products'
-  | 'observations'
-  | 'attachments'
-  | 'git'
-  | 'agent'
-  | 'timeline'
-  | 'changes'
-  | 'review'
-  | 'metrics';
-
-export interface TaskDetailNavigationTarget {
-  tab?: TaskDetailTabId;
-  timelineAttemptId?: string | null;
-}
-
-interface TaskDetailTabDefinition {
-  id: TaskDetailTabId;
-  label: string;
-  Icon?: LucideIcon;
-  fallbackTitle?: string;
-  codeOnly?: boolean;
-  feature?: 'attachments';
-  disabledWithoutWorktree?: boolean;
-}
-
-const TASK_DETAIL_TABS: readonly TaskDetailTabDefinition[] = [
-  {
-    id: 'work',
-    label: 'Work',
-    Icon: BriefcaseBusiness,
-    fallbackTitle: 'Work view failed to load',
-  },
-  { id: 'details', label: 'Details' },
-  {
-    id: 'progress',
-    label: 'Progress',
-    Icon: NotebookPen,
-    fallbackTitle: 'Progress section failed to load',
-  },
-  {
-    id: 'work-products',
-    label: 'Work Products',
-    Icon: Files,
-    fallbackTitle: 'Work products section failed to load',
-  },
-  {
-    id: 'observations',
-    label: 'Observations',
-    Icon: Eye,
-    fallbackTitle: 'Observations section failed to load',
-  },
-  {
-    id: 'attachments',
-    label: 'Attachments',
-    Icon: Paperclip,
-    fallbackTitle: 'Attachments section failed to load',
-    feature: 'attachments',
-  },
-  {
-    id: 'git',
-    label: 'Git',
-    Icon: GitBranch,
-    fallbackTitle: 'Git section failed to load',
-    codeOnly: true,
-  },
-  {
-    id: 'agent',
-    label: 'Agent',
-    Icon: Bot,
-    fallbackTitle: 'Agent panel failed to load',
-    codeOnly: true,
-  },
-  {
-    id: 'timeline',
-    label: 'Timeline',
-    Icon: History,
-    fallbackTitle: 'Run timeline failed to load',
-    codeOnly: true,
-  },
-  {
-    id: 'changes',
-    label: 'Changes',
-    Icon: FileDiff,
-    fallbackTitle: 'Changes viewer failed to load',
-    codeOnly: true,
-    disabledWithoutWorktree: true,
-  },
-  {
-    id: 'review',
-    label: 'Review',
-    Icon: ClipboardCheck,
-    fallbackTitle: 'Review panel failed to load',
-    codeOnly: true,
-  },
-  {
-    id: 'metrics',
-    label: 'Metrics',
-    Icon: BarChart3,
-    fallbackTitle: 'Metrics panel failed to load',
-  },
-];
+export type { TaskDetailNavigationTarget, TaskDetailTabId } from './task-detail-tabs';
 
 export function TaskDetailPanel({
   task,
@@ -210,25 +86,44 @@ export function TaskDetailPanel({
   const hasWorktree = !!localTask?.git?.worktreePath;
   const activeTaskId = localTask?.id;
   const defaultTab = localTask && shouldDefaultTaskDetailToWork(localTask) ? 'work' : 'details';
-  const visibleTabs = useMemo(
-    () =>
-      TASK_DETAIL_TABS.filter((tab) => {
-        if (tab.codeOnly && !isCodeTask) return false;
-        if (tab.feature === 'attachments' && !taskSettings.enableAttachments) return false;
-        return true;
-      }).map((tab) => ({
-        ...tab,
-        disabled: tab.disabledWithoutWorktree && !hasWorktree,
-      })),
+  const tabAvailabilityContext = useMemo(
+    () => ({
+      isCodeTask,
+      hasWorktree,
+      attachmentsEnabled: taskSettings.enableAttachments,
+    }),
     [hasWorktree, isCodeTask, taskSettings.enableAttachments]
+  );
+  const visibleTabs = useMemo(
+    () => getAvailableTaskDetailTabs(tabAvailabilityContext),
+    [tabAvailabilityContext]
+  );
+  const fallbackTab = getFallbackTaskDetailTabId(visibleTabs, defaultTab);
+
+  const addObservationForTask = useMemo(
+    () => async (data: TaskDetailObservationInput) => {
+      if (!localTask) return;
+      await addObservation.mutateAsync({ taskId: localTask.id, data });
+    },
+    [addObservation, localTask]
+  );
+  const deleteObservationForTask = useMemo(
+    () => async (observationId: string) => {
+      if (!localTask) return;
+      await deleteObservation.mutateAsync({
+        taskId: localTask.id,
+        observationId,
+      });
+    },
+    [deleteObservation, localTask]
   );
 
   useEffect(() => {
-    const activeTabAvailable = visibleTabs.some((tab) => tab.id === activeTab && !tab.disabled);
+    const activeTabAvailable = isTaskDetailTabAvailable(visibleTabs, activeTab);
     if (!activeTabAvailable) {
-      setActiveTab(defaultTab);
+      setActiveTab(fallbackTab);
     }
-  }, [activeTab, defaultTab, visibleTabs]);
+  }, [activeTab, fallbackTab, visibleTabs]);
 
   useEffect(() => {
     if (!activeTaskId) {
@@ -239,18 +134,15 @@ export function TaskDetailPanel({
     if (lastDefaultedTaskIdRef.current === activeTaskId) return;
     lastDefaultedTaskIdRef.current = activeTaskId;
     setTimelineAttemptId(null);
-    setActiveTab(defaultTab);
-  }, [activeTaskId, defaultTab]);
+    setActiveTab(fallbackTab);
+  }, [activeTaskId, fallbackTab]);
 
   useEffect(() => {
     if (!activeTaskId || !navigationTarget) return;
     if (navigationTarget.timelineAttemptId !== undefined) {
       setTimelineAttemptId(navigationTarget.timelineAttemptId ?? null);
     }
-    if (
-      navigationTarget.tab &&
-      visibleTabs.some((tab) => tab.id === navigationTarget.tab && !tab.disabled)
-    ) {
+    if (navigationTarget.tab && isTaskDetailTabAvailable(visibleTabs, navigationTarget.tab)) {
       setActiveTab(navigationTarget.tab);
     }
   }, [activeTaskId, navigationTarget, visibleTabs]);
@@ -261,106 +153,20 @@ export function TaskDetailPanel({
   const currentType = taskTypes.find((t) => t.id === localTask.type);
   const TypeIconComponent = currentType ? getTypeIcon(currentType.icon) : null;
   const typeLabel = currentType ? currentType.label : localTask.type;
-  const renderTabContent = (tabId: TaskDetailTabId) => {
-    switch (tabId) {
-      case 'work':
-        return (
-          <TaskWorkView
-            task={localTask}
-            isCodeTask={isCodeTask}
-            readOnly={readOnly}
-            onOpenTab={setActiveTab}
-            onOpenChat={() => setTaskChatOpen(true)}
-            onOpenWorkflow={() => setWorkflowOpen(true)}
-          />
-        );
-      case 'details':
-        return (
-          <TaskDetailsTab
-            task={localTask}
-            onUpdate={updateField}
-            onClose={() => onOpenChange(false)}
-            readOnly={readOnly}
-            onRestore={onRestore}
-          />
-        );
-      case 'progress':
-        return <ProgressTab task={localTask} />;
-      case 'work-products':
-        return <WorkProductsSection taskId={localTask.id} />;
-      case 'observations':
-        return (
-          <ObservationsSection
-            task={localTask}
-            onAddObservation={async (data) => {
-              await addObservation.mutateAsync({ taskId: localTask.id, data });
-            }}
-            onDeleteObservation={async (observationId) => {
-              await deleteObservation.mutateAsync({
-                taskId: localTask.id,
-                observationId,
-              });
-            }}
-          />
-        );
-      case 'attachments':
-        return <AttachmentsSection task={localTask} />;
-      case 'git':
-        return (
-          <GitSection
-            task={localTask}
-            onGitChange={(git) => updateField('git', git as Task['git'])}
-          />
-        );
-      case 'agent':
-        return (
-          <AgentPanel
-            task={localTask}
-            onOpenTimeline={(attemptId) => {
-              setTimelineAttemptId(attemptId ?? null);
-              setActiveTab('timeline');
-            }}
-          />
-        );
-      case 'timeline':
-        return (
-          <AgentRunTimelinePanel
-            task={localTask}
-            initialAttemptId={timelineAttemptId}
-            onOpenTab={setActiveTab}
-            onOpenWorkflow={() => setWorkflowOpen(true)}
-          />
-        );
-      case 'changes':
-        if (!hasWorktree) return null;
-        return (
-          <DiffViewer
-            task={localTask}
-            onAddComment={(comment: ReviewComment) => {
-              const newComments = [...(localTask.reviewComments || []), comment];
-              updateField('reviewComments', newComments);
-            }}
-            onRemoveComment={(commentId: string) => {
-              const newComments = (localTask.reviewComments || []).filter(
-                (comment) => comment.id !== commentId
-              );
-              updateField('reviewComments', newComments.length > 0 ? newComments : undefined);
-            }}
-          />
-        );
-      case 'review':
-        return (
-          <ReviewPanel
-            task={localTask}
-            onReview={(review: ReviewState) => {
-              updateField('review', Object.keys(review).length > 0 ? review : undefined);
-            }}
-            onMergeComplete={() => onOpenChange(false)}
-          />
-        );
-      case 'metrics':
-        return <TaskMetricsPanel task={localTask} />;
-    }
+  const tabRenderContext: TaskDetailRenderContext = {
+    ...tabAvailabilityContext,
+    task: localTask,
+    readOnly,
+    timelineAttemptId,
+    updateField,
+    onClose: () => onOpenChange(false),
+    onRestore,
+    setActiveTab,
+    openTaskChat: () => setTaskChatOpen(true),
+    openWorkflow: () => setWorkflowOpen(true),
+    setTimelineAttemptId,
+    addObservation: addObservationForTask,
+    deleteObservation: deleteObservationForTask,
   };
 
   return (
@@ -500,7 +306,7 @@ export function TaskDetailPanel({
               <Tabs
                 value={activeTab}
                 onChange={(value) => {
-                  if (value) setActiveTab(value as TaskDetailTabId);
+                  if (isTaskDetailTabId(value)) setActiveTab(value);
                 }}
                 className="flex flex-1 flex-col overflow-hidden px-4 pt-3 pb-6 sm:px-6"
               >
@@ -522,17 +328,31 @@ export function TaskDetailPanel({
                 </Tabs.List>
 
                 <div className="mt-4 flex-1 overflow-y-auto pr-1">
-                  {visibleTabs.map((tab) => (
-                    <Tabs.Panel key={tab.id} value={tab.id} className="mt-0">
-                      {tab.fallbackTitle ? (
-                        <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
-                          {renderTabContent(tab.id)}
-                        </FeatureErrorBoundary>
-                      ) : (
-                        renderTabContent(tab.id)
-                      )}
-                    </Tabs.Panel>
-                  ))}
+                  {visibleTabs.map((tab) => {
+                    const tabContent = (
+                      <Suspense
+                        fallback={
+                          <Text size="sm" c="dimmed">
+                            Loading {tab.label}...
+                          </Text>
+                        }
+                      >
+                        {tab.render(tabRenderContext)}
+                      </Suspense>
+                    );
+
+                    return (
+                      <Tabs.Panel key={tab.id} value={tab.id} className="mt-0">
+                        {tab.fallbackTitle ? (
+                          <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
+                            {tabContent}
+                          </FeatureErrorBoundary>
+                        ) : (
+                          tabContent
+                        )}
+                      </Tabs.Panel>
+                    );
+                  })}
                 </div>
               </Tabs>
             </Stack>

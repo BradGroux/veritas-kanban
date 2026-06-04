@@ -21,63 +21,17 @@ import { FloatingChat } from './components/chat/FloatingChat';
 import { SystemHealthBar } from './components/layout/SystemHealthBar';
 import { MobileShell } from './components/layout/MobileShell';
 import { PwaStatusBanner } from './components/layout/PwaStatusBanner';
-import { VIEW_BY_ID, type AppView } from './lib/views';
+import { NAVIGATION_VIEWS, VIEW_BY_ID, type AppView, type NavigationView } from './lib/views';
 import { usePendingProductMode } from './hooks/usePendingProductMode';
 
-// Lazy-load ActivityFeed and BacklogPage to keep initial bundle small
-const ActivityFeed = lazy(() =>
-  import('./components/activity/ActivityFeed').then((mod) => ({
-    default: mod.ActivityFeed,
-  }))
-);
-
-const BacklogPage = lazy(() =>
-  import('./components/backlog/BacklogPage').then((mod) => ({
-    default: mod.BacklogPage,
-  }))
-);
-
-const ArchivePage = lazy(() =>
-  import('./components/archive/ArchivePage').then((mod) => ({
-    default: mod.ArchivePage,
-  }))
-);
-
-const TemplatesPage = lazy(() =>
-  import('./components/templates/TemplatesPage').then((mod) => ({
-    default: mod.TemplatesPage,
-  }))
-);
-
-const WorkflowsPage = lazy(() =>
-  import('./components/workflows/WorkflowsPage').then((mod) => ({
-    default: mod.WorkflowsPage,
-  }))
-);
-
-const DriftMonitor = lazy(() =>
-  import('./components/drift/DriftMonitor').then((mod) => ({
-    default: mod.DriftMonitor,
-  }))
-);
-
-const DecisionExplorer = lazy(() =>
-  import('./components/decisions/DecisionExplorer').then((mod) => ({
-    default: mod.DecisionExplorer,
-  }))
-);
-
-const ScoringProfiles = lazy(() =>
-  import('./components/scoring/ScoringProfiles').then((mod) => ({
-    default: mod.ScoringProfiles,
-  }))
-);
-
-const PolicyManager = lazy(() =>
-  import('./components/policies/PolicyManager').then((mod) => ({
-    default: mod.PolicyManager,
-  }))
-);
+const LAZY_VIEW_COMPONENTS = Object.fromEntries(
+  NAVIGATION_VIEWS.map((definition) => {
+    if (!definition.loadComponent) {
+      throw new Error(`Navigation view ${definition.view} is missing a lazy component loader.`);
+    }
+    return [definition.view, lazy(definition.loadComponent)];
+  })
+) as Record<NavigationView, ReturnType<typeof lazy>>;
 
 function ViewLoading({ view }: { view: AppView }) {
   return (
@@ -91,82 +45,14 @@ function ViewLoading({ view }: { view: AppView }) {
 function MainContent() {
   const { view, setView, navigateToTask } = useView();
 
-  if (view === 'activity') {
-    return (
-      <Suspense fallback={<ViewLoading view="activity" />}>
-        <ActivityFeed
-          onBack={() => setView('board')}
-          onTaskClick={(taskId) => navigateToTask(taskId)}
-        />
-      </Suspense>
-    );
-  }
+  if (view === 'board') return <KanbanBoard />;
 
-  if (view === 'backlog') {
-    return (
-      <Suspense fallback={<ViewLoading view="backlog" />}>
-        <BacklogPage onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'archive') {
-    return (
-      <Suspense fallback={<ViewLoading view="archive" />}>
-        <ArchivePage onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'templates') {
-    return (
-      <Suspense fallback={<ViewLoading view="templates" />}>
-        <TemplatesPage onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'workflows') {
-    return (
-      <Suspense fallback={<ViewLoading view="workflows" />}>
-        <WorkflowsPage onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'drift') {
-    return (
-      <Suspense fallback={<ViewLoading view="drift" />}>
-        <DriftMonitor onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'decisions') {
-    return (
-      <Suspense fallback={<ViewLoading view="decisions" />}>
-        <DecisionExplorer onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'scoring') {
-    return (
-      <Suspense fallback={<ViewLoading view="scoring" />}>
-        <ScoringProfiles onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'policies') {
-    return (
-      <Suspense fallback={<ViewLoading view="policies" />}>
-        <PolicyManager onBack={() => setView('board')} />
-      </Suspense>
-    );
-  }
-
-  return <KanbanBoard />;
+  const ViewComponent = LAZY_VIEW_COMPONENTS[view];
+  return (
+    <Suspense fallback={<ViewLoading view={view} />}>
+      <ViewComponent onBack={() => setView('board')} onTaskClick={navigateToTask} />
+    </Suspense>
+  );
 }
 
 // Main app content (only rendered when authenticated)

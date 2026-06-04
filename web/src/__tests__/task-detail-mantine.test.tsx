@@ -187,6 +187,8 @@ describe('task detail Mantine migration', () => {
     );
     expect(screen.getByRole('tab', { name: 'Work' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Details' })).toBeDefined();
+    expect(screen.queryByRole('tab', { name: 'Git' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Chat' })).toBeDefined();
     expect(container.querySelector('.mantine-Drawer-content')).toBeDefined();
     expect(container.querySelector('.mantine-Tabs-root')).toBeDefined();
@@ -209,8 +211,8 @@ describe('task detail Mantine migration', () => {
     await user.click(screen.getByRole('tab', { name: 'Progress' }));
 
     expect(mocks.updateField).toHaveBeenCalledWith('title', 'Renamed task');
-    expect(screen.getByText('Progress Notes')).toBeDefined();
-    expect(screen.getByText('Mantine task detail renders')).toBeDefined();
+    expect(await screen.findByText('Progress Notes')).toBeDefined();
+    expect(await screen.findByText('Mantine task detail renders')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Paper-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="textarea"]')).toBeNull();
   });
@@ -252,5 +254,42 @@ describe('task detail Mantine migration', () => {
     expect(screen.getByRole('tab', { name: 'Work' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: 'Timeline' })).toBeDefined();
     expect(screen.getByText('Work View')).toBeDefined();
+  });
+
+  it('falls back when the active tab becomes unavailable for the task data', async () => {
+    const user = userEvent.setup();
+    const codeTask = createMockTask({
+      id: 'task-tab-fallback',
+      title: 'Investigate agent run',
+      type: 'code',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'tab-fallback',
+        baseBranch: 'main',
+      },
+    });
+
+    const { rerender } = renderWithProviders(
+      <TaskDetailPanel task={codeTask} open onOpenChange={mocks.onOpenChange} />
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Timeline' }));
+    expect(screen.getByRole('tab', { name: 'Timeline' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+
+    const featureTask = {
+      ...codeTask,
+      type: 'feature',
+      git: undefined,
+    };
+    rerender(<TaskDetailPanel task={featureTask} open onOpenChange={mocks.onOpenChange} />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe(
+        'true'
+      )
+    );
+    expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
   });
 });
