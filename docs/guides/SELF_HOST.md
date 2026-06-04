@@ -578,6 +578,21 @@ All variables live in `server/.env` (copy from `server/.env.example`).
 | `TRUST_PROXY`    | —                           | Express proxy trust. Use `1` for single-hop (nginx/Caddy). `true` is blocked |
 | `RATE_LIMIT_MAX` | `300`                       | Max API requests/minute/IP (localhost exempt)                                |
 
+### Prometheus metrics
+
+`GET /metrics` is public only in local development. In production, scrape it with one of these explicit configurations:
+
+```yaml
+scrape_configs:
+  - job_name: veritas-kanban
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['veritas.example.com']
+    bearer_token: '<PROMETHEUS_METRICS_TOKEN>'
+```
+
+Set `PROMETHEUS_METRICS_TOKEN` on the Veritas server to the same secret, or use a normal Veritas API key with `telemetry:read` permission in the `Authorization: Bearer <key>` header. Only set `PROMETHEUS_METRICS_PUBLIC=true` for trusted private networks where unauthenticated metrics are intentional.
+
 ### Data & Storage
 
 | Variable                   | Default              | Description                                             |

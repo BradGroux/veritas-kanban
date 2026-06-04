@@ -59,8 +59,8 @@ import { webhookN8nRouter } from './routes/webhook-n8n.js';
 import { cspNonceMiddleware, injectCspNonceAttributes } from './middleware/csp-nonce.js';
 import { apiDocsCspOverride, buildCspDirectives } from './config/csp.js';
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
-import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
+import { prometheusMetricsRouter } from './routes/prometheus.js';
 import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
 import {
   canReceiveWebSocketEvent,
@@ -349,16 +349,10 @@ app.use('/health', healthRouter);
 // Canonical VK API health signal (unauthenticated; used by dev tooling/watchdogs)
 app.use('/api/health', apiHealthRouter);
 
-// ============================================
-// Prometheus Metrics (unauthenticated, for scraping)
-// ============================================
-// Returns metrics in Prometheus exposition text format.
-// Placed before authentication so Prometheus can scrape without credentials.
-app.get('/metrics', (_req, res) => {
-  const collector = getPrometheusCollector();
-  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-  res.send(collector.scrape());
-});
+// Prometheus exposition endpoint. Public in local development; production
+// requires normal auth with telemetry:read, PROMETHEUS_METRICS_TOKEN, or an
+// explicit PROMETHEUS_METRICS_PUBLIC=true opt-in.
+app.use(prometheusMetricsRouter);
 
 // Metrics collection middleware — records per-request HTTP metrics.
 // Placed after health/metrics endpoints so those aren't self-instrumented

@@ -532,6 +532,14 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 | `CSP_REPORT_ONLY` | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                                                                                                                 |
 | `CSP_REPORT_URI`  | —                                                 | URL to receive CSP violation reports                                                                                                                                                         |
 
+### Prometheus metrics
+
+`GET /metrics` remains unauthenticated for local development. In production, use one of these explicit modes:
+
+- `PROMETHEUS_METRICS_TOKEN=<secret>` and configure Prometheus to send `Authorization: Bearer <secret>`.
+- A normal Veritas API key whose role or permissions include `telemetry:read`.
+- `PROMETHEUS_METRICS_PUBLIC=true` only on a trusted private network where unauthenticated operational metrics are intentional.
+
 ### Data & Storage
 
 | Variable                   | Default                                      | Description                                                                |
