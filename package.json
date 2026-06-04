@@ -28,7 +28,7 @@
     "dev:watchdog": "bash scripts/dev-watchdog.sh",
     "build": "pnpm --filter @veritas-kanban/shared build && pnpm --filter @veritas-kanban/server build && pnpm --filter @veritas-kanban/web build && pnpm --filter @veritas-kanban/cli build && pnpm --filter @veritas-kanban/mcp build && pnpm --filter @veritas-kanban/desktop build",
     "lint": "eslint .",
-    "lint:budget": "node scripts/lint-warning-budget.mjs --max-warnings=601",
+    "lint:budget": "node scripts/lint-warning-budget.mjs --max-warnings=600",
     "lint:report": "node scripts/lint-warning-budget.mjs --all-rules",
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",

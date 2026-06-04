@@ -30,14 +30,14 @@ pnpm lint:report
 
 ## Current Budget
 
-Current warning budget: 601.
+Current warning budget: 600.
 
 Baseline after the production unused-value cleanup:
 
 | Package | Warnings |
 | ------- | -------- |
 | server  | 536      |
-| web     | 38       |
+| web     | 37       |
 | mcp     | 25       |
 | shared  | 2        |
 
@@ -48,7 +48,6 @@ Current warning classes:
 | `@typescript-eslint/no-explicit-any`       | 342      |
 | `@typescript-eslint/no-non-null-assertion` | 227      |
 | `@typescript-eslint/no-unused-vars`        | 31       |
-| `react-hooks/exhaustive-deps`              | 1        |
 
 ## Cleanup Order
 

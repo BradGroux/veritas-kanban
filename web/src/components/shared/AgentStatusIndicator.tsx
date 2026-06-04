@@ -182,7 +182,7 @@ export function AgentStatusIndicator({
   const [lastStatus, setLastStatus] = useState<string | null>(null);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
   const [uptimeStart, setUptimeStart] = useState<Date | null>(null);
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
 
   // Fetch recent agent-related activity for status history
   const { data: activities } = useQuery({
@@ -286,10 +286,7 @@ export function AgentStatusIndicator({
   }, [state, data?.subAgentCount, config.label]);
 
   // Calculate uptime
-  const uptimeDisplay = useMemo(() => {
-    if (!uptimeStart) return null;
-    return formatDuration(uptimeStart.toISOString());
-  }, [uptimeStart, tick]); // tick increments every second to trigger recalc
+  const uptimeDisplay = uptimeStart ? formatDuration(uptimeStart.toISOString()) : null;
 
   // Screen reader announcement
   const ariaLabel = useMemo(() => {
