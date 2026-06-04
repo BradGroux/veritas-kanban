@@ -103,6 +103,12 @@
         }
       ]
     },
+    "deb": {
+      "packageName": "veritas-kanban"
+    },
+    "rpm": {
+      "packageName": "veritas-kanban"
+    },
     "linux": {
       "category": "Office",
       "maintainer": "Digital Meld <support@digitalmeld.io>",
