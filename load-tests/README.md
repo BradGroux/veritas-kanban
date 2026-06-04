@@ -56,6 +56,11 @@ k6 run load-tests/k6/smoke.js
 pnpm test:load
 ```
 
+Scheduled CI runs the k6 smoke profile weekly and can run the full profile by
+manual dispatch. See
+[`docs/testing/scheduled-qa-gates.md`](../docs/testing/scheduled-qa-gates.md)
+for the scheduled/manual gate, artifact, and threshold contract.
+
 ### Run a specific scenario
 
 ```bash

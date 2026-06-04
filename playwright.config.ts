@@ -30,7 +30,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: process.env.CI ? 'github' : 'html',
+  reporter:
+    process.env.CI && process.env.PLAYWRIGHT_HTML_REPORT === '1'
+      ? [['github'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
+      : process.env.CI
+        ? 'github'
+        : 'html',
   timeout: 30_000,
 
   use: {
