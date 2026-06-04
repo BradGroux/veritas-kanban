@@ -1,11 +1,120 @@
-import { Select, TextInput } from '@mantine/core';
+import {
+  Badge,
+  Code,
+  Group,
+  Paper,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
+import { api, type OutboundDeliveryAttempt, type OutboundEndpointRecord } from '@/lib/api';
+
+type CommunicationState = 'ok' | 'warn' | 'off' | 'unknown';
+
+const STATE_COLORS: Record<CommunicationState, string> = {
+  ok: 'green',
+  warn: 'yellow',
+  off: 'gray',
+  unknown: 'blue',
+};
+
+function redactDestination(value?: string): string {
+  if (!value?.trim()) return 'not configured';
+  try {
+    const parsed = new URL(value);
+    const hasSensitiveParts = parsed.pathname !== '/' || parsed.search || parsed.hash;
+    return hasSensitiveParts ? `${parsed.origin}/[redacted]` : parsed.origin;
+  } catch {
+    return '[redacted destination]';
+  }
+}
+
+function formatDelivery(delivery?: OutboundDeliveryAttempt): string {
+  if (!delivery) return 'not recorded';
+  const status = delivery.responseStatus
+    ? `${delivery.status} ${delivery.responseStatus}`
+    : delivery.status;
+  return `${status} at ${new Date(delivery.completedAt).toLocaleString()}`;
+}
+
+function notificationDestination(settings: { channel?: string; webhookUrl?: string }): string {
+  const channel = settings.channel?.trim();
+  const webhookUrl = settings.webhookUrl?.trim();
+  if (channel && webhookUrl) return `Teams channel + webhook: ${redactDestination(webhookUrl)}`;
+  if (channel) return 'Teams channel configured';
+  if (webhookUrl) return `Webhook: ${redactDestination(webhookUrl)}`;
+
+  return 'not configured';
+}
+
+function findDelivery(deliveries: OutboundDeliveryAttempt[], endpointId: string) {
+  return deliveries.find((delivery) => delivery.endpointId === endpointId);
+}
+
+function findEndpoint(endpoints: OutboundEndpointRecord[], endpointId: string) {
+  return endpoints.find((endpoint) => endpoint.id === endpointId);
+}
+
+function healthState(enabled: boolean, configured: boolean): CommunicationState {
+  if (!enabled) return 'off';
+  return configured ? 'ok' : 'warn';
+}
+
+function HealthCard({
+  title,
+  state,
+  label,
+  detail,
+}: {
+  title: string;
+  state: CommunicationState;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <Paper withBorder radius="md" p="sm">
+      <Group justify="space-between" gap="sm">
+        <Text size="sm" fw={600}>
+          {title}
+        </Text>
+        <Badge color={STATE_COLORS[state]} variant="light" tt="none">
+          {label}
+        </Badge>
+      </Group>
+      <Text size="xs" c="dimmed" mt={4}>
+        {detail}
+      </Text>
+    </Paper>
+  );
+}
+
+function endpointLabel(endpoint?: OutboundEndpointRecord): string {
+  if (!endpoint) return 'endpoint pending';
+  if (!endpoint.validation.valid) return `blocked: ${endpoint.validation.reason ?? 'invalid URL'}`;
+  return endpoint.enabled ? 'endpoint enabled' : 'endpoint disabled';
+}
 
 export function NotificationsTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { data: outboundEndpoints = [] } = useQuery({
+    queryKey: ['integrations', 'outbound', 'endpoints'],
+    queryFn: api.integrations.outboundEndpoints,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const { data: outboundDeliveries = [] } = useQuery({
+    queryKey: ['integrations', 'outbound', 'deliveries', 25],
+    queryFn: () => api.integrations.outboundDeliveries(25),
+    staleTime: 30_000,
+    retry: false,
+  });
 
   const updateNotifications = (key: string, value: any) => {
     debouncedUpdate({ notifications: { [key]: value } });
@@ -23,9 +132,115 @@ export function NotificationsTab() {
   };
 
   const webhookMode = settings.squadWebhook?.mode ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.mode;
+  const notificationsEnabled =
+    settings.notifications?.enabled ?? DEFAULT_FEATURE_SETTINGS.notifications.enabled;
+  const notificationDestinationConfigured = Boolean(
+    settings.notifications?.channel?.trim() || settings.notifications?.webhookUrl?.trim()
+  );
+  const failureWebhookConfigured = Boolean(settings.notifications?.webhookUrl?.trim());
+  const failureAlertsEnabled =
+    notificationsEnabled &&
+    (settings.notifications?.onAgentFailure ??
+      DEFAULT_FEATURE_SETTINGS.notifications.onAgentFailure);
+  const squadWebhookEnabled =
+    settings.squadWebhook?.enabled ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.enabled;
+  const squadDestination =
+    webhookMode === 'openclaw'
+      ? settings.squadWebhook?.openclawGatewayUrl
+      : settings.squadWebhook?.url;
+  const squadDestinationConfigured = Boolean(squadDestination?.trim());
+  const squadEndpointId = webhookMode === 'openclaw' ? 'squad.openclawWake' : 'squad.webhook';
+  const squadEndpoint = findEndpoint(outboundEndpoints, squadEndpointId);
+  const squadDelivery = findDelivery(outboundDeliveries, squadEndpointId);
+  const notificationEndpoint = findEndpoint(outboundEndpoints, 'notifications.failureAlert');
+  const failureDelivery = findDelivery(outboundDeliveries, 'notifications.failureAlert');
 
   return (
     <div className="space-y-4">
+      <div className="space-y-3">
+        <SectionHeader title="Communication Health" />
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+          <HealthCard
+            title="Local Squad Chat"
+            state="ok"
+            label="Working"
+            detail="Local messages save to the coordination log. External wake or reply behavior requires a configured consumer."
+          />
+          <HealthCard
+            title="Squad Chat Webhook"
+            state={healthState(squadWebhookEnabled, squadDestinationConfigured)}
+            label={
+              !squadWebhookEnabled
+                ? 'Disabled'
+                : squadDestinationConfigured
+                  ? 'Configured'
+                  : 'Missing destination'
+            }
+            detail={`${endpointLabel(squadEndpoint)}. Destination: ${redactDestination(squadDestination)}. HTTP accepted: ${formatDelivery(squadDelivery)}. Visually verified: not recorded in VK.`}
+          />
+          <HealthCard
+            title="Broad Notifications"
+            state={healthState(notificationsEnabled, notificationDestinationConfigured)}
+            label={
+              !notificationsEnabled
+                ? 'Disabled'
+                : notificationDestinationConfigured
+                  ? 'Configured'
+                  : 'Missing destination'
+            }
+            detail={`Destination: ${notificationDestination(settings.notifications ?? {})}. Last test result: not recorded in VK.`}
+          />
+          <HealthCard
+            title="Failure Alerts"
+            state={healthState(failureAlertsEnabled, failureWebhookConfigured)}
+            label={
+              !failureAlertsEnabled
+                ? 'Disabled'
+                : failureWebhookConfigured
+                  ? 'Webhook configured'
+                  : 'Stored only'
+            }
+            detail={`Immediate webhook: ${redactDestination(settings.notifications?.webhookUrl)}. ${endpointLabel(notificationEndpoint)}. HTTP accepted: ${formatDelivery(failureDelivery)}. Visually verified: not recorded in VK.`}
+          />
+          <HealthCard
+            title="Inbound Wake / Replies"
+            state={
+              webhookMode === 'openclaw' && squadWebhookEnabled && squadDestinationConfigured
+                ? 'ok'
+                : 'off'
+            }
+            label={
+              webhookMode === 'openclaw' && squadWebhookEnabled && squadDestinationConfigured
+                ? 'OpenClaw configured'
+                : 'Not configured'
+            }
+            detail="Generic webhooks are outbound only. OpenClaw Direct can wake a gateway; replies still require the external orchestrator."
+          />
+          <Paper withBorder radius="md" p="sm">
+            <Stack gap={4}>
+              <Group justify="space-between" gap="sm">
+                <Text size="sm" fw={600}>
+                  Payload & Signing
+                </Text>
+                <Badge color="blue" variant="light" tt="none">
+                  Redacted
+                </Badge>
+              </Group>
+              <Text size="xs" c="dimmed">
+                Generic webhooks send <Code>event</Code>, <Code>message.id</Code>,{' '}
+                <Code>message.agent</Code>, <Code>message.message</Code>,{' '}
+                <Code>message.timestamp</Code>, and <Code>isHuman</Code>. HMAC signatures use{' '}
+                <Code>X-VK-Signature</Code> when a secret is set. OpenClaw Direct posts a wake
+                payload to <Code>/tools/invoke</Code> with bearer auth. Secrets and bearer tokens
+                are not shown after save.
+              </Text>
+            </Stack>
+          </Paper>
+        </SimpleGrid>
+      </div>
+
+      <div className="border-t my-6" />
+
       <div className="flex items-center justify-between">
         <SectionHeader title="Notifications" onReset={resetNotifications} />
         <SaveIndicator isPending={isPending} />
@@ -78,6 +293,20 @@ export function NotificationsTab() {
                 aria-label="Channel"
                 size="xs"
                 w={192}
+              />
+            </SettingRow>
+            <SettingRow
+              label="Failure Webhook URL"
+              description="Optional Teams or generic webhook for immediate failure alert delivery"
+            >
+              <TextInput
+                value={settings.notifications?.webhookUrl ?? ''}
+                onChange={(e) => updateNotifications('webhookUrl', e.target.value || undefined)}
+                placeholder="https://example.com/webhook"
+                aria-label="Failure Webhook URL"
+                size="xs"
+                w={384}
+                type="url"
               />
             </SettingRow>
           </>

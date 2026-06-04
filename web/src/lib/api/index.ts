@@ -22,6 +22,7 @@ import { tracesApi } from './traces';
 import { maintenanceApi } from './maintenance';
 import { skillCapabilitiesApi } from './skill-capabilities';
 import { skillSecurityApi } from './skill-security';
+import { integrationsApi } from './integrations';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -52,6 +53,7 @@ export const api = {
   workProducts: workProductsApi,
   traces: tracesApi,
   maintenance: maintenanceApi,
+  integrations: integrationsApi,
   skillCapabilities: skillCapabilitiesApi,
   skillSecurity: skillSecurityApi,
 };
@@ -69,6 +71,12 @@ export type {
 export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';
 export type { TraceStatus } from './traces';
 export type { SqlitePortabilityReport } from './maintenance';
+export type {
+  OutboundDeliveryAttempt,
+  OutboundDeliveryStatus,
+  OutboundEndpointRecord,
+  OutboundEndpointType,
+} from './integrations';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

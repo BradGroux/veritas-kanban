@@ -120,6 +120,10 @@ Use the Squad Chat Webhook only when local chat needs to notify an external syst
 | Notifications    | Stores recipient-specific task/system records, including failure alerts | Optional delivery channel sends externally if configured              |
 | Broadcasts       | Stores durable system-wide messages at `/api/broadcasts` for polling/UI | Agents poll or receive WebSocket updates and mark messages read       |
 
+Settings -> Notifications -> Communication Health reports whether each path is configured and whether VK saw the last outbound HTTP result. HTTP success is not visual receipt. For Teams-style workflows, webhook receivers, and OpenClaw gateways, verify the destination manually after VK records a successful delivery.
+
+Generic Squad Chat webhooks send a `squad.message` JSON payload with `event`, `message.id`, `message.agent`, `message.message`, `message.timestamp`, and `isHuman`. When a secret is set, VK signs the request with `X-VK-Signature`. OpenClaw Direct posts a wake payload to `/tools/invoke` with bearer auth. Secrets, bearer tokens, query strings, and webhook paths should stay out of logs, screenshots, and support notes.
+
 ## Step-by-Step: Tag Conventions
 
 Use consistent tags so messages are filterable by project or task:

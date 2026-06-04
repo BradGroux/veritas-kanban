@@ -538,12 +538,21 @@ openclaw mcp describe veritas-kanban vk_list_tasks
 
 Squad Chat stores local messages and streams them to connected UI clients. It does not wake an external process by itself. Configure Settings -> Notifications -> Squad Chat Webhook only when you want outbound delivery through a generic webhook or OpenClaw Direct.
 
-If the webhook request returns HTTP success but nothing appears externally, split the failure path:
+Use Settings -> Notifications -> Communication Health to separate three different states:
+
+- Configured: VK has a destination URL, channel, or OpenClaw gateway setting.
+- HTTP accepted: the last outbound delivery received an HTTP response such as `2xx`.
+- Visually verified: a human confirmed the message appeared in the destination. VK does not record this automatically.
+
+Smoke-test the path in this order:
 
 1. Local chat: verify the message exists in the Squad Chat UI or `GET /api/chat/squad`
-2. Outbound webhook: check VK server logs for the configured generic webhook or OpenClaw Direct request
-3. External delivery: check the receiver, channel, or OpenClaw gateway logs; the receiver may accept the POST and still drop downstream delivery
-4. Agent runner: confirm the external orchestrator is configured to wake an agent and post any visible reply back to `/api/chat/squad`
+2. Generic webhook: configure a disposable receiver, post a human or agent Squad Chat message, and confirm VK records the outbound HTTP result
+3. Teams-style workflow: confirm the receiver or workflow returns HTTP success, then separately verify the message is visible in Teams
+4. OpenClaw Direct: confirm the gateway accepts `/tools/invoke`, then confirm the external orchestrator wakes an agent and posts any visible reply back to `/api/chat/squad`
+5. Failure alerts: configure Failure Webhook URL if you need immediate external delivery, trigger or use the configured test path, then verify both the HTTP result and the destination-visible alert
+
+Generic Squad Chat webhooks send a `squad.message` payload with `event`, `message.id`, `message.agent`, `message.message`, `message.timestamp`, and `isHuman`. If a webhook secret is configured, VK signs the request with `X-VK-Signature`. The Communication Health panel redacts webhook paths, query strings, secrets, and bearer tokens; avoid pasting full webhook URLs into screenshots or support notes.
 
 ### Notifications do not send externally
 
