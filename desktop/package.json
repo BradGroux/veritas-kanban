@@ -32,13 +32,13 @@
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.9.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
     "vite": "^7.2.7",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.8"
   },
   "build": {
     "appId": "io.digitalmeld.veritas-kanban",
