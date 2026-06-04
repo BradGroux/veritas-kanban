@@ -107,7 +107,9 @@ test.describe('mobile responsive flows', () => {
     await detail.getByRole('tab', { name: 'Details' }).click();
     await detail.getByPlaceholder(/Add a comment/).fill('Mobile comment submitted.');
     await detail.getByRole('button', { name: 'Add Comment' }).click();
-    await expect(detail.getByText('Mobile comment submitted.')).toBeVisible();
+    await expect(
+      detail.locator('p', { hasText: 'Mobile comment submitted.' }).first()
+    ).toBeVisible();
 
     await detail.getByRole('button', { name: 'Close task details' }).click();
     await expect(detail).not.toBeVisible();

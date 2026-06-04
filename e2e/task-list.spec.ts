@@ -28,7 +28,7 @@ test.describe('Task List', () => {
     await page.goto('/');
 
     // The kanban board should show the seeded task
-    const taskCard = page.locator(`text=E2E Visible Task`);
+    const taskCard = page.getByRole('heading', { name: 'E2E Visible Task' });
     await expect(taskCard).toBeVisible({ timeout: 10_000 });
   });
 
@@ -43,7 +43,7 @@ test.describe('Task List', () => {
     await page.goto('/');
 
     // Find the in-progress column and verify the task is inside it
-    const inProgressCol = page.getByRole('region', { name: /In Progress column/ });
+    const inProgressCol = page.getByRole('region', { name: 'In Progress' });
     await expect(inProgressCol).toBeVisible({ timeout: 15_000 });
     await expect(inProgressCol.locator('text=E2E Column Check Task')).toBeVisible({
       timeout: 10_000,
@@ -54,7 +54,7 @@ test.describe('Task List', () => {
     await page.goto('/');
 
     // Wait for the board to load
-    await expect(page.getByRole('region', { name: /To Do column/ })).toBeVisible({
+    await expect(page.getByRole('region', { name: 'To Do' })).toBeVisible({
       timeout: 15_000,
     });
 

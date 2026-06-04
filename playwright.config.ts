@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
-import { readFileSync } from 'fs';
+import { mkdtempSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { resolve } from 'path';
 
 // Load VERITAS_ADMIN_KEY from server/.env so E2E tests use the same key as the server
@@ -14,6 +15,10 @@ if (!process.env.VERITAS_ADMIN_KEY) {
     // server/.env not found — fall through to default
   }
 }
+
+const e2eDataDir =
+  process.env.VERITAS_DATA_DIR ?? mkdtempSync(resolve(tmpdir(), 'veritas-kanban-e2e-'));
+process.env.VERITAS_DATA_DIR = e2eDataDir;
 
 /**
  * Playwright E2E test configuration for Veritas Kanban.
@@ -70,9 +75,11 @@ export default defineConfig({
       timeout: 30_000,
       env: {
         VERITAS_ADMIN_KEY: process.env.VERITAS_ADMIN_KEY || 'dev-admin-key',
+        VERITAS_DATA_DIR: e2eDataDir,
         VERITAS_DISABLE_WATCHERS: '1',
         VERITAS_AUTH_LOCALHOST_BYPASS: 'true',
         VERITAS_AUTH_LOCALHOST_ROLE: 'admin',
+        RATE_LIMIT_MAX: '10000',
       },
     },
     {

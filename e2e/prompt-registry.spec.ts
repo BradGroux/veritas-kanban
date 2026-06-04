@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { bypassAuth, cleanupRoutes } from './helpers/auth';
 
-test.describe('Prompt registry', () => {
+test.describe('Template registry', () => {
   test.beforeEach(async ({ page }) => {
     await bypassAuth(page);
   });
@@ -14,11 +14,16 @@ test.describe('Prompt registry', () => {
     await page.goto('/templates', { timeout: 15_000 });
 
     await expect(page.getByRole('button', { name: 'Templates' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Prompt Templates')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Task Templates' })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByRole('button', { name: /new template/i })).toBeVisible();
+    await expect(page.getByPlaceholder('Search templates...')).toBeVisible();
 
     await expect(
-      page.locator('text=/No description|Variables:|Loading templates|Prompt Templates/i').first()
+      page
+        .locator('text=/No templates yet|No templates match|Loading templates|Task Templates/i')
+        .first()
     ).toBeVisible({ timeout: 15_000 });
   });
 });

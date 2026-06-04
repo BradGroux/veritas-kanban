@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { bypassAuth, deleteTask, cleanupRoutes } from './helpers/auth';
+import {
+  bypassAuth,
+  deleteTask,
+  cleanupRoutes,
+  unwrapApiData,
+  unwrapTaskList,
+} from './helpers/auth';
 
 test.describe('Task Creation', () => {
   const createdTaskIds: string[] = [];
@@ -38,9 +44,21 @@ test.describe('Task Creation', () => {
     const descInput = dialog.locator('#description');
     await descInput.fill('This task was created by an E2E test');
 
-    // Submit the form
+    // Submit the form and capture the created task ID before UI assertions.
     const submitBtn = dialog.locator('button[type="submit"]', { hasText: /Create/ });
-    await submitBtn.click();
+    const [createResponse] = await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/api/tasks') && resp.request().method() === 'POST',
+        { timeout: 10_000 }
+      ),
+      submitBtn.click(),
+    ]);
+    expect(createResponse.status()).toBeLessThan(400);
+
+    const createdFromResponse = unwrapApiData<{ id?: string }>(await createResponse.json());
+    if (createdFromResponse.id) {
+      createdTaskIds.push(createdFromResponse.id);
+    }
 
     // Dialog should close after the API call completes
     await expect(dialog).not.toBeVisible({ timeout: 15_000 });
@@ -53,11 +71,9 @@ test.describe('Task Creation', () => {
     const response = await page.request.get('/api/tasks', {
       headers: { 'X-API-Key': process.env.VERITAS_ADMIN_KEY || 'dev-admin-key' },
     });
-    const tasks = await response.json();
-    const created = (tasks as { id: string; title: string }[]).find(
-      (t) => t.title === 'E2E Created Task'
-    );
-    if (created) {
+    const tasks = unwrapTaskList<{ id: string; title: string }>(await response.json());
+    const created = tasks.find((t) => t.title === 'E2E Created Task');
+    if (created && !createdTaskIds.includes(created.id)) {
       createdTaskIds.push(created.id);
     }
   });

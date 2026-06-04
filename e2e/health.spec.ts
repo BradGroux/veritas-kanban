@@ -22,10 +22,10 @@ test.describe('Health Check', () => {
     await page.goto('/');
 
     // Wait for columns to load — data fetches via API, so allow time for loading
-    const todoColumn = page.getByRole('region', { name: /To Do column/ });
-    const inProgressColumn = page.getByRole('region', { name: /In Progress column/ });
-    const blockedColumn = page.getByRole('region', { name: /Blocked column/ });
-    const doneColumn = page.getByRole('region', { name: /Done column/ });
+    const todoColumn = page.getByRole('region', { name: 'To Do' });
+    const inProgressColumn = page.getByRole('region', { name: 'In Progress' });
+    const blockedColumn = page.getByRole('region', { name: 'Blocked' });
+    const doneColumn = page.getByRole('region', { name: 'Done' });
 
     await expect(todoColumn).toBeVisible({ timeout: 15_000 });
     await expect(inProgressColumn).toBeVisible();

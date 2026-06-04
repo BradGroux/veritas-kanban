@@ -12,6 +12,29 @@ const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY || 'dev-admin-key';
  * Vite proxy issues (IPv4/IPv6 binding differences on macOS).
  */
 const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
+const AGENT_STATUS_PATH = /\/api\/agent\/status(?:\?.*)?$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+export function unwrapApiData<T = unknown>(body: unknown): T {
+  if (isRecord(body) && 'data' in body) {
+    return body.data as T;
+  }
+
+  return body as T;
+}
+
+export function unwrapTaskList<T = { id: string; title?: string }>(body: unknown): T[] {
+  const data = unwrapApiData<unknown>(body);
+
+  if (Array.isArray(data)) return data as T[];
+  if (isRecord(data) && Array.isArray(data.tasks)) return data.tasks as T[];
+  if (isRecord(body) && Array.isArray(body.tasks)) return body.tasks as T[];
+
+  return [];
+}
 
 /**
  * Bypass authentication for E2E tests.
@@ -38,14 +61,34 @@ export async function bypassAuth(page: Page): Promise<void> {
     })
   );
 
+  // Keep browser E2E focused on user flows instead of live agent-status polling.
+  await page.route(AGENT_STATUS_PATH, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          status: 'idle',
+          subAgentCount: 0,
+          activeAgents: [],
+          lastUpdated: new Date().toISOString(),
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    })
+  );
+
   // Add 429 retry interceptor for all API calls from the browser.
   // The dev server has rate limiting which E2E tests can exceed.
   await page.route('**/api/**', async (route: Route) => {
     const url = route.request().url();
-    // Skip the auth/status route (already handled by the specific handler above).
+    // Skip routes already handled by specific handlers above.
     // Use route.fallback() so Playwright passes the request to the next matching
     // handler instead of hanging (routes are matched LIFO).
-    if (url.includes('/api/auth/status')) {
+    if (url.includes('/api/auth/status') || AGENT_STATUS_PATH.test(url)) {
       await route.fallback();
       return;
     }
@@ -138,7 +181,7 @@ export async function seedTestTask(
   }
 
   const createdBody = await response.json();
-  const task = (createdBody as { data?: Record<string, unknown> }).data ?? createdBody;
+  const task = unwrapApiData<Record<string, unknown>>(createdBody);
 
   // The API creates tasks as 'todo' and only accepts git/worktree data on PATCH.
   const targetStatus = desiredStatus ?? 'todo';
@@ -163,7 +206,7 @@ export async function seedTestTask(
       );
     }
     const patchedBody = await patchResponse.json();
-    return (patchedBody as { data?: Record<string, unknown> }).data ?? patchedBody;
+    return unwrapApiData<Record<string, unknown>>(patchedBody);
   }
 
   return task;

@@ -16,8 +16,8 @@ import type { Request } from 'express';
  *  - authRateLimit   — 10 req / 15 min (login, token refresh)
  *  - uploadRateLimit — 20 req / min   (file uploads)
  *  - writeRateLimit  — 60 req / min   (POST, PUT, PATCH, DELETE)
- *  - readRateLimit   — 300 req / min  (GET requests)
- *  - apiRateLimit    — 300 req / min  (global fallback, localhost exempt)
+ *  - readRateLimit   — 300 req / min  (GET requests, configurable with RATE_LIMIT_MAX)
+ *  - apiRateLimit    — 300 req / min  (global fallback, configurable with RATE_LIMIT_MAX, localhost exempt)
  */
 
 // ── Configuration ──────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ import type { Request } from 'express';
 /** Default rate limit (requests per minute) for general API access. */
 const DEFAULT_API_LIMIT = 300;
 
-/** Read override from environment, falling back to the default. */
+/** API/read override from environment, falling back to the default. */
 const API_LIMIT: number = (() => {
   const env = process.env.RATE_LIMIT_MAX;
   if (env) {
@@ -37,7 +37,6 @@ const API_LIMIT: number = (() => {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Returns true when the request originates from localhost / loopback. */
 /** Returns true when the request originates from localhost / loopback. */
 function isLocalhost(req: Request): boolean {
   // In production, never exempt localhost to avoid bypassing limits behind proxies.
@@ -120,12 +119,13 @@ export const writeRateLimit = rateLimit({
 });
 
 /**
- * Generous rate limiter for read operations: 300 req / min per IP.
+ * Generous rate limiter for read operations: 300 req / min per IP by default.
  * Applied to: GET requests on resource endpoints.
+ * Override with RATE_LIMIT_MAX for high-volume test/dev scenarios.
  * Localhost is NOT exempt — consistent with other tiered limiters.
  */
 export const readRateLimit = rateLimit({
-  limit: 300,
+  limit: API_LIMIT,
   windowMs: 60_000,
   message: 'Too many read requests. Please slow down.',
 });

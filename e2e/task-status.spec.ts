@@ -29,7 +29,7 @@ test.describe('Task Status Change', () => {
     await page.goto('/');
 
     // Verify the task is in the To Do column
-    const todoColumn = page.getByRole('region', { name: /To Do column/ });
+    const todoColumn = page.getByRole('region', { name: 'To Do' });
     await expect(todoColumn.locator(`text=${uniqueTitle}`)).toBeVisible({
       timeout: 15_000,
     });
@@ -40,10 +40,7 @@ test.describe('Task Status Change', () => {
     const detailPanel = page.locator('[role="dialog"]');
     await expect(detailPanel).toBeVisible({ timeout: 5_000 });
 
-    // The metadata section has a grid: Status | Type | Priority
-    // Status is the first Select in the grid
-    const statusSection = detailPanel.locator('label:has-text("Status")').locator('..');
-    const statusTrigger = statusSection.locator('button[role="combobox"]');
+    const statusTrigger = detailPanel.getByRole('combobox', { name: 'Status' });
     await expect(statusTrigger).toBeVisible();
     await statusTrigger.click();
 
@@ -67,7 +64,7 @@ test.describe('Task Status Change', () => {
     await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
 
     // Wait for the task to move to the In Progress column
-    const inProgressColumn = page.getByRole('region', { name: /In Progress column/ });
+    const inProgressColumn = page.getByRole('region', { name: 'In Progress' });
     await expect(inProgressColumn.locator(`text=${uniqueTitle}`)).toBeVisible({
       timeout: 10_000,
     });
@@ -89,7 +86,7 @@ test.describe('Task Status Change', () => {
     await page.goto('/');
 
     // Verify the task starts in In Progress
-    const inProgressCol = page.getByRole('region', { name: /In Progress column/ });
+    const inProgressCol = page.getByRole('region', { name: 'In Progress' });
     await expect(inProgressCol.locator(`text=${uniqueTitle}`)).toBeVisible({ timeout: 15_000 });
 
     // Open the detail panel
@@ -98,9 +95,7 @@ test.describe('Task Status Change', () => {
     const detailPanel = page.locator('[role="dialog"]');
     await expect(detailPanel).toBeVisible({ timeout: 5_000 });
 
-    // Find the Status dropdown
-    const statusSection = detailPanel.locator('label:has-text("Status")').locator('..');
-    const statusTrigger = statusSection.locator('button[role="combobox"]');
+    const statusTrigger = detailPanel.getByRole('combobox', { name: 'Status' });
     await expect(statusTrigger).toBeVisible();
     await statusTrigger.click();
 
@@ -122,7 +117,7 @@ test.describe('Task Status Change', () => {
     await page.keyboard.press('Escape');
 
     // Verify the task moved to Done
-    const doneCol = page.getByRole('region', { name: /Done column/ });
+    const doneCol = page.getByRole('region', { name: 'Done' });
     await expect(doneCol.locator(`text=${uniqueTitle}`)).toBeVisible({ timeout: 10_000 });
   });
 });

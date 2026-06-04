@@ -503,7 +503,7 @@ test.describe('v5 Mantine migration QA gate', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });
 
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const settingsDialog = page.getByRole('dialog', { name: 'Settings' });
     await expect(settingsDialog).toBeVisible({ timeout: 5_000 });
     await settingsDialog.getByRole('tab', { name: 'Board' }).click();
@@ -516,7 +516,7 @@ test.describe('v5 Mantine migration QA gate', () => {
 
     await page.getByRole('button', { name: 'Search' }).click();
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByRole('textbox', { name: 'Search tasks and docs' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Search Veritas' })).toBeVisible();
     await assertNoLegacyPrimitiveSlots(page);
     await assertVisibleInteractiveControlsHaveNames(page);
     await assertFocusRemainsInsideDialog(page, 'Search');
@@ -561,6 +561,7 @@ test.describe('v5 Mantine migration QA gate', () => {
 
     await page.setViewportSize(mobileViewport);
     await page.goto('/', { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Mobile board' }).click();
     await expect(page.getByRole('region', { name: 'To Do' })).toBeVisible({
       timeout: 15_000,
     });
@@ -580,7 +581,7 @@ test.describe('v5 Mantine migration QA gate', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });
 
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
     await assertNoHorizontalOverflow(page);
     await assertMobileTouchTargets(page);
