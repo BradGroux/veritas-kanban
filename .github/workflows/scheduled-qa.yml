@@ -53,11 +53,14 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright E2E tests
+        env:
+          PLAYWRIGHT_HTML_REPORT: '1'
+          PLAYWRIGHT_HTML_OPEN: never
         run: pnpm test:e2e
 
       - name: Upload Playwright artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-artifacts
           path: |
@@ -108,7 +111,10 @@ jobs:
           exit 1
 
       - name: Run k6 profile
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p k6-results
 
           if [ "$K6_PROFILE" = "full" ]; then
@@ -132,7 +138,7 @@ jobs:
               -w /work \
               grafana/k6:latest run \
               --summary-export "k6-results/${script}.json" \
-              "load-tests/k6/${script}.js"
+              "load-tests/k6/${script}.js" 2>&1 | tee "k6-results/${script}.log"
           done
 
       - name: Stop API server
@@ -144,7 +150,7 @@ jobs:
 
       - name: Upload k6 artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: k6-artifacts
           path: |
