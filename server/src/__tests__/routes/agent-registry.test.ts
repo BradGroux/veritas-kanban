@@ -8,12 +8,34 @@ import request from 'supertest';
 import express from 'express';
 import { errorHandler } from '../../middleware/error-handler.js';
 
+const routeMocks = vi.hoisted(() => ({
+  getAgentStatus: vi.fn(() => ({
+    status: 'idle',
+    activeAgents: [],
+    lastUpdated: '2026-06-04T12:00:00Z',
+  })),
+  getEvents: vi.fn(async () => []),
+  listTasks: vi.fn(async () => []),
+}));
+
 // Mock fs-helpers before importing routes
 vi.mock('../../storage/fs-helpers.js', () => ({
   existsSync: vi.fn().mockReturnValue(false),
   readFileSync: vi.fn().mockReturnValue('{}'),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+}));
+
+vi.mock('../../services/task-service.js', () => ({
+  getTaskService: () => ({ listTasks: routeMocks.listTasks }),
+}));
+
+vi.mock('../../services/telemetry-service.js', () => ({
+  getTelemetryService: () => ({ getEvents: routeMocks.getEvents }),
+}));
+
+vi.mock('../../routes/agent-status.js', () => ({
+  getAgentStatus: routeMocks.getAgentStatus,
 }));
 
 const { disposeAgentRegistryService } = await import('../../services/agent-registry-service.js');
@@ -24,6 +46,13 @@ describe('Agent Registry Routes', () => {
 
   beforeEach(() => {
     disposeAgentRegistryService();
+    routeMocks.getAgentStatus.mockReturnValue({
+      status: 'idle',
+      activeAgents: [],
+      lastUpdated: '2026-06-04T12:00:00Z',
+    });
+    routeMocks.getEvents.mockResolvedValue([]);
+    routeMocks.listTasks.mockResolvedValue([]);
 
     app = express();
     app.use(express.json());
@@ -206,6 +235,54 @@ describe('Agent Registry Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
       expect(res.body[0].id).toBe('a1');
+    });
+  });
+
+  // ── Health Classifier ────────────────────────────────────────
+
+  describe('GET /api/agents/register/health', () => {
+    it('should return deterministic agent health classifications before ID lookup', async () => {
+      routeMocks.listTasks.mockResolvedValue([
+        {
+          id: 'task_20260604_health',
+          title: 'Health classified task',
+          description: 'Route fixture',
+          type: 'feature',
+          status: 'blocked',
+          priority: 'high',
+          created: '2026-06-04T10:00:00Z',
+          updated: '2026-06-04T11:00:00Z',
+          blockedReason: { category: 'waiting-on-feedback', note: 'Needs owner approval' },
+        },
+      ]);
+
+      await request(app)
+        .post('/api/agents/register')
+        .send({ id: 'codex', name: 'Codex', capabilities: [] });
+
+      await request(app).post('/api/agents/register/codex/heartbeat').send({
+        status: 'busy',
+        currentTaskId: 'task_20260604_health',
+        currentTaskTitle: 'Health classified task',
+      });
+
+      const res = await request(app).get('/api/agents/register/health');
+
+      expect(res.status).toBe(200);
+      expect(res.body.generatedAt).toBeDefined();
+      expect(res.body.classifications).toHaveLength(1);
+      expect(res.body.classifications[0]).toMatchObject({
+        subjectId: 'agent:codex',
+        state: 'blocked',
+        reasonCode: 'hitl_pending',
+        confidence: 0.88,
+      });
+      expect(routeMocks.getEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: ['run.completed', 'run.error'],
+          limit: 5000,
+        })
+      );
     });
   });
 

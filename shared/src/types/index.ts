@@ -12,6 +12,7 @@ export * from './delegation.types.js';
 export * from './changes.types.js';
 export * from './broadcast.types.js';
 export * from './agent-registry.types.js';
+export * from './agent-health-classifier.types.js';
 export * from './shared-resources.types.js';
 export * from './doc-freshness.types.js';
 export * from './drift.types.js';

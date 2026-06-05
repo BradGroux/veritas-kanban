@@ -13,8 +13,17 @@ import {
   ShieldAlert,
   Workflow,
 } from 'lucide-react';
-import type { DriftAlert, SkillRiskInventoryItem, Task } from '@veritas-kanban/shared';
-import { usePendingAgentApprovals, type AgentApprovalRequest } from '@/hooks/useAgent';
+import type {
+  AgentHealthClassification,
+  DriftAlert,
+  SkillRiskInventoryItem,
+  Task,
+} from '@veritas-kanban/shared';
+import {
+  useAgentHealthClassifications,
+  usePendingAgentApprovals,
+  type AgentApprovalRequest,
+} from '@/hooks/useAgent';
 import { useDriftAlerts, useAcknowledgeDriftAlert } from '@/hooks/useDrift';
 import {
   useFailedRuns,
@@ -44,6 +53,7 @@ const STUCK_WORKFLOW_MS = 2 * 60 * 60 * 1000;
 type NeedsAttentionSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 type NeedsAttentionSource =
+  | 'agent-health'
   | 'approval'
   | 'blocked-task'
   | 'drift-alert'
@@ -81,10 +91,12 @@ export interface NeedsAttentionItem {
   notificationId?: string;
   driftAlertId?: string;
   workflowRunId?: string;
+  healthState?: AgentHealthClassification['state'];
 }
 
 export interface BuildNeedsAttentionInput {
   activeRuns?: WorkflowRun[];
+  agentHealth?: AgentHealthClassification[];
   approvals?: AgentApprovalRequest[];
   driftAlerts?: DriftAlert[];
   failedRuns?: FailedRunDetails[];
@@ -115,6 +127,7 @@ const SEVERITY_RANK: Record<NeedsAttentionSeverity, number> = {
 };
 
 const SOURCE_LABELS: Record<NeedsAttentionSource, string> = {
+  'agent-health': 'Agent health',
   approval: 'Approval',
   'blocked-task': 'Blocked task',
   'drift-alert': 'Drift',
@@ -129,6 +142,7 @@ const SOURCE_LABELS: Record<NeedsAttentionSource, string> = {
 };
 
 const SOURCE_ICONS: Record<NeedsAttentionSource, typeof AlertTriangle> = {
+  'agent-health': ShieldAlert,
   approval: ShieldAlert,
   'blocked-task': AlertTriangle,
   'drift-alert': ShieldAlert,
@@ -179,6 +193,33 @@ function formatAge(timestamp: string, now: Date): string {
 
 function formatSourceValue(value: string): string {
   return SOURCE_LABELS[value as NeedsAttentionSource] ?? value;
+}
+
+function formatHealthState(value: AgentHealthClassification['state']): string {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function healthSeverity(state: AgentHealthClassification['state']): NeedsAttentionSeverity {
+  switch (state) {
+    case 'blocked':
+    case 'risky':
+      return 'high';
+    case 'stuck':
+      return 'medium';
+    case 'complete_candidate':
+    case 'healthy':
+      return 'low';
+  }
+}
+
+function healthReason(classification: AgentHealthClassification): string {
+  const firstEvidence = classification.evidence[0]?.message;
+  return firstEvidence
+    ? `${classification.explanation} Evidence: ${firstEvidence}`
+    : classification.explanation;
 }
 
 function getTaskOwner(task?: Task): string | undefined {
@@ -344,6 +385,42 @@ export function buildNeedsAttentionItems(
         });
       }
     }
+  }
+
+  for (const classification of input.agentHealth ?? []) {
+    if (classification.state === 'healthy') continue;
+    const task = classification.taskId ? taskById.get(classification.taskId) : undefined;
+    const project = itemProject(task);
+    if (!projectMatches(input.project, project)) continue;
+
+    addItem(items, {
+      id: `agent-health:${classification.subjectId}:${classification.reasonCode}`,
+      dedupeKey: `agent-health:${classification.subjectId}:${classification.reasonCode}:${classification.updatedAt}`,
+      title:
+        task?.title ??
+        `${classification.agent ?? 'Agent'} ${formatHealthState(classification.state)}`,
+      reason: healthReason(classification),
+      nextAction: task
+        ? classification.state === 'complete_candidate'
+          ? 'Review completion'
+          : 'Open task'
+        : 'Review agent',
+      severity: healthSeverity(classification.state),
+      source: 'agent-health',
+      sourceLabel: SOURCE_LABELS['agent-health'],
+      timestamp: classification.updatedAt,
+      owner: classification.agent,
+      agent: classification.agent,
+      taskId: classification.taskId,
+      taskTitle: task?.title ?? classification.taskTitle,
+      taskType: task?.type,
+      project,
+      destination: task ? 'task' : 'workflows',
+      destinationLabel: task
+        ? `task:${task.id}`
+        : `agent:${classification.agent ?? classification.subjectId}`,
+      healthState: classification.state,
+    });
   }
 
   for (const run of input.failedRuns ?? []) {
@@ -605,6 +682,7 @@ function filterItems(
   filters: {
     age: string;
     agent: string;
+    healthState: string;
     severity: string;
     source: string;
     taskType: string;
@@ -616,6 +694,7 @@ function filterItems(
     if (dismissed[item.dedupeKey]) return false;
     if (filters.severity !== 'all' && item.severity !== filters.severity) return false;
     if (filters.source !== 'all' && item.source !== filters.source) return false;
+    if (filters.healthState !== 'all' && item.healthState !== filters.healthState) return false;
     if (filters.agent !== 'all' && item.agent !== filters.agent && item.owner !== filters.agent) {
       return false;
     }
@@ -646,6 +725,7 @@ export function NeedsAttentionQueue({
   const [severityFilter, setSeverityFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
+  const [healthStateFilter, setHealthStateFilter] = useState('all');
   const [taskTypeFilter, setTaskTypeFilter] = useState('all');
   const [ageFilter, setAgeFilter] = useState('all');
   const [dismissed, setDismissed] = useState<Record<string, string>>(() => readDismissedItems());
@@ -665,6 +745,7 @@ export function NeedsAttentionQueue({
     acknowledged: false,
   });
   const { data: approvals = [], isLoading: approvalsLoading } = usePendingAgentApprovals();
+  const { data: agentHealthData, isLoading: agentHealthLoading } = useAgentHealthClassifications();
   const { data: notifications = [], isLoading: notificationsLoading } =
     useUndeliveredNotifications(50);
   const { data: skillInventory, isLoading: skillRiskLoading } = useSkillRiskInventory();
@@ -676,6 +757,7 @@ export function NeedsAttentionQueue({
       buildNeedsAttentionItems(
         {
           activeRuns,
+          agentHealth: agentHealthData?.classifications,
           approvals,
           driftAlerts,
           failedRuns,
@@ -690,6 +772,7 @@ export function NeedsAttentionQueue({
       ),
     [
       activeRuns,
+      agentHealthData?.classifications,
       approvals,
       driftAlerts,
       failedRuns,
@@ -710,6 +793,7 @@ export function NeedsAttentionQueue({
         {
           age: ageFilter,
           agent: agentFilter,
+          healthState: healthStateFilter,
           severity: severityFilter,
           source: sourceFilter,
           taskType: taskTypeFilter,
@@ -717,7 +801,17 @@ export function NeedsAttentionQueue({
         dismissed,
         now
       ),
-    [ageFilter, agentFilter, allItems, dismissed, now, severityFilter, sourceFilter, taskTypeFilter]
+    [
+      ageFilter,
+      agentFilter,
+      allItems,
+      dismissed,
+      healthStateFilter,
+      now,
+      severityFilter,
+      sourceFilter,
+      taskTypeFilter,
+    ]
   );
 
   const visibleLimited = visibleItems.slice(0, MAX_VISIBLE_ITEMS);
@@ -730,6 +824,7 @@ export function NeedsAttentionQueue({
     recentRunsLoading ||
     driftLoading ||
     approvalsLoading ||
+    agentHealthLoading ||
     notificationsLoading ||
     skillRiskLoading;
 
@@ -755,6 +850,16 @@ export function NeedsAttentionQueue({
     allItems.map((item) => item.taskType),
     'All types'
   );
+  const healthStateOptions = uniqueOptions(
+    allItems.map((item) => item.healthState),
+    'All health'
+  ).map((option) => ({
+    value: option.value,
+    label:
+      option.value === 'all'
+        ? option.label
+        : formatHealthState(option.value as AgentHealthClassification['state']),
+  }));
 
   const persistDismissed = (next: Record<string, string>) => {
     setDismissed(next);
@@ -823,7 +928,7 @@ export function NeedsAttentionQueue({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-5 lg:min-w-[680px]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-6 lg:min-w-[760px]">
           <Select
             aria-label="Filter needs attention by severity"
             data={severityOptions}
@@ -838,6 +943,14 @@ export function NeedsAttentionQueue({
             data={sourceOptions}
             value={sourceFilter}
             onChange={(value) => setSourceFilter(value ?? 'all')}
+            allowDeselect={false}
+            size="xs"
+          />
+          <Select
+            aria-label="Filter needs attention by health state"
+            data={healthStateOptions}
+            value={healthStateFilter}
+            onChange={(value) => setHealthStateFilter(value ?? 'all')}
             allowDeselect={false}
             size="xs"
           />
@@ -928,6 +1041,11 @@ export function NeedsAttentionQueue({
                         <Badge size="xs" variant="outline">
                           {item.sourceLabel}
                         </Badge>
+                        {item.healthState && (
+                          <Badge size="xs" variant="light">
+                            {formatHealthState(item.healthState)}
+                          </Badge>
+                        )}
                       </div>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {item.reason}

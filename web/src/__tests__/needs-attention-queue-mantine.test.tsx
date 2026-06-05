@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { SkillRiskInventoryItem } from '@veritas-kanban/shared';
+import type { AgentHealthClassification, SkillRiskInventoryItem } from '@veritas-kanban/shared';
 
 import {
   buildNeedsAttentionItems,
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   markNotificationDeliveredMutate: vi.fn(),
   useAcknowledgeDriftAlert: vi.fn(),
   useActiveRuns: vi.fn(),
+  useAgentHealthClassifications: vi.fn(),
   useDriftAlerts: vi.fn(),
   useFailedRuns: vi.fn(),
   useMarkNotificationDelivered: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('@/hooks/useDrift', () => ({
 }));
 
 vi.mock('@/hooks/useAgent', () => ({
+  useAgentHealthClassifications: mocks.useAgentHealthClassifications,
   usePendingAgentApprovals: mocks.usePendingAgentApprovals,
 }));
 
@@ -200,6 +202,29 @@ const notifications = [
   },
 ];
 
+const agentHealth: AgentHealthClassification[] = [
+  {
+    subjectId: 'agent:codex-cloud',
+    subjectType: 'agent',
+    agent: 'codex-cloud',
+    taskId: 'task-review',
+    taskTitle: 'Review generated PR',
+    state: 'risky',
+    reasonCode: 'repeated_tool_failures',
+    explanation: 'Agent has repeated recent run errors.',
+    confidence: 0.86,
+    evidence: [
+      {
+        code: 'repeated_tool_failures',
+        message: '3 run errors recorded in the last 24 hours.',
+        timestamp: '2026-06-01T11:30:00Z',
+        taskId: 'task-review',
+      },
+    ],
+    updatedAt: '2026-06-01T11:45:00Z',
+  },
+];
+
 const skillRisks: SkillRiskInventoryItem[] = [
   {
     skillId: 'skill-risky',
@@ -262,6 +287,10 @@ function mockQueueData() {
   mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
   mocks.useDriftAlerts.mockReturnValue({ data: driftAlerts, isLoading: false });
   mocks.usePendingAgentApprovals.mockReturnValue({ data: approvals, isLoading: false });
+  mocks.useAgentHealthClassifications.mockReturnValue({
+    data: { classifications: agentHealth, generatedAt: '2026-06-01T11:45:00Z' },
+    isLoading: false,
+  });
   mocks.useUndeliveredNotifications.mockReturnValue({ data: notifications, isLoading: false });
   mocks.useSkillRiskInventory.mockReturnValue({
     data: { generatedAt: '2026-06-01T12:00:00Z', items: skillRisks, totals: {} },
@@ -290,6 +319,7 @@ describe('needs attention queue', () => {
     const items = buildNeedsAttentionItems(
       {
         activeRuns,
+        agentHealth,
         approvals,
         driftAlerts,
         failedRuns,
@@ -306,6 +336,7 @@ describe('needs attention queue', () => {
     expect(items.map((item) => item.source)).toEqual(
       expect.arrayContaining([
         'approval',
+        'agent-health',
         'blocked-task',
         'expensive-run',
         'failed-run',
@@ -331,6 +362,9 @@ describe('needs attention queue', () => {
     expect(items.find((item) => item.source === 'skill-risk')?.title).toBe(
       'Skill risk: Risky Skill'
     );
+    const healthItem = items.find((item) => item.source === 'agent-health');
+    expect(healthItem?.healthState).toBe('risky');
+    expect(healthItem?.reason).toContain('3 run errors recorded');
   });
 
   it('renders queue items through Mantine controls and opens task targets', async () => {
@@ -345,8 +379,9 @@ describe('needs attention queue', () => {
     expect(screen.getAllByText('Blocked queue task').length).toBeGreaterThan(0);
     expect(screen.getByText('Review notification')).toBeDefined();
     expect(screen.getByText('Skill risk: Risky Skill')).toBeDefined();
+    expect(screen.getAllByText('Risky').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Stale running task').length).toBeGreaterThan(0);
-    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(5);
+    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(6);
     expect(container.querySelectorAll('.mantine-Badge-root').length).toBeGreaterThan(3);
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="badge"]')).toBeNull();
@@ -373,6 +408,18 @@ describe('needs attention queue', () => {
     expect(screen.queryByText('Review notification')).toBeNull();
   });
 
+  it('filters by agent health state and shows classifier evidence', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<NeedsAttentionQueue period="7d" project="platform" />);
+
+    await user.click(screen.getAllByLabelText('Filter needs attention by health state')[0]);
+    await user.click(screen.getByRole('option', { name: 'Risky' }));
+
+    expect(screen.getByText(/3 run errors recorded in the last 24 hours/i)).toBeDefined();
+    expect(screen.queryByText('Review notification')).toBeNull();
+  });
+
   it('renders an empty state when no inputs need attention', () => {
     mocks.useTasks.mockReturnValue({ data: [], isLoading: false });
     mocks.useFailedRuns.mockReturnValue({ data: [], isLoading: false });
@@ -384,6 +431,10 @@ describe('needs attention queue', () => {
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useDriftAlerts.mockReturnValue({ data: [], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [], isLoading: false });
+    mocks.useAgentHealthClassifications.mockReturnValue({
+      data: { classifications: [], generatedAt: '2026-06-01T12:00:00Z' },
+      isLoading: false,
+    });
     mocks.useUndeliveredNotifications.mockReturnValue({ data: [], isLoading: false });
     mocks.useSkillRiskInventory.mockReturnValue({
       data: { totals: { total: 0, blocked: 0, warned: 0, unscanned: 0 }, items: [] },

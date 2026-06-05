@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, AgentOutput } from '@/lib/api';
 import { apiFetch, API_BASE } from '@/lib/api/helpers';
 import { useWebSocket, type WebSocketMessage } from './useWebSocket';
-import type { AgentType } from '@veritas-kanban/shared';
+import type { AgentHealthClassificationResponse, AgentType } from '@veritas-kanban/shared';
 
 export interface StartAgentInput {
   taskId: string;
@@ -23,10 +23,17 @@ export interface AgentApprovalRequest {
   createdAt: string;
 }
 
+function requiredQueryParam(value: string | undefined, name: string): string {
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
+
 export function useAgentStatus(taskId: string | undefined) {
   return useQuery({
     queryKey: ['agent', 'status', taskId],
-    queryFn: () => api.agent.status(taskId!),
+    queryFn: () => api.agent.status(requiredQueryParam(taskId, 'taskId')),
     enabled: !!taskId,
     refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
   });
@@ -67,7 +74,7 @@ export function useStopAgent() {
 export function useAgentAttempts(taskId: string | undefined) {
   return useQuery({
     queryKey: ['agent', 'attempts', taskId],
-    queryFn: () => api.agent.listAttempts(taskId!),
+    queryFn: () => api.agent.listAttempts(requiredQueryParam(taskId, 'taskId')),
     enabled: !!taskId,
   });
 }
@@ -75,7 +82,11 @@ export function useAgentAttempts(taskId: string | undefined) {
 export function useAgentLog(taskId: string | undefined, attemptId: string | undefined) {
   return useQuery({
     queryKey: ['agent', 'log', taskId, attemptId],
-    queryFn: () => api.agent.getLog(taskId!, attemptId!),
+    queryFn: () =>
+      api.agent.getLog(
+        requiredQueryParam(taskId, 'taskId'),
+        requiredQueryParam(attemptId, 'attemptId')
+      ),
     enabled: !!taskId && !!attemptId,
   });
 }
@@ -92,6 +103,16 @@ export function usePendingAgentApprovals(agentId?: string) {
       );
     },
     staleTime: 30_000,
+  });
+}
+
+export function useAgentHealthClassifications() {
+  return useQuery({
+    queryKey: ['agent', 'health-classifications'],
+    queryFn: () =>
+      apiFetch<AgentHealthClassificationResponse>(`${API_BASE}/agents/register/health`),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 

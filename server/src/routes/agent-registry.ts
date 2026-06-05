@@ -6,6 +6,7 @@
  * DELETE /api/agents/register/:id       — Deregister an agent
  * GET    /api/agents/register           — List all registered agents
  * GET    /api/agents/register/:id       — Get specific agent
+ * GET    /api/agents/register/health    — Classify operational health for agents
  * GET    /api/agents/register/stats     — Get registry statistics
  * GET    /api/agents/register/capabilities/:capability — Find agents by capability
  */
@@ -13,8 +14,12 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getAgentRegistryService } from '../services/agent-registry-service.js';
+import { getAgentHealthClassifierService } from '../services/agent-health-classifier-service.js';
+import { getTaskService } from '../services/task-service.js';
+import { getTelemetryService } from '../services/telemetry-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { getAgentStatus } from './agent-status.js';
 
 const router: RouterType = Router();
 
@@ -67,6 +72,36 @@ router.get(
     const registry = getAgentRegistryService();
     const agents = registry.findByCapability(req.params.capability as string);
     res.json(agents);
+  })
+);
+
+/**
+ * GET /api/agents/register/health
+ * Classify registered agents with deterministic operational health signals
+ */
+router.get(
+  '/health',
+  asyncHandler(async (_req, res) => {
+    const registry = getAgentRegistryService();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [tasks, telemetryEvents] = await Promise.all([
+      getTaskService().listTasks(),
+      getTelemetryService().getEvents({
+        since,
+        type: ['run.completed', 'run.error'],
+        limit: 5000,
+      }),
+    ]);
+    const generatedAt = new Date().toISOString();
+    const classifications = getAgentHealthClassifierService().classify({
+      agents: registry.list(),
+      tasks,
+      telemetryEvents,
+      globalStatus: getAgentStatus(),
+      now: new Date(generatedAt),
+    });
+
+    res.json({ classifications, generatedAt });
   })
 );
 
