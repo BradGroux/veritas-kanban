@@ -55,12 +55,14 @@ export interface DocsStats {
 
 // ─── Service ─────────────────────────────────────────────────────
 
-class DocsService {
+export class DocsService {
   private docsRoot: string;
 
-  constructor() {
+  constructor(docsRoot?: string) {
     // Default to <storage>/../docs, configurable via VK_DOCS_DIR
-    this.docsRoot = process.env.VK_DOCS_DIR || path.join(DATA_DIR, '..', 'docs');
+    this.docsRoot = path.resolve(
+      docsRoot || process.env.VK_DOCS_DIR || path.join(DATA_DIR, '..', 'docs')
+    );
   }
 
   /**
@@ -74,8 +76,10 @@ class DocsService {
   }): Promise<DocFile[]> {
     const files: DocFile[] = [];
     const root = options?.directory
-      ? path.join(this.docsRoot, options.directory)
+      ? await this.resolveDocsDirectory(options.directory)
       : this.docsRoot;
+
+    if (!root) return [];
 
     try {
       await this.scanDirectory(root, files);
@@ -116,14 +120,8 @@ class DocsService {
    * Get a specific file with content.
    */
   async getFile(filePath: string): Promise<DocFile | null> {
-    const fullPath = path.join(this.docsRoot, filePath);
-
-    // Security: prevent path traversal
-    const resolved = path.resolve(fullPath);
-    if (!resolved.startsWith(path.resolve(this.docsRoot))) {
-      log.warn({ filePath }, 'Path traversal attempt blocked');
-      return null;
-    }
+    const fullPath = await this.resolveExistingFilePath(filePath);
+    if (!fullPath) return null;
 
     try {
       const stat = await fs.stat(fullPath);
@@ -148,11 +146,8 @@ class DocsService {
    * Create or update a file.
    */
   async saveFile(filePath: string, content: string): Promise<DocFile> {
-    const fullPath = path.join(this.docsRoot, filePath);
-
-    // Security: prevent path traversal
-    const resolved = path.resolve(fullPath);
-    if (!resolved.startsWith(path.resolve(this.docsRoot))) {
+    const fullPath = await this.resolveWritableFilePath(filePath);
+    if (!fullPath) {
       throw new Error('Invalid file path');
     }
 
@@ -179,12 +174,8 @@ class DocsService {
    * Delete a file.
    */
   async deleteFile(filePath: string): Promise<boolean> {
-    const fullPath = path.join(this.docsRoot, filePath);
-
-    const resolved = path.resolve(fullPath);
-    if (!resolved.startsWith(path.resolve(this.docsRoot))) {
-      return false;
-    }
+    const fullPath = await this.resolveExistingFilePath(filePath);
+    if (!fullPath) return false;
 
     try {
       await fs.unlink(fullPath);
@@ -214,7 +205,8 @@ class DocsService {
 
       // Check content match
       try {
-        const fullPath = path.join(this.docsRoot, file.path);
+        const fullPath = await this.resolveExistingFilePath(file.path);
+        if (!fullPath) continue;
         const content = await fs.readFile(fullPath, 'utf-8');
         const lines = content.split('\n');
         const matches: DocSearchResult['matches'] = [];
@@ -280,6 +272,124 @@ class DocsService {
   }
 
   // ─── Private ─────────────────────────────────────────────────
+
+  private isWithinDocsRoot(candidatePath: string, root = this.docsRoot): boolean {
+    const relative = path.relative(root, candidatePath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  }
+
+  private resolveLogicalDocsPath(filePath: string): string | null {
+    const resolved = path.resolve(this.docsRoot, filePath);
+    if (!this.isWithinDocsRoot(resolved)) {
+      log.warn({ filePath }, 'Docs path traversal attempt blocked');
+      return null;
+    }
+    return resolved;
+  }
+
+  private async realDocsRoot(): Promise<string> {
+    try {
+      return await fs.realpath(this.docsRoot);
+    } catch {
+      return this.docsRoot;
+    }
+  }
+
+  private async resolveDocsDirectory(directory: string): Promise<string | null> {
+    const resolved = this.resolveLogicalDocsPath(directory);
+    if (!resolved) return null;
+
+    try {
+      const [realRoot, realDirectory] = await Promise.all([
+        this.realDocsRoot(),
+        fs.realpath(resolved),
+      ]);
+      if (!this.isWithinDocsRoot(realDirectory, realRoot)) {
+        log.warn({ directory }, 'Docs directory symlink escape blocked');
+        return null;
+      }
+    } catch {
+      // Missing directories are handled by scanDirectory as an empty result.
+    }
+
+    return resolved;
+  }
+
+  private async resolveExistingFilePath(filePath: string): Promise<string | null> {
+    const resolved = this.resolveLogicalDocsPath(filePath);
+    if (!resolved) return null;
+
+    try {
+      const [realRoot, realFile] = await Promise.all([this.realDocsRoot(), fs.realpath(resolved)]);
+      if (!this.isWithinDocsRoot(realFile, realRoot)) {
+        log.warn({ filePath }, 'Docs file symlink escape blocked');
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    return resolved;
+  }
+
+  private async resolveWritableFilePath(filePath: string): Promise<string | null> {
+    const resolved = this.resolveLogicalDocsPath(filePath);
+    if (!resolved) return null;
+
+    try {
+      await fs.mkdir(this.docsRoot, { recursive: true });
+      const parent = path.dirname(resolved);
+      const parentReady = await this.ensureWritableDirectory(parent, filePath);
+      if (!parentReady) return null;
+
+      const [realRoot, realParent] = await Promise.all([
+        fs.realpath(this.docsRoot),
+        fs.realpath(parent),
+      ]);
+      if (!this.isWithinDocsRoot(realParent, realRoot)) {
+        log.warn({ filePath }, 'Docs write symlink escape blocked');
+        return null;
+      }
+
+      try {
+        const existing = await fs.lstat(resolved);
+        if (existing.isSymbolicLink()) {
+          log.warn({ filePath }, 'Docs write to symlink blocked');
+          return null;
+        }
+      } catch {
+        // New file; parent containment is enough.
+      }
+    } catch {
+      return null;
+    }
+
+    return resolved;
+  }
+
+  private async ensureWritableDirectory(directory: string, filePath: string): Promise<boolean> {
+    const relativeParent = path.relative(this.docsRoot, directory);
+    const segments =
+      relativeParent && relativeParent !== '.'
+        ? relativeParent.split(path.sep).filter(Boolean)
+        : [];
+    let current = this.docsRoot;
+
+    for (const segment of segments) {
+      current = path.join(current, segment);
+      try {
+        const existing = await fs.lstat(current);
+        if (existing.isSymbolicLink() || !existing.isDirectory()) {
+          log.warn({ filePath }, 'Docs write through unsafe parent blocked');
+          return false;
+        }
+      } catch {
+        await fs.mkdir(current);
+      }
+    }
+
+    return true;
+  }
 
   private async scanDirectory(dir: string, files: DocFile[]): Promise<void> {
     let entries;
