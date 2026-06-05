@@ -100,6 +100,15 @@ vk delete "$TASK_ID" --json
 
 If the read check succeeds but the write check returns `401` or `403`, the CLI is reaching VK but does not have write-capable auth. Recheck `VERITAS_API_KEYS`, restart the server, and confirm `VK_API_KEY` is exported in the same shell running `vk`.
 
+For release-candidate verification, run the combined scripted CLI/MCP smoke
+after `pnpm build`:
+
+```bash
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=replace-with-a-long-secret
+pnpm smoke:cli-mcp
+```
+
 ## MCP Setup
 
 Build the MCP server:
@@ -153,6 +162,11 @@ echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name
 ```
 
 If the `list_tasks` read check works but `create_task` fails, the MCP process is installed but does not have write-capable API auth. Put `VK_API_KEY` in the MCP client env block and restart the client.
+
+The scripted release smoke above also exercises MCP `tools/list`,
+`resources/list`, `resources/read`, `list_tasks`, `create_task`, and
+`delete_task`, and fails closed on CLI/MCP/server version skew unless the
+operator explicitly passes `--allow-version-skew`.
 
 ## Optional Layers
 

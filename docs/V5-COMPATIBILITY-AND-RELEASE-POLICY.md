@@ -99,5 +99,9 @@ Before publishing stable:
 5. Run the signed `Desktop Release` workflow only with Apple credentials set.
 6. Verify `/api/health.version`, `X-API-Version`, `vk --version`, MCP package
    version, desktop app version, and updater metadata all match the release.
-7. Verify migration dry-run, migration run, recovery-state, and restore-backup
+7. Run `pnpm smoke:cli-mcp` against the release-candidate server with
+   `VK_API_URL` and a scoped write-capable `VK_API_KEY`. Version skew is
+   unsupported unless the operator records an explicit
+   `--allow-version-skew` warning as release evidence.
+8. Verify migration dry-run, migration run, recovery-state, and restore-backup
    against the release fixture.
