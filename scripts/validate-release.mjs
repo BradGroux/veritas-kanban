@@ -32,6 +32,7 @@ const requiredScripts = [
   'lint',
   'lint:budget',
   'qa:mantine',
+  'smoke:cli-mcp',
   'test:e2e',
   'test:load',
   'test:load:smoke',

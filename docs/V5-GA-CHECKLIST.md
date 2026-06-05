@@ -112,6 +112,7 @@ pnpm lint:budget
 pnpm test:unit
 pnpm build
 pnpm validate:release
+pnpm smoke:cli-mcp
 pnpm desktop:package:mac:unsigned
 pnpm test:load:smoke
 ```
