@@ -238,6 +238,33 @@ describe('task detail Git and workflow Mantine migration', () => {
           },
         ]);
       }
+      if (url.includes('/workflows/launch-recommendations')) {
+        return createJsonResponse({
+          generatedAt: '2026-06-05T12:00:00.000Z',
+          context: {
+            workflowId: 'workflow-1',
+            taskId: 'task-workflow',
+            project: 'veritas-kanban',
+            taskType: 'feature',
+            cwd: '/tmp/veritas-worktree',
+            verificationGates: [],
+          },
+          recommendations: [
+            {
+              id: 'template:release',
+              kind: 'template',
+              label: 'Reviewed launch template',
+              detail: 'Active launch template matches prior successful run signals.',
+              confidence: 0.86,
+              reasonCodes: ['workflow:matched', 'source-run:matched'],
+              provenance: [{ type: 'run', id: 'run-success' }],
+              templateId: 'template-release',
+              templateStatus: 'active',
+              overrides: { templateId: 'template-release', agent: 'codex' },
+            },
+          ],
+        });
+      }
       return createJsonResponse([
         {
           id: 'run-active',
@@ -250,12 +277,26 @@ describe('task detail Git and workflow Mantine migration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const task = createMockTask({ id: 'task-workflow' });
+    const task = createMockTask({
+      id: 'task-workflow',
+      type: 'feature',
+      project: 'veritas-kanban',
+      git: {
+        repo: 'veritas',
+        baseBranch: 'main',
+        branch: 'feature/mantine-git',
+        worktreePath: '/tmp/veritas-worktree',
+      },
+    });
     const { baseElement, container } = renderWithProviders(
       <WorkflowSection task={task} open onOpenChange={vi.fn()} />
     );
 
     expect(await screen.findByText('Release Workflow')).toBeDefined();
+    expect(await screen.findByText('Reviewed launch template')).toBeDefined();
+    expect(screen.getByText('86%')).toBeDefined();
+    expect(screen.getByText('workflow:matched')).toBeDefined();
+    expect(screen.getByText('1 source')).toBeDefined();
     expect(screen.getByText('run-active')).toBeDefined();
     expect(container.querySelector('.mantine-Modal-content')).toBeDefined();
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
@@ -267,6 +308,12 @@ describe('task detail Git and workflow Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
     await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/workflows/launch-recommendations?workflowId=workflow-1&taskId=task-workflow'
+        ),
+        expect.anything()
+      );
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/workflows/workflow-1/runs'),
         expect.objectContaining({

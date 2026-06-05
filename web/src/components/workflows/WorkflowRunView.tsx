@@ -41,11 +41,13 @@ import {
   Pause,
   History,
   Users,
+  FileText,
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { useView } from '@/contexts/ViewContext';
+import { useDistillTemplateFromRun } from '@/hooks/useTemplates';
 
 interface WorkflowRunViewProps {
   runId: string;
@@ -150,6 +152,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const { toast } = useToast();
   const { navigateToTask } = useView();
+  const distillTemplate = useDistillTemplateFromRun();
 
   // Fetch run details
   const fetchRun = useCallback(async () => {
@@ -244,6 +247,22 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     } catch (error) {
       toast({
         title: '❌ Failed to resume workflow run',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  const handleDistillTemplate = async () => {
+    if (!run) return;
+    try {
+      const template = await distillTemplate.mutateAsync({ runId: run.id });
+      toast({
+        title: 'Draft template created',
+        description: `${template.name} is ready for review.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to create draft template',
         description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -356,6 +375,17 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
               onClick={handleResume}
             >
               Resume
+            </Button>
+          )}
+          {run.status === 'completed' && (
+            <Button
+              size="sm"
+              variant="light"
+              leftSection={<FileText className="h-4 w-4" />}
+              loading={distillTemplate.isPending}
+              onClick={handleDistillTemplate}
+            >
+              Draft Template
             </Button>
           )}
           {taskTimelineId && (

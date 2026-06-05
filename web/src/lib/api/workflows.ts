@@ -1,5 +1,6 @@
 import type {
   WorkflowDefinition,
+  LaunchRecommendationsResponse,
   WorkflowOutputTarget,
   WorkflowPipelineSummary,
   WorkflowSchedule,
@@ -115,6 +116,15 @@ export interface WorkflowRunStartResponse {
   id: string;
 }
 
+export interface WorkflowLaunchRecommendationParams {
+  workflowId?: string;
+  taskId?: string;
+  project?: string;
+  taskType?: string;
+  cwd?: string;
+  verificationGates?: string[];
+}
+
 function unwrapData<T>(value: T | { data: T }): T {
   if (value && typeof value === 'object' && 'data' in value) {
     return (value as { data: T }).data;
@@ -199,4 +209,23 @@ export const workflowsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workflow }),
     }),
+
+  launchRecommendations: async (
+    params: WorkflowLaunchRecommendationParams
+  ): Promise<LaunchRecommendationsResponse> => {
+    const query = new URLSearchParams();
+    if (params.workflowId) query.set('workflowId', params.workflowId);
+    if (params.taskId) query.set('taskId', params.taskId);
+    if (params.project) query.set('project', params.project);
+    if (params.taskType) query.set('taskType', params.taskType);
+    if (params.cwd) query.set('cwd', params.cwd);
+    if (params.verificationGates?.length) {
+      query.set('verificationGates', params.verificationGates.join(','));
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const response = await apiFetch<
+      LaunchRecommendationsResponse | { data: LaunchRecommendationsResponse }
+    >(`${API_BASE}/workflows/launch-recommendations${suffix}`);
+    return unwrapData(response);
+  },
 };

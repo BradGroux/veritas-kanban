@@ -118,6 +118,7 @@ export class TemplateService {
       category: undefined,
       subtaskTemplates: undefined,
       blueprint: undefined,
+      launch: undefined,
       created: data.created,
       updated: data.updated,
     };
@@ -191,6 +192,7 @@ export class TemplateService {
       taskDefaults: input.taskDefaults,
       subtaskTemplates: input.subtaskTemplates,
       blueprint: input.blueprint,
+      launch: input.launch,
       created: now,
       updated: now,
     };
@@ -224,6 +226,7 @@ export class TemplateService {
       },
       subtaskTemplates: input.subtaskTemplates ?? existing.subtaskTemplates,
       blueprint: input.blueprint ?? existing.blueprint,
+      launch: input.launch ?? existing.launch,
       updated: new Date().toISOString(),
     };
 

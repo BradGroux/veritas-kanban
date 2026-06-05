@@ -4,6 +4,7 @@
 import type {
   TaskTemplate,
   CreateTemplateInput,
+  DistillTemplateFromRunInput,
   UpdateTemplateInput,
   TaskTypeConfig,
   SprintConfig,
@@ -48,6 +49,16 @@ export const templatesApi = {
       method: 'DELETE',
     });
     return handleResponse<void>(response);
+  },
+
+  distillFromRun: async (input: DistillTemplateFromRunInput): Promise<TaskTemplate> => {
+    const response = await fetch(`${API_BASE}/templates/distill-from-run`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return handleResponse<TaskTemplate>(response);
   },
 };
 

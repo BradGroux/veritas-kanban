@@ -390,6 +390,61 @@ describe('workflow surfaces Mantine migration', () => {
     await waitFor(() => expect(screen.getByText('artifact ready')).toBeDefined());
   });
 
+  it('creates a draft launch template from a completed workflow run', async () => {
+    const user = userEvent.setup();
+    const completedRun = {
+      ...workflowRun,
+      status: 'completed' as const,
+      completedAt: '2026-06-01T10:05:00Z',
+      steps: workflowRun.steps.map((step) => ({ ...step, status: 'completed' as const })),
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/workflows/runs/run-1')) {
+        return jsonResponse(completedRun);
+      }
+      if (url.endsWith('/workflows/wf-release')) {
+        return jsonResponse({
+          id: 'wf-release',
+          name: 'Release workflow',
+          version: 3,
+          steps: [
+            { id: 'build', name: 'Build artifact', agent: 'codex' },
+            { id: 'smoke', name: 'Smoke test', agent: 'codex' },
+          ],
+        });
+      }
+      if (url.endsWith('/templates/distill-from-run') && init?.method === 'POST') {
+        return jsonResponse({
+          id: 'template-run-1',
+          name: 'Draft: Release workflow',
+          version: 1,
+          taskDefaults: {},
+          launch: { status: 'draft', distilledFromRunId: 'run-1' },
+          created: '2026-06-01T10:05:00Z',
+          updated: '2026-06-01T10:05:00Z',
+        });
+      }
+      return jsonResponse(null, false);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    renderWithProviders(<WorkflowRunView runId="run-1" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Release workflow')).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Draft Template' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/templates/distill-from-run',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ runId: 'run-1' }),
+        })
+      );
+    });
+  });
+
   it('applies workflow run WebSocket payload updates without a full reload', async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

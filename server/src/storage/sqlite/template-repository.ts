@@ -50,6 +50,7 @@ export class SqliteTemplateRepository implements TemplateRepository {
       taskDefaults: input.taskDefaults,
       subtaskTemplates: input.subtaskTemplates,
       blueprint: input.blueprint,
+      launch: input.launch,
       created: now,
       updated: now,
     };
@@ -74,6 +75,7 @@ export class SqliteTemplateRepository implements TemplateRepository {
       },
       subtaskTemplates: input.subtaskTemplates ?? existing.subtaskTemplates,
       blueprint: input.blueprint ?? existing.blueprint,
+      launch: input.launch ?? existing.launch,
       updated: new Date().toISOString(),
     };
 
@@ -142,6 +144,7 @@ export class SqliteTemplateRepository implements TemplateRepository {
       category: undefined,
       subtaskTemplates: undefined,
       blueprint: undefined,
+      launch: undefined,
       created: template.created,
       updated: template.updated,
     };

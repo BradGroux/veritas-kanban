@@ -14,7 +14,8 @@ import { useMediaQuery } from '@mantine/hooks';
 import { Play, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useIdentity } from '@/hooks/useIdentity';
-import type { Task } from '@veritas-kanban/shared';
+import { workflowsApi } from '@/lib/api/workflows';
+import type { LaunchRecommendation, Task } from '@veritas-kanban/shared';
 
 interface WorkflowSectionProps {
   task: Task;
@@ -57,6 +58,9 @@ function getRunStatusColor(status: WorkflowRun['status']) {
 export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionProps) {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [activeRuns, setActiveRuns] = useState<WorkflowRun[]>([]);
+  const [recommendationsByWorkflow, setRecommendationsByWorkflow] = useState<
+    Record<string, LaunchRecommendation[]>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState<string | null>(null);
   const { toast } = useToast();
@@ -66,14 +70,37 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
 
   useEffect(() => {
     if (!open) return;
+    let isCancelled = false;
 
     const fetchData = async () => {
+      setIsLoading(true);
       try {
         // Fetch available workflows
         const workflowsRes = await fetch(`${API_BASE}/workflows`);
         if (workflowsRes.ok) {
           const wJson = await workflowsRes.json();
-          setWorkflows(wJson.data ?? wJson);
+          const workflowList = (wJson.data ?? wJson) as Workflow[];
+          if (isCancelled) return;
+          setWorkflows(workflowList);
+
+          const recommendationEntries = await Promise.all(
+            workflowList.map(async (workflow) => {
+              try {
+                const result = await workflowsApi.launchRecommendations({
+                  workflowId: workflow.id,
+                  taskId: task.id,
+                  project: task.project,
+                  taskType: task.type,
+                  cwd: task.git?.worktreePath,
+                });
+                return [workflow.id, result.recommendations] as const;
+              } catch {
+                return [workflow.id, []] as const;
+              }
+            })
+          );
+          if (isCancelled) return;
+          setRecommendationsByWorkflow(Object.fromEntries(recommendationEntries));
         }
 
         // Fetch active runs for this task
@@ -81,6 +108,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
         if (runsRes.ok) {
           const rJson = await runsRes.json();
           const runs = rJson.data ?? rJson;
+          if (isCancelled) return;
           setActiveRuns(
             runs.filter((r: WorkflowRun) => r.status === 'running' || r.status === 'blocked')
           );
@@ -88,12 +116,15 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
       } catch (error) {
         console.error('Failed to fetch workflows:', error);
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [open, task.id]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [open, task.id, task.project, task.type, task.git?.worktreePath]);
 
   const handleStartWorkflow = async (workflowId: string) => {
     setIsStarting(workflowId);
@@ -214,6 +245,9 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                               {workflow.steps.length} steps
                             </Text>
                           </Group>
+                          <LaunchRecommendationSummary
+                            recommendations={recommendationsByWorkflow[workflow.id] ?? []}
+                          />
                         </Stack>
                         <Button
                           size="sm"
@@ -244,5 +278,52 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
         )}
       </Stack>
     </Modal>
+  );
+}
+
+function LaunchRecommendationSummary({
+  recommendations,
+}: {
+  recommendations: LaunchRecommendation[];
+}) {
+  const topRecommendations = recommendations.slice(0, 2);
+  if (topRecommendations.length === 0) return null;
+
+  return (
+    <Stack gap={4} className="rounded-md border bg-background/60 p-2">
+      {topRecommendations.map((recommendation) => (
+        <Stack key={recommendation.id} gap={3}>
+          <Group gap="xs" wrap="wrap">
+            <Badge size="xs" variant="light">
+              {recommendation.kind}
+            </Badge>
+            <Text size="xs" className="min-w-0 flex-1">
+              {recommendation.label}
+            </Text>
+            <Badge size="xs" color="green" variant="outline">
+              {Math.round(recommendation.confidence * 100)}%
+            </Badge>
+            {recommendation.templateStatus === 'draft' && (
+              <Badge size="xs" color="yellow" variant="light">
+                draft
+              </Badge>
+            )}
+          </Group>
+          <Group gap={4} wrap="wrap">
+            {recommendation.reasonCodes.slice(0, 3).map((reasonCode) => (
+              <Badge key={reasonCode} size="xs" color="gray" variant="outline">
+                {reasonCode}
+              </Badge>
+            ))}
+            {recommendation.provenance.length > 0 && (
+              <Text size="xs" c="dimmed">
+                {recommendation.provenance.length} source
+                {recommendation.provenance.length === 1 ? '' : 's'}
+              </Text>
+            )}
+          </Group>
+        </Stack>
+      ))}
+    </Stack>
   );
 }

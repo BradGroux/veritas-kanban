@@ -11,9 +11,14 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import { type TaskTemplate, useCreateTemplate, useDeleteTemplate } from '@/hooks/useTemplates';
+import {
+  type TaskTemplate,
+  useCreateTemplate,
+  useDeleteTemplate,
+  useUpdateTemplate,
+} from '@/hooks/useTemplates';
 import { getTypeIcon, useTaskTypesManager } from '@/hooks/useTaskTypes';
-import { FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, FileText, Trash2 } from 'lucide-react';
 import type { AgentType, TaskPriority } from '@veritas-kanban/shared';
 import { TEMPLATE_CATEGORIES, getCategoryIcon, getCategoryLabel } from '@/lib/template-categories';
 
@@ -183,8 +188,10 @@ export function AddTemplateForm({ onClose }: { onClose: () => void }) {
 
 export function TemplateItem({ template }: { template: TaskTemplate }) {
   const deleteTemplate = useDeleteTemplate();
+  const updateTemplate = useUpdateTemplate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const taskDefaults = template.taskDefaults ?? {};
+  const isLaunchDraft = template.launch?.status === 'draft';
   const metadata = [
     taskDefaults.type,
     taskDefaults.priority,
@@ -208,23 +215,55 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
                 {getCategoryIcon(template.category)} {getCategoryLabel(template.category)}
               </Badge>
             )}
+            {isLaunchDraft && (
+              <Badge variant="light" color="yellow" size="xs">
+                draft
+              </Badge>
+            )}
           </div>
           <Text size="xs" c="dimmed">
             {metadata || 'No defaults'}
           </Text>
         </div>
       </div>
-      <ActionIcon
-        type="button"
-        variant="subtle"
-        color="red"
-        size="sm"
-        radius="md"
-        aria-label={`Delete ${template.name}`}
-        onClick={() => setDeleteOpen(true)}
-      >
-        <Trash2 className="h-4 w-4" />
-      </ActionIcon>
+      <Group gap="xs">
+        {isLaunchDraft && (
+          <ActionIcon
+            type="button"
+            variant="subtle"
+            color="green"
+            size="sm"
+            radius="md"
+            aria-label={`Activate ${template.name}`}
+            loading={updateTemplate.isPending}
+            onClick={() => {
+              updateTemplate.mutate({
+                id: template.id,
+                input: {
+                  launch: {
+                    ...template.launch,
+                    status: 'active',
+                    reviewedAt: new Date().toISOString(),
+                  },
+                },
+              });
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+          </ActionIcon>
+        )}
+        <ActionIcon
+          type="button"
+          variant="subtle"
+          color="red"
+          size="sm"
+          radius="md"
+          aria-label={`Delete ${template.name}`}
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </ActionIcon>
+      </Group>
       <Modal
         opened={deleteOpen}
         onClose={() => setDeleteOpen(false)}

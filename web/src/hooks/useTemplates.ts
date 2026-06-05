@@ -1,8 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { TaskTemplate, CreateTemplateInput, UpdateTemplateInput } from '@veritas-kanban/shared';
+import type {
+  DistillTemplateFromRunInput,
+  TaskTemplate,
+  CreateTemplateInput,
+  UpdateTemplateInput,
+} from '@veritas-kanban/shared';
 
-export type { TaskTemplate, CreateTemplateInput, UpdateTemplateInput };
+export type { TaskTemplate, CreateTemplateInput, DistillTemplateFromRunInput, UpdateTemplateInput };
 
 export function useTemplates() {
   return useQuery({
@@ -32,7 +37,7 @@ export function useCreateTemplate() {
 export function useUpdateTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) => 
+    mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) =>
       api.templates.update(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
@@ -44,6 +49,16 @@ export function useDeleteTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: api.templates.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+    },
+  });
+}
+
+export function useDistillTemplateFromRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.templates.distillFromRun,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
     },

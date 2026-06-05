@@ -9,6 +9,7 @@ import type { WorkflowDefinition, WorkflowACL } from '../types/workflow.js';
 import { getWorkflowService } from '../services/workflow-service.js';
 import { getWorkflowRunService } from '../services/workflow-run-service.js';
 import { getWorkflowAuthoringService } from '../services/workflow-authoring-service.js';
+import { getSessionTemplateService } from '../services/session-template-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError, BadRequestError } from '../middleware/error-handler.js';
@@ -20,6 +21,7 @@ const router = Router();
 const workflowService = getWorkflowService();
 const workflowRunService = getWorkflowRunService();
 const workflowAuthoringService = getWorkflowAuthoringService();
+const sessionTemplateService = getSessionTemplateService();
 
 // Helper to extract string param (handles Express types)
 function getStringParam(param: string | string[] | undefined): string {
@@ -64,6 +66,15 @@ const authoringInputSchema = z.object({
   workflow: z.record(z.string(), z.unknown()).optional(),
   yaml: z.string().optional(),
   context: authoringContextSchema,
+});
+
+const launchRecommendationsQuerySchema = z.object({
+  workflowId: z.string().optional(),
+  taskId: z.string().optional(),
+  project: z.string().optional(),
+  taskType: z.string().optional(),
+  cwd: z.string().optional(),
+  verificationGates: z.string().optional(),
 });
 
 // Basic input validation - detailed validation happens in WorkflowService
@@ -193,6 +204,34 @@ router.post(
     res.json({
       yaml: workflowAuthoringService.toYaml(input.workflow as unknown as WorkflowDefinition),
     });
+  })
+);
+
+/**
+ * GET /api/workflows/launch-recommendations - Advisory launch recommendations from prior runs
+ */
+router.get(
+  '/launch-recommendations',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const userId = getUserId(req);
+    const query = launchRecommendationsQuerySchema.parse(req.query);
+
+    if (query.workflowId) {
+      await assertWorkflowPermission(query.workflowId, userId, 'view');
+    }
+
+    const result = await sessionTemplateService.getLaunchRecommendations({
+      workflowId: query.workflowId,
+      taskId: query.taskId,
+      project: query.project,
+      taskType: query.taskType,
+      cwd: query.cwd,
+      verificationGates: query.verificationGates
+        ?.split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    });
+    res.json(result);
   })
 );
 

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   reorderItems: vi.fn(),
   createTemplate: vi.fn(),
+  updateTemplate: vi.fn(),
   deleteTemplate: vi.fn(),
   toast: vi.fn(),
 }));
@@ -43,6 +44,27 @@ const taskTemplates: TaskTemplate[] = [
     created: '2026-01-01T00:00:00.000Z',
     updated: '2026-01-01T00:00:00.000Z',
   } as TaskTemplate,
+  {
+    id: 'template-launch-draft',
+    name: 'Launch Draft',
+    category: 'workflow-launch',
+    version: 1,
+    taskDefaults: {
+      type: 'feature',
+      priority: 'high',
+      project: 'veritas-kanban',
+      agent: 'codex',
+    },
+    launch: {
+      status: 'draft',
+      distilledFromRunId: 'run_584',
+      sourceWorkflowId: 'workflow_launch',
+      verificationGates: ['pnpm typecheck'],
+      provenance: [{ type: 'run', id: 'run_584' }],
+    },
+    created: '2026-01-01T00:00:00.000Z',
+    updated: '2026-01-01T00:00:00.000Z',
+  },
 ];
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -53,6 +75,10 @@ vi.mock('@/hooks/useTemplates', () => ({
   useTemplates: () => ({ data: taskTemplates, isLoading: false }),
   useCreateTemplate: () => ({
     mutateAsync: mocks.createTemplate,
+    isPending: false,
+  }),
+  useUpdateTemplate: () => ({
+    mutate: mocks.updateTemplate,
     isPending: false,
   }),
   useDeleteTemplate: () => ({
@@ -145,6 +171,7 @@ describe('Manage settings Mantine migration', () => {
     mocks.deleteItem.mockResolvedValue({});
     mocks.reorderItems.mockResolvedValue({});
     mocks.createTemplate.mockResolvedValue({});
+    mocks.updateTemplate.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -159,9 +186,11 @@ describe('Manage settings Mantine migration', () => {
     expect(screen.getByRole('textbox', { name: 'Rubicon description' })).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'Sprint 1 description' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Toggle template guide' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Activate Launch Draft' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Delete Bug Fix' })).toBeDefined();
     expect(screen.getByText('Empty Defaults')).toBeDefined();
     expect(screen.getByText('No defaults')).toBeDefined();
+    expect(screen.getByText('draft')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(3);
     expect(container.querySelectorAll('.mantine-TextInput-root').length).toBeGreaterThanOrEqual(5);
     expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThanOrEqual(4);
@@ -173,6 +202,19 @@ describe('Manage settings Mantine migration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle template guide' }));
 
     expect(screen.getByText('Template Guide')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activate Launch Draft' }));
+
+    expect(mocks.updateTemplate).toHaveBeenCalledWith({
+      id: 'template-launch-draft',
+      input: {
+        launch: expect.objectContaining({
+          status: 'active',
+          reviewedAt: expect.any(String),
+        }),
+      },
+    });
+    expect(mocks.updateTemplate.mock.calls[0][0].input.launch).not.toHaveProperty('reviewedBy');
   });
 
   it('creates templates through the Mantine form controls', async () => {
