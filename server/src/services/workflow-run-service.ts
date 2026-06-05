@@ -28,6 +28,14 @@ const log = createLogger('workflow-run');
 const MAX_CONCURRENT_RUNS = 10;
 let activeRunCount = 0;
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
+const RESERVED_CONTEXT_KEYS = new Set([
+  'task',
+  'workflow',
+  'run',
+  'pipeline',
+  '_sessions',
+  '_retryContext',
+]);
 
 class NotFoundError extends Error {
   constructor(message: string) {
@@ -219,6 +227,7 @@ export class WorkflowRunService {
     // Load full task payload if taskId provided
     const taskService = getTaskService();
     const task = taskId ? await taskService.getTask(taskId) : null;
+    const safeInitialContext = this.validateExternalContext(initialContext, 'Initial context');
 
     const runId = `run_${Date.now()}_${nanoid(8)}`;
     const now = new Date().toISOString();
@@ -234,11 +243,11 @@ export class WorkflowRunService {
         // Workflow variables
         ...workflow.variables,
 
+        // Custom initial context (from API caller)
+        ...safeInitialContext,
+
         // Task payload (if provided)
         ...(task ? { task } : {}),
-
-        // Custom initial context (from API caller)
-        ...initialContext,
 
         // Orchestrator/subagent pipeline summary for run views and completion handoff.
         ...(workflow.pipeline ? { pipeline: buildWorkflowPipelineSummary(workflow) } : {}),
@@ -645,8 +654,11 @@ export class WorkflowRunService {
       throw new ValidationError(`Run ${runId} is not blocked (status: ${run.status})`);
     }
 
-    // Merge resume context
-    run.context = { ...run.context, ...resumeContext };
+    // Merge resume context after rejecting attempts to replace server-owned context.
+    run.context = {
+      ...run.context,
+      ...this.validateExternalContext(resumeContext, 'Resume context'),
+    };
     run.status = 'running';
     await this.saveRun(run);
 
@@ -666,6 +678,22 @@ export class WorkflowRunService {
     });
 
     return run;
+  }
+
+  private validateExternalContext(
+    context: Record<string, unknown> | undefined,
+    source: string
+  ): Record<string, unknown> {
+    if (!context) return {};
+
+    const blockedKeys = Object.keys(context).filter((key) => RESERVED_CONTEXT_KEYS.has(key));
+    if (blockedKeys.length > 0) {
+      throw new ValidationError(
+        `${source} cannot set reserved workflow context keys: ${blockedKeys.join(', ')}`
+      );
+    }
+
+    return context;
   }
 
   /**

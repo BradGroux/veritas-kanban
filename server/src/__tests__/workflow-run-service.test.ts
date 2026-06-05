@@ -94,6 +94,25 @@ describe('WorkflowRunService', () => {
     expect(mockBroadcastWorkflowStatus).toHaveBeenCalled();
   });
 
+  it('rejects initial context that overrides server-owned workflow run keys', async () => {
+    mockGetTask.mockResolvedValue({
+      id: 'task-1',
+      title: 'Trusted task',
+      git: { worktreePath: '/trusted/worktree' },
+    });
+
+    await expect(
+      service.startRun('wf-1', 'task-1', {
+        task: {
+          id: 'attacker-task',
+          git: { worktreePath: '/attacker/worktree' },
+        },
+        _sessions: { codex: 'thread_attacker' },
+      })
+    ).rejects.toThrow('reserved workflow context keys: task, _sessions');
+    expect(mockExecuteStep).not.toHaveBeenCalled();
+  });
+
   it('rolls orchestrated pipeline roles into workflow run context', async () => {
     mockLoadWorkflow.mockResolvedValue(
       makeWorkflow({
@@ -269,6 +288,38 @@ describe('WorkflowRunService', () => {
     await expect(service.resumeRun(run.id, {})).rejects.toThrow(/not blocked/);
   });
 
+  it('rejects resume context that overrides server-owned workflow run keys', async () => {
+    mockLoadWorkflow.mockResolvedValue(
+      makeWorkflow({
+        steps: [
+          {
+            id: 'step-1',
+            type: 'agent',
+            agent: 'agent-1',
+            prompt: 'x',
+            on_fail: { escalate_to: 'human', escalate_message: 'blocked' },
+          },
+        ],
+      })
+    );
+    mockExecuteStep.mockRejectedValueOnce(new Error('blocked'));
+
+    const run = await service.startRun('wf-1');
+    await vi.waitFor(async () => expect((await service.getRun(run.id)).status).toBe('blocked'));
+    mockExecuteStep.mockClear();
+
+    await expect(
+      service.resumeRun(run.id, {
+        task: { git: { worktreePath: '/attacker/worktree' } },
+        pipeline: { mode: 'attacker' },
+      })
+    ).rejects.toThrow('reserved workflow context keys: task, pipeline');
+
+    const saved = await service.getRun(run.id);
+    expect(saved.status).toBe('blocked');
+    expect(mockExecuteStep).not.toHaveBeenCalled();
+  });
+
   it('lists runs and metadata with filters while skipping invalid or broken entries', async () => {
     const run1 = await service.startRun('wf-1', 'task-1');
     const run2 = await service.startRun('wf-1', 'task-2');
@@ -279,7 +330,14 @@ describe('WorkflowRunService', () => {
 
     await expect(service.listRuns({ taskId: 'task-1' })).rejects.toThrow();
     const meta = await service.listRunsMetadata({ workflowId: 'wf-1' });
-    expect(meta.map((m: any) => m.id)).toEqual([run2.id, run1.id]);
+    const expectedIds = [run1, run2]
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
+          b.id.localeCompare(a.id)
+      )
+      .map((run: any) => run.id);
+    expect(meta.map((m: any) => m.id)).toEqual(expectedIds);
   });
 
   it('calculates stats using workflow permissions', async () => {
