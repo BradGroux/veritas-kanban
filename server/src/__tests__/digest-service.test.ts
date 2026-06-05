@@ -236,6 +236,85 @@ describe('DigestService', () => {
       });
       expect(digest.totals.openApprovals).toBe(1);
     });
+
+    it('filters deterministic operations by repository and cwd', async () => {
+      const makeTask = (id: string, repo: string, worktreePath: string): Task => ({
+        id,
+        title: `${repo} task`,
+        description: `${repo} task`,
+        type: 'feature',
+        status: 'in-progress',
+        priority: 'medium',
+        project: 'platform',
+        created: '2026-06-04T08:00:00.000Z',
+        updated: '2026-06-04T11:00:00.000Z',
+        git: {
+          repo,
+          branch: `feature/${id}`,
+          baseBranch: 'main',
+          worktreePath,
+        },
+      });
+      const tasks = [
+        makeTask('task_match', 'veritas-kanban', '/worktrees/platform'),
+        makeTask('task_other', 'other-repo', '/worktrees/other'),
+      ];
+      const telemetry = {
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            id: 'tokens_match',
+            type: 'run.tokens',
+            timestamp: '2026-06-04T11:30:00.000Z',
+            taskId: 'task_match',
+            agent: 'codex',
+            inputTokens: 25,
+            outputTokens: 15,
+            totalTokens: 40,
+            cost: 0.004,
+          } satisfies TokenTelemetryEvent,
+          {
+            id: 'tokens_other',
+            type: 'run.tokens',
+            timestamp: '2026-06-04T11:35:00.000Z',
+            taskId: 'task_other',
+            agent: 'codex',
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+            cost: 0.015,
+          } satisfies TokenTelemetryEvent,
+        ]),
+      };
+      const taskService = { listTasks: vi.fn().mockResolvedValue(tasks) };
+      const serviceOverrides = service as unknown as {
+        telemetry: typeof telemetry;
+        taskService: typeof taskService;
+      };
+      serviceOverrides.telemetry = telemetry;
+      serviceOverrides.taskService = taskService;
+
+      const digest = await service.generateOperationsDigest({
+        from: '2026-06-04T00:00:00.000Z',
+        to: '2026-06-04T12:00:00.000Z',
+        project: 'platform',
+        repo: 'veritas-kanban',
+        cwd: '/worktrees/platform',
+      });
+
+      expect(digest.groups).toHaveLength(1);
+      expect(digest.groups[0]).toMatchObject({
+        project: 'platform',
+        repo: 'veritas-kanban',
+        cwd: '/worktrees/platform',
+        totals: {
+          active: 1,
+          totalTokens: 40,
+        },
+      });
+      expect(digest.groups[0].sourceLinks.activeTasks).toHaveLength(1);
+      expect(digest.groups[0].sourceLinks.tokenEvents[0]?.id).toBe('tokens_match');
+      expect(digest.totals.totalTokens).toBe(40);
+    });
   });
 
   describe('formatForTeams', () => {

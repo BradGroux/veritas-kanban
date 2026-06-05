@@ -14,6 +14,8 @@ const router: RouterType = Router();
  * - hours: window size when from/to are not supplied (default: 24)
  * - from/to: ISO timestamp range
  * - project: optional project filter
+ * - repo: optional repository filter
+ * - cwd: optional worktree/current-working-directory filter
  */
 router.get(
   '/operations',
@@ -24,6 +26,8 @@ router.get(
       from: qStr(req.query.from),
       to: qStr(req.query.to),
       project: qStr(req.query.project),
+      repo: qStr(req.query.repo),
+      cwd: qStr(req.query.cwd),
     });
 
     if (qStrD(req.query.format, 'json') === 'markdown') {
@@ -49,6 +53,8 @@ router.get(
       from: qStr(req.query.from),
       to: qStr(req.query.to),
       project: qStr(req.query.project),
+      repo: qStr(req.query.repo),
+      cwd: qStr(req.query.cwd),
     });
     const message = digestService.formatOperationsDigestMarkdown(digest);
 

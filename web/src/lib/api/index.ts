@@ -23,6 +23,8 @@ import { maintenanceApi } from './maintenance';
 import { skillCapabilitiesApi } from './skill-capabilities';
 import { skillSecurityApi } from './skill-security';
 import { integrationsApi } from './integrations';
+import { digestApi } from './digest';
+import { scheduledDeliverablesApi } from './deliverables';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -56,6 +58,8 @@ export const api = {
   integrations: integrationsApi,
   skillCapabilities: skillCapabilitiesApi,
   skillSecurity: skillSecurityApi,
+  digest: digestApi,
+  scheduledDeliverables: scheduledDeliverablesApi,
 };
 
 export type {
@@ -77,6 +81,24 @@ export type {
   OutboundEndpointRecord,
   OutboundEndpointType,
 } from './integrations';
+export type {
+  AgentOperationsApproval,
+  AgentOperationsDigest,
+  AgentOperationsDigestFilters,
+  AgentOperationsDigestGroup,
+  AgentOperationsFailure,
+  AgentOperationsMarkdown,
+  AgentOperationsSourceLink,
+} from './digest';
+export type {
+  DeliverableRunStatus,
+  DeliverableSchedule,
+  ScheduledDeliverable,
+  ScheduledDeliverableCreateInput,
+  ScheduledDeliverableRun,
+  ScheduledDeliverableRunInput,
+  ScheduledDeliverableRunSnapshot,
+} from './deliverables';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

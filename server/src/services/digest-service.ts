@@ -73,6 +73,8 @@ export interface AgentOperationsDigestOptions {
   from?: string;
   to?: string;
   project?: string;
+  repo?: string;
+  cwd?: string;
 }
 
 export interface AgentOperationsSourceLink {
@@ -277,14 +279,15 @@ export class DigestService {
   async generateOperationsDigest(
     options: AgentOperationsDigestOptions = {}
   ): Promise<AgentOperationsDigest> {
-    const period = resolveOperationsPeriod(options);
+    const filters = normalizeOperationsOptions(options);
+    const period = resolveOperationsPeriod(filters);
     const [tasks, events, approvals] = await Promise.all([
       this.taskService.listTasks(),
       this.telemetry.getEvents({
         since: period.start,
         until: period.end,
         type: ['run.completed', 'run.error', 'run.tokens'],
-        project: options.project,
+        project: filters.project,
         limit: 10000,
       }),
       getAgentPermissionService().getPendingApprovals(),
@@ -332,7 +335,7 @@ export class DigestService {
     };
 
     for (const task of tasks) {
-      if (options.project && task.project !== options.project) continue;
+      if (!matchesOperationsFilters(taskOperationsContext(task), filters)) continue;
       const group = getGroup(task.project, task.git?.repo, task.git?.worktreePath);
       const taskLink = taskSourceLink(task);
 
@@ -363,7 +366,18 @@ export class DigestService {
 
     for (const event of events) {
       const task = event.taskId ? taskById.get(event.taskId) : undefined;
-      if (options.project && (task?.project ?? event.project) !== options.project) continue;
+      if (
+        !matchesOperationsFilters(
+          {
+            project: task?.project ?? event.project,
+            repo: task?.git?.repo,
+            cwd: task?.git?.worktreePath,
+          },
+          filters
+        )
+      ) {
+        continue;
+      }
       const group = getGroup(
         task?.project ?? event.project,
         task?.git?.repo,
@@ -410,7 +424,7 @@ export class DigestService {
 
     for (const approval of approvals) {
       const task = approval.taskId ? taskById.get(approval.taskId) : undefined;
-      if (options.project && task?.project !== options.project) continue;
+      if (!matchesOperationsFilters(taskOperationsContext(task), filters)) continue;
       const group = getGroup(task?.project, task?.git?.repo, task?.git?.worktreePath);
       const approvalLink = approvalSourceLink(approval);
       pushUnique(group.openApprovals, approvalLink);
@@ -723,6 +737,59 @@ function taskSourceLink(task: Task): AgentOperationsSourceLink {
     timestamp: task.updated,
     taskId: task.id,
   };
+}
+
+function taskOperationsContext(task?: Task): {
+  project?: string;
+  repo?: string;
+  cwd?: string;
+} {
+  return {
+    project: task?.project,
+    repo: task?.git?.repo,
+    cwd: task?.git?.worktreePath,
+  };
+}
+
+function matchesOperationsFilters(
+  candidate: { project?: string; repo?: string; cwd?: string },
+  options: AgentOperationsDigestOptions
+): boolean {
+  return (
+    matchesOperationsFilter(normalizeProject(candidate.project), options.project) &&
+    matchesOperationsFilter(normalizeRepo(candidate.repo), options.repo) &&
+    matchesOperationsFilter(candidate.cwd, options.cwd)
+  );
+}
+
+function normalizeOperationsOptions(
+  options: AgentOperationsDigestOptions
+): AgentOperationsDigestOptions {
+  return {
+    ...options,
+    project: normalizeOptionalFilter(options.project),
+    repo: normalizeOptionalFilter(options.repo),
+    cwd: normalizeOptionalFilter(options.cwd),
+  };
+}
+
+function matchesOperationsFilter(candidate: string | undefined, filter: string | undefined) {
+  const normalizedFilter = normalizeOptionalFilter(filter);
+  if (!normalizedFilter) return true;
+  return candidate === normalizedFilter;
+}
+
+function normalizeOptionalFilter(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeProject(value: string | undefined): string {
+  return normalizeOptionalFilter(value) ?? 'unassigned';
+}
+
+function normalizeRepo(value: string | undefined): string {
+  return normalizeOptionalFilter(value) ?? 'unknown';
 }
 
 function runSourceLink(event: RunTelemetryEvent): AgentOperationsSourceLink {

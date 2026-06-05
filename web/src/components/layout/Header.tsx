@@ -14,6 +14,7 @@ import {
   Settings,
   Search,
   Archive,
+  ClipboardList,
   Inbox,
   Sun,
   Moon,
@@ -82,6 +83,7 @@ interface SearchPreset {
 const VIEW_ICONS: Record<ViewIcon, LucideIcon> = {
   Activity,
   Archive,
+  ClipboardList,
   FileText,
   GitBranch,
   Inbox,

@@ -468,10 +468,17 @@ describe('Digest Routes', () => {
       groups: [],
       hasActivity: false,
     });
-    const res = await request(app).get('/api/digest/operations?hours=12&project=platform');
+    const res = await request(app).get(
+      '/api/digest/operations?hours=12&project=platform&repo=veritas-kanban&cwd=%2Fworktrees%2Fplatform'
+    );
     expect(res.status).toBe(200);
     expect(mockDigestService.generateOperationsDigest).toHaveBeenCalledWith(
-      expect.objectContaining({ windowHours: 12, project: 'platform' })
+      expect.objectContaining({
+        windowHours: 12,
+        project: 'platform',
+        repo: 'veritas-kanban',
+        cwd: '/worktrees/platform',
+      })
     );
   });
 

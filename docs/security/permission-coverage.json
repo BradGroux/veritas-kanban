@@ -452,6 +452,14 @@
       "denialReason": "Workflow navigation leads to workflow read APIs."
     },
     {
+      "id": "command-palette:go-operations",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "telemetry:read", "workflow_run:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Operations digest navigation leads to task, telemetry, and scheduled deliverable read APIs."
+    },
+    {
       "id": "command-palette:go-drift",
       "kind": "command-palette",
       "classification": "authenticated-read",

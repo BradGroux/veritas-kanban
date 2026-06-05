@@ -7,6 +7,7 @@ export type AppView =
   | 'archive'
   | 'templates'
   | 'workflows'
+  | 'operations'
   | 'policies'
   | 'drift'
   | 'decisions'
@@ -17,6 +18,7 @@ export type NavigationView = Exclude<AppView, 'board'>;
 export type ViewIcon =
   | 'Activity'
   | 'Archive'
+  | 'ClipboardList'
   | 'FileText'
   | 'GitBranch'
   | 'Inbox'
@@ -130,6 +132,22 @@ const VIEW_DEFINITION_LIST = [
     loadComponent: () =>
       import('@/components/workflows/WorkflowsPage').then((mod) => ({
         default: mod.WorkflowsPage,
+      })),
+  },
+  {
+    view: 'operations',
+    path: '/operations',
+    label: 'Operations',
+    order: 55,
+    showInNavigation: true,
+    title: 'Operations Digest',
+    commandLabel: 'Go to Operations',
+    loadingLabel: 'Loading operations digest...',
+    icon: 'ClipboardList',
+    keywords: ['digest', 'standup', 'briefing', 'operations', 'schedule'],
+    loadComponent: () =>
+      import('@/components/digest/OperationsDigestPage').then((mod) => ({
+        default: mod.OperationsDigestPage,
       })),
   },
   {
