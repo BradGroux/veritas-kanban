@@ -40,6 +40,25 @@ interface LogSourceDefinition {
 
 const MAX_TAIL_LINES = 500;
 
+const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
+  [
+    /\b((?:system|user|assistant)\s+prompt|prompt)\s*[:=]\s*("[^"]*"|'[^']*'|[^\r\n]+)/gi,
+    '$1: [redacted-prompt]',
+  ],
+  [
+    /\b(raw\s+chat|chat\s+message|user\s+message|assistant\s+message)\s*[:=]\s*("[^"]*"|'[^']*'|[^\r\n]+)/gi,
+    '$1: [redacted-chat-content]',
+  ],
+  [
+    /\b(stdout|stderr|process\s+output|child\s+output)\s*[:=]\s*("[^"]*"|'[^']*'|[^\r\n]+)/gi,
+    '$1: [redacted-process-output]',
+  ],
+  [
+    /\b(model\s+output|assistant\s+output|generated(?:\s+sensitive)?\s+text)\s*[:=]\s*("[^"]*"|'[^']*'|[^\r\n]+)/gi,
+    '$1: [redacted-generated-text]',
+  ],
+];
+
 export class MaintenanceService {
   async buildSummary(): Promise<MaintenanceSummary> {
     const generatedAt = new Date().toISOString();
@@ -557,6 +576,9 @@ export class MaintenanceService {
 
   private redactMaintenanceText(value: string): string {
     let redacted = redactString(value);
+    for (const [pattern, replacement] of MAINTENANCE_CONTENT_REDACTIONS) {
+      redacted = redacted.replace(pattern, replacement);
+    }
     const replacements = [
       [getLogsDir(), '[redacted-logs]'],
       [getRuntimeDir(), '[redacted-runtime]'],
