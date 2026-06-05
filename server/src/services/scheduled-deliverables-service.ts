@@ -209,6 +209,7 @@ export class ScheduledDeliverablesService {
       createdAt: new Date().toISOString(),
       totalRuns: 0,
     };
+    deliverable.nextRunAt = this.calculateNextRun(deliverable, deliverable.createdAt);
 
     this.deliverables.push(deliverable);
     await this.saveDeliverables();
@@ -244,6 +245,9 @@ export class ScheduledDeliverablesService {
     if (update.schedule || update.cronExpr) {
       del.scheduleDescription =
         update.scheduleDescription || this.describeSchedule(del.schedule, del.cronExpr);
+      del.nextRunAt = this.calculateNextRun(del, new Date().toISOString());
+    } else if (update.enabled === true && !del.nextRunAt) {
+      del.nextRunAt = this.calculateNextRun(del, new Date().toISOString());
     }
 
     await this.saveDeliverables();
@@ -311,7 +315,7 @@ export class ScheduledDeliverablesService {
     if (del) {
       del.lastRunAt = run.runAt;
       del.totalRuns++;
-      del.nextRunAt = this.calculateNextRun(del);
+      del.nextRunAt = this.calculateNextRun(del, run.runAt);
       await this.saveDeliverables();
     }
 
@@ -336,11 +340,30 @@ export class ScheduledDeliverablesService {
     if (filters?.agent) {
       results = results.filter((d) => d.agent === filters.agent);
     }
-    if (filters?.tag) {
-      results = results.filter((d) => d.tags.includes(filters.tag!));
+    const tag = filters?.tag;
+    if (tag) {
+      results = results.filter((d) => d.tags.includes(tag));
     }
 
     return results.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async listDue(now = new Date()): Promise<Deliverable[]> {
+    await this.ensureLoaded();
+    const cutoff = now.getTime();
+
+    return this.deliverables
+      .filter((deliverable) => {
+        if (!deliverable.enabled || !deliverable.nextRunAt) return false;
+        const nextRunTime = new Date(deliverable.nextRunAt).getTime();
+        return Number.isFinite(nextRunTime) && nextRunTime <= cutoff;
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.nextRunAt as string).getTime();
+        const bTime = new Date(b.nextRunAt as string).getTime();
+        if (aTime !== bTime) return aTime - bTime;
+        return a.name.localeCompare(b.name);
+      });
   }
 
   /**
@@ -395,9 +418,10 @@ export class ScheduledDeliverablesService {
     }
   }
 
-  private calculateNextRun(del: Deliverable): string {
-    const lastRun = del.lastRunAt ? new Date(del.lastRunAt) : new Date();
-    const next = new Date(lastRun);
+  private calculateNextRun(del: Deliverable, baseAt?: string): string {
+    const base = baseAt ? new Date(baseAt) : del.lastRunAt ? new Date(del.lastRunAt) : new Date();
+    const normalizedBase = Number.isFinite(base.getTime()) ? base : new Date();
+    const next = new Date(normalizedBase.getTime());
 
     switch (del.schedule) {
       case 'daily':

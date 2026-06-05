@@ -28,6 +28,10 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
+import {
+  startScheduledDeliverablesRunner,
+  stopScheduledDeliverablesRunner,
+} from './services/scheduled-deliverables-runner-service.js';
 import { initBroadcast, nextWebSocketEventSequence } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { getPolicyService } from './services/policy-service.js';
@@ -1055,6 +1059,9 @@ async function gracefulShutdown(signal: string) {
   try {
     log.info('Disposing services');
 
+    stopScheduledDeliverablesRunner();
+    log.info('Scheduled deliverables runner stopped');
+
     // Flush pending telemetry writes (timeout: 5s)
     await Promise.race([
       getTelemetryService().flush(),
@@ -1167,4 +1174,6 @@ server.listen(Number(PORT), HOST, () => {
       log.info({ security: 'jwt-secret' }, warning.message);
     }
   }
+
+  startScheduledDeliverablesRunner();
 });
