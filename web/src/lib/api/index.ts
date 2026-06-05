@@ -25,6 +25,7 @@ import { skillSecurityApi } from './skill-security';
 import { integrationsApi } from './integrations';
 import { digestApi } from './digest';
 import { scheduledDeliverablesApi } from './deliverables';
+import { evidenceApi } from './evidence';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -60,6 +61,7 @@ export const api = {
   skillSecurity: skillSecurityApi,
   digest: digestApi,
   scheduledDeliverables: scheduledDeliverablesApi,
+  evidence: evidenceApi,
 };
 
 export type {
@@ -99,6 +101,16 @@ export type {
   ScheduledDeliverableRunInput,
   ScheduledDeliverableRunSnapshot,
 } from './deliverables';
+export type {
+  EvidenceTimelineCitation,
+  EvidenceTimelineEvent,
+  EvidenceTimelineEventSource,
+  EvidenceTimelineEventType,
+  EvidenceTimelineFilters,
+  EvidenceTimelineRecap,
+  EvidenceTimelineResponse,
+  EvidenceTimelineSourceLink,
+} from './evidence';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

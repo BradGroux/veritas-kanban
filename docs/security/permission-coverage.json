@@ -460,6 +460,14 @@
       "denialReason": "Operations digest navigation leads to task, telemetry, and scheduled deliverable read APIs."
     },
     {
+      "id": "command-palette:go-evidence",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["report:read", "task:read", "telemetry:read", "work_product:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Evidence navigation leads to source-backed task, telemetry, and work-product report APIs."
+    },
+    {
       "id": "command-palette:go-drift",
       "kind": "command-palette",
       "classification": "authenticated-read",

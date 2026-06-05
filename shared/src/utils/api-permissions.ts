@@ -231,6 +231,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
   { prefix: '/api/shared-resources', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/status-history', read: 'telemetry:read', write: 'admin:manage' },
   { prefix: '/api/digest', read: 'report:read' },
+  { prefix: '/api/evidence', read: 'report:read' },
   { prefix: '/api/audit', read: 'admin:manage', write: 'admin:manage' },
   { prefix: '/api/lessons', read: 'task:read' },
   { prefix: '/api/delegation', read: 'agent:read', write: 'admin:manage' },

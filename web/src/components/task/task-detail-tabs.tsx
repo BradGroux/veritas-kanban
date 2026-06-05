@@ -37,6 +37,11 @@ const AttachmentsSection = lazy(() =>
   import('./AttachmentsSection').then((mod) => ({ default: mod.AttachmentsSection }))
 );
 const DiffViewer = lazy(() => import('./DiffViewer').then((mod) => ({ default: mod.DiffViewer })));
+const EvidenceTimelinePanel = lazy(() =>
+  import('@/components/evidence/EvidenceTimelinePanel').then((mod) => ({
+    default: mod.EvidenceTimelinePanel,
+  }))
+);
 const GitSection = lazy(() => import('./GitSection').then((mod) => ({ default: mod.GitSection })));
 const ObservationsSection = lazy(() =>
   import('./ObservationsSection').then((mod) => ({ default: mod.ObservationsSection }))
@@ -157,6 +162,7 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
       onOpenWorkflow={openWorkflow}
     />
   ),
+  evidence: ({ task }) => <EvidenceTimelinePanel taskId={task.id} />,
   changes: ({ task, hasWorktree, updateField }) => {
     if (!hasWorktree) return null;
     return (

@@ -8,6 +8,7 @@ export type TaskDetailTabId =
   | 'git'
   | 'agent'
   | 'timeline'
+  | 'evidence'
   | 'changes'
   | 'review'
   | 'metrics';
@@ -101,6 +102,12 @@ export const TASK_DETAIL_TAB_METADATA: readonly TaskDetailTabMetadata[] = [
     icon: 'History',
     fallbackTitle: 'Run timeline failed to load',
     isVisible: ({ isCodeTask }) => isCodeTask,
+  },
+  {
+    id: 'evidence',
+    label: 'Evidence',
+    icon: 'History',
+    fallbackTitle: 'Evidence timeline failed to load',
   },
   {
     id: 'changes',

@@ -8,6 +8,7 @@ export type AppView =
   | 'templates'
   | 'workflows'
   | 'operations'
+  | 'evidence'
   | 'policies'
   | 'drift'
   | 'decisions'
@@ -148,6 +149,22 @@ const VIEW_DEFINITION_LIST = [
     loadComponent: () =>
       import('@/components/digest/OperationsDigestPage').then((mod) => ({
         default: mod.OperationsDigestPage,
+      })),
+  },
+  {
+    view: 'evidence',
+    path: '/evidence',
+    label: 'Evidence',
+    order: 57,
+    showInNavigation: true,
+    title: 'Evidence Timeline',
+    commandLabel: 'Go to Evidence',
+    loadingLabel: 'Loading evidence timeline...',
+    icon: 'ListOrdered',
+    keywords: ['audit', 'evidence', 'timeline', 'recap', 'source'],
+    loadComponent: () =>
+      import('@/components/evidence/EvidenceTimelinePage').then((mod) => ({
+        default: mod.EvidenceTimelinePage,
       })),
   },
   {
