@@ -137,6 +137,7 @@ export type {
   ContextProviderBoundary,
   ContextProviderHealth,
   ContextProviderHealthResponse,
+  ContextProviderPostureStatus,
   ContextProviderRisk,
   ContextProviderState,
 } from './config';

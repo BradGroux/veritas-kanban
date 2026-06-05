@@ -81,10 +81,10 @@ vi.mock('@/hooks/useConfig', () => ({
       summary: {
         total: 2,
         connected: 1,
-        degraded: 0,
+        degraded: 1,
         stale: 0,
         disconnected: 0,
-        unknown: 1,
+        unknown: 0,
         risky: 1,
         writeCapable: 2,
       },
@@ -109,7 +109,7 @@ vi.mock('@/hooks/useConfig', () => ({
           id: 'openclaw',
           name: 'OpenClaw',
           provider: 'openclaw',
-          state: 'unknown',
+          state: 'degraded',
           risk: 'risky',
           boundary: 'local',
           readCapability: true,
@@ -117,9 +117,50 @@ vi.mock('@/hooks/useConfig', () => ({
           privacyScope: 'Local gateway posture only; tokens and gateway secrets are redacted.',
           lastCheckedAt: '2026-06-01T12:01:00.000Z',
           detail: '1 enabled OpenClaw agent profile(s) detected.',
-          tools: ['gateway', 'agent:openclaw'],
-          postureFlags: ['Risky exec/elevated argument detected'],
-          recommendations: ['Review OpenClaw exec/elevated arguments before autonomous runs.'],
+          tools: ['gateway', 'plugin:browser', 'agent:openclaw'],
+          postureFlags: [
+            'Gateway configured',
+            'Write-capable agent profile enabled',
+            '2 high-impact plugin opt-in(s) detected.',
+            '1 exec/elevated allowance signal(s) detected; identities are redacted.',
+          ],
+          recommendations: ['Review OpenClaw exec/elevated posture before autonomous runs.'],
+          postureChecks: [
+            {
+              id: 'openclaw.plugins',
+              label: 'OpenClaw plugins',
+              status: 'risky',
+              detail: '2 high-impact plugin opt-in(s) detected.',
+              items: ['browser', 'memory'],
+            },
+            {
+              id: 'openclaw.exec',
+              label: 'Exec and elevated posture',
+              status: 'risky',
+              detail: '1 exec/elevated allowance signal(s) detected; identities are redacted.',
+            },
+            {
+              id: 'openclaw.privacy',
+              label: 'Node privacy posture',
+              status: 'risky',
+              detail: '1 node/camera/screen/file-transfer opt-in(s) detected.',
+              items: ['screen'],
+            },
+            {
+              id: 'openclaw.doctor',
+              label: 'Doctor check',
+              status: 'normal',
+              detail: 'Doctor checks passed.',
+              checkedAt: '2026-06-01T12:01:00.000Z',
+            },
+            {
+              id: 'openclaw.policy',
+              label: 'Policy check',
+              status: 'degraded',
+              detail: 'Policy check found review items.',
+              checkedAt: '2026-06-01T12:01:00.000Z',
+            },
+          ],
         },
       ],
     },
@@ -252,7 +293,12 @@ describe('Agents settings Mantine migration', () => {
     expect(screen.getByText('Launch Compatibility')).toBeDefined();
     expect(screen.getAllByText('Local Supervisor').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('OpenClaw')).toBeDefined();
-    expect(screen.getByText('Risky')).toBeDefined();
+    expect(screen.getAllByText('Risky').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('OpenClaw plugins')).toBeDefined();
+    expect(screen.getByText('Exec and elevated posture')).toBeDefined();
+    expect(screen.getByText('Node privacy posture')).toBeDefined();
+    expect(screen.getByText('Doctor check')).toBeDefined();
+    expect(screen.getByText('Policy check')).toBeDefined();
     expect(screen.getByText('Agent Routing')).toBeDefined();
     expect(screen.getByText('CLI installed')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Refresh Codex health' })).toBeDefined();

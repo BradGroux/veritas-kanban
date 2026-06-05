@@ -70,6 +70,23 @@ export type ContextProviderState = 'connected' | 'degraded' | 'stale' | 'disconn
 
 export type ContextProviderRisk = 'safe' | 'normal' | 'risky';
 export type ContextProviderBoundary = 'local' | 'cloud' | 'mixed' | 'unknown';
+export type ContextProviderPostureStatus =
+  | 'safe'
+  | 'normal'
+  | 'risky'
+  | 'degraded'
+  | 'stale'
+  | 'disconnected'
+  | 'unknown';
+
+export interface ContextProviderPostureCheck {
+  id: string;
+  label: string;
+  status: ContextProviderPostureStatus;
+  detail: string;
+  checkedAt?: string;
+  items?: string[];
+}
 
 export interface ContextProviderHealth {
   id: string;
@@ -86,6 +103,7 @@ export interface ContextProviderHealth {
   tools: string[];
   postureFlags: string[];
   recommendations: string[];
+  postureChecks?: ContextProviderPostureCheck[];
 }
 
 export interface ContextProviderHealthResponse {

@@ -33,6 +33,7 @@ import type {
 import type {
   CodexHealthStatus,
   ContextProviderHealth,
+  ContextProviderPostureStatus,
   ContextProviderHealthResponse,
 } from '@/lib/api';
 import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanban/shared';
@@ -239,6 +240,23 @@ function providerStateColor(state: ContextProviderHealth['state']): string {
   }
 }
 
+function providerPostureStatusColor(status: ContextProviderPostureStatus): string {
+  switch (status) {
+    case 'safe':
+    case 'normal':
+      return 'green';
+    case 'degraded':
+    case 'stale':
+    case 'unknown':
+      return 'yellow';
+    case 'risky':
+    case 'disconnected':
+      return 'red';
+    default:
+      return 'gray';
+  }
+}
+
 function formatProviderState(value: string): string {
   return value
     .split('-')
@@ -367,6 +385,31 @@ function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
           ))}
         </ul>
       )}
+
+      {provider.postureChecks?.length ? (
+        <div className="space-y-2">
+          {provider.postureChecks.slice(0, 5).map((check) => (
+            <div key={check.id} className="rounded-md border bg-card/60 p-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-medium">{check.label}</span>
+                <Badge size="xs" color={providerPostureStatusColor(check.status)} variant="light">
+                  {formatProviderState(check.status)}
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{check.detail}</p>
+              {check.items?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {check.items.slice(0, 6).map((item) => (
+                    <Badge key={item} size="xs" variant="outline" color="gray">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {provider.recommendations.length > 0 && (
         <ul className="space-y-1 text-xs text-muted-foreground">
