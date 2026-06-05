@@ -14,7 +14,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-![Veritas Kanban — Board Overview](assets/demo-overview.gif)
+![Veritas Kanban v5 board, workflow, and audit tour](docs/assets/v5/v5-board-to-workflow.gif)
 
 > 🎬 [Watch the full demo video](https://bradgroux.github.io/veritas-kanban/demo/)
 
@@ -83,6 +83,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v5 Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
 - [v5 Mantine Migration Plan](docs/UI-MANTINE-MIGRATION.md) — component inventory, migration order, retained custom surfaces, rollback strategy, and cleanup gates.
 - [v5 GA Checklist](docs/V5-GA-CHECKLIST.md) — final release gates, Mantine visual/accessibility cleanup evidence, bundle checks, and holdout tracking.
+- [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) — current dummy-data screenshots and GIFs for the v5 board, task work view, Maintenance Center, and mobile/PWA shell.
 - [v5 Upgrade, Install, Remote, And Admin Guide](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v4-to-v5 upgrade, desktop setup, remote/server, mobile/PWA, admin, backup, and diagnostics paths.
 - [v5 Compatibility And Release Policy](docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md) — supported version combinations, update channels, stale-client behavior, rollback limits, and release validation.
 - [v5 Release Notes Draft](docs/V5-RELEASE-NOTES.md) — breaking changes, migration warnings, release artifact checklist, and deferred post-GA backlog.
@@ -139,7 +140,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
-![Agent orchestration](assets/demo-overview.gif)
+![Agent orchestration board](docs/assets/v5/v5-board-overview.png)
 
 ### 🧭 Veritas Cutover + Hermes Support
 
@@ -165,7 +166,7 @@ Define multi-step agent pipelines as version-controlled YAML. Sequential steps, 
 
 Not just cards on a board. Tasks have dependency graphs with cycle detection, crash-recovery checkpointing (auto-sanitizes secrets), observational memory with importance scoring, time tracking, and full activity logs. Enforcement gates (review gates, delegation enforcement, auto-telemetry) add production guardrails — all optional, all toggleable.
 
-![Task detail features demo](assets/demo-task.gif)
+![Task detail work view](docs/assets/v5/v5-task-work-view.png)
 
 ### 🔀 Git-Native Development
 
@@ -757,6 +758,7 @@ pnpm validate:release # Release readiness checks
 | Document                                       | Description                                  |
 | ---------------------------------------------- | -------------------------------------------- |
 | [Features](docs/FEATURES.md)                   | Complete feature reference                   |
+| [v5 Visual Tour](docs/V5-VISUAL-TOUR.md)       | Current dummy-data screenshots and GIFs      |
 | [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs              |
 | [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                |
 | [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker |
@@ -770,54 +772,28 @@ pnpm validate:release # Release readiness checks
 
 ---
 
-## 📸 Screenshots
+## 📸 v5 Visuals
 
 <details>
-<summary><strong>Click to expand screenshots</strong></summary>
+<summary><strong>Click to expand v5 screenshots and GIFs</strong></summary>
 
-### Board Overview
+These captures use dummy release-candidate content against the current v5 app surfaces. See the [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) for the full set and capture notes.
 
-|                                                    |                                                     |
-| -------------------------------------------------- | --------------------------------------------------- |
-| ![Main board view](assets/scr-main_overview_1.png) | ![Board with tasks](assets/scr-main_overview_2.png) |
-| ![Board columns](assets/scr-main_overview_3.png)   | ![Board dark mode](assets/scr-main_overview_4.png)  |
+### Desktop
 
-### Task Management
+| Board and workflow tour                                               | Task work view                                             |
+| --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| ![v5 board to workflow tour](docs/assets/v5/v5-board-to-workflow.gif) | ![v5 task work view](docs/assets/v5/v5-task-work-view.png) |
 
-|                                                             |                                                            |
-| ----------------------------------------------------------- | ---------------------------------------------------------- |
-| ![New task dialog](assets/scr-new_task.png)                 | ![Task details panel](assets/scr-task_details.png)         |
-| ![Task details list view](assets/scr-task_details_list.png) | ![Apply task template](assets/scr-apply_task_template.png) |
+| Board overview                                             | Maintenance Center                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| ![v5 board overview](docs/assets/v5/v5-board-overview.png) | ![v5 Maintenance Center](docs/assets/v5/v5-maintenance-center.png) |
 
-### Task Extras
+### Mobile/PWA
 
-|                                              |                                                      |
-| -------------------------------------------- | ---------------------------------------------------- |
-| ![Task metrics](assets/scr-task_metrics.png) | ![Task attachments](assets/scr-task_attachments.png) |
-| ![Activity log](assets/scr-activity_log.png) | ![Archive](assets/scr-archive.png)                   |
-
-### Metrics & Dashboard
-
-|                                                    |                                                    |
-| -------------------------------------------------- | -------------------------------------------------- |
-| ![Metrics overview](assets/scr-metrics_.png)       | ![Token usage](assets/scr-metrics_token_usage.png) |
-| ![Failed runs](assets/scr-metrics_failed_runs.png) | ![Export metrics](assets/scr-export_metrics.png)   |
-
-### Settings
-
-|                                                        |                                                                 |
-| ------------------------------------------------------ | --------------------------------------------------------------- |
-| ![General settings](assets/scr-settings_general.png)   | ![Board settings](assets/scr-settings_board.png)                |
-| ![Task settings](assets/scr-settings_tasks.png)        | ![Agent settings](assets/scr-settings_agents.png)               |
-| ![Data settings](assets/scr-settings_data.png)         | ![Notification settings](assets/scr-settings_notifications.png) |
-| ![Security settings](assets/scr-settings_security.png) | ![Manage settings](assets/scr-settings_manage.png)              |
-
-### Menus & Activity
-
-|                                                       |                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------- |
-| ![Agent activity](assets/scr-menu_agent_activity.png) | ![WebSocket activity](assets/scr-menu_websocket_activity.png) |
-| ![Keyboard shortcuts](assets/scr-menu_keyboard.png)   | ![Security menu](assets/scr-menu_security.png)                |
+| Mobile board                                                   | Mobile board to runs/settings flow                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------ |
+| ![v5 mobile PWA board](docs/assets/v5/v5-mobile-pwa-board.png) | ![v5 mobile PWA flow](docs/assets/v5/v5-mobile-pwa-flow.gif) |
 
 </details>
 

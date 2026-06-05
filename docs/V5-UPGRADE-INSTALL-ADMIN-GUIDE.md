@@ -4,6 +4,11 @@ This guide is the release-facing entry point for v5 operators. It links the
 existing detailed docs and keeps the happy path separate from optional
 automation layers.
 
+For current dummy-data screenshots and GIFs of the v5 board, task work view,
+Maintenance Center, and mobile/PWA shell, see
+[v5 Visual Tour](V5-VISUAL-TOUR.md). Use real RC screenshots in the evidence
+packet before publishing stable.
+
 ## Choose The Right Path
 
 | Path                    | Use when                                                    | Start here                                               | Do not configure on day one                                               |

@@ -171,6 +171,27 @@ Security release notes:
 
 ```
 
+## Visual Documentation And Media
+
+The checked-in dummy-data docs media lives in
+[v5 Visual Tour](V5-VISUAL-TOUR.md). Use this section to confirm the docs assets
+still match the RC UI and to attach real RC screenshots or recordings.
+
+| Surface                   | Docs asset                                 | RC proof |
+| ------------------------- | ------------------------------------------ | -------- |
+| Desktop board             | `docs/assets/v5/v5-board-overview.png`     |          |
+| Board/workflow/audit GIF  | `docs/assets/v5/v5-board-to-workflow.gif`  |          |
+| Task work view            | `docs/assets/v5/v5-task-work-view.png`     |          |
+| Maintenance Center        | `docs/assets/v5/v5-maintenance-center.png` |          |
+| Mobile/PWA board          | `docs/assets/v5/v5-mobile-pwa-board.png`   |          |
+| Mobile/PWA navigation GIF | `docs/assets/v5/v5-mobile-pwa-flow.gif`    |          |
+
+Visual docs notes:
+
+```text
+
+```
+
 ## Final Decision
 
 | Question                                             | Answer |

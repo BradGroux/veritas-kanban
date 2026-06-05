@@ -74,6 +74,7 @@ Stable release must include:
 ## Documentation
 
 - [v5 Upgrade, Install, Remote, And Admin Guide](V5-UPGRADE-INSTALL-ADMIN-GUIDE.md)
+- [v5 Visual Tour](V5-VISUAL-TOUR.md)
 - [v5 Compatibility And Release Policy](V5-COMPATIBILITY-AND-RELEASE-POLICY.md)
 - [v5 GA Checklist](V5-GA-CHECKLIST.md)
 - [Post-GA Desktop Agent Workbench Spec](DESKTOP-AGENT-WORKBENCH.md)

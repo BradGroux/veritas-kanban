@@ -106,7 +106,7 @@ pnpm dev
 
 Web boots on **3000**, API on **3001**. First boot seeds demo tasks so you have something to look at.
 
-![Dev stack running](../assets/demo-overview.gif)
+![Dev stack running with dummy v5 tasks](assets/v5/v5-board-overview.png)
 
 ### 4. Run the in-app setup
 
@@ -128,7 +128,7 @@ Visit [http://localhost:3000](http://localhost:3000) → follow the onboarding f
 4. Hit **Create** and watch it appear in **Todo**.
 5. Drag it to **In Progress** to feel the flow.
 
-![Creating a task via UI](../assets/demo-task.gif)
+![Creating and reviewing a task in the v5 task detail drawer](assets/v5/v5-task-work-view.png)
 
 > Need a clean slate? Remove the example tasks: `rm tasks/active/task_example_*.md`
 
@@ -164,7 +164,7 @@ vk list --status todo
 
 CLI commands fully mirror the API and are the fastest way to script agent workflows. Write commands need `VK_API_KEY` unless localhost bypass grants an `agent` or `admin` role.
 
-![CLI workflow demo](../assets/demo-drag_drop.gif)
+![Board to workflow tour with dummy v5 tasks](assets/v5/v5-board-to-workflow.gif)
 
 ---
 
@@ -197,7 +197,7 @@ This section is optional. Agents interact through HTTP + WebSocket; nothing is h
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**
 
-![Agent status indicator](../assets/demo-task.gif)
+![Agent-ready task detail view](assets/v5/v5-task-work-view.png)
 
 > **Automation tip:** Keep a `prompts/` folder (see below) so agents get consistent instructions for sprint planning, reviews, research, etc.
 

@@ -57,8 +57,11 @@ notarization proof, load results, mobile/PWA smoke proof, and accepted limits.
       evidence and limits in
       [v5.0 performance and load test notes](testing/v5-performance-load.md).
 - [ ] Docs cover upgrade, desktop install, remote access, admin operations,
-      backup/restore, diagnostics, and known platform limits, with ADR 0002 as
-      the remote/server-mode security baseline.
+      backup/restore, diagnostics, visual walkthroughs, and known platform
+      limits, with ADR 0002 as the remote/server-mode security baseline. The
+      dummy-data documentation media set lives in
+      [v5 Visual Tour](V5-VISUAL-TOUR.md); real RC proof still belongs in the
+      evidence packet.
 - [ ] Compatibility and release policy covers desktop/server/API/SQLite/CLI/MCP,
       PWA/mobile, workflow, WebSocket, migration, updater channel, staged
       rollout, stale-client, and rollback behavior. Track the contract in
@@ -89,7 +92,8 @@ Run this gate before closing #418, #417, or the v5 release checklist issue.
 - [ ] Run `pnpm test:e2e -- e2e/mantine-qa-gate.spec.ts` and keep the generated
       visual and accessibility evidence attached to the Playwright run.
 - [ ] Confirm visual smoke screenshots cover desktop dark mode, desktop light
-      mode, and mobile dark mode for every current v5 GA route.
+      mode, mobile dark mode, and the checked-in documentation captures in
+      `docs/assets/v5/` for every current v5 GA route.
 - [ ] Confirm keyboard navigation, focus traps, screen-reader names, reduced
       horizontal overflow, and mobile touch-target checks pass for board, task
       detail, create task, settings, command/search, and auth/setup flows.
