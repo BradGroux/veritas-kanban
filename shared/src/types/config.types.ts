@@ -273,6 +273,8 @@ export interface NotificationSettings {
   onReviewNeeded: boolean;
   channel: string; // Teams channel ID
   webhookUrl?: string; // Optional: Teams webhook URL for immediate delivery
+  webhookUrlConfigured?: boolean; // Response metadata when URL value is redacted
+  webhookUrlRedacted?: boolean; // True when webhookUrl was omitted from a response
 }
 
 /** Archive settings */
@@ -304,6 +306,8 @@ export interface EnforcementSettings {
 export interface HookConfig {
   enabled: boolean;
   webhook?: string; // URL to POST event payload
+  webhookConfigured?: boolean; // Response metadata when webhook value is redacted
+  webhookRedacted?: boolean; // True when webhook was omitted from a response
   notify?: boolean; // Send notification to configured channel
   logActivity?: boolean; // Record in activity log (default: true)
 }
@@ -358,12 +362,20 @@ export interface SquadWebhookSettings {
   mode: 'webhook' | 'openclaw'; // 'webhook' = generic HTTP POST, 'openclaw' = gateway wake
   // Generic webhook fields:
   url?: string; // Where to POST notifications
+  urlConfigured?: boolean; // Response metadata when URL value is redacted
+  urlRedacted?: boolean; // True when url was omitted from a response
   secret?: string; // Optional HMAC signing secret for verification
+  secretConfigured?: boolean; // Response metadata for secret posture
+  secretRedacted?: boolean; // True when secret was omitted from a response
   notifyOnHuman: boolean; // Fire webhook when human posts (default: true)
   notifyOnAgent: boolean; // Fire webhook when agent posts (default: false)
   // OpenClaw fields:
   openclawGatewayUrl?: string; // e.g., "http://127.0.0.1:18789"
+  openclawGatewayUrlConfigured?: boolean; // Response metadata when URL value is redacted
+  openclawGatewayUrlRedacted?: boolean; // True when openclawGatewayUrl was omitted from a response
   openclawGatewayToken?: string; // Auth token
+  openclawGatewayTokenConfigured?: boolean; // Response metadata for token posture
+  openclawGatewayTokenRedacted?: boolean; // True when token was omitted from a response
 }
 
 /** Watcher continuation policy settings. Disabled by default. */
