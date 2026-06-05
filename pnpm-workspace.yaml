@@ -6,6 +6,13 @@ packages:
   - 'mcp'
   - 'desktop'
 
+allowBuilds:
+  '@scarf/scarf': false
+  bcrypt: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+
 overrides:
   '@modelcontextprotocol/sdk>express-rate-limit': 8.5.2
   '@xmldom/xmldom': 0.8.13

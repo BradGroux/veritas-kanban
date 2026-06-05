@@ -52,7 +52,7 @@ async function main() {
   await rm(stagingDir, { recursive: true, force: true });
   await mkdir(stagingDir, { recursive: true });
 
-  run('pnpm', ['--filter', '@veritas-kanban/server', 'deploy', '--prod', serverStage]);
+  run('pnpm', ['--filter', '@veritas-kanban/server', 'deploy', '--legacy', '--prod', serverStage]);
   await pruneServerDeploy();
 
   await mkdir(webStage, { recursive: true });

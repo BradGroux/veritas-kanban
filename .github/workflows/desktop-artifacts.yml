@@ -51,7 +51,7 @@ jobs:
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --mac dmg zip --publish never --config.mac.identity=null --config.mac.notarize=false
+        run: node ./node_modules/electron-builder/cli.js --mac dmg zip --publish never --config.mac.identity=null --config.mac.notarize=false
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v7
@@ -94,7 +94,7 @@ jobs:
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --linux AppImage deb rpm --x64 --publish never
+        run: node ./node_modules/electron-builder/cli.js --linux AppImage deb rpm --x64 --publish never
 
       - name: Upload Linux desktop artifacts
         uses: actions/upload-artifact@v7
@@ -135,7 +135,7 @@ jobs:
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --win nsis zip --x64 --publish never
+        run: node ./node_modules/electron-builder/cli.js --win nsis zip --x64 --publish never
 
       - name: Upload Windows desktop artifacts
         uses: actions/upload-artifact@v7

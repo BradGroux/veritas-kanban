@@ -8,9 +8,9 @@
   "type": "module",
   "engines": {
     "node": ">=22.22.1",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=11.0.0"
   },
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "desktop:dev": "pnpm --filter @veritas-kanban/desktop dev",
@@ -31,6 +31,7 @@
     "lint:budget": "node scripts/lint-warning-budget.mjs --max-warnings=600",
     "lint:report": "node scripts/lint-warning-budget.mjs --all-rules",
     "lint:fix": "eslint . --fix",
+    "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "vitest run",
     "test:unit": "pnpm -r --workspace-concurrency=1 test",
@@ -47,10 +48,11 @@
     "qmd:setup": "bash scripts/qmd/setup-veritas-qmd.sh",
     "qmd:refresh": "bash scripts/qmd/refresh-veritas-qmd.sh",
     "seed": "bash scripts/seed.sh",
-    "prepare": "husky",
+    "prepare": "node scripts/prepare-husky.mjs",
     "demo": "docker compose -f demo/docker-compose.demo.yml up --build"
   },
   "devDependencies": {
+    "@eslint/js": "9.38.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
@@ -73,12 +75,6 @@
     "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
-  },
-  "pnpm": {
-    "overrides": {
-      "@modelcontextprotocol/sdk>express-rate-limit": "8.5.2",
-      "uuid@^8.3.0": "11.1.1"
-    }
   },
   "repository": {
     "type": "git",
