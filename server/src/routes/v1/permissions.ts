@@ -18,6 +18,9 @@ export const taskAccess = routeAccess('task:read', 'task:write');
 export const taskReadAccess = routeAccess('task:read', 'task:read');
 export const taskCommentAccess = routeAccess('task:read', 'comment:write');
 export const workProductAccess = routeAccess('work_product:read', 'work_product:write');
+export const diffAccess = routeAccess('task:read', 'task:write', [
+  { methods: ['POST'], path: /^\/[^/]+\/codex-review\/?$/, permissions: 'workflow:execute' },
+]);
 export const settingsAccess = routeAccess('settings:read', 'settings:write');
 export const adminAccess = routeAccess('admin:manage', 'admin:manage');
 export const agentRegistryAccess = routeAccess('agent:read', 'telemetry:write');

@@ -6,6 +6,7 @@ import {
   agentPermissionAccess,
   agentRegistryAccess,
   agentRoutingAccess,
+  diffAccess,
   policyAccess,
   previewAccess,
   scoringAccess,
@@ -159,6 +160,34 @@ describe('v1 REST permission guard presets', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         details: expect.objectContaining({ required: ['workflow:write'] }),
+      })
+    );
+  });
+
+  it('requires workflow execution before Codex review can launch from diff routes', () => {
+    expect(runGuard(diffAccess, mockRequest('GET', '/task_1')).next).toHaveBeenCalled();
+    expect(
+      runGuard(diffAccess, mockRequest('POST', '/task_1/codex-review')).next
+    ).toHaveBeenCalled();
+
+    const readOnlyReview = runGuard(
+      diffAccess,
+      mockRequest('POST', '/task_1/codex-review', 'read-only')
+    );
+    expect(readOnlyReview.next).not.toHaveBeenCalled();
+    expect(readOnlyReview.res.status).toHaveBeenCalledWith(403);
+    expect(readOnlyReview.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['workflow:execute'] }),
+      })
+    );
+
+    const genericMutation = runGuard(diffAccess, mockRequest('POST', '/task_1/other', 'read-only'));
+    expect(genericMutation.next).not.toHaveBeenCalled();
+    expect(genericMutation.res.status).toHaveBeenCalledWith(403);
+    expect(genericMutation.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['task:write'] }),
       })
     );
   });

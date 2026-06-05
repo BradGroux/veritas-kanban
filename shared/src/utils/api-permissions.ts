@@ -176,7 +176,14 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'admin:manage',
     overrides: [{ methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' }],
   },
-  { prefix: '/api/diff', read: 'task:read' },
+  {
+    prefix: '/api/diff',
+    read: 'task:read',
+    write: 'task:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/[^/]+\/codex-review\/?$/, permissions: 'workflow:execute' },
+    ],
+  },
   { prefix: '/api/automation', read: 'task:read', write: 'task:write' },
   { prefix: '/api/summary', read: 'report:read' },
   { prefix: '/api/notifications', read: 'agent:read', write: 'comment:write' },
