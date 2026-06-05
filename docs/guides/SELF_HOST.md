@@ -118,6 +118,9 @@ LAN access is server mode, not localhost mode. Keep `VERITAS_AUTH_ENABLED=true`,
 set `VERITAS_AUTH_LOCALHOST_BYPASS=false`, and use HTTPS, VPN, or a trusted
 tunnel for browser/mobile sessions unless the network is strictly private and
 temporary.
+Unauthenticated `/metrics` scrapes are allowed only when
+`PROMETHEUS_METRICS_PUBLIC=true`; otherwise use `PROMETHEUS_METRICS_TOKEN` or
+an API key with telemetry read access.
 
 ### 1. Bind to all interfaces
 
@@ -494,6 +497,9 @@ When exposing Veritas beyond loopback, also use `NODE_ENV=production` and keep
 the web client, `/api`, `/ws`, health endpoints, PWA assets, and service-worker
 scope on one trusted origin whenever possible. Split-origin deployments must set
 exact `CORS_ORIGINS` entries and confirm WebSocket origin/upgrade behavior.
+Prometheus `/metrics` fails closed outside explicit loopback development binds;
+use `PROMETHEUS_METRICS_TOKEN` or `PROMETHEUS_METRICS_PUBLIC=true` for external
+scrapers.
 Mobile install steps and offline-shell behavior are documented in
 [PWA install](PWA_INSTALL.md).
 

@@ -13,8 +13,21 @@ function envFlagEnabled(name: string): boolean {
   return process.env[name]?.trim().toLowerCase() === 'true';
 }
 
+function isTrustedLocalhostBind(): boolean {
+  const host = process.env.HOST?.trim().toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}
+
 function publicMetricsAllowed(): boolean {
-  return process.env.NODE_ENV !== 'production' || envFlagEnabled('PROMETHEUS_METRICS_PUBLIC');
+  if (envFlagEnabled('PROMETHEUS_METRICS_PUBLIC')) {
+    return true;
+  }
+
+  if (envFlagEnabled('VERITAS_REMOTE_MODE')) {
+    return false;
+  }
+
+  return process.env.NODE_ENV === 'development' && isTrustedLocalhostBind();
 }
 
 function constantTimeEquals(actual: string, expected: string): boolean {

@@ -9,8 +9,10 @@ async function buildApp(env: Record<string, string | undefined>) {
   process.env = { ...originalEnv };
 
   delete process.env.NODE_ENV;
+  delete process.env.HOST;
   delete process.env.PROMETHEUS_METRICS_PUBLIC;
   delete process.env.PROMETHEUS_METRICS_TOKEN;
+  delete process.env.VERITAS_REMOTE_MODE;
   delete process.env.VERITAS_ADMIN_KEY;
   delete process.env.VERITAS_API_KEYS;
   delete process.env.VERITAS_AUTH_ENABLED;
@@ -55,6 +57,7 @@ describe('Prometheus metrics route', () => {
   it('allows unauthenticated local development scrapes', async () => {
     const app = await buildApp({
       NODE_ENV: 'development',
+      HOST: '127.0.0.1',
       VERITAS_ADMIN_KEY: 'dev-admin-key',
     });
 
@@ -63,6 +66,45 @@ describe('Prometheus metrics route', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/plain');
     expect(res.text).toContain('veritas_test_metric 1');
+  });
+
+  it('requires authentication when NODE_ENV is unset even with a localhost bind', async () => {
+    const app = await buildApp({
+      HOST: '127.0.0.1',
+      VERITAS_ADMIN_KEY: 'dev-admin-key',
+    });
+
+    const res = await request(app).get('/metrics');
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTH_REQUIRED');
+  });
+
+  it('requires authentication for remote mode even in local development', async () => {
+    const app = await buildApp({
+      NODE_ENV: 'development',
+      HOST: '127.0.0.1',
+      VERITAS_REMOTE_MODE: 'true',
+      VERITAS_ADMIN_KEY: 'dev-admin-key',
+    });
+
+    const res = await request(app).get('/metrics');
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTH_REQUIRED');
+  });
+
+  it('requires authentication for development wildcard binds', async () => {
+    const app = await buildApp({
+      NODE_ENV: 'development',
+      HOST: '0.0.0.0',
+      VERITAS_ADMIN_KEY: 'dev-admin-key',
+    });
+
+    const res = await request(app).get('/metrics');
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTH_REQUIRED');
   });
 
   it('requires authentication in production by default', async () => {

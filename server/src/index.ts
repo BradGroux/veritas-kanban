@@ -349,9 +349,9 @@ app.use('/health', healthRouter);
 // Canonical VK API health signal (unauthenticated; used by dev tooling/watchdogs)
 app.use('/api/health', apiHealthRouter);
 
-// Prometheus exposition endpoint. Public in local development; production
-// requires normal auth with telemetry:read, PROMETHEUS_METRICS_TOKEN, or an
-// explicit PROMETHEUS_METRICS_PUBLIC=true opt-in.
+// Prometheus exposition endpoint. Public only for explicit loopback development
+// binds or PROMETHEUS_METRICS_PUBLIC=true; exposed/remote modes require normal
+// auth with telemetry:read or PROMETHEUS_METRICS_TOKEN.
 app.use(prometheusMetricsRouter);
 
 // Metrics collection middleware — records per-request HTTP metrics.
