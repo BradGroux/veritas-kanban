@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import yaml from 'yaml';
+import type { AgentHostRoutingDecision } from '@veritas-kanban/shared';
 import type {
   WorkflowStep,
   WorkflowRun,
@@ -29,6 +30,7 @@ import {
   type OpenClawWorkflowSessionResult,
 } from './openclaw-workflow-adapter.js';
 import { getToolPolicyService } from './tool-policy-service.js';
+import { getAgentHostService } from './agent-host-service.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -97,6 +99,15 @@ export class WorkflowStepExecutor {
 
     // Get tool policy filter for this agent role (#110)
     const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
+    const hostPreview = getAgentHostService().preview({
+      agent: step.agent,
+      provider: agentDef?.provider,
+      model: agentDef?.model,
+      workspacePath: this.expandPath(this.getWorkflowWorkingDirectory(run)),
+      requiredTools: this.routingTools(agentDef, toolPolicyFilter),
+      verificationGates: step.acceptance_criteria,
+    });
+    this.recordAgentHostRouting(run, step, hostPreview.decision, hostPreview.generatedAt);
 
     log.info(
       {
@@ -108,6 +119,7 @@ export class WorkflowStepExecutor {
         sessionContext: sessionConfig.context,
         sessionCleanup: sessionConfig.cleanup,
         toolPolicy: toolPolicyFilter,
+        hostRouting: hostPreview.decision,
       },
       'Agent step execution configured'
     );
@@ -119,7 +131,8 @@ export class WorkflowStepExecutor {
         agentDef,
         prompt,
         sessionConfig,
-        toolPolicyFilter
+        toolPolicyFilter,
+        hostPreview.decision
       );
     }
 
@@ -130,7 +143,8 @@ export class WorkflowStepExecutor {
       prompt,
       sessionConfig,
       sessionContext,
-      toolPolicyFilter
+      toolPolicyFilter,
+      hostPreview.decision
     );
   }
 
@@ -141,7 +155,8 @@ export class WorkflowStepExecutor {
     prompt: string,
     sessionConfig: StepSessionConfig,
     sessionContext: Record<string, unknown>,
-    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] },
+    hostRouting: AgentHostRoutingDecision
   ): Promise<StepExecutionResult> {
     const agentId = step.agent || agentDef?.id || step.id;
     const sessionMap = (run.context._sessions as Record<string, string> | undefined) || {};
@@ -200,7 +215,8 @@ export class WorkflowStepExecutor {
         run,
         agentDef,
         adapterResult,
-        sessionConfig
+        sessionConfig,
+        hostRouting
       );
       const parsed = this.parseStepOutput(result, step);
       await this.validateAcceptanceCriteria(step, result, parsed);
@@ -252,6 +268,49 @@ export class WorkflowStepExecutor {
     }
   }
 
+  private recordAgentHostRouting(
+    run: WorkflowRun,
+    step: WorkflowStep,
+    decision: AgentHostRoutingDecision,
+    recordedAt: string
+  ): void {
+    const existing =
+      run.context.agentHostRouting &&
+      typeof run.context.agentHostRouting === 'object' &&
+      !Array.isArray(run.context.agentHostRouting)
+        ? (run.context.agentHostRouting as Record<string, unknown>)
+        : {};
+
+    run.context.agentHostRouting = {
+      ...existing,
+      [step.id]: {
+        stepId: step.id,
+        agent: step.agent,
+        recordedAt,
+        selectedHostId: decision.selectedHostId,
+        selectedHostName: decision.selectedHostName,
+        policy: decision.policy,
+        reason: decision.reason,
+        fallbackBehavior: decision.fallbackBehavior,
+        excludedHostIds: decision.excludedHostIds,
+      },
+    };
+  }
+
+  private routingTools(
+    agentDef: WorkflowAgent | null,
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+  ): string[] {
+    const tools = new Set<string>();
+    for (const tool of agentDef?.tools ?? []) {
+      tools.add(tool);
+    }
+    for (const tool of toolPolicyFilter.allowed ?? []) {
+      if (tool !== '*') tools.add(tool);
+    }
+    return Array.from(tools).sort((a, b) => a.localeCompare(b));
+  }
+
   private assertOpenClawResult(
     step: WorkflowStep,
     result: OpenClawWorkflowSessionResult | undefined
@@ -278,7 +337,8 @@ export class WorkflowStepExecutor {
     run: WorkflowRun,
     agentDef: WorkflowAgent | null,
     result: OpenClawWorkflowSessionResult,
-    sessionConfig: StepSessionConfig
+    sessionConfig: StepSessionConfig,
+    hostRouting: AgentHostRoutingDecision
   ): string {
     const output = result.output?.trim() || 'OpenClaw completed without a final response.';
     const hasStatus = /\bSTATUS\s*:/i.test(output);
@@ -293,6 +353,9 @@ export class WorkflowStepExecutor {
       `OpenClaw run: ${result.runId || run.id}`,
       `Session mode: ${sessionConfig.mode}`,
       `Session cleanup: ${sessionConfig.cleanup}`,
+      `Host routing: ${hostRouting.policy}`,
+      `Selected host: ${hostRouting.selectedHostName || hostRouting.selectedHostId || 'none'}`,
+      `Routing reason: ${hostRouting.reason}`,
       '',
       '## Final Response',
       '',
@@ -344,7 +407,8 @@ export class WorkflowStepExecutor {
     agentDef: WorkflowAgent | null,
     prompt: string,
     sessionConfig: StepSessionConfig,
-    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] },
+    hostRouting: AgentHostRoutingDecision
   ): Promise<StepExecutionResult> {
     this.assertCodexToolPolicySupported(step, agentDef, toolPolicyFilter);
 
@@ -415,6 +479,9 @@ export class WorkflowStepExecutor {
       `Model: ${agentDef?.model || 'default'}`,
       `Thread: ${threadId || 'unknown'}`,
       `Working directory: ${workingDirectory}`,
+      `Host routing: ${hostRouting.policy}`,
+      `Selected host: ${hostRouting.selectedHostName || hostRouting.selectedHostId || 'none'}`,
+      `Routing reason: ${hostRouting.reason}`,
       '',
       '## Prompt',
       '',

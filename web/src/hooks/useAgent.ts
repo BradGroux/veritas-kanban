@@ -3,7 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, AgentOutput } from '@/lib/api';
 import { apiFetch, API_BASE } from '@/lib/api/helpers';
 import { useWebSocket, type WebSocketMessage } from './useWebSocket';
-import type { AgentHealthClassificationResponse, AgentType } from '@veritas-kanban/shared';
+import type {
+  AgentHealthClassificationResponse,
+  AgentHostPreviewRequest,
+  AgentType,
+} from '@veritas-kanban/shared';
 
 export interface StartAgentInput {
   taskId: string;
@@ -113,6 +117,24 @@ export function useAgentHealthClassifications() {
       apiFetch<AgentHealthClassificationResponse>(`${API_BASE}/agents/register/health`),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+}
+
+export function useAgentHosts() {
+  return useQuery({
+    queryKey: ['agent', 'hosts'],
+    queryFn: api.agentHosts.getHealth,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAgentHostPreview(request: AgentHostPreviewRequest, enabled = true) {
+  return useQuery({
+    queryKey: ['agent', 'hosts', 'preview', request],
+    queryFn: () => api.agentHosts.preview(request),
+    enabled,
+    staleTime: 15_000,
   });
 }
 

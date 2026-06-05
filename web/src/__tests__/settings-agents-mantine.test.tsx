@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
   refetchCodexHealth: vi.fn(),
   refetchProviderHealth: vi.fn(),
+  refetchHostHealth: vi.fn(),
   updateAgents: vi.fn(),
   updateRouting: vi.fn(),
 }));
@@ -158,6 +159,80 @@ vi.mock('@/hooks/useRouting', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useAgent', () => ({
+  useAgentHosts: () => ({
+    data: {
+      generatedAt: '2026-06-01T12:02:00.000Z',
+      summary: {
+        total: 1,
+        connected: 1,
+        degraded: 0,
+        stale: 0,
+        disconnected: 0,
+        risky: 0,
+        unknown: 0,
+        overloaded: 0,
+      },
+      hosts: [
+        {
+          id: 'host-local',
+          name: 'Local Supervisor',
+          supervisorType: 'local-agent',
+          os: 'darwin',
+          posture: 'connected',
+          authState: 'authenticated',
+          supportedAgents: ['codex'],
+          supportedProviders: ['codex-cli'],
+          supportedModels: ['gpt-5'],
+          supportedTools: ['code'],
+          workspaceLabels: ['workspace:veritas-kanban'],
+          activeSessions: 0,
+          queueDepth: 0,
+          maxQueueDepth: 2,
+          overloaded: false,
+          lastHeartbeat: '2026-06-01T12:01:59.000Z',
+          diagnostics: [],
+          registeredAgentIds: ['codex'],
+        },
+      ],
+    },
+    isFetching: false,
+    refetch: mocks.refetchHostHealth,
+  }),
+  useAgentHostPreview: () => ({
+    data: {
+      generatedAt: '2026-06-01T12:02:00.000Z',
+      request: { agent: 'codex', provider: 'codex-cli' },
+      decision: {
+        policy: 'first-capable-healthy',
+        selectedHostId: 'host-local',
+        selectedHostName: 'Local Supervisor',
+        reason: 'Selected first capable connected host.',
+        excludedHostIds: [],
+      },
+      previews: [
+        {
+          hostId: 'host-local',
+          hostName: 'Local Supervisor',
+          posture: 'connected',
+          compatible: true,
+          reasons: [],
+          warnings: [],
+          checks: [
+            {
+              id: 'heartbeat',
+              label: 'Heartbeat',
+              passed: true,
+              detail: 'Host has a current heartbeat.',
+            },
+          ],
+        },
+      ],
+    },
+    isFetching: false,
+  }),
+}));
+
 describe('Agents settings Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -173,11 +248,15 @@ describe('Agents settings Mantine migration', () => {
     expect(screen.getByText('Installed Agents')).toBeDefined();
     expect(screen.getByText('Codex Health')).toBeDefined();
     expect(screen.getByText('Context Provider Health')).toBeDefined();
+    expect(screen.getByText('Agent Host Health')).toBeDefined();
+    expect(screen.getByText('Launch Compatibility')).toBeDefined();
+    expect(screen.getAllByText('Local Supervisor').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('OpenClaw')).toBeDefined();
     expect(screen.getByText('Risky')).toBeDefined();
     expect(screen.getByText('Agent Routing')).toBeDefined();
     expect(screen.getByText('CLI installed')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Refresh Codex health' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Refresh host health' })).toBeDefined();
     expect(screen.getByRole('switch', { name: 'Enable Claude Code' })).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Default Agent' })).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'Default Model' })).toBeDefined();
@@ -198,10 +277,12 @@ describe('Agents settings Mantine migration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Codex health' }));
     fireEvent.click(screen.getByRole('button', { name: 'Refresh provider health' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh host health' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Enable Claude Code' }));
 
     expect(mocks.refetchCodexHealth).toHaveBeenCalledTimes(1);
     expect(mocks.refetchProviderHealth).toHaveBeenCalledTimes(1);
+    expect(mocks.refetchHostHealth).toHaveBeenCalledTimes(1);
     expect(mocks.updateAgents).toHaveBeenCalledWith([
       agents[0],
       expect.objectContaining({ type: 'claude-code', enabled: true }),

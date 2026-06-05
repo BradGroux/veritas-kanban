@@ -7,7 +7,7 @@
 import { tasksApi } from './tasks';
 import { backlogApi } from './backlog';
 import { settingsApi, configApi } from './config';
-import { agentApi, registryApi, worktreeApi, previewApi } from './agent';
+import { agentApi, agentHostApi, registryApi, worktreeApi, previewApi } from './agent';
 import { diffApi, conflictsApi, githubApi } from './diff';
 import { templatesApi, taskTypesApi, sprintsApi, activityApi, attachmentsApi } from './entities';
 import { timeApi, statusHistoryApi } from './time';
@@ -36,6 +36,7 @@ export const api = {
   config: configApi,
   worktree: worktreeApi,
   agent: agentApi,
+  agentHosts: agentHostApi,
   registry: registryApi,
   diff: diffApi,
   templates: templatesApi,

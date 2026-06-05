@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { ActionIcon, Badge, Button, Modal, Select, Switch, Text, TextInput } from '@mantine/core';
 import { useCodexHealth, useConfig, useProviderHealth, useUpdateAgents } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
+import { useAgentHostPreview, useAgentHosts } from '@/hooks/useAgent';
 import {
   Bot,
   Plus,
@@ -16,9 +17,15 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
+  Server,
 } from 'lucide-react';
 import type {
   AgentConfig,
+  AgentHostCompatibilityResponse,
+  AgentHostHealthResponse,
+  AgentHostPosture,
+  AgentHostPreviewRequest,
+  AgentHostRecord,
   AgentType,
   RoutingRule,
   AgentRoutingConfig,
@@ -160,6 +167,8 @@ export function AgentsTab() {
         isFetching={isProviderHealthFetching}
         onRefresh={() => refetchProviderHealth()}
       />
+
+      <AgentHostHealthPanel agents={config?.agents || []} />
 
       {/* Agent Behavior */}
       <div className="space-y-4">
@@ -365,6 +374,271 @@ function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
             <li key={recommendation}>{recommendation}</li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function hostPostureColor(posture: AgentHostPosture): string {
+  switch (posture) {
+    case 'connected':
+      return 'green';
+    case 'degraded':
+    case 'stale':
+      return 'yellow';
+    case 'risky':
+    case 'disconnected':
+      return 'red';
+    case 'unknown':
+      return 'gray';
+  }
+}
+
+function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
+  const { data: health, isFetching, refetch } = useAgentHosts();
+  const enabledAgents = agents.filter((agent) => agent.enabled);
+  const firstEnabledAgent = enabledAgents[0]?.type || '';
+  const [selectedAgent, setSelectedAgent] = useState<string>(firstEnabledAgent);
+  const [selectedHostId, setSelectedHostId] = useState<string>('auto');
+
+  useEffect(() => {
+    if (!selectedAgent && firstEnabledAgent) {
+      setSelectedAgent(firstEnabledAgent);
+    }
+  }, [firstEnabledAgent, selectedAgent]);
+
+  const selectedAgentConfig = agents.find((agent) => agent.type === selectedAgent);
+  const previewRequest = useMemo<AgentHostPreviewRequest>(
+    () => ({
+      agent: selectedAgent || undefined,
+      provider: selectedAgentConfig?.provider,
+      model: selectedAgentConfig?.model,
+      manualHostId: selectedHostId === 'auto' ? undefined : selectedHostId,
+    }),
+    [selectedAgent, selectedAgentConfig?.provider, selectedAgentConfig?.model, selectedHostId]
+  );
+  const { data: preview, isFetching: isPreviewFetching } = useAgentHostPreview(
+    previewRequest,
+    !!selectedAgent || (health?.hosts.length ?? 0) > 0
+  );
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Agent Host Health</h3>
+          <p className="text-xs text-muted-foreground">
+            {health?.generatedAt
+              ? `Checked ${new Date(health.generatedAt).toLocaleTimeString()}`
+              : 'Checking supervisor posture'}
+          </p>
+        </div>
+        <ActionIcon
+          variant="subtle"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          aria-label="Refresh host health"
+        >
+          {isFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+        </ActionIcon>
+      </div>
+
+      <AgentHostSummary health={health} />
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          {(health?.hosts ?? []).map((host) => (
+            <AgentHostItem key={host.id} host={host} />
+          ))}
+          {!health?.hosts?.length && (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No agent supervisors have registered host metadata yet.
+            </div>
+          )}
+        </div>
+
+        <AgentHostPreviewPanel
+          agents={enabledAgents}
+          hosts={health?.hosts ?? []}
+          preview={preview}
+          selectedAgent={selectedAgent}
+          selectedHostId={selectedHostId}
+          isFetching={isPreviewFetching}
+          onAgentChange={setSelectedAgent}
+          onHostChange={setSelectedHostId}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AgentHostSummary({ health }: { health?: AgentHostHealthResponse }) {
+  if (!health) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline" color="gray">
+          Loading hosts
+        </Badge>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge variant="light" color="gray">
+        {health.summary.total} hosts
+      </Badge>
+      <Badge variant="light" color="green">
+        {health.summary.connected} connected
+      </Badge>
+      <Badge variant="light" color={health.summary.degraded > 0 ? 'yellow' : 'gray'}>
+        {health.summary.degraded} degraded
+      </Badge>
+      <Badge variant="light" color={health.summary.stale > 0 ? 'yellow' : 'gray'}>
+        {health.summary.stale} stale
+      </Badge>
+      <Badge variant="light" color={health.summary.overloaded > 0 ? 'red' : 'gray'}>
+        {health.summary.overloaded} overloaded
+      </Badge>
+    </div>
+  );
+}
+
+function AgentHostItem({ host }: { host: AgentHostRecord }) {
+  return (
+    <div className="rounded-md border bg-background/60 p-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Server className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{host.name}</span>
+            <Badge size="xs" color={hostPostureColor(host.posture)} variant="light">
+              {formatProviderState(host.posture)}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {host.supervisorType}
+            {host.os ? ` · ${host.os}` : ''}
+          </p>
+        </div>
+        <Badge size="xs" color={host.overloaded ? 'red' : 'gray'} variant="outline">
+          Queue {host.queueDepth}/{host.maxQueueDepth}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {host.supportedAgents.slice(0, 4).map((agent) => (
+          <Badge key={agent} size="xs" variant="outline" color="gray">
+            {agent}
+          </Badge>
+        ))}
+        {host.supportedProviders.slice(0, 3).map((provider) => (
+          <Badge key={provider} size="xs" variant="light" color="gray">
+            {provider}
+          </Badge>
+        ))}
+      </div>
+
+      {host.workspaceLabels.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Workspaces: {host.workspaceLabels.slice(0, 3).join(', ')}
+        </p>
+      )}
+
+      {host.diagnostics.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {host.diagnostics.slice(0, 3).map((diagnostic) => (
+            <li key={diagnostic}>{diagnostic}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AgentHostPreviewPanel({
+  agents,
+  hosts,
+  preview,
+  selectedAgent,
+  selectedHostId,
+  isFetching,
+  onAgentChange,
+  onHostChange,
+}: {
+  agents: AgentConfig[];
+  hosts: AgentHostRecord[];
+  preview?: AgentHostCompatibilityResponse;
+  selectedAgent: string;
+  selectedHostId: string;
+  isFetching: boolean;
+  onAgentChange: (value: string) => void;
+  onHostChange: (value: string) => void;
+}) {
+  const selectedHost = preview?.decision.selectedHostName || preview?.decision.selectedHostId;
+  const selectedPreview = preview?.decision.selectedHostId
+    ? preview.previews.find((item) => item.hostId === preview.decision.selectedHostId)
+    : undefined;
+
+  return (
+    <div className="rounded-md border bg-background/60 p-3 space-y-3">
+      <div>
+        <h4 className="text-sm font-medium">Launch Compatibility</h4>
+        <p className="text-xs text-muted-foreground">
+          {isFetching ? 'Resolving host route' : preview?.decision.reason || 'No route resolved'}
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Select
+          label="Preview Agent"
+          value={selectedAgent}
+          onChange={(value) => onAgentChange(value || '')}
+          data={agents.map((agent) => ({ value: agent.type, label: agent.name }))}
+          placeholder="Select agent"
+          size="xs"
+        />
+        <Select
+          label="Target Host"
+          value={selectedHostId}
+          onChange={(value) => onHostChange(value || 'auto')}
+          data={[
+            { value: 'auto', label: 'Auto route' },
+            ...hosts.map((host) => ({ value: host.id, label: host.name })),
+          ]}
+          size="xs"
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="light" color={selectedHost ? 'green' : 'gray'}>
+          {selectedHost || 'No host selected'}
+        </Badge>
+        <Badge variant="outline" color="gray">
+          {preview?.decision.policy || 'disabled'}
+        </Badge>
+      </div>
+
+      {selectedPreview && (
+        <div className="space-y-1">
+          {selectedPreview.checks.slice(0, 5).map((check) => (
+            <div key={check.id} className="flex items-start justify-between gap-2 text-xs">
+              <span className="text-muted-foreground">{check.label}</span>
+              <Badge size="xs" color={check.passed ? 'green' : 'red'} variant="light">
+                {check.passed ? 'Pass' : 'Block'}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!selectedPreview && preview?.decision.fallbackBehavior && (
+        <p className="text-xs text-muted-foreground">{preview.decision.fallbackBehavior}</p>
       )}
     </div>
   );

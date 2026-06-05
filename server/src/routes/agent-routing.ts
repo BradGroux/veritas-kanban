@@ -9,6 +9,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getAgentRoutingService } from '../services/agent-routing-service.js';
+import { getAgentHostService } from '../services/agent-host-service.js';
 import { getGovernanceTraceService } from '../services/governance-trace-service.js';
 import { getTaskService } from '../services/task-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -56,6 +57,18 @@ const routingConfigSchema = z.object({
   defaultModel: z.string().max(50).optional(),
   fallbackOnFailure: z.boolean(),
   maxRetries: z.number().int().min(0).max(3),
+});
+
+const hostPreviewSchema = z.object({
+  agent: z.string().max(100).optional(),
+  provider: z.string().max(80).optional(),
+  model: z.string().max(100).optional(),
+  workspacePath: z.string().max(1000).optional(),
+  requiredTools: z.array(z.string().max(80)).max(50).optional(),
+  verificationGates: z.array(z.string().max(200)).max(50).optional(),
+  manualHostId: z.string().max(120).optional(),
+  projectDefaultHostId: z.string().max(120).optional(),
+  autoRouting: z.boolean().optional(),
 });
 
 // ─── Routes ──────────────────────────────────────────────────────
@@ -107,6 +120,35 @@ router.post(
     }
 
     throw new ValidationError('Provide either { taskId } or { type, priority, ... }');
+  })
+);
+
+/**
+ * GET /api/agents/hosts
+ *
+ * Return supervisor/host health and routing posture derived from the agent registry.
+ */
+router.get(
+  '/hosts',
+  asyncHandler(async (_req, res) => {
+    res.json(getAgentHostService().getHealth());
+  })
+);
+
+/**
+ * POST /api/agents/hosts/preview
+ *
+ * Preview deterministic host compatibility and the host routing decision before launch.
+ */
+router.post(
+  '/hosts/preview',
+  asyncHandler(async (req, res) => {
+    const parsed = hostPreviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid host preview request', parsed.error.issues);
+    }
+
+    res.json(getAgentHostService().preview(parsed.data));
   })
 );
 

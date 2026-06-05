@@ -176,6 +176,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'admin:manage',
     overrides: [
       { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
+      { methods: ['POST'], path: /^\/hosts\/preview\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
     ],
   },
