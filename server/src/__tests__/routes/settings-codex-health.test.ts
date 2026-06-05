@@ -3,8 +3,11 @@ import express from 'express';
 import request from 'supertest';
 import { errorHandler } from '../../middleware/error-handler.js';
 
-const { mockCodexHealthService } = vi.hoisted(() => ({
+const { mockCodexHealthService, mockContextProviderHealthService } = vi.hoisted(() => ({
   mockCodexHealthService: {
+    getHealth: vi.fn(),
+  },
+  mockContextProviderHealthService: {
     getHealth: vi.fn(),
   },
 }));
@@ -12,6 +15,12 @@ const { mockCodexHealthService } = vi.hoisted(() => ({
 vi.mock('../../services/codex-health-service.js', () => ({
   CodexHealthService: function () {
     return mockCodexHealthService;
+  },
+}));
+
+vi.mock('../../services/context-provider-health-service.js', () => ({
+  ContextProviderHealthService: function () {
+    return mockContextProviderHealthService;
   },
 }));
 
@@ -52,5 +61,48 @@ describe('Settings Codex health route', () => {
     expect(response.status).toBe(200);
     expect(response.body.ready.overall).toBe(true);
     expect(mockCodexHealthService.getHealth).toHaveBeenCalled();
+  });
+
+  it('returns context provider health', async () => {
+    mockContextProviderHealthService.getHealth.mockResolvedValue({
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      summary: {
+        total: 2,
+        connected: 1,
+        degraded: 0,
+        stale: 0,
+        disconnected: 0,
+        unknown: 1,
+        risky: 1,
+        writeCapable: 2,
+      },
+      providers: [
+        {
+          id: 'openclaw',
+          name: 'OpenClaw',
+          provider: 'openclaw',
+          state: 'unknown',
+          risk: 'risky',
+          boundary: 'local',
+          readCapability: true,
+          writeCapability: true,
+          privacyScope: 'Local gateway posture only.',
+          lastCheckedAt: '2026-06-05T00:00:00.000Z',
+          detail: 'OpenClaw profile detected.',
+          tools: ['gateway'],
+          postureFlags: ['Risky exec/elevated argument detected'],
+          recommendations: ['Review OpenClaw exec/elevated arguments.'],
+        },
+      ],
+    });
+
+    const response = await request(app).get('/api/settings/provider-health');
+
+    expect(response.status).toBe(200);
+    expect(response.body.providers[0]).toMatchObject({
+      id: 'openclaw',
+      risk: 'risky',
+    });
+    expect(mockContextProviderHealthService.getHealth).toHaveBeenCalled();
   });
 });

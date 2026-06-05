@@ -45,6 +45,7 @@ const routingConfig: AgentRoutingConfig = {
 const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
   refetchCodexHealth: vi.fn(),
+  refetchProviderHealth: vi.fn(),
   updateAgents: vi.fn(),
   updateRouting: vi.fn(),
 }));
@@ -72,6 +73,57 @@ vi.mock('@/hooks/useConfig', () => ({
     },
     isFetching: false,
     refetch: mocks.refetchCodexHealth,
+  }),
+  useProviderHealth: () => ({
+    data: {
+      checkedAt: '2026-06-01T12:01:00.000Z',
+      summary: {
+        total: 2,
+        connected: 1,
+        degraded: 0,
+        stale: 0,
+        disconnected: 0,
+        unknown: 1,
+        risky: 1,
+        writeCapable: 2,
+      },
+      providers: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          provider: 'codex',
+          state: 'connected',
+          risk: 'normal',
+          boundary: 'mixed',
+          readCapability: true,
+          writeCapability: true,
+          privacyScope: 'Local CLI/SDK profile with model-provider requests when agents run.',
+          lastCheckedAt: '2026-06-01T12:00:00.000Z',
+          detail: 'At least one Codex agent profile is ready.',
+          tools: ['codex-cli'],
+          postureFlags: ['CLI authenticated'],
+          recommendations: [],
+        },
+        {
+          id: 'openclaw',
+          name: 'OpenClaw',
+          provider: 'openclaw',
+          state: 'unknown',
+          risk: 'risky',
+          boundary: 'local',
+          readCapability: true,
+          writeCapability: true,
+          privacyScope: 'Local gateway posture only; tokens and gateway secrets are redacted.',
+          lastCheckedAt: '2026-06-01T12:01:00.000Z',
+          detail: '1 enabled OpenClaw agent profile(s) detected.',
+          tools: ['gateway', 'agent:openclaw'],
+          postureFlags: ['Risky exec/elevated argument detected'],
+          recommendations: ['Review OpenClaw exec/elevated arguments before autonomous runs.'],
+        },
+      ],
+    },
+    isFetching: false,
+    refetch: mocks.refetchProviderHealth,
   }),
   useUpdateAgents: () => ({
     mutate: mocks.updateAgents,
@@ -120,6 +172,9 @@ describe('Agents settings Mantine migration', () => {
 
     expect(screen.getByText('Installed Agents')).toBeDefined();
     expect(screen.getByText('Codex Health')).toBeDefined();
+    expect(screen.getByText('Context Provider Health')).toBeDefined();
+    expect(screen.getByText('OpenClaw')).toBeDefined();
+    expect(screen.getByText('Risky')).toBeDefined();
     expect(screen.getByText('Agent Routing')).toBeDefined();
     expect(screen.getByText('CLI installed')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Refresh Codex health' })).toBeDefined();
@@ -142,9 +197,11 @@ describe('Agents settings Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="badge"]')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Codex health' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh provider health' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Enable Claude Code' }));
 
     expect(mocks.refetchCodexHealth).toHaveBeenCalledTimes(1);
+    expect(mocks.refetchProviderHealth).toHaveBeenCalledTimes(1);
     expect(mocks.updateAgents).toHaveBeenCalledWith([
       agents[0],
       expect.objectContaining({ type: 'claude-code', enabled: true }),

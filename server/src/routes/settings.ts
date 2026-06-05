@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { ConfigService } from '../services/config-service.js';
 import { CodexHealthService } from '../services/codex-health-service.js';
+import { ContextProviderHealthService } from '../services/context-provider-health-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getAttachmentService } from '../services/attachment-service.js';
 import { setEnforcementSettings, setHooksSettings } from '../services/hook-service.js';
@@ -18,6 +19,7 @@ import { createLogger } from '../lib/logger.js';
 const router: RouterType = Router();
 const configService = new ConfigService();
 const codexHealthService = new CodexHealthService();
+const contextProviderHealthService = new ContextProviderHealthService();
 const log = createLogger('settings-routes');
 
 /**
@@ -90,6 +92,15 @@ router.get(
   '/codex/health',
   asyncHandler(async (_req, res) => {
     const health = await codexHealthService.getHealth();
+    res.json(health);
+  })
+);
+
+// GET /api/settings/provider-health — shared context-provider/MCP posture summary
+router.get(
+  '/provider-health',
+  asyncHandler(async (_req, res) => {
+    const health = await contextProviderHealthService.getHealth();
     res.json(health);
   })
 );

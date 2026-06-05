@@ -21,6 +21,11 @@ export const settingsApi = {
     return handleResponse<CodexHealthStatus>(response);
   },
 
+  getProviderHealth: async (): Promise<ContextProviderHealthResponse> => {
+    const response = await fetch(`${API_BASE}/settings/provider-health`);
+    return handleResponse<ContextProviderHealthResponse>(response);
+  },
+
   updateFeatures: async (patch: Partial<FeatureSettings>): Promise<FeatureSettings> => {
     const response = await fetch(`${API_BASE}/settings/features`, {
       credentials: 'include',
@@ -59,6 +64,43 @@ export interface CodexHealthStatus {
     overall: boolean;
   };
   recommendations: string[];
+}
+
+export type ContextProviderState = 'connected' | 'degraded' | 'stale' | 'disconnected' | 'unknown';
+
+export type ContextProviderRisk = 'safe' | 'normal' | 'risky';
+export type ContextProviderBoundary = 'local' | 'cloud' | 'mixed' | 'unknown';
+
+export interface ContextProviderHealth {
+  id: string;
+  name: string;
+  provider: 'codex' | 'openclaw' | 'custom';
+  state: ContextProviderState;
+  risk: ContextProviderRisk;
+  boundary: ContextProviderBoundary;
+  readCapability: boolean;
+  writeCapability: boolean;
+  privacyScope: string;
+  lastCheckedAt: string;
+  detail: string;
+  tools: string[];
+  postureFlags: string[];
+  recommendations: string[];
+}
+
+export interface ContextProviderHealthResponse {
+  checkedAt: string;
+  summary: {
+    total: number;
+    connected: number;
+    degraded: number;
+    stale: number;
+    disconnected: number;
+    unknown: number;
+    risky: number;
+    writeCapable: number;
+  };
+  providers: ContextProviderHealth[];
 }
 
 export const configApi = {

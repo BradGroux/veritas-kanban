@@ -17,6 +17,14 @@ export function useCodexHealth() {
   });
 }
 
+export function useProviderHealth() {
+  return useQuery({
+    queryKey: ['settings', 'provider-health'],
+    queryFn: api.settings.getProviderHealth,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRepos() {
   return useQuery({
     queryKey: ['config', 'repos'],

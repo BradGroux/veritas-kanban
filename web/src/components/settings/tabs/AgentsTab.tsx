@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ActionIcon, Badge, Button, Modal, Select, Switch, Text, TextInput } from '@mantine/core';
-import { useCodexHealth, useConfig, useUpdateAgents } from '@/hooks/useConfig';
+import { useCodexHealth, useConfig, useProviderHealth, useUpdateAgents } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
 import {
@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Loader2,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import type {
   AgentConfig,
@@ -22,7 +23,11 @@ import type {
   RoutingRule,
   AgentRoutingConfig,
 } from '@veritas-kanban/shared';
-import type { CodexHealthStatus } from '@/lib/api';
+import type {
+  CodexHealthStatus,
+  ContextProviderHealth,
+  ContextProviderHealthResponse,
+} from '@/lib/api';
 import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
@@ -36,6 +41,11 @@ export function AgentsTab() {
     isFetching: isCodexHealthFetching,
     refetch: refetchCodexHealth,
   } = useCodexHealth();
+  const {
+    data: providerHealth,
+    isFetching: isProviderHealthFetching,
+    refetch: refetchProviderHealth,
+  } = useProviderHealth();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
   const updateAgents = useUpdateAgents();
@@ -145,6 +155,12 @@ export function AgentsTab() {
         onRefresh={() => refetchCodexHealth()}
       />
 
+      <ProviderHealthPanel
+        health={providerHealth}
+        isFetching={isProviderHealthFetching}
+        onRefresh={() => refetchProviderHealth()}
+      />
+
       {/* Agent Behavior */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -196,6 +212,160 @@ export function AgentsTab() {
 
       {/* Agent Routing Rules */}
       <RoutingRulesSection agents={config?.agents || []} />
+    </div>
+  );
+}
+
+function providerStateColor(state: ContextProviderHealth['state']): string {
+  switch (state) {
+    case 'connected':
+      return 'green';
+    case 'degraded':
+    case 'stale':
+      return 'yellow';
+    case 'disconnected':
+      return 'red';
+    case 'unknown':
+      return 'gray';
+  }
+}
+
+function formatProviderState(value: string): string {
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function ProviderHealthPanel({
+  health,
+  isFetching,
+  onRefresh,
+}: {
+  health?: ContextProviderHealthResponse;
+  isFetching: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Context Provider Health</h3>
+          <p className="text-xs text-muted-foreground">
+            {health?.checkedAt
+              ? `Checked ${new Date(health.checkedAt).toLocaleTimeString()}`
+              : 'Checking provider posture'}
+          </p>
+        </div>
+        <ActionIcon
+          variant="subtle"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isFetching}
+          aria-label="Refresh provider health"
+        >
+          {isFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+        </ActionIcon>
+      </div>
+
+      {health && (
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="light" color="gray">
+            {health.summary.total} providers
+          </Badge>
+          <Badge variant="light" color={health.summary.writeCapable > 0 ? 'yellow' : 'gray'}>
+            {health.summary.writeCapable} write-capable
+          </Badge>
+          <Badge variant="light" color={health.summary.risky > 0 ? 'red' : 'green'}>
+            {health.summary.risky} risky
+          </Badge>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {(health?.providers ?? []).map((provider) => (
+          <ProviderHealthItem key={provider.id} provider={provider} />
+        ))}
+        {!health?.providers?.length && (
+          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            No provider health data is available yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
+  return (
+    <div className="rounded-md border bg-background/60 p-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{provider.name}</span>
+            <Badge size="xs" color={providerStateColor(provider.state)} variant="light">
+              {formatProviderState(provider.state)}
+            </Badge>
+            <Badge
+              size="xs"
+              color={provider.risk === 'risky' ? 'red' : 'gray'}
+              variant={provider.risk === 'risky' ? 'light' : 'outline'}
+            >
+              {formatProviderState(provider.risk)}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{provider.detail}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge size="xs" variant="outline">
+          {formatProviderState(provider.boundary)}
+        </Badge>
+        <Badge size="xs" variant={provider.readCapability ? 'light' : 'outline'} color="gray">
+          Read {provider.readCapability ? 'on' : 'off'}
+        </Badge>
+        <Badge
+          size="xs"
+          variant={provider.writeCapability ? 'light' : 'outline'}
+          color={provider.writeCapability ? 'yellow' : 'gray'}
+        >
+          Write {provider.writeCapability ? 'on' : 'off'}
+        </Badge>
+      </div>
+
+      <p className="text-xs text-muted-foreground">{provider.privacyScope}</p>
+
+      {provider.tools.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {provider.tools.slice(0, 5).map((tool) => (
+            <Badge key={tool} size="xs" variant="outline" color="gray">
+              {tool}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {provider.postureFlags.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {provider.postureFlags.slice(0, 4).map((flag) => (
+            <li key={flag}>{flag}</li>
+          ))}
+        </ul>
+      )}
+
+      {provider.recommendations.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {provider.recommendations.slice(0, 2).map((recommendation) => (
+            <li key={recommendation}>{recommendation}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
