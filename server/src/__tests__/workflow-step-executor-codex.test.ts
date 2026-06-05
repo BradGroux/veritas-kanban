@@ -7,6 +7,7 @@ const mockRunStreamed = vi.fn();
 const mockStartThread = vi.fn();
 const mockResumeThread = vi.fn();
 const mockRecordGovernanceTrace = vi.fn();
+const mockGetToolFilterForRole = vi.fn();
 
 vi.mock('@openai/codex-sdk', () => ({
   Codex: class {
@@ -17,7 +18,7 @@ vi.mock('@openai/codex-sdk', () => ({
 
 vi.mock('../services/tool-policy-service.js', () => ({
   getToolPolicyService: () => ({
-    getToolFilterForRole: vi.fn().mockResolvedValue({ allowed: ['*'], denied: [] }),
+    getToolFilterForRole: mockGetToolFilterForRole,
   }),
 }));
 
@@ -57,6 +58,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
     mockStartThread.mockReturnValue({ runStreamed: mockRunStreamed });
     mockResumeThread.mockReturnValue({ runStreamed: mockRunStreamed });
     mockRecordGovernanceTrace.mockResolvedValue({ id: 'govtrace_1' });
+    mockGetToolFilterForRole.mockResolvedValue({});
   });
 
   afterEach(async () => {
@@ -116,6 +118,57 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(run.context._sessions).toMatchObject({ codex: 'thread_test_123' });
     expect(result.output).toContain('Implemented workflow Codex step.');
     expect(result.outputPath).toContain('implement.md');
+  });
+
+  it('blocks Codex workflow agent steps when role tool policy is restricted', async () => {
+    mockGetToolFilterForRole.mockResolvedValueOnce({
+      allowed: ['Read'],
+      denied: ['Write', 'exec'],
+    });
+
+    const executor = new WorkflowStepExecutor(tmpDir);
+    const step: WorkflowStep = {
+      id: 'plan',
+      name: 'Plan',
+      type: 'agent',
+      agent: 'codex',
+      input: 'Plan {{task.title}}',
+      output: { file: 'plan.md' },
+    };
+    const run: WorkflowRun = {
+      id: 'run_1234567890_restricted',
+      workflowId: 'wf-codex-restricted',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: {
+          id: 'task_1',
+          title: 'Restricted Codex workflow',
+          git: { worktreePath: tmpDir },
+        },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'planner',
+              provider: 'codex-sdk',
+              model: 'gpt-5.5',
+              description: 'Restricted Codex planner',
+            },
+          ],
+        },
+        _sessions: {},
+      },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'plan', status: 'running', retries: 0 }],
+    };
+
+    await expect(executor.executeStep(step, run)).rejects.toThrow(
+      'cannot enforce restricted tool policy'
+    );
+    expect(mockStartThread).not.toHaveBeenCalled();
+    expect(mockResumeThread).not.toHaveBeenCalled();
   });
 
   it('records governance traces for workflow gate decisions', async () => {

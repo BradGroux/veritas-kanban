@@ -108,7 +108,14 @@ export class WorkflowStepExecutor {
     );
 
     if (this.isCodexAgent(agentDef, step.agent)) {
-      return this.executeCodexAgentStep(step, run, agentDef, prompt, sessionConfig);
+      return this.executeCodexAgentStep(
+        step,
+        run,
+        agentDef,
+        prompt,
+        sessionConfig,
+        toolPolicyFilter
+      );
     }
 
     return this.executeOpenClawAgentStep(
@@ -331,8 +338,11 @@ export class WorkflowStepExecutor {
     run: WorkflowRun,
     agentDef: WorkflowAgent | null,
     prompt: string,
-    sessionConfig: StepSessionConfig
+    sessionConfig: StepSessionConfig,
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
   ): Promise<StepExecutionResult> {
+    this.assertCodexToolPolicySupported(step, agentDef, toolPolicyFilter);
+
     const { Codex } = await import('@openai/codex-sdk');
     const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
     const codex = new Codex({
@@ -427,6 +437,27 @@ export class WorkflowStepExecutor {
       output: parsed,
       outputPath,
     };
+  }
+
+  private assertCodexToolPolicySupported(
+    step: WorkflowStep,
+    agentDef: WorkflowAgent | null,
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+  ): void {
+    const allowed = toolPolicyFilter.allowed ?? [];
+    const denied = toolPolicyFilter.denied ?? [];
+    const hasAllowedRestriction = allowed.length > 0 && !allowed.includes('*');
+    const hasDeniedRestriction = denied.length > 0;
+
+    if (!hasAllowedRestriction && !hasDeniedRestriction) {
+      return;
+    }
+
+    throw new Error(
+      `Codex workflow step ${step.id} cannot enforce restricted tool policy for role ${
+        agentDef?.role || 'unknown'
+      }; choose an unrestricted role or an OpenClaw-backed agent.`
+    );
   }
 
   /**
