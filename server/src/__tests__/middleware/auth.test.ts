@@ -57,7 +57,7 @@ import type { IdentityActor } from '../../services/identity-service.js';
 // Helper to create a mock Express request
 function mockRequest(overrides: Partial<Request> = {}): Request {
   const req = {
-    headers: {},
+    headers: { host: 'localhost:3001' },
     cookies: {},
     query: {},
     socket: { remoteAddress: '127.0.0.1' },
@@ -448,7 +448,7 @@ describe('Auth Middleware', () => {
       vi.mocked(getSecurityConfig).mockReturnValue({
         authEnabled: true,
         passwordHash: 'hashed-password',
-      } as any);
+      });
       vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
 
       const req = mockRequest({
@@ -464,6 +464,93 @@ describe('Auth Middleware', () => {
       expect(req.auth?.actorType).toBe('user');
       expect(req.auth?.authMethod).toBe('session');
       expect(req.auth?.workspaceId).toBe('local');
+    });
+
+    it('should reject JWT cookie from remote hosts because password sessions are local-owner only', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session' }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed-password',
+      });
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      const req = mockRequest({
+        cookies: { veritas_session: token },
+        headers: {
+          host: 'kanban.example.com',
+          origin: 'https://kanban.example.com',
+        },
+        socket: { remoteAddress: '203.0.113.10' } as Request['socket'],
+        ip: '203.0.113.10',
+      }) as AuthenticatedRequest;
+      const res = mockResponse();
+      const next = mockNext();
+
+      authenticate(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PASSWORD_SESSION_LOCAL_ONLY' })
+      );
+    });
+
+    it('should reject JWT cookie through a non-loopback forwarded host', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session' }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed-password',
+      });
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      const req = mockRequest({
+        cookies: { veritas_session: token },
+        headers: {
+          host: 'localhost:3001',
+          'x-forwarded-host': 'kanban.example.com',
+        },
+      }) as AuthenticatedRequest;
+      const res = mockResponse();
+      const next = mockNext();
+
+      authenticate(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PASSWORD_SESSION_LOCAL_ONLY' })
+      );
+    });
+
+    it('should still allow API key auth when a remote password-session cookie is present', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session' }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed-password',
+      });
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      process.env.VERITAS_ADMIN_KEY = 'fallback-key';
+      const req = mockRequest({
+        cookies: { veritas_session: token },
+        headers: {
+          host: 'kanban.example.com',
+          origin: 'https://kanban.example.com',
+          'x-api-key': 'fallback-key',
+        },
+        socket: { remoteAddress: '203.0.113.10' } as Request['socket'],
+        ip: '203.0.113.10',
+      }) as AuthenticatedRequest;
+      const res = mockResponse();
+      const next = mockNext();
+
+      authenticate(req, res, next);
+      expect(next).toHaveBeenCalled();
+      expect(req.auth?.authMethod).toBe('api-key');
     });
 
     it('should reject JWT cookie when session version is stale', () => {
@@ -970,7 +1057,7 @@ describe('Auth Middleware', () => {
       vi.mocked(getSecurityConfig).mockReturnValue({
         authEnabled: true,
         passwordHash: 'hashed',
-      } as any);
+      });
       vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
 
       const req = {
@@ -979,7 +1066,7 @@ describe('Auth Middleware', () => {
           host: 'localhost:3001',
         },
         url: '/ws',
-        socket: { remoteAddress: '192.168.1.100' },
+        socket: { remoteAddress: '127.0.0.1' },
       } as unknown as IncomingMessage;
 
       const result = authenticateWebSocket(req);
@@ -987,6 +1074,57 @@ describe('Auth Middleware', () => {
       expect(result.role).toBe('admin');
       expect(result.authMethod).toBe('session');
       expect(result.actorType).toBe('user');
+    });
+
+    it('should reject WebSocket JWT cookie from remote hosts', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session' }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed',
+      });
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      const req = {
+        headers: {
+          cookie: `veritas_session=${token}; other=val`,
+          host: 'kanban.example.com',
+          origin: 'https://kanban.example.com',
+        },
+        url: '/ws',
+        socket: { remoteAddress: '203.0.113.10' },
+      } as unknown as IncomingMessage;
+
+      const result = authenticateWebSocket(req);
+      expect(result.authenticated).toBe(false);
+      expect(result.error).toContain('Password sessions are limited to local-owner');
+    });
+
+    it('should allow WebSocket API key fallback when a remote password-session cookie is present', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session' }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed',
+      });
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      process.env.VERITAS_ADMIN_KEY = 'ws-fallback-key';
+      const req = {
+        headers: {
+          cookie: `veritas_session=${token}; other=val`,
+          host: 'kanban.example.com',
+          'x-api-key': 'ws-fallback-key',
+        },
+        url: '/ws',
+        socket: { remoteAddress: '203.0.113.10' },
+      } as unknown as IncomingMessage;
+
+      const result = authenticateWebSocket(req);
+      expect(result.authenticated).toBe(true);
+      expect(result.authMethod).toBe('api-key');
     });
 
     it('should reject WebSocket JWT cookie when session version is stale', () => {

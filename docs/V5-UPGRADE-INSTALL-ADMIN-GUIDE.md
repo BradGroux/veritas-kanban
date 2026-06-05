@@ -84,6 +84,12 @@ Then verify a WebSocket upgrade to `wss://kanban.example.com/ws` from the same
 origin. Keep `VERITAS_AUTH_ENABLED=true` and
 `VERITAS_AUTH_LOCALHOST_BYPASS=false` for remote/server mode.
 
+Do not use browser password sessions as the remote access boundary. In v5 GA the
+password session cookie is accepted only for local-owner loopback clients.
+Remote browsers, mobile/PWA clients, CLI/MCP clients, and multi-user workflows
+must use trusted device sessions or scoped API tokens so workspace membership,
+role, revocation, and downgraded scopes are revalidated.
+
 Use safe LAN, VPN, Tailscale, or reverse-proxy examples from
 `docs/guides/SELF_HOST.md`. Split-origin deployments require exact CORS,
 WebSocket, service-worker, cookie, and token handling as described in ADR 0002.

@@ -16,14 +16,18 @@ The review fixed five high or critical implementation issues in the #350 impleme
 | Revoked API tokens and device sessions stopped new authentication but did not close already-open WebSocket connections.                                                                         | High     | Fixed. WebSocket auth now retains token/session identifiers and identity revocation routes close matching live sockets.                                            |
 | Preview start/stop routes used read permissions while starting local child processes for repo preview servers.                                                                                  | High     | Fixed. Preview status/output remain readable with `task:read`, but start/stop now require `admin:manage`; preview process output is redacted before retention.     |
 
-## GA Blocker
+## GA Blocker Resolution
 
 Browser password sessions still use the compatibility local-owner model. The JWT proves only that a password login happened; it does not carry a persisted user subject, session id, workspace membership, disabled-user state, or membership downgrade check. `authMethod: "session"` maps to the local admin authority.
 
-This blocks multi-user/server-mode GA unless one of these is true before release:
+The v5 GA release resolves this by taking the smaller safe boundary: password
+sessions are explicitly local-owner only. The server accepts a password-session
+cookie only on loopback requests with loopback `Host`, `Origin`, `Referer`, and
+forwarded-host metadata. Remote/server, PWA, CLI/MCP, and multi-user workflows
+must use trusted device sessions or scoped API tokens instead.
 
-- Browser sessions are migrated to persisted per-user sessions that revalidate active membership and role on every request and WebSocket connect.
-- The GA release explicitly limits password-session mode to single-owner local deployments, with remote/multi-user access requiring device sessions or scoped API tokens.
+Persisted per-user browser sessions remain the future path if password login is
+ever promoted to a remote or multi-user auth method.
 
 ## Accepted Hardening Risks For This Review
 

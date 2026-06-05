@@ -99,18 +99,24 @@ elevation require `admin:manage`.
 Authenticated REST requests and WebSocket connections now carry a shared auth
 context for the v5 RBAC migration:
 
-| Field         | Description                                               |
-| ------------- | --------------------------------------------------------- |
-| `role`        | Current compatibility role: `admin`, `agent`, `read-only` |
-| `userId`      | Local fallback user ID until persisted users are enforced |
-| `workspaceId` | Local fallback workspace ID until workspace scoping lands |
-| `actorType`   | `user`, `agent`, `service`, or `localhost-bypass`         |
-| `authMethod`  | `disabled`, `session`, `api-key`, or `localhost-bypass`   |
-| `tokenName`   | API key name when authenticated with a configured key     |
-| `permissions` | Role-derived permission list used by new route guards     |
+| Field         | Description                                                               |
+| ------------- | ------------------------------------------------------------------------- |
+| `role`        | Current compatibility role: `admin`, `agent`, `read-only`                 |
+| `userId`      | Local fallback user ID until persisted users are enforced                 |
+| `workspaceId` | Local fallback workspace ID until workspace scoping lands                 |
+| `actorType`   | `user`, `agent`, `service`, or `localhost-bypass`                         |
+| `authMethod`  | `disabled`, `session`, `api-key`, `device-session`, or `localhost-bypass` |
+| `tokenName`   | API key name when authenticated with a configured key                     |
+| `permissions` | Role-derived permission list used by new route guards                     |
 
 New v5 endpoints should prefer explicit permission guards over broad role
 checks. Legacy role guards remain supported while route coverage is migrated.
+
+Browser password sessions are local-owner only in v5 GA. The server accepts the
+session cookie only on loopback requests with loopback `Host`/`Origin`/`Referer`
+metadata. Remote, server, PWA, and multi-user clients must authenticate with a
+trusted device session or scoped API token so active workspace membership, role,
+revocation, and downgraded scopes are revalidated.
 
 The v5 authority surface is tracked in
 [`docs/security/permission-coverage.json`](security/permission-coverage.json).
@@ -122,7 +128,7 @@ classification.
 The v5.0 hardening review is recorded in
 [`docs/security/v5-security-review.md`](security/v5-security-review.md),
 including fixed high/critical findings, accepted hardening risks, and the
-remaining browser-session GA blocker.
+password-session local-owner boundary.
 
 Release compatibility, stale-client behavior, update channels, and rollback
 limits are tracked in

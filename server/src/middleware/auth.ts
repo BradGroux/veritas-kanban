@@ -294,6 +294,63 @@ function isLocalhostRequest(req: Request | IncomingMessage): boolean {
   );
 }
 
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === '[::1]'
+  );
+}
+
+function isLoopbackHost(value: string | undefined): boolean {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value.includes('://') ? value : `http://${value}`);
+    return isLoopbackHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackForwardedFor(value: string | undefined): boolean {
+  if (!value) return true;
+  const first = value.split(',')[0]?.trim();
+  if (!first) return false;
+  const normalized = first.replace(/^\[|\]$/g, '');
+  return isLoopbackHostname(normalized);
+}
+
+function isLocalOwnerPasswordSessionRequest(
+  req: Request | IncomingMessage,
+  isLocalhost: boolean
+): boolean {
+  if (!isLocalhost) return false;
+
+  const host = firstHeaderValue(req.headers.host);
+  if (!isLoopbackHost(host)) return false;
+
+  const origin = firstHeaderValue(req.headers.origin);
+  if (origin && !isLoopbackHost(origin)) return false;
+
+  const referer = firstHeaderValue(req.headers.referer);
+  if (referer && !isLoopbackHost(referer)) return false;
+
+  const forwardedHost = firstHeaderValue(req.headers['x-forwarded-host']);
+  if (forwardedHost && !isLoopbackHost(forwardedHost)) return false;
+
+  const forwardedFor = firstHeaderValue(req.headers['x-forwarded-for']);
+  if (!isLoopbackForwardedFor(forwardedFor)) return false;
+
+  return true;
+}
+
 function extractApiKey(
   req: Request | IncomingMessage,
   options: { allowQueryParam?: boolean } = {}
@@ -443,6 +500,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   const config = getAuthConfig();
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
+  let blockedPasswordSession = false;
 
   // If password auth not set up yet, check API key auth
   const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
@@ -457,13 +515,17 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   if (passwordAuthEnabled) {
     const jwtResult = verifyJwtCookie(req);
     if (jwtResult.valid) {
-      req.auth = buildAuthContext({
-        role: 'admin',
-        keyName: 'session',
-        isLocalhost,
-        authMethod: 'session',
-      });
-      return next();
+      if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
+        blockedPasswordSession = true;
+      } else {
+        req.auth = buildAuthContext({
+          role: 'admin',
+          keyName: 'session',
+          isLocalhost,
+          authMethod: 'session',
+        });
+        return next();
+      }
     }
   }
 
@@ -503,6 +565,15 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       authMethod: 'localhost-bypass',
     });
     return next();
+  }
+
+  if (blockedPasswordSession) {
+    res.status(403).json({
+      code: 'PASSWORD_SESSION_LOCAL_ONLY',
+      message:
+        'Password sessions are limited to local-owner loopback clients. Use a device session or scoped API token for remote or multi-user access.',
+    });
+    return;
   }
 
   // No valid auth found
@@ -721,6 +792,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
   const config = getAuthConfig();
   const securityConfig = getSecurityConfig();
   const isLocalhost = isLocalhostRequest(req);
+  let blockedPasswordSession = false;
 
   const passwordAuthEnabled = securityConfig.authEnabled && securityConfig.passwordHash;
 
@@ -738,15 +810,19 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     if (token) {
       const result = verifySessionJwtToken(token);
       if (result.valid) {
-        return {
-          authenticated: true,
-          ...buildAuthContext({
-            role: 'admin',
-            keyName: 'session',
-            isLocalhost,
-            authMethod: 'session',
-          }),
-        };
+        if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
+          blockedPasswordSession = true;
+        } else {
+          return {
+            authenticated: true,
+            ...buildAuthContext({
+              role: 'admin',
+              keyName: 'session',
+              isLocalhost,
+              authMethod: 'session',
+            }),
+          };
+        }
       }
       // Token invalid or expired, continue to other auth methods
     }
@@ -783,6 +859,15 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
         ...deviceAuth,
       };
     }
+  }
+
+  if (blockedPasswordSession) {
+    return {
+      authenticated: false,
+      isLocalhost,
+      error:
+        'Password sessions are limited to local-owner loopback clients. Use a device session or scoped API token for remote or multi-user access.',
+    };
   }
 
   // 3. Localhost bypass — role is configurable (default: read-only)

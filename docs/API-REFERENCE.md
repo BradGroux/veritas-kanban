@@ -61,12 +61,12 @@ VK supports three authentication methods. All are optional when running locally 
 
 ### Methods
 
-| Method                 | Header / Param                    | Use Case                          |
-| ---------------------- | --------------------------------- | --------------------------------- |
-| **Bearer Token** (JWT) | `Authorization: Bearer <token>`   | Browser sessions, UI login        |
-| **API Key**            | `X-API-Key: <key>`                | Agent integrations, scripts       |
-| **Device Session**     | `Authorization: Bearer vk_dev_…`  | Paired desktop/mobile/PWA clients |
-| **WS Query Param**     | `ws://host:port/ws?api_key=<key>` | WebSocket connections             |
+| Method             | Header / Param                    | Use Case                          |
+| ------------------ | --------------------------------- | --------------------------------- |
+| **Session Cookie** | `veritas_session` cookie          | Local-owner browser UI login      |
+| **API Key**        | `X-API-Key: <key>`                | Agent integrations, scripts       |
+| **Device Session** | `Authorization: Bearer vk_dev_…`  | Paired desktop/mobile/PWA clients |
+| **WS Query Param** | `ws://host:port/ws?api_key=<key>` | WebSocket connections             |
 
 ### Roles
 
@@ -86,6 +86,11 @@ a current workspace role downgrade trimmed the approved scopes. Existing
 endpoints still accept the compatibility roles above, but new v5 route work
 should declare the specific permission it requires, such as `task:read`,
 `task:write`, `workflow:execute`, or `admin:manage`.
+
+Password sessions are intentionally local-owner only for v5 GA. Remote,
+server-mode, PWA, CLI, MCP, and multi-user clients must use device sessions or
+scoped API tokens; those credentials are revalidated against workspace
+membership and revocation state.
 
 ### Localhost Bypass
 
