@@ -8,9 +8,14 @@ const mockStartThread = vi.fn();
 const mockResumeThread = vi.fn();
 const mockRecordGovernanceTrace = vi.fn();
 const mockGetToolFilterForRole = vi.fn();
+const mockCodexConstructorOptions = vi.fn();
 
 vi.mock('@openai/codex-sdk', () => ({
   Codex: class {
+    constructor(options: unknown) {
+      mockCodexConstructorOptions(options);
+    }
+
     startThread = mockStartThread;
     resumeThread = mockResumeThread;
   },
@@ -118,6 +123,82 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(run.context._sessions).toMatchObject({ codex: 'thread_test_123' });
     expect(result.output).toContain('Implemented workflow Codex step.');
     expect(result.outputPath).toContain('implement.md');
+  });
+
+  it('passes only a minimal environment to Codex workflow sessions', async () => {
+    const originalEnv = {
+      GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+      DATABASE_URL: process.env.DATABASE_URL,
+      VERITAS_ADMIN_KEY: process.env.VERITAS_ADMIN_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      VK_API_URL: process.env.VK_API_URL,
+    };
+    process.env.GITHUB_TOKEN = 'test-github-token';
+    process.env.DATABASE_URL = 'postgres://test-secret';
+    process.env.VERITAS_ADMIN_KEY = 'test-admin-key';
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.VK_API_URL = 'http://127.0.0.1:3001';
+
+    try {
+      const executor = new WorkflowStepExecutor(tmpDir);
+      const step: WorkflowStep = {
+        id: 'implement',
+        name: 'Implement',
+        type: 'agent',
+        agent: 'codex',
+        input: 'Work on {{task.title}}',
+        output: { file: 'implement.md' },
+      };
+      const run: WorkflowRun = {
+        id: 'run_1234567890_envsafe',
+        workflowId: 'wf-codex',
+        workflowVersion: 1,
+        status: 'running',
+        context: {
+          task: {
+            id: 'task_1',
+            title: 'Codex env safety',
+            git: { worktreePath: tmpDir },
+          },
+          workflow: {
+            agents: [
+              {
+                id: 'codex',
+                name: 'Codex',
+                role: 'developer',
+                provider: 'codex-sdk',
+                model: 'gpt-5.5',
+                description: 'Codex developer',
+              },
+            ],
+          },
+          _sessions: {},
+        },
+        startedAt: new Date().toISOString(),
+        steps: [{ stepId: 'implement', status: 'running', retries: 0 }],
+      };
+
+      await executor.executeStep(step, run);
+
+      const env = (
+        mockCodexConstructorOptions.mock.calls.at(-1)?.[0] as { env?: Record<string, string> }
+      ).env;
+      expect(env).toMatchObject({
+        OPENAI_API_KEY: 'test-openai-key',
+        VK_API_URL: 'http://127.0.0.1:3001',
+      });
+      expect(env?.GITHUB_TOKEN).toBeUndefined();
+      expect(env?.DATABASE_URL).toBeUndefined();
+      expect(env?.VERITAS_ADMIN_KEY).toBeUndefined();
+    } finally {
+      for (const [key, value] of Object.entries(originalEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 
   it('blocks Codex workflow agent steps when role tool policy is restricted', async () => {

@@ -15,6 +15,7 @@ import type {
   StepSessionConfig,
 } from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
+import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import { createLogger } from '../lib/logger.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import {
@@ -348,7 +349,7 @@ export class WorkflowStepExecutor {
     const codex = new Codex({
       codexPathOverride:
         agentDef?.command && agentDef.command !== 'codex' ? agentDef.command : undefined,
-      env: this.buildCodexEnv(),
+      env: buildSafeCodexEnv(),
     });
 
     const sessionKey = step.agent || agentDef?.id || step.id;
@@ -505,15 +506,6 @@ export class WorkflowStepExecutor {
 
   private expandPath(p: string): string {
     return p.replace(/^~/, process.env.HOME || '');
-  }
-
-  private buildCodexEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') env[key] = value;
-    }
-    env.VK_API_URL = process.env.VK_API_URL || 'http://localhost:3001';
-    return env;
   }
 
   /**

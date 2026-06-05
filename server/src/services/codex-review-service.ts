@@ -2,6 +2,7 @@ import { simpleGit } from 'simple-git';
 import { nanoid } from 'nanoid';
 import { TaskService } from './task-service.js';
 import type { ReviewComment, ReviewDecision, Task } from '@veritas-kanban/shared';
+import { buildSafeCodexEnv } from '../utils/codex-env.js';
 
 export interface CodexReviewInput {
   taskId: string;
@@ -51,7 +52,7 @@ export class CodexReviewService {
 
     const prompt = this.buildReviewPrompt(task, diff, input.instructions);
     const { Codex } = await import('@openai/codex-sdk');
-    const codex = new Codex({ env: this.buildCodexEnv() });
+    const codex = new Codex({ env: buildSafeCodexEnv() });
     const thread = codex.startThread({
       workingDirectory: worktreePath,
       skipGitRepoCheck: true,
@@ -210,14 +211,5 @@ export class CodexReviewService {
       content: `[${finding.severity}] ${finding.title}: ${finding.message}`,
       created: new Date().toISOString(),
     };
-  }
-
-  private buildCodexEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') env[key] = value;
-    }
-    env.VK_API_URL = process.env.VK_API_URL || 'http://localhost:3001';
-    return env;
   }
 }

@@ -24,6 +24,7 @@ import { getBreaker } from './circuit-registry.js';
 import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type {
@@ -808,7 +809,7 @@ export class ClawdbotAgentService {
     const codex = new Codex({
       codexPathOverride:
         agentConfig?.command && agentConfig.command !== 'codex' ? agentConfig.command : undefined,
-      env: this.buildCodexEnv(),
+      env: buildSafeCodexEnv(),
     });
 
     const thread = codex.startThread({
@@ -1396,15 +1397,6 @@ export class ClawdbotAgentService {
         threadId,
       },
     });
-  }
-
-  private buildCodexEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') env[key] = value;
-    }
-    env.VK_API_URL = process.env.VK_API_URL || 'http://localhost:3001';
-    return env;
   }
 
   private extractCodexSummary(event: unknown): string | undefined {
