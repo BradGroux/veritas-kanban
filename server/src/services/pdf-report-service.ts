@@ -14,6 +14,7 @@
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import sanitizeHtml from 'sanitize-html';
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
 
 const log = createLogger('pdf-reports');
@@ -75,6 +76,81 @@ const DEFAULT_BRAND: BrandConfig = {
   accentColor: '#c4b5fd',
   fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
 };
+
+const SAFE_COLOR_PATTERN = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?(?:[0-9a-f]{2})?$/i;
+const SAFE_FONT_FAMILY_PATTERN = /^[a-zA-Z0-9\s'",.-]{1,160}$/;
+const SAFE_RELATIVE_URL_PATTERN = /^(?:\/(?!\/)|#|\.{1,2}\/)[^\s"'<>\\]*$/;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeCssColor(value: string | undefined, fallback: string): string {
+  const candidate = value?.trim();
+  return candidate && SAFE_COLOR_PATTERN.test(candidate) ? candidate : fallback;
+}
+
+function sanitizeFontFamily(value: string | undefined, fallback: string): string {
+  const candidate = value?.trim();
+  if (!candidate || !SAFE_FONT_FAMILY_PATTERN.test(candidate)) {
+    return fallback;
+  }
+  const lower = candidate.toLowerCase();
+  return lower.includes('url') || lower.includes('expression') ? fallback : candidate;
+}
+
+function sanitizeReportUrl(
+  value: string | undefined,
+  allowedProtocols: ReadonlySet<string>
+): string | undefined {
+  const candidate = value?.trim();
+  if (!candidate || hasControlCharacter(candidate)) {
+    return undefined;
+  }
+  if (SAFE_RELATIVE_URL_PATTERN.test(candidate)) {
+    return candidate;
+  }
+  try {
+    const parsed = new URL(candidate);
+    return allowedProtocols.has(parsed.protocol) ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sanitizeBrandConfig(brand: BrandConfig): BrandConfig {
+  const sanitized: BrandConfig = {
+    companyName: brand.companyName || DEFAULT_BRAND.companyName,
+    primaryColor: sanitizeCssColor(brand.primaryColor, DEFAULT_BRAND.primaryColor),
+    secondaryColor: sanitizeCssColor(brand.secondaryColor, DEFAULT_BRAND.secondaryColor),
+    accentColor: sanitizeCssColor(brand.accentColor, DEFAULT_BRAND.accentColor),
+    fontFamily: sanitizeFontFamily(brand.fontFamily, DEFAULT_BRAND.fontFamily),
+  };
+
+  const logoUrl = sanitizeReportUrl(brand.logoUrl, new Set(['http:', 'https:']));
+  if (logoUrl) {
+    sanitized.logoUrl = logoUrl;
+  }
+  if (brand.tagline) {
+    sanitized.tagline = brand.tagline;
+  }
+  return sanitized;
+}
 
 // ─── Template Styles ─────────────────────────────────────────────
 
@@ -149,35 +225,162 @@ function getTemplateCSS(brand: BrandConfig, template: ReportTemplate): string {
 
 // ─── Markdown to HTML (basic) ────────────────────────────────────
 
+function renderInlineMarkdown(input: string): string {
+  const codeFragments: string[] = [];
+  const tokenized = input.replace(/`([^`\n]+)`/g, (_match, code: string) => {
+    const index = codeFragments.push(`<code>${escapeHtml(code)}</code>`) - 1;
+    return `\uE000CODE${index}\uE000`;
+  });
+
+  const renderBasic = (value: string): string => {
+    let html = escapeHtml(value)
+      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    html = html.replace(/\uE000CODE(\d+)\uE000/g, (_match, index: string) => {
+      return codeFragments[Number(index)] ?? '';
+    });
+    return html;
+  };
+
+  const linkPattern = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+  let rendered = '';
+  let lastIndex = 0;
+  for (const match of tokenized.matchAll(linkPattern)) {
+    rendered += renderBasic(tokenized.slice(lastIndex, match.index));
+    const label = renderBasic(match[1] ?? '');
+    const href = sanitizeReportUrl(match[2], new Set(['http:', 'https:', 'mailto:']));
+    rendered += href
+      ? `<a href="${escapeHtml(href)}" rel="noopener noreferrer">${label}</a>`
+      : label;
+    lastIndex = (match.index ?? 0) + match[0].length;
+  }
+  rendered += renderBasic(tokenized.slice(lastIndex));
+  return rendered;
+}
+
+function sanitizeReportContentHtml(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'h1',
+      'h2',
+      'h3',
+      'p',
+      'strong',
+      'em',
+      'pre',
+      'code',
+      'blockquote',
+      'hr',
+      'ul',
+      'ol',
+      'li',
+      'a',
+    ],
+    allowedAttributes: {
+      a: ['href', 'rel'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+    enforceHtmlBoundary: true,
+  });
+}
+
 function markdownToHtml(md: string): string {
-  let html = md
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Bold/italic
-    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Code blocks
-    .replace(/```[\w]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    // Blockquotes
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // Horizontal rules
-    .replace(/^---$/gm, '<hr>')
-    // Lists
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    // Links
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
-    // Paragraphs (lines not already wrapped)
-    .replace(/^(?!<[h1-6|li|pre|blockquote|hr|ul|ol|div])(.+)$/gm, '<p>$1</p>');
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const html: string[] = [];
+  let listType: 'ul' | 'ol' | null = null;
+  let inCodeBlock = false;
+  let codeBuffer: string[] = [];
 
-  // Wrap consecutive li elements in ul
-  html = html.replace(/(<li>.*?<\/li>\n?)+/g, '<ul>$&</ul>');
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = null;
+  };
 
-  return html;
+  const openList = (type: 'ul' | 'ol') => {
+    if (listType === type) return;
+    closeList();
+    listType = type;
+    html.push(`<${type}>`);
+  };
+
+  const closeCodeBlock = () => {
+    html.push(`<pre><code>${escapeHtml(codeBuffer.join('\n'))}</code></pre>`);
+    codeBuffer = [];
+    inCodeBlock = false;
+  };
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      closeList();
+      if (inCodeBlock) {
+        closeCodeBlock();
+      } else {
+        inCodeBlock = true;
+        codeBuffer = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(line);
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeList();
+      continue;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      closeList();
+      const level = heading[1]?.length ?? 1;
+      html.push(`<h${level}>${renderInlineMarkdown(heading[2] ?? '')}</h${level}>`);
+      continue;
+    }
+
+    if (/^---\s*$/.test(line)) {
+      closeList();
+      html.push('<hr>');
+      continue;
+    }
+
+    const unorderedItem = /^-\s+(.+)$/.exec(line);
+    if (unorderedItem) {
+      openList('ul');
+      html.push(`<li>${renderInlineMarkdown(unorderedItem[1] ?? '')}</li>`);
+      continue;
+    }
+
+    const orderedItem = /^\d+\.\s+(.+)$/.exec(line);
+    if (orderedItem) {
+      openList('ol');
+      html.push(`<li>${renderInlineMarkdown(orderedItem[1] ?? '')}</li>`);
+      continue;
+    }
+
+    const quote = /^>\s+(.+)$/.exec(line);
+    if (quote) {
+      closeList();
+      html.push(`<blockquote>${renderInlineMarkdown(quote[1] ?? '')}</blockquote>`);
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${renderInlineMarkdown(line)}</p>`);
+  }
+
+  closeList();
+  if (inCodeBlock) {
+    closeCodeBlock();
+  }
+
+  return sanitizeReportContentHtml(html.join('\n'));
 }
 
 // ─── Service ─────────────────────────────────────────────────────
@@ -203,7 +406,7 @@ class PdfReportService {
     if (this.loaded) return;
     try {
       const data = await fs.readFile(this.configPath, 'utf-8');
-      this.brandConfig = { ...DEFAULT_BRAND, ...JSON.parse(data) };
+      this.brandConfig = sanitizeBrandConfig({ ...DEFAULT_BRAND, ...JSON.parse(data) });
     } catch {
       // Use defaults
     }
@@ -229,7 +432,7 @@ class PdfReportService {
    */
   async updateBrand(update: Partial<BrandConfig>): Promise<BrandConfig> {
     await this.ensureLoaded();
-    this.brandConfig = { ...this.brandConfig, ...update };
+    this.brandConfig = sanitizeBrandConfig({ ...this.brandConfig, ...update });
     await fs.writeFile(this.configPath, JSON.stringify(this.brandConfig, null, 2));
     return { ...this.brandConfig };
   }
@@ -241,19 +444,27 @@ class PdfReportService {
   async generateReport(config: ReportConfig): Promise<GeneratedReport> {
     await this.ensureLoaded();
 
-    const brand = { ...this.brandConfig, ...config.brand };
+    const brand = sanitizeBrandConfig({ ...this.brandConfig, ...config.brand });
     const css = getTemplateCSS(brand, config.template);
     const contentHtml = markdownToHtml(config.content);
+    const title = escapeHtml(config.title);
+    const companyName = escapeHtml(brand.companyName);
+    const tagline = brand.tagline ? escapeHtml(brand.tagline) : '';
 
-    const timestamp = config.includeTimestamp !== false
-      ? `<div class="report-header meta">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>`
+    const timestamp =
+      config.includeTimestamp !== false
+        ? `<div class="report-header meta">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>`
+        : '';
+
+    const authorLine = config.author
+      ? `<div class="report-header meta">Author: ${escapeHtml(config.author)}</div>`
+      : '';
+    const subtitleLine = config.subtitle
+      ? `<div class="report-header subtitle">${escapeHtml(config.subtitle)}</div>`
       : '';
 
-    const authorLine = config.author ? `<div class="report-header meta">Author: ${config.author}</div>` : '';
-    const subtitleLine = config.subtitle ? `<div class="report-header subtitle">${config.subtitle}</div>` : '';
-
     const logoHtml = brand.logoUrl
-      ? `<img src="${brand.logoUrl}" class="logo" alt="${brand.companyName}" />`
+      ? `<img src="${escapeHtml(brand.logoUrl)}" class="logo" alt="${companyName}" />`
       : '';
 
     const html = `<!DOCTYPE html>
@@ -261,13 +472,13 @@ class PdfReportService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${config.title} — ${brand.companyName}</title>
+  <title>${title} - ${companyName}</title>
   <style>${css}</style>
 </head>
 <body>
   <div class="report-header">
     ${logoHtml}
-    <h1>${config.title}</h1>
+    <h1>${title}</h1>
     ${subtitleLine}
     ${timestamp}
     ${authorLine}
@@ -278,7 +489,7 @@ class PdfReportService {
   </div>
 
   <div class="report-footer">
-    ${brand.companyName}${brand.tagline ? ` — ${brand.tagline}` : ''} · Generated by Veritas Kanban
+    ${companyName}${tagline ? ` - ${tagline}` : ''} - Generated by Veritas Kanban
   </div>
 </body>
 </html>`;
@@ -306,7 +517,7 @@ class PdfReportService {
     this.reports.push(report);
     await fs.writeFile(this.reportsPath, JSON.stringify(this.reports, null, 2));
 
-    log.info({ reportId: report.id, title: config.title, template: config.template }, 'Report generated');
+    log.info({ reportId: report.id, template: config.template }, 'Report generated');
     return report;
   }
 
@@ -333,10 +544,26 @@ class PdfReportService {
    */
   getTemplates(): Array<{ id: ReportTemplate; name: string; description: string }> {
     return [
-      { id: 'audit', name: 'Audit Report', description: 'Security/code audit with findings and recommendations' },
-      { id: 'summary', name: 'Summary Report', description: 'Sprint/standup summary with key metrics' },
-      { id: 'analysis', name: 'Analysis Report', description: 'Comparison/research analysis with pros/cons' },
-      { id: 'standup', name: 'Standup Report', description: 'Daily standup with status updates per agent' },
+      {
+        id: 'audit',
+        name: 'Audit Report',
+        description: 'Security/code audit with findings and recommendations',
+      },
+      {
+        id: 'summary',
+        name: 'Summary Report',
+        description: 'Sprint/standup summary with key metrics',
+      },
+      {
+        id: 'analysis',
+        name: 'Analysis Report',
+        description: 'Comparison/research analysis with pros/cons',
+      },
+      {
+        id: 'standup',
+        name: 'Standup Report',
+        description: 'Daily standup with status updates per agent',
+      },
       { id: 'custom', name: 'Custom Report', description: 'Freeform markdown with brand styling' },
     ];
   }
