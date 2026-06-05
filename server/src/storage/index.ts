@@ -41,6 +41,7 @@ export type { FileStorageOptions } from './file-storage.js';
 export {
   DEFAULT_SQLITE_FILENAME,
   SqliteDatabase,
+  UnsupportedSqliteSchemaError,
   calculateMigrationChecksum,
   resolveSqliteDatabasePath,
 } from './sqlite/database.js';

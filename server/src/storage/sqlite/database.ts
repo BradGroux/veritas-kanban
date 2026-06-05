@@ -19,6 +19,32 @@ interface AppliedMigrationRow {
   checksum: string;
 }
 
+interface UserVersionRow {
+  user_version: number;
+}
+
+export class UnsupportedSqliteSchemaError extends Error {
+  readonly code = 'SQLITE_UNSUPPORTED_SCHEMA';
+  readonly appliedVersion: number;
+  readonly maxSupportedVersion: number;
+  readonly migrationName?: string;
+
+  constructor(input: {
+    appliedVersion: number;
+    maxSupportedVersion: number;
+    migrationName?: string;
+  }) {
+    const migrationLabel = input.migrationName ? ` (${input.migrationName})` : '';
+    super(
+      `SQLite database schema version ${input.appliedVersion}${migrationLabel} is newer than this app supports (max ${input.maxSupportedVersion}). Upgrade Veritas Kanban or restore a compatible pre-migration backup.`
+    );
+    this.name = 'UnsupportedSqliteSchemaError';
+    this.appliedVersion = input.appliedVersion;
+    this.maxSupportedVersion = input.maxSupportedVersion;
+    this.migrationName = input.migrationName;
+  }
+}
+
 export function resolveSqliteDatabasePath(explicitPath?: string): string {
   const configuredPath = explicitPath ?? process.env.VERITAS_SQLITE_PATH;
 
@@ -83,11 +109,16 @@ export class SqliteDatabase {
 
   runMigrations(migrations: readonly SqliteMigration[] = this.migrations): void {
     const db = this.getConnection();
+    const sorted = sortedMigrations(migrations);
+    const maxSupportedVersion = sorted.at(-1)?.version ?? 0;
+
+    this.assertSupportedUserVersion(maxSupportedVersion);
     this.ensureSchemaMigrationsTable();
 
     const appliedByVersion = this.getAppliedMigrations();
+    this.assertSupportedAppliedMigrations(appliedByVersion, sorted, maxSupportedVersion);
 
-    for (const migration of sortedMigrations(migrations)) {
+    for (const migration of sorted) {
       const applied = appliedByVersion.get(migration.version);
       const checksum = calculateMigrationChecksum(migration);
 
@@ -107,6 +138,8 @@ export class SqliteDatabase {
         checksum,
       });
     }
+
+    this.setUserVersion(maxSupportedVersion);
   }
 
   close(): void {
@@ -154,6 +187,52 @@ export class SqliteDatabase {
       .all() as unknown as AppliedMigrationRow[];
 
     return new Map(rows.map((row) => [row.version, row]));
+  }
+
+  private assertSupportedUserVersion(maxSupportedVersion: number): void {
+    const row = this.getConnection().prepare('PRAGMA user_version;').get() as unknown as
+      | UserVersionRow
+      | undefined;
+    const rawUserVersion = row?.user_version;
+    const userVersion =
+      typeof rawUserVersion === 'number' && Number.isInteger(rawUserVersion) ? rawUserVersion : 0;
+
+    if (userVersion > maxSupportedVersion) {
+      throw new UnsupportedSqliteSchemaError({
+        appliedVersion: userVersion,
+        maxSupportedVersion,
+      });
+    }
+  }
+
+  private assertSupportedAppliedMigrations(
+    appliedByVersion: Map<number, AppliedMigrationRow>,
+    migrations: readonly SqliteMigration[],
+    maxSupportedVersion: number
+  ): void {
+    const knownVersions = new Set(migrations.map((migration) => migration.version));
+
+    for (const applied of appliedByVersion.values()) {
+      if (knownVersions.has(applied.version)) {
+        continue;
+      }
+
+      if (applied.version > maxSupportedVersion) {
+        throw new UnsupportedSqliteSchemaError({
+          appliedVersion: applied.version,
+          maxSupportedVersion,
+          migrationName: applied.name,
+        });
+      }
+
+      throw new Error(
+        `SQLite migration ${applied.version} (${applied.name}) was already applied but is not recognized by this app`
+      );
+    }
+  }
+
+  private setUserVersion(version: number): void {
+    this.getConnection().exec(`PRAGMA user_version = ${version};`);
   }
 
   private applyMigration(db: DatabaseSync, migration: SqliteMigration, checksum: string): void {

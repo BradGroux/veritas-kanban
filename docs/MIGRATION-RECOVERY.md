@@ -69,7 +69,9 @@ For GA users, rollback means restoring the pre-migration file-backed backup.
 Indefinite downgrade from all future v5 SQLite schema versions is unsupported.
 If an older app sees a newer SQLite database, it must refuse normal startup,
 report the schema version, and direct the admin to restore the pre-migration
-backup or use a compatible newer app.
+backup or use a compatible newer app. The runtime enforces this with
+`PRAGMA user_version` and active `schema_migrations` checks; newer schema
+refusals use the `SQLITE_UNSUPPORTED_SCHEMA` error code.
 
 ## Support Bundle Contents
 
