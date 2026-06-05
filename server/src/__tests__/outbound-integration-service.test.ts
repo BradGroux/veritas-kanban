@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { OutboundIntegrationService } from '../services/outbound-integration-service.js';
 
 const mockLookup = vi.hoisted(() => vi.fn());
@@ -151,6 +152,40 @@ describe('OutboundIntegrationService', () => {
 
     expect(result.status).toBe('blocked');
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit opt-in before registering OpenClaw wake endpoints for private IPs', async () => {
+    const originalOpenClawAllowPrivate = process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
+    delete process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
+    const service = new OutboundIntegrationService({ persist: false, audit });
+
+    try {
+      await service.syncFeatureSettings({
+        ...DEFAULT_FEATURE_SETTINGS,
+        squadWebhook: {
+          ...DEFAULT_FEATURE_SETTINGS.squadWebhook,
+          enabled: true,
+          mode: 'openclaw',
+          openclawGatewayUrl: 'http://127.0.0.1:18789',
+          openclawGatewayToken: 'token',
+        },
+      });
+
+      const endpoints = await service.listEndpoints();
+      expect(endpoints.find((endpoint) => endpoint.id === 'squad.openclawWake')).toMatchObject({
+        validationPolicy: {
+          allowHttp: true,
+          allowLocalhost: true,
+          allowPrivateIp: false,
+        },
+      });
+    } finally {
+      if (originalOpenClawAllowPrivate === undefined) {
+        delete process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
+      } else {
+        process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE = originalOpenClawAllowPrivate;
+      }
+    }
   });
 
   it('skips disabled endpoints and records history', async () => {

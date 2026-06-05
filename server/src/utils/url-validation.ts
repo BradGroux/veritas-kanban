@@ -24,19 +24,34 @@ const log = createLogger('url-validation');
 /**
  * IPv4 private/reserved ranges that should be blocked for outbound requests
  */
-const BLOCKED_IPV4_RANGES: Array<{ start: number; end: number; name: string }> = [
+type BlockedAddressClass = 'local' | 'private' | 'link-local' | 'cgnat' | 'unique-local';
+
+interface BlockedAddressCheck {
+  blocked: boolean;
+  reason?: string;
+  addressClass?: BlockedAddressClass;
+}
+
+const BLOCKED_IPV4_RANGES: Array<{
+  start: number;
+  end: number;
+  name: string;
+  addressClass: BlockedAddressClass;
+}> = [
+  // Unspecified local address
+  { start: 0x00000000, end: 0x00000000, name: 'unspecified-local', addressClass: 'local' },
   // Loopback (127.0.0.0/8)
-  { start: 0x7f000000, end: 0x7fffffff, name: 'loopback' },
+  { start: 0x7f000000, end: 0x7fffffff, name: 'loopback', addressClass: 'local' },
   // Private Class A (10.0.0.0/8)
-  { start: 0x0a000000, end: 0x0affffff, name: 'private-A' },
+  { start: 0x0a000000, end: 0x0affffff, name: 'private-A', addressClass: 'private' },
   // Private Class B (172.16.0.0/12)
-  { start: 0xac100000, end: 0xac1fffff, name: 'private-B' },
+  { start: 0xac100000, end: 0xac1fffff, name: 'private-B', addressClass: 'private' },
   // Private Class C (192.168.0.0/16)
-  { start: 0xc0a80000, end: 0xc0a8ffff, name: 'private-C' },
+  { start: 0xc0a80000, end: 0xc0a8ffff, name: 'private-C', addressClass: 'private' },
   // Link-local (169.254.0.0/16) - includes AWS/GCP/Azure metadata
-  { start: 0xa9fe0000, end: 0xa9feffff, name: 'link-local' },
+  { start: 0xa9fe0000, end: 0xa9feffff, name: 'link-local', addressClass: 'link-local' },
   // Carrier-grade NAT (100.64.0.0/10)
-  { start: 0x64400000, end: 0x647fffff, name: 'cgnat' },
+  { start: 0x64400000, end: 0x647fffff, name: 'cgnat', addressClass: 'cgnat' },
 ];
 
 /**
@@ -58,7 +73,7 @@ function ipv4ToInt(ip: string): number | null {
 /**
  * Check if an IPv4 address is in a blocked range
  */
-function isBlockedIPv4(ip: string): { blocked: boolean; reason?: string } {
+function isBlockedIPv4(ip: string): BlockedAddressCheck {
   const ipInt = ipv4ToInt(ip);
   if (ipInt === null) {
     return { blocked: false }; // Invalid IP, let URL parsing handle it
@@ -66,7 +81,11 @@ function isBlockedIPv4(ip: string): { blocked: boolean; reason?: string } {
 
   for (const range of BLOCKED_IPV4_RANGES) {
     if (ipInt >= range.start && ipInt <= range.end) {
-      return { blocked: true, reason: `IP in ${range.name} range` };
+      return {
+        blocked: true,
+        reason: `IP in ${range.name} range`,
+        addressClass: range.addressClass,
+      };
     }
   }
 
@@ -76,17 +95,17 @@ function isBlockedIPv4(ip: string): { blocked: boolean; reason?: string } {
 /**
  * Check if a hostname is a blocked IPv6 address
  */
-function isBlockedIPv6(host: string): { blocked: boolean; reason?: string } {
+function isBlockedIPv6(host: string): BlockedAddressCheck {
   const normalized = host.toLowerCase();
 
   // Loopback
   if (normalized === '::1' || normalized === '[::1]') {
-    return { blocked: true, reason: 'IPv6 loopback' };
+    return { blocked: true, reason: 'IPv6 loopback', addressClass: 'local' };
   }
 
   // Link-local (fe80::/10)
   if (normalized.startsWith('fe8') || normalized.startsWith('[fe8')) {
-    return { blocked: true, reason: 'IPv6 link-local' };
+    return { blocked: true, reason: 'IPv6 link-local', addressClass: 'link-local' };
   }
 
   // Unique local (fc00::/7)
@@ -96,26 +115,33 @@ function isBlockedIPv6(host: string): { blocked: boolean; reason?: string } {
     normalized.startsWith('[fc') ||
     normalized.startsWith('[fd')
   ) {
-    return { blocked: true, reason: 'IPv6 unique-local' };
+    return { blocked: true, reason: 'IPv6 unique-local', addressClass: 'unique-local' };
   }
 
   return { blocked: false };
 }
 
-function isBlockedIpAddress(
-  address: string,
-  opts: UrlValidationOptions
-): { blocked: boolean; reason?: string } {
+function isAllowedBlockedAddress(check: BlockedAddressCheck, opts: UrlValidationOptions): boolean {
+  if (!check.blocked) {
+    return true;
+  }
+  if (opts.allowPrivateIp) {
+    return true;
+  }
+  return Boolean(opts.allowLocalhost && check.addressClass === 'local');
+}
+
+function isBlockedIpAddress(address: string, opts: UrlValidationOptions): BlockedAddressCheck {
   if (isIP(address) === 4) {
     const check = isBlockedIPv4(address);
-    if (check.blocked && !opts.allowPrivateIp && !opts.allowLocalhost) {
+    if (!isAllowedBlockedAddress(check, opts)) {
       return check;
     }
   }
 
   if (isIP(address) === 6) {
     const check = isBlockedIPv6(address);
-    if (check.blocked && !opts.allowPrivateIp && !opts.allowLocalhost) {
+    if (!isAllowedBlockedAddress(check, opts)) {
       return check;
     }
   }
@@ -156,7 +182,7 @@ interface ResolvedUrlValidationResult extends UrlValidationResult {
 export interface UrlValidationOptions {
   /** Allow http:// in addition to https:// (default: false in production) */
   allowHttp?: boolean;
-  /** Allow localhost/127.0.0.1 (default: true in development only) */
+  /** Allow localhost/loopback addresses only (default: true in development only) */
   allowLocalhost?: boolean;
   /** Allow private IP ranges (default: false) */
   allowPrivateIp?: boolean;
@@ -229,7 +255,7 @@ export function validateWebhookUrl(
 
   // IPv4 private range check
   const ipv4Check = isBlockedIPv4(hostname);
-  if (ipv4Check.blocked && !opts.allowPrivateIp && !opts.allowLocalhost) {
+  if (!isAllowedBlockedAddress(ipv4Check, opts)) {
     const result = { valid: false, reason: ipv4Check.reason };
     if (opts.logFailures) {
       log.warn({ url: parsed.origin, reason: result.reason }, 'Webhook URL blocked');
@@ -239,7 +265,7 @@ export function validateWebhookUrl(
 
   // IPv6 check
   const ipv6Check = isBlockedIPv6(hostname);
-  if (ipv6Check.blocked && !opts.allowPrivateIp && !opts.allowLocalhost) {
+  if (!isAllowedBlockedAddress(ipv6Check, opts)) {
     const result = { valid: false, reason: ipv6Check.reason };
     if (opts.logFailures) {
       log.warn({ url: parsed.origin, reason: result.reason }, 'Webhook URL blocked');

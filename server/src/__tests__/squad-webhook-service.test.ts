@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'crypto';
+import type { SquadMessage, SquadWebhookSettings } from '@veritas-kanban/shared';
 
 const mockValidateWebhookUrl = vi.fn();
 const mockSafeFetch = vi.fn();
@@ -11,15 +12,22 @@ vi.mock('../utils/url-validation.js', () => ({
 
 describe('squad webhook service', () => {
   let fetchSpy: any;
+  const originalOpenClawAllowPrivate = process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
 
   beforeEach(() => {
     vi.resetModules();
+    delete process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
     mockValidateWebhookUrl.mockReturnValue({ valid: true });
     fetchSpy = vi.spyOn(globalThis, 'fetch' as any);
     mockSafeFetch.mockImplementation((url: string, init: RequestInit) => fetch(url, init));
   });
 
   afterEach(() => {
+    if (originalOpenClawAllowPrivate === undefined) {
+      delete process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE;
+    } else {
+      process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE = originalOpenClawAllowPrivate;
+    }
     fetchSpy.mockRestore();
     vi.clearAllMocks();
   });
@@ -112,7 +120,7 @@ describe('squad webhook service', () => {
     expect(mockSafeFetch).toHaveBeenCalledWith(
       'https://gateway.test/tools/invoke',
       expect.objectContaining({ method: 'POST' }),
-      expect.objectContaining({ allowHttp: true, allowLocalhost: true })
+      expect.objectContaining({ allowHttp: true, allowLocalhost: true, allowPrivateIp: false })
     );
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy.mock.calls[0][0]).toBe('https://gateway.test/tools/invoke');
@@ -120,6 +128,35 @@ describe('squad webhook service', () => {
       tool: 'cron',
       args: { action: 'wake', mode: 'now' },
     });
+  });
+
+  it('passes OpenClaw private-network opt-in only when enabled', async () => {
+    process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE = 'true';
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+    const mod = await import('../services/squad-webhook-service.js');
+    const message: SquadMessage = {
+      id: 'm1',
+      agent: 'TARS',
+      displayName: 'TARS',
+      message: 'hello',
+      timestamp: '2026-03-01T00:00:00.000Z',
+    };
+    const settings: SquadWebhookSettings = {
+      enabled: true,
+      notifyOnHuman: true,
+      notifyOnAgent: true,
+      mode: 'openclaw',
+      openclawGatewayUrl: 'https://gateway.test',
+      openclawGatewayToken: 'token',
+    };
+
+    await mod.fireSquadWebhook(message, settings);
+
+    expect(mockSafeFetch).toHaveBeenCalledWith(
+      'https://gateway.test/tools/invoke',
+      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ allowHttp: true, allowLocalhost: true, allowPrivateIp: true })
+    );
   });
 
   it('skips invalid OpenClaw or incomplete config and tolerates failed responses', async () => {

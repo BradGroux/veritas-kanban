@@ -57,6 +57,55 @@ describe('url validation', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('allows loopback addresses when localhost destinations are explicitly allowed', async () => {
+    const { server, port } = await listenLocalServer((_req, res) => {
+      res.writeHead(202, { 'content-type': 'text/plain' });
+      res.end('accepted');
+    });
+
+    try {
+      const response = await safeFetch(
+        `http://127.0.0.1:${port}/hook`,
+        { method: 'POST', body: 'payload' },
+        { allowHttp: true, allowLocalhost: true }
+      );
+
+      expect(response?.status).toBe(202);
+      await expect(response?.text()).resolves.toBe('accepted');
+    } finally {
+      await closeServer(server);
+    }
+  });
+
+  it.each(['10.0.0.1', '172.16.0.1', '192.168.0.1'])(
+    'does not treat allowLocalhost as private-network approval for %s',
+    async (address) => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const url = `http://${address}/hook`;
+      const validationOptions = { allowHttp: true, allowLocalhost: true, logFailures: false };
+
+      expect(validateWebhookUrl(url, validationOptions).valid).toBe(false);
+      await expect(safeFetch(url, undefined, validationOptions)).resolves.toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not treat allowLocalhost as DNS approval for resolved private addresses', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    mockLookup.mockResolvedValue([{ address: '192.168.1.20', family: 4 }]);
+
+    await expect(
+      safeFetch('http://hooks.example.test/hook', undefined, {
+        allowHttp: true,
+        allowLocalhost: true,
+        logFailures: false,
+      })
+    ).resolves.toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('pins outbound fetches to the validated DNS answer', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);

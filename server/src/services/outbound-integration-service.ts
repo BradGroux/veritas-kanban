@@ -109,6 +109,14 @@ const DEFAULT_AUTH: OutboundEndpointAuth = { type: 'none' };
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_DELIVERIES = 500;
 
+function openClawGatewayValidationOptions(): UrlValidationOptions {
+  return {
+    allowHttp: true,
+    allowLocalhost: true,
+    allowPrivateIp: process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true',
+  };
+}
+
 export class OutboundIntegrationService {
   private readonly storageDir: string;
   private readonly persist: boolean;
@@ -354,7 +362,7 @@ export class OutboundIntegrationService {
             hasSecret: Boolean(settings.squadWebhook.openclawGatewayToken),
           },
           owner: { source: 'feature-settings', resourceId: 'squadWebhook.openclawGatewayUrl' },
-          validationOptions: { allowHttp: true, allowLocalhost: true },
+          validationOptions: openClawGatewayValidationOptions(),
         })
       );
     }
