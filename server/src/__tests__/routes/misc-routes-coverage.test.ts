@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
+import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 
 // ===================== Hoisted Mocks =====================
 
@@ -145,6 +146,13 @@ const injectAdminAuth = (
   req.auth = { role: 'admin', keyName: 'test-admin', isLocalhost: true };
   next();
 };
+
+function featureSettings(overrides: Partial<typeof DEFAULT_FEATURE_SETTINGS> = {}) {
+  return {
+    ...DEFAULT_FEATURE_SETTINGS,
+    ...overrides,
+  };
+}
 
 describe('Activity Routes', () => {
   let app: express.Express;
@@ -288,9 +296,11 @@ describe('Settings Routes', () => {
   });
 
   it('GET /features should return settings', async () => {
-    mockConfigServiceForSettings.getFeatureSettings.mockResolvedValue({
-      telemetry: { enabled: true },
-    });
+    mockConfigServiceForSettings.getFeatureSettings.mockResolvedValue(
+      featureSettings({
+        telemetry: { ...DEFAULT_FEATURE_SETTINGS.telemetry, enabled: true },
+      })
+    );
     const res = await request(app).get('/api/settings/features');
     expect(res.status).toBe(200);
   });
@@ -302,14 +312,20 @@ describe('Settings Routes', () => {
   });
 
   it('PATCH /features should update settings', async () => {
-    const settings = {
-      telemetry: { enabled: false, retentionDays: 30, enableTraces: false },
+    const settings = featureSettings({
+      telemetry: {
+        ...DEFAULT_FEATURE_SETTINGS.telemetry,
+        enabled: false,
+        retentionDays: 30,
+        enableTraces: false,
+      },
       tasks: {
+        ...DEFAULT_FEATURE_SETTINGS.tasks,
         attachmentMaxFileSize: 10000000,
         attachmentMaxPerTask: 20,
         attachmentMaxTotalSize: 50000000,
       },
-    };
+    });
     mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(settings);
     const res = await request(app)
       .patch('/api/settings/features')
@@ -326,14 +342,16 @@ describe('Settings Routes', () => {
   });
 
   it('PATCH /features should accept requireDeliverableForDone', async () => {
-    const fullSettings = {
+    const fullSettings = featureSettings({
       telemetry: {
+        ...DEFAULT_FEATURE_SETTINGS.telemetry,
         enabled: true,
         retentionDays: 30,
         enableTraces: false,
         enableActivityTracking: true,
       },
       tasks: {
+        ...DEFAULT_FEATURE_SETTINGS.tasks,
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,
         enableDependencies: true,
@@ -346,9 +364,9 @@ describe('Settings Routes', () => {
         autoSaveDelayMs: 500,
         requireDeliverableForDone: true,
       },
-      hooks: { enabled: false },
-      enforcement: { squadChat: false },
-    };
+      hooks: { ...DEFAULT_FEATURE_SETTINGS.hooks, enabled: false },
+      enforcement: { ...DEFAULT_FEATURE_SETTINGS.enforcement, squadChat: false },
+    });
     mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(fullSettings);
     const res = await request(app)
       .patch('/api/settings/features')
@@ -357,14 +375,16 @@ describe('Settings Routes', () => {
   });
 
   it('PATCH /features should accept requireDeliverableForDone set to false', async () => {
-    const fullSettings = {
+    const fullSettings = featureSettings({
       telemetry: {
+        ...DEFAULT_FEATURE_SETTINGS.telemetry,
         enabled: true,
         retentionDays: 30,
         enableTraces: false,
         enableActivityTracking: true,
       },
       tasks: {
+        ...DEFAULT_FEATURE_SETTINGS.tasks,
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,
         enableDependencies: true,
@@ -377,9 +397,9 @@ describe('Settings Routes', () => {
         autoSaveDelayMs: 500,
         requireDeliverableForDone: false,
       },
-      hooks: { enabled: false },
-      enforcement: { squadChat: false },
-    };
+      hooks: { ...DEFAULT_FEATURE_SETTINGS.hooks, enabled: false },
+      enforcement: { ...DEFAULT_FEATURE_SETTINGS.enforcement, squadChat: false },
+    });
     mockConfigServiceForSettings.updateFeatureSettings.mockResolvedValue(fullSettings);
     const res = await request(app)
       .patch('/api/settings/features')
