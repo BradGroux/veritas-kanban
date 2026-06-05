@@ -6,6 +6,7 @@ import { getTaskService } from '../services/task-service.js';
 import type { AgentType, TokenTelemetryEvent } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 
 const router: RouterType = Router();
 
@@ -35,6 +36,7 @@ const reportTokensSchema = z.object({
 // POST /api/agents/:taskId/start - Start agent on task (delegates to Clawdbot)
 router.post(
   '/:taskId/start',
+  requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
     let agent: AgentType | undefined;
     let overrideReason: string | undefined;
@@ -94,6 +96,7 @@ router.post(
 // POST /api/agents/:taskId/stop - Stop running agent
 router.post(
   '/:taskId/stop',
+  requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
     await clawdbotAgentService.stopAgent(req.params.taskId as string);
     res.json({ stopped: true });

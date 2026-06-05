@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { NextFunction, Response } from 'express';
-import type { AuthenticatedRequest } from '../../middleware/auth.js';
+import type { AuthenticatedRequest, AuthPermission } from '../../middleware/auth.js';
 import {
   activityAccess,
   agentPermissionAccess,
   agentRegistryAccess,
   agentRoutingAccess,
+  agentTaskAccess,
   diffAccess,
   policyAccess,
   previewAccess,
@@ -22,12 +23,13 @@ type AccessGuard = (req: AuthenticatedRequest, res: Response, next: NextFunction
 function mockRequest(
   method: string,
   path: string,
-  role: 'admin' | 'agent' | 'read-only' = 'agent'
+  role: 'admin' | 'agent' | 'read-only' = 'agent',
+  permissions?: AuthPermission[]
 ): AuthenticatedRequest {
   return {
     method,
     path,
-    auth: { role, isLocalhost: false },
+    auth: { role, isLocalhost: false, permissions },
   } as unknown as AuthenticatedRequest;
 }
 
@@ -198,6 +200,23 @@ describe('v1 REST permission guard presets', () => {
       runGuard(agentPermissionAccess, mockRequest('POST', '/approvals')).next
     ).toHaveBeenCalled();
     expect(runGuard(agentRoutingAccess, mockRequest('POST', '/route')).next).toHaveBeenCalled();
+
+    expect(
+      runGuard(agentRoutingAccess, mockRequest('POST', '/task_1/start', 'agent', ['agent:write']))
+        .next
+    ).toHaveBeenCalled();
+    expect(
+      runGuard(agentTaskAccess, mockRequest('POST', '/task_1/stop', 'agent', ['agent:write'])).next
+    ).toHaveBeenCalled();
+
+    const missingAgentWrite = runGuard(agentTaskAccess, mockRequest('POST', '/task_1/start'));
+    expect(missingAgentWrite.next).not.toHaveBeenCalled();
+    expect(missingAgentWrite.res.status).toHaveBeenCalledWith(403);
+    expect(missingAgentWrite.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['agent:write'] }),
+      })
+    );
 
     const readOnlyApproval = runGuard(
       agentPermissionAccess,

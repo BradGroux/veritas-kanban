@@ -174,7 +174,10 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     prefix: '/api/agents',
     read: 'agent:read',
     write: 'admin:manage',
-    overrides: [{ methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' }],
+    overrides: [
+      { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
+      { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
+    ],
   },
   {
     prefix: '/api/diff',
