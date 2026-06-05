@@ -26,6 +26,7 @@ import { integrationsApi } from './integrations';
 import { digestApi } from './digest';
 import { scheduledDeliverablesApi } from './deliverables';
 import { evidenceApi } from './evidence';
+import { timeBreakdownsApi } from './time-breakdowns';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -62,6 +63,7 @@ export const api = {
   digest: digestApi,
   scheduledDeliverables: scheduledDeliverablesApi,
   evidence: evidenceApi,
+  timeBreakdowns: timeBreakdownsApi,
 };
 
 export type {
@@ -111,6 +113,17 @@ export type {
   EvidenceTimelineResponse,
   EvidenceTimelineSourceLink,
 } from './evidence';
+export type {
+  TimeBreakdownBlock,
+  TimeBreakdownBlockKind,
+  TimeBreakdownConfidence,
+  TimeBreakdownFilters,
+  TimeBreakdownGroup,
+  TimeBreakdownPreset,
+  TimeBreakdownResponse,
+  TimeBreakdownSource,
+  TimeBreakdownTotals,
+} from './time-breakdowns';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

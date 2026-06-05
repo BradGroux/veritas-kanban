@@ -9,6 +9,7 @@ export type AppView =
   | 'workflows'
   | 'operations'
   | 'evidence'
+  | 'time'
   | 'policies'
   | 'drift'
   | 'decisions'
@@ -19,6 +20,7 @@ export type NavigationView = Exclude<AppView, 'board'>;
 export type ViewIcon =
   | 'Activity'
   | 'Archive'
+  | 'Clock'
   | 'ClipboardList'
   | 'FileText'
   | 'GitBranch'
@@ -165,6 +167,22 @@ const VIEW_DEFINITION_LIST = [
     loadComponent: () =>
       import('@/components/evidence/EvidenceTimelinePage').then((mod) => ({
         default: mod.EvidenceTimelinePage,
+      })),
+  },
+  {
+    view: 'time',
+    path: '/time',
+    label: 'Time',
+    order: 58,
+    showInNavigation: true,
+    title: 'Time Breakdowns',
+    commandLabel: 'Go to Time',
+    loadingLabel: 'Loading time breakdowns...',
+    icon: 'Clock',
+    keywords: ['time', 'breakdown', 'export', 'billing', 'report'],
+    loadComponent: () =>
+      import('@/components/time/TimeBreakdownPage').then((mod) => ({
+        default: mod.TimeBreakdownPage,
       })),
   },
   {

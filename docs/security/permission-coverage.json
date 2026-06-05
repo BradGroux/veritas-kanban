@@ -468,6 +468,14 @@
       "denialReason": "Evidence navigation leads to source-backed task, telemetry, and work-product report APIs."
     },
     {
+      "id": "command-palette:go-time",
+      "kind": "command-palette",
+      "classification": "authenticated-read",
+      "permissions": ["report:read", "task:read", "telemetry:read"],
+      "source": "web/src/lib/views.ts",
+      "denialReason": "Time navigation leads to source-backed task and telemetry report APIs."
+    },
+    {
       "id": "command-palette:go-drift",
       "kind": "command-palette",
       "classification": "authenticated-read",

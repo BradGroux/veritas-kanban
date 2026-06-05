@@ -23,6 +23,7 @@ import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import {
   Plus,
+  Clock,
   ClipboardList,
   LayoutDashboard,
   ListOrdered,
@@ -60,6 +61,7 @@ const SearchDialog = lazy(() =>
 const VIEW_ICONS: Record<ViewIcon, LucideIcon> = {
   Activity,
   Archive,
+  Clock,
   ClipboardList,
   FileText,
   GitBranch,

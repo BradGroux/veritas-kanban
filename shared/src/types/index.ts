@@ -30,3 +30,4 @@ export * from './skill-capability.types.js';
 export * from './skill-security.types.js';
 export * from './watcher-policy.types.js';
 export * from './evidence.types.js';
+export * from './time-breakdown.types.js';
