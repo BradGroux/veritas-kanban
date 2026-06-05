@@ -16,7 +16,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 
 ![Veritas Kanban — Board Overview](assets/demo-overview.gif)
 
-> 🎬 [Watch the full demo video (MP4)](assets/demo-overview.mp4)
+> 🎬 [Watch the full demo video](https://bradgroux.github.io/veritas-kanban/demo/)
 
 ⭐ **If you find this useful, star the repo — it helps others discover it!**
 

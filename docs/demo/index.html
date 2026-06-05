@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veritas Kanban Demo Video</title>
+  <meta name="description" content="Watch the Veritas Kanban overview demo in a browser-playable video player.">
+  <meta property="og:title" content="Veritas Kanban Demo Video">
+  <meta property="og:description" content="A browser-playable overview demo for Veritas Kanban.">
+  <meta property="og:type" content="video.other">
+  <meta property="og:url" content="https://bradgroux.github.io/veritas-kanban/demo/">
+  <meta property="og:video" content="https://bradgroux.github.io/veritas-kanban/assets/demo-overview.mp4">
+  <meta property="og:video:type" content="video/mp4">
+  <meta name="twitter:card" content="player">
+  <meta name="twitter:title" content="Veritas Kanban Demo Video">
+  <meta name="twitter:description" content="Watch the Veritas Kanban overview demo in the browser.">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06060b;
+      --panel: #11111a;
+      --panel-2: #171724;
+      --text: #f4f4f6;
+      --muted: #a0a0b5;
+      --border: #242437;
+      --accent: #8b5cf6;
+      --accent-2: #06b6d4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 40px 18px;
+    }
+
+    main {
+      width: min(1120px, 100%);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent-2);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 4rem;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .intro {
+      max-width: 760px;
+      margin: 18px 0 28px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .player {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.4);
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px;
+      border-top: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    a {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #1d1d2d;
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .button.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+    }
+
+    .note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    @media (max-width: 720px) {
+      h1 {
+        font-size: 2.25rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Veritas Kanban</p>
+    <h1>Demo Video</h1>
+    <p class="intro">
+      A short overview of the local-first Kanban board, agent coordination surfaces, and workflow tooling.
+    </p>
+
+    <section class="player" aria-label="Veritas Kanban demo video player">
+      <video controls preload="metadata">
+        <source src="../assets/demo-overview.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+      </video>
+      <div class="meta">
+        <span>Hosted on GitHub Pages from the repository's <code>/docs</code> source.</span>
+        <div class="actions">
+          <a class="button" href="../">Docs Home</a>
+          <a class="button primary" href="https://github.com/BradGroux/veritas-kanban">View Repo</a>
+        </div>
+      </div>
+    </section>
+
+    <p class="note">
+      Source asset: <code>docs/assets/demo-overview.mp4</code>. Update steps live in
+      <a href="https://github.com/BradGroux/veritas-kanban/blob/main/docs/demo/README.md">docs/demo/README.md</a>.
+    </p>
+  </main>
+</body>
+</html>
