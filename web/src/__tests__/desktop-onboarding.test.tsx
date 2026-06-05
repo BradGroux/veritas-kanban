@@ -96,11 +96,25 @@ describe('desktop onboarding', () => {
 
     fireEvent.click(screen.getByTestId('setup-mode-remote'));
     fireEvent.change(screen.getByLabelText('Server URL'), {
-      target: { value: 'http://127.0.0.1:3001' },
+      target: { value: 'https://remote.example' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Validate Remote' }));
 
     expect(await screen.findByText('URL syntax is valid.')).toBeDefined();
     expect(screen.getByText('Live reachability checks require the desktop app.')).toBeDefined();
+  });
+
+  it('blocks browser-only remote checks for local destinations', async () => {
+    renderWithProviders(<DesktopOnboardingPanel onContinue={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('setup-mode-remote'));
+    fireEvent.change(screen.getByLabelText('Server URL'), {
+      target: { value: 'https://127.0.0.1:3001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate Remote' }));
+
+    expect(
+      await screen.findByText('Remote server URL cannot target loopback address.')
+    ).toBeDefined();
   });
 });

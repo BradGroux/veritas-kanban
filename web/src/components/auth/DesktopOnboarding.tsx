@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Upload,
 } from 'lucide-react';
+import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
 
 import { cn } from '@/lib/utils';
 import { persistPendingProductMode, productModeForSetupMode } from '@/lib/product-modes';
@@ -202,11 +203,15 @@ async function validateRemoteWithoutDesktop(
 ): Promise<DesktopConnectionValidationResult> {
   try {
     const parsed = new URL(serverUrl);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('Remote server URL protocol is not allowed.');
+    if (parsed.protocol !== 'https:') {
+      throw new Error('Remote server URL must use HTTPS in remote mode.');
     }
     if (parsed.username || parsed.password) {
       throw new Error('Remote server URL credentials are not allowed.');
+    }
+    const blockedDestination = blockedRemoteConnectionDestinationReason(parsed.hostname);
+    if (blockedDestination) {
+      throw new Error(`Remote server URL cannot target ${blockedDestination}.`);
     }
     return {
       mode: 'remote',

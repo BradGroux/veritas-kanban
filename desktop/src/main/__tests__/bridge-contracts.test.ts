@@ -1,5 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IpcMain, Shell } from 'electron';
+
+const mockLookup = vi.hoisted(() => vi.fn());
+
+vi.mock('node:dns/promises', () => ({
+  lookup: mockLookup,
+}));
 
 import {
   createDesktopBridgeHandlers,
@@ -91,6 +97,11 @@ function handlers(): DesktopBridgeHandlerMap {
 }
 
 describe('desktop bridge contracts', () => {
+  beforeEach(() => {
+    mockLookup.mockReset();
+    mockLookup.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -214,11 +225,23 @@ describe('desktop bridge contracts', () => {
       workspaceId: 'workspace-1',
     });
     expect(() =>
-      validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'ftp://example.com' })
-    ).toThrow('protocol is not allowed');
+      validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'http://example.com' })
+    ).toThrow('must use HTTPS');
     expect(() =>
       validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'https://user@example.com' })
     ).toThrow('credentials are not allowed');
+    expect(() =>
+      validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'https://10.0.0.1' })
+    ).toThrow('private IPv4 address');
+    expect(() =>
+      validateConnectionConfigRequest({ mode: 'remote', serverUrl: 'https://169.254.169.254' })
+    ).toThrow('link-local address');
+    expect(() =>
+      validateConnectionConfigRequest({
+        mode: 'remote',
+        serverUrl: 'https://metadata.google.internal',
+      })
+    ).toThrow('cloud metadata destination');
     expect(() =>
       validateConnectionConfigRequest({
         mode: 'remote',
@@ -250,6 +273,53 @@ describe('desktop bridge contracts', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: { Authorization: 'Bearer vk_pat_secret' },
     });
+  });
+
+  it('blocks remote connection destinations that resolve to private addresses before fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    mockLookup.mockResolvedValue([{ address: '192.168.1.10', family: 4 }]);
+
+    const result = await handlers().validateConnectionConfig({
+      mode: 'remote',
+      serverUrl: 'https://remote.example/veritas',
+      serverToken: 'vk_pat_secret',
+    });
+
+    expect(result).toMatchObject({
+      mode: 'remote',
+      valid: false,
+      normalizedServerUrl: 'https://remote.example/veritas',
+      errors: [expect.stringContaining('private IPv4 address')],
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks direct private and metadata remote connection URLs before fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const bridgeHandlers = handlers();
+
+    await expect(
+      bridgeHandlers.validateConnectionConfig({
+        mode: 'remote',
+        serverUrl: 'https://10.0.0.1',
+      })
+    ).rejects.toThrow('private IPv4 address');
+    await expect(
+      bridgeHandlers.validateConnectionConfig({
+        mode: 'remote',
+        serverUrl: 'https://169.254.169.254',
+      })
+    ).rejects.toThrow('link-local address');
+    await expect(
+      bridgeHandlers.validateConnectionConfig({
+        mode: 'remote',
+        serverUrl: 'https://metadata.google.internal',
+      })
+    ).rejects.toThrow('cloud metadata destination');
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('validates command names, file paths, notification actions, and work product exports', () => {

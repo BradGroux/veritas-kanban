@@ -1,4 +1,6 @@
 import type { IpcMain, Shell } from 'electron';
+import { lookup } from 'node:dns/promises';
+import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
 
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME } from './app-metadata.js';
 import type { DesktopCommandDispatcher } from './commands.js';
@@ -35,6 +37,28 @@ export type DesktopBridgeHandlerMap = {
   ) => MaybePromise<DesktopBridgeResponse<Method>>;
 };
 
+async function remoteConnectionDestinationError(serverUrl: string): Promise<string | null> {
+  const parsed = new URL(serverUrl);
+  const directReason = blockedRemoteConnectionDestinationReason(parsed.hostname);
+  if (directReason) {
+    return `Remote server URL cannot target ${directReason}`;
+  }
+
+  try {
+    const records = await lookup(parsed.hostname, { all: true, verbatim: true });
+    for (const record of records) {
+      const reason = blockedRemoteConnectionDestinationReason(record.address);
+      if (reason) {
+        return `Remote server URL resolves to ${reason}`;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function validateRemoteConnection(
   config: DesktopConnectionConfigRequest
 ): Promise<DesktopConnectionValidationResult> {
@@ -50,6 +74,16 @@ async function validateRemoteConnection(
 
   let serverToken = config.serverToken;
   const warnings: string[] = [];
+  const destinationError = await remoteConnectionDestinationError(config.serverUrl);
+  if (destinationError) {
+    return {
+      mode: 'remote',
+      valid: false,
+      normalizedServerUrl: config.serverUrl,
+      warnings,
+      errors: [destinationError],
+    };
+  }
 
   if (!serverToken && config.pairingPayload) {
     const paired = await exchangeRemotePairingPayload(config.serverUrl, config.pairingPayload);

@@ -1,4 +1,5 @@
 import type { DesktopAppInfo, DesktopStatusSnapshot } from '../main/types.js';
+import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
 
 export const DESKTOP_REDACTED_VALUE = '[redacted]';
 export const DESKTOP_RESTART_CONFIRMATION = 'restart-local-server';
@@ -523,7 +524,7 @@ export function createDesktopBridgeEventCleanup<Handler>(
 }
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
-const SAFE_CONNECTION_PROTOCOLS = new Set(['https:', 'http:']);
+const SAFE_CONNECTION_PROTOCOLS = new Set(['https:']);
 const SAFE_COMMAND_SOURCES = new Set<DesktopCommandSource>([
   'renderer',
   'menu',
@@ -711,11 +712,16 @@ export function validateConnectionConfigRequest(payload: unknown): DesktopConnec
   }
 
   if (!SAFE_CONNECTION_PROTOCOLS.has(parsed.protocol)) {
-    throw new Error(`Remote server URL protocol is not allowed: ${parsed.protocol}`);
+    throw new Error('Remote server URL must use HTTPS in remote mode');
   }
 
   if (parsed.username || parsed.password) {
     throw new Error('Remote server URL credentials are not allowed');
+  }
+
+  const blockedDestination = blockedRemoteConnectionDestinationReason(parsed.hostname);
+  if (blockedDestination) {
+    throw new Error(`Remote server URL cannot target ${blockedDestination}`);
   }
 
   return {
