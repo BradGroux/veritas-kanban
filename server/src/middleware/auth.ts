@@ -3,7 +3,7 @@ import { WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { getSecurityConfig, getValidJwtSecrets } from '../config/security.js';
+import { getSecurityConfig, getSessionVersion, getValidJwtSecrets } from '../config/security.js';
 import { createLogger } from '../lib/logger.js';
 import { validateScopedApiToken } from '../services/api-token-service.js';
 import { validateDeviceSessionSecret } from '../services/device-session-service.js';
@@ -382,18 +382,33 @@ function requestRemoteAddress(req: Request | IncomingMessage): string | null {
 
 // === JWT Verification ===
 
+export interface SessionJwtPayload extends jwt.JwtPayload {
+  type?: string;
+  sessionVersion?: number;
+}
+
 /**
- * Verify a JWT token against all valid secrets (supports secret rotation).
- * Tries the current secret first, then falls back to previous secrets
- * still within their grace period.
+ * Verify a session JWT against all valid secrets and the current session version.
  */
-function verifyJwtToken(token: string): { valid: boolean; error?: string } {
+export function verifySessionJwtToken(token: string): {
+  valid: boolean;
+  error?: string;
+  payload?: SessionJwtPayload;
+} {
   const secrets = getValidJwtSecrets();
+  const expectedSessionVersion = getSessionVersion();
 
   for (const secret of secrets) {
     try {
-      jwt.verify(token, secret, { algorithms: ['HS256'] });
-      return { valid: true };
+      const payload = jwt.verify(token, secret, { algorithms: ['HS256'] }) as SessionJwtPayload;
+      const tokenSessionVersion =
+        typeof payload.sessionVersion === 'number' ? Math.floor(payload.sessionVersion) : 0;
+
+      if (tokenSessionVersion !== expectedSessionVersion) {
+        return { valid: false, error: 'Session revoked' };
+      }
+
+      return { valid: true, payload };
     } catch (err) {
       // If the token is expired, no point trying other secrets
       if (err instanceof jwt.TokenExpiredError) {
@@ -415,7 +430,7 @@ function verifyJwtCookie(req: Request): { valid: boolean; error?: string } {
     return { valid: false };
   }
 
-  return verifyJwtToken(token);
+  return verifySessionJwtToken(token);
 }
 
 // === Express Middleware ===
@@ -721,7 +736,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
   if (passwordAuthEnabled) {
     const token = extractJwtFromWebSocket(req);
     if (token) {
-      const result = verifyJwtToken(token);
+      const result = verifySessionJwtToken(token);
       if (result.valid) {
         return {
           authenticated: true,

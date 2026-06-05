@@ -29,6 +29,10 @@ vi.mock('../../config/security.js', () => {
     getValidJwtSecrets: () => [
       securityConfig.jwtSecret || 'test-secret-key-for-jwt-signing-12345678',
     ],
+    getSessionVersion: (config: any = securityConfig) =>
+      typeof config.sessionVersion === 'number' ? config.sessionVersion : 0,
+    nextSessionVersion: (config: any = securityConfig) =>
+      (typeof config.sessionVersion === 'number' ? config.sessionVersion : 0) + 1,
     generateRecoveryKey: () => 'RECOVERY-KEY-12345678',
     hashRecoveryKey: async (key: string) => {
       return crypto.createHash('sha256').update(key).digest('hex');
@@ -67,6 +71,7 @@ describe('Auth Routes', () => {
       authEnabled: false,
       passwordHash: null,
       jwtSecret: 'test-secret-key-for-jwt-signing-12345678',
+      sessionVersion: 0,
     };
 
     app = express();
@@ -78,6 +83,7 @@ describe('Auth Routes', () => {
 
   afterEach(() => {
     resetDeviceSessionServiceForTests();
+    delete process.env.VERITAS_JWT_SECRET;
     delete process.env.VERITAS_SQLITE_PATH;
   });
 
@@ -102,7 +108,11 @@ describe('Auth Routes', () => {
       securityConfig.passwordHash = await bcrypt.hash('test-password', 4);
       securityConfig.authEnabled = true;
 
-      const token = jwt.sign({ type: 'session' }, securityConfig.jwtSecret, { expiresIn: '1h' });
+      const token = jwt.sign(
+        { type: 'session', sessionVersion: securityConfig.sessionVersion },
+        securityConfig.jwtSecret,
+        { expiresIn: '1h' }
+      );
 
       const res = await request(app)
         .get('/api/auth/status')
@@ -317,6 +327,30 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.recoveryKey).toBeDefined(); // New recovery key
+      expect(securityConfig.sessionVersion).toBe(1);
+    });
+
+    it('should revoke existing session cookies after recovery reset even when jwt secret is unchanged', async () => {
+      process.env.VERITAS_JWT_SECRET = 'env-managed-secret';
+      const oldToken = jwt.sign(
+        { type: 'session', sessionVersion: securityConfig.sessionVersion },
+        securityConfig.jwtSecret,
+        { expiresIn: '1h' }
+      );
+      const originalSecret = securityConfig.jwtSecret;
+
+      await request(app)
+        .post('/api/auth/recover')
+        .send({ recoveryKey: 'VALID-RECOVERY-KEY', newPassword: 'newstrongpassword' })
+        .expect(200);
+      expect(securityConfig.jwtSecret).toBe(originalSecret);
+
+      const status = await request(app)
+        .get('/api/auth/status')
+        .set('Cookie', `veritas_session=${oldToken}`);
+
+      expect(status.status).toBe(200);
+      expect(status.body.authenticated).toBe(false);
     });
 
     it('should reject invalid recovery key', async () => {
@@ -389,6 +423,27 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(securityConfig.sessionVersion).toBe(1);
+    });
+
+    it('should revoke existing session cookies after password change', async () => {
+      const oldToken = jwt.sign(
+        { type: 'session', sessionVersion: securityConfig.sessionVersion },
+        securityConfig.jwtSecret,
+        { expiresIn: '1h' }
+      );
+
+      await request(app)
+        .post('/api/auth/change-password')
+        .send({ currentPassword: 'currentpassword', newPassword: 'newsecurepassword' })
+        .expect(200);
+
+      const status = await request(app)
+        .get('/api/auth/status')
+        .set('Cookie', `veritas_session=${oldToken}`);
+
+      expect(status.status).toBe(200);
+      expect(status.body.authenticated).toBe(false);
     });
 
     it('should reject wrong current password', async () => {

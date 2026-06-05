@@ -7,6 +7,8 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import {
   getSecurityConfig,
   getJwtSecret,
+  getSessionVersion,
+  nextSessionVersion,
   saveSecurityConfig,
   SecurityConfig,
   generateRecoveryKey,
@@ -17,6 +19,7 @@ import {
 import {
   authenticate,
   authorize,
+  verifySessionJwtToken,
   type AuthenticatedRequest,
   type AuthPermission,
 } from '../middleware/auth.js';
@@ -184,16 +187,12 @@ router.get(
 
     const token = req.cookies?.veritas_session;
     if (token && !needsSetup) {
-      try {
-        const decoded = jwt.verify(token, getJwtSecret(), {
-          algorithms: ['HS256'],
-        }) as jwt.JwtPayload;
+      const verified = verifySessionJwtToken(token);
+      if (verified.valid && verified.payload) {
         authenticated = true;
-        if (decoded.exp) {
-          sessionExpiry = new Date(decoded.exp * 1000).toISOString();
+        if (verified.payload.exp) {
+          sessionExpiry = new Date(verified.payload.exp * 1000).toISOString();
         }
-      } catch {
-        // Invalid or expired token
       }
     }
 
@@ -379,6 +378,7 @@ router.post(
       passwordHash,
       recoveryKeyHash,
       authEnabled: true,
+      sessionVersion: getSessionVersion(config),
       setupCompletedAt: new Date().toISOString(),
     };
 
@@ -547,6 +547,7 @@ router.post(
       {
         type: 'session',
         iat: Math.floor(Date.now() / 1000),
+        sessionVersion: getSessionVersion(config),
       },
       getJwtSecret(),
       { expiresIn: expiryStr as jwt.SignOptions['expiresIn'] }
@@ -659,19 +660,19 @@ router.post(
     const newRecoveryKey = generateRecoveryKey();
     const newRecoveryKeyHash = await hashRecoveryKey(newRecoveryKey);
 
-    // Build config — rotate jwtSecret in file only if env var is NOT set
+    // Build config and revoke existing sessions regardless of JWT secret source.
     const updatedConfig: SecurityConfig = {
       ...config,
       passwordHash,
       recoveryKeyHash: newRecoveryKeyHash,
       lastPasswordChange: new Date().toISOString(),
+      sessionVersion: nextSessionVersion(config),
     };
 
     // Rotate file-based secret if no env var (invalidates all existing sessions)
     if (!process.env.VERITAS_JWT_SECRET) {
       updatedConfig.jwtSecret = crypto.randomBytes(64).toString('hex');
     }
-    // Note: if using env var, session invalidation requires changing the env var
 
     // Save config
     saveSecurityConfig(updatedConfig);
@@ -739,6 +740,7 @@ router.post(
       ...config,
       passwordHash,
       lastPasswordChange: new Date().toISOString(),
+      sessionVersion: nextSessionVersion(config),
     });
 
     res.json({

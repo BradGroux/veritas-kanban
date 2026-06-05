@@ -8,15 +8,23 @@ import type { Request, Response, NextFunction } from 'express';
 import type { IncomingMessage } from 'http';
 
 // Mock the security config module BEFORE importing auth
-vi.mock('../../config/security.js', () => ({
-  getSecurityConfig: vi.fn(() => ({
+vi.mock('../../config/security.js', () => {
+  const getSecurityConfig = vi.fn(() => ({
     authEnabled: false,
     passwordHash: null,
     jwtSecret: 'test-secret-key',
-  })),
-  getJwtSecret: vi.fn(() => 'test-secret-key'),
-  getValidJwtSecrets: vi.fn(() => ['test-secret-key']),
-}));
+  }));
+
+  return {
+    getSecurityConfig,
+    getJwtSecret: vi.fn(() => 'test-secret-key'),
+    getValidJwtSecrets: vi.fn(() => ['test-secret-key']),
+    getSessionVersion: vi.fn((config?: { sessionVersion?: number }) => {
+      const source = config ?? getSecurityConfig();
+      return typeof source.sessionVersion === 'number' ? source.sessionVersion : 0;
+    }),
+  };
+});
 
 import {
   authenticate,
@@ -456,6 +464,30 @@ describe('Auth Middleware', () => {
       expect(req.auth?.actorType).toBe('user');
       expect(req.auth?.authMethod).toBe('session');
       expect(req.auth?.workspaceId).toBe('local');
+    });
+
+    it('should reject JWT cookie when session version is stale', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session', sessionVersion: 0 }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed-password',
+        sessionVersion: 1,
+      } as any);
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      const req = mockRequest({
+        cookies: { veritas_session: token },
+        socket: { remoteAddress: '192.168.1.100' } as any,
+        ip: '192.168.1.100',
+      }) as AuthenticatedRequest;
+      const res = mockResponse();
+      const next = mockNext();
+
+      authenticate(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
     });
 
     it('should fall back to API key when JWT is invalid', () => {
@@ -955,6 +987,31 @@ describe('Auth Middleware', () => {
       expect(result.role).toBe('admin');
       expect(result.authMethod).toBe('session');
       expect(result.actorType).toBe('user');
+    });
+
+    it('should reject WebSocket JWT cookie when session version is stale', () => {
+      const secret = 'test-secret-key';
+      const token = jwt.sign({ type: 'session', sessionVersion: 0 }, secret, { expiresIn: '1h' });
+
+      vi.mocked(getSecurityConfig).mockReturnValue({
+        authEnabled: true,
+        passwordHash: 'hashed',
+        sessionVersion: 1,
+      } as any);
+      vi.mocked(getValidJwtSecrets).mockReturnValue([secret]);
+
+      const req = {
+        headers: {
+          cookie: `veritas_session=${token}`,
+          host: 'localhost:3001',
+        },
+        url: '/ws',
+        socket: { remoteAddress: '192.168.1.100' },
+      } as unknown as IncomingMessage;
+
+      const result = authenticateWebSocket(req);
+      expect(result.authenticated).toBe(false);
+      expect(result.error).toContain('Authentication required');
     });
 
     it('should allow localhost bypass for WebSocket with read-only role by default', () => {

@@ -63,6 +63,8 @@ import {
   getSecurityConfig,
   getJwtSecret,
   getValidJwtSecrets,
+  getSessionVersion,
+  nextSessionVersion,
   rotateJwtSecret,
   getJwtRotationStatus,
   saveSecurityConfig,
@@ -168,6 +170,16 @@ describe('JWT Secret Rotation', () => {
       const secrets = getValidJwtSecrets();
       expect(secrets).toHaveLength(1);
       expect(secrets[0]).toBe('current-secret');
+    });
+  });
+
+  describe('session version helpers', () => {
+    it('should default missing session version to zero', () => {
+      expect(getSessionVersion({})).toBe(0);
+    });
+
+    it('should increment the current session version for revocation events', () => {
+      expect(nextSessionVersion({ sessionVersion: 2 })).toBe(3);
     });
   });
 

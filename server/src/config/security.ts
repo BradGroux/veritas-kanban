@@ -80,6 +80,8 @@ export interface SecurityConfig {
   setupCompletedAt?: string;
   /** When password was last changed */
   lastPasswordChange?: string;
+  /** Monotonic version embedded in session JWTs; increment to revoke existing sessions */
+  sessionVersion?: number;
 }
 
 // In-memory cache
@@ -195,6 +197,25 @@ export function getValidJwtSecrets(): string[] {
 
   // Fall back to legacy single secret or runtime secret
   return [getJwtSecret()];
+}
+
+/**
+ * Return the current session token version.
+ * Missing or invalid legacy values are treated as version 0 so existing
+ * sessions remain valid until the first explicit revocation event.
+ */
+export function getSessionVersion(
+  config: Pick<SecurityConfig, 'sessionVersion'> = getSecurityConfig()
+): number {
+  return typeof config.sessionVersion === 'number' &&
+    Number.isFinite(config.sessionVersion) &&
+    config.sessionVersion >= 0
+    ? Math.floor(config.sessionVersion)
+    : 0;
+}
+
+export function nextSessionVersion(config: Pick<SecurityConfig, 'sessionVersion'>): number {
+  return getSessionVersion(config) + 1;
 }
 
 /**
