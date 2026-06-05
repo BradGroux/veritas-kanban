@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'fs';
 import type { SqliteMigration } from '../../storage/index.js';
-import { SqliteDatabase } from '../../storage/index.js';
+import { SqliteDatabase, UnsupportedSqliteSchemaError } from '../../storage/index.js';
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 
 describe('SqliteDatabase', () => {
@@ -57,6 +57,9 @@ describe('SqliteDatabase', () => {
         '0002_insert_probe',
       ]);
       expect(probeRow.name).toBe('ordered');
+      expect(
+        (db.prepare('PRAGMA user_version;').get() as { user_version: number }).user_version
+      ).toBe(2);
     } finally {
       fixture.cleanup();
     }
@@ -116,6 +119,98 @@ describe('SqliteDatabase', () => {
         'already applied with different content'
       );
     } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('refuses to open a database with a newer SQLite user_version', () => {
+    const fixture = createTestSqliteDatabase({ applyMigrations: false });
+    let newerSchemaDatabase: SqliteDatabase | null = null;
+    const olderAppMigrations: SqliteMigration[] = [
+      {
+        version: 1,
+        name: '0001_create_probe',
+        up: 'CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);',
+      },
+    ];
+
+    try {
+      fixture.database.open();
+      fixture.database.getConnection().exec('PRAGMA user_version = 2;');
+      fixture.database.close();
+
+      newerSchemaDatabase = new SqliteDatabase({
+        databasePath: fixture.databasePath,
+        migrations: olderAppMigrations,
+      });
+
+      let thrown: unknown;
+      try {
+        newerSchemaDatabase.open();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(UnsupportedSqliteSchemaError);
+      expect((thrown as Error).message).toContain(
+        'SQLite database schema version 2 is newer than this app supports (max 1)'
+      );
+    } finally {
+      newerSchemaDatabase?.close();
+      fixture.cleanup();
+    }
+  });
+
+  it('refuses applied migrations newer than the running app supports', () => {
+    const fixture = createTestSqliteDatabase({ applyMigrations: false });
+    let olderAppDatabase: SqliteDatabase | null = null;
+    const olderAppMigrations: SqliteMigration[] = [
+      {
+        version: 1,
+        name: '0001_create_probe',
+        up: 'CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);',
+      },
+    ];
+
+    try {
+      fixture.database.open();
+      const db = fixture.database.getConnection();
+      db.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          checksum TEXT NOT NULL,
+          applied_at TEXT NOT NULL,
+          execution_ms INTEGER NOT NULL,
+          rolled_back_at TEXT
+        );
+      `);
+      db.prepare(
+        `
+          INSERT INTO schema_migrations (version, name, checksum, applied_at, execution_ms)
+          VALUES (?, ?, ?, ?, ?)
+        `
+      ).run(2, '0002_future_probe', 'future-checksum', new Date().toISOString(), 1);
+      fixture.database.close();
+
+      olderAppDatabase = new SqliteDatabase({
+        databasePath: fixture.databasePath,
+        migrations: olderAppMigrations,
+      });
+
+      let thrown: unknown;
+      try {
+        olderAppDatabase.open();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(UnsupportedSqliteSchemaError);
+      expect((thrown as Error).message).toContain(
+        'SQLite database schema version 2 (0002_future_probe) is newer than this app supports (max 1)'
+      );
+    } finally {
+      olderAppDatabase?.close();
       fixture.cleanup();
     }
   });
