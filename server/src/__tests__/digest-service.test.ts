@@ -4,7 +4,10 @@
  * generateDigest requires too many external dependencies to test in isolation.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { RunTelemetryEvent, Task, TokenTelemetryEvent } from '@veritas-kanban/shared';
 import { DigestService, type DailyDigest } from '../services/digest-service.js';
+
+const mockPendingApprovals = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
 // Mock dependencies
 vi.mock('../services/metrics/index.js', () => ({
@@ -31,6 +34,12 @@ vi.mock('../services/task-service.js', () => ({
     listTasks = vi.fn().mockResolvedValue([]);
     getTask = vi.fn();
   },
+}));
+
+vi.mock('../services/agent-permission-service.js', () => ({
+  getAgentPermissionService: () => ({
+    getPendingApprovals: mockPendingApprovals,
+  }),
 }));
 
 function makeDigest(overrides: Partial<DailyDigest> = {}): DailyDigest {
@@ -87,7 +96,146 @@ describe('DigestService', () => {
   let service: DigestService;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    mockPendingApprovals.mockResolvedValue([]);
     service = new DigestService();
+  });
+
+  describe('generateOperationsDigest', () => {
+    it('groups deterministic operations counts with source links', async () => {
+      const tasks: Task[] = [
+        {
+          id: 'task_active',
+          title: 'Active work',
+          description: 'Active task',
+          type: 'feature',
+          status: 'in-progress',
+          priority: 'high',
+          project: 'platform',
+          created: '2026-06-04T08:00:00.000Z',
+          updated: '2026-06-04T08:30:00.000Z',
+          git: {
+            repo: 'veritas-kanban',
+            branch: 'feature',
+            baseBranch: 'main',
+            worktreePath: '/worktrees/platform',
+          },
+        },
+        {
+          id: 'task_blocked',
+          title: 'Blocked work',
+          description: 'Blocked task',
+          type: 'bug',
+          status: 'blocked',
+          priority: 'high',
+          project: 'platform',
+          created: '2026-06-04T08:00:00.000Z',
+          updated: '2026-06-04T10:00:00.000Z',
+          git: {
+            repo: 'veritas-kanban',
+            branch: 'blocked',
+            baseBranch: 'main',
+            worktreePath: '/worktrees/platform',
+          },
+        },
+        {
+          id: 'task_done',
+          title: 'Completed work',
+          description: 'Done task',
+          type: 'feature',
+          status: 'done',
+          priority: 'medium',
+          project: 'platform',
+          created: '2026-06-04T08:00:00.000Z',
+          updated: '2026-06-04T11:30:00.000Z',
+          git: {
+            repo: 'veritas-kanban',
+            branch: 'done',
+            baseBranch: 'main',
+            worktreePath: '/worktrees/platform',
+          },
+        },
+      ];
+      const runFailure: RunTelemetryEvent = {
+        id: 'run_failed',
+        type: 'run.completed',
+        timestamp: '2026-06-04T11:45:00.000Z',
+        taskId: 'task_active',
+        agent: 'codex',
+        success: false,
+        durationMs: 60_000,
+        error: 'Tests failed',
+        attemptId: 'attempt_failed',
+      };
+      const tokens: TokenTelemetryEvent = {
+        id: 'tokens_1',
+        type: 'run.tokens',
+        timestamp: '2026-06-04T11:50:00.000Z',
+        taskId: 'task_active',
+        agent: 'codex',
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: 0.0123,
+      };
+      const telemetry = { getEvents: vi.fn().mockResolvedValue([runFailure, tokens]) };
+      const taskService = { listTasks: vi.fn().mockResolvedValue(tasks) };
+      const serviceOverrides = service as unknown as {
+        telemetry: typeof telemetry;
+        taskService: typeof taskService;
+      };
+      serviceOverrides.telemetry = telemetry;
+      serviceOverrides.taskService = taskService;
+      mockPendingApprovals.mockResolvedValue([
+        {
+          id: 'approval_1',
+          agentId: 'codex',
+          action: 'push_branch',
+          taskId: 'task_blocked',
+          details: 'Needs owner approval',
+          status: 'pending',
+          createdAt: '2026-06-04T11:55:00.000Z',
+        },
+      ]);
+
+      const digest = await service.generateOperationsDigest({
+        from: '2026-06-04T00:00:00.000Z',
+        to: '2026-06-04T12:00:00.000Z',
+        project: 'platform',
+      });
+
+      expect(telemetry.getEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project: 'platform',
+          type: ['run.completed', 'run.error', 'run.tokens'],
+        })
+      );
+      expect(digest.hasActivity).toBe(true);
+      expect(digest.groups).toHaveLength(1);
+      expect(digest.groups[0]).toMatchObject({
+        project: 'platform',
+        repo: 'veritas-kanban',
+        cwd: '/worktrees/platform',
+        totals: {
+          active: 1,
+          blocked: 1,
+          stuck: 1,
+          completed: 1,
+          failed: 1,
+          runs: 1,
+          totalTokens: 150,
+          activeTimeMs: 60_000,
+        },
+      });
+      expect(digest.groups[0].sourceLinks.activeTasks[0]?.id).toBe('task_active');
+      expect(digest.groups[0].sourceLinks.failedRuns[0]?.id).toBe('attempt_failed');
+      expect(digest.groups[0].openApprovals[0]).toMatchObject({
+        id: 'approval_1',
+        agent: 'codex',
+        action: 'push_branch',
+      });
+      expect(digest.totals.openApprovals).toBe(1);
+    });
   });
 
   describe('formatForTeams', () => {
@@ -198,7 +346,7 @@ describe('DigestService', () => {
 
   describe('formatNumber (private)', () => {
     const formatNumber = (num: number) => {
-      return (service as any).formatNumber(num);
+      return (service as unknown as { formatNumber(value: number): string }).formatNumber(num);
     };
 
     it('should format small numbers as-is', () => {

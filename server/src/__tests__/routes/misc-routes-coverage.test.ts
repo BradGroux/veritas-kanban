@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 // ===================== Hoisted Mocks =====================
 
@@ -48,6 +49,8 @@ const {
   mockDigestService: {
     generateDigest: vi.fn(),
     formatForTeams: vi.fn(),
+    generateOperationsDigest: vi.fn(),
+    formatOperationsDigestMarkdown: vi.fn(),
   },
 }));
 
@@ -123,7 +126,7 @@ vi.mock('../../services/task-service.js', () => ({
 
 // Rate limit mock
 vi.mock('../../middleware/rate-limit.js', () => ({
-  strictRateLimit: (_req: any, _res: any, next: any) => next(),
+  strictRateLimit: (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
 import activityRouter from '../../routes/activity.js';
@@ -134,7 +137,11 @@ import digestRouter from '../../routes/digest.js';
 import { errorHandler } from '../../middleware/error-handler.js';
 
 // Helper: inject admin auth for route tests that use authorize() middleware
-const injectAdminAuth = (req: any, _res: any, next: any) => {
+const injectAdminAuth = (
+  req: Request & { auth?: { role: string; keyName: string; isLocalhost: boolean } },
+  _res: Response,
+  next: NextFunction
+) => {
   req.auth = { role: 'admin', keyName: 'test-admin', isLocalhost: true };
   next();
 };
@@ -320,7 +327,12 @@ describe('Settings Routes', () => {
 
   it('PATCH /features should accept requireDeliverableForDone', async () => {
     const fullSettings = {
-      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
+      telemetry: {
+        enabled: true,
+        retentionDays: 30,
+        enableTraces: false,
+        enableActivityTracking: true,
+      },
       tasks: {
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,
@@ -346,7 +358,12 @@ describe('Settings Routes', () => {
 
   it('PATCH /features should accept requireDeliverableForDone set to false', async () => {
     const fullSettings = {
-      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
+      telemetry: {
+        enabled: true,
+        retentionDays: 30,
+        enableTraces: false,
+        enableActivityTracking: true,
+      },
       tasks: {
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,
@@ -424,5 +441,39 @@ describe('Digest Routes', () => {
     const res = await request(app).get('/api/digest/daily/preview');
     expect(res.status).toBe(200);
     expect(res.text).toContain('No activity');
+  });
+
+  it('GET /operations should return JSON operations digest', async () => {
+    mockDigestService.generateOperationsDigest.mockResolvedValue({
+      groups: [],
+      hasActivity: false,
+    });
+    const res = await request(app).get('/api/digest/operations?hours=12&project=platform');
+    expect(res.status).toBe(200);
+    expect(mockDigestService.generateOperationsDigest).toHaveBeenCalledWith(
+      expect.objectContaining({ windowHours: 12, project: 'platform' })
+    );
+  });
+
+  it('GET /operations?format=markdown should return markdown payload', async () => {
+    mockDigestService.generateOperationsDigest.mockResolvedValue({ groups: [], hasActivity: true });
+    mockDigestService.formatOperationsDigestMarkdown.mockReturnValue({
+      isEmpty: false,
+      markdown: '# Ops',
+    });
+    const res = await request(app).get('/api/digest/operations?format=markdown');
+    expect(res.status).toBe(200);
+    expect(res.body.markdown).toBe('# Ops');
+  });
+
+  it('GET /operations/preview should return markdown preview', async () => {
+    mockDigestService.generateOperationsDigest.mockResolvedValue({ groups: [], hasActivity: true });
+    mockDigestService.formatOperationsDigestMarkdown.mockReturnValue({
+      isEmpty: false,
+      markdown: '# Ops Preview',
+    });
+    const res = await request(app).get('/api/digest/operations/preview');
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('# Ops Preview');
   });
 });
