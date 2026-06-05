@@ -8,9 +8,18 @@
 import crypto from 'crypto';
 import type { SquadMessage, SquadWebhookSettings } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import type { UrlValidationOptions } from '../utils/url-validation.js';
 import { getOutboundIntegrationService } from './outbound-integration-service.js';
 
 const log = createLogger('squad-webhook');
+
+function openClawWakeValidationOptions(): UrlValidationOptions {
+  return {
+    allowHttp: true,
+    allowLocalhost: true,
+    allowPrivateIp: process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true',
+  };
+}
 
 interface WebhookPayload {
   event: 'squad.message';
@@ -100,7 +109,7 @@ async function fireOpenClawWake(
           hasSecret: Boolean(settings.openclawGatewayToken),
         },
         owner: { source: 'feature-settings', resourceId: 'squadWebhook.openclawGatewayUrl' },
-        validationOptions: { allowHttp: true, allowLocalhost: true },
+        validationOptions: openClawWakeValidationOptions(),
       },
       {
         method: 'POST',
