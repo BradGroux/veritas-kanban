@@ -4,6 +4,11 @@ This checklist tracks the release evidence that must be true before v5.0 GA.
 The GitHub epic remains the source of scheduling truth; this document is the
 operator checklist for final release verification.
 
+Use [v5 Release Candidate Evidence Packet](V5-RC-EVIDENCE-PACKET.md) as the
+single evidence target for each release candidate. The packet is the place to
+link command output, workflow runs, signed artifact URLs, checksums,
+notarization proof, load results, mobile/PWA smoke proof, and accepted limits.
+
 ## Required Release Gates
 
 - [ ] Fresh install verifies the desktop app can start the bundled server, load
@@ -126,10 +131,12 @@ pnpm validate:release -- --github --repo BradGroux/veritas-kanban
 Signed stable publishing requires the `Desktop Release` workflow with the Apple
 signing/notarization secrets from [Desktop Release](DESKTOP-RELEASE.md). Record
 the workflow run URL, artifact URLs, and updater metadata URLs in the release
-notes before marking GA complete.
+notes and the [v5 Release Candidate Evidence Packet](V5-RC-EVIDENCE-PACKET.md)
+before marking GA complete.
 
 ## Final Sign-Off Notes
 
 Each GA release candidate should link the PRs or workflow runs that satisfy the
-gates above. If a gate is intentionally deferred, link the follow-up issue and
-state the user-visible risk in release notes.
+gates above from [v5 Release Candidate Evidence Packet](V5-RC-EVIDENCE-PACKET.md).
+If a gate is intentionally deferred, link the follow-up issue and state the
+user-visible risk in release notes.
