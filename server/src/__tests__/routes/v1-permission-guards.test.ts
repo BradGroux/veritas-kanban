@@ -200,6 +200,9 @@ describe('v1 REST permission guard presets', () => {
       runGuard(agentPermissionAccess, mockRequest('POST', '/approvals')).next
     ).toHaveBeenCalled();
     expect(runGuard(agentRoutingAccess, mockRequest('POST', '/route')).next).toHaveBeenCalled();
+    expect(
+      runGuard(agentRoutingAccess, mockRequest('POST', '/hosts/preview')).next
+    ).toHaveBeenCalled();
 
     expect(
       runGuard(agentRoutingAccess, mockRequest('POST', '/task_1/start', 'agent', ['agent:write']))

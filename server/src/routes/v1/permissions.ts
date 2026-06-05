@@ -30,6 +30,7 @@ export const agentPermissionAccess = routeAccess('agent:read', 'admin:manage', [
 ]);
 export const agentRoutingAccess = routeAccess('agent:read', 'admin:manage', [
   { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
+  { methods: ['POST'], path: /^\/hosts\/preview\/?$/, permissions: 'agent:read' },
   { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
 ]);
 export const agentTaskAccess = routeAccess('agent:read', 'task:write', [

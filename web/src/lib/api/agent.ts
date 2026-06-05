@@ -1,7 +1,14 @@
 /**
  * Agent, worktree, and preview API endpoints.
  */
-import type { AgentType, AgentRoutingConfig, RoutingResult } from '@veritas-kanban/shared';
+import type {
+  AgentHostCompatibilityResponse,
+  AgentHostHealthResponse,
+  AgentHostPreviewRequest,
+  AgentType,
+  AgentRoutingConfig,
+  RoutingResult,
+} from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
 
 export interface StartAgentRequest {
@@ -204,6 +211,23 @@ export const routingApi = {
       body: JSON.stringify(metadata),
     });
     return handleResponse<RoutingResult>(response);
+  },
+};
+
+export const agentHostApi = {
+  getHealth: async (): Promise<AgentHostHealthResponse> => {
+    const response = await fetch(`${API_BASE}/agents/hosts`);
+    return handleResponse<AgentHostHealthResponse>(response);
+  },
+
+  preview: async (request: AgentHostPreviewRequest): Promise<AgentHostCompatibilityResponse> => {
+    const response = await fetch(`${API_BASE}/agents/hosts/preview`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return handleResponse<AgentHostCompatibilityResponse>(response);
   },
 };
 
