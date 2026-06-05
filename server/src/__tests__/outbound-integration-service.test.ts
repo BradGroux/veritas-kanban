@@ -111,6 +111,64 @@ describe('OutboundIntegrationService', () => {
     }
   });
 
+  it('cancels response body reads after responseBodyLimit is exceeded', async () => {
+    let chunksWritten = 0;
+    let responseClosed = false;
+    const { server, port } = await listenLocalServer((_req, res) => {
+      let interval: ReturnType<typeof setInterval> | undefined;
+      const stop = () => {
+        if (interval) clearInterval(interval);
+      };
+      const writeChunk = () => {
+        chunksWritten += 1;
+        res.write('x'.repeat(64));
+        if (chunksWritten >= 100) {
+          stop();
+          res.end();
+        }
+      };
+
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.on('close', () => {
+        responseClosed = true;
+        stop();
+      });
+      interval = setInterval(writeChunk, 5);
+      writeChunk();
+    });
+    mockLookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    const service = new OutboundIntegrationService({ persist: false, audit });
+
+    try {
+      const result = await service.deliver(
+        {
+          id: 'limited.response',
+          type: 'policy-webhook',
+          displayName: 'Limited response webhook',
+          url: `http://hook.test:${port}/stream`,
+          owner: { source: 'policy', resourceId: 'policy_1' },
+          validationOptions: { allowHttp: true, allowLocalhost: true },
+        },
+        {
+          method: 'POST',
+          responseBodyLimit: 128,
+          timeoutMs: 1_000,
+        }
+      );
+
+      expect(result).toMatchObject({
+        ok: true,
+        status: 'success',
+        responseStatus: 200,
+        responseText: 'x'.repeat(128),
+      });
+      await vi.waitFor(() => expect(responseClosed).toBe(true));
+      expect(chunksWritten).toBeLessThan(100);
+    } finally {
+      await closeServer(server);
+    }
+  });
+
   it('blocks private IP destinations before fetch', async () => {
     const fetchSpy = stubGlobalFetch();
     const service = new OutboundIntegrationService({ persist: false, audit });

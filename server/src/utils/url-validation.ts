@@ -15,6 +15,7 @@ import { lookup } from 'node:dns/promises';
 import { request as httpRequest, type IncomingHttpHeaders, type RequestOptions } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
+import { Readable } from 'node:stream';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('url-validation');
@@ -425,21 +426,19 @@ async function fetchPinnedUrl(
 
   return new Promise((resolve, reject) => {
     const req = request(requestOptions, (res) => {
-      const chunks: Buffer[] = [];
+      const status = res.statusCode ?? 500;
+      const responseBody =
+        status === 204 || status === 304
+          ? null
+          : (Readable.toWeb(res) as unknown as ConstructorParameters<typeof Response>[0]);
 
-      res.on('data', (chunk: Buffer | string) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      });
-      res.on('end', () => {
-        resolve(
-          new Response(Buffer.concat(chunks), {
-            status: res.statusCode ?? 500,
-            statusText: res.statusMessage,
-            headers: headersFromResponse(res.headers),
-          })
-        );
-      });
-      res.on('error', reject);
+      resolve(
+        new Response(responseBody, {
+          status,
+          statusText: res.statusMessage,
+          headers: headersFromResponse(res.headers),
+        })
+      );
     });
 
     req.on('error', reject);

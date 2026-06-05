@@ -117,6 +117,62 @@ function openClawGatewayValidationOptions(): UrlValidationOptions {
   };
 }
 
+async function cancelResponseReader(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  reason: string
+): Promise<void> {
+  try {
+    await reader.cancel(reason);
+  } catch {
+    // The body may already be closed by the remote endpoint.
+  }
+}
+
+async function readLimitedResponseText(
+  response: Response,
+  limitBytes?: number
+): Promise<string | undefined> {
+  if (!limitBytes || limitBytes <= 0) {
+    return undefined;
+  }
+  if (!response.body) {
+    return '';
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      const remaining = limitBytes - bytesRead;
+      if (remaining <= 0) {
+        await cancelResponseReader(reader, 'Response body limit exceeded');
+        break;
+      }
+
+      const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      text += decoder.decode(chunk, { stream: true });
+      bytesRead += chunk.byteLength;
+
+      if (value.byteLength > remaining) {
+        await cancelResponseReader(reader, 'Response body limit exceeded');
+        break;
+      }
+    }
+  } finally {
+    text += decoder.decode();
+    reader.releaseLock();
+  }
+
+  return text;
+}
+
 export class OutboundIntegrationService {
   private readonly storageDir: string;
   private readonly persist: boolean;
@@ -251,10 +307,7 @@ export class OutboundIntegrationService {
         };
       }
 
-      const responseText =
-        request.responseBodyLimit && request.responseBodyLimit > 0
-          ? await response.text().catch(() => '')
-          : undefined;
+      const responseText = await readLimitedResponseText(response, request.responseBodyLimit);
       const status: OutboundDeliveryStatus = response.ok ? 'success' : 'failed';
       const attempt = await this.recordDelivery({
         endpoint: registered,
@@ -272,7 +325,7 @@ export class OutboundIntegrationService {
         status,
         attemptId: attempt.id,
         responseStatus: response.status,
-        responseText: responseText?.slice(0, request.responseBodyLimit),
+        responseText,
       };
     } catch (err) {
       const message = this.sanitizeError(err, endpoint.url);
