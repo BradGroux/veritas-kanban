@@ -90,8 +90,8 @@ Stable release must include:
 
 ## Post-GA Follow-Up
 
-- Linux and Windows unsigned desktop artifact support is documented in
-  [Desktop Release](DESKTOP-RELEASE.md).
+- Linux and Windows unsigned desktop artifacts remain preview-only, non-GA
+  validation outputs documented in [Desktop Release](DESKTOP-RELEASE.md).
 - Native mobile apps with offline execution are scoped in
   [ADR 0003](architecture/ADR-0003-post-ga-native-mobile-offline.md).
 - Cloud sync and hosted SaaS are scoped as optional post-GA work in

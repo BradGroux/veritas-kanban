@@ -183,8 +183,9 @@ admin credentials for routine agent writes.
 
 ## Known v5 GA Limits
 
-- Mac is the only desktop GA target. Linux and Windows are post-GA artifact
-  targets documented in [Desktop Release](DESKTOP-RELEASE.md).
+- Mac is the only desktop GA target. Linux and Windows artifacts are
+  preview-only, unsigned, non-GA validation outputs documented in
+  [Desktop Release](DESKTOP-RELEASE.md), not supported v5 install targets.
 - Mobile GA is responsive web plus PWA, not native offline apps. Native mobile
   offline architecture is defined in
   [ADR 0003](architecture/ADR-0003-post-ga-native-mobile-offline.md);

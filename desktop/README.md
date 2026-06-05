@@ -80,14 +80,15 @@ in `config/window-state.json`.
 
 ## Release Packaging
 
-Unsigned PR artifacts, signed/notarized release artifacts, update metadata, and
-platform smoke steps are documented in
+Unsigned PR artifacts, macOS signed/notarized release artifacts, update
+metadata, and platform smoke steps are documented in
 [`docs/DESKTOP-RELEASE.md`](../docs/DESKTOP-RELEASE.md). Use the root
-`desktop:package:mac:unsigned`, `desktop:package:linux:unsigned`, and
-`desktop:package:windows:unsigned` scripts for local unsigned validation.
-Use `desktop:release:mac`, `desktop:release:linux`, or
+`desktop:package:mac:unsigned` script for Mac release validation. The
+`desktop:package:linux:unsigned` and `desktop:package:windows:unsigned` scripts
+produce preview-only, non-GA artifacts for post-GA readiness checks. Use
+`desktop:release:mac` only for v5 GA; use `desktop:release:linux` or
 `desktop:release:windows` only after the platform release prerequisites in the
-release guide are satisfied.
+release guide are promoted.
 
 ## Production Scaffold
 

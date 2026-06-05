@@ -90,13 +90,13 @@ jobs:
       - name: Prepare desktop runtime payload
         run: pnpm --filter @veritas-kanban/desktop package:prepare
 
-      - name: Build unsigned Linux AppImage, deb, and rpm artifacts
+      - name: Build unsigned Linux preview AppImage, deb, and rpm artifacts
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: node ./node_modules/electron-builder/cli.js --linux AppImage deb rpm --x64 --publish never
 
-      - name: Upload Linux desktop artifacts
+      - name: Upload Linux preview desktop artifacts
         uses: actions/upload-artifact@v7
         with:
           name: veritas-kanban-linux-unsigned
@@ -131,13 +131,13 @@ jobs:
       - name: Prepare desktop runtime payload
         run: pnpm --filter @veritas-kanban/desktop package:prepare
 
-      - name: Build unsigned Windows NSIS and ZIP artifacts
+      - name: Build unsigned Windows preview NSIS and ZIP artifacts
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: node ./node_modules/electron-builder/cli.js --win nsis zip --x64 --publish never
 
-      - name: Upload Windows desktop artifacts
+      - name: Upload Windows preview desktop artifacts
         uses: actions/upload-artifact@v7
         with:
           name: veritas-kanban-windows-unsigned

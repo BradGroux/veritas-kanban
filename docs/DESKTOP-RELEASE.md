@@ -1,8 +1,12 @@
 # Veritas Kanban Desktop Release
 
-This guide covers desktop packaging paths for macOS GA artifacts and post-GA
-Linux/Windows artifacts: unsigned PR artifacts, signed release artifacts, update
-metadata, and smoke testing.
+This guide covers desktop packaging paths for macOS GA artifacts and
+Linux/Windows preview artifact scaffolding: unsigned PR artifacts, signed
+release artifacts, update metadata, and smoke testing.
+
+For v5 GA, macOS is the only supported desktop release target. Linux and
+Windows artifacts are unsigned preview artifacts for post-GA validation unless a
+later release guide explicitly promotes the platform.
 
 ## Local Commands
 
@@ -20,15 +24,16 @@ pnpm desktop:release:windows
 
 `desktop:package:mac:dir` creates an unpacked local app for fast inspection.
 `desktop:package:mac:unsigned` creates unsigned DMG/ZIP artifacts and update
-metadata for PR validation. `desktop:package:linux:unsigned` creates x64
-AppImage, deb, and rpm artifacts. `desktop:package:windows:unsigned` creates
-x64 NSIS installer and ZIP artifacts.
+metadata for PR validation. `desktop:package:linux:unsigned` creates preview
+x64 AppImage, deb, and rpm artifacts. `desktop:package:windows:unsigned`
+creates preview x64 NSIS installer and ZIP artifacts.
 
 `desktop:release:mac` expects Apple signing and notarization credentials and
-publishes update metadata through electron-builder. `desktop:release:linux`
-publishes Linux artifacts without signing in the first post-GA slice.
-`desktop:release:windows` expects a Windows code-signing certificate available
-to electron-builder before a supported Windows release is cut.
+publishes update metadata through electron-builder. `desktop:release:linux` is
+reserved for post-GA Linux preview validation until checksum, provenance,
+install, and update policy requirements are promoted. `desktop:release:windows`
+expects a Windows code-signing certificate available to electron-builder before
+a supported Windows release is cut.
 
 The package step builds the workspace, stages the production server runtime in
 `desktop/.desktop-release/server`, stages the built web app in
@@ -45,6 +50,11 @@ dispatch. It builds unsigned artifacts on:
 - `windows-2025`: x64 NSIS installer, ZIP, blockmap, and update YAML.
 
 Unsigned artifact jobs do not require platform signing credentials.
+
+For v5 GA, the Linux and Windows jobs are preview signals only. They keep
+packaging paths and artifact names exercised, but they are not supported release
+deliverables and must not be linked from stable release notes as install
+targets.
 
 `Desktop Release` runs on manual dispatch or a published GitHub release. It
 requires the signing secrets below, builds signed/notarized macOS artifacts,
@@ -68,21 +78,22 @@ The workflow maps those secrets to electron-builder's `CSC_LINK`,
 Windows releases need a separate code-signing certificate before the first
 supported Windows artifact is published. Use `WINDOWS_CSC_LINK` and
 `WINDOWS_CSC_KEY_PASSWORD` as the repository secret names when the Windows
-release job is enabled. Linux AppImage/deb/rpm artifacts are unsigned in the
-first post-GA slice; publish checks should rely on checksum verification and
-GitHub release provenance until a Linux signing policy is added.
+release job is enabled. Linux AppImage/deb/rpm artifacts remain preview-only
+until checksum verification, GitHub release provenance, platform install smoke,
+and update policy requirements are promoted into the supported release path.
 
-## Supported Post-GA Targets
+## Desktop Support Boundary
 
-| Platform | First supported matrix                          | Artifact formats           | Update stance                                                           |
-| -------- | ----------------------------------------------- | -------------------------- | ----------------------------------------------------------------------- |
-| macOS    | macOS 14+ Apple Silicon                         | signed DMG, ZIP            | Supported through signed electron-updater metadata                      |
-| Linux    | Ubuntu 24.04 x64 and Fedora 40+ x64 smoke hosts | AppImage, deb, rpm         | Metadata generated; manual download/install is the first supported path |
-| Windows  | Windows 11 23H2+ x64 smoke host                 | signed NSIS installer, ZIP | Requires Windows code signing before update support is enabled          |
+| Platform | v5 GA stance                  | Validation matrix                               | Artifact formats             | Update stance                                      |
+| -------- | ----------------------------- | ----------------------------------------------- | ---------------------------- | -------------------------------------------------- |
+| macOS    | Supported desktop GA target   | macOS 14+ Apple Silicon                         | signed DMG, ZIP              | Supported through signed electron-updater metadata |
+| Linux    | Preview only; not a GA target | Ubuntu 24.04 x64 and Fedora 40+ x64 smoke hosts | unsigned AppImage, deb, rpm  | Deferred until Linux release policy is promoted    |
+| Windows  | Preview only; not a GA target | Windows 11 23H2+ x64 smoke host                 | unsigned NSIS installer, ZIP | Blocked until Windows code signing and smoke pass  |
 
-Linux and Windows support is post-GA. Do not mention Linux/Windows as Mac v5 GA
+Linux and Windows support is post-GA. Do not mention Linux/Windows as v5 GA
 install targets until the corresponding release artifact has passed the smoke
-matrix below.
+matrix below and the compatibility policy has been updated to promote the
+platform.
 
 ## Update Channels
 
@@ -113,9 +124,11 @@ policy is tracked in
   `pnpm test:unit`.
 - Run `pnpm desktop:package:mac:unsigned` and inspect artifact names.
 - Run `pnpm desktop:package:linux:unsigned` on Linux or the
-  `Desktop Artifacts` Linux job and inspect artifact names.
+  `Desktop Artifacts` Linux job and inspect preview artifact names. This is not
+  a v5 GA release gate.
 - Run `pnpm desktop:package:windows:unsigned` on Windows or the
-  `Desktop Artifacts` Windows job and inspect artifact names.
+  `Desktop Artifacts` Windows job and inspect preview artifact names. This is
+  not a v5 GA release gate.
 - Run `Desktop Artifacts` and download the uploaded DMG/ZIP/update metadata.
 - Run `Desktop Release` only after Apple signing secrets are configured.
 - Confirm notarization succeeds and the DMG installs without Gatekeeper
@@ -147,7 +160,10 @@ Signed release artifact:
 5. Publish a higher test-channel build, then confirm available, downloading,
    ready, and install states.
 
-Linux unsigned artifact:
+Linux preview unsigned artifact:
+
+These steps generate post-GA readiness evidence only. They are not v5 GA
+install instructions.
 
 1. Download `veritas-kanban-linux-unsigned` from the workflow run.
 2. On Ubuntu 24.04 x64, install the deb with
@@ -163,7 +179,10 @@ Linux unsigned artifact:
 6. Confirm uninstall removes the app but preserves user data unless the user
    explicitly deletes the app data directory.
 
-Windows unsigned artifact:
+Windows preview unsigned artifact:
+
+These steps generate post-GA readiness evidence only. They are not v5 GA
+install instructions.
 
 1. Download `veritas-kanban-windows-unsigned` from the workflow run.
 2. On Windows 11 23H2+ x64, run the NSIS installer and accept expected unsigned
@@ -188,8 +207,9 @@ Rollback:
 
 ## Platform Notes
 
-Linux and Windows packages are intentionally not v5 Mac GA blockers. The
-post-GA artifact jobs keep artifact naming and update-channel conventions
-portable, but Windows update support stays blocked until code signing and
-signed-installer smoke coverage are in place. Linux updater support is deferred
-until the project has a clear AppImage/deb/rpm update policy.
+Linux and Windows packages are intentionally not v5 GA blockers. The post-GA
+artifact jobs keep artifact naming and update-channel conventions portable, but
+Windows release and update support stay blocked until code signing and
+signed-installer smoke coverage are in place. Linux release and updater support
+are deferred until the project has clear checksum, provenance, install, and
+AppImage/deb/rpm update policies.
