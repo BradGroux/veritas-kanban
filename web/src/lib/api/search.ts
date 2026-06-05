@@ -25,6 +25,7 @@ export type SearchTarget =
       taskId: string;
       tab?: string;
       timelineAttemptId?: string;
+      timelineEventId?: string;
       href?: string;
     }
   | {

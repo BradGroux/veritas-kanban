@@ -68,6 +68,7 @@ export function TaskDetailPanel({
   const [taskChatOpen, setTaskChatOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [timelineAttemptId, setTimelineAttemptId] = useState<string | null>(null);
+  const [timelineEventId, setTimelineEventId] = useState<string | null>(null);
   const lastDefaultedTaskIdRef = useRef<string | undefined>(undefined);
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
@@ -129,11 +130,13 @@ export function TaskDetailPanel({
     if (!activeTaskId) {
       lastDefaultedTaskIdRef.current = undefined;
       setTimelineAttemptId(null);
+      setTimelineEventId(null);
       return;
     }
     if (lastDefaultedTaskIdRef.current === activeTaskId) return;
     lastDefaultedTaskIdRef.current = activeTaskId;
     setTimelineAttemptId(null);
+    setTimelineEventId(null);
     setActiveTab(fallbackTab);
   }, [activeTaskId, fallbackTab]);
 
@@ -141,6 +144,12 @@ export function TaskDetailPanel({
     if (!activeTaskId || !navigationTarget) return;
     if (navigationTarget.timelineAttemptId !== undefined) {
       setTimelineAttemptId(navigationTarget.timelineAttemptId ?? null);
+      if (navigationTarget.timelineEventId === undefined) {
+        setTimelineEventId(null);
+      }
+    }
+    if (navigationTarget.timelineEventId !== undefined) {
+      setTimelineEventId(navigationTarget.timelineEventId ?? null);
     }
     if (navigationTarget.tab && isTaskDetailTabAvailable(visibleTabs, navigationTarget.tab)) {
       setActiveTab(navigationTarget.tab);
@@ -148,6 +157,11 @@ export function TaskDetailPanel({
   }, [activeTaskId, navigationTarget, visibleTabs]);
 
   if (!localTask) return null;
+
+  const setTimelineAttemptTarget = (attemptId: string | null) => {
+    setTimelineAttemptId(attemptId);
+    setTimelineEventId(null);
+  };
 
   // Get current type info
   const currentType = taskTypes.find((t) => t.id === localTask.type);
@@ -158,13 +172,14 @@ export function TaskDetailPanel({
     task: localTask,
     readOnly,
     timelineAttemptId,
+    timelineEventId,
     updateField,
     onClose: () => onOpenChange(false),
     onRestore,
     setActiveTab,
     openTaskChat: () => setTaskChatOpen(true),
     openWorkflow: () => setWorkflowOpen(true),
-    setTimelineAttemptId,
+    setTimelineAttemptId: setTimelineAttemptTarget,
     addObservation: addObservationForTask,
     deleteObservation: deleteObservationForTask,
   };

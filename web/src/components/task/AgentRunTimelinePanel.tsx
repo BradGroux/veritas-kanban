@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -57,6 +57,7 @@ const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 interface AgentRunTimelinePanelProps {
   task: Task;
   initialAttemptId?: string | null;
+  initialEventId?: string | null;
   onOpenTab?: (target: TimelineTabTarget) => void;
   onOpenWorkflow?: (runId?: string) => void;
 }
@@ -913,10 +914,12 @@ function governanceTraceHrefForEvent(event: AgentRunTimelineEvent): string | nul
 
 function EventRow({
   event,
+  highlighted,
   onOpenTab,
   onOpenWorkflow,
 }: {
   event: AgentRunTimelineEvent;
+  highlighted?: boolean;
   onOpenTab?: (target: TimelineTabTarget) => void;
   onOpenWorkflow?: (runId?: string) => void;
 }) {
@@ -930,7 +933,13 @@ function EventRow({
   const governanceTraceHref = governanceTraceHrefForEvent(event);
 
   return (
-    <Paper withBorder p="sm" radius="md">
+    <Paper
+      withBorder
+      p="sm"
+      radius="md"
+      className={highlighted ? 'border-primary bg-primary/5 shadow-sm' : undefined}
+      data-highlighted={highlighted ? 'true' : undefined}
+    >
       <Stack gap="xs">
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Group gap="sm" align="flex-start" wrap="nowrap" className="min-w-0">
@@ -1023,6 +1032,7 @@ function EventRow({
 export function AgentRunTimelinePanel({
   task,
   initialAttemptId,
+  initialEventId,
   onOpenTab,
   onOpenWorkflow,
 }: AgentRunTimelinePanelProps) {
@@ -1046,6 +1056,7 @@ export function AgentRunTimelinePanel({
   );
   const [filter, setFilter] = useState<AgentRunTimelineEventType | 'all'>('all');
   const [visibleCount, setVisibleCount] = useState(TIMELINE_PAGE_SIZE);
+  const highlightedEventRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (initialAttemptId) {
@@ -1105,6 +1116,13 @@ export function AgentRunTimelinePanel({
       selectedAttemptId,
     ]
   );
+  const highlightedEventId = useMemo(() => {
+    if (!initialEventId) return null;
+    if (events.some((event) => event.id === initialEventId)) return initialEventId;
+    const telemetryEventId = `telemetry-${initialEventId}`;
+    if (events.some((event) => event.id === telemetryEventId)) return telemetryEventId;
+    return initialEventId;
+  }, [events, initialEventId]);
 
   const filteredEvents = useMemo(
     () => (filter === 'all' ? events : events.filter((event) => event.type === filter)),
@@ -1128,6 +1146,25 @@ export function AgentRunTimelinePanel({
   useEffect(() => {
     setVisibleCount(TIMELINE_PAGE_SIZE);
   }, [filter, selectedAttemptId, events.length]);
+
+  useEffect(() => {
+    if (!highlightedEventId) return;
+    if (filter !== 'all') {
+      setFilter('all');
+    }
+
+    const eventIndex = events.findIndex((event) => event.id === highlightedEventId);
+    if (eventIndex >= visibleCount) {
+      setVisibleCount(Math.max(TIMELINE_PAGE_SIZE, eventIndex + 1));
+    }
+  }, [events, filter, highlightedEventId, visibleCount]);
+
+  useEffect(() => {
+    if (!highlightedEventId) return;
+    const highlightedElement = highlightedEventRef.current;
+    if (typeof highlightedElement?.scrollIntoView !== 'function') return;
+    highlightedElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [highlightedEventId, visibleEvents.length]);
 
   return (
     <Stack gap="md">
@@ -1370,14 +1407,23 @@ export function AgentRunTimelinePanel({
       <ScrollArea.Autosize mah={520} type="auto">
         <Stack gap="xs" pr="xs">
           {visibleEvents.length > 0 ? (
-            visibleEvents.map((event) => (
-              <EventRow
-                key={event.id}
-                event={event}
-                onOpenTab={onOpenTab}
-                onOpenWorkflow={onOpenWorkflow}
-              />
-            ))
+            visibleEvents.map((event) => {
+              const highlighted = event.id === highlightedEventId;
+              return (
+                <div
+                  key={event.id}
+                  ref={highlighted ? highlightedEventRef : undefined}
+                  data-testid={highlighted ? 'highlighted-timeline-event' : undefined}
+                >
+                  <EventRow
+                    event={event}
+                    highlighted={highlighted}
+                    onOpenTab={onOpenTab}
+                    onOpenWorkflow={onOpenWorkflow}
+                  />
+                </div>
+              );
+            })
           ) : (
             <Paper withBorder p="md" radius="md">
               <Group gap="xs">

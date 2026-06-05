@@ -467,6 +467,21 @@ describe('agent run timeline Mantine surface', () => {
     expect(mocks.onOpenTab).toHaveBeenCalledWith('work-products');
   });
 
+  it('highlights a deep-linked telemetry event', () => {
+    renderWithProviders(
+      <AgentRunTimelinePanel
+        task={task}
+        initialAttemptId="attempt-1"
+        initialEventId="evt-tokens"
+        onOpenTab={mocks.onOpenTab}
+      />
+    );
+
+    const highlighted = screen.getByTestId('highlighted-timeline-event');
+    expect(highlighted.textContent).toContain('Token usage recorded');
+    expect(highlighted.querySelector('[data-highlighted="true"]')).toBeDefined();
+  });
+
   it('pages long timelines so replay rendering stays bounded', async () => {
     const user = userEvent.setup();
     const longTrace: AgentRunTrace = {

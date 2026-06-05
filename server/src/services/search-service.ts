@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { getNotificationService, NotificationService } from './notification-service.js';
 import {
   getScheduledDeliverablesService,
   ScheduledDeliverablesService,
 } from './scheduled-deliverables-service.js';
+import { getTelemetryService, TelemetryService } from './telemetry-service.js';
 import { getWorkProductService, WorkProductService } from './work-product-service.js';
 import { getWorkflowService, WorkflowService } from './workflow-service.js';
 import { getWorkflowRunService, WorkflowRunService } from './workflow-run-service.js';
@@ -106,6 +108,14 @@ const DATA_FILE_EXTENSIONS = [
 ] as const;
 const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', 'backups', 'worktrees']);
 const MAX_FILES_PER_SOURCE = Number(process.env.VERITAS_SEARCH_MAX_FILES_PER_SOURCE || 1_500);
+const CONFIGURED_MAX_TELEMETRY_SEARCH_EVENTS = Number(
+  process.env.VERITAS_SEARCH_MAX_TELEMETRY_EVENTS
+);
+const MAX_TELEMETRY_SEARCH_EVENTS =
+  Number.isFinite(CONFIGURED_MAX_TELEMETRY_SEARCH_EVENTS) &&
+  CONFIGURED_MAX_TELEMETRY_SEARCH_EVENTS > 0
+    ? CONFIGURED_MAX_TELEMETRY_SEARCH_EVENTS
+    : 2_000;
 
 class SearchService {
   async search(request: SearchRequest): Promise<SearchResponse> {
@@ -372,6 +382,10 @@ class SearchService {
 
     if (collections.has('workflow-runs')) {
       results.push(...(await this.searchWorkflowRuns(query, terms, limit)));
+    }
+
+    if (collections.has('agent-runs')) {
+      results.push(...(await this.searchTelemetryEvents(query, terms, limit)));
     }
 
     if (collections.has('notifications')) {
@@ -675,6 +689,80 @@ class SearchService {
     return this.rankResults(results).slice(0, limit);
   }
 
+  private async searchTelemetryEvents(
+    query: string,
+    terms: string[],
+    limit: number
+  ): Promise<SearchResult[]> {
+    const events = await this.telemetryService().getEvents({
+      limit: Math.min(Math.max(limit * 50, 250), MAX_TELEMETRY_SEARCH_EVENTS),
+    });
+    const results: SearchResult[] = [];
+
+    for (const event of events) {
+      const eventId = this.firstString(event.id) ?? this.telemetryEventFallbackId(event);
+      const attemptId = this.telemetryEventAttemptId(event);
+      const title = this.telemetryEventTitle(event);
+      const content = this.telemetryEventSearchText(event);
+      const pathValue = `/agent-runs/${encodeURIComponent(attemptId ?? eventId)}`;
+      const score = this.scoreText({
+        title,
+        pathValue,
+        content,
+        terms,
+        query,
+        timestamp: event.timestamp,
+      });
+
+      if (score.textScore === 0) continue;
+
+      const target = event.taskId
+        ? {
+            type: 'task',
+            taskId: event.taskId,
+            tab: 'timeline',
+            timelineAttemptId: attemptId,
+            timelineEventId: eventId,
+            href: `veritas://task/${encodeURIComponent(event.taskId)}?tab=timeline${
+              attemptId ? `&attempt=${encodeURIComponent(attemptId)}` : ''
+            }&event=${encodeURIComponent(eventId)}`,
+          }
+        : { type: 'diagnostics', href: '/diagnostics' };
+
+      results.push({
+        id: `telemetry:${eventId}`,
+        title,
+        path: pathValue,
+        collection: 'agent-runs',
+        snippet: this.extractSnippet(content, terms),
+        score: score.score,
+        metadata: {
+          source: 'telemetry-event',
+          eventId,
+          eventType: event.type,
+          taskId: event.taskId,
+          project: event.project,
+          agent: this.telemetryEventAgent(event),
+          attemptId,
+          timestamp: event.timestamp,
+          highlight: {
+            timelineEventId: eventId,
+            timelineAttemptId: attemptId,
+          },
+          target,
+          actions: this.actionsForTarget(target, 'agent-runs'),
+          ranking: {
+            textScore: score.textScore,
+            recencyBoost: score.recencyBoost,
+            usageFrequency: 0,
+          },
+        },
+      });
+    }
+
+    return this.rankResults(results).slice(0, limit);
+  }
+
   private async searchNotifications(
     query: string,
     terms: string[],
@@ -963,6 +1051,71 @@ class SearchService {
     }
 
     return results;
+  }
+
+  private telemetryEventSearchText(event: AnyTelemetryEvent): string {
+    const parts = [
+      event.id,
+      event.type,
+      event.timestamp,
+      event.taskId,
+      event.project,
+      this.telemetryEventAgent(event),
+      this.telemetryEventAttemptId(event),
+      this.firstString(
+        this.recordValue(event, 'model'),
+        this.recordValue(event, 'status'),
+        this.recordValue(event, 'previousStatus')
+      ),
+      this.firstString(this.recordValue(event, 'error'), this.recordValue(event, 'summary')),
+      this.firstString(this.recordValue(event, 'tool'), this.recordValue(event, 'toolName')),
+      this.firstString(this.recordValue(event, 'artifact'), this.recordValue(event, 'artifactUrl')),
+      this.telemetryUsageSummary(event),
+    ];
+
+    return this.redactSnippet(parts.filter(Boolean).join('\n'));
+  }
+
+  private telemetryEventTitle(event: AnyTelemetryEvent): string {
+    const agent = this.telemetryEventAgent(event);
+    const subject = [agent, event.type].filter(Boolean).join(' ');
+    if (event.taskId) return `${subject || event.type} for ${event.taskId}`;
+    return subject || event.type;
+  }
+
+  private telemetryEventAgent(event: AnyTelemetryEvent): string | undefined {
+    return this.firstString(this.recordValue(event, 'agent'), this.recordValue(event, 'actor'));
+  }
+
+  private telemetryEventAttemptId(event: AnyTelemetryEvent): string | undefined {
+    return this.firstString(
+      this.recordValue(event, 'attemptId'),
+      this.recordValue(event, 'traceId'),
+      this.recordValue(event, 'runId')
+    );
+  }
+
+  private telemetryEventFallbackId(event: AnyTelemetryEvent): string {
+    return [event.type, event.taskId, event.timestamp].filter(Boolean).join(':');
+  }
+
+  private telemetryUsageSummary(event: AnyTelemetryEvent): string | undefined {
+    const inputTokens = this.firstNumber(this.recordValue(event, 'inputTokens'));
+    const outputTokens = this.firstNumber(this.recordValue(event, 'outputTokens'));
+    const totalTokens = this.firstNumber(this.recordValue(event, 'totalTokens'));
+    const cost = this.firstNumber(this.recordValue(event, 'cost'));
+    const values = [
+      inputTokens === undefined ? undefined : `input tokens ${inputTokens}`,
+      outputTokens === undefined ? undefined : `output tokens ${outputTokens}`,
+      totalTokens === undefined ? undefined : `total tokens ${totalTokens}`,
+      cost === undefined ? undefined : `cost ${cost}`,
+    ].filter(Boolean);
+
+    return values.length > 0 ? values.join(' ') : undefined;
+  }
+
+  private recordValue(record: object, key: string): unknown {
+    return (record as Record<string, unknown>)[key];
   }
 
   private normalizeCollections(collections?: SearchCollection[]): SearchCollection[] {
@@ -1305,6 +1458,10 @@ class SearchService {
       });
     }
     return getWorkflowRunService();
+  }
+
+  private telemetryService(): TelemetryService {
+    return getTelemetryService();
   }
 
   private firstString(...values: unknown[]): string | undefined {
