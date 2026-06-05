@@ -5,6 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MaintenanceService } from '../services/maintenance-service.js';
 import { resetWorkProductServiceForTests } from '../services/work-product-service.js';
 
+const seededSensitiveValues = [
+  'vk_seededNegativeFixture1234567890',
+  'seededBearerToken1234567890',
+  '/Users/brad/private/customer-board/roadmap.md',
+  String.raw`C:\Users\Brad\private\board\notes.md`,
+  'Write a launch prompt with private roadmap details.',
+  'Customer says launch price is confidential.',
+  'stdout leaked generated summary for private customer.',
+  'stderr failed with customer secret output.',
+  'model returned private generated content.',
+];
+
 describe('MaintenanceService', () => {
   let root: string;
   let originalDataDir: string | undefined;
@@ -20,7 +32,16 @@ describe('MaintenanceService', () => {
       [
         'startup ok',
         'Bearer abcdefghijklmnop token=sk_supersecret1234567890',
+        `api_key=${seededSensitiveValues[0]}`,
+        `Authorization: Bearer ${seededSensitiveValues[1]}`,
         '/Users/brad/private/project/file.txt',
+        seededSensitiveValues[2],
+        seededSensitiveValues[3],
+        `prompt: "${seededSensitiveValues[4]}"`,
+        `chat message: "${seededSensitiveValues[5]}"`,
+        `stdout: "${seededSensitiveValues[6]}"`,
+        `stderr: "${seededSensitiveValues[7]}"`,
+        `model output: "${seededSensitiveValues[8]}"`,
       ].join('\n'),
       'utf-8'
     );
@@ -92,6 +113,7 @@ describe('MaintenanceService', () => {
       'utf-8'
     );
     const summary = await fs.readFile(path.join(bundle.outputPath, 'summary.json'), 'utf-8');
+    const bundleText = await readDirectoryText(bundle.outputPath);
 
     expect(bundle.redacted).toBe(true);
     expect(manifest.includedCategories).toEqual(
@@ -100,5 +122,28 @@ describe('MaintenanceService', () => {
     expect(manifest.files.find((file) => file.id === 'server')?.path).toContain('[redacted-logs]');
     expect(serverLog).not.toContain('sk_supersecret1234567890');
     expect(summary).not.toContain(root);
+    expect(bundleText).toContain('[REDACTED_API_KEY]');
+    expect(bundleText).toContain('Bearer [REDACTED]');
+    expect(bundleText).toContain('[redacted-local-path]');
+    expect(bundleText).toContain('[redacted-prompt]');
+    expect(bundleText).toContain('[redacted-chat-content]');
+    expect(bundleText).toContain('[redacted-process-output]');
+    expect(bundleText).toContain('[redacted-generated-text]');
+    for (const sensitiveValue of seededSensitiveValues) {
+      expect(bundleText).not.toContain(sensitiveValue);
+    }
   });
 });
+
+async function readDirectoryText(dirPath: string): Promise<string> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const chunks = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) return readDirectoryText(entryPath);
+      if (!entry.isFile()) return '';
+      return fs.readFile(entryPath, 'utf-8');
+    })
+  );
+  return chunks.join('\n');
+}
