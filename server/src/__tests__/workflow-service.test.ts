@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 
 import { WorkflowService } from '../services/workflow-service.js';
-import { ValidationError } from '../types/workflow.js';
+import { ValidationError, type WorkflowDefinition } from '../types/workflow.js';
 
 function workflow(overrides: Record<string, any> = {}) {
   return {
@@ -22,13 +22,34 @@ function workflow(overrides: Record<string, any> = {}) {
 describe('WorkflowService', () => {
   let tmpDir: string;
   let service: WorkflowService;
+  let originalCodexEnv: {
+    VERITAS_CODEX_EXECUTABLE?: string;
+    CODEX_PATH?: string;
+    VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES?: string;
+  };
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workflow-service-'));
     service = new WorkflowService(tmpDir);
+    originalCodexEnv = {
+      VERITAS_CODEX_EXECUTABLE: process.env.VERITAS_CODEX_EXECUTABLE,
+      CODEX_PATH: process.env.CODEX_PATH,
+      VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES:
+        process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES,
+    };
+    delete process.env.VERITAS_CODEX_EXECUTABLE;
+    delete process.env.CODEX_PATH;
+    delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
   });
 
   afterEach(async () => {
+    for (const [key, value] of Object.entries(originalCodexEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -188,6 +209,29 @@ describe('WorkflowService', () => {
         }) as any
       )
     ).rejects.toThrow(/exceeds maximum of 50 tools/);
+  });
+
+  it('rejects arbitrary Codex command overrides unless explicitly allowlisted', async () => {
+    const codexWorkflow = workflow({
+      agents: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          role: 'developer',
+          provider: 'codex-sdk',
+          command: '/tmp/not-the-codex-binary',
+          description: 'Runs Codex.',
+        },
+      ],
+      steps: [{ id: 'step-1', type: 'agent', agent: 'codex', prompt: 'x' }],
+    }) as WorkflowDefinition;
+
+    await expect(service.saveWorkflow(codexWorkflow)).rejects.toThrow(
+      /unsafe Codex command override/
+    );
+
+    process.env.VERITAS_CODEX_EXECUTABLE = '/tmp/not-the-codex-binary';
+    await expect(service.saveWorkflow(codexWorkflow)).resolves.toBeUndefined();
   });
 
   it('saves ACLs and audit entries', async () => {

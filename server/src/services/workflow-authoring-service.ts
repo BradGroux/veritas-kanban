@@ -14,6 +14,7 @@ import type {
 } from '../types/workflow.js';
 import { getToolPolicyService, type ToolPolicyService } from './tool-policy-service.js';
 import { getSkillSecurityService, type SkillSecurityService } from './skill-security-service.js';
+import { evaluateCodexCommandPolicy, isCodexWorkflowAgent } from '../utils/codex-command-policy.js';
 
 export type WorkflowRecipeInputType = 'text' | 'textarea' | 'select' | 'boolean';
 export type WorkflowLintSeverity = 'error' | 'warning' | 'info';
@@ -1040,6 +1041,7 @@ export class WorkflowAuthoringService {
     const messages: WorkflowLintMessage[] = [];
 
     this.lintDefinition(workflow, messages);
+    this.lintCodexCommandOverrides(workflow, messages);
     const pipelineSummary = this.lintPipeline(workflow, messages);
     await this.lintToolPolicies(workflow, messages);
     const skillAudit = await this.lintSkillAudit(workflow, context, messages);
@@ -1333,6 +1335,26 @@ export class WorkflowAuthoringService {
           )
         );
       }
+    }
+  }
+
+  private lintCodexCommandOverrides(
+    workflow: WorkflowDefinition,
+    messages: WorkflowLintMessage[]
+  ): void {
+    for (const [index, agent] of toArray(workflow.agents).entries()) {
+      if (!isCodexWorkflowAgent(agent)) continue;
+      const commandPolicy = evaluateCodexCommandPolicy(agent.command);
+      if (commandPolicy.allowed) continue;
+      messages.push(
+        message(
+          'error',
+          'definition',
+          `agents[${index}].command`,
+          `Agent ${agent.id} has an unsafe Codex command override.`,
+          commandPolicy.reason ?? 'Use the default codex command or configure an allowed path.'
+        )
+      );
     }
   }
 

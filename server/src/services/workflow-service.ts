@@ -12,6 +12,7 @@ import { getWorkflowsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkflowDefinitionRepository } from '../storage/sqlite/workflow-repositories.js';
+import { evaluateCodexCommandPolicy, isCodexWorkflowAgent } from '../utils/codex-command-policy.js';
 
 const log = createLogger('workflow-service');
 const WORKFLOW_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -334,6 +335,15 @@ export class WorkflowService {
         throw new ValidationError(
           `Agent ${agent.id} exceeds maximum of ${MAX_TOOLS_PER_AGENT} tools (has ${agent.tools.length})`
         );
+      }
+
+      if (isCodexWorkflowAgent(agent)) {
+        const commandPolicy = evaluateCodexCommandPolicy(agent.command);
+        if (!commandPolicy.allowed) {
+          throw new ValidationError(
+            `Agent ${agent.id} has unsafe Codex command override: ${commandPolicy.reason}`
+          );
+        }
       }
     }
 

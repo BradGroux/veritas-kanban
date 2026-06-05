@@ -53,6 +53,25 @@ async function* codexEvents() {
   };
 }
 
+function captureCodexCommandEnv() {
+  return {
+    VERITAS_CODEX_EXECUTABLE: process.env.VERITAS_CODEX_EXECUTABLE,
+    CODEX_PATH: process.env.CODEX_PATH,
+    VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES:
+      process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES,
+  };
+}
+
+function restoreCodexCommandEnv(env: ReturnType<typeof captureCodexCommandEnv>): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
 describe('WorkflowStepExecutor Codex integration', () => {
   let tmpDir: string;
 
@@ -198,6 +217,118 @@ describe('WorkflowStepExecutor Codex integration', () => {
           process.env[key] = value;
         }
       }
+    }
+  });
+
+  it('rejects unsafe Codex command overrides before starting SDK sessions', async () => {
+    const originalEnv = captureCodexCommandEnv();
+    delete process.env.VERITAS_CODEX_EXECUTABLE;
+    delete process.env.CODEX_PATH;
+    delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
+
+    try {
+      const executor = new WorkflowStepExecutor(tmpDir);
+      const step: WorkflowStep = {
+        id: 'implement',
+        name: 'Implement',
+        type: 'agent',
+        agent: 'codex',
+        input: 'Work on {{task.title}}',
+        output: { file: 'implement.md' },
+      };
+      const run: WorkflowRun = {
+        id: 'run_1234567890_command',
+        workflowId: 'wf-codex-command',
+        workflowVersion: 1,
+        status: 'running',
+        context: {
+          task: {
+            id: 'task_1',
+            title: 'Codex command policy',
+            git: { worktreePath: tmpDir },
+          },
+          workflow: {
+            agents: [
+              {
+                id: 'codex',
+                name: 'Codex',
+                role: 'developer',
+                provider: 'codex-sdk',
+                command: '/tmp/not-the-codex-binary',
+                description: 'Codex developer',
+              },
+            ],
+          },
+          _sessions: {},
+        },
+        startedAt: new Date().toISOString(),
+        steps: [{ stepId: 'implement', status: 'running', retries: 0 }],
+      };
+
+      await expect(executor.executeStep(step, run)).rejects.toThrow(
+        'Codex command overrides must be "codex"'
+      );
+      expect(mockCodexConstructorOptions).not.toHaveBeenCalled();
+      expect(mockStartThread).not.toHaveBeenCalled();
+      expect(mockResumeThread).not.toHaveBeenCalled();
+    } finally {
+      restoreCodexCommandEnv(originalEnv);
+    }
+  });
+
+  it('passes configured Codex executable overrides to SDK sessions', async () => {
+    const originalEnv = captureCodexCommandEnv();
+    process.env.VERITAS_CODEX_EXECUTABLE = '/tmp/allowed-codex';
+    delete process.env.CODEX_PATH;
+    delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
+
+    try {
+      const executor = new WorkflowStepExecutor(tmpDir);
+      const step: WorkflowStep = {
+        id: 'implement',
+        name: 'Implement',
+        type: 'agent',
+        agent: 'codex',
+        input: 'Work on {{task.title}}',
+        output: { file: 'implement.md' },
+      };
+      const run: WorkflowRun = {
+        id: 'run_1234567890_allowed_command',
+        workflowId: 'wf-codex-allowed-command',
+        workflowVersion: 1,
+        status: 'running',
+        context: {
+          task: {
+            id: 'task_1',
+            title: 'Codex command policy',
+            git: { worktreePath: tmpDir },
+          },
+          workflow: {
+            agents: [
+              {
+                id: 'codex',
+                name: 'Codex',
+                role: 'developer',
+                provider: 'codex-sdk',
+                command: '/tmp/allowed-codex',
+                description: 'Codex developer',
+              },
+            ],
+          },
+          _sessions: {},
+        },
+        startedAt: new Date().toISOString(),
+        steps: [{ stepId: 'implement', status: 'running', retries: 0 }],
+      };
+
+      await executor.executeStep(step, run);
+
+      expect(mockCodexConstructorOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ codexPathOverride: '/tmp/allowed-codex' })
+      );
+      expect(mockStartThread).toHaveBeenCalled();
+    } finally {
+      restoreCodexCommandEnv(originalEnv);
     }
   });
 

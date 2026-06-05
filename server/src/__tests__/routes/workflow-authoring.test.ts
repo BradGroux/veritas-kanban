@@ -254,6 +254,68 @@ describe('workflow authoring routes', () => {
     );
   });
 
+  it('dry-runs drafts and blocks unsafe Codex command overrides', async () => {
+    const originalEnv = {
+      VERITAS_CODEX_EXECUTABLE: process.env.VERITAS_CODEX_EXECUTABLE,
+      CODEX_PATH: process.env.CODEX_PATH,
+      VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES:
+        process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES,
+    };
+    delete process.env.VERITAS_CODEX_EXECUTABLE;
+    delete process.env.CODEX_PATH;
+    delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
+
+    try {
+      const draft = workflow({
+        agents: [
+          {
+            id: 'codex',
+            name: 'Codex',
+            role: 'developer',
+            provider: 'codex-sdk',
+            command: '/tmp/not-the-codex-binary',
+            description: 'Runs Codex.',
+          },
+        ],
+        steps: [
+          {
+            id: 'implement',
+            name: 'Implement',
+            type: 'agent',
+            agent: 'codex',
+            input: 'Implement the task.',
+          },
+        ],
+      });
+
+      const response = await request(app)
+        .post('/api/workflows/authoring/dry-run')
+        .send({ workflow: draft, context: { clientMode: 'local' } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('blocked');
+      expect(response.body.canRun).toBe(false);
+      expect(response.body.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: 'error',
+            category: 'definition',
+            path: 'agents[0].command',
+            message: 'Agent codex has an unsafe Codex command override.',
+          }),
+        ])
+      );
+    } finally {
+      for (const [key, value] of Object.entries(originalEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
   it('adds skill audit status to dry-run checks and blocks risky skills in remote mode', async () => {
     const runtimeDir = path.join(testRoot, '.veritas-kanban');
     await fs.mkdir(runtimeDir, { recursive: true });

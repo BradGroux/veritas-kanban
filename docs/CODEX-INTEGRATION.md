@@ -127,6 +127,10 @@ agents:
     description: Codex workflow implementer
 ```
 
+Workflow definitions should normally omit `command` for Codex agents. Command overrides are
+rejected unless they are `codex`, match `VERITAS_CODEX_EXECUTABLE` or `CODEX_PATH`, or the server
+is intentionally started with `VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES=1`.
+
 ## Review Actions
 
 Codex review actions run against the task worktree diff in read-only SDK mode and map structured findings into Veritas review comments:

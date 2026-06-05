@@ -16,6 +16,10 @@ import type {
 } from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
+import {
+  assertAllowedCodexCommandOverride,
+  isCodexWorkflowAgent,
+} from '../utils/codex-command-policy.js';
 import { createLogger } from '../lib/logger.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import {
@@ -344,11 +348,14 @@ export class WorkflowStepExecutor {
   ): Promise<StepExecutionResult> {
     this.assertCodexToolPolicySupported(step, agentDef, toolPolicyFilter);
 
+    const codexPathOverride = assertAllowedCodexCommandOverride(
+      agentDef?.command,
+      `Workflow agent ${agentDef?.id || step.agent || step.id}`
+    );
     const { Codex } = await import('@openai/codex-sdk');
     const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
     const codex = new Codex({
-      codexPathOverride:
-        agentDef?.command && agentDef.command !== 'codex' ? agentDef.command : undefined,
+      codexPathOverride,
       env: buildSafeCodexEnv(),
     });
 
@@ -491,10 +498,7 @@ export class WorkflowStepExecutor {
   }
 
   private isCodexAgent(agentDef: WorkflowAgent | null, agentId?: string): boolean {
-    const marker = `${agentDef?.provider || ''} ${agentDef?.id || ''} ${
-      agentDef?.name || ''
-    } ${agentDef?.role || ''} ${agentId || ''}`.toLowerCase();
-    return marker.includes('codex');
+    return isCodexWorkflowAgent(agentDef ? { ...agentDef, agentId } : { id: agentId });
   }
 
   private getWorkflowWorkingDirectory(run: WorkflowRun): string {
