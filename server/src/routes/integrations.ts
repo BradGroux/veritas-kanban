@@ -12,6 +12,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { createLogger } from '../lib/logger.js';
 import type { CoolifyServiceConfig, CoolifyServicesConfig } from '@veritas-kanban/shared';
 import { getOutboundIntegrationService } from '../services/outbound-integration-service.js';
+import { safeFetch } from '../utils/url-validation.js';
 
 const log = createLogger('integrations');
 const router = Router();
@@ -104,11 +105,18 @@ async function pingService(service: CoolifyServiceConfig): Promise<ServiceStatus
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
 
   try {
-    await fetch(validated.href, {
-      method: 'HEAD',
-      signal: controller.signal,
-      redirect: 'manual',
-    });
+    const response = await safeFetch(
+      validated.href,
+      {
+        method: 'HEAD',
+        signal: controller.signal,
+        redirect: 'manual',
+      },
+      { allowHttp: true }
+    );
+    if (!response) {
+      return { status: 'down', error: 'blocked host' };
+    }
     const responseTimeMs = Math.round(performance.now() - start);
 
     // Any response (even 401/403) means the service is up

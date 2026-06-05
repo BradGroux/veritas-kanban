@@ -6,9 +6,21 @@ const { mockLookup } = vi.hoisted(() => ({
   mockLookup: vi.fn(),
 }));
 
+const { mockSafeFetch } = vi.hoisted(() => ({
+  mockSafeFetch: vi.fn(),
+}));
+
 vi.mock('node:dns/promises', () => ({
   lookup: mockLookup,
 }));
+
+vi.mock('../../utils/url-validation.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/url-validation.js')>();
+  return {
+    ...actual,
+    safeFetch: mockSafeFetch,
+  };
+});
 
 const { mockGetConfig } = vi.hoisted(() => ({
   mockGetConfig: vi.fn(),
@@ -32,6 +44,11 @@ describe('integrations routes', () => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     mockLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    mockSafeFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(''),
+    } as unknown as Response);
     app = express();
     app.use('/api/integrations', integrationsRoutes);
   });
@@ -65,15 +82,11 @@ describe('integrations routes', () => {
       },
     });
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-
     const res = await request(app).get('/api/integrations/status');
     expect(res.status).toBe(200);
     expect(res.body.data.n8n.status).toBe('down');
     expect(res.body.data.n8n.error).toBe('blocked host');
-    expect(fetchSpy).not.toHaveBeenCalled();
-
-    fetchSpy.mockRestore();
+    expect(mockSafeFetch).not.toHaveBeenCalled();
   });
 
   it('marks service up when reachable', async () => {
@@ -85,29 +98,24 @@ describe('integrations routes', () => {
       },
     });
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
-
     const res = await request(app).get('/api/integrations/status');
     expect(res.status).toBe(200);
     expect(res.body.data.n8n.status).toBe('up');
     expect(mockLookup).toHaveBeenCalledWith('example.com', { all: true });
-    expect(fetchSpy).toHaveBeenCalledWith(
+    expect(mockSafeFetch).toHaveBeenCalledWith(
       'https://example.com/',
-      expect.objectContaining({ method: 'HEAD', redirect: 'manual' })
+      expect.objectContaining({ method: 'HEAD', redirect: 'manual' }),
+      { allowHttp: true }
     );
-    fetchSpy.mockRestore();
   });
 
   it('exposes sanitized outbound endpoint and delivery history', async () => {
     const endpointId = `route-test.${Date.now()}`;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 202,
-        text: vi.fn().mockResolvedValue('accepted'),
-      })
-    );
+    mockSafeFetch.mockResolvedValue({
+      ok: true,
+      status: 202,
+      text: vi.fn().mockResolvedValue('accepted'),
+    } as unknown as Response);
 
     const delivery = await getOutboundIntegrationService().deliver(
       {

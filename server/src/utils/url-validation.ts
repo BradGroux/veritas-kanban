@@ -12,6 +12,8 @@
  */
 
 import { lookup } from 'node:dns/promises';
+import { request as httpRequest, type IncomingHttpHeaders, type RequestOptions } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import { createLogger } from '../lib/logger.js';
 
@@ -142,6 +144,15 @@ export interface UrlValidationResult {
   normalized?: string;
 }
 
+interface ResolvedOutboundAddress {
+  address: string;
+  family: 4 | 6;
+}
+
+interface ResolvedUrlValidationResult extends UrlValidationResult {
+  resolvedAddress?: ResolvedOutboundAddress;
+}
+
 export interface UrlValidationOptions {
   /** Allow http:// in addition to https:// (default: false in production) */
   allowHttp?: boolean;
@@ -251,16 +262,28 @@ export function validateWebhookUrl(
 async function validateResolvedHostname(
   parsed: URL,
   opts: UrlValidationOptions
-): Promise<UrlValidationResult> {
+): Promise<ResolvedUrlValidationResult> {
   const hostname = parsed.hostname;
+  const directIpFamily = isIP(hostname);
 
-  if (isIP(hostname) !== 0 || isLocalhostHostname(hostname)) {
-    return { valid: true, normalized: parsed.href };
+  if (directIpFamily === 4 || directIpFamily === 6) {
+    return {
+      valid: true,
+      normalized: parsed.href,
+      resolvedAddress: { address: hostname, family: directIpFamily },
+    };
   }
 
   try {
     const records = await lookup(hostname, { all: true, verbatim: true });
+    const resolvedAddresses: ResolvedOutboundAddress[] = [];
+
     for (const record of records) {
+      const family = isIP(record.address);
+      if (family !== 4 && family !== 6) {
+        continue;
+      }
+
       const check = isBlockedIpAddress(record.address, opts);
       if (check.blocked) {
         const result = {
@@ -272,7 +295,19 @@ async function validateResolvedHostname(
         }
         return result;
       }
+
+      resolvedAddresses.push({ address: record.address, family });
     }
+
+    if (resolvedAddresses.length === 0) {
+      const result = { valid: false, reason: 'Hostname did not resolve to an IP address' };
+      if (opts.logFailures) {
+        log.warn({ url: parsed.origin, reason: result.reason }, 'Webhook URL blocked');
+      }
+      return result;
+    }
+
+    return { valid: true, normalized: parsed.href, resolvedAddress: resolvedAddresses[0] };
   } catch {
     const result = { valid: false, reason: 'Hostname could not be resolved' };
     if (opts.logFailures) {
@@ -280,8 +315,113 @@ async function validateResolvedHostname(
     }
     return result;
   }
+}
 
-  return { valid: true, normalized: parsed.href };
+function headersFromInit(headers: RequestInit['headers'] | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!headers) return result;
+
+  const normalized = new Headers(headers);
+  normalized.forEach((value, key) => {
+    if (key.toLowerCase() !== 'host') {
+      result[key] = value;
+    }
+  });
+  return result;
+}
+
+function headersFromResponse(headers: IncomingHttpHeaders): Headers {
+  const result = new Headers();
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        result.append(key, item);
+      }
+    } else {
+      result.set(key, String(value));
+    }
+  }
+  return result;
+}
+
+async function bodyFromInit(
+  body: RequestInit['body'] | undefined
+): Promise<string | Uint8Array | undefined> {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string') return body;
+  if (body instanceof URLSearchParams) return body.toString();
+  if (body instanceof Uint8Array) return body;
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (ArrayBuffer.isView(body)) {
+    return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  }
+  if (body instanceof Blob) {
+    return new Uint8Array(await body.arrayBuffer());
+  }
+
+  throw new TypeError('Unsupported outbound request body type');
+}
+
+async function fetchPinnedUrl(
+  parsed: URL,
+  resolvedAddress: ResolvedOutboundAddress,
+  init?: RequestInit
+): Promise<Response> {
+  const pinnedLookup: NonNullable<RequestOptions['lookup']> = (_hostname, options, callback) => {
+    const cb = typeof options === 'function' ? options : callback;
+    if (!cb) {
+      throw new Error('Pinned DNS lookup callback was not provided');
+    }
+    if (typeof options === 'object' && options?.all) {
+      cb(null, [resolvedAddress]);
+      return;
+    }
+    cb(null, resolvedAddress.address, resolvedAddress.family);
+  };
+  const requestBody = await bodyFromInit(init?.body ?? undefined);
+  const requestOptions: RequestOptions & { servername?: string } = {
+    protocol: parsed.protocol,
+    hostname: parsed.hostname,
+    port: parsed.port || undefined,
+    path: `${parsed.pathname}${parsed.search}`,
+    method: init?.method ?? 'GET',
+    headers: headersFromInit(init?.headers),
+    signal: init?.signal ?? undefined,
+    lookup: pinnedLookup,
+  };
+
+  if (parsed.protocol === 'https:') {
+    requestOptions.servername = parsed.hostname;
+  }
+
+  const request = parsed.protocol === 'https:' ? httpsRequest : httpRequest;
+
+  return new Promise((resolve, reject) => {
+    const req = request(requestOptions, (res) => {
+      const chunks: Buffer[] = [];
+
+      res.on('data', (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      res.on('end', () => {
+        resolve(
+          new Response(Buffer.concat(chunks), {
+            status: res.statusCode ?? 500,
+            statusText: res.statusMessage,
+            headers: headersFromResponse(res.headers),
+          })
+        );
+      });
+      res.on('error', reject);
+    });
+
+    req.on('error', reject);
+    if (requestBody !== undefined) {
+      req.write(requestBody);
+    }
+    req.end();
+  });
 }
 
 /**
@@ -305,11 +445,11 @@ export async function safeFetch(
 
   const parsed = new URL(validation.normalized ?? url);
   const resolved = await validateResolvedHostname(parsed, opts);
-  if (!resolved.valid) {
+  if (!resolved.valid || !resolved.resolvedAddress) {
     return null;
   }
 
-  return fetch(validation.normalized ?? url, {
+  return fetchPinnedUrl(parsed, resolved.resolvedAddress, {
     ...init,
     redirect: 'manual',
   });
