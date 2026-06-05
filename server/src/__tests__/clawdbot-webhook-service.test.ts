@@ -5,10 +5,12 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const mockLookup = vi.hoisted(() => vi.fn());
+const mockDeliver = vi.hoisted(() => vi.fn());
 
-vi.mock('node:dns/promises', () => ({
-  lookup: mockLookup,
+vi.mock('../services/outbound-integration-service.js', () => ({
+  getOutboundIntegrationService: () => ({
+    deliver: mockDeliver,
+  }),
 }));
 
 import {
@@ -26,11 +28,21 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Capture calls to global fetch. */
-function mockFetch(response: { ok: boolean; status?: number } = { ok: true, status: 200 }) {
-  const fn = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal('fetch', fn);
-  return fn;
+function mockDelivery(
+  response: { ok: boolean; status?: string; responseStatus?: number; attemptId?: string } = {
+    ok: true,
+    status: 'success',
+    responseStatus: 200,
+    attemptId: 'attempt-1',
+  }
+) {
+  mockDeliver.mockResolvedValue({
+    status: response.status ?? (response.ok ? 'success' : 'failed'),
+    ok: response.ok,
+    responseStatus: response.responseStatus ?? (response.ok ? 200 : 500),
+    attemptId: response.attemptId ?? 'attempt-1',
+  });
+  return mockDeliver;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,8 +52,7 @@ function mockFetch(response: { ok: boolean; status?: number } = { ok: true, stat
 describe('ClawdbotWebhookService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    mockLookup.mockReset();
-    mockLookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+    mockDeliver.mockReset();
     // Clear env overrides
     delete process.env.VERITAS_WEBHOOK_URL;
     delete process.env.VERITAS_WEBHOOK_SECRET;
@@ -111,24 +122,25 @@ describe('ClawdbotWebhookService', () => {
     };
 
     it('does nothing when no webhook URL is configured', async () => {
-      const fetchSpy = mockFetch();
+      mockDelivery();
       await deliverWebhook(samplePayload);
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockDeliver).not.toHaveBeenCalled();
     });
 
     it('POSTs JSON to the configured URL', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       await deliverWebhook(samplePayload);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toBe('https://hook.test/endpoint');
-      expect(opts.method).toBe('POST');
-      expect(opts.headers['Content-Type']).toBe('application/json');
+      expect(mockDeliver).toHaveBeenCalledOnce();
+      const [endpoint, request] = mockDeliver.mock.calls[0];
+      expect(endpoint.url).toBe('https://hook.test/endpoint');
+      expect(endpoint.type).toBe('broadcast-webhook');
+      expect(request.method).toBe('POST');
+      expect(request.headers['Content-Type']).toBe('application/json');
 
-      const body = JSON.parse(opts.body);
+      const body = JSON.parse(request.body);
       expect(body.event).toBe('task:created');
       expect(body.taskId).toBe('task_123');
     });
@@ -136,77 +148,80 @@ describe('ClawdbotWebhookService', () => {
     it('includes X-Webhook-Signature when secret is set', async () => {
       setWebhookUrl('https://hook.test/endpoint');
       process.env.VERITAS_WEBHOOK_SECRET = 'my-secret';
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       await deliverWebhook(samplePayload);
 
-      const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts.headers['X-Webhook-Signature']).toMatch(/^[0-9a-f]{64}$/);
+      const [, request] = mockDeliver.mock.calls[0];
+      expect(request.headers['X-Webhook-Signature']).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('does NOT include X-Webhook-Signature when no secret', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       await deliverWebhook(samplePayload);
 
-      const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts.headers['X-Webhook-Signature']).toBeUndefined();
+      const [, request] = mockDeliver.mock.calls[0];
+      expect(request.headers['X-Webhook-Signature']).toBeUndefined();
     });
 
     it('retries once after 2 s on failure', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch({ ok: false, status: 500 });
+      mockDelivery({ ok: false, status: 'failed', responseStatus: 500 });
 
       await deliverWebhook(samplePayload);
 
       // First call already happened
-      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(mockDeliver).toHaveBeenCalledOnce();
 
       // Advance timers to trigger the retry
       await vi.advanceTimersByTimeAsync(2_000);
 
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(mockDeliver).toHaveBeenCalledTimes(2);
     });
 
     it('retries once on fetch error (network failure)', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      vi.stubGlobal('fetch', fetchSpy);
+      mockDeliver.mockRejectedValueOnce(new Error('ECONNREFUSED')).mockResolvedValueOnce({
+        status: 'success',
+        ok: true,
+        responseStatus: 200,
+        attemptId: 'attempt-2',
+      });
 
       await deliverWebhook(samplePayload);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(mockDeliver).toHaveBeenCalledOnce();
 
       // Advance timers to trigger the retry
       await vi.advanceTimersByTimeAsync(2_000);
 
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(mockDeliver).toHaveBeenCalledTimes(2);
     });
 
-    it('does not fetch or retry when outbound URL policy blocks the host', async () => {
+    it('does not retry when outbound URL policy blocks the host', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      mockLookup.mockResolvedValue([{ address: '10.0.0.10', family: 4 }]);
-      const fetchSpy = mockFetch();
+      mockDelivery({ ok: false, status: 'blocked', attemptId: 'blocked-1' });
 
       await deliverWebhook(samplePayload);
       await vi.advanceTimersByTimeAsync(2_000);
 
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockDeliver).toHaveBeenCalledOnce();
     });
 
     it('does NOT retry on success', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch({ ok: true });
+      mockDelivery({ ok: true });
 
       await deliverWebhook(samplePayload);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(mockDeliver).toHaveBeenCalledOnce();
 
       // Advance timers — no retry should fire
       await vi.advanceTimersByTimeAsync(5_000);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(mockDeliver).toHaveBeenCalledOnce();
     });
   });
 
@@ -217,7 +232,7 @@ describe('ClawdbotWebhookService', () => {
   describe('notifyTaskChange()', () => {
     it('formats a task payload and calls deliverWebhook', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       notifyTaskChange('created', 'task_abc', {
         title: 'My Task',
@@ -230,8 +245,8 @@ describe('ClawdbotWebhookService', () => {
       // Allow the promise to resolve
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(mockDeliver).toHaveBeenCalledOnce();
+      const body = JSON.parse(mockDeliver.mock.calls[0][1].body);
       expect(body).toMatchObject({
         event: 'task:created',
         taskId: 'task_abc',
@@ -246,14 +261,14 @@ describe('ClawdbotWebhookService', () => {
 
     it('works without optional context', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       notifyTaskChange('deleted', 'task_xyz');
 
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(mockDeliver).toHaveBeenCalledOnce();
+      const body = JSON.parse(mockDeliver.mock.calls[0][1].body);
       expect(body.event).toBe('task:deleted');
       expect(body.taskId).toBe('task_xyz');
     });
@@ -262,14 +277,14 @@ describe('ClawdbotWebhookService', () => {
   describe('notifyChatMessage()', () => {
     it('formats a chat payload and calls deliverWebhook', async () => {
       setWebhookUrl('https://hook.test/endpoint');
-      const fetchSpy = mockFetch();
+      mockDelivery();
 
       notifyChatMessage('session_1', 'chat:message', 'Hello world');
 
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const body: WebhookChatPayload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(mockDeliver).toHaveBeenCalledOnce();
+      const body: WebhookChatPayload = JSON.parse(mockDeliver.mock.calls[0][1].body);
       expect(body).toMatchObject({
         event: 'chat:message',
         chatSessionId: 'session_1',
