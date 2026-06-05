@@ -72,6 +72,7 @@ export interface TaskDetailRenderContext extends TaskDetailAvailabilityContext {
   task: Task;
   readOnly: boolean;
   timelineAttemptId: string | null;
+  timelineEventId: string | null;
   updateField: <K extends keyof Task>(field: K, value: Task[K]) => void;
   onClose: () => void;
   onRestore?: (taskId: string) => void;
@@ -147,10 +148,11 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
       }}
     />
   ),
-  timeline: ({ task, timelineAttemptId, setActiveTab, openWorkflow }) => (
+  timeline: ({ task, timelineAttemptId, timelineEventId, setActiveTab, openWorkflow }) => (
     <AgentRunTimelinePanel
       task={task}
       initialAttemptId={timelineAttemptId}
+      initialEventId={timelineEventId}
       onOpenTab={setActiveTab}
       onOpenWorkflow={openWorkflow}
     />

@@ -117,6 +117,7 @@ function taskNavigationTarget(target: SearchTarget): TaskDetailNavigationTarget 
   return {
     tab,
     timelineAttemptId: target.timelineAttemptId ?? null,
+    timelineEventId: target.timelineEventId ?? null,
   };
 }
 

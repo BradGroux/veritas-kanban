@@ -15,6 +15,7 @@ export type TaskDetailTabId =
 export interface TaskDetailNavigationTarget {
   tab?: TaskDetailTabId;
   timelineAttemptId?: string | null;
+  timelineEventId?: string | null;
 }
 
 export interface TaskDetailAvailabilityContext {

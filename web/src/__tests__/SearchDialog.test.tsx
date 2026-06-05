@@ -162,6 +162,7 @@ describe('SearchDialog', () => {
               taskId: 'task_20260504_abc123',
               tab: 'timeline',
               timelineAttemptId: 'attempt-1',
+              timelineEventId: 'evt-1',
             },
           },
         },
@@ -177,6 +178,7 @@ describe('SearchDialog', () => {
     expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', {
       tab: 'timeline',
       timelineAttemptId: 'attempt-1',
+      timelineEventId: 'evt-1',
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

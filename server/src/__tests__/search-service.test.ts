@@ -2,12 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
 import { SearchService } from '../services/search-service.js';
 
 const execFileMock = vi.hoisted(() => vi.fn());
+const telemetryEventsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock,
+}));
+
+vi.mock('../services/telemetry-service.js', () => ({
+  getTelemetryService: () => ({
+    getEvents: telemetryEventsMock,
+  }),
 }));
 
 describe('SearchService', () => {
@@ -23,6 +31,8 @@ describe('SearchService', () => {
     process.env.VERITAS_SEARCH_ROOT = root;
     process.env.VERITAS_SEARCH_BACKEND = 'keyword';
     execFileMock.mockReset();
+    telemetryEventsMock.mockReset();
+    telemetryEventsMock.mockResolvedValue([]);
   });
 
   afterEach(async () => {
@@ -134,6 +144,66 @@ describe('SearchService', () => {
       score: 0.92,
       collection: 'tasks-active',
     });
+  });
+
+  it('searches telemetry events as agent run results with timeline targets', async () => {
+    const telemetryEvents: AnyTelemetryEvent[] = [
+      {
+        id: 'evt-error-1',
+        type: 'run.error',
+        timestamp: '2026-06-04T18:00:00.000Z',
+        taskId: 'task_20260604_search',
+        project: 'veritas',
+        agent: 'codex',
+        attemptId: 'attempt-search-1',
+        error: 'Playwright login failed token=super-secret-value',
+        stackTrace: 'Error: Playwright login failed',
+      },
+      {
+        id: 'evt-tokens-1',
+        type: 'run.tokens',
+        timestamp: '2026-06-04T18:01:00.000Z',
+        taskId: 'task_20260604_search',
+        project: 'veritas',
+        agent: 'codex',
+        attemptId: 'attempt-search-1',
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+      },
+    ];
+    telemetryEventsMock.mockResolvedValue(telemetryEvents);
+
+    const result = await new SearchService().search({
+      query: 'playwright login',
+      collections: ['agent-runs'],
+      limit: 5,
+    });
+
+    expect(telemetryEventsMock).toHaveBeenCalledWith({ limit: 250 });
+    expect(result.results[0]).toMatchObject({
+      id: 'telemetry:evt-error-1',
+      title: 'codex run.error for task_20260604_search',
+      collection: 'agent-runs',
+      metadata: {
+        source: 'telemetry-event',
+        eventId: 'evt-error-1',
+        eventType: 'run.error',
+        taskId: 'task_20260604_search',
+        agent: 'codex',
+        attemptId: 'attempt-search-1',
+        target: {
+          type: 'task',
+          taskId: 'task_20260604_search',
+          tab: 'timeline',
+          timelineAttemptId: 'attempt-search-1',
+          timelineEventId: 'evt-error-1',
+        },
+      },
+    });
+    expect(result.results[0].snippet).toContain('Playwright login failed');
+    expect(result.results[0].snippet).toContain('token: [redacted]');
+    expect(result.results[0].snippet).not.toContain('super-secret-value');
   });
 
   it('refreshes qmd index and embeddings', async () => {
