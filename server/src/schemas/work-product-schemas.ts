@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeSafeHref } from '@veritas-kanban/shared';
 
 const PrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
@@ -26,7 +27,21 @@ const RedactionSchema = z.object({
 
 const SourceLinkSchema = z.object({
   label: z.string().min(1).max(120),
-  href: z.string().min(1).max(1000),
+  href: z
+    .string()
+    .min(1)
+    .max(1000)
+    .transform((href, ctx) => {
+      const normalized = normalizeSafeHref(href);
+      if (!normalized) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'source link href must use an allowed URL scheme',
+        });
+        return z.NEVER;
+      }
+      return normalized;
+    }),
   type: z.enum(['task', 'run', 'file', 'url', 'pr', 'other']).optional(),
 });
 

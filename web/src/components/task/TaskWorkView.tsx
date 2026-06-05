@@ -45,6 +45,8 @@ import {
 import {
   evaluateTaskReadiness,
   getTaskReadinessChecks as getSharedTaskReadinessChecks,
+  isExternalTargetHref,
+  normalizeSafeHref,
 } from '@veritas-kanban/shared';
 import type { Task, TaskAttempt, TaskReadinessCheck, TaskStatus } from '@veritas-kanban/shared';
 import { useAgentStatus, useAgentStream, useStopAgent } from '@/hooks/useAgent';
@@ -944,41 +946,42 @@ export function TaskWorkView({
                 </Group>
               ) : latestWorkProducts.length > 0 ? (
                 <Stack gap={6}>
-                  {latestWorkProducts.map((product) => (
-                    <Group key={product.id} gap="xs" wrap="nowrap" align="flex-start">
-                      <History className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <Text size="sm" truncate>
-                          {product.title}
-                        </Text>
-                        <Text size="xs" c="dimmed" truncate>
-                          v{product.version} | {product.kind}
-                          {product.sourceRunId ? ` | run ${product.sourceRunId}` : ''}
-                        </Text>
-                      </div>
-                      {product.sourceLinks?.[0] && (
-                        <Tooltip label={`Open ${product.sourceLinks[0].label}`}>
-                          <ActionIcon
-                            component="a"
-                            href={product.sourceLinks[0].href}
-                            target={
-                              product.sourceLinks[0].href.startsWith('http') ? '_blank' : undefined
-                            }
-                            rel={
-                              product.sourceLinks[0].href.startsWith('http')
-                                ? 'noopener noreferrer'
-                                : undefined
-                            }
-                            size="sm"
-                            variant="subtle"
-                            aria-label={`Open origin for ${product.title}`}
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                    </Group>
-                  ))}
+                  {latestWorkProducts.map((product) => {
+                    const sourceLink = product.sourceLinks?.find((link) =>
+                      normalizeSafeHref(link.href)
+                    );
+                    const href = normalizeSafeHref(sourceLink?.href);
+                    const external = isExternalTargetHref(href);
+                    return (
+                      <Group key={product.id} gap="xs" wrap="nowrap" align="flex-start">
+                        <History className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <Text size="sm" truncate>
+                            {product.title}
+                          </Text>
+                          <Text size="xs" c="dimmed" truncate>
+                            v{product.version} | {product.kind}
+                            {product.sourceRunId ? ` | run ${product.sourceRunId}` : ''}
+                          </Text>
+                        </div>
+                        {sourceLink && href && (
+                          <Tooltip label={`Open ${sourceLink.label}`}>
+                            <ActionIcon
+                              component="a"
+                              href={href}
+                              target={external ? '_blank' : undefined}
+                              rel={external ? 'noopener noreferrer' : undefined}
+                              size="sm"
+                              variant="subtle"
+                              aria-label={`Open origin for ${product.title}`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </Group>
+                    );
+                  })}
                 </Stack>
               ) : (
                 <Text size="sm" c="dimmed">

@@ -31,6 +31,7 @@ import {
   Timer,
   Wrench,
 } from 'lucide-react';
+import { normalizeSafeHref } from '@veritas-kanban/shared';
 import type {
   AgentRunTimelineEvent,
   AgentRunTimelineEventSource,
@@ -223,18 +224,6 @@ function safeString(value: unknown): string | undefined {
   return sanitized.length > 0 ? sanitized : undefined;
 }
 
-function safeTimelineHref(value: unknown): string | undefined {
-  const href = safeString(value);
-  if (!href) return undefined;
-  if (href.startsWith('/') && !href.startsWith('//')) return href;
-  try {
-    const parsed = new URL(href);
-    return ['http:', 'https:', 'veritas:'].includes(parsed.protocol) ? href : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function sourceRunIdFromRecord(source?: Record<string, unknown>): string | undefined {
   return (
     safeString(source?.attemptId) ?? safeString(source?.runId) ?? safeString(source?.sourceRunId)
@@ -255,7 +244,7 @@ function workflowStartedAt(run: WorkflowRun): string {
 
 function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
   const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
-  const href = safeTimelineHref(sourceLink?.href);
+  const href = normalizeSafeHref(sourceLink?.href);
   if (sourceLink && href) {
     return {
       label: sourceLink.label || 'Open source',
@@ -267,7 +256,7 @@ function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['li
 }
 
 function deliverableLink(deliverable: Deliverable): AgentRunTimelineEvent['link'] {
-  const href = safeTimelineHref(deliverable.path);
+  const href = normalizeSafeHref(deliverable.path);
   if (href) {
     return { label: 'Open deliverable', href, target: 'external' };
   }
@@ -804,7 +793,7 @@ export function buildAgentRunTimelineEvents({
     if (notification.taskId !== task.id) continue;
     const notificationRunId = sourceRunIdFromRecord(notification.source);
     if (!sourceRunMatches(attemptId, notificationRunId)) continue;
-    const targetHref = safeTimelineHref(notification.targetUrl);
+    const targetHref = normalizeSafeHref(notification.targetUrl);
     events.push({
       id: `notification-${notification.id}`,
       sequence: nextSequence++,

@@ -265,6 +265,37 @@ describe('task work view Mantine surface', () => {
     expect(mocks.stopAgentMutate).toHaveBeenCalledWith('task-work');
   });
 
+  it('skips unsafe work product source links in the Work view', () => {
+    mocks.useTaskWorkProducts.mockReturnValue({
+      data: [
+        {
+          ...product,
+          sourceLinks: [
+            {
+              label: 'Unsafe source',
+              href: 'data:text/html,<script>alert(1)</script>',
+              type: 'url',
+            },
+            { label: 'Safe source', href: '/runs/safe-run', type: 'run' },
+          ],
+        },
+      ],
+      isLoading: false,
+    });
+
+    const { container } = renderWorkView();
+    const sourceLink = screen.getByRole('link', {
+      name: 'Open origin for Release readiness report',
+    });
+
+    expect(sourceLink.getAttribute('href')).toBe('/runs/safe-run');
+    expect(
+      Array.from(container.querySelectorAll('a')).some((anchor) =>
+        /^(?:javascript|data|file):/i.test(anchor.getAttribute('href') ?? '')
+      )
+    ).toBe(false);
+  });
+
   it('keeps readiness and default-tab decisions deterministic', () => {
     const task = createMockTask({
       title: 'Implement run timeline',

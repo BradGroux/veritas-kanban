@@ -22,6 +22,13 @@ import { api } from '@/lib/api';
 import { useTaskWorkProducts, useWorkProductVersions } from '@/hooks/useWorkProducts';
 import { toast } from '@/hooks/useToast';
 import {
+  isExternalTargetHref,
+  normalizeSafeHref,
+  type WorkProductKind,
+  type WorkProductPreview,
+  type WorkProductVersion,
+} from '@veritas-kanban/shared';
+import {
   AlertCircle,
   Clipboard,
   Download,
@@ -31,11 +38,6 @@ import {
   Pencil,
   Sparkles,
 } from 'lucide-react';
-import type {
-  WorkProductKind,
-  WorkProductPreview,
-  WorkProductVersion,
-} from '@veritas-kanban/shared';
 
 interface WorkProductsSectionProps {
   taskId: string;
@@ -365,20 +367,25 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                           Run {product.sourceRunId}
                         </Badge>
                       )}
-                      {product.sourceLinks?.map((link) => (
-                        <Button
-                          key={`${product.id}:${link.href}:${link.label}`}
-                          component="a"
-                          href={link.href}
-                          target={link.href.startsWith('http') ? '_blank' : undefined}
-                          rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                          variant="subtle"
-                          size="compact-xs"
-                          rightSection={<ExternalLink className="h-3 w-3" />}
-                        >
-                          {link.label}
-                        </Button>
-                      ))}
+                      {product.sourceLinks?.map((link) => {
+                        const href = normalizeSafeHref(link.href);
+                        if (!href) return null;
+                        const external = isExternalTargetHref(href);
+                        return (
+                          <Button
+                            key={`${product.id}:${href}:${link.label}`}
+                            component="a"
+                            href={href}
+                            target={external ? '_blank' : undefined}
+                            rel={external ? 'noopener noreferrer' : undefined}
+                            variant="subtle"
+                            size="compact-xs"
+                            rightSection={<ExternalLink className="h-3 w-3" />}
+                          >
+                            {link.label}
+                          </Button>
+                        );
+                      })}
                     </Group>
                   )}
                 </Stack>

@@ -151,6 +151,31 @@ describe('task detail work products surface', () => {
     });
   });
 
+  it('does not render unsafe source link hrefs', async () => {
+    listForTaskMock.mockResolvedValue([
+      {
+        ...product,
+        sourceLinks: [
+          { label: 'Unsafe source', href: 'JaVaScRiPt:alert(1)', type: 'url' },
+          { label: 'Safe source', href: 'https://example.com/report', type: 'url' },
+        ],
+      },
+    ]);
+
+    const { container } = renderWithProviders(<WorkProductsSection taskId="task-work-products" />);
+
+    expect(await screen.findByText('Launch readiness report')).toBeDefined();
+    expect(screen.queryByRole('link', { name: /unsafe source/i })).toBeNull();
+    const safeLink = screen.getByRole('link', { name: /safe source/i });
+    expect(safeLink.getAttribute('href')).toBe('https://example.com/report');
+    expect(safeLink.getAttribute('target')).toBe('_blank');
+    expect(
+      Array.from(container.querySelectorAll('a')).some((anchor) =>
+        /^javascript:/i.test(anchor.getAttribute('href') ?? '')
+      )
+    ).toBe(false);
+  });
+
   it('requests redacted markdown when copying', async () => {
     const user = userEvent.setup();
     renderWithProviders(<WorkProductsSection taskId="task-work-products" />);
