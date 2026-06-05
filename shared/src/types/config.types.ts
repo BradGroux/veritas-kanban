@@ -1,6 +1,6 @@
 // Config Types
 
-import type { AgentType, TaskPriority } from './task.types.js';
+import type { AgentType, TaskPriority, TaskStatus } from './task.types.js';
 import type { TelemetryConfig } from './telemetry.types.js';
 import type { WatcherContinuationSettings } from './watcher-policy.types.js';
 
@@ -213,8 +213,15 @@ export interface BoardSavedView {
   updatedAt: string;
 }
 
+export interface BoardColumnConfig {
+  id: TaskStatus;
+  title: string;
+}
+
 /** Board display settings */
 export interface BoardSettings {
+  columns: BoardColumnConfig[];
+  defaultStatus: TaskStatus;
   showDashboard: boolean;
   showArchiveSuggestions: boolean;
   cardDensity: 'normal' | 'compact';
@@ -411,6 +418,13 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     dismissedHints: [],
   },
   board: {
+    columns: [
+      { id: 'todo', title: 'To Do' },
+      { id: 'in-progress', title: 'In Progress' },
+      { id: 'blocked', title: 'Blocked' },
+      { id: 'done', title: 'Done' },
+    ],
+    defaultStatus: 'todo',
     showDashboard: true,
     showArchiveSuggestions: true,
     cardDensity: 'normal',

@@ -11,12 +11,12 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
+import type { BoardColumnConfig, Task, TaskStatus } from '@veritas-kanban/shared';
 
 interface UseBoardDragDropOptions {
   tasks: Task[];
-  tasksByStatus: Record<TaskStatus, Task[]>;
-  columns: { id: TaskStatus; title: string }[];
+  tasksByStatus: Record<string, Task[]>;
+  columns: BoardColumnConfig[];
   onStatusChange: (taskId: string, status: TaskStatus) => void;
   onReorder: (taskIds: string[], onSuccess?: () => void) => void;
 }
@@ -25,7 +25,7 @@ interface UseBoardDragDropReturn {
   activeTask: Task | null;
   isDragActive: boolean;
   /** Use this for rendering columns — reflects real-time drag state */
-  liveTasksByStatus: Record<TaskStatus, Task[]>;
+  liveTasksByStatus: Record<string, Task[]>;
   sensors: ReturnType<typeof useSensors>;
   collisionDetection: CollisionDetection;
   handleDragStart: (event: DragStartEvent) => void;
@@ -43,7 +43,7 @@ export function useBoardDragDrop({
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   // Local copy of tasksByStatus that updates in real-time during drag.
   // null = not dragging, use server state; non-null = mid-drag, use local state
-  const [dragState, setDragState] = useState<Record<TaskStatus, Task[]> | null>(null);
+  const [dragState, setDragState] = useState<Record<string, Task[]> | null>(null);
   const activeIdRef = useRef<string | null>(null);
 
   const sensors = useSensors(
@@ -86,7 +86,7 @@ export function useBoardDragDrop({
 
   // Find which column a task belongs to in the given state
   const findColumn = useCallback(
-    (taskId: string, state: Record<TaskStatus, Task[]>): TaskStatus | null => {
+    (taskId: string, state: Record<string, Task[]>): TaskStatus | null => {
       for (const col of columns) {
         if (state[col.id]?.some((t: Task) => t.id === taskId)) {
           return col.id;
@@ -132,7 +132,7 @@ export function useBoardDragDrop({
         if (!overColumn) return prev;
 
         // Reorder within the same column when hovering over another task.
-        const sourceTasks = prev[activeColumn];
+        const sourceTasks = prev[activeColumn] ?? [];
         const activeIndex = sourceTasks.findIndex((t) => t.id === activeId);
         if (activeIndex === -1) return prev;
 
@@ -149,7 +149,7 @@ export function useBoardDragDrop({
         }
 
         // Move the task from source to destination.
-        const destTasks = prev[overColumn];
+        const destTasks = prev[overColumn] ?? [];
         const movedTask = sourceTasks[activeIndex];
         const newSource = [...sourceTasks];
         newSource.splice(activeIndex, 1);
@@ -201,8 +201,8 @@ export function useBoardDragDrop({
 
       if (originalColumn === finalColumn && !columnIds.includes(overId as TaskStatus)) {
         // Same column — check for reorder
-        const columnTasks = finalState[finalColumn];
-        const origColumnTasks = tasksByStatus[originalColumn];
+        const columnTasks = finalState[finalColumn] ?? [];
+        const origColumnTasks = tasksByStatus[originalColumn] ?? [];
         const oldIndex = origColumnTasks.findIndex((t: Task) => t.id === activeId);
         const newIndex = columnTasks.findIndex((t: Task) => t.id === activeId);
 
@@ -215,7 +215,7 @@ export function useBoardDragDrop({
         onStatusChange(activeId, finalColumn);
 
         // Send the new order for the destination column
-        const newOrder = finalState[finalColumn].map((t: Task) => t.id);
+        const newOrder = (finalState[finalColumn] ?? []).map((t: Task) => t.id);
         onReorder(newOrder);
       }
     },

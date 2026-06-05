@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BOARD_COLUMN_ID_PATTERN } from '@veritas-kanban/shared';
 
 // Dangerous keys check
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
@@ -77,8 +78,24 @@ const BoardSavedViewSchema = z
   })
   .strict();
 
+const BoardColumnSchema = z
+  .object({
+    id: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
+    title: z.string().min(1).max(50),
+  })
+  .strict();
+
 const BoardSettingsSchema = z
   .object({
+    columns: z
+      .array(BoardColumnSchema)
+      .min(1)
+      .max(12)
+      .refine((columns) => new Set(columns.map((column) => column.id)).size === columns.length, {
+        message: 'Board column IDs must be unique',
+      })
+      .optional(),
+    defaultStatus: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN).optional(),
     showDashboard: z.boolean().optional(),
     showArchiveSuggestions: z.boolean().optional(),
     cardDensity: z.enum(['normal', 'compact']).optional(),
@@ -92,6 +109,19 @@ const BoardSettingsSchema = z
     dashboardWidgets: DashboardWidgetSettingsSchema,
   })
   .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.columns &&
+      value.defaultStatus &&
+      !value.columns.some((column) => column.id === value.defaultStatus)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'defaultStatus must reference a configured board column',
+        path: ['defaultStatus'],
+      });
+    }
+  })
   .optional();
 
 const TaskBehaviorSettingsSchema = z

@@ -42,8 +42,12 @@ function createFeatureSettings(
 
 vi.mock('@/hooks/useTasks', () => ({
   useTasks: () => mockUseTasks(),
-  useTasksByStatus: (tasks: Task[]) => {
-    const result: Record<string, Task[]> = { todo: [], 'in-progress': [], blocked: [], done: [] };
+  useTasksByStatus: (tasks: Task[], columns?: Array<{ id: string }>) => {
+    const result: Record<string, Task[]> = Object.fromEntries(
+      (columns ?? [{ id: 'todo' }, { id: 'in-progress' }, { id: 'blocked' }, { id: 'done' }]).map(
+        (column) => [column.id, [] as Task[]]
+      )
+    );
     for (const t of tasks) {
       if (result[t.status]) result[t.status].push(t);
     }
@@ -251,6 +255,34 @@ describe('KanbanBoard', () => {
     expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blocked').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Done').length).toBeGreaterThan(0);
+  });
+
+  it('renders configured custom board columns', () => {
+    mockUseTasks = () => ({
+      data: [
+        createMockTask({ id: 'k-custom', title: 'Ready Task', status: 'ready' }),
+        ...mockTasks,
+      ],
+      isLoading: false,
+      error: null,
+    });
+    mockFeatureSettingsResult = {
+      isPlaceholderData: false,
+      settings: createFeatureSettings({
+        columns: [
+          { id: 'triage', title: 'Triage' },
+          { id: 'ready', title: 'Ready' },
+          { id: 'done', title: 'Done' },
+        ],
+        defaultStatus: 'triage',
+      }),
+    };
+
+    renderBoard();
+
+    expect(screen.getByTestId('column-triage')).toBeDefined();
+    expect(screen.getByTestId('column-ready')).toBeDefined();
+    expect(screen.getByTestId('task-k-custom')).toBeDefined();
   });
 
   it('renders empty board when no tasks', () => {

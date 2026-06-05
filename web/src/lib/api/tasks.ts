@@ -345,7 +345,7 @@ export const tasksApi = {
 
   bulkUpdate: async (
     ids: string[],
-    status: 'todo' | 'in-progress' | 'blocked' | 'done'
+    status: Task['status']
   ): Promise<{ updated: string[]; count: number; failed: string[] }> => {
     const response = await fetch(`${API_BASE}/tasks/bulk-update`, {
       credentials: 'include',

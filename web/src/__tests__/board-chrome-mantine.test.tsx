@@ -297,7 +297,7 @@ describe('Board chrome Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Select all tasks' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Select all Todo tasks (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all To Do tasks (1)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(mocks.selectAll).toHaveBeenCalledWith(['VK-1', 'VK-2']);

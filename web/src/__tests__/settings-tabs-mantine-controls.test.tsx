@@ -142,6 +142,9 @@ describe('Settings tab Mantine controls', () => {
     const { container: boardContainer } = renderWithProviders(<BoardTab />);
 
     expect(screen.getByRole('combobox', { name: 'Card Density' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Default task status' })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Column 1 status ID' })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Column 1 title' })).toBeDefined();
     expect(boardContainer.querySelector('.mantine-Select-root')).toBeDefined();
 
     cleanup();
@@ -150,6 +153,26 @@ describe('Settings tab Mantine controls', () => {
 
     expect(screen.getByRole('combobox', { name: 'Default Priority' })).toBeDefined();
     expect(tasksContainer.querySelector('.mantine-Select-root')).toBeDefined();
+  });
+
+  it('updates configured board columns from the Board tab', () => {
+    renderWithProviders(<BoardTab />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Column 1 title' }), {
+      target: { value: 'Triage' },
+    });
+
+    expect(mocks.debouncedUpdate).toHaveBeenCalledWith({
+      board: {
+        columns: [
+          { id: 'todo', title: 'Triage' },
+          { id: 'in-progress', title: 'In Progress' },
+          { id: 'blocked', title: 'Blocked' },
+          { id: 'done', title: 'Done' },
+        ],
+        defaultStatus: 'todo',
+      },
+    });
   });
 
   it('renders Notifications text and select controls through direct Mantine primitives', async () => {

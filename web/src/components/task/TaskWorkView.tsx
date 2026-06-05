@@ -48,7 +48,7 @@ import {
   isExternalTargetHref,
   normalizeSafeHref,
 } from '@veritas-kanban/shared';
-import type { Task, TaskAttempt, TaskReadinessCheck, TaskStatus } from '@veritas-kanban/shared';
+import type { Task, TaskAttempt, TaskReadinessCheck } from '@veritas-kanban/shared';
 import { useAgentStatus, useAgentStream, useStopAgent } from '@/hooks/useAgent';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
@@ -87,7 +87,7 @@ interface TaskWorkViewProps {
   onOpenWorkflow: () => void;
 }
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
+const STATUS_COLORS: Record<string, string> = {
   blocked: 'red',
   cancelled: 'gray',
   done: 'green',
@@ -452,7 +452,7 @@ export function TaskWorkView({
                   <Route className="h-4 w-4" />
                 </ThemeIcon>
                 <Text fw={700}>Work View</Text>
-                <Badge color={STATUS_COLORS[task.status]} variant="light">
+                <Badge color={STATUS_COLORS[task.status] ?? 'gray'} variant="light">
                   {task.status}
                 </Badge>
                 <Badge color={readinessPercent === 100 ? 'green' : 'yellow'} variant="outline">

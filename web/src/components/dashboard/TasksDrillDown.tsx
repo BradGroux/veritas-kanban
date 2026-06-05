@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Badge, Group, Paper, Skeleton, Stack, Text } from '@mantine/core';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
-import { CheckCircle, Play, Ban, ListTodo } from 'lucide-react';
+import { CheckCircle, Play, Ban, ListTodo, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskStatus, Task } from '@veritas-kanban/shared';
 
@@ -13,7 +13,7 @@ interface TasksDrillDownProps {
 }
 
 const statusConfig: Record<
-  TaskStatus,
+  string,
   {
     icon: React.ReactNode;
     color: string;
@@ -53,6 +53,13 @@ const statusConfig: Record<
   },
 };
 
+const defaultStatusConfig = {
+  icon: <Circle className="h-4 w-4" />,
+  color: 'gray',
+  iconClassName: 'text-muted-foreground',
+  label: 'Custom',
+};
+
 export function TasksDrillDown({
   project,
   statusFilter = 'all',
@@ -84,14 +91,17 @@ export function TasksDrillDown({
 
   // Group by status for summary
   const statusCounts = useMemo(() => {
-    const counts: Record<TaskStatus, number> = {
+    const counts: Record<string, number> = {
       todo: 0,
       'in-progress': 0,
       blocked: 0,
       done: 0,
       cancelled: 0,
     };
-    filteredTasks.forEach((t) => counts[t.status]++);
+    filteredTasks.forEach((t) => {
+      counts[t.status] ??= 0;
+      counts[t.status]++;
+    });
     return counts;
   }, [filteredTasks]);
 
@@ -110,7 +120,7 @@ export function TasksDrillDown({
       {/* Summary Stats */}
       <Group gap="xs" wrap="wrap">
         {Object.entries(statusCounts).map(([status, count]) => {
-          const config = statusConfig[status as TaskStatus];
+          const config = statusConfig[status] ?? { ...defaultStatusConfig, label: status };
           return (
             <Badge key={status} variant="light" color={config.color} leftSection={config.icon}>
               {config.label}: {count}

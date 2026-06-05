@@ -11,7 +11,7 @@ export function registerTaskCommands(program: Command): void {
     .command('list')
     .alias('ls')
     .description('List tasks')
-    .option('-s, --status <status>', 'Filter by status (todo, in-progress, blocked, done)')
+    .option('-s, --status <status>', 'Filter by status')
     .option('-t, --type <type>', 'Filter by type (code, research, content, automation)')
     .option('-p, --project <project>', 'Filter by project')
     .option('-S, --sprint <sprint>', 'Filter by sprint')
@@ -93,6 +93,7 @@ export function registerTaskCommands(program: Command): void {
     .option('-S, --sprint <sprint>', 'Sprint name or ID')
     .option('-d, --description <desc>', 'Task description')
     .option('--priority <priority>', 'Priority (low, medium, high)', 'medium')
+    .option('-s, --status <status>', 'Initial status')
     .option('--json', 'Output as JSON')
     .action(async (title, options) => {
       try {
@@ -105,6 +106,7 @@ export function registerTaskCommands(program: Command): void {
             sprint: options.sprint,
             description: options.description || '',
             priority: options.priority,
+            status: options.status,
           }),
         });
 

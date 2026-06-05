@@ -5,37 +5,39 @@ import { useToast } from '@/hooks/useToast';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDeleteTask, useBulkUpdate, useBulkArchiveByIds } from '@/hooks/useTasks';
 import { useBulkDemote } from '@/hooks/useBacklog';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { cn } from '@/lib/utils';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  normalizeBoardColumns,
+  type BoardColumnConfig,
+  type Task,
+  type TaskStatus,
+} from '@veritas-kanban/shared';
 
-const STATUS_BUTTONS: { id: TaskStatus; label: string; color: string; activeColor: string }[] = [
-  {
-    id: 'todo',
-    label: 'Todo',
+const STATUS_BUTTON_COLORS: Record<string, { color: string; activeColor: string }> = {
+  todo: {
     color: 'border-slate-400 text-slate-600',
     activeColor: 'bg-slate-500 text-white border-slate-500',
   },
-  {
-    id: 'in-progress',
-    label: 'In Progress',
+  'in-progress': {
     color: 'border-blue-400 text-blue-600',
     activeColor: 'bg-blue-500 text-white border-blue-500',
   },
-  {
-    id: 'blocked',
-    label: 'Blocked',
+  blocked: {
     color: 'border-red-400 text-red-600',
     activeColor: 'bg-red-500 text-white border-red-500',
   },
-  {
-    id: 'done',
-    label: 'Done',
+  done: {
     color: 'border-green-400 text-green-600',
     activeColor: 'bg-green-500 text-white border-green-500',
   },
-];
+};
 
-const MOVE_STATUS_OPTIONS = STATUS_BUTTONS.map(({ id, label }) => ({ value: id, label }));
+const DEFAULT_STATUS_BUTTON_COLOR = {
+  color: 'border-primary/60 text-primary',
+  activeColor: 'bg-primary text-primary-foreground border-primary',
+};
 
 interface BulkActionsBarProps {
   tasks: Task[];
@@ -45,6 +47,15 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
   const { selectedIds, isSelecting, toggleSelecting, selectAll, toggleGroup, clearSelection } =
     useBulkActions();
   const { toast } = useToast();
+  const { settings } = useFeatureSettings();
+  const columns = useMemo<BoardColumnConfig[]>(
+    () => normalizeBoardColumns(settings.board?.columns ?? DEFAULT_FEATURE_SETTINGS.board.columns),
+    [settings.board?.columns]
+  );
+  const moveStatusOptions = useMemo(
+    () => columns.map((column) => ({ value: column.id, label: column.title })),
+    [columns]
+  );
 
   const bulkUpdate = useBulkUpdate();
   const deleteTask = useDeleteTask();
@@ -57,20 +68,16 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
 
   // Group task IDs by status
   const taskIdsByStatus = useMemo(() => {
-    const map: Record<TaskStatus, string[]> = {
-      todo: [],
-      'in-progress': [],
-      blocked: [],
-      done: [],
-      cancelled: [],
-    };
+    const map: Record<string, string[]> = Object.fromEntries(
+      columns.map((column) => [column.id, [] as string[]])
+    );
     for (const task of tasks) {
       if (map[task.status]) {
         map[task.status].push(task.id);
       }
     }
     return map;
-  }, [tasks]);
+  }, [columns, tasks]);
 
   const allTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
   const selectedCount = selectedIds.size;
@@ -104,10 +111,9 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
     setIsProcessing(true);
     try {
       const ids = Array.from(selectedIds);
-      // Type assertion since BulkActionsBar only allows the 4 valid statuses
       const result = await bulkUpdate.mutateAsync({
         ids,
-        status: moveTarget as 'todo' | 'in-progress' | 'blocked' | 'done',
+        status: moveTarget,
       });
 
       if (result.failed.length > 0) {
@@ -261,8 +267,9 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
 
           {/* Status filter buttons */}
           <div className="flex items-center gap-1.5 ml-1">
-            {STATUS_BUTTONS.map(({ id, label, color, activeColor }) => {
-              const count = taskIdsByStatus[id].length;
+            {columns.map(({ id, title }) => {
+              const colors = STATUS_BUTTON_COLORS[id] ?? DEFAULT_STATUS_BUTTON_COLOR;
+              const count = taskIdsByStatus[id]?.length ?? 0;
               if (count === 0) return null;
               const fullySelected = isStatusFullySelected(id);
               const partiallySelected = isStatusPartiallySelected(id);
@@ -271,15 +278,19 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
                   key={id}
                   variant="outline"
                   size="xs"
-                  onClick={() => toggleGroup(taskIdsByStatus[id])}
+                  onClick={() => toggleGroup(taskIdsByStatus[id] ?? [])}
                   className={cn(
                     'text-xs h-7 px-2 border transition-colors',
-                    fullySelected ? activeColor : partiallySelected ? `${color} opacity-70` : color
+                    fullySelected
+                      ? colors.activeColor
+                      : partiallySelected
+                        ? `${colors.color} opacity-70`
+                        : colors.color
                   )}
-                  aria-label={`Select all ${label} tasks (${count})`}
+                  aria-label={`Select all ${title} tasks (${count})`}
                   aria-pressed={fullySelected}
                 >
-                  {label} ({count})
+                  {title} ({count})
                 </Button>
               );
             })}
@@ -295,7 +306,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
               value={moveTarget}
               onChange={(value) => setMoveTarget(value as TaskStatus | null)}
               disabled={isProcessing}
-              data={MOVE_STATUS_OPTIONS}
+              data={moveStatusOptions}
               aria-label="Move selected tasks to status"
               placeholder="Move to..."
               className="w-[140px]"

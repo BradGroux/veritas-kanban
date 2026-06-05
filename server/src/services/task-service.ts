@@ -12,7 +12,10 @@ import type {
   TimeTracking,
   RunStartedEvent,
   RunCompletedEvent,
+  BoardColumnConfig,
+  TaskStatus,
 } from '@veritas-kanban/shared';
+import { normalizeBoardColumns, normalizeBoardDefaultStatus } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { ConfigService } from './config-service.js';
 import { withFileLock } from './file-lock.js';
@@ -64,6 +67,12 @@ function isValidTaskId(id: string): boolean {
   return TASK_ID_REGEX.test(id);
 }
 
+interface BoardStatusConfig {
+  columns: BoardColumnConfig[];
+  defaultStatus: TaskStatus;
+  activeStatusIds: Set<string>;
+}
+
 // Simple slug function to avoid CJS/ESM issues with slugify
 function makeSlug(text: string): string {
   return text
@@ -86,6 +95,7 @@ export interface TaskServiceOptions {
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
+  configService?: Pick<ConfigService, 'getFeatureSettings'>;
 }
 
 /** Ignore file-watcher events within this window after our own writes */
@@ -99,6 +109,7 @@ export class TaskService {
   private sqliteDatabase: SqliteDatabase | null = null;
   private sqliteTasks: SqliteTaskRepository | null = null;
   private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
+  private configService: Pick<ConfigService, 'getFeatureSettings'>;
 
   // ============ In-Memory Cache ============
   private cache: Map<string, Task> = new Map();
@@ -116,6 +127,7 @@ export class TaskService {
     this.backlogDir =
       options.backlogDir ?? (options.tasksDir || options.archiveDir ? null : getTasksBacklogDir());
     this.telemetry = options.telemetryService || getTelemetryService();
+    this.configService = options.configService ?? new ConfigService();
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -615,8 +627,6 @@ export class TaskService {
   private syncAgentRegistryForStatusTransition(task: Task): void {
     if (!task.agent) return;
 
-    if (!['todo', 'in-progress', 'blocked', 'done', 'cancelled'].includes(task.status)) return;
-
     const registry = getAgentRegistryService();
     registry.syncFromTask(
       {
@@ -627,6 +637,28 @@ export class TaskService {
       },
       TASK_SYNC_CONTEXT
     );
+  }
+
+  private async getBoardStatusConfig(): Promise<BoardStatusConfig> {
+    const settings = await this.configService.getFeatureSettings();
+    const columns = normalizeBoardColumns(settings.board?.columns);
+    const defaultStatus = normalizeBoardDefaultStatus(settings.board?.defaultStatus, columns);
+    return {
+      columns,
+      defaultStatus,
+      activeStatusIds: new Set(columns.map((column) => column.id)),
+    };
+  }
+
+  private assertConfiguredStatus(status: TaskStatus, config: BoardStatusConfig): void {
+    if (config.activeStatusIds.has(status)) return;
+    throw new ValidationError(`Invalid task status "${status}" for the configured board`, [
+      {
+        code: 'INVALID_STATUS',
+        message: `Status "${status}" is not configured as an active board column`,
+        path: ['status'],
+      },
+    ]);
   }
 
   private startTaskSyncReconciler(): void {
@@ -714,13 +746,16 @@ export class TaskService {
 
   async createTask(input: CreateTaskInput): Promise<Task> {
     const now = new Date().toISOString();
+    const boardStatusConfig = await this.getBoardStatusConfig();
+    const status = input.status ?? boardStatusConfig.defaultStatus;
+    this.assertConfiguredStatus(status, boardStatusConfig);
 
     const task: Task = {
       id: this.generateId(),
       title: input.title,
       description: input.description || '',
       type: input.type || 'code',
-      status: 'todo',
+      status,
       priority: input.priority || 'medium',
       project: input.project,
       sprint: input.sprint,
@@ -836,8 +871,13 @@ export class TaskService {
       let settings: Awaited<ReturnType<ConfigService['getFeatureSettings']>> | null = null;
 
       if (statusChanged) {
-        const configService = new ConfigService();
-        settings = await configService.getFeatureSettings();
+        settings = await this.configService.getFeatureSettings();
+        const columns = normalizeBoardColumns(settings.board?.columns);
+        this.assertConfiguredStatus(input.status as TaskStatus, {
+          columns,
+          defaultStatus: normalizeBoardDefaultStatus(settings.board?.defaultStatus, columns),
+          activeStatusIds: new Set(columns.map((column) => column.id)),
+        });
       }
 
       // Validate transition hooks (quality gates) before allowing status change

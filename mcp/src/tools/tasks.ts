@@ -5,7 +5,7 @@ import { Task } from '../utils/types.js';
 
 // Tool input schemas
 const ListTasksSchema = z.object({
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
+  status: z.string().min(1).max(50).optional(),
   type: z.enum(['code', 'research', 'content', 'automation']).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
@@ -24,7 +24,7 @@ const UpdateTaskSchema = z.object({
   id: z.string().min(1),
   title: z.string().optional(),
   description: z.string().optional(),
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
+  status: z.string().min(1).max(50).optional(),
   type: z.enum(['code', 'research', 'content', 'automation']).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
@@ -44,7 +44,6 @@ export const taskTools = [
       properties: {
         status: {
           type: 'string',
-          enum: ['todo', 'in-progress', 'blocked', 'done'],
           description: 'Filter by task status',
         },
         type: {
@@ -133,7 +132,6 @@ export const taskTools = [
         },
         status: {
           type: 'string',
-          enum: ['todo', 'in-progress', 'blocked', 'done'],
           description: 'New status',
         },
         type: {

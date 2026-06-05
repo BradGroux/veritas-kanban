@@ -7,7 +7,12 @@ import { getBlockingService } from '../services/blocking-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { getDelegationService } from '../services/delegation-service.js';
 import { getProgressService } from '../services/progress-service.js';
-import type { CreateTaskInput, UpdateTaskInput, TaskSummary } from '@veritas-kanban/shared';
+import {
+  BOARD_COLUMN_ID_PATTERN,
+  type CreateTaskInput,
+  type UpdateTaskInput,
+  type TaskSummary,
+} from '@veritas-kanban/shared';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -53,6 +58,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional().default(''),
   type: z.string().optional().default('code'),
+  status: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
   project: z.string().optional(),
   sprint: z.string().optional(),
@@ -147,7 +153,7 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
   type: z.string().optional(),
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']).optional(),
+  status: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
@@ -435,7 +441,7 @@ router.get(
 
     // Get all active tasks and count by status
     const tasks = await taskService.listTasks();
-    const counts = {
+    const counts: Record<string, number> = {
       backlog: 0,
       todo: 0,
       'in-progress': 0,
@@ -446,9 +452,8 @@ router.get(
 
     // Count active tasks by status
     for (const task of tasks) {
-      if (task.status in counts) {
-        counts[task.status as keyof typeof counts]++;
-      }
+      counts[task.status] ??= 0;
+      counts[task.status]++;
     }
 
     // Get backlog count
@@ -1030,7 +1035,7 @@ const bulkUpdateSchema = z.object({
     .array(z.string())
     .min(1, 'At least one task ID is required')
     .max(100, 'Maximum 100 tasks per bulk operation'),
-  status: z.enum(['todo', 'in-progress', 'blocked', 'done']),
+  status: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
 });
 
 const bulkArchiveSchema = z.object({
@@ -1044,7 +1049,7 @@ const bulkArchiveSchema = z.object({
 router.post(
   '/bulk-update',
   asyncHandler(async (req, res) => {
-    let input: { ids: string[]; status: 'todo' | 'in-progress' | 'blocked' | 'done' };
+    let input: { ids: string[]; status: string };
     try {
       input = bulkUpdateSchema.parse(req.body);
     } catch (error) {

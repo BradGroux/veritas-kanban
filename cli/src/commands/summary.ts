@@ -22,10 +22,9 @@ export function registerSummaryCommands(program: Command): void {
         console.log(chalk.bold('\n📊 Veritas Kanban Summary\n'));
 
         console.log(chalk.dim('Status:'));
-        console.log(`  To Do:       ${summary.byStatus.todo}`);
-        console.log(`  In Progress: ${summary.byStatus['in-progress']}`);
-        console.log(`  Blocked:     ${summary.byStatus.blocked}`);
-        console.log(`  Done:        ${summary.byStatus.done}`);
+        Object.entries(summary.byStatus).forEach(([status, count]) => {
+          console.log(`  ${status}: ${count}`);
+        });
 
         const projects = Object.entries(summary.byProject) as [
           string,

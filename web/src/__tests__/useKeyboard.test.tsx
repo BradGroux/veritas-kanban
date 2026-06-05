@@ -15,6 +15,23 @@ vi.mock('@/hooks/useToast', () => ({
   default: vi.fn(),
 }));
 
+const featureSettingsMock = vi.hoisted(() => ({
+  settings: {
+    board: {
+      columns: [
+        { id: 'todo', title: 'To Do' },
+        { id: 'in-progress', title: 'In Progress' },
+        { id: 'blocked', title: 'Blocked' },
+        { id: 'done', title: 'Done' },
+      ],
+    },
+  },
+}));
+
+vi.mock('@/hooks/useFeatureSettings', () => ({
+  useFeatureSettings: () => featureSettingsMock,
+}));
+
 import { KeyboardProvider, useKeyboard } from '@/hooks/useKeyboard';
 
 // ── Test Component ───────────────────────────────────────────
@@ -67,6 +84,16 @@ function renderWithProvider(props: React.ComponentProps<typeof TestConsumer> = {
 describe('KeyboardProvider', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    featureSettingsMock.settings = {
+      board: {
+        columns: [
+          { id: 'todo', title: 'To Do' },
+          { id: 'in-progress', title: 'In Progress' },
+          { id: 'blocked', title: 'Blocked' },
+          { id: 'done', title: 'Done' },
+        ],
+      },
+    };
   });
 
   afterEach(() => {
@@ -187,6 +214,29 @@ describe('KeyboardProvider', () => {
 
     fireEvent.keyDown(window, { key: '4' });
     expect(onMoveTask).toHaveBeenCalledWith('move-test', 'done');
+  });
+
+  it('maps number keys to configured custom column order', () => {
+    featureSettingsMock.settings = {
+      board: {
+        columns: [
+          { id: 'triage', title: 'Triage' },
+          { id: 'todo', title: 'To Do' },
+          { id: 'ready', title: 'Ready' },
+          { id: 'in-progress', title: 'In Progress' },
+          { id: 'done', title: 'Done' },
+        ],
+      },
+    };
+    const tasks = [createMockTask({ id: 'custom-move', title: 'Move Task', status: 'triage' })];
+    const onMoveTask = vi.fn();
+
+    renderWithProvider({ tasks, onMoveTask });
+
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: '3' });
+
+    expect(onMoveTask).toHaveBeenCalledWith('custom-move', 'ready');
   });
 
   it('clears selection with Escape', () => {

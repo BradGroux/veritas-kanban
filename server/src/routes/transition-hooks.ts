@@ -6,6 +6,7 @@
 
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
+import { BOARD_COLUMN_ID_PATTERN } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { authorize } from '../middleware/auth.js';
@@ -64,13 +65,13 @@ const ruleSchema = z.object({
   name: z.string().min(1),
   enabled: z.boolean(),
   from: z.union([
-    z.enum(['todo', 'in-progress', 'blocked', 'done', 'cancelled']),
-    z.array(z.enum(['todo', 'in-progress', 'blocked', 'done', 'cancelled'])),
+    z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
+    z.array(z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN)),
     z.literal('*'),
   ]),
   to: z.union([
-    z.enum(['todo', 'in-progress', 'blocked', 'done', 'cancelled']),
-    z.array(z.enum(['todo', 'in-progress', 'blocked', 'done', 'cancelled'])),
+    z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
+    z.array(z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN)),
     z.literal('*'),
   ]),
   gates: z.array(gateSchema),

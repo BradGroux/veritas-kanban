@@ -346,6 +346,44 @@ describe('Feature Settings Schema', () => {
     expect(result.telemetry?.enabled).toBe(true);
   });
 
+  it('should accept configurable board columns', () => {
+    const result = FeatureSettingsPatchSchema.parse({
+      board: {
+        columns: [
+          { id: 'triage', title: 'Triage' },
+          { id: 'ready', title: 'Ready' },
+        ],
+        defaultStatus: 'triage',
+      },
+    });
+
+    expect(result.board?.columns?.[0]?.id).toBe('triage');
+  });
+
+  it('should reject duplicate board column IDs', () => {
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        board: {
+          columns: [
+            { id: 'triage', title: 'Triage' },
+            { id: 'triage', title: 'Duplicate' },
+          ],
+        },
+      })
+    ).toThrow();
+  });
+
+  it('should reject a board default status outside supplied columns', () => {
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        board: {
+          columns: [{ id: 'triage', title: 'Triage' }],
+          defaultStatus: 'ready',
+        },
+      })
+    ).toThrow();
+  });
+
   it('should accept notification settings', () => {
     const result = FeatureSettingsPatchSchema.parse({
       notifications: { enabled: true, onTaskComplete: true },

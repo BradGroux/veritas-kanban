@@ -1,7 +1,8 @@
 // Task Types
 
 export type TaskType = string;
-export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+export type BuiltInTaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+export type TaskStatus = BuiltInTaskStatus | (string & {});
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 /** Run mode controls the review/QA strategy for a task. */
@@ -349,6 +350,7 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   type?: TaskType;
+  status?: TaskStatus;
   priority?: TaskPriority;
   project?: string;
   sprint?: string;

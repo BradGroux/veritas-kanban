@@ -2,7 +2,16 @@ import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/re
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { toast } from '@/hooks/useToast';
-import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  normalizeBoardColumns,
+  normalizeBoardDefaultStatus,
+  type BoardColumnConfig,
+  type Task,
+  type CreateTaskInput,
+  type UpdateTaskInput,
+} from '@veritas-kanban/shared';
 
 /**
  * Patch a single task in both the list cache (['tasks']) and the individual
@@ -120,6 +129,11 @@ export function useTask(id: string) {
 
 export function useCreateTask() {
   const queryClient = useQueryClient();
+  const { settings } = useFeatureSettings();
+  const boardColumns = normalizeBoardColumns(
+    settings.board?.columns ?? DEFAULT_FEATURE_SETTINGS.board.columns
+  );
+  const defaultStatus = normalizeBoardDefaultStatus(settings.board?.defaultStatus, boardColumns);
 
   return useMutation({
     mutationFn: (input: CreateTaskInput) => api.tasks.create(input),
@@ -137,7 +151,7 @@ export function useCreateTask() {
         title: input.title,
         description: input.description || '',
         type: (input.type || 'code') as Task['type'],
-        status: 'todo',
+        status: input.status ?? defaultStatus,
         priority: input.priority || 'medium',
         project: input.project,
         sprint: input.sprint,
@@ -339,13 +353,8 @@ export function useBulkUpdate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      ids,
-      status,
-    }: {
-      ids: string[];
-      status: 'todo' | 'in-progress' | 'blocked' | 'done';
-    }) => api.tasks.bulkUpdate(ids, status),
+    mutationFn: ({ ids, status }: { ids: string[]; status: Task['status'] }) =>
+      api.tasks.bulkUpdate(ids, status),
     onMutate: async ({ ids, status }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
@@ -650,24 +659,30 @@ function sortByPosition(tasks: Task[]): Task[] {
   });
 }
 
-export function useTasksByStatus(tasks: Task[] | undefined) {
-  if (!tasks) {
-    return {
-      todo: [],
-      'in-progress': [],
-      blocked: [],
-      done: [],
-      cancelled: [],
-    };
+export function useTasksByStatus(
+  tasks: Task[] | undefined,
+  columns?: BoardColumnConfig[]
+): Record<string, Task[]> {
+  const statuses = normalizeBoardColumns(columns ?? DEFAULT_FEATURE_SETTINGS.board.columns).map(
+    (column) => column.id
+  );
+  const grouped = Object.fromEntries(statuses.map((status) => [status, [] as Task[]])) as Record<
+    string,
+    Task[]
+  >;
+
+  for (const task of tasks ?? []) {
+    if (!grouped[task.status]) {
+      grouped[task.status] = [];
+    }
+    grouped[task.status].push(task);
   }
 
-  return {
-    todo: sortByPosition(tasks.filter((t) => t.status === 'todo')),
-    'in-progress': sortByPosition(tasks.filter((t) => t.status === 'in-progress')),
-    blocked: sortByPosition(tasks.filter((t) => t.status === 'blocked')),
-    done: sortByPosition(tasks.filter((t) => t.status === 'done')),
-    cancelled: sortByPosition(tasks.filter((t) => t.status === 'cancelled')),
-  };
+  for (const status of Object.keys(grouped)) {
+    grouped[status] = sortByPosition(grouped[status]);
+  }
+
+  return grouped;
 }
 
 // Check if a task is blocked by incomplete dependencies

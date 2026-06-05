@@ -9,12 +9,7 @@ import type { Task, Comment } from '@veritas-kanban/shared';
 import { formatDuration, formatDate } from '@veritas-kanban/shared';
 import type { Activity } from './activity-service.js';
 
-export interface StatusCounts {
-  todo: number;
-  'in-progress': number;
-  blocked: number;
-  done: number;
-}
+export type StatusCounts = Record<string, number>;
 
 export interface ProjectStats {
   total: number;
@@ -72,11 +67,15 @@ export class SummaryService {
    */
   getOverallSummary(tasks: Task[]): OverallSummary {
     const byStatus: StatusCounts = {
-      todo: tasks.filter((t) => t.status === 'todo').length,
-      'in-progress': tasks.filter((t) => t.status === 'in-progress').length,
-      blocked: tasks.filter((t) => t.status === 'blocked').length,
-      done: tasks.filter((t) => t.status === 'done').length,
+      todo: 0,
+      'in-progress': 0,
+      blocked: 0,
+      done: 0,
     };
+    tasks.forEach((task) => {
+      byStatus[task.status] ??= 0;
+      byStatus[task.status]++;
+    });
 
     const byProject: Record<string, ProjectStats> = {};
     tasks.forEach((task) => {

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 
-export interface TaskCounts {
+export interface TaskCounts extends Record<string, number> {
   backlog: number;
   todo: number;
   'in-progress': number;

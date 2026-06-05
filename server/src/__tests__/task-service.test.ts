@@ -3,12 +3,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { TaskService } from '../services/task-service.js';
+import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings } from '@veritas-kanban/shared';
 
 describe('TaskService', () => {
   let service: TaskService;
   let testRoot: string;
   let tasksDir: string;
   let archiveDir: string;
+  let featureSettings: FeatureSettings;
 
   beforeEach(async () => {
     // Create fresh test directories with unique suffix
@@ -19,10 +21,14 @@ describe('TaskService', () => {
 
     await fs.mkdir(tasksDir, { recursive: true });
     await fs.mkdir(archiveDir, { recursive: true });
+    featureSettings = DEFAULT_FEATURE_SETTINGS;
 
     service = new TaskService({
       tasksDir,
       archiveDir,
+      configService: {
+        getFeatureSettings: async () => featureSettings,
+      },
     });
   });
 
@@ -204,6 +210,39 @@ updated: '2026-01-26T10:00:00.000Z'
       const taskFile = files.find((f) => f.includes(task.id));
       expect(taskFile).toMatch(/test-special-characters-more/);
     });
+
+    it('should use configured default status for new tasks', async () => {
+      featureSettings = {
+        ...DEFAULT_FEATURE_SETTINGS,
+        board: {
+          ...DEFAULT_FEATURE_SETTINGS.board,
+          columns: [
+            { id: 'triage', title: 'Triage' },
+            { id: 'ready', title: 'Ready' },
+          ],
+          defaultStatus: 'triage',
+        },
+      };
+
+      const task = await service.createTask({ title: 'Configured Default' });
+
+      expect(task.status).toBe('triage');
+    });
+
+    it('should reject creates with statuses outside configured columns', async () => {
+      featureSettings = {
+        ...DEFAULT_FEATURE_SETTINGS,
+        board: {
+          ...DEFAULT_FEATURE_SETTINGS.board,
+          columns: [{ id: 'triage', title: 'Triage' }],
+          defaultStatus: 'triage',
+        },
+      };
+
+      await expect(service.createTask({ title: 'Invalid Status', status: 'todo' })).rejects.toThrow(
+        'Invalid task status'
+      );
+    });
   });
 
   describe('Task updates', () => {
@@ -230,6 +269,28 @@ updated: '2026-01-26T10:00:00.000Z'
     it('should return null for non-existent task', async () => {
       const result = await service.updateTask('nonexistent', { title: 'Test' });
       expect(result).toBeNull();
+    });
+
+    it('should validate status updates against configured columns', async () => {
+      featureSettings = {
+        ...DEFAULT_FEATURE_SETTINGS,
+        board: {
+          ...DEFAULT_FEATURE_SETTINGS.board,
+          columns: [
+            { id: 'triage', title: 'Triage' },
+            { id: 'ready', title: 'Ready' },
+          ],
+          defaultStatus: 'triage',
+        },
+      };
+      const task = await service.createTask({ title: 'Config Status Move' });
+
+      const moved = await service.updateTask(task.id, { status: 'ready' });
+      await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
+        'Invalid task status'
+      );
+
+      expect(moved?.status).toBe('ready');
     });
 
     it('should clear checkpoint when task is marked done', async () => {

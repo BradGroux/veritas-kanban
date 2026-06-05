@@ -4,7 +4,16 @@ import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints } from '@/hooks/useSprints';
 import { useConfig } from '@/hooks/useConfig';
-import type { Task, TaskStatus, TaskPriority, AgentType } from '@veritas-kanban/shared';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  normalizeBoardColumns,
+  getBoardStatusLabel,
+  type Task,
+  type TaskStatus,
+  type TaskPriority,
+  type AgentType,
+} from '@veritas-kanban/shared';
 import type { ReactNode } from 'react';
 
 interface TaskMetadataSectionProps {
@@ -12,14 +21,6 @@ interface TaskMetadataSectionProps {
   onUpdate: <K extends keyof Task>(field: K, value: Task[K]) => void;
   readOnly?: boolean;
 }
-
-const statusLabels: Record<TaskStatus, string> = {
-  todo: 'To Do',
-  'in-progress': 'In Progress',
-  blocked: 'Blocked',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
 
 const priorityLabels: Record<TaskPriority, string> = {
   low: 'Low',
@@ -45,6 +46,11 @@ export function TaskMetadataSection({
   const { data: projects = [] } = useProjects();
   const { data: sprints = [] } = useSprints();
   const { data: config } = useConfig();
+  const { settings: featureSettings } = useFeatureSettings();
+  const columns = normalizeBoardColumns(
+    featureSettings.board?.columns ?? DEFAULT_FEATURE_SETTINGS.board.columns
+  );
+  const statusOptions = columns.map((column) => ({ value: column.id, label: column.title }));
   const enabledAgents = config?.agents.filter((a) => a.enabled) || [];
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -62,12 +68,12 @@ export function TaskMetadataSection({
             Status
           </Text>
           {readOnly ? (
-            <ReadOnlyValue>{statusLabels[task.status]}</ReadOnlyValue>
+            <ReadOnlyValue>{getBoardStatusLabel(task.status, columns)}</ReadOnlyValue>
           ) : (
             <Select
               aria-label="Status"
               allowDeselect={false}
-              data={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
+              data={statusOptions}
               value={task.status}
               onChange={(value) => {
                 if (value) onUpdate('status', value as TaskStatus);

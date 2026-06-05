@@ -1,15 +1,77 @@
-import { Select } from '@mantine/core';
+import { ActionIcon, Button, Group, Select, TextInput } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
-import { DEFAULT_FEATURE_SETTINGS, type DashboardWidgetSettings } from '@veritas-kanban/shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  normalizeBoardColumns,
+  normalizeBoardDefaultStatus,
+  type BoardColumnConfig,
+  type DashboardWidgetSettings,
+} from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
+import { Plus, Trash2 } from 'lucide-react';
 
 export function BoardTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const boardSettings = settings.board ?? DEFAULT_FEATURE_SETTINGS.board;
+  const columns = normalizeBoardColumns(boardSettings.columns);
+  const defaultStatus = normalizeBoardDefaultStatus(boardSettings.defaultStatus, columns);
 
   const update = (key: string, value: any) => {
     debouncedUpdate({ board: { [key]: value } });
   };
+
+  const updateBoardColumns = (
+    nextColumns: BoardColumnConfig[],
+    nextDefaultStatus = defaultStatus
+  ) => {
+    const normalizedColumns = normalizeBoardColumns(nextColumns);
+    debouncedUpdate({
+      board: {
+        columns: normalizedColumns,
+        defaultStatus: normalizeBoardDefaultStatus(nextDefaultStatus, normalizedColumns),
+      },
+    });
+  };
+
+  const updateColumn = (index: number, patch: Partial<BoardColumnConfig>) => {
+    const previousId = columns[index]?.id;
+    const nextColumns = columns.map((column, columnIndex) =>
+      columnIndex === index ? { ...column, ...patch } : column
+    );
+    const nextDefaultStatus =
+      previousId && previousId === defaultStatus && patch.id ? patch.id : defaultStatus;
+    updateBoardColumns(nextColumns, nextDefaultStatus);
+  };
+
+  const addColumn = () => {
+    let suffix = columns.length + 1;
+    let id = `column-${suffix}`;
+    const used = new Set(columns.map((column) => column.id));
+    while (used.has(id)) {
+      suffix += 1;
+      id = `column-${suffix}`;
+    }
+    updateBoardColumns([...columns, { id, title: `Column ${suffix}` }]);
+  };
+
+  const removeColumn = (index: number) => {
+    if (columns.length <= 1) return;
+    const removedId = columns[index]?.id;
+    const nextColumns = columns.filter((_, columnIndex) => columnIndex !== index);
+    updateBoardColumns(
+      nextColumns,
+      removedId === defaultStatus ? nextColumns[0]?.id : defaultStatus
+    );
+  };
+
+  const normalizeIdInput = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-{2,}/g, '-')
+      .slice(0, 50);
 
   const resetBoard = () => {
     debouncedUpdate({ board: DEFAULT_FEATURE_SETTINGS.board });
@@ -25,10 +87,10 @@ export function BoardTab() {
         <ToggleRow
           label="Show Dashboard"
           description="Display the metrics dashboard section above the board"
-          checked={settings.board?.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard}
+          checked={boardSettings.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard}
           onCheckedChange={(v) => update('showDashboard', v)}
         />
-        {(settings.board?.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard) && (
+        {(boardSettings.showDashboard ?? DEFAULT_FEATURE_SETTINGS.board.showDashboard) && (
           <>
             <div className="pl-6 border-l-2 border-muted ml-2 space-y-0 divide-y">
               {(
@@ -56,7 +118,7 @@ export function BoardTab() {
                   label={label}
                   description={desc}
                   checked={
-                    (settings.board.dashboardWidgets ??
+                    (boardSettings.dashboardWidgets ??
                       DEFAULT_FEATURE_SETTINGS.board.dashboardWidgets)?.[
                       key as keyof DashboardWidgetSettings
                     ] ?? true
@@ -65,7 +127,7 @@ export function BoardTab() {
                     debouncedUpdate({
                       board: {
                         dashboardWidgets: {
-                          ...(settings.board?.dashboardWidgets ??
+                          ...(boardSettings.dashboardWidgets ??
                             DEFAULT_FEATURE_SETTINGS.board.dashboardWidgets),
                           [key]: v,
                         },
@@ -81,14 +143,14 @@ export function BoardTab() {
           label="Archive Suggestions"
           description="Show banner when all sprint tasks are complete"
           checked={
-            settings.board?.showArchiveSuggestions ??
+            boardSettings.showArchiveSuggestions ??
             DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions
           }
           onCheckedChange={(v) => update('showArchiveSuggestions', v)}
         />
         <SettingRow label="Card Density" description="Compact cards use less space">
           <Select
-            value={settings.board?.cardDensity ?? DEFAULT_FEATURE_SETTINGS.board.cardDensity}
+            value={boardSettings.cardDensity ?? DEFAULT_FEATURE_SETTINGS.board.cardDensity}
             onChange={(value) => value && update('cardDensity', value)}
             data={[
               { value: 'normal', label: 'Normal' },
@@ -100,11 +162,82 @@ export function BoardTab() {
             w={112}
           />
         </SettingRow>
+        <SettingRow
+          label="Default Status"
+          description="Status assigned when a task is created without an explicit status"
+        >
+          <Select
+            value={defaultStatus}
+            onChange={(value) => value && update('defaultStatus', value)}
+            data={columns.map((column) => ({ value: column.id, label: column.title }))}
+            aria-label="Default task status"
+            allowDeselect={false}
+            size="xs"
+            w={160}
+          />
+        </SettingRow>
+        <div className="py-3">
+          <Group justify="space-between" align="center" mb="xs">
+            <div>
+              <div className="text-sm font-medium">Board Columns</div>
+              <div className="text-xs text-muted-foreground">Visible task statuses and order</div>
+            </div>
+            <Button
+              type="button"
+              variant="light"
+              size="xs"
+              leftSection={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={addColumn}
+              disabled={columns.length >= 12}
+            >
+              Add
+            </Button>
+          </Group>
+          <div className="space-y-2">
+            {columns.map((column, index) => (
+              <div
+                key={`${column.id}-${index}`}
+                className="grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_32px] gap-2"
+              >
+                <TextInput
+                  aria-label={`Column ${index + 1} status ID`}
+                  value={column.id}
+                  onChange={(event) => {
+                    const id = normalizeIdInput(event.currentTarget.value);
+                    if (id) updateColumn(index, { id });
+                  }}
+                  size="xs"
+                  maxLength={50}
+                />
+                <TextInput
+                  aria-label={`Column ${index + 1} title`}
+                  value={column.title}
+                  onChange={(event) => {
+                    const title = event.currentTarget.value.slice(0, 50);
+                    if (title.trim()) updateColumn(index, { title });
+                  }}
+                  size="xs"
+                  maxLength={50}
+                />
+                <ActionIcon
+                  aria-label={`Remove ${column.title}`}
+                  variant="subtle"
+                  color="red"
+                  size="sm"
+                  onClick={() => removeColumn(index)}
+                  disabled={columns.length <= 1}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </ActionIcon>
+              </div>
+            ))}
+          </div>
+        </div>
         <ToggleRow
           label="Priority Indicators"
           description="Show priority badge on task cards"
           checked={
-            settings.board?.showPriorityIndicators ??
+            boardSettings.showPriorityIndicators ??
             DEFAULT_FEATURE_SETTINGS.board.showPriorityIndicators
           }
           onCheckedChange={(v) => update('showPriorityIndicators', v)}
@@ -113,7 +246,7 @@ export function BoardTab() {
           label="Project Badges"
           description="Show project badge on task cards"
           checked={
-            settings.board?.showProjectBadges ?? DEFAULT_FEATURE_SETTINGS.board.showProjectBadges
+            boardSettings.showProjectBadges ?? DEFAULT_FEATURE_SETTINGS.board.showProjectBadges
           }
           onCheckedChange={(v) => update('showProjectBadges', v)}
         />
@@ -121,7 +254,7 @@ export function BoardTab() {
           label="Sprint Badges"
           description="Show sprint badge on task cards"
           checked={
-            settings.board?.showSprintBadges ?? DEFAULT_FEATURE_SETTINGS.board.showSprintBadges
+            boardSettings.showSprintBadges ?? DEFAULT_FEATURE_SETTINGS.board.showSprintBadges
           }
           onCheckedChange={(v) => update('showSprintBadges', v)}
         />
@@ -129,16 +262,14 @@ export function BoardTab() {
           label="Drag & Drop"
           description="Allow dragging cards between columns"
           checked={
-            settings.board?.enableDragAndDrop ?? DEFAULT_FEATURE_SETTINGS.board.enableDragAndDrop
+            boardSettings.enableDragAndDrop ?? DEFAULT_FEATURE_SETTINGS.board.enableDragAndDrop
           }
           onCheckedChange={(v) => update('enableDragAndDrop', v)}
         />
         <ToggleRow
           label="Done Column Metrics"
           description="Show agent run count, success status, and duration on completed tasks"
-          checked={
-            settings.board?.showDoneMetrics ?? DEFAULT_FEATURE_SETTINGS.board.showDoneMetrics
-          }
+          checked={boardSettings.showDoneMetrics ?? DEFAULT_FEATURE_SETTINGS.board.showDoneMetrics}
           onCheckedChange={(v) => update('showDoneMetrics', v)}
         />
       </div>

@@ -25,7 +25,7 @@ interface KanbanColumnProps {
   statusOptions?: Array<{ value: TaskStatus; label: string }>;
 }
 
-const columnColors: Record<TaskStatus, string> = {
+const columnColors: Record<string, string> = {
   todo: 'border-t-slate-500',
   'in-progress': 'border-t-blue-500',
   blocked: 'border-t-red-500',
@@ -76,7 +76,7 @@ export function KanbanColumn({
       aria-roledescription="kanban column"
       className={cn(
         'flex flex-col rounded-lg bg-muted/50 border-t-2 transition-all',
-        columnColors[id],
+        columnColors[id] ?? 'border-t-primary',
         dragEnabled && isOver && 'ring-2 ring-primary/50 bg-muted/70'
       )}
     >

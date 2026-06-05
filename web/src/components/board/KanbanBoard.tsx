@@ -5,8 +5,10 @@ import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
 import {
   DEFAULT_FEATURE_SETTINGS,
   type BoardSavedView,
+  type BoardColumnConfig,
   type TaskStatus,
   type Task,
+  normalizeBoardColumns,
 } from '@veritas-kanban/shared';
 import { useFeatureSettings, useUpdateFeatureSettings } from '@/hooks/useFeatureSettings';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
@@ -62,14 +64,6 @@ const BoardSidebar = lazy(() =>
   }))
 );
 
-const COLUMNS: { id: TaskStatus; title: string }[] = [
-  { id: 'todo', title: 'To Do' },
-  { id: 'in-progress', title: 'In Progress' },
-  { id: 'blocked', title: 'Blocked' },
-  { id: 'done', title: 'Done' },
-];
-
-const STATUS_OPTIONS = COLUMNS.map((column) => ({ value: column.id, label: column.title }));
 const EMPTY_SAVED_VIEWS: BoardSavedView[] = [];
 
 export function KanbanBoard() {
@@ -77,6 +71,14 @@ export function KanbanBoard() {
   const { settings: featureSettings, isPlaceholderData } = useFeatureSettings();
   const updateFeatureSettings = useUpdateFeatureSettings();
   const boardSettings = featureSettings.board ?? DEFAULT_FEATURE_SETTINGS.board;
+  const columns = useMemo<BoardColumnConfig[]>(
+    () => normalizeBoardColumns(boardSettings.columns),
+    [boardSettings.columns]
+  );
+  const statusOptions = useMemo(
+    () => columns.map((column) => ({ value: column.id, label: column.title })),
+    [columns]
+  );
   const savedViews = boardSettings.savedViews ?? EMPTY_SAVED_VIEWS;
   const defaultSavedViewId = boardSettings.defaultSavedViewId ?? null;
   const { announce } = useLiveAnnouncer();
@@ -294,7 +296,7 @@ export function KanbanBoard() {
   }, [tasks, filters]);
 
   // Group filtered tasks by status
-  const tasksByStatus = useTasksByStatus(filteredTasks);
+  const tasksByStatus = useTasksByStatus(filteredTasks, columns);
 
   // Register filtered tasks with keyboard context
   useEffect(() => {
@@ -376,7 +378,7 @@ export function KanbanBoard() {
   const handleMoveTask = useCallback(
     (taskId: string, status: TaskStatus) => {
       const task = filteredTasks.find((t) => t.id === taskId);
-      const columnName = COLUMNS.find((c) => c.id === status)?.title || status;
+      const columnName = columns.find((c) => c.id === status)?.title || status;
       if (!canWriteTasks) {
         announce(`Task ${task?.title || taskId} cannot be moved with the current permissions`);
         return;
@@ -388,7 +390,7 @@ export function KanbanBoard() {
       updateTask.mutate({ id: taskId, input: { status } });
       announce(`Task ${task?.title || taskId} moved to ${columnName}`);
     },
-    [announce, canWriteTasks, filteredTasks, isOnline, updateTask]
+    [announce, canWriteTasks, columns, filteredTasks, isOnline, updateTask]
   );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
@@ -408,7 +410,7 @@ export function KanbanBoard() {
   } = useBoardDragDrop({
     tasks: filteredTasks,
     tasksByStatus,
-    columns: COLUMNS,
+    columns,
     onStatusChange: (taskId, status) => {
       if (!canWriteTasks || !isOnline) return;
       updateTask.mutate({ id: taskId, input: { status } });
@@ -433,7 +435,7 @@ export function KanbanBoard() {
     : null;
 
   if (isLoading) {
-    return <BoardLoadingSkeleton columns={COLUMNS} />;
+    return <BoardLoadingSkeleton columns={columns} />;
   }
 
   if (error) {
@@ -502,16 +504,21 @@ export function KanbanBoard() {
                 onDragEnd={handleDragEnd}
               >
                 <div
-                  className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+                  className="grid grid-cols-1 gap-4 md:grid-cols-2"
+                  style={
+                    isMobileLayout
+                      ? undefined
+                      : { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }
+                  }
                   role="group"
                   aria-label="Kanban columns"
                 >
-                  {COLUMNS.map((column) => (
+                  {columns.map((column) => (
                     <KanbanColumn
                       key={column.id}
                       id={column.id}
                       title={column.title}
-                      tasks={liveTasksByStatus[column.id]}
+                      tasks={liveTasksByStatus[column.id] ?? []}
                       allTasks={filteredTasks}
                       onTaskClick={handleTaskClick}
                       onTaskStatusChange={handleMoveTask}
@@ -519,7 +526,7 @@ export function KanbanBoard() {
                       canChangeStatus={canWriteTasks && isOnline}
                       dragEnabled={canDragTasks}
                       isDragActive={isDragActive}
-                      statusOptions={STATUS_OPTIONS}
+                      statusOptions={statusOptions}
                     />
                   ))}
                 </div>
@@ -530,16 +537,21 @@ export function KanbanBoard() {
               </DndContext>
             ) : (
               <div
-                className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+                className="grid grid-cols-1 gap-4 md:grid-cols-2"
+                style={
+                  isMobileLayout
+                    ? undefined
+                    : { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }
+                }
                 role="group"
                 aria-label="Kanban columns"
               >
-                {COLUMNS.map((column) => (
+                {columns.map((column) => (
                   <KanbanColumn
                     key={column.id}
                     id={column.id}
                     title={column.title}
-                    tasks={tasksByStatus[column.id]}
+                    tasks={tasksByStatus[column.id] ?? []}
                     allTasks={filteredTasks}
                     onTaskClick={handleTaskClick}
                     onTaskStatusChange={handleMoveTask}
@@ -547,7 +559,7 @@ export function KanbanBoard() {
                     canChangeStatus={canWriteTasks && isOnline}
                     dragEnabled={false}
                     showStatusControls={isMobileLayout}
-                    statusOptions={STATUS_OPTIONS}
+                    statusOptions={statusOptions}
                   />
                 ))}
               </div>

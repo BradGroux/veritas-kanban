@@ -6,14 +6,16 @@
  * - Task counters in 2-column grid
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@mantine/core';
 import { useRealtimeAgentStatus } from '@/hooks/useAgentStatus';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { api, Activity } from '@/lib/api';
 import { useTaskCounts } from '@/hooks/useTaskCounts';
+import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useView } from '@/contexts/ViewContext';
+import { DEFAULT_FEATURE_SETTINGS, normalizeBoardColumns } from '@veritas-kanban/shared';
 import {
   Clock,
   AlertCircle,
@@ -30,6 +32,7 @@ import {
   ExternalLink,
   GitBranch,
   ShieldAlert,
+  Circle,
 } from 'lucide-react';
 import { BudgetCard } from '@/components/dashboard/BudgetCard';
 import { MultiAgentPanel } from './MultiAgentPanel';
@@ -388,6 +391,17 @@ interface BoardSidebarProps {
 export function BoardSidebar({ onTaskClick }: BoardSidebarProps) {
   const { setView } = useView();
   const { data: counts } = useTaskCounts(); // Use new counts endpoint for sidebar counters
+  const { settings } = useFeatureSettings();
+  const columns = normalizeBoardColumns(
+    settings.board?.columns ?? DEFAULT_FEATURE_SETTINGS.board.columns
+  );
+
+  const columnCounterMeta: Record<string, { icon: ReactNode; color?: string }> = {
+    todo: { icon: <ListTodo className="h-3.5 w-3.5" /> },
+    'in-progress': { icon: <Play className="h-3.5 w-3.5" />, color: 'text-blue-500' },
+    blocked: { icon: <Ban className="h-3.5 w-3.5" />, color: 'text-red-500' },
+    done: { icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-green-500' },
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -402,29 +416,20 @@ export function BoardSidebar({ onTaskClick }: BoardSidebarProps) {
             value={counts?.backlog || 0}
             icon={<Inbox className="h-3.5 w-3.5" />}
           />
-          <Counter
-            label="To Do"
-            value={counts?.todo || 0}
-            icon={<ListTodo className="h-3.5 w-3.5" />}
-          />
-          <Counter
-            label="In Progress"
-            value={counts?.['in-progress'] || 0}
-            icon={<Play className="h-3.5 w-3.5" />}
-            color="text-blue-500"
-          />
-          <Counter
-            label="Blocked"
-            value={counts?.blocked || 0}
-            icon={<Ban className="h-3.5 w-3.5" />}
-            color="text-red-500"
-          />
-          <Counter
-            label="Done"
-            value={counts?.done || 0}
-            icon={<CheckCircle className="h-3.5 w-3.5" />}
-            color="text-green-500"
-          />
+          {columns.map((column) => {
+            const meta = columnCounterMeta[column.id] ?? {
+              icon: <Circle className="h-3.5 w-3.5" />,
+            };
+            return (
+              <Counter
+                key={column.id}
+                label={column.title}
+                value={counts?.[column.id] || 0}
+                icon={meta.icon}
+                color={meta.color}
+              />
+            );
+          })}
           <Counter
             label="Archived"
             value={counts?.archived || 0}

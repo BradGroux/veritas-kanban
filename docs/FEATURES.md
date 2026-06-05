@@ -85,8 +85,8 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 | ![Main board view](../assets/scr-main_overview_1.png) | ![Board with tasks](../assets/scr-main_overview_2.png) |
 | ![Board columns](../assets/scr-main_overview_3.png)   | ![Board dark mode](../assets/scr-main_overview_4.png)  |
 
-- **Kanban columns** — Four default columns: To Do, In Progress, Blocked, Done
-- **Drag-and-drop** — Move tasks between columns with [@dnd-kit](https://dndkit.com/); reorder within columns; custom collision detection (pointerWithin + rectIntersection fallback) for reliable cross-column moves; tooltips suppressed during drag; local state management for real-time column updates
+- **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
+- **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; custom collision detection (pointerWithin + rectIntersection fallback) for reliable cross-column moves; tooltips suppressed during drag; local state management for real-time column updates
 
   ![Drag-and-drop demo](../assets/demo-drag_drop.gif)
 
