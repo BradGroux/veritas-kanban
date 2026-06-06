@@ -111,6 +111,11 @@ jobs:
               exit 1
             fi
 
+            if [ "${file}" = "${dmg}" ]; then
+              codesign --verify --verbose=2 "${file}"
+              spctl -a -vvv -t open --context context:primary-signature "${file}"
+            fi
+
             checksum="$(shasum -a 256 "${file}" | awk '{print $1}')"
             printf '%s  %s\n' "${checksum}" "$(basename "${file}")" > "${file}.sha256"
           done
