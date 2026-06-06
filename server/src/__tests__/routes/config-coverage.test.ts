@@ -211,6 +211,32 @@ describe('Config Routes (actual module)', () => {
           provider: 'codex-cloud',
           model: 'gpt-5.5',
         },
+        {
+          type: 'ollama-local',
+          name: 'Ollama Local',
+          command: 'ollama',
+          args: ['run', 'llama3.2'],
+          enabled: true,
+          provider: 'ollama-local',
+          model: 'llama3.2',
+        },
+        {
+          type: 'ollama-cloud',
+          name: 'Ollama Cloud',
+          command: 'ollama',
+          args: ['run', 'gpt-oss:120b-cloud'],
+          enabled: true,
+          provider: 'ollama-cloud',
+          model: 'gpt-oss:120b-cloud',
+        },
+        {
+          type: 'lm-studio-local',
+          name: 'LM Studio Local',
+          command: 'lms',
+          args: ['server', 'status'],
+          enabled: true,
+          provider: 'lm-studio-local',
+        },
       ];
       mockConfigService.updateAgents.mockResolvedValue({ agents });
       const res = await request(app).put('/api/config/agents').send(agents);

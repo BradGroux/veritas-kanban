@@ -12,6 +12,7 @@ const agents: AgentConfig[] = [
     args: ['exec'],
     enabled: true,
     provider: 'codex-cli',
+    model: 'gpt-5',
   },
   {
     type: 'claude-code' as AgentType,
@@ -287,6 +288,8 @@ describe('Agents settings Mantine migration', () => {
     const { baseElement } = renderWithProviders(<AgentsTab />);
 
     expect(screen.getByText('Installed Agents')).toBeDefined();
+    expect(screen.getByText('Codex CLI')).toBeDefined();
+    expect(screen.getByText('gpt-5')).toBeDefined();
     expect(screen.getByText('Codex Health')).toBeDefined();
     expect(screen.getByText('Context Provider Health')).toBeDefined();
     expect(screen.getByText('Agent Host Health')).toBeDefined();
@@ -348,6 +351,9 @@ describe('Agents settings Mantine migration', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: 'run --fast' },
     });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Model' }), {
+      target: { value: 'gemini-2.5-pro' },
+    });
     expect(baseElement.querySelectorAll('.mantine-TextInput-root').length).toBeGreaterThanOrEqual(
       5
     );
@@ -362,6 +368,7 @@ describe('Agents settings Mantine migration', () => {
         command: 'gemini',
         args: ['run', '--fast'],
         enabled: true,
+        model: 'gemini-2.5-pro',
       }),
     ]);
   });

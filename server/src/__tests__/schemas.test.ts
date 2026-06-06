@@ -678,7 +678,18 @@ describe('Config Schemas', () => {
     });
 
     it('should accept all valid agent types', () => {
-      const agents = ['claude-code', 'amp', 'copilot', 'gemini'];
+      const agents = [
+        'claude-code',
+        'amp',
+        'copilot',
+        'gemini',
+        'codex',
+        'codex-sdk',
+        'codex-cloud',
+        'ollama-local',
+        'ollama-cloud',
+        'lm-studio-local',
+      ];
       for (const agent of agents) {
         expect(SetDefaultAgentBodySchema.parse({ agent }).agent).toBe(agent);
       }

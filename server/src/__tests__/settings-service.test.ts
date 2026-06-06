@@ -17,9 +17,9 @@ describe('ConfigService', () => {
     testRoot = path.join(os.tmpdir(), `veritas-test-config-${uniqueSuffix}`);
     configDir = path.join(testRoot, '.veritas-kanban');
     configFile = path.join(configDir, 'config.json');
-    
+
     await fs.mkdir(configDir, { recursive: true });
-    
+
     service = new ConfigService({
       configDir,
       configFile,
@@ -37,7 +37,7 @@ describe('ConfigService', () => {
   describe('Feature Settings', () => {
     it('should return defaults when no config exists', async () => {
       const features = await service.getFeatureSettings();
-      
+
       expect(features).toEqual(DEFAULT_FEATURE_SETTINGS);
       expect(features.board).toBeDefined();
       expect(features.tasks).toBeDefined();
@@ -46,10 +46,13 @@ describe('ConfigService', () => {
 
     it('should create config file with defaults on first access', async () => {
       await service.getConfig();
-      
-      const exists = await fs.access(configFile).then(() => true).catch(() => false);
+
+      const exists = await fs
+        .access(configFile)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
-      
+
       const content = await fs.readFile(configFile, 'utf-8');
       const parsed = JSON.parse(content);
       expect(parsed.features).toEqual(DEFAULT_FEATURE_SETTINGS);
@@ -58,19 +61,21 @@ describe('ConfigService', () => {
     it('should perform deep merge on PATCH', async () => {
       // First get config to create defaults
       await service.getConfig();
-      
+
       // Patch a nested value
       const updated = await service.updateFeatureSettings({
         board: {
           showDashboard: false,
         },
       });
-      
+
       // Should preserve other board settings
       expect(updated.board.showDashboard).toBe(false);
-      expect(updated.board.showArchiveSuggestions).toBe(DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions);
+      expect(updated.board.showArchiveSuggestions).toBe(
+        DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions
+      );
       expect(updated.board.cardDensity).toBe(DEFAULT_FEATURE_SETTINGS.board.cardDensity);
-      
+
       // Should preserve other top-level features
       expect(updated.tasks).toEqual(DEFAULT_FEATURE_SETTINGS.tasks);
       expect(updated.agents).toEqual(DEFAULT_FEATURE_SETTINGS.agents);
@@ -87,32 +92,34 @@ describe('ConfigService', () => {
           },
         },
       };
-      
+
       await fs.writeFile(configFile, JSON.stringify(partialConfig, null, 2));
-      
+
       // Force reload
       const config = await service.getConfig();
-      
+
       // Should merge with defaults
       expect(config.features.board.showDashboard).toBe(false);
-      expect(config.features.board.showArchiveSuggestions).toBe(DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions);
+      expect(config.features.board.showArchiveSuggestions).toBe(
+        DEFAULT_FEATURE_SETTINGS.board.showArchiveSuggestions
+      );
       expect(config.features.board.cardDensity).toBe(DEFAULT_FEATURE_SETTINGS.board.cardDensity);
       expect(config.features.tasks).toEqual(DEFAULT_FEATURE_SETTINGS.tasks);
     });
 
     it('should handle multiple sequential patches', async () => {
       await service.getConfig();
-      
+
       // First patch
       await service.updateFeatureSettings({
         board: { showDashboard: false },
       });
-      
+
       // Second patch
       const updated = await service.updateFeatureSettings({
         tasks: { enableTimeTracking: false },
       });
-      
+
       // Both patches should be preserved
       expect(updated.board.showDashboard).toBe(false);
       expect(updated.tasks.enableTimeTracking).toBe(false);
@@ -120,17 +127,19 @@ describe('ConfigService', () => {
 
     it('should handle deeply nested patch objects', async () => {
       await service.getConfig();
-      
+
       const updated = await service.updateFeatureSettings({
         agents: {
           timeoutMinutes: 60,
           autoCommitOnComplete: true,
         },
       });
-      
+
       expect(updated.agents.timeoutMinutes).toBe(60);
       expect(updated.agents.autoCommitOnComplete).toBe(true);
-      expect(updated.agents.autoCleanupWorktrees).toBe(DEFAULT_FEATURE_SETTINGS.agents.autoCleanupWorktrees);
+      expect(updated.agents.autoCleanupWorktrees).toBe(
+        DEFAULT_FEATURE_SETTINGS.agents.autoCleanupWorktrees
+      );
       expect(updated.agents.enablePreview).toBe(DEFAULT_FEATURE_SETTINGS.agents.enablePreview);
     });
 
@@ -139,13 +148,13 @@ describe('ConfigService', () => {
       await service.updateFeatureSettings({
         board: { cardDensity: 'compact' },
       });
-      
+
       // Create new instance pointing to same config
       const newService = new ConfigService({
         configDir,
         configFile,
       });
-      
+
       const features = await newService.getFeatureSettings();
       expect(features.board.cardDensity).toBe('compact');
     });
@@ -155,26 +164,70 @@ describe('ConfigService', () => {
     it('should handle missing config directory gracefully', async () => {
       // Delete the config directory
       await fs.rm(configDir, { recursive: true, force: true });
-      
+
       // Should recreate on access
       const config = await service.getConfig();
       expect(config).toBeDefined();
-      
-      const exists = await fs.access(configDir).then(() => true).catch(() => false);
+
+      const exists = await fs
+        .access(configDir)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
     });
 
     it('should include default agents in new config', async () => {
       const config = await service.getConfig();
-      
+
       expect(config.agents).toBeDefined();
       expect(config.agents.length).toBeGreaterThan(0);
-      expect(config.agents.some(a => a.type === 'claude-code')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'claude-code')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'codex')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'ollama-local')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'ollama-cloud')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'lm-studio-local')).toBe(true);
     });
 
     it('should set default agent', async () => {
       const config = await service.getConfig();
-      expect(config.defaultAgent).toBe('claude-code');
+      expect(config.defaultAgent).toBe('codex');
+    });
+
+    it('should use VERITAS_DATA_DIR for implicit file-backed config', async () => {
+      service.dispose();
+      const previousDataDir = process.env.DATA_DIR;
+      const previousVeritasDataDir = process.env.VERITAS_DATA_DIR;
+      const envRoot = path.join(testRoot, 'runtime-root');
+
+      delete process.env.DATA_DIR;
+      process.env.VERITAS_DATA_DIR = envRoot;
+
+      const envService = new ConfigService();
+      service = envService;
+
+      try {
+        const config = await envService.getConfig();
+        const envConfigFile = path.join(envRoot, '.veritas-kanban', 'config.json');
+        const raw = JSON.parse(await fs.readFile(envConfigFile, 'utf-8'));
+
+        expect(config.defaultAgent).toBe('codex');
+        expect(raw.defaultAgent).toBe('codex');
+        expect(raw.agents.find((agent: { type: string }) => agent.type === 'codex')?.enabled).toBe(
+          true
+        );
+      } finally {
+        if (previousDataDir === undefined) {
+          delete process.env.DATA_DIR;
+        } else {
+          process.env.DATA_DIR = previousDataDir;
+        }
+
+        if (previousVeritasDataDir === undefined) {
+          delete process.env.VERITAS_DATA_DIR;
+        } else {
+          process.env.VERITAS_DATA_DIR = previousVeritasDataDir;
+        }
+      }
     });
   });
 
@@ -182,20 +235,16 @@ describe('ConfigService', () => {
     it('should throw on corrupted config file', async () => {
       // Write invalid JSON
       await fs.writeFile(configFile, '{ invalid json }');
-      
+
       await expect(service.getConfig()).rejects.toThrow();
     });
 
     it('should handle concurrent reads', async () => {
       // Multiple simultaneous reads
-      const promises = [
-        service.getConfig(),
-        service.getConfig(),
-        service.getConfig(),
-      ];
-      
+      const promises = [service.getConfig(), service.getConfig(), service.getConfig()];
+
       const results = await Promise.all(promises);
-      
+
       // All should return the same config
       expect(results[0]).toEqual(results[1]);
       expect(results[1]).toEqual(results[2]);
@@ -206,7 +255,7 @@ describe('ConfigService', () => {
     it('should return cached config within TTL', async () => {
       // First read populates cache
       const config1 = await service.getConfig();
-      
+
       // Modify file on disk behind the service's back
       const raw = JSON.parse(await fs.readFile(configFile, 'utf-8'));
       raw.defaultAgent = 'amp';
@@ -214,7 +263,7 @@ describe('ConfigService', () => {
       // simulating a read within the TTL window
       (service as any).lastWriteTime = Date.now();
       await fs.writeFile(configFile, JSON.stringify(raw, null, 2));
-      
+
       // Should still return the cached version (TTL hasn't expired)
       const config2 = await service.getConfig();
       expect(config2.defaultAgent).toBe(config1.defaultAgent);
@@ -222,7 +271,7 @@ describe('ConfigService', () => {
 
     it('should re-read from disk after invalidateCache()', async () => {
       const config1 = await service.getConfig();
-      expect(config1.defaultAgent).toBe('claude-code');
+      expect(config1.defaultAgent).toBe('codex');
 
       // Modify file on disk
       const raw = JSON.parse(await fs.readFile(configFile, 'utf-8'));

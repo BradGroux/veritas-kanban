@@ -182,7 +182,7 @@ router.post(
 
     // Use provided attemptId or current attempt
     const resolvedAttemptId = attemptId || task.attempt?.id || 'unknown';
-    const resolvedAgent = agent || task.attempt?.agent || 'claude-code';
+    const resolvedAgent = agent || task.attempt?.agent || 'codex';
 
     // Emit telemetry event
     const telemetry = getTelemetryService();

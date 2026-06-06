@@ -77,6 +77,23 @@ export class AgentHealthService implements AgentHealthChecker {
       return this.runAuthProbe(agent.command, ['auth', 'status'], /logged in/i);
     }
 
+    if (provider === 'ollama-local') {
+      return this.runAuthProbe(agent.command, ['list'], /name|model/i);
+    }
+
+    if (provider === 'ollama-cloud') {
+      if (process.env.OLLAMA_API_KEY) return { authenticated: true };
+      return { authenticated: null };
+    }
+
+    if (provider === 'lm-studio-local') {
+      return this.runAuthProbe(
+        agent.command,
+        ['server', 'status', '--json', '--quiet'],
+        /"running"\s*:\s*true|server is running/i
+      );
+    }
+
     if (provider.startsWith('codex') || command === 'codex') {
       return this.runAuthProbe(agent.command, ['login', 'status'], /logged in/i);
     }

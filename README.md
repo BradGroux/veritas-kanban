@@ -85,6 +85,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 36 tools, architecture, tool catalog, security model, and read/write smoke checks.
+- [Agent Providers](docs/AGENT-PROVIDERS.md) — Codex defaults, Ollama local/cloud, LM Studio local, routing, and web vs macOS behavior.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
@@ -216,7 +217,8 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Custom agents** — Add your own agents with any name and command; not limited to built-in types
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
 - **HermesAgent support** — documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
-- **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, and MCP setup
+- **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, MCP setup, and default routing for fresh installs
+- **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
 - **@Mention notifications** — @agent-name parsing in comments, thread subscriptions
@@ -612,6 +614,7 @@ VK also documents the Codex and Hermes operating model:
 - **HermesAgent/Hermes Gateway is the active control plane** for the named Hermes roster and execution routing.
 - **Mission Control is display/control only** in the cutover model, while GitHub Issues, PRs, review comments, and CI remain the durable delivery record.
 - **OpenAI Codex can be a first-class agent** through local CLI runs, SDK sessions, Codex Cloud delegation, workflow steps, review actions, and MCP access.
+- **Ollama and LM Studio profiles are first-class routing targets** for local/server-hosted model workflows, with Ollama Cloud available when cloud execution is intentional.
 
 ### How It Works
 
@@ -671,6 +674,7 @@ vk agents:pending
 ### Codex + HermesAgent
 
 - Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when Codex should implement, review, or delegate Veritas tasks.
+- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex, Ollama, LM Studio, or provider-specific routing in the web app or macOS app.
 - Use the [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) when routing work through the HermesAgent roster, enforcing QA evidence, or creating GitHub-backed task templates.
 - Configure Codex MCP access with the [MCP Server Guide](docs/mcp/README.md#codex) so Codex reads and updates Veritas through typed tools instead of one-off HTTP calls.
 

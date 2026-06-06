@@ -6,4 +6,13 @@
  * so all fetch calls hit the correct prefix automatically.
  */
 const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-export const API_BASE = import.meta.env.VITE_API_URL || `${basePath}/api`;
+
+export function normalizeApiBase(rawBase: string): string {
+  const trimmed = rawBase.replace(/\/$/, '');
+  if (/^https?:\/\/[^/]+$/i.test(trimmed)) {
+    return `${trimmed}/api`;
+  }
+  return trimmed;
+}
+
+export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_URL || `${basePath}/api`);

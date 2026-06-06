@@ -23,9 +23,19 @@ export interface AgentConfig {
   command: string;
   args: string[];
   enabled: boolean;
-  provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | 'custom';
+  provider?: AgentProvider;
   model?: string;
 }
+
+export type AgentProvider =
+  | 'openclaw'
+  | 'codex-cli'
+  | 'codex-sdk'
+  | 'codex-cloud'
+  | 'ollama-local'
+  | 'ollama-cloud'
+  | 'lm-studio-local'
+  | 'custom';
 
 // ============ Agent Routing Types ============
 
@@ -74,50 +84,44 @@ export const DEFAULT_ROUTING_CONFIG: AgentRoutingConfig = {
   rules: [
     {
       id: 'code-high',
-      name: 'High-priority code → Claude Code (Opus)',
+      name: 'High-priority code → OpenAI Codex',
       match: { type: 'code', priority: 'high' },
-      agent: 'claude-code',
-      model: 'opus',
-      fallback: 'amp',
+      agent: 'codex',
+      fallback: 'claude-code',
       enabled: true,
     },
     {
       id: 'code-default',
-      name: 'Code tasks → Claude Code (Sonnet)',
+      name: 'Code tasks → OpenAI Codex',
       match: { type: 'code' },
-      agent: 'claude-code',
-      model: 'sonnet',
-      fallback: 'copilot',
-      enabled: true,
-    },
-    {
-      id: 'bug-high',
-      name: 'High-priority bugs → Claude Code (Opus)',
-      match: { type: 'bug', priority: 'high' },
-      agent: 'claude-code',
-      model: 'opus',
+      agent: 'codex',
       fallback: 'amp',
       enabled: true,
     },
     {
+      id: 'bug-high',
+      name: 'High-priority bugs → OpenAI Codex',
+      match: { type: 'bug', priority: 'high' },
+      agent: 'codex',
+      fallback: 'claude-code',
+      enabled: true,
+    },
+    {
       id: 'docs',
-      name: 'Documentation → Claude Code (Haiku)',
+      name: 'Documentation → OpenAI Codex',
       match: { type: 'docs' },
-      agent: 'claude-code',
-      model: 'haiku',
+      agent: 'codex',
       enabled: true,
     },
     {
       id: 'review',
-      name: 'Code review → Claude Code (Opus)',
+      name: 'Code review → OpenAI Codex',
       match: { type: 'review' },
-      agent: 'claude-code',
-      model: 'opus',
+      agent: 'codex',
       enabled: true,
     },
   ],
-  defaultAgent: 'claude-code',
-  defaultModel: 'sonnet',
+  defaultAgent: 'codex',
   fallbackOnFailure: true,
   maxRetries: 1,
 };

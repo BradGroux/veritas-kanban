@@ -278,7 +278,8 @@ First-class support for autonomous coding agents.
 - **Send message to agent** — Send text messages to running agents
 - **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
-- **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, and MCP setup
+- **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
+- **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
 - **Agent request tracking** — VK can create and display pending agent requests; a configured external runner/provider must execute the work
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
@@ -293,7 +294,8 @@ v4.3 adds first-class OpenAI Codex support: local `codex exec` attempts, SDK-bac
 Implemented:
 
 - **Codex CLI provider** — Runs `codex exec --json` in the task worktree, maps JSONL/stdout/stderr into Veritas attempt logs, records final summaries, and emits run/token telemetry when available.
-- **Codex agent defaults** — Adds a disabled-by-default OpenAI Codex agent profile with `codex exec --sandbox workspace-write --json`.
+- **Codex agent defaults** — Fresh installs enable the OpenAI Codex CLI profile by default with `codex exec --sandbox workspace-write --json`; existing configs keep their selected default agent.
+- **Ollama and LM Studio profiles** — Adds disabled-by-default Ollama Local, Ollama Cloud, and LM Studio Local profiles with provider metadata and health probes.
 - **Codex SDK provider** — Uses `@openai/codex-sdk` to start durable local Codex threads, stream SDK events into attempt logs, persist `threadId` on attempts, and emit token telemetry from completed turns.
 - **Codex Cloud delegation** — Creates scoped `@codex` GitHub issue/PR prompts, records cloud attempt metadata, and links the GitHub artifact back to the Veritas task.
 - **Workflow Codex steps** — Executes workflow-engine agent steps through Codex SDK streaming, writes step outputs, and stores Codex thread IDs in workflow session context.

@@ -26,6 +26,7 @@ import type {
   AgentHostPosture,
   AgentHostPreviewRequest,
   AgentHostRecord,
+  AgentProvider,
   AgentType,
   RoutingRule,
   AgentRoutingConfig,
@@ -41,6 +42,18 @@ import { cn } from '@/lib/utils';
 import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
 
 type AgentFeatureSettings = typeof DEFAULT_FEATURE_SETTINGS.agents;
+
+const AGENT_PROVIDER_OPTIONS: Array<{ value: AgentProvider | '__none__'; label: string }> = [
+  { value: '__none__', label: 'None / legacy' },
+  { value: 'codex-cli', label: 'Codex CLI' },
+  { value: 'codex-sdk', label: 'Codex SDK' },
+  { value: 'codex-cloud', label: 'Codex Cloud' },
+  { value: 'ollama-local', label: 'Ollama Local' },
+  { value: 'ollama-cloud', label: 'Ollama Cloud' },
+  { value: 'lm-studio-local', label: 'LM Studio Local' },
+  { value: 'openclaw', label: 'OpenClaw' },
+  { value: 'custom', label: 'Custom' },
+];
 
 export function AgentsTab() {
   const { data: config, isLoading } = useConfig();
@@ -262,6 +275,13 @@ function formatProviderState(value: string): string {
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function formatAgentProvider(provider: AgentProvider): string {
+  return (
+    AGENT_PROVIDER_OPTIONS.find((option) => option.value === provider)?.label ??
+    formatProviderState(provider)
+  );
 }
 
 function ProviderHealthPanel({
@@ -798,6 +818,18 @@ function AgentItem({ agent, isDefault, onToggle, onEdit, onRemove }: AgentItemPr
             <code className="text-xs text-muted-foreground">
               {agent.command} {agent.args.join(' ')}
             </code>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {agent.provider && (
+                <Badge size="xs" variant="outline" color="gray">
+                  {formatAgentProvider(agent.provider)}
+                </Badge>
+              )}
+              {agent.model && (
+                <Badge size="xs" variant="light" color="gray">
+                  {agent.model}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1461,6 +1493,8 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
   const [type, setType] = useState(agent?.type || '');
   const [command, setCommand] = useState(agent?.command || '');
   const [argsStr, setArgsStr] = useState(agent?.args.join(' ') || '');
+  const [provider, setProvider] = useState<AgentProvider | ''>(agent?.provider || '');
+  const [model, setModel] = useState(agent?.model || '');
 
   const typeSlug =
     type ||
@@ -1483,8 +1517,8 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
         .split(/\s+/)
         .filter((a) => a),
       enabled: agent?.enabled ?? true,
-      provider: agent?.provider,
-      model: agent?.model,
+      provider: provider || undefined,
+      model: model.trim() || undefined,
     });
   };
 
@@ -1538,6 +1572,28 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
             value={argsStr}
             onChange={(e) => setArgsStr(e.target.value)}
             placeholder="e.g., --flag -p"
+            classNames={{ input: 'font-mono text-sm' }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Select
+            id="agent-provider"
+            label="Provider"
+            value={provider || '__none__'}
+            onChange={(value) =>
+              setProvider(!value || value === '__none__' ? '' : (value as AgentProvider))
+            }
+            data={AGENT_PROVIDER_OPTIONS}
+            allowDeselect={false}
+          />
+          <TextInput
+            id="agent-model"
+            label="Model"
+            description="Optional"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="e.g., llama3.2"
             classNames={{ input: 'font-mono text-sm' }}
           />
         </div>

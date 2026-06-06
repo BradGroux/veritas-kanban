@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { API_BASE, apiFetch, handleResponse } from '@/lib/api/helpers';
+import { normalizeApiBase } from '@/lib/config';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -130,5 +131,14 @@ describe('handleResponse', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(1, `${API_BASE}/tasks`, expect.any(Object));
     expect(fetch).toHaveBeenNthCalledWith(2, `${API_BASE}/metrics`, expect.any(Object));
+  });
+
+  it('normalizes a pure API origin to the /api base path', () => {
+    expect(normalizeApiBase('http://127.0.0.1:3101')).toBe('http://127.0.0.1:3101/api');
+    expect(normalizeApiBase('https://example.com/')).toBe('https://example.com/api');
+    expect(normalizeApiBase('/kanban/api')).toBe('/kanban/api');
+    expect(normalizeApiBase('https://example.com/custom-api')).toBe(
+      'https://example.com/custom-api'
+    );
   });
 });

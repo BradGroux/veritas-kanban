@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
-import { useWebSocket } from '@/hooks/useWebSocket';
+import { resolveDefaultWsUrl, useWebSocket } from '@/hooks/useWebSocket';
 import { createMockWebSocket } from './test-utils';
 
 // ── Setup ────────────────────────────────────────────────────
@@ -35,6 +35,29 @@ afterEach(() => {
 // ── Tests ────────────────────────────────────────────────────
 
 describe('useWebSocket', () => {
+  it('resolves same-origin WebSocket URLs from the current host and base path', () => {
+    expect(
+      resolveDefaultWsUrl('/api', { protocol: 'http:', host: 'localhost:5173' }, '/kanban/')
+    ).toBe('ws://localhost:5173/kanban/ws');
+  });
+
+  it('resolves WebSocket URLs from an absolute API base', () => {
+    expect(
+      resolveDefaultWsUrl(
+        'http://127.0.0.1:3101/api',
+        { protocol: 'http:', host: 'localhost:5173' },
+        '/'
+      )
+    ).toBe('ws://127.0.0.1:3101/ws');
+    expect(
+      resolveDefaultWsUrl(
+        'https://example.com/kanban/api',
+        { protocol: 'http:', host: 'localhost:5173' },
+        '/'
+      )
+    ).toBe('wss://example.com/kanban/ws');
+  });
+
   it('starts disconnected when autoConnect is false', () => {
     const { result } = renderHook(() => useWebSocket({ autoConnect: false }));
     expect(result.current.connectionState).toBe('disconnected');

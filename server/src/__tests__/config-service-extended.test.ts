@@ -48,7 +48,7 @@ describe('ConfigService', () => {
             name: 'OpenAI Codex',
             command: 'codex',
             provider: 'codex-cli',
-            enabled: false,
+            enabled: true,
           }),
           expect.objectContaining({
             type: 'codex-sdk',
@@ -64,8 +64,30 @@ describe('ConfigService', () => {
             provider: 'codex-cloud',
             enabled: false,
           }),
+          expect.objectContaining({
+            type: 'ollama-local',
+            name: 'Ollama Local',
+            command: 'ollama',
+            provider: 'ollama-local',
+            enabled: false,
+          }),
+          expect.objectContaining({
+            type: 'ollama-cloud',
+            name: 'Ollama Cloud',
+            command: 'ollama',
+            provider: 'ollama-cloud',
+            enabled: false,
+          }),
+          expect.objectContaining({
+            type: 'lm-studio-local',
+            name: 'LM Studio Local',
+            command: 'lms',
+            provider: 'lm-studio-local',
+            enabled: false,
+          }),
         ])
       );
+      expect(config.defaultAgent).toBe('codex');
     });
 
     it('should create config file with defaults when missing', async () => {
@@ -127,6 +149,21 @@ describe('ConfigService', () => {
             type: 'codex-cloud',
             command: 'gh',
             provider: 'codex-cloud',
+          }),
+          expect.objectContaining({
+            type: 'ollama-local',
+            command: 'ollama',
+            provider: 'ollama-local',
+          }),
+          expect.objectContaining({
+            type: 'ollama-cloud',
+            command: 'ollama',
+            provider: 'ollama-cloud',
+          }),
+          expect.objectContaining({
+            type: 'lm-studio-local',
+            command: 'lms',
+            provider: 'lm-studio-local',
           }),
         ])
       );

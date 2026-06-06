@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { API_BASE } from '@/lib/config';
 
 // ============================================
 // WebSocket Connection States
@@ -60,11 +61,26 @@ const KEEPALIVE_TIMEOUT_MS = 45_000;
 /** Default maximum number of reconnect attempts before giving up. */
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 20;
 
-function getDefaultWsUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+export function resolveDefaultWsUrl(
+  apiBase = API_BASE,
+  location: Pick<Location, 'protocol' | 'host'> = window.location,
+  basePath = import.meta.env.BASE_URL || '/'
+): string {
+  if (/^https?:\/\//i.test(apiBase)) {
+    const apiUrl = new URL(apiBase);
+    const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiPath = apiUrl.pathname.replace(/\/$/, '').replace(/\/api$/, '');
+    return `${protocol}//${apiUrl.host}${apiPath}/ws`;
+  }
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   // Include base path for sub-path deployments (e.g., /kanban/ws)
-  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  return `${protocol}//${window.location.host}${basePath}/ws`;
+  const normalizedBasePath = basePath.replace(/\/$/, '');
+  return `${protocol}//${location.host}${normalizedBasePath}/ws`;
+}
+
+function getDefaultWsUrl(): string {
+  return resolveDefaultWsUrl();
 }
 
 /**

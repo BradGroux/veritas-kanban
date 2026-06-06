@@ -1607,7 +1607,10 @@ export class WorkflowAuthoringService {
       const command = agent.command ?? '';
       if (
         (clientMode === 'remote' || clientMode === 'cloud') &&
-        (provider === 'codex-cli' || command.includes('codex'))
+        (provider === 'codex-cli' ||
+          provider === 'ollama-local' ||
+          provider === 'lm-studio-local' ||
+          command.includes('codex'))
       ) {
         messages.push(
           message(
@@ -1619,13 +1622,13 @@ export class WorkflowAuthoringService {
           )
         );
       }
-      if (clientMode === 'local' && provider === 'codex-cloud') {
+      if (clientMode === 'local' && (provider === 'codex-cloud' || provider === 'ollama-cloud')) {
         messages.push(
           message(
             'info',
             'client',
             `agents[${index}].provider`,
-            `Agent ${agent.id} targets Codex Cloud.`,
+            `Agent ${agent.id} targets a cloud provider.`,
             'Confirm this workflow is intended to leave local execution.'
           )
         );

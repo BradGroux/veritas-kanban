@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentRoutingService } from '../services/agent-routing-service';
-import type { AgentConfig, AgentRoutingConfig, AppConfig } from '@veritas-kanban/shared';
+import {
+  DEFAULT_ROUTING_CONFIG,
+  type AgentConfig,
+  type AgentRoutingConfig,
+  type AppConfig,
+} from '@veritas-kanban/shared';
 import type { AgentHealthStatus } from '../services/agent-health-service';
 
 // Mock ConfigService
@@ -126,6 +131,29 @@ describe('AgentRoutingService', () => {
   });
 
   describe('resolveAgent', () => {
+    it('routes default built-in rules to Codex first', async () => {
+      const config: AppConfig = {
+        ...structuredClone(BASE_CONFIG),
+        agents: [
+          { type: 'codex', name: 'OpenAI Codex', command: 'codex', args: [], enabled: true },
+          { type: 'claude-code', name: 'Claude Code', command: 'claude', args: [], enabled: false },
+          { type: 'amp', name: 'Amp', command: 'amp', args: [], enabled: false },
+        ],
+        defaultAgent: 'codex',
+        agentRouting: structuredClone(DEFAULT_ROUTING_CONFIG),
+      };
+      mockGetConfig.mockResolvedValue(config);
+
+      const result = await service.resolveAgent({
+        type: 'code',
+        priority: 'high',
+      });
+
+      expect(result.agent).toBe('codex');
+      expect(result.fallback).toBe('claude-code');
+      expect(result.rule).toBe('code-high');
+    });
+
     it('matches high-priority code task to first rule', async () => {
       const result = await service.resolveAgent({
         type: 'code',

@@ -26,7 +26,18 @@ const agentSchema = z.object({
   command: z.string().min(1),
   args: z.array(z.string()),
   enabled: z.boolean(),
-  provider: z.enum(['openclaw', 'codex-cli', 'codex-sdk', 'codex-cloud', 'custom']).optional(),
+  provider: z
+    .enum([
+      'openclaw',
+      'codex-cli',
+      'codex-sdk',
+      'codex-cloud',
+      'ollama-local',
+      'ollama-cloud',
+      'lm-studio-local',
+      'custom',
+    ])
+    .optional(),
   model: z.string().optional(),
 });
 

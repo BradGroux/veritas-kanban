@@ -22,7 +22,11 @@ export type BuiltInAgentType =
   | 'copilot'
   | 'gemini'
   | 'codex'
+  | 'codex-sdk'
   | 'codex-cloud'
+  | 'ollama-local'
+  | 'ollama-cloud'
+  | 'lm-studio-local'
   | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';

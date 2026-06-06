@@ -13,6 +13,7 @@ import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { withFileLock } from './file-lock.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 /** How long cached config stays valid before re-reading from disk */
 const CACHE_TTL_MS = 60_000; // 60 seconds
@@ -20,10 +21,7 @@ const CACHE_TTL_MS = 60_000; // 60 seconds
 /** Ignore file-watcher events within this window after our own writes */
 const WRITE_DEBOUNCE_MS = 200;
 
-// Default paths - resolve to project root
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const CONFIG_DIR = path.join(PROJECT_ROOT, '.veritas-kanban');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const CONFIG_FILENAME = 'config.json';
 
 const DEFAULT_CONFIG: AppConfig = {
   repos: [],
@@ -33,14 +31,14 @@ const DEFAULT_CONFIG: AppConfig = {
       name: 'Claude Code',
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
-      enabled: true,
+      enabled: false,
     },
     {
       type: 'amp',
       name: 'Amp',
       command: 'amp',
       args: ['--dangerously-allow-all'],
-      enabled: true,
+      enabled: false,
     },
     {
       type: 'copilot',
@@ -61,7 +59,7 @@ const DEFAULT_CONFIG: AppConfig = {
       name: 'OpenAI Codex',
       command: 'codex',
       args: ['exec', '--sandbox', 'workspace-write', '--json'],
-      enabled: false,
+      enabled: true,
       provider: 'codex-cli',
     },
     {
@@ -80,8 +78,34 @@ const DEFAULT_CONFIG: AppConfig = {
       enabled: false,
       provider: 'codex-cloud',
     },
+    {
+      type: 'ollama-local',
+      name: 'Ollama Local',
+      command: 'ollama',
+      args: ['run', 'llama3.2'],
+      enabled: false,
+      provider: 'ollama-local',
+      model: 'llama3.2',
+    },
+    {
+      type: 'ollama-cloud',
+      name: 'Ollama Cloud',
+      command: 'ollama',
+      args: ['run', 'gpt-oss:120b-cloud'],
+      enabled: false,
+      provider: 'ollama-cloud',
+      model: 'gpt-oss:120b-cloud',
+    },
+    {
+      type: 'lm-studio-local',
+      name: 'LM Studio Local',
+      command: 'lms',
+      args: ['server', 'status'],
+      enabled: false,
+      provider: 'lm-studio-local',
+    },
   ],
-  defaultAgent: 'claude-code',
+  defaultAgent: 'codex',
 };
 
 export function createDefaultConfig(): AppConfig {
@@ -193,8 +217,8 @@ export class ConfigService {
   private ownsSqliteDatabase = false;
 
   constructor(options: ConfigServiceOptions = {}) {
-    this.configDir = options.configDir || CONFIG_DIR;
-    this.configFile = options.configFile || CONFIG_FILE;
+    this.configDir = options.configDir || getRuntimeDir();
+    this.configFile = options.configFile || path.join(this.configDir, CONFIG_FILENAME);
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

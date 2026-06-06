@@ -11,7 +11,18 @@ export interface QaGateState {
   passedBy?: string;
 }
 /** Built-in agent types. Custom agents use any string slug. */
-export type BuiltInAgentType = 'claude-code' | 'amp' | 'copilot' | 'gemini' | 'veritas';
+export type BuiltInAgentType =
+  | 'claude-code'
+  | 'amp'
+  | 'copilot'
+  | 'gemini'
+  | 'codex'
+  | 'codex-sdk'
+  | 'codex-cloud'
+  | 'ollama-local'
+  | 'ollama-cloud'
+  | 'lm-studio-local'
+  | 'veritas';
 export type AgentType = BuiltInAgentType | (string & {});
 export type AttemptStatus = 'pending' | 'running' | 'complete' | 'failed';
 export type BlockedCategory = 'waiting-on-feedback' | 'technical-snag' | 'prerequisite' | 'other';
