@@ -93,6 +93,13 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: node ./node_modules/electron-builder/cli.js --mac dmg zip --publish always
 
+      - name: Finalize notarized macOS release assets
+        env:
+          APPLE_API_KEY: ${{ steps.notary-key.outputs.key_path }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: node scripts/finalize-macos-release-assets.mjs
+
       - name: Upload macOS release assets
         working-directory: desktop
         env:
