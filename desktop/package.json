@@ -43,7 +43,7 @@
   "build": {
     "appId": "io.digitalmeld.veritas-kanban",
     "productName": "Veritas Kanban",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Veritas-Kanban-${version}-${os}-${arch}.${ext}",
     "asar": true,
     "afterPack": "../scripts/desktop-after-pack.mjs",
     "directories": {

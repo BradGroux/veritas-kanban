@@ -88,13 +88,14 @@ Configure these repository secrets before running `Desktop Release`:
 - `MACOS_CSC_LINK`: base64 encoded `.p12` Developer ID Application certificate
   or a secure URL accepted by electron-builder `CSC_LINK`.
 - `MACOS_CSC_KEY_PASSWORD`: password for the `.p12` signing identity.
-- `APPLE_ID`: Apple Developer account email for notarization.
-- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization.
-- `APPLE_TEAM_ID`: Apple Developer team ID.
+- `APPLE_API_KEY_BASE64`: base64 encoded App Store Connect API `.p8` key.
+- `APPLE_API_KEY_ID`: App Store Connect API key ID.
+- `APPLE_API_ISSUER`: App Store Connect API issuer UUID.
 
 The workflow maps those secrets to electron-builder's `CSC_LINK`,
-`CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and
-`APPLE_TEAM_ID` environment variables.
+`CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
+`APPLE_API_ISSUER` environment variables. The API key is decoded into a
+temporary file during the release job and is not written to the repository.
 
 Windows releases need a separate code-signing certificate before the first
 supported Windows artifact is published. Use `WINDOWS_CSC_LINK` and
