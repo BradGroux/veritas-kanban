@@ -44,6 +44,8 @@ tasks/archive/*.md
 tasks/backlog/*.md
 tasks/attachments/
 tasks/archive-attachments/
+storage/
+server/storage/
 .veritas-kanban/*
 !.veritas-kanban/.gitkeep
 .veritas-desktop-dev/
