@@ -78,11 +78,11 @@ The v5.0.0 stable release includes:
 
 | Artifact                                                                                                                                                        | SHA-256                                                            |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Veritas-Kanban-5.0.0-mac-arm64.dmg](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.dmg)                   | `566be0697ab52c6c6ea2e6123ce159737e8b90d026253b4af02c3868dc221133` |
-| [Veritas-Kanban-5.0.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip)                   | `67bf02a36fa070df029108c9e36fb4f9ee9e014972e1dd08dbadd85dc123a810` |
-| [Veritas-Kanban-5.0.0-mac-arm64.dmg.blockmap](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.dmg.blockmap) | `248d8b441428a98819b9434d7cef88f8432f0dbff04695d549fd41444861e018` |
-| [Veritas-Kanban-5.0.0-mac-arm64.zip.blockmap](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip.blockmap) | `910e72bf0c8af94b7f44f95eee6563f031bf80ec5eeebfdb537ada10c8fd6d54` |
-| [latest-mac.yml](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/latest-mac.yml)                                                           | `073802613fcbe609ff42e2aa6c44cb419cc7eb347f4b9fb0538dcb47bcb79c33` |
+| [Veritas-Kanban-5.0.0-mac-arm64.dmg](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.dmg)                   | `285464d80c6d62b7bdfbf88e9f191a103614666c1ee38049c86f35b8d92a7ca0` |
+| [Veritas-Kanban-5.0.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip)                   | `dec9bd9caa07732749fdc24bd8a0952cf3c5c52058793ec0804baffba2431ad2` |
+| [Veritas-Kanban-5.0.0-mac-arm64.dmg.blockmap](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.dmg.blockmap) | `1947ea74ce892456989579821b2fa678fa5b4113403493e036f62e09622340f7` |
+| [Veritas-Kanban-5.0.0-mac-arm64.zip.blockmap](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip.blockmap) | `5c10851269b96b7352f0b31d755c28b832c29fc4c697bae7b2f59c977ad04b4c` |
+| [latest-mac.yml](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/latest-mac.yml)                                                           | `63d58a052379625a0a1054242f728ad7f43c40f701552bf8b367220cced35545` |
 
 Checksum sidecars are published as
 [`Veritas-Kanban-5.0.0-mac-arm64.dmg.sha256`](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.dmg.sha256)
