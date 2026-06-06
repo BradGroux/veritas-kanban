@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { access, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -45,15 +46,47 @@ async function hashFile(file, algorithm, encoding) {
 }
 
 function resolveAppBuilderPath() {
-  const electronBuilderPackage = requireFromScript.resolve('electron-builder/package.json', {
-    paths: [desktopDir],
-  });
-  const electronBuilderDir = path.dirname(electronBuilderPackage);
-  const appBuilderBin = requireFromScript.resolve('app-builder-bin', {
-    paths: [electronBuilderDir],
-  });
+  const resolutionRoots = [
+    path.join(rootDir, 'node_modules/.pnpm/node_modules'),
+    path.join(desktopDir, 'node_modules/.pnpm/node_modules'),
+    path.join(desktopDir, 'node_modules/electron-builder'),
+    desktopDir,
+    rootDir,
+  ];
 
-  return createRequire(appBuilderBin)('app-builder-bin').appBuilderPath;
+  for (const resolutionRoot of resolutionRoots) {
+    try {
+      const appBuilderBin = requireFromScript.resolve('app-builder-bin', {
+        paths: [resolutionRoot],
+      });
+
+      return createRequire(appBuilderBin)('app-builder-bin').appBuilderPath;
+    } catch {
+      // Try the next pnpm resolution root.
+    }
+  }
+
+  for (const storeRoot of [
+    path.join(rootDir, 'node_modules/.pnpm'),
+    path.join(desktopDir, 'node_modules/.pnpm'),
+  ]) {
+    if (!existsSync(storeRoot)) {
+      continue;
+    }
+
+    for (const entry of readdirSync(storeRoot)) {
+      if (!entry.startsWith('app-builder-bin@')) {
+        continue;
+      }
+
+      const appBuilderBin = path.join(storeRoot, entry, 'node_modules/app-builder-bin/index.js');
+      if (existsSync(appBuilderBin)) {
+        return createRequire(appBuilderBin)('app-builder-bin').appBuilderPath;
+      }
+    }
+  }
+
+  throw new Error('Unable to resolve app-builder-bin for DMG blockmap regeneration');
 }
 
 async function writeLatestMacYml(version, zip, dmg) {
