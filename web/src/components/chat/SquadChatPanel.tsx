@@ -9,15 +9,18 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { Send, Loader2, Users, Filter, Settings2 } from 'lucide-react';
+import { Send, Loader2, Users, Filter, Settings2, X } from 'lucide-react';
 import { useSquadMessages, useSendSquadMessage, useSquadStream } from '@/hooks/useChat';
 import { useConfig } from '@/hooks/useConfig';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { SquadMessage } from '@veritas-kanban/shared';
+import { cn } from '@/lib/utils';
 
 interface SquadChatPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  variant?: 'drawer' | 'inline';
+  className?: string;
 }
 
 // Agent colors for visual distinction
@@ -52,7 +55,12 @@ function writeIncludeSystemPreference(includeSystem: boolean): void {
   }
 }
 
-export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
+export function SquadChatPanel({
+  open,
+  onOpenChange,
+  variant = 'drawer',
+  className,
+}: SquadChatPanelProps) {
   const humanDisplayName = useFeatureSetting('general', 'humanDisplayName');
   const { data: config } = useConfig();
 
@@ -169,134 +177,155 @@ export function SquadChatPanel({ open, onOpenChange }: SquadChatPanelProps) {
   // Get unique agents from messages
   const uniqueAgents = Array.from(new Set(messages.map((m) => m.agent))).sort();
 
-  return (
+  const titleContent = (
+    <Group justify="space-between" wrap="nowrap" className="w-full pr-8">
+      <div>
+        <Group gap="xs" wrap="nowrap">
+          <Users className="h-5 w-5" />
+          <Text fw={600}>Squad Chat</Text>
+        </Group>
+        <Text size="xs" c="dimmed" pt={4}>
+          Agent-to-agent communication channel
+        </Text>
+      </div>
+      {variant === 'inline' && (
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          aria-label="Close squad chat panel"
+          onClick={() => onOpenChange(false)}
+        >
+          <X className="h-4 w-4" />
+        </ActionIcon>
+      )}
+    </Group>
+  );
+
+  const panelContent = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Filter Bar */}
+      <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-shrink-0">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={agentFilter}
+          onChange={(value) => setAgentFilter(value ?? 'all')}
+          allowDeselect={false}
+          size="xs"
+          w={150}
+          data={[
+            { value: 'all', label: 'All Agents' },
+            ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
+          ]}
+          aria-label="Filter by agent"
+        />
+        <Button
+          variant={includeSystem ? 'filled' : 'outline'}
+          size="xs"
+          onClick={() => setIncludeSystem(!includeSystem)}
+          className="ml-auto gap-1.5"
+          title={includeSystem ? 'Hide system messages' : 'Show system messages'}
+          leftSection={<Settings2 className="h-3.5 w-3.5" />}
+        >
+          {includeSystem ? 'Hide' : 'Show'} System
+        </Button>
+      </div>
+
+      {/* Messages */}
+      <ScrollArea
+        className="flex-1 min-h-0 px-4"
+        onScrollCapture={handleScroll}
+        ref={scrollAreaRef}
+      >
+        <div className="py-4 space-y-3">
+          {isLoading && (
+            <div className="text-center text-muted-foreground py-8">
+              <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+              <p className="text-sm">Loading messages...</p>
+            </div>
+          )}
+          {!isLoading && filteredMessages.length === 0 && (
+            <div className="text-center text-muted-foreground py-8">
+              <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">
+                {agentFilter === 'all'
+                  ? 'No messages yet. Be the first to say something!'
+                  : `No messages from ${agentFilter}`}
+              </p>
+            </div>
+          )}
+          {filteredMessages.map((msg) =>
+            msg.system ? (
+              <SystemMessageDivider key={msg.id} message={msg} />
+            ) : (
+              <SquadMessageBubble key={msg.id} message={msg} humanDisplayName={humanDisplayName} />
+            )
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
+
+      {/* Input Area */}
+      <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-muted-foreground">Sending as:</span>
+          <Select
+            value={selectedAgent}
+            onChange={(value) => setSelectedAgent(value ?? humanDisplayName ?? 'Human')}
+            allowDeselect={false}
+            size="xs"
+            w={140}
+            data={availableAgents.map((agent) => ({ value: agent, label: agent }))}
+            aria-label="Sending as"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <TextInput
+            ref={inputRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Send a message to the squad..."
+            disabled={isPending}
+            className="flex-1"
+            autoFocus
+          />
+          <ActionIcon
+            onClick={handleSend}
+            disabled={!message.trim() || isPending}
+            aria-label="Send squad message"
+          >
+            {isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </ActionIcon>
+        </div>
+      </div>
+    </div>
+  );
+
+  return variant === 'inline' ? (
+    open && (
+      <section className={cn('flex h-full min-h-0 flex-col', className)} aria-label="Squad Chat">
+        <div className="desktop-no-drag border-b border-border px-4 py-3">{titleContent}</div>
+        {panelContent}
+      </section>
+    )
+  ) : (
     <Drawer
       opened={open}
       onClose={() => onOpenChange(false)}
       position="right"
       size={500}
       padding={0}
-      title={
-        <div>
-          <Group gap="xs" wrap="nowrap">
-            <Users className="h-5 w-5" />
-            <Text fw={600}>Squad Chat</Text>
-          </Group>
-          <Text size="xs" c="dimmed" pt={4}>
-            Agent-to-agent communication channel
-          </Text>
-        </div>
-      }
+      title={titleContent}
       styles={{
         content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
         body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
       }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Filter Bar */}
-        <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-shrink-0">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select
-            value={agentFilter}
-            onChange={(value) => setAgentFilter(value ?? 'all')}
-            allowDeselect={false}
-            size="xs"
-            w={150}
-            data={[
-              { value: 'all', label: 'All Agents' },
-              ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
-            ]}
-            aria-label="Filter by agent"
-          />
-          <Button
-            variant={includeSystem ? 'filled' : 'outline'}
-            size="xs"
-            onClick={() => setIncludeSystem(!includeSystem)}
-            className="ml-auto gap-1.5"
-            title={includeSystem ? 'Hide system messages' : 'Show system messages'}
-            leftSection={<Settings2 className="h-3.5 w-3.5" />}
-          >
-            {includeSystem ? 'Hide' : 'Show'} System
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <ScrollArea
-          className="flex-1 min-h-0 px-4"
-          onScrollCapture={handleScroll}
-          ref={scrollAreaRef}
-        >
-          <div className="py-4 space-y-3">
-            {isLoading && (
-              <div className="text-center text-muted-foreground py-8">
-                <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
-                <p className="text-sm">Loading messages...</p>
-              </div>
-            )}
-            {!isLoading && filteredMessages.length === 0 && (
-              <div className="text-center text-muted-foreground py-8">
-                <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">
-                  {agentFilter === 'all'
-                    ? 'No messages yet. Be the first to say something!'
-                    : `No messages from ${agentFilter}`}
-                </p>
-              </div>
-            )}
-            {filteredMessages.map((msg) =>
-              msg.system ? (
-                <SystemMessageDivider key={msg.id} message={msg} />
-              ) : (
-                <SquadMessageBubble
-                  key={msg.id}
-                  message={msg}
-                  humanDisplayName={humanDisplayName}
-                />
-              )
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-
-        {/* Input Area */}
-        <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-muted-foreground">Sending as:</span>
-            <Select
-              value={selectedAgent}
-              onChange={(value) => setSelectedAgent(value ?? humanDisplayName ?? 'Human')}
-              allowDeselect={false}
-              size="xs"
-              w={140}
-              data={availableAgents.map((agent) => ({ value: agent, label: agent }))}
-              aria-label="Sending as"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <TextInput
-              ref={inputRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Send a message to the squad..."
-              disabled={isPending}
-              className="flex-1"
-              autoFocus
-            />
-            <ActionIcon
-              onClick={handleSend}
-              disabled={!message.trim() || isPending}
-              aria-label="Send squad message"
-            >
-              {isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </ActionIcon>
-          </div>
-        </div>
-      </div>
+      {panelContent}
     </Drawer>
   );
 }

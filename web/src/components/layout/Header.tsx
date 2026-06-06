@@ -28,6 +28,13 @@ import {
   LayoutDashboard,
   ListOrdered,
   MoreHorizontal,
+  MessageSquare,
+  PanelBottom,
+  PanelBottomClose,
+  PanelLeft,
+  PanelLeftClose,
+  PanelRight,
+  PanelRightClose,
   Scale,
   ShieldAlert,
   type LucideIcon,
@@ -37,7 +44,7 @@ import {
 import { UserMenu } from './UserMenu';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
-import { lazy, Suspense, useState, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect, type MouseEvent } from 'react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import { useBacklogCount } from '@/hooks/useBacklog';
@@ -46,6 +53,7 @@ import { useIdentity } from '@/hooks/useIdentity';
 import type { SearchCollection } from '@/lib/api';
 import { NAVIGATION_VIEWS, type ViewIcon } from '@/lib/views';
 import { cn } from '@/lib/utils';
+import { useDesktopShell } from './DesktopShellContext';
 
 const CreateTaskDialog = lazy(() =>
   import('@/components/task/CreateTaskDialog').then((mod) => ({
@@ -116,13 +124,12 @@ function VeritasMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg border border-primary/30 bg-primary/15 text-primary shadow-sm',
+        'relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-card shadow-sm',
         className
       )}
       aria-hidden="true"
     >
-      <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_45%)]" />
-      <Scale className="relative h-[18px] w-[18px]" strokeWidth={2.25} />
+      <img src="/icons/pwa-icon-192.png" alt="" className="h-full w-full object-cover" />
     </span>
   );
 }
@@ -145,9 +152,16 @@ export function Header() {
   const { hasPermission } = useIdentity();
   const canCreateTask = hasPermission('task:write');
   const canOpenSettings = hasPermission('settings:read') || hasPermission('admin:manage');
-  const isDesktopClient =
-    typeof window !== 'undefined' &&
-    Boolean((window as Window & { veritasDesktop?: unknown }).veritasDesktop);
+  const {
+    isDesktopClient,
+    leftRailOpen,
+    rightRailOpen,
+    bottomPanel,
+    setLeftRailOpen,
+    setRightRailOpen,
+    openBottomPanel,
+    toggleBottomPanel,
+  } = useDesktopShell();
 
   const toggleView = useCallback(
     (nextView: NavigationItem['view']) => setView(view === nextView ? 'board' : nextView),
@@ -170,9 +184,13 @@ export function Header() {
   }, [markPanelLoaded]);
 
   const openChatPanel = useCallback(() => {
+    if (isDesktopClient) {
+      openBottomPanel('board-chat');
+      return;
+    }
     markPanelLoaded('chat');
     setChatOpen(true);
-  }, [markPanelLoaded]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
 
   const openSearchDialog = useCallback(
     (preset?: SearchPreset) => {
@@ -184,9 +202,13 @@ export function Header() {
   );
 
   const openSquadChatPanel = useCallback(() => {
+    if (isDesktopClient) {
+      openBottomPanel('squad-chat');
+      return;
+    }
     markPanelLoaded('squadChat');
     setSquadChatOpen(true);
-  }, [markPanelLoaded]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
 
   const openSettingsDialog = useCallback(
     (section?: string) => {
@@ -284,6 +306,26 @@ export function Header() {
     return () => window.removeEventListener('veritas:open-search', handleOpenSearch);
   }, [openSearchDialog]);
 
+  const handleChromeDoubleClick = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (!isDesktopClient) return;
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          'button, a, input, textarea, select, [role="button"], [role="combobox"], .desktop-no-drag'
+        )
+      ) {
+        return;
+      }
+      void (
+        window as Window & {
+          veritasDesktop?: { toggleWindowMaximize?: () => Promise<{ maximized: boolean }> };
+        }
+      ).veritasDesktop?.toggleWindowMaximize?.();
+    },
+    [isDesktopClient]
+  );
+
   // Register the create dialog and chat panel openers with keyboard context (refs, no useEffect needed)
   setOpenCreateDialog(openCreateDialog);
   setOpenChatPanel(openChatPanel);
@@ -291,7 +333,7 @@ export function Header() {
   return (
     <Box
       component="header"
-      className="sticky top-0 z-50 border-b border-border bg-card"
+      className="desktop-app-header sticky top-0 z-50 border-b border-border bg-card"
       role="banner"
     >
       <Container fluid px={{ base: 'xs', sm: 'md' }}>
@@ -301,18 +343,14 @@ export function Header() {
           h={58}
           justify="space-between"
           wrap="nowrap"
-          className="min-w-0"
+          className="desktop-window-drag min-w-0"
+          onDoubleClick={handleChromeDoubleClick}
         >
-          <Group
-            gap="sm"
-            wrap="nowrap"
-            miw={0}
-            className={cn('min-w-0 flex-1', isDesktopClient && 'pl-[4.75rem]')}
-          >
+          <Group gap="sm" wrap="nowrap" miw={0} className="desktop-header-leading min-w-0 flex-1">
             <Box
               component="button"
               type="button"
-              className="flex shrink-0 items-center gap-2 transition-opacity hover:opacity-80"
+              className="desktop-no-drag flex shrink-0 items-center gap-2 transition-opacity hover:opacity-80"
               onClick={() => window.location.reload()}
               aria-label="Refresh page"
               title="Refresh page"
@@ -344,6 +382,55 @@ export function Header() {
             aria-label="Board actions"
             className="min-w-0 shrink-0"
           >
+            {isDesktopClient && (
+              <Group gap={4} wrap="nowrap" className="desktop-no-drag">
+                <ActionIcon
+                  variant={leftRailOpen ? 'light' : 'subtle'}
+                  color={leftRailOpen ? 'veritas' : 'gray'}
+                  size={32}
+                  onClick={() => setLeftRailOpen(!leftRailOpen)}
+                  aria-label={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
+                  aria-pressed={leftRailOpen}
+                  title={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
+                >
+                  {leftRailOpen ? (
+                    <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <PanelLeft className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </ActionIcon>
+                <ActionIcon
+                  variant={rightRailOpen ? 'light' : 'subtle'}
+                  color={rightRailOpen ? 'veritas' : 'gray'}
+                  size={32}
+                  onClick={() => setRightRailOpen(!rightRailOpen)}
+                  aria-label={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                  aria-pressed={rightRailOpen}
+                  title={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                >
+                  {rightRailOpen ? (
+                    <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <PanelRight className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </ActionIcon>
+                <ActionIcon
+                  variant={bottomPanel ? 'light' : 'subtle'}
+                  color={bottomPanel ? 'veritas' : 'gray'}
+                  size={32}
+                  onClick={() => toggleBottomPanel('board-chat')}
+                  aria-label={bottomPanel ? 'Close bottom panel' : 'Open bottom panel'}
+                  aria-pressed={Boolean(bottomPanel)}
+                  title={bottomPanel ? 'Close bottom panel' : 'Open bottom panel'}
+                >
+                  {bottomPanel ? (
+                    <PanelBottomClose className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <PanelBottom className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </ActionIcon>
+              </Group>
+            )}
             <Button
               variant="filled"
               size="sm"
@@ -355,9 +442,11 @@ export function Header() {
             >
               New Task
             </Button>
-            <Group gap={4} wrap="nowrap" className="hidden xl:flex">
-              {PRIMARY_NAVIGATION_VIEWS.map(renderNavigationAction)}
-            </Group>
+            {!isDesktopClient && (
+              <Group gap={4} wrap="nowrap" className="hidden xl:flex">
+                {PRIMARY_NAVIGATION_VIEWS.map(renderNavigationAction)}
+              </Group>
+            )}
             <Menu position="bottom-end" shadow="md" withinPortal>
               <Menu.Target>
                 <ActionIcon
@@ -384,6 +473,16 @@ export function Header() {
               title="Search"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size={32}
+              onClick={openChatPanel}
+              aria-label="Board Chat"
+              title="Board Chat"
+            >
+              <MessageSquare className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
             <ActionIcon
               variant="subtle"

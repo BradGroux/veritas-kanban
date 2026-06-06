@@ -270,4 +270,19 @@ describe('activity and chat Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
   });
+
+  it('renders chat panels inline for the desktop bottom panel', () => {
+    const { baseElement } = renderWithProviders(
+      <>
+        <ChatPanel open={true} onOpenChange={vi.fn()} variant="inline" />
+        <SquadChatPanel open={true} onOpenChange={vi.fn()} variant="inline" />
+      </>
+    );
+
+    expect(screen.getByLabelText('Board Chat')).toBeDefined();
+    expect(screen.getByLabelText('Squad Chat')).toBeDefined();
+    expect(screen.getByLabelText('Close chat panel')).toBeDefined();
+    expect(screen.getByLabelText('Close squad chat panel')).toBeDefined();
+    expect(baseElement.querySelector('.mantine-Drawer-root')).toBeNull();
+  });
 });

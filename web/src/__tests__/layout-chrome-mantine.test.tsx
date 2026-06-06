@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { ViewProvider } from '@/contexts/ViewContext';
 import { KeyboardProvider } from '@/hooks/useKeyboard';
 import { Header } from '@/components/layout/Header';
+import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
@@ -136,6 +137,26 @@ function renderHeaderChrome() {
   );
 }
 
+function renderDesktopHeaderChrome() {
+  Object.defineProperty(window, 'veritasDesktop', {
+    configurable: true,
+    value: {
+      toggleWindowMaximize: vi.fn(),
+    },
+  });
+  document.documentElement.dataset.client = 'desktop';
+
+  return renderWithProviders(
+    <KeyboardProvider>
+      <ViewProvider>
+        <DesktopShellProvider>
+          <Header />
+        </DesktopShellProvider>
+      </ViewProvider>
+    </KeyboardProvider>
+  );
+}
+
 describe('layout chrome Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -145,6 +166,8 @@ describe('layout chrome Mantine migration', () => {
 
   afterEach(() => {
     cleanup();
+    delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+    delete document.documentElement.dataset.client;
   });
 
   it('renders the header actions, workspace switcher, and user menu through direct Mantine controls', () => {
@@ -218,5 +241,20 @@ describe('layout chrome Mantine migration', () => {
     expect(screen.getByText('Real-time sync active')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Popover-dropdown')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="popover-content"]')).toBeNull();
+  });
+
+  it('renders desktop shell controls and app icon branding in desktop mode', () => {
+    renderDesktopHeaderChrome();
+
+    expect(screen.getByRole('button', { name: 'Collapse left sidebar' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Expand right sidebar' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open bottom panel' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Board Chat' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Squad Chat' })).toBeDefined();
+
+    const brandIcon = screen
+      .getByRole('button', { name: 'Refresh page' })
+      .querySelector('img[src="/icons/pwa-icon-192.png"]');
+    expect(brandIcon).toBeDefined();
   });
 });

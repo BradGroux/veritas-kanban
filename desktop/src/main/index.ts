@@ -70,7 +70,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
-  const preloadPath = path.join(__dirname, '../preload/index.mjs');
+  const preloadPath = path.join(__dirname, '../preload/index.cjs');
   const windowBounds = applyDesktopWindowState(savedState);
 
   const window = new BrowserWindow({
@@ -79,6 +79,7 @@ function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
     minHeight: DESKTOP_MIN_WINDOW.height,
     ...windowBounds,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 18 } : undefined,
     backgroundColor: '#111318',
     show: false,
     webPreferences: {
@@ -280,7 +281,19 @@ async function boot(): Promise<void> {
     },
   });
 
-  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher, updateService);
+  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher, updateService, {
+    toggleMaximize: () => {
+      if (!mainWindow) {
+        return { maximized: false };
+      }
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+      return { maximized: mainWindow.isMaximized() };
+    },
+  });
   refreshDesktopMenu();
   runtime.on('status', (status) => {
     mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);

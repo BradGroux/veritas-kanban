@@ -27,6 +27,7 @@ import {
   type DesktopBridgeResponse,
   type DesktopConnectionConfigRequest,
   type DesktopConnectionValidationResult,
+  type DesktopWindowToggleMaximizeResult,
 } from '../shared/desktop-bridge-contracts.js';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -36,6 +37,10 @@ export type DesktopBridgeHandlerMap = {
     request: DesktopBridgeRequest<Method>
   ) => MaybePromise<DesktopBridgeResponse<Method>>;
 };
+
+export interface DesktopWindowControls {
+  toggleMaximize(): DesktopWindowToggleMaximizeResult;
+}
 
 async function remoteConnectionDestinationError(serverUrl: string): Promise<string | null> {
   const parsed = new URL(serverUrl);
@@ -200,7 +205,8 @@ export function createDesktopBridgeHandlers(
   shell: Shell,
   packaged: boolean,
   commandDispatcher?: DesktopCommandDispatcher,
-  updateService?: DesktopUpdateService
+  updateService?: DesktopUpdateService,
+  windowControls?: DesktopWindowControls
 ): DesktopBridgeHandlerMap {
   const appInfo = (): DesktopAppInfo => ({
     name: DESKTOP_APP_NAME,
@@ -289,6 +295,7 @@ export function createDesktopBridgeHandlers(
       await shell.openExternal(url);
       return undefined;
     },
+    toggleWindowMaximize: () => windowControls?.toggleMaximize() ?? { maximized: false },
   };
 }
 
@@ -298,14 +305,16 @@ export function registerDesktopBridge(
   shell: Shell,
   packaged: boolean,
   commandDispatcher?: DesktopCommandDispatcher,
-  updateService?: DesktopUpdateService
+  updateService?: DesktopUpdateService,
+  windowControls?: DesktopWindowControls
 ): void {
   const handlers = createDesktopBridgeHandlers(
     runtime,
     shell,
     packaged,
     commandDispatcher,
-    updateService
+    updateService,
+    windowControls
   );
 
   for (const method of DESKTOP_BRIDGE_METHOD_NAMES) {

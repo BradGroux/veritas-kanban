@@ -9,6 +9,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { createMockTask, renderWithProviders } from './test-utils';
 import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings, type Task } from '@veritas-kanban/shared';
+import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -195,6 +196,27 @@ function renderBoard() {
   return renderWithProviders(<KanbanBoard />, { queryClient });
 }
 
+function renderDesktopBoard() {
+  Object.defineProperty(window, 'veritasDesktop', {
+    configurable: true,
+    value: {
+      toggleWindowMaximize: vi.fn(),
+    },
+  });
+  window.localStorage.setItem('veritas.desktop.rightRailOpen', 'false');
+  document.documentElement.dataset.client = 'desktop';
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderWithProviders(
+    <DesktopShellProvider>
+      <KanbanBoard />
+    </DesktopShellProvider>,
+    { queryClient }
+  );
+}
+
 function setOnline(value: boolean) {
   Object.defineProperty(window.navigator, 'onLine', {
     configurable: true,
@@ -205,6 +227,9 @@ function setOnline(value: boolean) {
 afterEach(() => {
   cleanup();
   setOnline(true);
+  delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+  delete document.documentElement.dataset.client;
+  window.localStorage.removeItem('veritas.desktop.rightRailOpen');
   mockFeatureSettingsResult = {
     isPlaceholderData: false,
     settings: createFeatureSettings(),
@@ -294,6 +319,23 @@ describe('KanbanBoard', () => {
     // Columns should still exist
     expect(screen.getByTestId('column-todo')).toBeDefined();
     expect(screen.getByTestId('column-done')).toBeDefined();
+  });
+
+  it('collapses the board right rail in desktop mode by default', () => {
+    mockUseTasks = () => ({ data: [], isLoading: false, error: null });
+    renderDesktopBoard();
+
+    expect(screen.getByTestId('column-todo')).toBeDefined();
+    expect(screen.queryByLabelText('Board right sidebar')).toBeNull();
+  });
+
+  it('fits configured board columns across the desktop shell', () => {
+    mockUseTasks = () => ({ data: [], isLoading: false, error: null });
+    renderDesktopBoard();
+
+    expect(screen.getByRole('group', { name: 'Kanban columns' }).style.gridTemplateColumns).toBe(
+      'repeat(4, minmax(0, 1fr))'
+    );
   });
 
   it('disables explicit status changes while the browser is offline', () => {
