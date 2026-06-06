@@ -111,7 +111,8 @@ jobs:
               exit 1
             fi
 
-            shasum -a 256 "${file}" > "${file}.sha256"
+            checksum="$(shasum -a 256 "${file}" | awk '{print $1}')"
+            printf '%s  %s\n' "${checksum}" "$(basename "${file}")" > "${file}.sha256"
           done
 
           assets=(
