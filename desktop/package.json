@@ -169,7 +169,7 @@
         "provider": "github",
         "owner": "BradGroux",
         "repo": "veritas-kanban",
-        "releaseType": "draft"
+        "releaseType": "release"
       }
     ]
   }
