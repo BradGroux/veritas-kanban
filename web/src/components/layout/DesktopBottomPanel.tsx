@@ -1,8 +1,17 @@
-import { lazy, Suspense } from 'react';
+import {
+  lazy,
+  Suspense,
+  useRef,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react';
 import { ActionIcon, Group, SegmentedControl, Text } from '@mantine/core';
-import { MessageSquare, PanelBottomClose, Users } from 'lucide-react';
+import { GripHorizontal, MessageSquare, PanelBottomClose, Users } from 'lucide-react';
 
 import {
+  MAX_BOTTOM_PANEL_HEIGHT,
+  MIN_BOTTOM_PANEL_HEIGHT,
   useDesktopShell,
   type DesktopBottomPanel as DesktopBottomPanelId,
 } from './DesktopShellContext';
@@ -25,15 +34,78 @@ const PANEL_OPTIONS = [
 ] satisfies Array<{ label: string; value: DesktopBottomPanelId }>;
 
 export function DesktopBottomPanel() {
-  const { isDesktopClient, bottomPanel, openBottomPanel, closeBottomPanel } = useDesktopShell();
+  const {
+    bottomPanel,
+    bottomPanelHeight,
+    setBottomPanelHeight,
+    openBottomPanel,
+    closeBottomPanel,
+  } = useDesktopShell();
+  const dragStateRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
-  if (!isDesktopClient || !bottomPanel) return null;
+  if (!bottomPanel) return null;
+
+  const resizeBy = (delta: number) => {
+    setBottomPanelHeight(bottomPanelHeight + delta);
+  };
+
+  const handleResizePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    dragStateRef.current = {
+      startY: event.clientY,
+      startHeight: bottomPanelHeight,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleResizePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!dragStateRef.current) return;
+    const delta = dragStateRef.current.startY - event.clientY;
+    setBottomPanelHeight(dragStateRef.current.startHeight + delta);
+  };
+
+  const handleResizePointerEnd = (event: PointerEvent<HTMLButtonElement>) => {
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleResizeKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      resizeBy(event.shiftKey ? 80 : 24);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      resizeBy(event.shiftKey ? -80 : -24);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setBottomPanelHeight(MIN_BOTTOM_PANEL_HEIGHT);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setBottomPanelHeight(MAX_BOTTOM_PANEL_HEIGHT);
+    }
+  };
 
   return (
     <section
-      className="desktop-bottom-panel border-t border-border bg-card"
-      aria-label="Desktop bottom panel"
+      className="workbench-bottom-panel border-t border-border bg-card"
+      aria-label="Workbench bottom panel"
+      style={{ '--workbench-bottom-panel-height': `${bottomPanelHeight}px` } as CSSProperties}
     >
+      <button
+        type="button"
+        className="workbench-bottom-panel-resizer desktop-no-drag"
+        aria-label="Resize workbench panel"
+        title="Drag to resize workbench panel"
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerEnd}
+        onPointerCancel={handleResizePointerEnd}
+        onKeyDown={handleResizeKeyDown}
+      >
+        <GripHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
       <Group
         justify="space-between"
         wrap="nowrap"

@@ -10,6 +10,7 @@ import {
   Menu,
   Text,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   Plus,
   Settings,
@@ -145,6 +146,7 @@ export function Header() {
   const [chatOpen, setChatOpen] = useState(false);
   const [squadChatOpen, setSquadChatOpen] = useState(false);
   const [loadedPanels, setLoadedPanels] = useState<Set<LazyPanel>>(() => new Set());
+  const supportsWorkbenchPanel = useMediaQuery('(min-width: 768px)', false);
   const { setOpenCreateDialog, setOpenChatPanel } = useKeyboard();
   const { view, setView, navigateToTask } = useView();
   const { data: backlogCount = 0 } = useBacklogCount();
@@ -184,13 +186,13 @@ export function Header() {
   }, [markPanelLoaded]);
 
   const openChatPanel = useCallback(() => {
-    if (isDesktopClient) {
+    if (isDesktopClient || supportsWorkbenchPanel) {
       openBottomPanel('board-chat');
       return;
     }
     markPanelLoaded('chat');
     setChatOpen(true);
-  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
 
   const openSearchDialog = useCallback(
     (preset?: SearchPreset) => {
@@ -202,13 +204,13 @@ export function Header() {
   );
 
   const openSquadChatPanel = useCallback(() => {
-    if (isDesktopClient) {
+    if (isDesktopClient || supportsWorkbenchPanel) {
       openBottomPanel('squad-chat');
       return;
     }
     markPanelLoaded('squadChat');
     setSquadChatOpen(true);
-  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
 
   const openSettingsDialog = useCallback(
     (section?: string) => {
@@ -382,38 +384,42 @@ export function Header() {
             aria-label="Board actions"
             className="min-w-0 shrink-0"
           >
-            {isDesktopClient && (
+            {(isDesktopClient || supportsWorkbenchPanel) && (
               <Group gap={4} wrap="nowrap" className="desktop-no-drag">
-                <ActionIcon
-                  variant={leftRailOpen ? 'light' : 'subtle'}
-                  color={leftRailOpen ? 'veritas' : 'gray'}
-                  size={32}
-                  onClick={() => setLeftRailOpen(!leftRailOpen)}
-                  aria-label={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
-                  aria-pressed={leftRailOpen}
-                  title={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
-                >
-                  {leftRailOpen ? (
-                    <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <PanelLeft className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </ActionIcon>
-                <ActionIcon
-                  variant={rightRailOpen ? 'light' : 'subtle'}
-                  color={rightRailOpen ? 'veritas' : 'gray'}
-                  size={32}
-                  onClick={() => setRightRailOpen(!rightRailOpen)}
-                  aria-label={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
-                  aria-pressed={rightRailOpen}
-                  title={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
-                >
-                  {rightRailOpen ? (
-                    <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <PanelRight className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </ActionIcon>
+                {isDesktopClient && (
+                  <>
+                    <ActionIcon
+                      variant={leftRailOpen ? 'light' : 'subtle'}
+                      color={leftRailOpen ? 'veritas' : 'gray'}
+                      size={32}
+                      onClick={() => setLeftRailOpen(!leftRailOpen)}
+                      aria-label={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
+                      aria-pressed={leftRailOpen}
+                      title={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
+                    >
+                      {leftRailOpen ? (
+                        <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <PanelLeft className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </ActionIcon>
+                    <ActionIcon
+                      variant={rightRailOpen ? 'light' : 'subtle'}
+                      color={rightRailOpen ? 'veritas' : 'gray'}
+                      size={32}
+                      onClick={() => setRightRailOpen(!rightRailOpen)}
+                      aria-label={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                      aria-pressed={rightRailOpen}
+                      title={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                    >
+                      {rightRailOpen ? (
+                        <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <PanelRight className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </ActionIcon>
+                  </>
+                )}
                 <ActionIcon
                   variant={bottomPanel ? 'light' : 'subtle'}
                   color={bottomPanel ? 'veritas' : 'gray'}

@@ -181,13 +181,47 @@ html[data-client='desktop'] .desktop-main-content {
   overflow: auto;
 }
 
-html[data-client='desktop'] .desktop-bottom-panel {
+.workbench-bottom-panel {
   display: flex;
-  min-height: 240px;
-  max-height: 34vh;
-  flex: 0 0 clamp(240px, 30vh, 360px);
+  height: var(--workbench-bottom-panel-height, 340px);
+  min-height: 220px;
+  max-height: min(68vh, 640px);
+  flex: 0 0 var(--workbench-bottom-panel-height, 340px);
   flex-direction: column;
   overflow: hidden;
+}
+
+html:not([data-client='desktop']) .workbench-bottom-panel {
+  position: sticky;
+  bottom: 0;
+  z-index: 35;
+  box-shadow: 0 -12px 32px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+html[data-client='desktop'] .workbench-bottom-panel {
+  min-height: 240px;
+  max-height: min(68vh, 640px);
+  flex: 0 0 var(--workbench-bottom-panel-height, 340px);
+}
+
+.workbench-bottom-panel-resizer {
+  display: flex;
+  height: 10px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--card) 92%, var(--muted));
+  color: var(--muted-foreground);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.workbench-bottom-panel-resizer:hover,
+.workbench-bottom-panel-resizer:focus-visible {
+  background: color-mix(in oklch, var(--primary) 12%, var(--card));
+  color: var(--foreground);
 }
 
 html[data-client='desktop'] .desktop-board-with-right-rail {
@@ -202,6 +236,54 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   html[data-client='desktop'] .desktop-board-with-right-rail {
     grid-template-columns: 1fr;
   }
+}
+
+.settings-dialog-content,
+.settings-dialog {
+  --settings-surface: var(--background);
+  --settings-panel: color-mix(in oklch, var(--muted) 52%, var(--background));
+  --settings-card: var(--card);
+  --settings-muted-card: color-mix(in oklch, var(--muted) 42%, var(--card));
+  --settings-border: var(--border);
+}
+
+.dark .settings-dialog-content,
+.dark .settings-dialog {
+  --settings-surface: oklch(0.17 0.01 286);
+  --settings-panel: oklch(0.205 0.012 286);
+  --settings-card: oklch(0.19 0.012 286);
+  --settings-muted-card: oklch(0.22 0.012 286);
+  --settings-border: oklch(0.31 0.014 286);
+}
+
+.settings-dialog-content {
+  background: var(--settings-surface) !important;
+  border: 1px solid var(--settings-border);
+}
+
+.settings-dialog [class~='bg-card'] {
+  background-color: var(--settings-card) !important;
+}
+
+.settings-dialog [class~='bg-muted/30'],
+.settings-dialog [class~='bg-background/50'] {
+  background-color: var(--settings-panel) !important;
+}
+
+.settings-dialog [class~='border'],
+.settings-dialog [class~='border-r'],
+.settings-dialog [class~='border-t'],
+.settings-dialog [class~='border-b'],
+.settings-dialog [class~='border-dashed'] {
+  border-color: var(--settings-border) !important;
+}
+
+.settings-dialog .mantine-Input-input,
+.settings-dialog .mantine-Select-input,
+.settings-dialog .mantine-Textarea-input,
+.settings-dialog .mantine-NumberInput-input {
+  background: var(--settings-muted-card);
+  border-color: var(--settings-border);
 }
 
 /* Custom scrollbar for dark mode */

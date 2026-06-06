@@ -448,20 +448,29 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       trapFocus
       returnFocus
       closeButtonProps={{ 'aria-label': 'Close settings' }}
+      classNames={{
+        content: 'settings-dialog-content',
+        body: 'settings-dialog-body',
+      }}
       styles={{
         content: { height: '85vh', overflow: 'hidden' },
         body: { height: '100%', padding: 0 },
+        close: { top: '1rem', right: '1rem' },
       }}
     >
       <ErrorBoundary level="section">
-        <div ref={dialogContentRef} className="flex h-full min-h-0" onKeyDown={handleDialogKeyDown}>
+        <div
+          ref={dialogContentRef}
+          className="settings-dialog flex h-full min-h-0"
+          onKeyDown={handleDialogKeyDown}
+        >
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
-          <div className="hidden sm:flex flex-col w-48 border-r bg-muted/30 py-4">
+          <div className="hidden min-h-0 w-48 flex-col border-r bg-muted/30 py-4 sm:flex">
             <div className="px-4 pb-3">
               <h2 className="text-sm font-semibold">Settings</h2>
             </div>
             <nav
-              className="flex-1 space-y-0.5 px-2"
+              className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pr-1"
               role="tablist"
               aria-orientation="vertical"
               onKeyDown={handleKeyDown}
@@ -500,7 +509,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             </nav>
 
             {/* Import/Export/Reset */}
-            <Stack gap={4} className="mt-auto border-t px-2 pt-3">
+            <Stack gap={4} className="mt-auto shrink-0 border-t px-3 pt-3 pb-6">
               <input
                 ref={settingsFileInputRef}
                 type="file"

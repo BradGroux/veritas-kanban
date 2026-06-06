@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useMediaQuery } from '@mantine/hooks';
 
 export type DesktopBottomPanel = 'board-chat' | 'squad-chat';
 
@@ -15,8 +16,10 @@ interface DesktopShellContextValue {
   leftRailOpen: boolean;
   rightRailOpen: boolean;
   bottomPanel: DesktopBottomPanel | null;
+  bottomPanelHeight: number;
   setLeftRailOpen: (open: boolean) => void;
   setRightRailOpen: (open: boolean) => void;
+  setBottomPanelHeight: (height: number) => void;
   openBottomPanel: (panel: DesktopBottomPanel) => void;
   closeBottomPanel: () => void;
   toggleBottomPanel: (panel?: DesktopBottomPanel) => void;
@@ -25,14 +28,20 @@ interface DesktopShellContextValue {
 const LEFT_RAIL_STORAGE_KEY = 'veritas.desktop.leftRailOpen';
 const RIGHT_RAIL_STORAGE_KEY = 'veritas.desktop.rightRailOpen';
 const BOTTOM_PANEL_STORAGE_KEY = 'veritas.desktop.bottomPanel';
+const BOTTOM_PANEL_HEIGHT_STORAGE_KEY = 'veritas.workbench.bottomPanelHeight';
+export const DEFAULT_BOTTOM_PANEL_HEIGHT = 340;
+export const MIN_BOTTOM_PANEL_HEIGHT = 220;
+export const MAX_BOTTOM_PANEL_HEIGHT = 640;
 
 const DEFAULT_CONTEXT: DesktopShellContextValue = {
   isDesktopClient: false,
   leftRailOpen: false,
   rightRailOpen: false,
   bottomPanel: null,
+  bottomPanelHeight: DEFAULT_BOTTOM_PANEL_HEIGHT,
   setLeftRailOpen: () => undefined,
   setRightRailOpen: () => undefined,
+  setBottomPanelHeight: () => undefined,
   openBottomPanel: () => undefined,
   closeBottomPanel: () => undefined,
   toggleBottomPanel: () => undefined,
@@ -70,6 +79,30 @@ function readStoredBottomPanel(): DesktopBottomPanel | null {
   }
 }
 
+function clampBottomPanelHeight(height: number): number {
+  const viewportMax =
+    typeof window === 'undefined'
+      ? MAX_BOTTOM_PANEL_HEIGHT
+      : Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.floor(window.innerHeight * 0.68));
+  return Math.min(
+    Math.min(MAX_BOTTOM_PANEL_HEIGHT, viewportMax),
+    Math.max(MIN_BOTTOM_PANEL_HEIGHT, height)
+  );
+}
+
+function readStoredBottomPanelHeight(): number {
+  if (typeof window === 'undefined') return DEFAULT_BOTTOM_PANEL_HEIGHT;
+
+  try {
+    const value = Number(window.localStorage.getItem(BOTTOM_PANEL_HEIGHT_STORAGE_KEY));
+    return Number.isFinite(value)
+      ? clampBottomPanelHeight(value)
+      : clampBottomPanelHeight(DEFAULT_BOTTOM_PANEL_HEIGHT);
+  } catch {
+    return DEFAULT_BOTTOM_PANEL_HEIGHT;
+  }
+}
+
 function writeStoredValue(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value);
@@ -80,6 +113,8 @@ function writeStoredValue(key: string, value: string): void {
 
 export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const desktopClient = isDesktopClient();
+  const supportsWorkbenchPanel = useMediaQuery('(min-width: 768px)', false);
+  const canUseBottomPanel = desktopClient || supportsWorkbenchPanel;
   const [leftRailOpen, setLeftRailOpenState] = useState(() =>
     readStoredBoolean(LEFT_RAIL_STORAGE_KEY, true)
   );
@@ -88,6 +123,9 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   );
   const [bottomPanel, setBottomPanel] = useState<DesktopBottomPanel | null>(() =>
     readStoredBottomPanel()
+  );
+  const [bottomPanelHeight, setBottomPanelHeightState] = useState(() =>
+    readStoredBottomPanelHeight()
   );
 
   const setLeftRailOpen = useCallback(
@@ -106,29 +144,29 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
     [desktopClient]
   );
 
-  const openBottomPanel = useCallback(
-    (panel: DesktopBottomPanel) => {
-      setBottomPanel(panel);
-      if (desktopClient) writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, panel);
-    },
-    [desktopClient]
-  );
+  const setBottomPanelHeight = useCallback((height: number) => {
+    const next = clampBottomPanelHeight(height);
+    setBottomPanelHeightState(next);
+    writeStoredValue(BOTTOM_PANEL_HEIGHT_STORAGE_KEY, String(next));
+  }, []);
+
+  const openBottomPanel = useCallback((panel: DesktopBottomPanel) => {
+    setBottomPanel(panel);
+    writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, panel);
+  }, []);
 
   const closeBottomPanel = useCallback(() => {
     setBottomPanel(null);
-    if (desktopClient) writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, 'closed');
-  }, [desktopClient]);
+    writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, 'closed');
+  }, []);
 
-  const toggleBottomPanel = useCallback(
-    (panel: DesktopBottomPanel = 'board-chat') => {
-      setBottomPanel((current) => {
-        const next = current === panel ? null : panel;
-        if (desktopClient) writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, next ?? 'closed');
-        return next;
-      });
-    },
-    [desktopClient]
-  );
+  const toggleBottomPanel = useCallback((panel: DesktopBottomPanel = 'board-chat') => {
+    setBottomPanel((current) => {
+      const next = current === panel ? null : panel;
+      writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, next ?? 'closed');
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!desktopClient || typeof document === 'undefined') return;
@@ -140,9 +178,11 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       isDesktopClient: desktopClient,
       leftRailOpen: desktopClient ? leftRailOpen : false,
       rightRailOpen: desktopClient ? rightRailOpen : false,
-      bottomPanel: desktopClient ? bottomPanel : null,
+      bottomPanel: canUseBottomPanel ? bottomPanel : null,
+      bottomPanelHeight,
       setLeftRailOpen,
       setRightRailOpen,
+      setBottomPanelHeight,
       openBottomPanel,
       closeBottomPanel,
       toggleBottomPanel,
@@ -150,10 +190,13 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
     [
       bottomPanel,
       closeBottomPanel,
+      canUseBottomPanel,
       desktopClient,
+      bottomPanelHeight,
       leftRailOpen,
       openBottomPanel,
       rightRailOpen,
+      setBottomPanelHeight,
       setLeftRailOpen,
       setRightRailOpen,
       toggleBottomPanel,
