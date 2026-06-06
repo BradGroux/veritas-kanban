@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 @custom-variant dark (&:is(.dark *));
 @config "../tailwind.config.js";
 
@@ -24,61 +24,61 @@
 }
 
 @custom-variant data-open {
-  &:where([data-state="open"]),
-  &:where([data-open]:not([data-open="false"])) {
+  &:where([data-state='open']),
+  &:where([data-open]:not([data-open='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-closed {
-  &:where([data-state="closed"]),
-  &:where([data-closed]:not([data-closed="false"])) {
+  &:where([data-state='closed']),
+  &:where([data-closed]:not([data-closed='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-checked {
-  &:where([data-state="checked"]),
-  &:where([data-checked]:not([data-checked="false"])) {
+  &:where([data-state='checked']),
+  &:where([data-checked]:not([data-checked='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-unchecked {
-  &:where([data-state="unchecked"]),
-  &:where([data-unchecked]:not([data-unchecked="false"])) {
+  &:where([data-state='unchecked']),
+  &:where([data-unchecked]:not([data-unchecked='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-selected {
-  &:where([data-selected="true"]) {
+  &:where([data-selected='true']) {
     @slot;
   }
 }
 
 @custom-variant data-disabled {
-  &:where([data-disabled="true"]),
-  &:where([data-disabled]:not([data-disabled="false"])) {
+  &:where([data-disabled='true']),
+  &:where([data-disabled]:not([data-disabled='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-active {
-  &:where([data-state="active"]),
-  &:where([data-active]:not([data-active="false"])) {
+  &:where([data-state='active']),
+  &:where([data-active]:not([data-active='false'])) {
     @slot;
   }
 }
 
 @custom-variant data-horizontal {
-  &:where([data-orientation="horizontal"]) {
+  &:where([data-orientation='horizontal']) {
     @slot;
   }
 }
 
 @custom-variant data-vertical {
-  &:where([data-orientation="vertical"]) {
+  &:where([data-orientation='vertical']) {
     @slot;
   }
 }
@@ -118,6 +118,89 @@
   /* WCAG 2.1 SC 2.4.7 — Visible focus indicators */
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+html[data-client='desktop'],
+html[data-client='desktop'] body,
+html[data-client='desktop'] #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+html[data-client='desktop'] .desktop-app-shell {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html[data-client='desktop'] .desktop-app-header {
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+html[data-client='desktop'] .desktop-window-drag {
+  -webkit-app-region: drag;
+}
+
+html[data-client='desktop'] .desktop-no-drag,
+html[data-client='desktop'] button,
+html[data-client='desktop'] input,
+html[data-client='desktop'] textarea,
+html[data-client='desktop'] select,
+html[data-client='desktop'] [role='button'],
+html[data-client='desktop'] [role='menu'],
+html[data-client='desktop'] [role='menuitem'],
+html[data-client='desktop'] [role='combobox'],
+html[data-client='desktop'] .mantine-Input-input {
+  -webkit-app-region: no-drag;
+}
+
+html[data-client='desktop'] .desktop-header-leading {
+  padding-left: 6rem;
+}
+
+html[data-client='desktop'] .desktop-workbench {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+html[data-client='desktop'] .desktop-left-sidebar {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+html[data-client='desktop'] .desktop-main-content {
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+html[data-client='desktop'] .desktop-bottom-panel {
+  display: flex;
+  min-height: 240px;
+  max-height: 34vh;
+  flex: 0 0 clamp(240px, 30vh, 360px);
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html[data-client='desktop'] .desktop-board-with-right-rail {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+}
+
+@media (max-width: 900px) {
+  html[data-client='desktop'] .desktop-header-leading {
+    padding-left: 5.5rem;
+  }
+
+  html[data-client='desktop'] .desktop-board-with-right-rail {
+    grid-template-columns: 1fr;
   }
 }
 

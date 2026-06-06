@@ -203,6 +203,10 @@ export interface DesktopWorkProductExportResult {
   warnings: string[];
 }
 
+export interface DesktopWindowToggleMaximizeResult {
+  maximized: boolean;
+}
+
 export const DESKTOP_BRIDGE_METHODS = {
   getAppInfo: {
     capability: 'setup',
@@ -290,6 +294,12 @@ export const DESKTOP_BRIDGE_METHODS = {
     dangerous: true,
     validator: 'openExternal',
   },
+  toggleWindowMaximize: {
+    capability: 'shell',
+    channel: 'desktop:toggle-window-maximize',
+    desktopOnly: true,
+    dangerous: false,
+  },
 } as const satisfies Record<string, DesktopBridgeMethodDefinition>;
 
 export const DESKTOP_BRIDGE_METHOD_NAMES = [
@@ -306,6 +316,7 @@ export const DESKTOP_BRIDGE_METHOD_NAMES = [
   'performNotificationAction',
   'exportWorkProduct',
   'openExternal',
+  'toggleWindowMaximize',
 ] as const;
 
 export type DesktopBridgeMethod = (typeof DESKTOP_BRIDGE_METHOD_NAMES)[number];
@@ -413,6 +424,7 @@ export interface DesktopBridgeRequestMap {
   performNotificationAction: DesktopNotificationActionRequest;
   exportWorkProduct: DesktopWorkProductExportRequest;
   openExternal: OpenExternalRequest;
+  toggleWindowMaximize: undefined;
 }
 
 export interface DesktopBridgeResponseMap {
@@ -429,6 +441,7 @@ export interface DesktopBridgeResponseMap {
   performNotificationAction: DesktopNotificationActionResult;
   exportWorkProduct: DesktopWorkProductExportResult;
   openExternal: undefined;
+  toggleWindowMaximize: DesktopWindowToggleMaximizeResult;
 }
 
 export interface DesktopBridgeEventPayloadMap {

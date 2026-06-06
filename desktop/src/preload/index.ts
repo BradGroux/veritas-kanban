@@ -1,29 +1,72 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type { DesktopAppInfo, DesktopStatusSnapshot } from '../main/types.js';
-import {
-  createDesktopBridgeEventCleanup,
-  DESKTOP_RESTART_CONFIRMATION,
-  DESKTOP_BRIDGE_EVENTS,
-  DESKTOP_BRIDGE_METHODS,
-  type DesktopBridgeEvent,
-  type DesktopBridgeEventPayload,
-  type DesktopCommandDispatchRequest,
-  type DesktopCommandDispatchResult,
-  type DesktopConnectionConfigRequest,
-  type DesktopConnectionValidationResult,
-  type DesktopDiagnosticsBundleRequest,
-  type DesktopDiagnosticsBundleResult,
-  type DesktopFilePickerRequest,
-  type DesktopFilePickerResult,
-  type DesktopNotificationActionRequest,
-  type DesktopNotificationActionResult,
-  type DesktopSetupDiagnostics,
-  type DesktopSupportSnapshot,
-  type DesktopUpdateStatus,
-  type DesktopWorkProductExportRequest,
-  type DesktopWorkProductExportResult,
+import type {
+  DesktopBridgeEventPayload,
+  DesktopCommandDispatchRequest,
+  DesktopCommandDispatchResult,
+  DesktopConnectionConfigRequest,
+  DesktopConnectionValidationResult,
+  DesktopDiagnosticsBundleRequest,
+  DesktopDiagnosticsBundleResult,
+  DesktopFilePickerRequest,
+  DesktopFilePickerResult,
+  DesktopNotificationActionRequest,
+  DesktopNotificationActionResult,
+  DesktopSetupDiagnostics,
+  DesktopSupportSnapshot,
+  DesktopUpdateStatus,
+  DesktopWindowToggleMaximizeResult,
+  DesktopWorkProductExportRequest,
+  DesktopWorkProductExportResult,
 } from '../shared/desktop-bridge-contracts.js';
+
+const DESKTOP_RESTART_CONFIRMATION = 'restart-local-server';
+
+const DESKTOP_BRIDGE_METHODS = {
+  getAppInfo: { channel: 'desktop:get-app-info' },
+  getConnectionStatus: { channel: 'desktop:get-connection-status' },
+  getSetupDiagnostics: { channel: 'desktop:get-setup-diagnostics' },
+  validateConnectionConfig: { channel: 'desktop:validate-connection-config' },
+  restartLocalServer: { channel: 'desktop:restart-local-server' },
+  getSupportSnapshot: { channel: 'desktop:get-support-snapshot' },
+  getUpdateStatus: { channel: 'desktop:get-update-status' },
+  dispatchCommand: { channel: 'desktop:dispatch-command' },
+  pickUploadFiles: { channel: 'desktop:pick-upload-files' },
+  createDiagnosticsBundle: { channel: 'desktop:create-diagnostics-bundle' },
+  performNotificationAction: { channel: 'desktop:perform-notification-action' },
+  exportWorkProduct: { channel: 'desktop:export-work-product' },
+  openExternal: { channel: 'desktop:open-external' },
+  toggleWindowMaximize: { channel: 'desktop:toggle-window-maximize' },
+} as const;
+
+const DESKTOP_BRIDGE_EVENTS = {
+  setupProgress: { channel: 'desktop:setup-progress' },
+  communicationCheck: { channel: 'desktop:communication-check' },
+  serverStatus: { channel: 'desktop:server-status' },
+  runProgress: { channel: 'desktop:run-progress' },
+  updateStatus: { channel: 'desktop:update-status' },
+  notificationAction: { channel: 'desktop:notification-action' },
+  menuCommand: { channel: 'desktop:menu-command' },
+  uploadProgress: { channel: 'desktop:upload-progress' },
+  workProductExportProgress: { channel: 'desktop:work-product-export-progress' },
+  externalDeliveryVerification: { channel: 'desktop:external-delivery-verification' },
+} as const;
+
+type DesktopBridgeEvent = keyof typeof DESKTOP_BRIDGE_EVENTS;
+
+function createDesktopBridgeEventCleanup<Handler>(
+  channel: string,
+  handler: Handler,
+  detach: (channel: string, handler: Handler) => void
+): () => void {
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    detach(channel, handler);
+  };
+}
 
 export interface VeritasDesktopApi {
   getAppInfo(): Promise<DesktopAppInfo>;
@@ -47,6 +90,7 @@ export interface VeritasDesktopApi {
     request: DesktopWorkProductExportRequest
   ): Promise<DesktopWorkProductExportResult>;
   openExternal(url: string): Promise<void>;
+  toggleWindowMaximize(): Promise<DesktopWindowToggleMaximizeResult>;
   onSetupProgress(listener: BridgeEventListener<'setupProgress'>): () => void;
   onCommunicationCheck(listener: BridgeEventListener<'communicationCheck'>): () => void;
   onServerStatus(listener: (status: DesktopStatusSnapshot) => void): () => void;
@@ -131,6 +175,10 @@ const api: VeritasDesktopApi = {
     ),
   openExternal: (url: string) =>
     invokeDesktop<void>(DESKTOP_BRIDGE_METHODS.openExternal.channel, { url }),
+  toggleWindowMaximize: () =>
+    invokeDesktop<DesktopWindowToggleMaximizeResult>(
+      DESKTOP_BRIDGE_METHODS.toggleWindowMaximize.channel
+    ),
   onSetupProgress: (listener) => onDesktopEvent('setupProgress', listener),
   onCommunicationCheck: (listener) => onDesktopEvent('communicationCheck', listener),
   onServerStatus: (listener) => onDesktopEvent('serverStatus', listener),

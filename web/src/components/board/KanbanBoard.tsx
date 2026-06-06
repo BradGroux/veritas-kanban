@@ -44,6 +44,8 @@ import { useView } from '@/contexts/ViewContext';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
+import { useDesktopShell } from '@/components/layout/DesktopShellContext';
+import { cn } from '@/lib/utils';
 
 // Lazy-load Dashboard so board startup does not include dashboard-heavy code paths.
 const Dashboard = lazy(() =>
@@ -84,6 +86,7 @@ export function KanbanBoard() {
   const { announce } = useLiveAnnouncer();
   const { hasPermission } = useIdentity();
   const { isOnline } = useNetworkStatus();
+  const { isDesktopClient, rightRailOpen } = useDesktopShell();
   const canWriteTasks = hasPermission('task:write');
   const isMobileLayout = useMediaQuery('(max-width: 767px)', false);
   const canDragTasks =
@@ -297,6 +300,17 @@ export function KanbanBoard() {
 
   // Group filtered tasks by status
   const tasksByStatus = useTasksByStatus(filteredTasks, columns);
+  const boardColumnGridStyle = isMobileLayout
+    ? undefined
+    : {
+        gridTemplateColumns: isDesktopClient
+          ? `repeat(${Math.max(columns.length, 1)}, minmax(0, 1fr))`
+          : 'repeat(auto-fit, minmax(220px, 1fr))',
+      };
+  const boardColumnGridClassName = cn(
+    'grid grid-cols-1 gap-4',
+    !isDesktopClient && 'md:grid-cols-2'
+  );
 
   // Register filtered tasks with keyboard context
   useEffect(() => {
@@ -513,10 +527,16 @@ export function KanbanBoard() {
       {boardSettings.showArchiveSuggestions && <ArchiveSuggestionBanner />}
 
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-4',
+            !isDesktopClient && 'xl:grid-cols-5',
+            isDesktopClient && rightRailOpen && 'desktop-board-with-right-rail'
+          )}
+        >
           <section
             id="mobile-board-columns"
-            className="min-w-0 xl:col-span-4"
+            className={cn('min-w-0', !isDesktopClient && 'xl:col-span-4')}
             aria-label={`Kanban board, ${filteredTasks.length} tasks`}
           >
             {canDragTasks ? (
@@ -528,12 +548,8 @@ export function KanbanBoard() {
                 onDragEnd={handleDragEnd}
               >
                 <div
-                  className="grid grid-cols-1 gap-4 md:grid-cols-2"
-                  style={
-                    isMobileLayout
-                      ? undefined
-                      : { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }
-                  }
+                  className={boardColumnGridClassName}
+                  style={boardColumnGridStyle}
                   role="group"
                   aria-label="Kanban columns"
                 >
@@ -561,12 +577,8 @@ export function KanbanBoard() {
               </DndContext>
             ) : (
               <div
-                className="grid grid-cols-1 gap-4 md:grid-cols-2"
-                style={
-                  isMobileLayout
-                    ? undefined
-                    : { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }
-                }
+                className={boardColumnGridClassName}
+                style={boardColumnGridStyle}
                 role="group"
                 aria-label="Kanban columns"
               >
@@ -590,17 +602,21 @@ export function KanbanBoard() {
             )}
           </section>
 
-          <Suspense
-            fallback={
-              <aside className="min-h-24 rounded-md border border-dashed border-border/70" />
-            }
-          >
-            <BoardSidebar
-              onTaskClick={(taskId) => {
-                void handleTaskIdClick(taskId);
-              }}
-            />
-          </Suspense>
+          {(!isDesktopClient || rightRailOpen) && (
+            <Suspense
+              fallback={
+                <aside className="min-h-24 rounded-md border border-dashed border-border/70" />
+              }
+            >
+              <aside className="min-w-0" aria-label="Board right sidebar">
+                <BoardSidebar
+                  onTaskClick={(taskId) => {
+                    void handleTaskIdClick(taskId);
+                  }}
+                />
+              </aside>
+            </Suspense>
+          )}
         </div>
 
         {boardSettings.showDashboard && (

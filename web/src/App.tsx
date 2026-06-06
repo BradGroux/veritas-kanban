@@ -18,6 +18,9 @@ import { SkipToContent } from './components/shared/SkipToContent';
 import { LiveAnnouncerProvider } from './components/shared/LiveAnnouncer';
 import { NAVIGATION_VIEWS, VIEW_BY_ID, type AppView, type NavigationView } from './lib/views';
 import { usePendingProductMode } from './hooks/usePendingProductMode';
+import { DesktopShellProvider, useDesktopShell } from './components/layout/DesktopShellContext';
+import { DesktopLeftSidebar } from './components/layout/DesktopLeftSidebar';
+import { DesktopBottomPanel } from './components/layout/DesktopBottomPanel';
 
 const LAZY_VIEW_COMPONENTS = Object.fromEntries(
   NAVIGATION_VIEWS.map((definition) => {
@@ -80,6 +83,66 @@ function MainContent() {
   );
 }
 
+function DesktopAwareAppShell({
+  authStatus,
+  refreshStatus,
+  showDesktopOnboarding,
+  setShowDesktopOnboarding,
+}: {
+  authStatus: ReturnType<typeof useAuth>['status'];
+  refreshStatus: ReturnType<typeof useAuth>['refreshStatus'];
+  showDesktopOnboarding: boolean;
+  setShowDesktopOnboarding: (open: boolean) => void;
+}) {
+  const { isDesktopClient, bottomPanel } = useDesktopShell();
+
+  return (
+    <Box className="desktop-app-shell min-h-screen bg-background">
+      <SkipToContent />
+      <Header />
+      <Suspense fallback={<div className="h-7 border-b border-border bg-muted/30" aria-hidden />}>
+        <SystemHealthBar />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PwaStatusBanner sessionExpiry={authStatus?.sessionExpiry} onRefreshAuth={refreshStatus} />
+      </Suspense>
+      <div className="desktop-workbench">
+        <DesktopLeftSidebar />
+        <Box
+          component="main"
+          id="main-content"
+          px={isDesktopClient ? 'md' : { base: 'md', md: '3.5rem' }}
+          pt={isDesktopClient ? 'md' : 'lg'}
+          pb={isDesktopClient ? (bottomPanel ? 'md' : 'lg') : { base: '6rem', md: 'lg' }}
+          tabIndex={-1}
+          className="desktop-main-content"
+        >
+          <ErrorBoundary level="section">
+            <MainContent />
+          </ErrorBoundary>
+        </Box>
+      </div>
+      <DesktopBottomPanel />
+      <Toaster />
+      <CommandPalette />
+      {!isDesktopClient && (
+        <Suspense fallback={null}>
+          <FloatingChat />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>{!isDesktopClient && <MobileShell />}</Suspense>
+      {showDesktopOnboarding && (
+        <Suspense fallback={null}>
+          <DesktopOnboardingDialog
+            open={showDesktopOnboarding}
+            onOpenChange={setShowDesktopOnboarding}
+          />
+        </Suspense>
+      )}
+    </Box>
+  );
+}
+
 // Main app content (only rendered when authenticated)
 function AppContent() {
   // Connect to WebSocket for real-time task updates
@@ -129,51 +192,14 @@ function AppContent() {
             <TaskConfigProvider>
               <ViewProvider>
                 <IdentityProvider>
-                  <Box className="min-h-screen bg-background">
-                    <SkipToContent />
-                    <Header />
-                    <Suspense
-                      fallback={
-                        <div className="h-7 border-b border-border bg-muted/30" aria-hidden />
-                      }
-                    >
-                      <SystemHealthBar />
-                    </Suspense>
-                    <Suspense fallback={null}>
-                      <PwaStatusBanner
-                        sessionExpiry={authStatus?.sessionExpiry}
-                        onRefreshAuth={refreshStatus}
-                      />
-                    </Suspense>
-                    <Box
-                      component="main"
-                      id="main-content"
-                      px={{ base: 'md', md: '3.5rem' }}
-                      pt="lg"
-                      pb={{ base: '6rem', md: 'lg' }}
-                      tabIndex={-1}
-                    >
-                      <ErrorBoundary level="section">
-                        <MainContent />
-                      </ErrorBoundary>
-                    </Box>
-                    <Toaster />
-                    <CommandPalette />
-                    <Suspense fallback={null}>
-                      <FloatingChat />
-                    </Suspense>
-                    <Suspense fallback={null}>
-                      <MobileShell />
-                    </Suspense>
-                    {showDesktopOnboarding && (
-                      <Suspense fallback={null}>
-                        <DesktopOnboardingDialog
-                          open={showDesktopOnboarding}
-                          onOpenChange={setShowDesktopOnboarding}
-                        />
-                      </Suspense>
-                    )}
-                  </Box>
+                  <DesktopShellProvider>
+                    <DesktopAwareAppShell
+                      authStatus={authStatus}
+                      refreshStatus={refreshStatus}
+                      showDesktopOnboarding={showDesktopOnboarding}
+                      setShowDesktopOnboarding={setShowDesktopOnboarding}
+                    />
+                  </DesktopShellProvider>
                 </IdentityProvider>
               </ViewProvider>
             </TaskConfigProvider>
