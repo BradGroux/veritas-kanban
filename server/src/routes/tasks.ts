@@ -79,10 +79,16 @@ const gitSchema = z
 const attemptSchema = z
   .object({
     id: z.string(),
-    agent: z.enum(['claude-code', 'amp', 'copilot', 'gemini', 'veritas']),
+    agent: z.string().min(1).max(80),
     status: z.enum(['pending', 'running', 'complete', 'failed']),
     started: z.string().optional(),
     ended: z.string().optional(),
+    provider: z.string().max(80).optional(),
+    model: z.string().max(160).optional(),
+    threadId: z.string().max(240).optional(),
+    cloudUrl: z.string().max(500).optional(),
+    cloudTarget: z.string().max(240).optional(),
+    orchestration: z.unknown().optional(),
   })
   .optional();
 

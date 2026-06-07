@@ -254,6 +254,68 @@ describe('Tasks Routes (actual module)', () => {
       expect(res.status).toBe(200);
     });
 
+    it('should accept current and custom attempt agent slugs', async () => {
+      const oldTask = { id: 't1', title: 'Old', status: 'todo', created: '2025-01-01' };
+      mockTaskService.getTask.mockResolvedValue(oldTask);
+      mockTaskService.updateTask.mockImplementation(async (_id, input) => ({
+        ...oldTask,
+        ...input,
+      }));
+
+      for (const agent of ['codex', 'ollama-local', 'lm-studio-local', 'custom-router']) {
+        const res = await request(app)
+          .patch('/api/tasks/t1')
+          .send({
+            attempt: {
+              id: `attempt_${agent.replaceAll('-', '_')}`,
+              agent,
+              status: 'running',
+              provider: agent,
+              model: agent === 'ollama-local' ? 'llama3.2' : undefined,
+              threadId: 'thread_docs_refresh',
+              cloudTarget: agent === 'custom-router' ? 'local-lab' : undefined,
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attempt.agent).toBe(agent);
+      }
+
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          attempt: expect.objectContaining({
+            agent: 'ollama-local',
+            provider: 'ollama-local',
+            model: 'llama3.2',
+            threadId: 'thread_docs_refresh',
+          }),
+        })
+      );
+    });
+
+    it('should still reject invalid attempt status', async () => {
+      mockTaskService.getTask.mockResolvedValue({
+        id: 't1',
+        title: 'Old',
+        status: 'todo',
+        created: '2025-01-01',
+      });
+
+      const res = await request(app)
+        .patch('/api/tasks/t1')
+        .send({
+          attempt: {
+            id: 'attempt_bad',
+            agent: 'codex',
+            status: 'stuck',
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(mockTaskService.updateTask).not.toHaveBeenCalled();
+    });
+
     it('should return 404 for missing task on getTask', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
       const res = await request(app).patch('/api/tasks/nonexistent').send({ title: 'Updated' });
