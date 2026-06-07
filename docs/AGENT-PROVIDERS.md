@@ -2,6 +2,8 @@
 
 Veritas works as a board without any agent runner. When you do enable agents, provider profiles are configured in **Settings -> Agents** and are stored in the same app config for the web app and the macOS desktop app.
 
+![Agent provider settings](assets/v5/v5-agent-providers.png)
+
 ## Defaults
 
 Fresh v5 installs use OpenAI Codex as the default agent:

@@ -9,8 +9,11 @@ tokens, or customer data.
 
 | Asset                  | Path                                       | Notes                                                                           |
 | ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
-| Board to workflow tour | `docs/assets/v5/v5-board-to-workflow.gif`  | Desktop board, task detail, Workflows, and Decision Audit Trail flow.           |
-| Board overview         | `docs/assets/v5/v5-board-overview.png`     | Current dark-mode board with v5 dummy tasks.                                    |
+| Board to workflow tour | `docs/assets/v5/v5-board-to-workflow.gif`  | Desktop board, task detail, Workflows, and More Views flow.                     |
+| Board overview         | `docs/assets/v5/v5-board-overview.png`     | Current dark-mode board with v5 dummy tasks and live agent registry data.       |
+| Desktop shell          | `docs/assets/v5/v5-desktop-shell.png`      | Native-app-style shell with toolbar, workspace selector, and health rail.       |
+| Workbench panel        | `docs/assets/v5/v5-workbench-panel.png`    | Resizable bottom Workbench with Board Chat and Squad Chat tabs.                 |
+| Agent providers        | `docs/assets/v5/v5-agent-providers.png`    | Settings -> Agents with Codex default, Ollama Local/Cloud, and LM Studio Local. |
 | Task work view         | `docs/assets/v5/v5-task-work-view.png`     | Task detail drawer with dummy v5 release smoke content.                         |
 | Maintenance Center     | `docs/assets/v5/v5-maintenance-center.png` | Operator diagnostics, storage, cleanup preview, and redacted evidence surfaces. |
 | Mobile/PWA board       | `docs/assets/v5/v5-mobile-pwa-board.png`   | Phone-width board shell with mobile navigation.                                 |
@@ -21,10 +24,28 @@ tokens, or customer data.
 ![v5 board to workflow tour](assets/v5/v5-board-to-workflow.gif)
 
 The desktop tour shows the current board chrome, seeded release tasks, task
-detail drawer, workflow route, and decision audit route. It is intentionally
-dummy data, but it uses the real web app and a throwaway local server.
+detail drawer, workflow route, and More Views menu. It is intentionally dummy
+data, but it uses the real web app and a throwaway local server.
 
 ![v5 board overview](assets/v5/v5-board-overview.png)
+
+![v5 desktop shell](assets/v5/v5-desktop-shell.png)
+
+## Workbench And Chat
+
+![v5 Workbench bottom panel](assets/v5/v5-workbench-panel.png)
+
+The Workbench capture shows the bottom panel as a first-class app surface
+instead of a floating off-screen chat control. Board Chat and Squad Chat share
+the panel, and the panel can be collapsed or resized vertically.
+
+## Agent Provider Settings
+
+![v5 agent provider settings](assets/v5/v5-agent-providers.png)
+
+Fresh installs use Codex as the default agent profile. Ollama Local, Ollama
+Cloud, and LM Studio Local are available as optional routing targets for users
+who want local/server-hosted models or explicit cloud model execution.
 
 ## Task Work View
 

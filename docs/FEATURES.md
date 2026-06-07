@@ -26,7 +26,7 @@ For current v5 screenshots and GIFs, see the
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
-- [OpenAI Codex Integration](#openai-codex-integration-v43)
+- [OpenAI Codex Integration](#openai-codex-integration-v5)
 - [Veritas Cutover & Hermes Support](#veritas-cutover--hermes-support)
 - [Multi-Agent System](#multi-agent-system)
 - [Squad Chat](#squad-chat)
@@ -84,14 +84,16 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 
 ![v5 board to workflow tour](assets/v5/v5-board-to-workflow.gif)
 
-| Board overview                                        | Mobile/PWA board                                          |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| ![v5 board overview](assets/v5/v5-board-overview.png) | ![v5 mobile PWA board](assets/v5/v5-mobile-pwa-board.png) |
+| Desktop shell                                       | Board overview                                        |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| ![v5 desktop shell](assets/v5/v5-desktop-shell.png) | ![v5 board overview](assets/v5/v5-board-overview.png) |
+
+| Workbench panel                                         | Mobile/PWA board                                          |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| ![v5 Workbench panel](assets/v5/v5-workbench-panel.png) | ![v5 mobile PWA board](assets/v5/v5-mobile-pwa-board.png) |
 
 - **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
 - **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; custom collision detection (pointerWithin + rectIntersection fallback) for reliable cross-column moves; tooltips suppressed during drag; local state management for real-time column updates
-
-  ![Board to workflow tour](assets/v5/v5-board-to-workflow.gif)
 
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
@@ -107,6 +109,8 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter (via [gray-matter](https://github.com/jonschlinkert/gray-matter))
 - **Dark/light mode** — Ships dark by default with a toggle in Settings → General → Appearance; persists to localStorage; inline script in `index.html` prevents flash of wrong theme on load
 - **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
+- **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and left/right/bottom panel controls shared by the web and macOS app shells
+- **Resizable Workbench** — Board Chat and Squad Chat live in a collapsible bottom panel that can be resized vertically for longer chat sessions
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle
 - **Keyboard shortcuts** — Navigate tasks (j/k, arrows), open (Enter), close (Esc), create (c), move to column (1-4), help (?)
 - **Loading skeleton** — Shimmer placeholders while the board loads
@@ -263,8 +267,10 @@ First-class support for autonomous coding agents.
 
 ![Task workflow demo](assets/v5/v5-task-work-view.png)
 
+![Agent provider settings](assets/v5/v5-agent-providers.png)
+
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
-- **Multi-agent support** — Ships with Claude Code, Amp, Copilot, Gemini, and Veritas agents; add completely custom agents via Settings → Agents
+- **Multi-agent support** — Ships with Codex, Codex SDK, Codex Cloud, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
 - **Agent CRUD management** — Full Add/Edit/Remove for agents in Settings → Agents; add agent form with name, type slug (auto-generated), command, and args; inline edit via pencil icon; remove via trash icon with confirmation (blocked for the default agent); `AgentType` accepts any string slug, not just built-in names
 - **Agent request files** — Server writes structured requests to `.veritas-kanban/agent-requests/` for agent pickup
 - **Completion callbacks** — Agents call the completion endpoint with success/failure status and summary
@@ -287,9 +293,9 @@ First-class support for autonomous coding agents.
 
 ---
 
-## OpenAI Codex Integration (v4.3)
+## OpenAI Codex Integration (v5)
 
-v4.3 adds first-class OpenAI Codex support: local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
+v5 uses OpenAI Codex as the default fresh-install agent profile and supports local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
 
 Implemented:
 
@@ -424,6 +430,7 @@ Automated staleness detection for project documentation with real-time tracking 
 Real-time agent-to-agent communication channel for multi-agent collaboration. Shipped in v2.0. Optional for first-run setup.
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
+- **Resizable Workbench panel** — Board Chat and Squad Chat share the bottom Workbench surface, which can be collapsed or resized vertically instead of floating off-screen
 - **Local shared log** — Squad Chat stores and streams messages; it does not wake or reply through an external agent unless a webhook, OpenClaw Direct path, or orchestrator is configured
 - **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
 - **Model attribution** — Messages can include the sending agent's model for provenance tracking

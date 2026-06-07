@@ -93,7 +93,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v5 Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
 - [v5 Mantine Migration Plan](docs/UI-MANTINE-MIGRATION.md) — component inventory, migration order, retained custom surfaces, rollback strategy, and cleanup gates.
 - [v5 GA Checklist](docs/V5-GA-CHECKLIST.md) — release-gate reference, follow-up evidence tracking, Mantine visual/accessibility cleanup evidence, and bundle checks.
-- [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) — release-safe dummy screenshots and GIFs for the v5 board, task work view, Maintenance Center, and mobile/PWA shell.
+- [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) — release-safe dummy screenshots and GIFs for the v5 desktop shell, resizable workbench, agent providers, task work view, Maintenance Center, and mobile/PWA shell.
 - [v5 Upgrade, Install, Remote, And Admin Guide](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v4-to-v5 upgrade, desktop setup, remote/server, mobile/PWA, admin, backup, and diagnostics paths.
 - [v5 Compatibility And Release Policy](docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md) — supported version combinations, update channels, stale-client behavior, rollback limits, and release validation.
 - [v5 Release Notes](docs/V5-RELEASE-NOTES.md) — breaking changes, migration warnings, published v5.0.0 artifacts, and deferred post-GA backlog.
@@ -152,13 +152,17 @@ Spawn autonomous coding agents on tasks when you choose to connect an agent runn
 
 ![Agent orchestration board](docs/assets/v5/v5-board-overview.png)
 
+![Resizable Workbench panel](docs/assets/v5/v5-workbench-panel.png)
+
 ### 🧭 Veritas Cutover + Hermes Support
 
 Veritas now documents the GitHub-backed operating model for Codex and HermesAgent work. The new cutover guide names Veritas as the source of truth, routes HermesAgent/Hermes Gateway as the control plane for agent execution, keeps Mission Control focused on display/control, and makes GitHub Issues/PRs/reviews/CI the implementation record. It also adds the active Hermes roster, required QA evidence gates, and copy/paste task templates for product specs, research/revenue intake, and approval-gated client workflows.
 
 ### 🧠 OpenAI Codex Integration
 
-Codex can run as a first-class Veritas agent through local `codex exec`, SDK-backed sessions, GitHub-native `@codex` delegation, workflow-engine steps, review actions, Settings health checks, and MCP access to the board. The docs include a roadmap, SOP, workflow examples, and an AGENTS template so Codex work can be started, tracked, reviewed, and released through the same Veritas lifecycle as other agents.
+Codex can run as the default first-class Veritas agent through local `codex exec`, SDK-backed sessions, GitHub-native `@codex` delegation, workflow-engine steps, review actions, Settings health checks, and MCP access to the board. Ollama Local, Ollama Cloud, and LM Studio Local profiles are optional routing targets for users who want local/server-hosted models or explicit cloud model execution. The docs include a roadmap, SOP, workflow examples, and an AGENTS template so provider-backed work can be started, tracked, reviewed, and released through the same Veritas lifecycle as other agents.
+
+![Agent provider settings](docs/assets/v5/v5-agent-providers.png)
 
 ### 📊 Customizable Dashboard
 
@@ -794,13 +798,17 @@ These captures use release-safe dummy content against the current v5 app surface
 
 ### Desktop
 
-| Board and workflow tour                                               | Task work view                                             |
-| --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| ![v5 board to workflow tour](docs/assets/v5/v5-board-to-workflow.gif) | ![v5 task work view](docs/assets/v5/v5-task-work-view.png) |
+| Board and workflow tour                                               | Desktop shell                                            |
+| --------------------------------------------------------------------- | -------------------------------------------------------- |
+| ![v5 board to workflow tour](docs/assets/v5/v5-board-to-workflow.gif) | ![v5 desktop shell](docs/assets/v5/v5-desktop-shell.png) |
 
-| Board overview                                             | Maintenance Center                                                 |
+| Workbench panel                                              | Agent provider settings                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ![v5 Workbench panel](docs/assets/v5/v5-workbench-panel.png) | ![v5 agent providers](docs/assets/v5/v5-agent-providers.png) |
+
+| Task work view                                             | Maintenance Center                                                 |
 | ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| ![v5 board overview](docs/assets/v5/v5-board-overview.png) | ![v5 Maintenance Center](docs/assets/v5/v5-maintenance-center.png) |
+| ![v5 task work view](docs/assets/v5/v5-task-work-view.png) | ![v5 Maintenance Center](docs/assets/v5/v5-maintenance-center.png) |
 
 ### Mobile/PWA
 

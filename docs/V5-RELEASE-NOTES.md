@@ -27,6 +27,9 @@ These notes describe the published Veritas Kanban v5.0.0 stable release.
   work products, completion packets, universal search, workflow authoring,
   policy decision traces, maintenance center, product modes, skill capability
   profiles, skill security scanning, and orchestrator/subagent pipelines.
+- Refreshed release documentation captures the current desktop shell, resizable
+  Workbench bottom panel, Codex-default agent provider settings, task work view,
+  Maintenance Center, and mobile/PWA shell using release-safe dummy content.
 
 ## Breaking Changes And Migration Warnings
 

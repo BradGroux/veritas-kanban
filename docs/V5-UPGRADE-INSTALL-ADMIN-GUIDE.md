@@ -4,8 +4,9 @@ This guide is the release-facing entry point for v5 operators. It links the
 existing detailed docs and keeps the happy path separate from optional
 automation layers.
 
-For current release-safe dummy screenshots and GIFs of the v5 board, task work
-view, Maintenance Center, and mobile/PWA shell, see
+For current release-safe dummy screenshots and GIFs of the v5 desktop shell,
+resizable Workbench, agent provider settings, task work view, Maintenance
+Center, and mobile/PWA shell, see
 [v5 Visual Tour](V5-VISUAL-TOUR.md). Release evidence, when needed for a future
 candidate, belongs in the reusable
 [v5 Release Candidate Evidence Packet](V5-RC-EVIDENCE-PACKET.md).
