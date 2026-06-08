@@ -28,13 +28,46 @@ function run(command, args) {
   }
 }
 
-function requireEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required`);
+function getNotarytoolCredentials() {
+  const apiKey = process.env.APPLE_API_KEY;
+  const apiKeyId = process.env.APPLE_API_KEY_ID;
+  const apiIssuer = process.env.APPLE_API_ISSUER;
+  const appleId = process.env.APPLE_ID;
+  const applePassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+
+  const apiKeyValues = [apiKey, apiKeyId, apiIssuer].filter(Boolean).length;
+  const appleIdValues = [appleId, applePassword, appleTeamId].filter(Boolean).length;
+
+  if (apiKeyValues > 0 && apiKeyValues < 3) {
+    throw new Error(
+      'APPLE_API_KEY, APPLE_API_KEY_ID, and APPLE_API_ISSUER must be provided together for API-key notarization'
+    );
   }
 
-  return value;
+  if (appleIdValues > 0 && appleIdValues < 3) {
+    throw new Error(
+      'APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID must be provided together for Apple ID notarization'
+    );
+  }
+
+  if (apiKeyValues === 3 && appleIdValues === 3) {
+    throw new Error(
+      'Provide exactly one notarization credential set, not both API-key and Apple ID credentials'
+    );
+  }
+
+  if (apiKeyValues === 3) {
+    return ['--key', apiKey, '--key-id', apiKeyId, '--issuer', apiIssuer];
+  }
+
+  if (appleIdValues === 3) {
+    return ['--apple-id', appleId, '--password', applePassword, '--team-id', appleTeamId];
+  }
+
+  throw new Error(
+    'Notarization credentials are required: provide App Store Connect API-key credentials or Apple ID credentials'
+  );
 }
 
 async function assertFile(file) {
@@ -42,7 +75,9 @@ async function assertFile(file) {
 }
 
 async function hashFile(file, algorithm, encoding) {
-  return createHash(algorithm).update(await readFile(file)).digest(encoding);
+  return createHash(algorithm)
+    .update(await readFile(file))
+    .digest(encoding);
 }
 
 function resolveAppBuilderPath() {
@@ -123,21 +158,15 @@ async function main() {
   const dmgBlockmap = `${dmg}.blockmap`;
   const zipBlockmap = `${zip}.blockmap`;
 
-  await Promise.all([assertFile(dmg), assertFile(zip), assertFile(dmgBlockmap), assertFile(zipBlockmap)]);
+  await Promise.all([
+    assertFile(dmg),
+    assertFile(zip),
+    assertFile(dmgBlockmap),
+    assertFile(zipBlockmap),
+  ]);
 
   run('codesign', ['--verify', '--verbose=2', dmg]);
-  run('xcrun', [
-    'notarytool',
-    'submit',
-    dmg,
-    '--key',
-    requireEnv('APPLE_API_KEY'),
-    '--key-id',
-    requireEnv('APPLE_API_KEY_ID'),
-    '--issuer',
-    requireEnv('APPLE_API_ISSUER'),
-    '--wait',
-  ]);
+  run('xcrun', ['notarytool', 'submit', dmg, ...getNotarytoolCredentials(), '--wait']);
   run('xcrun', ['stapler', 'staple', dmg]);
   run('xcrun', ['stapler', 'validate', dmg]);
   run('spctl', ['-a', '-vvv', '-t', 'open', '--context', 'context:primary-signature', dmg]);
