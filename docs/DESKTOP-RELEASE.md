@@ -20,6 +20,7 @@ pnpm desktop:package:windows:unsigned
 pnpm desktop:release:mac
 pnpm desktop:release:linux
 pnpm desktop:release:windows
+pnpm desktop:smoke:mac:local
 ```
 
 `desktop:package:mac:dir` creates an unpacked local app for fast inspection.
@@ -39,6 +40,13 @@ The package step builds the workspace, stages the production server runtime in
 `desktop/.desktop-release/server`, stages the built web app in
 `desktop/.desktop-release/web`, and writes artifacts to `desktop/release/`.
 Both staging and release directories are ignored by git.
+
+`pnpm desktop:smoke:mac:local` runs the macOS directory packaging path and then
+asserts that root dev tooling such as Prettier, ESLint, and the desktop
+`electron-builder` dependency still exist. Use it after package-script changes
+that touch production staging or pnpm deploy behavior. The staging deploy runs
+from an isolated temporary workspace so `pnpm deploy --prod` cannot rewrite the
+live repository install into a production-only dependency state.
 
 ## GitHub Workflows
 
@@ -144,6 +152,8 @@ policy is tracked in
 - Update `CHANGELOG.md`.
 - Run `pnpm typecheck`, `pnpm lint:budget`, `pnpm build`, and
   `pnpm test:unit`.
+- Run `pnpm desktop:smoke:mac:local` to verify local packaging does not prune
+  root dev tooling.
 - Run `pnpm desktop:package:mac:unsigned` and inspect artifact names.
 - Run `pnpm desktop:package:linux:unsigned` on Linux or the
   `Desktop Artifacts` Linux job and inspect preview artifact names. This is not
