@@ -185,9 +185,10 @@ router.post(
 router.post(
   '/:id/restore',
   asyncHandler(async (req, res) => {
+    const archivedTask = await taskService.getArchivedTask(req.params.id as string);
     const task = await taskService.restoreTask(req.params.id as string);
     if (!task) {
-      throw new NotFoundError('Archived task not found');
+      throw new NotFoundError('Archived task not found or restore window expired');
     }
     broadcastTaskChange('restored', task.id);
 
@@ -199,11 +200,33 @@ router.post(
       {
         from: 'archived',
         status: 'done',
+        restoredFromDelete: Boolean(archivedTask?.deletedAt),
       },
       task.agent
     );
 
-    res.json(task);
+    const authReq = req as AuthenticatedRequest;
+    await auditLog({
+      action: 'task.restore',
+      actor: authReq.auth?.keyName || 'unknown',
+      resource: task.id,
+      details: {
+        title: task.title,
+        deletedAt: archivedTask?.deletedAt,
+        deletedBy: archivedTask?.deletedBy,
+        restoredFromDelete: Boolean(archivedTask?.deletedAt),
+      },
+    });
+
+    res.json({
+      ...task,
+      restoreMetadata: {
+        deletedAt: archivedTask?.deletedAt,
+        deletedBy: archivedTask?.deletedBy,
+        purgeAfter: archivedTask?.purgeAfter,
+        restoredFromDelete: Boolean(archivedTask?.deletedAt),
+      },
+    });
   })
 );
 

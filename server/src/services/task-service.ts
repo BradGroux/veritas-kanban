@@ -136,8 +136,6 @@ export class TaskService {
         options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
       this.sqliteDatabase.open();
       this.sqliteTasks = new SqliteTaskRepository(this.sqliteDatabase);
-    } else {
-      this.ensureDirectories();
     }
 
     this.startTaskSyncReconciler();
@@ -617,6 +615,9 @@ export class TaskService {
         dependencies: data.dependencies,
         runMode: data.runMode,
         qaGate: data.qaGate,
+        deletedAt: data.deletedAt,
+        deletedBy: data.deletedBy,
+        purgeAfter: data.purgeAfter,
       };
     } catch (error) {
       log.error({ err: error, filename }, 'Failed to parse task file');
@@ -1228,7 +1229,10 @@ export class TaskService {
     return true;
   }
 
-  async archiveTask(id: string): Promise<boolean> {
+  async archiveTask(
+    id: string,
+    options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
+  ): Promise<boolean> {
     await this.assertTaskIdentityIntegrity('task.archive', id, {
       allowSameLocationTaskIdDuplicates: true,
     });
@@ -1236,24 +1240,34 @@ export class TaskService {
     const task = await this.getTaskWithoutIdentityCheck(id);
     if (!task) return false;
 
+    const archivedTask: Task = {
+      ...task,
+      updated: new Date().toISOString(),
+      deletedAt: options?.deletedAt ?? task.deletedAt,
+      deletedBy: options?.deletedBy ?? task.deletedBy,
+      purgeAfter: options?.purgeAfter ?? task.purgeAfter,
+    };
+
     if (this.sqliteTasks) {
       const sqliteTasks = this.sqliteTasks;
-      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id));
+      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id, archivedTask));
       if (!archived) return false;
 
       await this.telemetry.emit<TaskTelemetryEvent>({
         type: 'task.archived',
-        taskId: task.id,
-        project: task.project,
-        status: task.status,
+        taskId: archivedTask.id,
+        project: archivedTask.project,
+        status: archivedTask.status,
       });
 
-      fireHook('onArchived', task).catch((err) => {
-        log.warn({ taskId: task.id }, 'onArchived hook failed: %s', err);
+      fireHook('onArchived', archivedTask).catch((err) => {
+        log.warn({ taskId: archivedTask.id }, 'onArchived hook failed: %s', err);
       });
 
       return true;
     }
+
+    const archivedContent = this.taskToMarkdown(archivedTask);
 
     // Find ALL files on disk with this task ID (handles orphaned slug variations)
     const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
@@ -1270,6 +1284,7 @@ export class TaskService {
         await withFileLock(sourcePath, async () => {
           this.markWrite();
           await fs.rename(sourcePath, destPath);
+          await fs.writeFile(destPath, archivedContent, 'utf-8');
         });
         log.debug({ taskId: id, filename }, 'Archived task file');
       })
@@ -1291,14 +1306,14 @@ export class TaskService {
     // Emit telemetry event
     await this.telemetry.emit<TaskTelemetryEvent>({
       type: 'task.archived',
-      taskId: task.id,
-      project: task.project,
-      status: task.status,
+      taskId: archivedTask.id,
+      project: archivedTask.project,
+      status: archivedTask.status,
     });
 
     // Fire onArchived hook
-    fireHook('onArchived', task).catch((err) => {
-      log.warn({ taskId: task.id }, 'onArchived hook failed: %s', err);
+    fireHook('onArchived', archivedTask).catch((err) => {
+      log.warn({ taskId: archivedTask.id }, 'onArchived hook failed: %s', err);
     });
 
     return true;
@@ -1341,8 +1356,32 @@ export class TaskService {
     return tasks.find((t) => t.id === id) || null;
   }
 
+  private isRestoreWindowExpired(task: Task): boolean {
+    if (!task.purgeAfter) {
+      return false;
+    }
+
+    const purgeAfterTime = new Date(task.purgeAfter).getTime();
+    if (Number.isFinite(purgeAfterTime) && purgeAfterTime >= Date.now()) {
+      return false;
+    }
+
+    log.info(
+      { taskId: task.id, purgeAfter: task.purgeAfter },
+      'Restore window invalid or expired for archived task'
+    );
+    return true;
+  }
+
   async restoreTask(id: string): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.restore', id);
+
+    const task = await this.getArchivedTask(id);
+    if (!task) return null;
+
+    if (this.isRestoreWindowExpired(task)) {
+      return null;
+    }
 
     if (this.sqliteTasks) {
       const sqliteTasks = this.sqliteTasks;
@@ -1359,9 +1398,6 @@ export class TaskService {
       return restoredTask;
     }
 
-    const task = await this.getArchivedTask(id);
-    if (!task) return null;
-
     // Find actual file on disk (slug may differ from current title)
     const actualFilename = await this.findTaskFile(this.archiveDir, id);
     if (!actualFilename) {
@@ -1377,6 +1413,9 @@ export class TaskService {
       ...task,
       status: 'done',
       updated: new Date().toISOString(),
+      deletedAt: undefined,
+      deletedBy: undefined,
+      purgeAfter: undefined,
     };
 
     const content = this.taskToMarkdown(restoredTask);
