@@ -11,6 +11,20 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const desktopDir = path.join(rootDir, 'desktop');
 const releaseDir = path.join(desktopDir, 'release');
 const requireFromScript = createRequire(import.meta.url);
+const sensitiveArgumentFlags = new Set([
+  '--apple-id',
+  '--issuer',
+  '--key',
+  '--key-id',
+  '--password',
+  '--team-id',
+]);
+
+function sanitizeArgsForError(args) {
+  return args.map((arg, index) =>
+    index > 0 && sensitiveArgumentFlags.has(args[index - 1]) ? '<redacted>' : arg
+  );
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -24,7 +38,9 @@ function run(command, args) {
   }
 
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`);
+    throw new Error(
+      `${command} ${sanitizeArgsForError(args).join(' ')} failed with exit code ${result.status}`
+    );
   }
 }
 
