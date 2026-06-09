@@ -487,7 +487,7 @@ export class ChatService {
     ensureWithinBase(this.squadDir, filePath);
 
     await withFileLock(filePath, async () => {
-      let content = '';
+      let content: string;
       try {
         content = await fs.readFile(filePath, 'utf-8');
       } catch (err: any) {

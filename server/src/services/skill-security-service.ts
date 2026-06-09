@@ -311,7 +311,7 @@ function referencedFiles(content: string, root: string): string[] {
 async function readScannedFile(filePath: string, root: string): Promise<ScannedFileInternal> {
   const stat = await fs.stat(filePath);
   const handle = await fs.open(filePath, 'r');
-  let buffer = Buffer.alloc(0);
+  let buffer: Buffer;
   try {
     const bytesToRead = Math.min(stat.size, MAX_FILE_BYTES);
     buffer = Buffer.alloc(bytesToRead);

@@ -176,7 +176,7 @@ function checkGate(gate: TransitionGate, task: Task): GateCheckResult {
     return { gate, passed: true, message: 'Gate does not apply to this task' };
   }
 
-  let passed = false;
+  let passed: boolean;
   let message = gate.errorMessage || `Gate "${gate.name}" failed`;
 
   switch (gate.type) {

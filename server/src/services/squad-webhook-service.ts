@@ -249,7 +249,7 @@ async function fireWebhookAsync(
   } catch (err: any) {
     if (err.name === 'AbortError') {
       log.warn('Squad webhook timed out after 5 seconds');
-      throw new Error('Webhook timeout');
+      throw new Error('Webhook timeout', { cause: err });
     }
     log.error({ err: err.message }, 'Squad webhook request failed');
     throw err;

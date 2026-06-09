@@ -229,7 +229,7 @@ export class WorkflowStepExecutor {
       };
     } catch (err) {
       const message = this.sanitizeProviderError(err, prompt);
-      throw new Error(`OpenClaw workflow step ${step.id} failed: ${message}`);
+      throw new Error(`OpenClaw workflow step ${step.id} failed: ${message}`, { cause: err });
     } finally {
       if (ownedSession && sessionKey && sessionConfig.cleanup === 'delete') {
         try {
