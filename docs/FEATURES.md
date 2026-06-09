@@ -1604,6 +1604,10 @@ Optimizations spanning server, frontend, and data lifecycle.
 
 ---
 
+## Guided Tutorials
+
+The click-through tutorial roadmap lives in [Click-through Tutorials Roadmap](CLICK-THROUGH-TUTORIALS.md). It defines the product-native tour registry, runtime, launch surfaces, product-mode filters, accessibility requirements, and first tour sequence for board basics, desktop safety, workflows, and agent work.
+
 ## Settings & Customization
 
 Modular settings system with 8 focused tabs.

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { constants } from 'node:fs';
-import { access, cp, mkdir, rm } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,9 +35,9 @@ function releaseChildEnv() {
   };
 }
 
-function run(command, args) {
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    cwd: rootDir,
+    cwd: options.cwd ?? rootDir,
     encoding: 'utf8',
     env: releaseChildEnv(),
     shell: process.platform === 'win32',
@@ -83,6 +84,41 @@ async function materializeServerSelfReference() {
   });
 }
 
+async function copyWorkspaceForDeploy(tempRoot) {
+  const entries = [
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'package.json',
+    'scripts/prepare-husky.mjs',
+    'server/package.json',
+    'server/dist',
+    'shared/package.json',
+    'shared/dist',
+  ];
+
+  for (const entry of entries) {
+    const source = path.join(rootDir, entry);
+    const target = path.join(tempRoot, entry);
+    await mkdir(path.dirname(target), { recursive: true });
+    await cp(source, target, { recursive: true });
+  }
+}
+
+async function deployServerRuntime() {
+  const deployRoot = await mkdtemp(path.join(os.tmpdir(), 'veritas-desktop-deploy-'));
+
+  try {
+    await copyWorkspaceForDeploy(deployRoot);
+    run(
+      'pnpm',
+      ['--filter', '@veritas-kanban/server', 'deploy', '--legacy', '--prod', serverStage],
+      { cwd: deployRoot }
+    );
+  } finally {
+    await rm(deployRoot, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await assertExists('Server build output', path.join(rootDir, 'server/dist/index.js'));
   await assertExists('Web build output', path.join(rootDir, 'web/dist/index.html'));
@@ -90,7 +126,7 @@ async function main() {
   await rm(stagingDir, { recursive: true, force: true });
   await mkdir(stagingDir, { recursive: true });
 
-  run('pnpm', ['--filter', '@veritas-kanban/server', 'deploy', '--legacy', '--prod', serverStage]);
+  await deployServerRuntime();
   await pruneServerDeploy();
   await materializeServerSelfReference();
 

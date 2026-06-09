@@ -50,7 +50,8 @@
     "qmd:refresh": "bash scripts/qmd/refresh-veritas-qmd.sh",
     "seed": "bash scripts/seed.sh",
     "prepare": "node scripts/prepare-husky.mjs",
-    "demo": "docker compose -f demo/docker-compose.demo.yml up --build"
+    "demo": "docker compose -f demo/docker-compose.demo.yml up --build",
+    "desktop:smoke:mac:local": "node scripts/check-desktop-local-packaging-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.38.0",
