@@ -52,9 +52,9 @@ async function assertRootDevToolingStillPresent(beforeSnapshots) {
 }
 
 async function main() {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') {
     throw new Error(
-      'desktop:smoke:mac:local must run on macOS because it exercises macOS packaging.'
+      'desktop:smoke:mac:local must run on Apple Silicon macOS because it exercises macOS arm64 packaging.'
     );
   }
 
