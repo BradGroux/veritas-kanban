@@ -204,13 +204,17 @@ describe('task detail Mantine migration', () => {
   });
 
   it('keeps title editing and progress tab behavior wired after the migration', async () => {
-    const user = userEvent.setup();
     const { baseElement } = renderTaskDetail();
+    const detailsTab = screen.getByRole('tab', { name: 'Details' });
+    const progressTab = screen.getByRole('tab', { name: 'Progress' });
+
+    await waitFor(() => expect(detailsTab.getAttribute('aria-selected')).toBe('true'));
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Renamed task' } });
-    await user.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.click(progressTab);
 
     expect(mocks.updateField).toHaveBeenCalledWith('title', 'Renamed task');
+    await waitFor(() => expect(progressTab.getAttribute('aria-selected')).toBe('true'));
     expect(await screen.findByText('Progress Notes')).toBeDefined();
     expect(await screen.findByText('Mantine task detail renders')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Paper-root')).toBeDefined();
