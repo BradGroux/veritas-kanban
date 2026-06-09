@@ -328,6 +328,11 @@ export interface Task {
   // Run mode — controls the review/QA strategy for the task
   runMode?: RunMode | null;
 
+  // Soft-delete / recycle-bin metadata
+  deletedAt?: string; // ISO timestamp when task was soft-deleted/archived via delete
+  deletedBy?: string; // Actor who deleted the task
+  purgeAfter?: string; // ISO timestamp when restore window expires
+
   // QA gate — requires a QA pass before the task can move to Done
   qaGate?: QaGateState | null;
 }
@@ -416,6 +421,9 @@ export interface UpdateTaskInput {
     resumeCount?: number;
   };
   runMode?: RunMode | null;
+  deletedAt?: string;
+  deletedBy?: string;
+  purgeAfter?: string;
   qaGate?: QaGateState | null;
 }
 
