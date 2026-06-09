@@ -38,7 +38,7 @@
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
-    "vite": "^7.2.7",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   },
   "build": {
