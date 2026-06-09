@@ -471,7 +471,7 @@ export class ConfigService {
       return { valid: true, branches };
     } catch (error: any) {
       if (error.message.includes('not a git repository')) {
-        throw new Error(`Path is not a git repository: ${repoPath}`);
+        throw new Error(`Path is not a git repository: ${repoPath}`, { cause: error });
       }
       throw error;
     }

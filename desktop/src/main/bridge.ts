@@ -328,6 +328,8 @@ export function registerDesktopBridge(
       try {
         return await handler(validator ? validator(request) : request);
       } catch (error) {
+        // Do not attach the original cause to errors crossing the desktop bridge.
+        // eslint-disable-next-line preserve-caught-error
         throw new Error(redactDesktopBridgeError(error));
       }
     });
