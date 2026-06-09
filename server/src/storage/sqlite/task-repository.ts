@@ -126,13 +126,13 @@ export class SqliteTaskRepository implements TaskRepository {
     return result.changes > 0;
   }
 
-  async archive(id: string): Promise<boolean> {
+  async archive(id: string, archivedTask?: Task): Promise<boolean> {
     const existing = await this.findById(id);
     if (!existing) {
       return false;
     }
 
-    this.save(existing, 'archived', new Date().toISOString());
+    this.save(archivedTask ?? existing, 'archived', new Date().toISOString());
     return true;
   }
 
@@ -146,6 +146,9 @@ export class SqliteTaskRepository implements TaskRepository {
       ...existing,
       status: 'done' as const,
       updated: new Date().toISOString(),
+      deletedAt: undefined,
+      deletedBy: undefined,
+      purgeAfter: undefined,
     };
     this.save(restored, 'active', null);
     return restored;

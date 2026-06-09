@@ -10,6 +10,7 @@ const { mockTaskService, mockActivityService } = vi.hoisted(() => ({
     getTask: vi.fn(),
     listTasks: vi.fn(),
     listArchivedTasks: vi.fn(),
+    getArchivedTask: vi.fn(),
     archiveTask: vi.fn(),
     restoreTask: vi.fn(),
     archiveSprint: vi.fn(),
@@ -98,12 +99,26 @@ describe('Task Archive Routes (actual module)', () => {
   });
 
   it('POST /:id/restore should restore a task', async () => {
+    mockTaskService.getArchivedTask.mockResolvedValue({
+      id: 't1',
+      title: 'Task',
+      deletedAt: '2026-01-01T00:00:00.000Z',
+      deletedBy: 'service:test',
+      purgeAfter: '2026-01-31T00:00:00.000Z',
+    });
     mockTaskService.restoreTask.mockResolvedValue({ id: 't1', title: 'Task', status: 'done' });
     const res = await request(app).post('/api/tasks/t1/restore');
     expect(res.status).toBe(200);
+    expect(res.body.restoreMetadata).toMatchObject({
+      deletedAt: '2026-01-01T00:00:00.000Z',
+      deletedBy: 'service:test',
+      purgeAfter: '2026-01-31T00:00:00.000Z',
+      restoredFromDelete: true,
+    });
   });
 
   it('POST /:id/restore should 404 for missing', async () => {
+    mockTaskService.getArchivedTask.mockResolvedValue(null);
     mockTaskService.restoreTask.mockResolvedValue(null);
     const res = await request(app).post('/api/tasks/missing/restore');
     expect(res.status).toBe(404);

@@ -20,6 +20,7 @@ const {
     createTask: vi.fn(),
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
+    archiveTask: vi.fn(),
     reorderTasks: vi.fn(),
     getIdentityScanSources: vi.fn().mockReturnValue([]),
   },
@@ -398,15 +399,19 @@ describe('Tasks Routes (actual module)', () => {
   describe('DELETE /api/tasks/:id', () => {
     it('should delete a task', async () => {
       mockTaskService.getTask.mockResolvedValue({ id: 't1', title: 'Task' });
-      mockTaskService.deleteTask.mockResolvedValue(true);
+      mockTaskService.archiveTask.mockResolvedValue(true);
 
       const res = await request(app).delete('/api/tasks/t1');
       expect(res.status).toBe(204);
+      expect(mockTaskService.archiveTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ deletedBy: 'system:unknown' })
+      );
     });
 
     it('should return 404 for missing task', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
-      mockTaskService.deleteTask.mockResolvedValue(false);
+      mockTaskService.archiveTask.mockResolvedValue(false);
 
       const res = await request(app).delete('/api/tasks/nonexistent');
       expect(res.status).toBe(404);

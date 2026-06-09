@@ -819,7 +819,16 @@ router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const task = await taskService.getTask(req.params.id as string);
-    const success = await taskService.deleteTask(req.params.id as string);
+    const authReqDel = req as AuthenticatedRequest;
+    const actor = actorFromRequest(authReqDel);
+    const deletedAt = new Date().toISOString();
+    const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const success = await taskService.archiveTask(req.params.id as string, {
+      deletedAt,
+      deletedBy: actor,
+      purgeAfter,
+    });
     if (!success) {
       throw new NotFoundError('Task not found');
     }
@@ -827,26 +836,24 @@ router.delete(
 
     // Log activity
     if (task) {
-      const authReqDel = req as AuthenticatedRequest;
-      const actor = actorFromRequest(authReqDel);
       await activityService.logActivity(
         'task_deleted',
         task.id,
         task.title,
-        { actor },
+        { actor, deletedAt, deletedBy: actor, purgeAfter, recovery: 'recycle-bin' },
         task.agent,
         actor
       );
     }
 
     // Audit log
-    const authReqDel = req as AuthenticatedRequest;
-    const actor = actorFromRequest(authReqDel);
     await auditLog({
       action: 'task.delete',
       actor,
       resource: req.params.id as string,
-      details: task ? { title: task.title } : undefined,
+      details: task
+        ? { title: task.title, deletedAt, purgeAfter, recovery: 'recycle-bin' }
+        : undefined,
     });
 
     res.status(204).send();
