@@ -87,7 +87,7 @@ export function MobileShell() {
     <>
       <nav
         aria-label="Mobile navigation"
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-lg backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[100] border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-lg backdrop-blur md:hidden"
       >
         {clientMode && (
           <div className="mb-1 flex justify-center">

@@ -14,8 +14,8 @@ test.describe('Health Check', () => {
     await page.goto('/');
     // Wait for the header to appear — proves React rendered
     await expect(page.locator('header')).toBeVisible();
-    // Title is present
-    await expect(page.locator('text=Veritas Kanban')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Refresh page' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Board actions' })).toBeVisible();
   });
 
   test('kanban board renders with all four columns', async ({ page }) => {

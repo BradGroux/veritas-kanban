@@ -80,6 +80,7 @@ export function GeneralTab() {
             checked={theme === 'dark'}
             onChange={(event) => setTheme(event.currentTarget.checked ? 'dark' : 'light')}
             aria-label="Toggle dark mode"
+            className="flex min-h-8 items-center"
             size="sm"
           />
         </div>

@@ -347,11 +347,15 @@ async function assertMobileTouchTargets(page: Page) {
       .filter((element) => isVisible(element))
       .filter((element) => !element.closest('[aria-hidden="true"]'))
       .map((element) => {
-        const rect = element.getBoundingClientRect();
+        const hitTarget = element.classList.contains('mantine-Switch-input')
+          ? (element.closest('.mantine-Switch-root') ?? element.closest('label') ?? element)
+          : element;
+        const rect = hitTarget.getBoundingClientRect();
         return {
           ariaLabel: element.getAttribute('aria-label'),
           height: Math.round(rect.height),
           html: element.outerHTML.slice(0, 500),
+          hitTargetHtml: hitTarget.outerHTML.slice(0, 500),
           text: element.textContent?.trim(),
           title: element.getAttribute('title'),
           width: Math.round(rect.width),

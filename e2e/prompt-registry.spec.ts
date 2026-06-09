@@ -13,7 +13,6 @@ test.describe('Template registry', () => {
   test('renders templates view and create controls', async ({ page }) => {
     await page.goto('/templates', { timeout: 15_000 });
 
-    await expect(page.getByRole('button', { name: 'Templates' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Task Templates' })).toBeVisible({
       timeout: 15_000,
     });

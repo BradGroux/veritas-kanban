@@ -29,6 +29,8 @@ env:
   VERITAS_AUTH_LOCALHOST_BYPASS: 'true'
   VERITAS_AUTH_LOCALHOST_ROLE: admin
   VERITAS_JWT_SECRET: scheduled-qa-jwt-secret-00000000000000000000000000000000
+  RATE_LIMIT_MAX: '100000'
+  RATE_LIMIT_WRITE_MAX: '100000'
 
 jobs:
   playwright:
@@ -56,8 +58,8 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @veritas-kanban/shared build
 
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium webkit
 
       - name: Run Playwright E2E tests
         env:

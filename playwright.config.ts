@@ -64,6 +64,11 @@ export default defineConfig({
       use: { ...devices['Pixel 5'] },
       testMatch: /(mobile-responsive|pwa-offline)\.spec\.ts/,
     },
+    {
+      name: 'mobile-webkit',
+      use: { ...devices['iPhone 13'], browserName: 'webkit' },
+      testMatch: /(mobile-responsive|pwa-offline)\.spec\.ts/,
+    },
   ],
 
   /* Run dev servers before starting tests (if not already running) */

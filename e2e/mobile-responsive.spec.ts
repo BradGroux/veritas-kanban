@@ -1,5 +1,12 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { bypassAuth, cleanupRoutes, deleteTask, seedTestTask } from './helpers/auth';
+
+async function tapLocatorCenter(page: Page, locator: Locator) {
+  await expect(locator).toBeVisible();
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  await page.touchscreen.tap(box!.x + box!.width / 2, box!.y + box!.height / 2);
+}
 
 async function useMobileDeviceContext(page: Page) {
   await page.route('**/api/auth/context', (route) =>
@@ -114,7 +121,8 @@ test.describe('mobile responsive flows', () => {
     await detail.getByRole('button', { name: 'Close task details' }).click();
     await expect(detail).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'Mobile notifications' }).click();
+    const mobileNotificationsButton = page.getByRole('button', { name: 'Mobile notifications' });
+    await tapLocatorCenter(page, mobileNotificationsButton);
     const notifications = page.getByLabel('Notifications', { exact: true });
     await expect(notifications).toBeVisible();
     await expect(notifications.getByRole('heading', { name: 'Needs Attention' })).toBeVisible();

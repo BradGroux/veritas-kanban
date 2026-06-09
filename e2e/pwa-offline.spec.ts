@@ -49,13 +49,15 @@ test.describe('mobile PWA offline behavior', () => {
     await cleanupRoutes(page);
   });
 
-  test('serves install metadata and a static-only service worker', async ({ page }) => {
+  test('serves install metadata and a static-only service worker', async ({ page, request }) => {
     await page.goto('/');
 
     const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
     expect(manifestHref).toBeTruthy();
 
-    const manifestResponse = await page.request.get(new URL(manifestHref!, page.url()).toString());
+    const manifestResponse = await request.get(new URL(manifestHref!, page.url()).toString(), {
+      timeout: 10_000,
+    });
     expect(manifestResponse.ok()).toBe(true);
     const manifest = (await manifestResponse.json()) as {
       display: string;
@@ -68,7 +70,9 @@ test.describe('mobile PWA offline behavior', () => {
     expect(manifest.scope).toBe('.');
     expect(manifest.icons.some((icon) => icon.purpose === 'maskable')).toBe(true);
 
-    const serviceWorkerResponse = await page.request.get(new URL('/sw.js', page.url()).toString());
+    const serviceWorkerResponse = await request.get(new URL('/sw.js', page.url()).toString(), {
+      timeout: 10_000,
+    });
     expect(serviceWorkerResponse.ok()).toBe(true);
     const serviceWorker = await serviceWorkerResponse.text();
     expect(serviceWorker).toContain("request.method !== 'GET'");

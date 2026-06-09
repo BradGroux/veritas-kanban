@@ -15,7 +15,7 @@ import type { Request } from 'express';
  * Tiered rate limits:
  *  - authRateLimit   — 10 req / 15 min (login, token refresh)
  *  - uploadRateLimit — 20 req / min   (file uploads)
- *  - writeRateLimit  — 60 req / min   (POST, PUT, PATCH, DELETE)
+ *  - writeRateLimit  — 60 req / min   (POST, PUT, PATCH, DELETE, configurable with RATE_LIMIT_WRITE_MAX)
  *  - readRateLimit   — 300 req / min  (GET requests, configurable with RATE_LIMIT_MAX)
  *  - apiRateLimit    — 300 req / min  (global fallback, configurable with RATE_LIMIT_MAX, localhost exempt)
  */
@@ -24,16 +24,20 @@ import type { Request } from 'express';
 
 /** Default rate limit (requests per minute) for general API access. */
 const DEFAULT_API_LIMIT = 300;
+const DEFAULT_WRITE_LIMIT = 60;
 
-/** API/read override from environment, falling back to the default. */
-const API_LIMIT: number = (() => {
-  const env = process.env.RATE_LIMIT_MAX;
+function readPositiveLimit(name: string, fallback: number): number {
+  const env = process.env[name];
   if (env) {
     const parsed = Number(env);
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
-  return DEFAULT_API_LIMIT;
-})();
+  return fallback;
+}
+
+/** API/read override from environment, falling back to the default. */
+const API_LIMIT = readPositiveLimit('RATE_LIMIT_MAX', DEFAULT_API_LIMIT);
+const WRITE_LIMIT = readPositiveLimit('RATE_LIMIT_WRITE_MAX', DEFAULT_WRITE_LIMIT);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -123,12 +127,13 @@ export const authStatusRateLimit = rateLimit({
 });
 
 /**
- * Moderate rate limiter for write operations: 60 req / min per IP.
+ * Moderate rate limiter for write operations: 60 req / min per IP by default.
  * Applied to: POST, PUT, PATCH, DELETE on resource endpoints.
+ * Override with RATE_LIMIT_WRITE_MAX for high-volume test/dev scenarios.
  * Localhost is NOT exempt — protects against runaway scripts.
  */
 export const writeRateLimit = rateLimit({
-  limit: 60,
+  limit: WRITE_LIMIT,
   windowMs: 60_000,
   message: 'Too many write requests. Please slow down.',
 });

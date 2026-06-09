@@ -311,6 +311,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   checked={selectedIds.has(task.id)}
                   onChange={() => handleToggleSelect(task.id)}
                   onClick={(e) => e.stopPropagation()}
+                  aria-label={`Select archived task ${task.title}`}
                   className="mt-1"
                 />
 

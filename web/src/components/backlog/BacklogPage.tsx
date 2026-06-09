@@ -301,6 +301,7 @@ function BacklogTaskCard({
           checked={isSelected}
           onChange={onToggleSelect}
           onClick={(e) => e.stopPropagation()}
+          aria-label={`Select backlog task ${task.title}`}
           className="mt-1"
         />
 

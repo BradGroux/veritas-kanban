@@ -146,6 +146,7 @@ export function Header() {
   const [chatOpen, setChatOpen] = useState(false);
   const [squadChatOpen, setSquadChatOpen] = useState(false);
   const [loadedPanels, setLoadedPanels] = useState<Set<LazyPanel>>(() => new Set());
+  const isCompactHeader = useMediaQuery('(max-width: 639px)', false);
   const supportsWorkbenchPanel = useMediaQuery('(min-width: 768px)', false);
   const { setOpenCreateDialog, setOpenChatPanel } = useKeyboard();
   const { view, setView, navigateToTask } = useView();
@@ -363,17 +364,17 @@ export function Header() {
                 <span className="block text-xs font-medium text-muted-foreground">Kanban</span>
               </Text>
             </Box>
-            <Divider
-              orientation="vertical"
-              className="hidden h-5 border-border sm:block"
-              aria-hidden="true"
-            />
-            <WorkspaceSwitcher />
-            <Divider
-              orientation="vertical"
-              className="hidden h-5 border-border lg:block"
-              aria-hidden="true"
-            />
+            {!isCompactHeader && (
+              <>
+                <Divider orientation="vertical" className="h-5 border-border" aria-hidden="true" />
+                <WorkspaceSwitcher />
+                <Divider
+                  orientation="vertical"
+                  className="hidden h-5 border-border lg:block"
+                  aria-hidden="true"
+                />
+              </>
+            )}
             <WebSocketIndicator />
           </Group>
 
@@ -437,17 +438,32 @@ export function Header() {
                 </ActionIcon>
               </Group>
             )}
-            <Button
-              variant="filled"
-              size="sm"
-              leftSection={<Plus className="h-4 w-4" aria-hidden="true" />}
-              onClick={openCreateDialog}
-              disabled={!canCreateTask}
-              title={canCreateTask ? 'New Task' : 'Task write permission required'}
-              className="shrink-0"
-            >
-              New Task
-            </Button>
+            {isCompactHeader ? (
+              <ActionIcon
+                variant="filled"
+                color="veritas"
+                size={32}
+                onClick={openCreateDialog}
+                disabled={!canCreateTask}
+                aria-label="New Task"
+                title={canCreateTask ? 'New Task' : 'Task write permission required'}
+                className="shrink-0"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            ) : (
+              <Button
+                variant="filled"
+                size="sm"
+                leftSection={<Plus className="h-4 w-4" aria-hidden="true" />}
+                onClick={openCreateDialog}
+                disabled={!canCreateTask}
+                title={canCreateTask ? 'New Task' : 'Task write permission required'}
+                className="shrink-0"
+              >
+                New Task
+              </Button>
+            )}
             {!isDesktopClient && (
               <Group gap={4} wrap="nowrap" className="hidden xl:flex">
                 {PRIMARY_NAVIGATION_VIEWS.map(renderNavigationAction)}
@@ -480,26 +496,30 @@ export function Header() {
             >
               <Search className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={32}
-              onClick={openChatPanel}
-              aria-label="Board Chat"
-              title="Board Chat"
-            >
-              <MessageSquare className="h-4 w-4" aria-hidden="true" />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={32}
-              onClick={openSquadChatPanel}
-              aria-label="Squad Chat"
-              title="Squad Chat — Agent communication"
-            >
-              <Users className="h-4 w-4" aria-hidden="true" />
-            </ActionIcon>
+            {!isCompactHeader && (
+              <>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size={32}
+                  onClick={openChatPanel}
+                  aria-label="Board Chat"
+                  title="Board Chat"
+                >
+                  <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                </ActionIcon>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size={32}
+                  onClick={openSquadChatPanel}
+                  aria-label="Squad Chat"
+                  title="Squad Chat — Agent communication"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                </ActionIcon>
+              </>
+            )}
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -511,25 +531,28 @@ export function Header() {
             >
               <Settings className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={32}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              aria-label="Toggle theme"
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'light' ? (
-                <Moon className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Sun className="h-4 w-4" aria-hidden="true" />
-              )}
-            </ActionIcon>
+            {!isCompactHeader && (
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size={32}
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                aria-label="Toggle theme"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'light' ? (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                )}
+              </ActionIcon>
+            )}
             <UserMenu
               onOpenSecuritySettings={openSecuritySettings}
               onOpenIdentitySettings={openIdentitySettings}
             />
             <Button
+              visibleFrom="lg"
               variant="subtle"
               color="gray"
               size="sm"
