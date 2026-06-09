@@ -30,12 +30,12 @@
   },
   "dependencies": {
     "@veritas-kanban/shared": "workspace:*",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "electron": "^42.3.3",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
     "vite": "^7.2.7",
@@ -44,9 +44,10 @@
   "build": {
     "appId": "io.digitalmeld.veritas-kanban",
     "productName": "Veritas Kanban",
+    "executableName": "veritas-kanban",
     "artifactName": "Veritas-Kanban-${version}-${os}-${arch}.${ext}",
     "asar": true,
-    "afterPack": "../scripts/desktop-after-pack.mjs",
+    "afterPack": "scripts/desktop-after-pack.mjs",
     "directories": {
       "buildResources": "resources",
       "output": "release"
