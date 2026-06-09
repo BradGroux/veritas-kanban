@@ -83,19 +83,36 @@ brew livecheck bradgroux/tap/veritas-kanban
 
 ## Required Release Secrets
 
-Configure these repository secrets before running `Desktop Release`:
+Configure Developer ID signing secrets before running `Desktop Release`:
 
 - `MACOS_CSC_LINK`: base64 encoded `.p12` Developer ID Application certificate
   or a secure URL accepted by electron-builder `CSC_LINK`.
 - `MACOS_CSC_KEY_PASSWORD`: password for the `.p12` signing identity.
+
+Then configure exactly one complete notarization credential set. The workflow
+fails before packaging if neither set is complete, if either set is partial, or
+if both sets are configured at the same time.
+
+### Preferred: App Store Connect API-key notarization
+
 - `APPLE_API_KEY_BASE64`: base64 encoded App Store Connect API `.p8` key.
 - `APPLE_API_KEY_ID`: App Store Connect API key ID.
 - `APPLE_API_ISSUER`: App Store Connect API issuer UUID.
 
-The workflow maps those secrets to electron-builder's `CSC_LINK`,
-`CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
-`APPLE_API_ISSUER` environment variables. The API key is decoded into a
-temporary file during the release job and is not written to the repository.
+The workflow decodes `APPLE_API_KEY_BASE64` into a temporary private-key file
+and maps it to electron-builder/notarytool as `APPLE_API_KEY`. The key file is
+created under the runner temp directory and is not written to the repository.
+
+### Fallback: Apple ID app-specific-password notarization
+
+- `APPLE_ID`: Apple developer account email address.
+- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization.
+- `APPLE_TEAM_ID`: Apple Developer Team ID.
+
+The workflow maps those values to electron-builder/notarytool only when the API
+key credential set is absent. Do not configure both notarization modes in the
+same repository environment; that is treated as a release-preflight error so CI
+cannot silently use the wrong credential path.
 
 Windows releases need a separate code-signing certificate before the first
 supported Windows artifact is published. Use `WINDOWS_CSC_LINK` and
@@ -152,9 +169,10 @@ policy is tracked in
   `Desktop Artifacts` Windows job and inspect preview artifact names. This is
   not a v5 GA release gate.
 - Run `Desktop Artifacts` and download the uploaded DMG/ZIP/update metadata.
-- Run `Desktop Release` only after Apple signing secrets are configured.
-- Confirm notarization succeeds and the DMG installs without Gatekeeper
-  warnings on a clean Mac.
+- Run `Desktop Release` only after Developer ID signing secrets and exactly one
+  complete notarization credential set are configured.
+- Confirm notarization succeeds with the intended credential mode and the DMG
+  installs without Gatekeeper warnings on a clean Mac.
 - Confirm a first run creates the profile/workspace app data directories.
 - Confirm update check, download, install, failed-download, and rollback paths
   on the selected channel.
