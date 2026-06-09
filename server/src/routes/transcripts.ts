@@ -49,7 +49,7 @@ function isProcessed(subject: string): { found: boolean; matchedFile: string | n
   }
 
   const needle = normalizeTranscriptName(subject);
-  let files: string[] = [];
+  let files: string[];
   try {
     files = readdirSync(PROCESSED_DIR);
   } catch {

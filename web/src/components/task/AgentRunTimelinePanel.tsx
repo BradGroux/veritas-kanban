@@ -827,7 +827,7 @@ export function buildAgentRunTimelineEvents({
     const checked = task.verificationSteps?.filter((step) => step.checked).length ?? 0;
     events.push({
       id: `verification-${task.id}`,
-      sequence: nextSequence++,
+      sequence: nextSequence,
       type: checked === task.verificationSteps?.length ? 'approval' : 'result',
       source: 'derived',
       timestamp: task.updated,

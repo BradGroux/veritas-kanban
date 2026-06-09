@@ -331,7 +331,9 @@ export class ClawdbotAgentService {
         error: error.message || `Failed to start ${adapter.label}`,
         stackTrace: error.stack,
       });
-      throw new Error(`Failed to start agent via ${adapter.label}: ${error.message}`);
+      throw new Error(`Failed to start agent via ${adapter.label}: ${error.message}`, {
+        cause: error,
+      });
     }
 
     return {

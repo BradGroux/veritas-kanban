@@ -17,7 +17,8 @@ function resolveElectronBuilderCli() {
         'Unable to resolve electron-builder from the desktop package dependency graph.',
         'Run `CI=true pnpm install --frozen-lockfile` from the repository root, then retry the desktop packaging command.',
         error instanceof Error ? error.message : String(error),
-      ].join('\n')
+      ].join('\n'),
+      { cause: error }
     );
   }
 }

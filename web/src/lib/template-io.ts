@@ -105,15 +105,15 @@ export async function parseTemplateFile(
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
-    throw new Error('Invalid JSON format');
+  } catch (err) {
+    throw new Error('Invalid JSON format', { cause: err });
   }
 
   // Sanitize keys to prevent prototype pollution
   try {
     parsed = sanitizeKeys(parsed);
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : 'Security check failed');
+    throw new Error(err instanceof Error ? err.message : 'Security check failed', { cause: err });
   }
 
   // Validate with Zod schema
@@ -122,9 +122,9 @@ export async function parseTemplateFile(
     return validated;
   } catch (err) {
     if (err instanceof ZodError) {
-      throw new Error(`Validation failed: ${formatZodError(err)}`);
+      throw new Error(`Validation failed: ${formatZodError(err)}`, { cause: err });
     }
-    throw new Error('Template validation failed');
+    throw new Error('Template validation failed', { cause: err });
   }
 }
 
