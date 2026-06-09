@@ -342,7 +342,13 @@ updated: '2026-01-26T10:00:00.000Z'
     it('should move task to archive', async () => {
       const task = await service.createTask({ title: 'To Archive' });
 
-      const result = await service.archiveTask(task.id);
+      const deletedAt = new Date().toISOString();
+      const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const result = await service.archiveTask(task.id, {
+        deletedAt,
+        deletedBy: 'test-user',
+        purgeAfter,
+      });
       expect(result).toBe(true);
 
       // Task should be gone from active
@@ -352,11 +358,29 @@ updated: '2026-01-26T10:00:00.000Z'
       // Task should be in archive
       const archiveFiles = await fs.readdir(archiveDir);
       expect(archiveFiles.some((f) => f.includes('to-archive'))).toBe(true);
+
+      const archivedTask = await service.getArchivedTask(task.id);
+      expect(archivedTask?.deletedAt).toBe(deletedAt);
+      expect(archivedTask?.deletedBy).toBe('test-user');
+      expect(archivedTask?.purgeAfter).toBe(purgeAfter);
     });
 
     it('should return false for non-existent task', async () => {
       const result = await service.archiveTask('nonexistent');
       expect(result).toBe(false);
+    });
+
+    it('should reject restore after purge window has expired', async () => {
+      const task = await service.createTask({ title: 'Expired Restore' });
+      const result = await service.archiveTask(task.id, {
+        deletedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString(),
+        deletedBy: 'test-user',
+        purgeAfter: new Date(Date.now() - 1000).toISOString(),
+      });
+      expect(result).toBe(true);
+
+      const restored = await service.restoreTask(task.id);
+      expect(restored).toBeNull();
     });
 
     it('should cleanup all orphaned files when archiving tasks with title changes', async () => {
