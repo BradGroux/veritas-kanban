@@ -101,12 +101,14 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
   const navigateFile = (direction: 'prev' | 'next') => {
     if (!status?.conflictingFiles.length) return;
 
-    let newIndex = currentIndex;
-    if (direction === 'prev') {
-      newIndex = currentIndex > 0 ? currentIndex - 1 : status.conflictingFiles.length - 1;
-    } else {
-      newIndex = currentIndex < status.conflictingFiles.length - 1 ? currentIndex + 1 : 0;
-    }
+    const newIndex =
+      direction === 'prev'
+        ? currentIndex > 0
+          ? currentIndex - 1
+          : status.conflictingFiles.length - 1
+        : currentIndex < status.conflictingFiles.length - 1
+          ? currentIndex + 1
+          : 0;
     setSelectedFile(status.conflictingFiles[newIndex]);
   };
 

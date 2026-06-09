@@ -170,7 +170,7 @@ export class GitHubService {
     const title = input.title || `Codex: ${task.title}`;
     const ghBreaker = getBreaker('github');
 
-    let url = '';
+    let url: string;
     let number: number | undefined;
 
     if (target === 'issue') {
@@ -361,7 +361,7 @@ export class GitHubService {
         }
       );
     } catch (error: any) {
-      throw new Error(`Failed to create PR: ${error.message}`);
+      throw new Error(`Failed to create PR: ${error.message}`, { cause: error });
     }
   }
 

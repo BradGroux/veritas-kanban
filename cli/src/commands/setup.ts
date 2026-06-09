@@ -55,11 +55,10 @@ export function registerSetupCommands(program: Command): void {
 
       // Step 2: Check if server is running
       let serverRunning = false;
-      let serverVersion = '';
       try {
         const health = await api<HealthResponse>('/api/health');
         serverRunning = health.ok;
-        serverVersion = health.version;
+        const serverVersion = health.version;
         results.push({
           step: 'server',
           status: 'pass',

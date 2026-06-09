@@ -525,7 +525,7 @@ export class WorkflowRunService {
     for (const dir of runDirs) {
       if (!dir.startsWith('run_')) continue;
 
-      let run: WorkflowRun | null = null;
+      let run: WorkflowRun | null;
       try {
         run = await this.getRun(dir);
       } catch (err) {

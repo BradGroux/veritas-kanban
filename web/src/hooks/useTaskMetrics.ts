@@ -94,11 +94,18 @@ function aggregateMetrics(taskId: string, events: AnyTelemetryEvent[]): Aggregat
     } else if (event.type === 'run.error') {
       const e = event as RunErrorEvent;
       attemptKey = e.attemptId || `${e.timestamp}_${e.agent}`;
+      let found = false;
       for (const [, attempt] of attemptMap.entries()) {
         if (attempt.started?.agent === e.agent && !attempt.error) {
           attempt.error = e;
+          found = true;
           break;
         }
+      }
+      if (!found) {
+        const attempt = attemptMap.get(attemptKey) || {};
+        attempt.error = e;
+        attemptMap.set(attemptKey, attempt);
       }
     } else if (event.type === 'run.tokens') {
       const e = event as TokenTelemetryEvent;

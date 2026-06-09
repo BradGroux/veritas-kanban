@@ -166,7 +166,7 @@ export class BroadcastStorageService {
       return broadcast;
     } catch (err) {
       log.error({ err, id }, 'Failed to create broadcast');
-      throw new Error('Failed to create broadcast');
+      throw new Error('Failed to create broadcast', { cause: err });
     }
   }
 
@@ -237,7 +237,7 @@ export class BroadcastStorageService {
       return broadcasts;
     } catch (err) {
       log.error({ err }, 'Failed to list broadcasts');
-      throw new Error('Failed to list broadcasts');
+      throw new Error('Failed to list broadcasts', { cause: err });
     }
   }
 
