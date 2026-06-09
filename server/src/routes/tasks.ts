@@ -820,7 +820,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const task = await taskService.getTask(req.params.id as string);
     const authReqDel = req as AuthenticatedRequest;
-    const actor = authReqDel.auth?.keyName || 'unknown';
+    const actor = actorFromRequest(authReqDel);
     const deletedAt = new Date().toISOString();
     const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 

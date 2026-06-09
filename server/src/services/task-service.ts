@@ -1252,7 +1252,7 @@ export class TaskService {
 
     if (this.sqliteTasks) {
       const sqliteTasks = this.sqliteTasks;
-      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id));
+      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id, archivedTask));
       if (!archived) return false;
 
       await this.telemetry.emit<TaskTelemetryEvent>({
@@ -1358,8 +1358,32 @@ export class TaskService {
     return tasks.find((t) => t.id === id) || null;
   }
 
+  private isRestoreWindowExpired(task: Task): boolean {
+    if (!task.purgeAfter) {
+      return false;
+    }
+
+    const purgeAfterTime = new Date(task.purgeAfter).getTime();
+    if (Number.isFinite(purgeAfterTime) && purgeAfterTime >= Date.now()) {
+      return false;
+    }
+
+    log.info(
+      { taskId: task.id, purgeAfter: task.purgeAfter },
+      'Restore window invalid or expired for archived task'
+    );
+    return true;
+  }
+
   async restoreTask(id: string): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.restore', id);
+
+    const task = await this.getArchivedTask(id);
+    if (!task) return null;
+
+    if (this.isRestoreWindowExpired(task)) {
+      return null;
+    }
 
     if (this.sqliteTasks) {
       const sqliteTasks = this.sqliteTasks;
@@ -1374,17 +1398,6 @@ export class TaskService {
       });
 
       return restoredTask;
-    }
-
-    const task = await this.getArchivedTask(id);
-    if (!task) return null;
-
-    if (task.purgeAfter && new Date(task.purgeAfter).getTime() < Date.now()) {
-      log.info(
-        { taskId: id, purgeAfter: task.purgeAfter },
-        'Restore window expired for archived task'
-      );
-      return null;
     }
 
     // Find actual file on disk (slug may differ from current title)

@@ -218,7 +218,15 @@ router.post(
       },
     });
 
-    res.json(task);
+    res.json({
+      ...task,
+      restoreMetadata: {
+        deletedAt: archivedTask?.deletedAt,
+        deletedBy: archivedTask?.deletedBy,
+        purgeAfter: archivedTask?.purgeAfter,
+        restoredFromDelete: Boolean(archivedTask?.deletedAt),
+      },
+    });
   })
 );
 
