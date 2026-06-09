@@ -136,8 +136,6 @@ export class TaskService {
         options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
       this.sqliteDatabase.open();
       this.sqliteTasks = new SqliteTaskRepository(this.sqliteDatabase);
-    } else {
-      this.ensureDirectories();
     }
 
     this.startTaskSyncReconciler();
