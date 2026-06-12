@@ -21,6 +21,13 @@ function parseToolResponse(result: any): any {
   return JSON.parse(text.substring(start));
 }
 
+function extractCreatedTaskId(result: any): string {
+  const text = result.content[0].text;
+  const match = text.match(/^Task created: ([^\n]+)/);
+  if (!match) throw new Error(`Unable to extract task id from response: ${text}`);
+  return match[1];
+}
+
 describe('Task MCP Tools', () => {
   const testTaskIds: string[] = [];
 
@@ -108,12 +115,13 @@ describe('Task MCP Tools', () => {
         priority: 'low',
         description: 'Integration test task — safe to delete',
       });
-      const task = parseToolResponse(result);
+      taskId = extractCreatedTaskId(result);
+      const getResult = await handleTaskTool('get_task', { id: taskId });
+      const task = parseToolResponse(getResult);
       expect(task.title).toBe('__mcp_test_task');
       expect(task.type).toBe('research');
       expect(task.priority).toBe('low');
       expect(task.id).toBeDefined();
-      taskId = task.id;
       testTaskIds.push(taskId);
     });
 
@@ -130,7 +138,9 @@ describe('Task MCP Tools', () => {
         status: 'in-progress',
         priority: 'high',
       });
-      const task = parseToolResponse(result);
+      expect(result.content[0].text).toContain(`Task updated: ${taskId}`);
+      const getResult = await handleTaskTool('get_task', { id: taskId });
+      const task = parseToolResponse(getResult);
       expect(task.status).toBe('in-progress');
       expect(task.priority).toBe('high');
     });

@@ -18,6 +18,10 @@ const DeleteCommentSchema = z.object({
   commentId: z.string().min(1),
 });
 
+function commentCount(task: Pick<Task, 'comments'>): number {
+  return Array.isArray(task.comments) ? task.comments.length : 0;
+}
+
 export const commentTools = [
   {
     name: 'add_comment',
@@ -90,7 +94,7 @@ export async function handleCommentTool(name: string, args: any): Promise<any> {
         content: [
           {
             type: 'text',
-            text: `Comment added to task ${taskId}\n${JSON.stringify(task, null, 2)}`,
+            text: `Comment added to task ${task.id}; comment: ${task.comments?.at(-1)?.id ?? 'unknown'}; comments: ${commentCount(task)}`,
           },
         ],
       };
@@ -123,7 +127,7 @@ export async function handleCommentTool(name: string, args: any): Promise<any> {
         content: [
           {
             type: 'text',
-            text: `Comment ${commentId} deleted from task ${taskId}\n${JSON.stringify(task, null, 2)}`,
+            text: `Comment deleted from task ${task.id}; comment: ${commentId}; comments: ${commentCount(task)}`,
           },
         ],
       };
