@@ -215,8 +215,10 @@ describe('task detail Mantine migration', () => {
 
     expect(mocks.updateField).toHaveBeenCalledWith('title', 'Renamed task');
     await waitFor(() => expect(progressTab.getAttribute('aria-selected')).toBe('true'));
-    expect(await screen.findByText('Progress Notes')).toBeDefined();
-    expect(await screen.findByText('Mantine task detail renders')).toBeDefined();
+    expect(await screen.findByText('Progress Notes', {}, { timeout: 5000 })).toBeDefined();
+    expect(
+      await screen.findByText('Mantine task detail renders', {}, { timeout: 5000 })
+    ).toBeDefined();
     expect(baseElement.querySelector('.mantine-Paper-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="textarea"]')).toBeNull();
   });

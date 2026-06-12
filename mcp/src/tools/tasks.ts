@@ -35,6 +35,18 @@ const TaskIdSchema = z.object({
   id: z.string().min(1),
 });
 
+function commentCount(task: Pick<Task, 'comments'>): number {
+  return Array.isArray(task.comments) ? task.comments.length : 0;
+}
+
+function changedFieldList(updates: Record<string, unknown>): string {
+  const fields = Object.entries(updates)
+    .filter(([, value]) => value !== undefined)
+    .map(([field]) => field);
+
+  return fields.length > 0 ? fields.join(', ') : 'none';
+}
+
 export const taskTools = [
   {
     name: 'list_tasks',
@@ -242,7 +254,12 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
         content: [
           {
             type: 'text',
-            text: `Task created: ${task.id}\n${JSON.stringify(task, null, 2)}`,
+            text: [
+              `Task created: ${task.id}`,
+              `Status: ${task.status}`,
+              `Priority: ${task.priority}`,
+              `Comments: ${commentCount(task)}`,
+            ].join('\n'),
           },
         ],
       };
@@ -268,7 +285,7 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
         content: [
           {
             type: 'text',
-            text: `Task updated: ${updated.id}\n${JSON.stringify(updated, null, 2)}`,
+            text: `Task updated: ${updated.id}; fields: ${changedFieldList(updates)}; comments: ${commentCount(updated)}`,
           },
         ],
       };

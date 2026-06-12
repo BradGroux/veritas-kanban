@@ -300,6 +300,8 @@ These are set in `server/.env`, not in the MCP client config:
 | `archive_task` | Archive a completed task                | `id`            | —                                                                         |
 | `delete_task`  | Permanently delete a task               | `id`            | —                                                                         |
 
+Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or `list_comments` when an assistant needs the full task or comment payload.
+
 <details>
 <summary><strong>Examples</strong></summary>
 
@@ -329,7 +331,7 @@ These are set in `server/.env`, not in the MCP client config:
 }
 ```
 
-→ Returns `Task created: task_20260302_abc123\n{...task JSON...}`
+→ Returns `Task created: task_20260302_abc123` plus status, priority, and comment count.
 
 **Update task status:**
 
@@ -340,7 +342,7 @@ These are set in `server/.env`, not in the MCP client config:
 }
 ```
 
-→ Partial IDs work — matches the last 6+ characters.
+→ Returns `Task updated: task_20260302_abc123; fields: status; comments: 0`. Partial IDs work — matches the last 6+ characters.
 
 </details>
 
@@ -641,6 +643,7 @@ Full project lifecycle management from MCP — create, organize, and track proje
 ### Comment Management (3 tools) <small>_New in v4.0_</small>
 
 Comment tools for task discussion threads, enabling agents to participate in async review notes.
+Comment write tools return concise confirmations. Use `list_comments` when an assistant needs the full thread.
 
 | Tool             | Description                 | Required Inputs       | Key Options |
 | ---------------- | --------------------------- | --------------------- | ----------- |
@@ -664,6 +667,8 @@ Comment tools for task discussion threads, enabling agents to participate in asy
 }
 ```
 
+→ Returns `Comment added to task task_20260321_abc; comment: comment_xyz789; comments: 3`.
+
 **List comments on a task:**
 
 ```json
@@ -686,6 +691,8 @@ Comment tools for task discussion threads, enabling agents to participate in asy
   }
 }
 ```
+
+→ Returns `Comment deleted from task task_20260321_abc; comment: cmt_xyz789; comments: 2`.
 
 </details>
 
