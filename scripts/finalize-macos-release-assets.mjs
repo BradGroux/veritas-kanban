@@ -96,22 +96,19 @@ async function hashFile(file, algorithm, encoding) {
     .digest(encoding);
 }
 
-function resolveAppBuilderPath() {
+function resolvePackageModule(moduleName, packageName) {
   const resolutionRoots = [
     path.join(rootDir, 'node_modules/.pnpm/node_modules'),
     path.join(desktopDir, 'node_modules/.pnpm/node_modules'),
-    path.join(desktopDir, 'node_modules/electron-builder'),
     desktopDir,
     rootDir,
   ];
 
   for (const resolutionRoot of resolutionRoots) {
     try {
-      const appBuilderBin = requireFromScript.resolve('app-builder-bin', {
+      return requireFromScript.resolve(moduleName, {
         paths: [resolutionRoot],
       });
-
-      return createRequire(appBuilderBin)('app-builder-bin').appBuilderPath;
     } catch {
       // Try the next pnpm resolution root.
     }
@@ -126,18 +123,32 @@ function resolveAppBuilderPath() {
     }
 
     for (const entry of readdirSync(storeRoot)) {
-      if (!entry.startsWith('app-builder-bin@')) {
+      if (!entry.startsWith(`${packageName}@`)) {
         continue;
       }
 
-      const appBuilderBin = path.join(storeRoot, entry, 'node_modules/app-builder-bin/index.js');
-      if (existsSync(appBuilderBin)) {
-        return createRequire(appBuilderBin)('app-builder-bin').appBuilderPath;
+      const modulePath = path.join(storeRoot, entry, 'node_modules', moduleName);
+      if (existsSync(modulePath)) {
+        return modulePath;
       }
     }
   }
 
-  throw new Error('Unable to resolve app-builder-bin for DMG blockmap regeneration');
+  throw new Error(`Unable to resolve ${moduleName} for DMG blockmap regeneration`);
+}
+
+async function writeDmgBlockmap(dmg, dmgBlockmap) {
+  const blockmapModule = resolvePackageModule(
+    'app-builder-lib/out/targets/blockmap/blockmap.js',
+    'app-builder-lib'
+  );
+  const { buildBlockMap } = createRequire(blockmapModule)(blockmapModule);
+
+  if (typeof buildBlockMap !== 'function') {
+    throw new Error('Electron Builder blockmap module did not expose buildBlockMap');
+  }
+
+  await buildBlockMap(dmg, 'gzip', dmgBlockmap);
 }
 
 async function writeLatestMacYml(version, zip, dmg) {
@@ -187,7 +198,7 @@ async function main() {
   run('xcrun', ['stapler', 'validate', dmg]);
   run('spctl', ['-a', '-vvv', '-t', 'open', '--context', 'context:primary-signature', dmg]);
 
-  run(resolveAppBuilderPath(), ['blockmap', '--input', dmg, '--output', dmgBlockmap]);
+  await writeDmgBlockmap(dmg, dmgBlockmap);
   await writeLatestMacYml(version, zip, dmg);
 }
 
