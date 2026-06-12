@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,11 @@ async function snapshotPath(label, targetPath) {
   await assertExists(label, targetPath);
   const info = await stat(targetPath);
   return { label, targetPath, mtimeMs: info.mtimeMs };
+}
+
+async function getMacAppBundleName() {
+  const packageJson = JSON.parse(await readFile(path.join(desktopDir, 'package.json'), 'utf8'));
+  return `${packageJson.build?.executableName ?? packageJson.build?.productName ?? 'Veritas Kanban'}.app`;
 }
 
 function run(command, args) {
@@ -80,7 +85,7 @@ async function main() {
   await assertExists('Desktop staging web app', path.join(stagingDir, 'web/dist/index.html'));
   await assertExists(
     'Unpacked macOS app',
-    path.join(desktopDir, 'release/mac-arm64/Veritas Kanban.app')
+    path.join(desktopDir, 'release/mac-arm64', await getMacAppBundleName())
   );
 
   console.log(

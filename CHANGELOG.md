@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-06-12
+
+### Changed
+
+- Bumped the release from `5.0.0` to `5.0.1` across the root, shared, server,
+  web, CLI, MCP, and desktop package manifests.
+- Updated the README version badge and MCP documentation footer for `5.0.1`.
+
+### Fixed
+
+- Made MCP write tools return concise confirmations instead of echoing full task
+  JSON payloads with complete comment history, reducing token usage for
+  agent-heavy boards (#714, #715). Thanks to @Cob-AI for the report.
+- Stabilized the Mantine task detail Progress tab test under CI load.
+- Fixed the local macOS desktop packaging smoke check to follow the configured
+  app bundle name.
+
 ## [5.0.0] - 2026-06-05
 
 ### Added
@@ -1567,7 +1584,9 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v4.1.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...HEAD
+[5.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v4.3.2...v5.0.0
 [4.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v3.3.3...v4.0.0

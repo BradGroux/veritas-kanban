@@ -1,13 +1,29 @@
 # v5.0 Release Notes
 
-These notes describe the published Veritas Kanban v5.0.0 stable release.
+These notes describe the published Veritas Kanban v5.0 stable release line.
 
 - GitHub release:
-  [Veritas Kanban v5.0.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.0.0)
+  [Veritas Kanban v5.0.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.0.1)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
   [Veritas-Kanban-5.0.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip)
+
+## v5.0.1 Patch
+
+v5.0.1 is a small MCP/runtime patch release. It keeps the v5 storage,
+desktop, security, and migration posture unchanged from v5.0.0.
+
+- MCP write tools now return concise confirmations instead of echoing the full
+  task JSON and complete comment history on every mutation.
+- Read tools remain the full-detail paths: `get_task`, `list_tasks`, and
+  `list_comments`.
+- The MCP documentation and response-contract tests cover the concise write
+  behavior.
+- The Mantine task detail Progress tab test was stabilized under CI load while
+  validating the patch.
+- The local macOS desktop packaging smoke check now follows the configured app
+  bundle name.
 
 ## Highlights
 
@@ -77,7 +93,7 @@ These notes describe the published Veritas Kanban v5.0.0 stable release.
 
 ## Release Artifacts
 
-The v5.0.0 stable release includes:
+The v5.0.0 stable desktop release includes:
 
 | Artifact                                                                                                                                                        | SHA-256                                                            |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
