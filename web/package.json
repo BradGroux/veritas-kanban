@@ -27,8 +27,8 @@
     "@veritas-kanban/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.4.8",
-    "lucide-react": "^1.17.0",
+    "dompurify": "^3.4.10",
+    "lucide-react": "^1.18.0",
     "nanoid": "^5.1.11",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -43,7 +43,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -52,15 +52,15 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
-    "eslint": "^10.4.1",
+    "eslint": "^10.5.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
-    "tailwindcss": "^4.3.0",
+    "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",
