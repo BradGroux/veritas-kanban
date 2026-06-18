@@ -604,6 +604,46 @@
       "denialReason": "Stopping an agent requires task read and task write access."
     },
     {
+      "id": "cli:agents:profiles",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Profile package command discovery requires settings read access."
+    },
+    {
+      "id": "cli:agents:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Listing agent profile packages requires settings read access."
+    },
+    {
+      "id": "cli:agents:validate",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Validating an agent profile package uses settings-scoped profile schema access."
+    },
+    {
+      "id": "cli:agents:import",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["settings:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Importing an agent profile package modifies workspace settings."
+    },
+    {
+      "id": "cli:agents:export",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Exporting an agent profile package requires settings read access."
+    },
+    {
       "id": "cli:agents:agents:pending",
       "kind": "cli",
       "classification": "agent-scoped",
