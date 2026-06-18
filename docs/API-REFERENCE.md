@@ -2644,7 +2644,7 @@ Log agent decisions with assumptions and record outcomes.
 GET /api/decisions
 ```
 
-Query params: `agent`, `taskId`, `minConfidence` (0–1), `maxConfidence` (0–1), `since`, `until`, `limit`, `offset`.
+Query params: `agent`, `taskId`, `minConfidence` (0–100), `maxConfidence` (0–100), `minRisk` (0–100), `maxRisk` (0–100), `startTime`, `endTime`.
 
 **Response:** Array of decision objects.
 
@@ -2707,6 +2707,35 @@ Update a specific assumption by its zero-based index.
 ```
 
 **Response:** Updated decision object with the assumption patched.
+
+#### Decision Review Sessions
+
+Task-launched review sessions capture independent participant responses, ordered critique rounds, and a final packet linked to a versioned work product plus a decision audit record.
+
+| Method | Path                                   | Description                                           |
+| ------ | -------------------------------------- | ----------------------------------------------------- |
+| `GET`  | `/api/decisions/reviews?taskId=<id>`   | List decision review sessions                         |
+| `POST` | `/api/decisions/reviews`               | Start a review session with at least two participants |
+| `GET`  | `/api/decisions/reviews/:id`           | Get a review session                                  |
+| `POST` | `/api/decisions/reviews/:id/responses` | Record an independent initial response                |
+| `POST` | `/api/decisions/reviews/:id/critiques` | Record a participant critique round                   |
+| `POST` | `/api/decisions/reviews/:id/finalize`  | Create the final packet, work product, and decision   |
+| `POST` | `/api/decisions/reviews/:id/cancel`    | Cancel a review session                               |
+| `GET`  | `/api/decisions/reviews/:id/export`    | Export the session packet as Markdown                 |
+
+```json
+{
+  "taskId": "task_20260618_abc",
+  "title": "Release readiness approach",
+  "prompt": "Should we cut v5.1 after the remaining PRs merge?",
+  "context": "Open issues require docs, packaging, and tap validation.",
+  "rounds": 1,
+  "participants": [
+    { "id": "architect", "label": "Architect", "model": "gpt-5" },
+    { "id": "qa-reviewer", "label": "QA Reviewer", "profileId": "qa-reviewer" }
+  ]
+}
+```
 
 ---
 

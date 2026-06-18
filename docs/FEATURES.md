@@ -2000,7 +2000,8 @@ Log structured decision records for every significant agent choice. Each decisio
 
 **Key capabilities:**
 
-- Structured records: decision text, confidence (0–1), evidence array, assumptions array
+- Structured records: decision text, confidence (0–100), risk score (0–100), evidence context, assumptions array
+- Multi-model decision review sessions: task-launched sessions capture independent participant responses, critique rounds, final synthesis packets, versioned work products, and linked decision records
 - Outcome recording: what happened, whether assumptions held, a retrospective rating
 - Full-text search and filtering by agent, task, confidence range, and date range
 - Queryable from MCP for agent self-review
@@ -2008,12 +2009,16 @@ Log structured decision records for every significant agent choice. Each decisio
 
 **API endpoints:**
 
-| Method  | Path                                  | Description                                            |
-| ------- | ------------------------------------- | ------------------------------------------------------ |
-| `GET`   | `/api/decisions`                      | List decisions (filterable by agent, task, confidence) |
-| `POST`  | `/api/decisions`                      | Log a new decision                                     |
-| `GET`   | `/api/decisions/:id`                  | Get a single decision                                  |
-| `PATCH` | `/api/decisions/:id/assumptions/:idx` | Update an assumption by index                          |
+| Method  | Path                                   | Description                                            |
+| ------- | -------------------------------------- | ------------------------------------------------------ |
+| `GET`   | `/api/decisions`                       | List decisions (filterable by agent, task, confidence) |
+| `POST`  | `/api/decisions`                       | Log a new decision                                     |
+| `GET`   | `/api/decisions/:id`                   | Get a single decision                                  |
+| `PATCH` | `/api/decisions/:id/assumptions/:idx`  | Update an assumption by index                          |
+| `POST`  | `/api/decisions/reviews`               | Start a decision review session                        |
+| `POST`  | `/api/decisions/reviews/:id/responses` | Record an independent participant response             |
+| `POST`  | `/api/decisions/reviews/:id/critiques` | Record a critique-round response                       |
+| `POST`  | `/api/decisions/reviews/:id/finalize`  | Create the final packet, work product, and decision    |
 
 **Related:** `server/src/routes/decisions.ts` · `shared/src/types/decision.types.ts` · `docs/SOP-decision-audit-trail.md`
 

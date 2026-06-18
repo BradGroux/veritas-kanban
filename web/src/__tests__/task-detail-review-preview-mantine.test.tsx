@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   resolveConflictMutateAsync: vi.fn(),
   abortConflictMutateAsync: vi.fn(),
   continueConflictMutateAsync: vi.fn(),
+  createDecisionReviewMutateAsync: vi.fn(),
+  recordDecisionReviewResponseMutateAsync: vi.fn(),
+  recordDecisionReviewCritiqueMutateAsync: vi.fn(),
+  finalizeDecisionReviewMutateAsync: vi.fn(),
+  cancelDecisionReviewMutate: vi.fn(),
+  exportDecisionReviewMutateAsync: vi.fn(),
+  useDecisionReviews: vi.fn(),
 }));
 
 vi.mock('@/hooks/useWorktree', () => ({
@@ -59,6 +66,38 @@ vi.mock('@/hooks/useConflicts', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useConfig', () => ({
+  useAgentProfiles: () => ({ data: [], isLoading: false }),
+}));
+
+vi.mock('@/hooks/useDecisionReviews', () => ({
+  useDecisionReviews: mocks.useDecisionReviews,
+  useCreateDecisionReview: () => ({
+    mutateAsync: mocks.createDecisionReviewMutateAsync,
+    isPending: false,
+  }),
+  useRecordDecisionReviewResponse: () => ({
+    mutateAsync: mocks.recordDecisionReviewResponseMutateAsync,
+    isPending: false,
+  }),
+  useRecordDecisionReviewCritique: () => ({
+    mutateAsync: mocks.recordDecisionReviewCritiqueMutateAsync,
+    isPending: false,
+  }),
+  useFinalizeDecisionReview: () => ({
+    mutateAsync: mocks.finalizeDecisionReviewMutateAsync,
+    isPending: false,
+  }),
+  useCancelDecisionReview: () => ({
+    mutate: mocks.cancelDecisionReviewMutate,
+    isPending: false,
+  }),
+  useExportDecisionReview: () => ({
+    mutateAsync: mocks.exportDecisionReviewMutateAsync,
+    isPending: false,
+  }),
+}));
+
 describe('task detail review and preview Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,6 +109,45 @@ describe('task detail review and preview Mantine migration', () => {
     mocks.resolveConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.abortConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.continueConflictMutateAsync.mockResolvedValue({ success: true });
+    mocks.useDecisionReviews.mockReturnValue({ data: [], isLoading: false });
+    mocks.createDecisionReviewMutateAsync.mockResolvedValue({
+      id: 'decision_review_new',
+      taskId: 'task-review',
+      title: 'Decision Review: Review task',
+      prompt: 'Review task',
+      context: 'Review task',
+      sourceType: 'task',
+      rounds: 1,
+      participants: [
+        { id: 'architect', label: 'Architect' },
+        { id: 'reviewer', label: 'Reviewer' },
+      ],
+      status: 'collecting',
+      initialResponses: [],
+      critiqueRounds: [],
+      createdAt: '2026-06-01T09:00:00Z',
+      updatedAt: '2026-06-01T09:00:00Z',
+    });
+    mocks.recordDecisionReviewResponseMutateAsync.mockResolvedValue({ id: 'decision_review_new' });
+    mocks.recordDecisionReviewCritiqueMutateAsync.mockResolvedValue({ id: 'decision_review_new' });
+    mocks.finalizeDecisionReviewMutateAsync.mockResolvedValue({
+      id: 'decision_review_new',
+      taskId: 'task-review',
+      status: 'synthesized',
+      finalPacket: {
+        recommendation: 'Use staged rollout',
+        dissentingViews: [],
+        assumptions: [],
+        risks: [],
+        validationPlan: [],
+        followUpTasks: [],
+        confidenceLevel: 80,
+        riskScore: 35,
+        workProductId: 'wp_decision_review',
+        decisionId: 'decision_review_audit',
+      },
+    });
+    mocks.exportDecisionReviewMutateAsync.mockResolvedValue('# Decision Review');
     mocks.usePreviewStatus.mockReturnValue({
       data: { status: 'stopped' },
       isLoading: false,
@@ -170,6 +248,140 @@ describe('task detail review and preview Mantine migration', () => {
       onSuccess: expect.any(Function),
     });
     expect(onMergeComplete).toHaveBeenCalled();
+  });
+
+  it('starts and records a task decision review session from the review tab', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-review',
+      title: 'Review task',
+      description: 'Choose the release path',
+      git: {
+        repo: 'veritas',
+        branch: 'feature/review',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-review',
+      },
+    });
+
+    renderWithProviders(<ReviewPanel task={task} onReview={vi.fn()} />);
+
+    expect(await screen.findByText('Decision Review Sessions')).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Start Decision Review' }));
+
+    await waitFor(() =>
+      expect(mocks.createDecisionReviewMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'task-review',
+          participants: expect.arrayContaining([
+            expect.objectContaining({ id: 'architect' }),
+            expect.objectContaining({ id: 'reviewer' }),
+          ]),
+        })
+      )
+    );
+  });
+
+  it('finalizes a completed decision review session into a packet', async () => {
+    const user = userEvent.setup();
+    mocks.useDecisionReviews.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          id: 'decision_review_ready',
+          taskId: 'task-review',
+          title: 'Release approach',
+          prompt: 'Choose release approach',
+          context: 'All issue PRs are queued.',
+          sourceType: 'task',
+          sourceId: 'task-review',
+          rounds: 1,
+          participants: [
+            { id: 'architect', label: 'Architect' },
+            { id: 'reviewer', label: 'Reviewer' },
+          ],
+          status: 'critiquing',
+          initialResponses: [
+            {
+              id: 'turn_1',
+              participantId: 'architect',
+              phase: 'initial',
+              round: 0,
+              prompt: 'p',
+              response: 'Release after CI passes.',
+              createdAt: '2026-06-01T09:00:00Z',
+            },
+            {
+              id: 'turn_2',
+              participantId: 'reviewer',
+              phase: 'initial',
+              round: 0,
+              prompt: 'p',
+              response: 'Require docs and artifacts.',
+              createdAt: '2026-06-01T09:01:00Z',
+            },
+          ],
+          critiqueRounds: [
+            {
+              id: 'turn_3',
+              participantId: 'architect',
+              phase: 'critique',
+              round: 1,
+              prompt: 'p',
+              response: 'Docs are a valid blocker.',
+              createdAt: '2026-06-01T09:02:00Z',
+            },
+            {
+              id: 'turn_4',
+              participantId: 'reviewer',
+              phase: 'critique',
+              round: 1,
+              prompt: 'p',
+              response: 'CI alone is not enough.',
+              createdAt: '2026-06-01T09:03:00Z',
+            },
+          ],
+          createdAt: '2026-06-01T09:00:00Z',
+          updatedAt: '2026-06-01T09:03:00Z',
+        },
+      ],
+    });
+    const task = createMockTask({
+      id: 'task-review',
+      title: 'Review task',
+      description: 'Choose the release path',
+      git: {
+        repo: 'veritas',
+        branch: 'feature/review',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-review',
+      },
+    });
+
+    renderWithProviders(<ReviewPanel task={task} onReview={vi.fn()} />);
+
+    fireEvent.change(await screen.findByLabelText('Recommendation'), {
+      target: { value: 'Use staged release after docs and artifacts pass.' },
+    });
+    fireEvent.change(screen.getByLabelText('Assumptions'), {
+      target: { value: 'CI remains green' },
+    });
+    fireEvent.change(screen.getByLabelText('Risks'), {
+      target: { value: 'Tap metadata can drift' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Finalize Packet' }));
+
+    await waitFor(() =>
+      expect(mocks.finalizeDecisionReviewMutateAsync).toHaveBeenCalledWith({
+        id: 'decision_review_ready',
+        input: expect.objectContaining({
+          recommendation: 'Use staged release after docs and artifacts pass.',
+          assumptions: ['CI remains green'],
+          risks: ['Tap metadata can drift'],
+          attachWorkProduct: true,
+        }),
+      })
+    );
   });
 
   it('renders inline review comments through direct Mantine textarea, button, and action icon', async () => {

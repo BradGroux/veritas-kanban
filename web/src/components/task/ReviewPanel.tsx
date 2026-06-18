@@ -14,6 +14,7 @@ import {
 import { CheckCircle, XCircle, RefreshCcw, MessageSquare, GitMerge, Loader2 } from 'lucide-react';
 import { useMergeWorktree } from '@/hooks/useWorktree';
 import type { Task, ReviewDecision, ReviewState } from '@veritas-kanban/shared';
+import { DecisionReviewSessionsSection } from './DecisionReviewSessionsSection';
 
 interface ReviewPanelProps {
   task: Task;
@@ -74,18 +75,16 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
     setPendingDecision(null);
   };
 
-  if (!hasWorktree) {
-    return (
-      <Text ta="center" c="dimmed" className="py-8">
-        Start a worktree to enable code review
-      </Text>
-    );
-  }
-
   return (
     <Stack gap="md">
+      {!hasWorktree && (
+        <Text ta="center" c="dimmed" className="py-4">
+          Start a worktree to enable code review
+        </Text>
+      )}
+
       {/* Current review status */}
-      {currentReview?.decision && (
+      {hasWorktree && currentReview?.decision && (
         <Paper className="p-3" radius="md" withBorder>
           <Group gap="sm" wrap="nowrap">
             <ThemeIcon color={decisionStyles[currentReview.decision].color} variant="light">
@@ -108,7 +107,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
         </Paper>
       )}
 
-      {currentReview?.summary && (
+      {hasWorktree && currentReview?.summary && (
         <Paper className="bg-muted/50 p-3" radius="md" withBorder>
           <Text size="sm" className="whitespace-pre-wrap">
             {currentReview.summary}
@@ -136,7 +135,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
       )}
 
       {/* Comment summary */}
-      {comments.length > 0 && (
+      {hasWorktree && comments.length > 0 && (
         <Group gap="xs">
           <MessageSquare className="h-4 w-4" />
           <Text size="sm" c="dimmed">
@@ -146,7 +145,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
       )}
 
       {/* Summary input for changes-requested/rejected */}
-      {showSummary && pendingDecision && (
+      {hasWorktree && showSummary && pendingDecision && (
         <Paper className="bg-muted/50 p-3" radius="md" withBorder>
           <Stack gap="xs">
             <Textarea
@@ -182,7 +181,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
       )}
 
       {/* Action buttons */}
-      {!currentReview?.decision && !showSummary && (
+      {hasWorktree && !currentReview?.decision && !showSummary && (
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
           <Button
             onClick={() => handleDecision('approved')}
@@ -207,6 +206,8 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
           </Button>
         </SimpleGrid>
       )}
+
+      <DecisionReviewSessionsSection task={task} />
 
       <Modal
         opened={mergeDialogOpen}

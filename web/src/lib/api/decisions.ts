@@ -1,8 +1,14 @@
 import type {
   CreateDecisionInput,
+  CreateDecisionReviewSessionInput,
   DecisionListFilters,
   DecisionRecord,
+  DecisionReviewListFilters,
+  DecisionReviewSession,
   DecisionWithChain,
+  FinalizeDecisionReviewSessionInput,
+  RecordDecisionReviewCritiqueInput,
+  RecordDecisionReviewTurnInput,
   UpdateDecisionAssumptionInput,
 } from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
@@ -64,5 +70,112 @@ export const decisionsApi = {
       }
     );
     return handleResponse<DecisionRecord>(response);
+  },
+
+  reviews: {
+    list: async (filters: DecisionReviewListFilters = {}): Promise<DecisionReviewSession[]> => {
+      const params = new URLSearchParams();
+      if (filters.taskId) params.set('taskId', filters.taskId);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+      const query = params.toString();
+      const response = await fetch(`${API_BASE}/decisions/reviews${query ? `?${query}` : ''}`, {
+        credentials: 'include',
+      });
+      return handleResponse<DecisionReviewSession[]>(response);
+    },
+
+    get: async (id: string): Promise<DecisionReviewSession> => {
+      const response = await fetch(`${API_BASE}/decisions/reviews/${encodeURIComponent(id)}`, {
+        credentials: 'include',
+      });
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    create: async (input: CreateDecisionReviewSessionInput): Promise<DecisionReviewSession> => {
+      const response = await fetch(`${API_BASE}/decisions/reviews`, {
+        credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    recordResponse: async (
+      id: string,
+      input: RecordDecisionReviewTurnInput
+    ): Promise<DecisionReviewSession> => {
+      const response = await fetch(
+        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/responses`,
+        {
+          credentials: 'include',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    recordCritique: async (
+      id: string,
+      input: RecordDecisionReviewCritiqueInput
+    ): Promise<DecisionReviewSession> => {
+      const response = await fetch(
+        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/critiques`,
+        {
+          credentials: 'include',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    finalize: async (
+      id: string,
+      input: FinalizeDecisionReviewSessionInput
+    ): Promise<DecisionReviewSession> => {
+      const response = await fetch(
+        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/finalize`,
+        {
+          credentials: 'include',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    cancel: async (id: string): Promise<DecisionReviewSession> => {
+      const response = await fetch(
+        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/cancel`,
+        {
+          credentials: 'include',
+          method: 'POST',
+        }
+      );
+      return handleResponse<DecisionReviewSession>(response);
+    },
+
+    export: async (id: string): Promise<string> => {
+      const response = await fetch(
+        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/export`,
+        {
+          credentials: 'include',
+        }
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        if (body && typeof body === 'object' && 'message' in body) {
+          throw new Error(String((body as { message: unknown }).message));
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.text();
+    },
   },
 };

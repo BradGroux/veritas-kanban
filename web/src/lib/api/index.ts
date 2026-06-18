@@ -194,6 +194,7 @@ export type {
 
 export type {
   DecisionRecord,
+  DecisionReviewSession,
   DecisionWithChain,
   DecisionListFilters,
 } from '@veritas-kanban/shared';
