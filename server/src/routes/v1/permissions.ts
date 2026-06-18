@@ -42,6 +42,9 @@ export const telemetryAccess = routeAccess('telemetry:read', 'telemetry:write');
 export const policyAccess = routeAccess('policy:read', 'policy:read', [
   { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
 ]);
+export const sandboxPolicyAccess = routeAccess('policy:read', 'policy:write', [
+  { methods: ['POST'], path: /^\/validate\/?$/, permissions: ['policy:read', 'agent:read'] },
+]);
 export const skillCapabilityAccess = routeAccess('policy:read', 'policy:write', [
   {
     methods: ['POST'],

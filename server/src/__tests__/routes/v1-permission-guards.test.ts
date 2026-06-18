@@ -13,6 +13,7 @@ import {
   scoringAccess,
   searchAccess,
   settingsAccess,
+  sandboxPolicyAccess,
   taskAccess,
   taskCommentAccess,
   workflowAccess,
@@ -144,6 +145,19 @@ describe('v1 REST permission guard presets', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         details: expect.objectContaining({ required: ['policy:read'] }),
+      })
+    );
+  });
+
+  it('keeps sandbox policy validation read-like while guarding preset mutations', () => {
+    expect(runGuard(sandboxPolicyAccess, mockRequest('POST', '/validate')).next).toHaveBeenCalled();
+
+    const { res, next } = runGuard(sandboxPolicyAccess, mockRequest('POST', '/'));
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['policy:write'] }),
       })
     );
   });

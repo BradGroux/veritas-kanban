@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 const {
   mockSpawn,
   mockGetConfig,
+  mockSaveConfig,
   mockGetTask,
   mockUpdateTask,
   mockCheckAgent,
@@ -21,6 +22,7 @@ const {
 } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockGetConfig: vi.fn(),
+  mockSaveConfig: vi.fn(),
   mockGetTask: vi.fn(),
   mockUpdateTask: vi.fn(),
   mockCheckAgent: vi.fn(),
@@ -38,8 +40,9 @@ vi.mock('child_process', () => ({
 
 vi.mock('../services/config-service.js', () => ({
   ConfigService: function () {
-    return { getConfig: mockGetConfig };
+    return { getConfig: mockGetConfig, saveConfig: mockSaveConfig };
   },
+  getConfigService: () => ({ getConfig: mockGetConfig, saveConfig: mockSaveConfig }),
 }));
 
 vi.mock('../services/task-service.js', () => ({

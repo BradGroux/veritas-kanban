@@ -14,6 +14,20 @@ Fresh v5 installs use OpenAI Codex as the default agent:
 
 Existing configs keep the user's chosen default agent. Missing built-in profiles are added during config normalization without overwriting customized commands, arguments, or enabled states.
 
+## Sandbox Policy Presets
+
+Use **Settings -> Agents -> Sandbox Policies** to manage reusable filesystem, network, environment, and credential controls for agent execution. Built-in presets are immutable; custom presets can be created, edited, disabled, or deleted.
+
+Presets can be assigned to:
+
+- An agent profile, as the default guardrail for that provider.
+- A workflow agent, as the guardrail for that workflow role.
+- A one-off agent start request, by passing `sandboxPresetId`.
+
+The launch path dry-runs the selected preset before starting Codex CLI, Codex SDK, or OpenClaw-backed work. Required controls fail closed when the provider cannot support them. Advisory controls continue with warnings and a governance trace. Settings also includes a dry-run panel that shows effective sandbox mode, network access, environment allowlist, unsupported controls, and the trace ID.
+
+Credential references and environment-style `name=value` values are redacted from dry-run output and governance traces. Prefer brokered credential presets for workflows that need scoped secrets instead of exposing broad environment passthrough.
+
 ## Local And Cloud Profiles
 
 | Profile            | Provider          | Default command                               | Auth / readiness                    |
@@ -37,6 +51,12 @@ The provider model is the same in both shells:
 - The macOS app bundles and supervises the local Veritas server. Local providers execute on that Mac.
 - Cloud profiles are still explicit. Routing a local workflow to a cloud provider surfaces a warning during workflow dry-runs.
 - Remote or cloud clients should not route directly to local-only providers unless a trusted local host/supervisor is configured.
+
+Sandbox policy enforcement follows the execution host:
+
+- **Local desktop:** filesystem paths, environment passthrough, credentials, and network controls apply on the user's Mac through the bundled server/provider process.
+- **Remote server:** the same presets apply on the remote Veritas server host. Browser and mobile clients never receive direct local filesystem access.
+- **Cloud-hosted runners:** only provider-reported controls can be treated as enforced. Required controls fail closed when the cloud provider cannot prove support; advisory controls continue with traceable warnings.
 
 ## Routing
 

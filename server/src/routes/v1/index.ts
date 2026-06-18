@@ -39,6 +39,7 @@ import {
   promptRegistryAccess,
   reportAccess,
   reportRoutesAccess,
+  sandboxPolicyAccess,
   scoringAccess,
   searchAccess,
   settingsAccess,
@@ -129,6 +130,7 @@ import { identityRoutes } from '../identity.js';
 import { skillCapabilityRoutes } from '../skill-capabilities.js';
 import { skillSecurityRoutes } from '../skill-security.js';
 import { watcherPolicyRoutes } from '../watcher-policies.js';
+import sandboxPolicyRoutes from '../sandbox-policies.js';
 
 const v1Router: IRouter = Router();
 
@@ -225,6 +227,7 @@ v1Router.use('/workflows', workflowAccess, workflowRoutes);
 v1Router.use('/watcher-policies', watcherPolicyAccess, watcherPolicyRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);
+v1Router.use('/sandbox-policies', sandboxPolicyAccess, sandboxPolicyRoutes);
 v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);
 v1Router.use('/skills/security', skillSecurityAccess, skillSecurityRoutes);
 v1Router.use('/integrations', settingsAccess, integrationsRoutes);

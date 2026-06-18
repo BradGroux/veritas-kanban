@@ -49,6 +49,12 @@ describe('AgentHostService', () => {
       posture: 'connected',
       workspaceLabels: ['workspace:veritas-kanban'],
     });
+    expect(health.hosts[0].sandboxCapabilities).toEqual([
+      'environment.allowlist',
+      'filesystem.read',
+      'filesystem.write',
+    ]);
+    expect(health.hosts[0].sandboxCapabilities).not.toContain('network.disable');
     expect(JSON.stringify(health.hosts)).not.toContain('/Users/bradgroux');
   });
 
@@ -113,6 +119,34 @@ describe('AgentHostService', () => {
     expect(preview.decision.policy).toBe('manual');
     expect(preview.decision.selectedHostId).toBeUndefined();
     expect(preview.decision.reason).toContain('not compatible');
+  });
+
+  it('marks hosts without sandbox capability signals incompatible when a preset is requested', () => {
+    const service = serviceFor([
+      agent(
+        'custom',
+        { provider: 'custom' },
+        { hostId: 'host-custom', hostName: 'Custom Host', providers: ['custom'] }
+      ),
+    ]);
+
+    const preview = service.preview(
+      {
+        agent: 'custom',
+        provider: 'custom',
+        sandboxPresetId: 'codex-repo-contained',
+      },
+      now
+    );
+
+    expect(preview.decision.selectedHostId).toBeUndefined();
+    expect(preview.decision.excludedHostIds).toContain('host-custom');
+    expect(preview.previews[0].checks.find((check) => check.id === 'sandbox-policy')).toMatchObject(
+      {
+        passed: false,
+        detail: 'Host does not report sandbox capability support for preset codex-repo-contained.',
+      }
+    );
   });
 
   it('disables auto-routing when no host is registered', () => {

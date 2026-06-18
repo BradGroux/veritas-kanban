@@ -1,6 +1,7 @@
 export type GovernanceTraceKind =
   | 'policy'
   | 'tool-policy'
+  | 'sandbox-policy'
   | 'agent-permission'
   | 'routing'
   | 'workflow-gate';

@@ -28,4 +28,13 @@ describe('shared API permission metadata', () => {
         .permissions
     ).toEqual(['workflow:execute']);
   });
+
+  it('separates sandbox policy validation from preset mutations', () => {
+    expect(
+      getApiPermissionRequirement('/api/sandbox-policies/validate', { method: 'POST' }).permissions
+    ).toEqual(['policy:read', 'agent:read']);
+    expect(
+      getApiPermissionRequirement('/api/sandbox-policies', { method: 'POST' }).permissions
+    ).toEqual(['policy:write']);
+  });
 });

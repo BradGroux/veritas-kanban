@@ -286,6 +286,7 @@ First-class support for autonomous coding agents.
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
+- **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
 - **Agent request tracking** — VK can create and display pending agent requests; a configured external runner/provider must execute the work
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
@@ -876,6 +877,32 @@ Role-based tool restrictions for least-privilege security.
 
 - Tool filters are resolved before OpenClaw workflow session execution and passed through the provider-adapter boundary.
 - Denied list takes precedence over allowed list
+
+### Sandbox Policies
+
+Reusable launch-time sandbox presets for provider execution guardrails.
+
+**Built-in presets:**
+
+| Preset                       | Enforcement | Use case                                                                        |
+| ---------------------------- | ----------- | ------------------------------------------------------------------------------- |
+| `legacy-permissive`          | advisory    | Preserve existing Codex CLI behavior while surfacing sandbox telemetry          |
+| `codex-repo-contained`       | required    | Default-deny network with repository-scoped filesystem writes                   |
+| `brokered-network-allowlist` | required    | Allowlist egress and brokered credential references for controlled integrations |
+
+**Configuration:**
+
+- Create, edit, enable, disable, and delete custom presets in **Settings -> Agents -> Sandbox Policies**.
+- Assign presets to agent profiles or workflow agents; one-off agent starts can pass `sandboxPresetId` to override the profile default.
+- Presets declare filesystem read/write paths, denied paths, dotfile masking, network default egress, allowed hosts and paths, environment passthrough keys, credential mode, and broker references.
+- Dry-runs compare a preset against provider capabilities before execution and show the effective sandbox mode, network state, environment allowlist, unsupported controls, and governance trace ID.
+
+**Enforcement:**
+
+- Required controls fail closed before agent or workflow launch when the selected provider cannot support them.
+- Advisory controls warn and record trace evidence without blocking the run.
+- Credential references and environment-style `name=value` values are redacted in dry-run output and governance traces.
+- Provider capability checks currently distinguish Codex CLI, Codex SDK, and OpenClaw execution behavior.
 
 ### Session Isolation
 

@@ -19,6 +19,8 @@ import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
 import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
+import { getGovernanceTraceService } from './governance-trace-service.js';
+import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import { AgentHealthService, type AgentHealthChecker } from './agent-health-service.js';
 import { getBreaker } from './circuit-registry.js';
 import { activityService } from './activity-service.js';
@@ -41,6 +43,7 @@ import type {
   RunErrorEvent,
   TokenTelemetryEvent,
   TaskReadinessSummary,
+  SandboxPolicyDryRunResult,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -71,6 +74,7 @@ export interface AgentProviderStartContext {
   startedAt: string;
   emitter: EventEmitter;
   attempt: TaskAttempt;
+  sandboxPolicy?: SandboxPolicyDryRunResult;
 }
 
 export interface AgentProviderStopContext {
@@ -110,6 +114,7 @@ export interface AgentOutput {
 
 export interface AgentStartOptions {
   overrideReason?: string;
+  sandboxPresetId?: string;
 }
 
 export class AgentReadinessError extends Error {
@@ -207,6 +212,24 @@ export class ClawdbotAgentService {
     const agentConfig = this.resolveAgentConfig(config.agents, agent);
     await this.assertAgentAvailable(agent, agentConfig);
     const provider = this.resolveAgentProvider(agentConfig, agent);
+    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+      presetId: options.sandboxPresetId ?? agentConfig?.sandboxPresetId,
+      provider,
+      workspacePath: task.git.worktreePath,
+    });
+    const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
+    if (sandboxPolicy.result.decision === 'block') {
+      throw new ConflictError('Sandbox preset cannot be enforced by the selected provider', {
+        presetId: sandboxPolicy.result.preset.id,
+        provider,
+        traceId: sandboxTrace.id,
+        unsupportedRules: sandboxPolicy.result.unsupportedRules.map((rule) => ({
+          id: rule.id,
+          capability: rule.capability,
+          detail: rule.detail,
+        })),
+      });
+    }
     const readiness = evaluateTaskReadiness(task, { isCodeTask: true, selectedAgent: agent });
     const overrideReason = options.overrideReason?.trim();
 
@@ -307,6 +330,7 @@ export class ClawdbotAgentService {
         startedAt,
         emitter,
         attempt,
+        sandboxPolicy: sandboxPolicy.result,
       });
     } catch (error: any) {
       pendingAgents.delete(taskId);
@@ -567,8 +591,26 @@ export class ClawdbotAgentService {
         id: 'codex-cli',
         label: 'Codex CLI',
         capabilities: { ...commonCapabilities, stop: true, resume: false },
-        start: ({ task, agentConfig, prompt, logPath, attemptId, startedAt, emitter }) => {
-          this.startCodexCli(task, agentConfig, prompt, logPath, attemptId, startedAt, emitter);
+        start: ({
+          task,
+          agentConfig,
+          prompt,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+        }) => {
+          this.startCodexCli(
+            task,
+            agentConfig,
+            prompt,
+            logPath,
+            attemptId,
+            startedAt,
+            emitter,
+            sandboxPolicy
+          );
         },
         stop: ({ pending }) => {
           if (pending.process && !pending.process.killed) pending.process.kill('SIGTERM');
@@ -581,7 +623,16 @@ export class ClawdbotAgentService {
         id: 'codex-sdk',
         label: 'Codex SDK',
         capabilities: { ...commonCapabilities, stop: true, resume: true },
-        start: ({ task, agentConfig, prompt, logPath, attemptId, startedAt, emitter }) => {
+        start: ({
+          task,
+          agentConfig,
+          prompt,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+        }) => {
           const abortController = new AbortController();
           const pending = pendingAgents.get(task.id);
           if (pending) pending.abortController = abortController;
@@ -593,7 +644,8 @@ export class ClawdbotAgentService {
             attemptId,
             startedAt,
             emitter,
-            abortController
+            abortController,
+            sandboxPolicy
           ).catch(async (error: any) => {
             if (!pendingAgents.has(task.id)) return;
             await this.appendLog(
@@ -638,7 +690,8 @@ export class ClawdbotAgentService {
     logPath: string,
     attemptId: string,
     startedAt: string,
-    emitter: EventEmitter
+    emitter: EventEmitter,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined
   ): void {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
@@ -646,13 +699,10 @@ export class ClawdbotAgentService {
     }
 
     const command = agentConfig?.command || 'codex';
-    const args = this.buildCodexArgs(agentConfig, prompt, logPath, attemptId);
+    const args = this.buildCodexArgs(agentConfig, prompt, logPath, attemptId, sandboxPolicy);
     const child = spawn(command, args, {
       cwd: worktreePath,
-      env: {
-        ...process.env,
-        VK_API_URL: process.env.VK_API_URL || 'http://localhost:3001',
-      },
+      env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
     });
 
@@ -775,11 +825,18 @@ export class ClawdbotAgentService {
     agentConfig: AgentConfig | undefined,
     prompt: string,
     logPath: string,
-    attemptId: string
+    attemptId: string,
+    sandboxPolicy?: SandboxPolicyDryRunResult
   ): string[] {
     const configured = agentConfig?.args?.length ? [...agentConfig.args] : ['exec'];
     const args = configured.includes('exec') ? configured : ['exec', ...configured];
-    if (!args.includes('--sandbox')) args.push('--sandbox', 'workspace-write');
+    const sandboxMode = sandboxPolicy?.effective.sandboxMode ?? 'workspace-write';
+    const sandboxIndex = args.indexOf('--sandbox');
+    if (sandboxIndex >= 0) {
+      args[sandboxIndex + 1] = sandboxMode;
+    } else {
+      args.push('--sandbox', sandboxMode);
+    }
     if (!args.includes('--json')) args.push('--json');
     if (!args.includes('--output-last-message')) {
       args.push('--output-last-message', this.getCodexFinalPath(logPath, attemptId));
@@ -800,7 +857,8 @@ export class ClawdbotAgentService {
     attemptId: string,
     startedAt: string,
     emitter: EventEmitter,
-    abortController: AbortController
+    abortController: AbortController,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined
   ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
@@ -811,15 +869,15 @@ export class ClawdbotAgentService {
     const codex = new Codex({
       codexPathOverride:
         agentConfig?.command && agentConfig.command !== 'codex' ? agentConfig.command : undefined,
-      env: buildSafeCodexEnv(),
+      env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
     });
 
     const thread = codex.startThread({
       workingDirectory: worktreePath,
       skipGitRepoCheck: true,
-      sandboxMode: 'workspace-write',
+      sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
       approvalPolicy: 'never',
-      networkAccessEnabled: true,
+      networkAccessEnabled: sandboxPolicy?.effective.networkAccessEnabled ?? true,
       model: agentConfig?.model,
     });
 

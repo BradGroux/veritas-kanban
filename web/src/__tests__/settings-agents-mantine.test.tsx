@@ -13,6 +13,7 @@ const agents: AgentConfig[] = [
     enabled: true,
     provider: 'codex-cli',
     model: 'gpt-5',
+    sandboxPresetId: 'codex-repo-contained',
   },
   {
     type: 'claude-code' as AgentType,
@@ -227,6 +228,7 @@ vi.mock('@/hooks/useAgent', () => ({
           supportedProviders: ['codex-cli'],
           supportedModels: ['gpt-5'],
           supportedTools: ['code'],
+          sandboxCapabilities: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
           workspaceLabels: ['workspace:veritas-kanban'],
           activeSessions: 0,
           queueDepth: 0,
@@ -275,6 +277,86 @@ vi.mock('@/hooks/useAgent', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useSandboxPolicies', () => ({
+  useSandboxPolicies: () => ({
+    data: [
+      {
+        id: 'legacy-permissive',
+        name: 'Legacy permissive',
+        enabled: true,
+        builtIn: true,
+        enforcement: 'advisory',
+        requiredCapabilities: [],
+        filesystem: {
+          readPaths: ['<workspace>'],
+          writePaths: ['<workspace>'],
+          deniedPaths: [],
+          dotfileMasking: false,
+          localOnlyHandles: false,
+        },
+        network: {
+          defaultEgress: 'allow',
+          allowedHosts: [],
+          allowedMethods: [],
+          allowedPathPrefixes: [],
+          blockPrivateNetwork: false,
+          blockMetadataEndpoints: false,
+          blockLoopback: false,
+        },
+        environment: {
+          passthrough: ['PATH', 'OPENAI_API_KEY'],
+          redactDisplay: true,
+        },
+        credentials: {
+          mode: 'env-passthrough',
+          brokerRefs: [],
+        },
+        createdAt: '2026-06-18T00:00:00.000Z',
+        updatedAt: '2026-06-18T00:00:00.000Z',
+      },
+      {
+        id: 'codex-repo-contained',
+        name: 'Codex repo contained',
+        enabled: true,
+        builtIn: true,
+        enforcement: 'required',
+        requiredCapabilities: [],
+        filesystem: {
+          readPaths: ['<workspace>'],
+          writePaths: ['<workspace>'],
+          deniedPaths: [],
+          dotfileMasking: false,
+          localOnlyHandles: true,
+        },
+        network: {
+          defaultEgress: 'deny',
+          allowedHosts: [],
+          allowedMethods: [],
+          allowedPathPrefixes: [],
+          blockPrivateNetwork: true,
+          blockMetadataEndpoints: true,
+          blockLoopback: true,
+        },
+        environment: {
+          passthrough: ['PATH', 'OPENAI_API_KEY'],
+          redactDisplay: true,
+        },
+        credentials: {
+          mode: 'none',
+          brokerRefs: [],
+        },
+        createdAt: '2026-06-18T00:00:00.000Z',
+        updatedAt: '2026-06-18T00:00:00.000Z',
+      },
+    ],
+    isLoading: false,
+  }),
+  useCreateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
+  useValidateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
+}));
+
 describe('Agents settings Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -288,14 +370,14 @@ describe('Agents settings Mantine migration', () => {
     const { baseElement } = renderWithProviders(<AgentsTab />);
 
     expect(screen.getByText('Installed Agents')).toBeDefined();
-    expect(screen.getByText('Codex CLI')).toBeDefined();
+    expect(screen.getAllByText('Codex CLI').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('gpt-5')).toBeDefined();
     expect(screen.getByText('Codex Health')).toBeDefined();
     expect(screen.getByText('Context Provider Health')).toBeDefined();
     expect(screen.getByText('Agent Host Health')).toBeDefined();
     expect(screen.getByText('Launch Compatibility')).toBeDefined();
     expect(screen.getAllByText('Local Supervisor').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('OpenClaw')).toBeDefined();
+    expect(screen.getAllByText('OpenClaw').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Risky').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('OpenClaw plugins')).toBeDefined();
     expect(screen.getByText('Exec and elevated posture')).toBeDefined();

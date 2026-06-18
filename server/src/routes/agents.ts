@@ -40,10 +40,12 @@ router.post(
   asyncHandler(async (req, res) => {
     let agent: AgentType | undefined;
     let overrideReason: string | undefined;
+    let sandboxPresetId: string | undefined;
     try {
-      ({ agent, overrideReason } = startAgentSchema.parse(req.body) as {
+      ({ agent, overrideReason, sandboxPresetId } = startAgentSchema.parse(req.body) as {
         agent?: AgentType;
         overrideReason?: string;
+        sandboxPresetId?: string;
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -55,6 +57,7 @@ router.post(
     try {
       status = await clawdbotAgentService.startAgent(req.params.taskId as string, agent, {
         overrideReason,
+        sandboxPresetId,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {

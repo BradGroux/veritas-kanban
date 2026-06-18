@@ -274,6 +274,14 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   {
+    prefix: '/api/sandbox-policies',
+    read: 'policy:read',
+    write: 'policy:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/validate\/?$/, permissions: ['policy:read', 'agent:read'] },
+    ],
+  },
+  {
     prefix: '/api/skills/capabilities',
     read: 'policy:read',
     write: 'policy:write',

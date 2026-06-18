@@ -36,22 +36,23 @@
 23. [Attachments](#attachments)
 24. [Agent Permissions](#agent-permissions)
 25. [Agent Routing](#agent-routing)
-26. [Shared Resources](#shared-resources)
-27. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-28. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-29. [Doc Freshness](#doc-freshness)
-30. [Cost Prediction](#cost-prediction)
-31. [Error Learning](#error-learning)
-32. [Tool Policies](#tool-policies)
-33. [Watcher Continuation Policies](#watcher-continuation-policies)
-34. [Traces](#traces)
-35. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-36. [Audit](#audit)
-37. [Maintenance Center](#maintenance-center-apiv1maintenance)
-38. [Common Workflows](#common-workflows)
-39. [Versioning & Deprecation](#versioning--deprecation)
-40. [Rate Limits](#rate-limits)
-41. [Additional Endpoint Groups](#additional-endpoint-groups)
+26. [Sandbox Policies](#sandbox-policies)
+27. [Shared Resources](#shared-resources)
+28. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+29. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+30. [Doc Freshness](#doc-freshness)
+31. [Cost Prediction](#cost-prediction)
+32. [Error Learning](#error-learning)
+33. [Tool Policies](#tool-policies)
+34. [Watcher Continuation Policies](#watcher-continuation-policies)
+35. [Traces](#traces)
+36. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+37. [Audit](#audit)
+38. [Maintenance Center](#maintenance-center-apiv1maintenance)
+39. [Common Workflows](#common-workflows)
+40. [Versioning & Deprecation](#versioning--deprecation)
+41. [Rate Limits](#rate-limits)
+42. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1422,6 +1423,112 @@ PUT /api/agents/routing
 
 ---
 
+## Sandbox Policies
+
+Reusable filesystem, network, environment, and credential presets for agent
+and workflow launch guardrails.
+
+Mounted at `/api/sandbox-policies`.
+
+| Method   | Path                             | Description                                    | Permissions                 |
+| -------- | -------------------------------- | ---------------------------------------------- | --------------------------- |
+| `GET`    | `/api/sandbox-policies`          | List built-in and custom presets               | `policy:read`               |
+| `GET`    | `/api/sandbox-policies/:id`      | Get one preset                                 | `policy:read`               |
+| `POST`   | `/api/sandbox-policies`          | Create a custom preset                         | `policy:write` + admin role |
+| `PUT`    | `/api/sandbox-policies/:id`      | Update a custom preset                         | `policy:write` + admin role |
+| `DELETE` | `/api/sandbox-policies/:id`      | Delete a custom preset                         | `policy:write` + admin role |
+| `POST`   | `/api/sandbox-policies/validate` | Dry-run a preset against provider capabilities | `policy:read`, `agent:read` |
+
+Built-in presets are immutable. Custom presets live in the shared app config.
+Agent profiles, workflow agents, and one-off agent starts can reference a preset
+with `sandboxPresetId`.
+
+### Create Preset
+
+```
+POST /api/sandbox-policies
+```
+
+**Body**:
+
+```json
+{
+  "id": "repo-contained-no-network",
+  "name": "Repo contained, no network",
+  "enabled": true,
+  "enforcement": "required",
+  "requiredCapabilities": ["filesystem.write"],
+  "filesystem": {
+    "readPaths": ["."],
+    "writePaths": ["."],
+    "deniedPaths": ["~/.ssh", "~/.aws", "~/.config/gh"],
+    "dotfileMasking": true,
+    "localOnlyHandles": true
+  },
+  "network": {
+    "defaultEgress": "deny",
+    "allowedHosts": [],
+    "allowedMethods": [],
+    "allowedPathPrefixes": [],
+    "blockPrivateNetwork": true,
+    "blockMetadataEndpoints": true,
+    "blockLoopback": false
+  },
+  "environment": {
+    "passthrough": ["CODEX_HOME", "OPENAI_API_KEY"],
+    "redactDisplay": true
+  },
+  "credentials": {
+    "mode": "brokered",
+    "brokerRefs": ["openai-api-key"]
+  }
+}
+```
+
+**Response** `201`: Created preset with `createdAt` and `updatedAt`.
+
+### Validate Preset
+
+```
+POST /api/sandbox-policies/validate
+```
+
+**Body**:
+
+```json
+{
+  "presetId": "repo-contained-no-network",
+  "provider": "codex-sdk",
+  "workspacePath": "/workspace/veritas-kanban",
+  "requiredCapabilities": ["filesystem.write"]
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "decision": "allow",
+  "provider": "codex-sdk",
+  "effective": {
+    "sandboxMode": "workspace-write",
+    "networkAccessEnabled": false,
+    "envPassthrough": ["CODEX_HOME", "OPENAI_API_KEY"],
+    "credentialRefs": ["openai-api-key"]
+  },
+  "unsupportedRules": [],
+  "warnings": [],
+  "traceId": "govtrace_1760000000000_ab12cd"
+}
+```
+
+`decision` is `allow`, `warn`, or `block`. Required unsupported controls block
+launches before execution. Advisory unsupported controls continue with warnings.
+Credential references and environment-style `name=value` values are redacted in
+responses and governance traces.
+
+---
+
 ## Shared Resources
 
 Registry for shared resources (credentials, config files, API keys, docs) that can be mounted to projects.
@@ -2373,6 +2480,7 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/delegation`                | Task delegation                               |
 | `/api/workflows`                 | Workflow engine ([details](API-WORKFLOWS.md)) |
 | `/api/tool-policies`             | Tool access policies                          |
+| `/api/sandbox-policies`          | Agent sandbox policy presets                  |
 | `/api/integrations`              | External integrations                         |
 | `/api/settings/transition-hooks` | Status transition hooks                       |
 
@@ -2558,7 +2666,7 @@ Update a specific assumption by its zero-based index.
 
 ### Governance Decision Traces (`/api/governance/traces`)
 
-Inspect policy, tool-policy, agent-permission, routing, and workflow-gate decisions with evaluated rules, matched rules, remediation, and redacted raw detail.
+Inspect policy, tool-policy, sandbox-policy, agent-permission, routing, and workflow-gate decisions with evaluated rules, matched rules, remediation, and redacted raw detail.
 
 #### List Governance Traces
 
@@ -2568,7 +2676,7 @@ GET /api/governance/traces
 
 Query params: `kind`, `outcome`, `agent`, `taskId`, `actionType`, `startTime`, `endTime`, `limit`.
 
-`kind` values: `policy`, `tool-policy`, `agent-permission`, `routing`, `workflow-gate`.
+`kind` values: `policy`, `tool-policy`, `sandbox-policy`, `agent-permission`, `routing`, `workflow-gate`.
 
 `outcome` values: `allowed`, `warned`, `blocked`, `approval-required`, `routed`, `fallback`, `skipped`.
 

@@ -9,6 +9,7 @@ import type {
   AgentHostPreviewRequest,
   AgentHostRecord,
   AgentHostRoutingDecision,
+  SandboxProviderCapabilityId,
 } from '@veritas-kanban/shared';
 import { getAgentRegistryService, type RegisteredAgent } from './agent-registry-service.js';
 
@@ -29,6 +30,7 @@ interface HostAccumulator {
   supportedProviders: Set<string>;
   supportedModels: Set<string>;
   supportedTools: Set<string>;
+  sandboxCapabilities: Set<SandboxProviderCapabilityId>;
   workspaceLabels: Set<string>;
   workspaceRoots: string[];
   activeSessions: number;
@@ -89,6 +91,17 @@ export class AgentHostService {
 
       if (agent.provider) host.supportedProviders.add(agent.provider);
       for (const item of stringArray(metadata.providers)) host.supportedProviders.add(item);
+      for (const capability of sandboxCapabilityArray(metadata.sandboxCapabilities)) {
+        host.sandboxCapabilities.add(capability);
+      }
+      for (const capability of inferredSandboxCapabilities(agent.provider)) {
+        host.sandboxCapabilities.add(capability);
+      }
+      for (const provider of stringArray(metadata.providers)) {
+        for (const capability of inferredSandboxCapabilities(provider)) {
+          host.sandboxCapabilities.add(capability);
+        }
+      }
 
       if (agent.model) host.supportedModels.add(agent.model);
       for (const item of stringArray(metadata.models)) host.supportedModels.add(item);
@@ -169,6 +182,7 @@ export class AgentHostService {
         'No model requirement supplied.'
       ),
       this.requiredToolsCheck(host, request.requiredTools),
+      this.sandboxPolicyCheck(host, request.sandboxPresetId),
       {
         id: 'verification-gates',
         label: 'Verification gates',
@@ -301,6 +315,30 @@ export class AgentHostService {
     };
   }
 
+  private sandboxPolicyCheck(
+    host: AgentHostRecord,
+    sandboxPresetId: string | undefined
+  ): AgentHostCompatibilityCheck {
+    if (!sandboxPresetId) {
+      return {
+        id: 'sandbox-policy',
+        label: 'Sandbox policy',
+        passed: true,
+        detail: 'No sandbox preset requirement supplied.',
+      };
+    }
+
+    return {
+      id: 'sandbox-policy',
+      label: 'Sandbox policy',
+      passed: host.sandboxCapabilities.length > 0,
+      detail:
+        host.sandboxCapabilities.length > 0
+          ? `Host reports ${host.sandboxCapabilities.length} sandbox capability signal(s) for preset ${sandboxPresetId}.`
+          : `Host does not report sandbox capability support for preset ${sandboxPresetId}.`,
+    };
+  }
+
   private resolveDecision(
     previews: AgentHostCompatibilityPreview[],
     request: AgentHostPreviewRequest
@@ -405,6 +443,7 @@ function getOrCreateHost(
     supportedProviders: new Set(),
     supportedModels: new Set(),
     supportedTools: new Set(),
+    sandboxCapabilities: new Set(),
     workspaceLabels: new Set(),
     workspaceRoots: [],
     activeSessions: 0,
@@ -448,6 +487,9 @@ function finalizeHost(host: HostAccumulator, now: Date): ResolvedAgentHost {
     supportedProviders: uniqueSorted(Array.from(host.supportedProviders)),
     supportedModels: uniqueSorted(Array.from(host.supportedModels)),
     supportedTools: uniqueSorted(Array.from(host.supportedTools)),
+    sandboxCapabilities: uniqueSorted(
+      Array.from(host.sandboxCapabilities)
+    ) as SandboxProviderCapabilityId[],
     workspaceLabels: uniqueSorted(Array.from(host.workspaceLabels)),
     activeSessions: host.activeSessions,
     queueDepth: host.queueDepth,
@@ -507,6 +549,7 @@ function normalizeRequest(request: AgentHostPreviewRequest): AgentHostPreviewReq
     workspacePath: trimOptional(request.workspacePath),
     requiredTools: uniqueSorted(request.requiredTools ?? []),
     verificationGates: uniqueSorted(request.verificationGates ?? []),
+    sandboxPresetId: trimOptional(request.sandboxPresetId),
     manualHostId: trimOptional(request.manualHostId),
     projectDefaultHostId: trimOptional(request.projectDefaultHostId),
     autoRouting: request.autoRouting,
@@ -543,6 +586,38 @@ function trimOptional(value: string | undefined): string | undefined {
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+const SANDBOX_CAPABILITY_IDS = new Set<SandboxProviderCapabilityId>([
+  'filesystem.read',
+  'filesystem.write',
+  'filesystem.deny-paths',
+  'filesystem.dotfile-masking',
+  'network.disable',
+  'network.allowlist',
+  'network.block-private',
+  'network.block-metadata',
+  'environment.allowlist',
+  'credential.broker',
+]);
+
+function sandboxCapabilityArray(value: unknown): SandboxProviderCapabilityId[] {
+  return stringArray(value).filter((item): item is SandboxProviderCapabilityId =>
+    SANDBOX_CAPABILITY_IDS.has(item as SandboxProviderCapabilityId)
+  );
+}
+
+function inferredSandboxCapabilities(provider: string | undefined): SandboxProviderCapabilityId[] {
+  switch (provider) {
+    case 'codex-cli':
+      return ['filesystem.read', 'filesystem.write', 'environment.allowlist'];
+    case 'codex-sdk':
+      return ['filesystem.read', 'filesystem.write', 'network.disable', 'environment.allowlist'];
+    case 'openclaw':
+      return ['filesystem.read', 'filesystem.write', 'environment.allowlist'];
+    default:
+      return [];
+  }
 }
 
 function numberValue(value: unknown): number | undefined {

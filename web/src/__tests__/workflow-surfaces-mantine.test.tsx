@@ -33,6 +33,10 @@ vi.mock('@/hooks/useWebSocket', () => ({
   useWebSocket: mocks.useWebSocket,
 }));
 
+vi.mock('@/hooks/useSandboxPolicies', () => ({
+  useSandboxPolicies: () => ({ data: [] }),
+}));
+
 const workflowRun = {
   id: 'run-1',
   workflowId: 'wf-release',

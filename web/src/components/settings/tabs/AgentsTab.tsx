@@ -1,9 +1,26 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { ActionIcon, Badge, Button, Modal, Select, Switch, Text, TextInput } from '@mantine/core';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Modal,
+  Select,
+  Switch,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
 import { useCodexHealth, useConfig, useProviderHealth, useUpdateAgents } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
 import { useAgentHostPreview, useAgentHosts } from '@/hooks/useAgent';
+import {
+  useCreateSandboxPolicy,
+  useDeleteSandboxPolicy,
+  useSandboxPolicies,
+  useUpdateSandboxPolicy,
+  useValidateSandboxPolicy,
+} from '@/hooks/useSandboxPolicies';
 import {
   Bot,
   Plus,
@@ -17,6 +34,7 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Server,
 } from 'lucide-react';
 import type {
@@ -30,6 +48,8 @@ import type {
   AgentType,
   RoutingRule,
   AgentRoutingConfig,
+  SandboxPolicyDryRunResult,
+  SandboxPolicyPreset,
 } from '@veritas-kanban/shared';
 import type {
   CodexHealthStatus,
@@ -55,6 +75,10 @@ const AGENT_PROVIDER_OPTIONS: Array<{ value: AgentProvider | '__none__'; label: 
   { value: 'custom', label: 'Custom' },
 ];
 
+const SANDBOX_PROVIDER_OPTIONS = AGENT_PROVIDER_OPTIONS.filter(
+  (option): option is { value: AgentProvider; label: string } => option.value !== '__none__'
+);
+
 export function AgentsTab() {
   const { data: config, isLoading } = useConfig();
   const {
@@ -67,6 +91,7 @@ export function AgentsTab() {
     isFetching: isProviderHealthFetching,
     refetch: refetchProviderHealth,
   } = useProviderHealth();
+  const { data: sandboxPresets = [], isLoading: isSandboxPoliciesLoading } = useSandboxPolicies();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
   const updateAgents = useUpdateAgents();
@@ -131,6 +156,8 @@ export function AgentsTab() {
         {showAddForm && (
           <AgentForm
             existingTypes={config?.agents.map((a) => a.type) || []}
+            sandboxPresets={sandboxPresets}
+            defaultSandboxPresetId={config?.defaultSandboxPresetId}
             onSubmit={handleAddAgent}
             onCancel={() => setShowAddForm(false)}
           />
@@ -152,6 +179,8 @@ export function AgentsTab() {
                   existingTypes={config.agents
                     .filter((a) => a.type !== agent.type)
                     .map((a) => a.type)}
+                  sandboxPresets={sandboxPresets}
+                  defaultSandboxPresetId={config.defaultSandboxPresetId}
                   onSubmit={(updated) => handleEditAgent(agent.type, updated)}
                   onCancel={() => setEditingAgent(null)}
                 />
@@ -159,6 +188,7 @@ export function AgentsTab() {
                 <AgentItem
                   key={agent.type}
                   agent={agent}
+                  sandboxPresets={sandboxPresets}
                   isDefault={isDefault(agent.type)}
                   onToggle={() => handleToggleAgent(agent.type)}
                   onEdit={() => setEditingAgent(agent.type)}
@@ -183,6 +213,12 @@ export function AgentsTab() {
       />
 
       <AgentHostHealthPanel agents={config?.agents || []} />
+
+      <SandboxPoliciesSection
+        agents={config?.agents || []}
+        presets={sandboxPresets}
+        isLoading={isSandboxPoliciesLoading}
+      />
 
       {/* Agent Behavior */}
       <div className="space-y-4">
@@ -476,9 +512,16 @@ function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
       agent: selectedAgent || undefined,
       provider: selectedAgentConfig?.provider,
       model: selectedAgentConfig?.model,
+      sandboxPresetId: selectedAgentConfig?.sandboxPresetId,
       manualHostId: selectedHostId === 'auto' ? undefined : selectedHostId,
     }),
-    [selectedAgent, selectedAgentConfig?.provider, selectedAgentConfig?.model, selectedHostId]
+    [
+      selectedAgent,
+      selectedAgentConfig?.provider,
+      selectedAgentConfig?.model,
+      selectedAgentConfig?.sandboxPresetId,
+      selectedHostId,
+    ]
   );
   const { data: preview, isFetching: isPreviewFetching } = useAgentHostPreview(
     previewRequest,
@@ -605,6 +648,11 @@ function AgentHostItem({ host }: { host: AgentHostRecord }) {
             {provider}
           </Badge>
         ))}
+        {host.sandboxCapabilities.slice(0, 3).map((capability) => (
+          <Badge key={capability} size="xs" variant="light" color="teal">
+            {capability}
+          </Badge>
+        ))}
       </div>
 
       {host.workspaceLabels.length > 0 && (
@@ -707,6 +755,526 @@ function AgentHostPreviewPanel({
   );
 }
 
+function SandboxPoliciesSection({
+  agents,
+  presets,
+  isLoading,
+}: {
+  agents: AgentConfig[];
+  presets: SandboxPolicyPreset[];
+  isLoading: boolean;
+}) {
+  const createPreset = useCreateSandboxPolicy();
+  const updatePreset = useUpdateSandboxPolicy();
+  const deletePreset = useDeleteSandboxPolicy();
+  const validatePreset = useValidateSandboxPolicy();
+  const [editingPreset, setEditingPreset] = useState<SandboxPolicyPreset | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [previewPresetId, setPreviewPresetId] = useState<string>('');
+  const [previewProvider, setPreviewProvider] = useState<AgentProvider>('codex-sdk');
+
+  useEffect(() => {
+    if (!previewPresetId && presets.length > 0) {
+      setPreviewPresetId(presets[0].id);
+    }
+  }, [presets, previewPresetId]);
+
+  const assignedByPreset = useMemo(() => {
+    const grouped = new Map<string, AgentConfig[]>();
+    for (const agent of agents) {
+      if (!agent.sandboxPresetId) continue;
+      const current = grouped.get(agent.sandboxPresetId) ?? [];
+      current.push(agent);
+      grouped.set(agent.sandboxPresetId, current);
+    }
+    return grouped;
+  }, [agents]);
+
+  const selectedPreset = presets.find((preset) => preset.id === previewPresetId);
+  const validation = validatePreset.data as
+    | (SandboxPolicyDryRunResult & { traceId?: string })
+    | undefined;
+
+  const handlePreview = () => {
+    if (!selectedPreset) return;
+    validatePreset.mutate({
+      presetId: selectedPreset.id,
+      provider: previewProvider,
+    });
+  };
+
+  const handleSavePreset = (preset: SandboxPolicyPreset) => {
+    if (editingPreset) {
+      updatePreset.mutate(
+        { id: editingPreset.id, preset },
+        {
+          onSuccess: () => setEditingPreset(null),
+        }
+      );
+      return;
+    }
+
+    createPreset.mutate(preset, {
+      onSuccess: () => setShowCreateForm(false),
+    });
+  };
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Sandbox Policies</h3>
+          <p className="text-xs text-muted-foreground">
+            {isLoading ? 'Loading presets' : `${presets.length} presets configured`}
+          </p>
+        </div>
+        {!showCreateForm && !editingPreset && (
+          <Button
+            variant="outline"
+            size="xs"
+            leftSection={<Plus className="h-4 w-4" />}
+            onClick={() => setShowCreateForm(true)}
+          >
+            Add Preset
+          </Button>
+        )}
+      </div>
+
+      {(showCreateForm || editingPreset) && (
+        <SandboxPresetForm
+          preset={editingPreset ?? undefined}
+          existingIds={presets.map((preset) => preset.id)}
+          onSubmit={handleSavePreset}
+          onCancel={() => {
+            setShowCreateForm(false);
+            setEditingPreset(null);
+          }}
+        />
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="space-y-2">
+          {presets.map((preset) => {
+            const assignedAgents = assignedByPreset.get(preset.id) ?? [];
+            return (
+              <div key={preset.id} className="rounded-md border bg-background/60 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{preset.name}</span>
+                      <Badge size="xs" variant="light" color={preset.enabled ? 'green' : 'gray'}>
+                        {preset.enabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                      <Badge size="xs" variant="outline" color="gray">
+                        {preset.enforcement}
+                      </Badge>
+                      {preset.builtIn && (
+                        <Badge size="xs" variant="outline" color="teal">
+                          Built-in
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {sandboxPresetSummary(preset)}
+                    </p>
+                  </div>
+                  {!preset.builtIn && (
+                    <div className="flex items-center gap-1">
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        aria-label={`Edit ${preset.name}`}
+                        onClick={() => setEditingPreset(preset)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        aria-label={
+                          preset.enabled ? `Disable ${preset.name}` : `Enable ${preset.name}`
+                        }
+                        onClick={() =>
+                          updatePreset.mutate({
+                            id: preset.id,
+                            preset: { ...preset, enabled: !preset.enabled },
+                          })
+                        }
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        color="red"
+                        aria-label={`Delete ${preset.name}`}
+                        onClick={() => deletePreset.mutate(preset.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </ActionIcon>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  <Badge size="xs" variant="light" color="gray">
+                    {formatSandboxMode(preset)}
+                  </Badge>
+                  <Badge size="xs" variant="light" color="gray">
+                    Network {preset.network.defaultEgress}
+                  </Badge>
+                  <Badge size="xs" variant="light" color="gray">
+                    Env {preset.environment.passthrough.length}
+                  </Badge>
+                  {assignedAgents.length > 0 && (
+                    <Badge size="xs" variant="light" color="violet">
+                      {assignedAgents.length} assigned
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {!presets.length && (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No sandbox presets configured.
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-md border bg-background/60 p-3 space-y-3">
+          <div>
+            <h4 className="text-sm font-medium">Dry Run</h4>
+            <p className="text-xs text-muted-foreground">
+              Check provider enforcement before launch.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Select
+              label="Preset"
+              size="xs"
+              value={previewPresetId}
+              onChange={(value) => setPreviewPresetId(value || '')}
+              data={presets.map((preset) => ({ value: preset.id, label: preset.name }))}
+              disabled={presets.length === 0}
+            />
+            <Select
+              label="Provider"
+              size="xs"
+              value={previewProvider}
+              onChange={(value) => setPreviewProvider((value as AgentProvider) || 'codex-sdk')}
+              data={SANDBOX_PROVIDER_OPTIONS}
+              allowDeselect={false}
+            />
+          </div>
+          <Button
+            size="xs"
+            variant="light"
+            onClick={handlePreview}
+            disabled={!selectedPreset || validatePreset.isPending}
+          >
+            {validatePreset.isPending ? 'Checking...' : 'Run Dry Check'}
+          </Button>
+
+          {validation && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Badge color={sandboxDecisionColor(validation.decision)} variant="light">
+                  {validation.decision}
+                </Badge>
+                <Badge variant="outline" color="gray">
+                  {validation.effective.sandboxMode}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  color={validation.effective.networkAccessEnabled ? 'yellow' : 'green'}
+                >
+                  Network {validation.effective.networkAccessEnabled ? 'on' : 'off'}
+                </Badge>
+              </div>
+              {validation.unsupportedRules.length > 0 && (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {validation.unsupportedRules.slice(0, 5).map((rule) => (
+                    <li key={rule.id}>{rule.detail}</li>
+                  ))}
+                </ul>
+              )}
+              {validation.traceId && (
+                <p className="text-xs text-muted-foreground">Trace {validation.traceId}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SandboxPresetForm({
+  preset,
+  existingIds,
+  onSubmit,
+  onCancel,
+}: {
+  preset?: SandboxPolicyPreset;
+  existingIds: string[];
+  onSubmit: (preset: SandboxPolicyPreset) => void;
+  onCancel: () => void;
+}) {
+  const isEditing = !!preset;
+  const now = new Date().toISOString();
+  const [name, setName] = useState(preset?.name ?? '');
+  const [id, setId] = useState(preset?.id ?? '');
+  const [enabled, setEnabled] = useState(preset?.enabled ?? true);
+  const [enforcement, setEnforcement] = useState<SandboxPolicyPreset['enforcement']>(
+    preset?.enforcement ?? 'required'
+  );
+  const [readPaths, setReadPaths] = useState(
+    joinList(preset?.filesystem.readPaths ?? ['<workspace>'])
+  );
+  const [writePaths, setWritePaths] = useState(
+    joinList(preset?.filesystem.writePaths ?? ['<workspace>'])
+  );
+  const [deniedPaths, setDeniedPaths] = useState(joinList(preset?.filesystem.deniedPaths ?? []));
+  const [networkDefault, setNetworkDefault] = useState<
+    SandboxPolicyPreset['network']['defaultEgress']
+  >(preset?.network.defaultEgress ?? 'deny');
+  const [allowedHosts, setAllowedHosts] = useState(joinList(preset?.network.allowedHosts ?? []));
+  const [environmentKeys, setEnvironmentKeys] = useState(
+    joinList(
+      preset?.environment.passthrough ?? [
+        'PATH',
+        'HOME',
+        'SHELL',
+        'USER',
+        'TMPDIR',
+        'TEMP',
+        'TERM',
+        'VK_API_URL',
+      ]
+    )
+  );
+  const [credentialMode, setCredentialMode] = useState<SandboxPolicyPreset['credentials']['mode']>(
+    preset?.credentials.mode ?? 'none'
+  );
+  const [brokerRefs, setBrokerRefs] = useState(joinList(preset?.credentials.brokerRefs ?? []));
+
+  const effectiveId = isEditing ? preset.id : id || presetIdFromName(name);
+  const duplicate = !isEditing && existingIds.includes(effectiveId);
+  const valid = name.trim() && effectiveId && !duplicate;
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!valid) return;
+
+    onSubmit({
+      id: effectiveId,
+      name: name.trim(),
+      enabled,
+      builtIn: false,
+      enforcement,
+      requiredCapabilities: [],
+      filesystem: {
+        readPaths: splitList(readPaths),
+        writePaths: splitList(writePaths),
+        deniedPaths: splitList(deniedPaths),
+        dotfileMasking: splitList(deniedPaths).length > 0,
+        localOnlyHandles: true,
+      },
+      network: {
+        defaultEgress: networkDefault,
+        allowedHosts: splitList(allowedHosts),
+        allowedMethods: allowedHosts.trim() ? ['GET', 'POST'] : [],
+        allowedPathPrefixes: allowedHosts.trim() ? ['/'] : [],
+        blockPrivateNetwork: networkDefault === 'deny',
+        blockMetadataEndpoints: networkDefault === 'deny',
+        blockLoopback: networkDefault === 'deny',
+      },
+      environment: {
+        passthrough: splitList(environmentKeys).map((key) => key.toUpperCase()),
+        redactDisplay: true,
+      },
+      credentials: {
+        mode: credentialMode,
+        brokerRefs: splitList(brokerRefs),
+      },
+      createdAt: preset?.createdAt ?? now,
+      updatedAt: now,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-md border bg-muted/30 p-3 space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ShieldCheck className="h-4 w-4" />
+        {isEditing ? `Edit ${preset.name}` : 'Add Sandbox Preset'}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextInput
+          label="Name"
+          value={name}
+          onChange={(event) => setName(event.currentTarget.value)}
+        />
+        <TextInput
+          label="ID"
+          value={isEditing ? preset.id : id}
+          onChange={(event) => setId(event.currentTarget.value)}
+          disabled={isEditing}
+          placeholder={name ? presetIdFromName(name) : 'repo-contained'}
+          error={duplicate ? 'Preset ID already exists' : undefined}
+        />
+        <Select
+          label="Enforcement"
+          value={enforcement}
+          onChange={(value) =>
+            setEnforcement((value as SandboxPolicyPreset['enforcement']) ?? 'required')
+          }
+          data={[
+            { value: 'required', label: 'Required' },
+            { value: 'advisory', label: 'Advisory' },
+          ]}
+          allowDeselect={false}
+        />
+        <Select
+          label="Network"
+          value={networkDefault}
+          onChange={(value) =>
+            setNetworkDefault((value as SandboxPolicyPreset['network']['defaultEgress']) ?? 'deny')
+          }
+          data={[
+            { value: 'deny', label: 'Default deny' },
+            { value: 'allow', label: 'Default allow' },
+          ]}
+          allowDeselect={false}
+        />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Textarea
+          label="Read Paths"
+          value={readPaths}
+          onChange={(event) => setReadPaths(event.currentTarget.value)}
+          minRows={2}
+        />
+        <Textarea
+          label="Write Paths"
+          value={writePaths}
+          onChange={(event) => setWritePaths(event.currentTarget.value)}
+          minRows={2}
+        />
+        <Textarea
+          label="Denied Paths"
+          value={deniedPaths}
+          onChange={(event) => setDeniedPaths(event.currentTarget.value)}
+          minRows={2}
+        />
+        <Textarea
+          label="Allowed Hosts"
+          value={allowedHosts}
+          onChange={(event) => setAllowedHosts(event.currentTarget.value)}
+          minRows={2}
+        />
+        <Textarea
+          label="Environment"
+          value={environmentKeys}
+          onChange={(event) => setEnvironmentKeys(event.currentTarget.value)}
+          minRows={2}
+        />
+        <Textarea
+          label="Broker Refs"
+          value={brokerRefs}
+          onChange={(event) => setBrokerRefs(event.currentTarget.value)}
+          minRows={2}
+        />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Select
+          label="Credentials"
+          value={credentialMode}
+          onChange={(value) =>
+            setCredentialMode((value as SandboxPolicyPreset['credentials']['mode']) ?? 'none')
+          }
+          data={[
+            { value: 'none', label: 'None' },
+            { value: 'brokered', label: 'Brokered' },
+            { value: 'env-passthrough', label: 'Environment passthrough' },
+          ]}
+          allowDeselect={false}
+        />
+        <Switch
+          label="Enabled"
+          checked={enabled}
+          onChange={(event) => setEnabled(event.currentTarget.checked)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="subtle"
+          size="xs"
+          leftSection={<X className="h-3.5 w-3.5" />}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          size="xs"
+          leftSection={<Check className="h-3.5 w-3.5" />}
+          disabled={!valid}
+        >
+          Save Preset
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinList(values: string[]): string {
+  return values.join('\n');
+}
+
+function presetIdFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function sandboxPresetSummary(preset: SandboxPolicyPreset): string {
+  const pieces = [
+    `${preset.filesystem.readPaths.length} read`,
+    `${preset.filesystem.writePaths.length} write`,
+    `${preset.network.allowedHosts.length} hosts`,
+    `${preset.credentials.mode} credentials`,
+  ];
+  return pieces.join(' · ');
+}
+
+function formatSandboxMode(preset: SandboxPolicyPreset): string {
+  if (preset.filesystem.writePaths.length > 0) return 'Workspace write';
+  if (preset.filesystem.readPaths.length > 0) return 'Read only';
+  return 'Full access';
+}
+
+function sandboxDecisionColor(decision: SandboxPolicyDryRunResult['decision']): string {
+  if (decision === 'allow') return 'green';
+  if (decision === 'warn') return 'yellow';
+  return 'red';
+}
+
 function CodexHealthPanel({
   health,
   isFetching,
@@ -783,14 +1351,23 @@ function CodexHealthPanel({
 
 interface AgentItemProps {
   agent: AgentConfig;
+  sandboxPresets: SandboxPolicyPreset[];
   isDefault: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onRemove: () => void;
 }
 
-function AgentItem({ agent, isDefault, onToggle, onEdit, onRemove }: AgentItemProps) {
+function AgentItem({
+  agent,
+  sandboxPresets,
+  isDefault,
+  onToggle,
+  onEdit,
+  onRemove,
+}: AgentItemProps) {
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const sandboxPreset = sandboxPresets.find((preset) => preset.id === agent.sandboxPresetId);
 
   return (
     <>
@@ -827,6 +1404,11 @@ function AgentItem({ agent, isDefault, onToggle, onEdit, onRemove }: AgentItemPr
               {agent.model && (
                 <Badge size="xs" variant="light" color="gray">
                   {agent.model}
+                </Badge>
+              )}
+              {sandboxPreset && (
+                <Badge size="xs" variant="light" color="teal">
+                  {sandboxPreset.name}
                 </Badge>
               )}
             </div>
@@ -898,6 +1480,8 @@ function AgentItem({ agent, isDefault, onToggle, onEdit, onRemove }: AgentItemPr
 interface AgentFormProps {
   agent?: AgentConfig;
   existingTypes: string[];
+  sandboxPresets: SandboxPolicyPreset[];
+  defaultSandboxPresetId?: string;
   onSubmit: (agent: AgentConfig) => void;
   onCancel: () => void;
 }
@@ -1487,7 +2071,14 @@ function RoutingRuleForm({ rule, agents, existingIds, onSubmit, onCancel }: Rout
 
 // ============ Agent Form (add/edit mode) ============
 
-function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps) {
+function AgentForm({
+  agent,
+  existingTypes,
+  sandboxPresets,
+  defaultSandboxPresetId,
+  onSubmit,
+  onCancel,
+}: AgentFormProps) {
   const isEditing = !!agent;
   const [name, setName] = useState(agent?.name || '');
   const [type, setType] = useState(agent?.type || '');
@@ -1495,6 +2086,7 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
   const [argsStr, setArgsStr] = useState(agent?.args.join(' ') || '');
   const [provider, setProvider] = useState<AgentProvider | ''>(agent?.provider || '');
   const [model, setModel] = useState(agent?.model || '');
+  const [sandboxPresetId, setSandboxPresetId] = useState(agent?.sandboxPresetId || '');
 
   const typeSlug =
     type ||
@@ -1519,6 +2111,7 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
       enabled: agent?.enabled ?? true,
       provider: provider || undefined,
       model: model.trim() || undefined,
+      sandboxPresetId: sandboxPresetId || undefined,
     });
   };
 
@@ -1597,6 +2190,23 @@ function AgentForm({ agent, existingTypes, onSubmit, onCancel }: AgentFormProps)
             classNames={{ input: 'font-mono text-sm' }}
           />
         </div>
+
+        <Select
+          id="agent-sandbox-preset"
+          label="Sandbox Preset"
+          value={sandboxPresetId || '__default__'}
+          onChange={(value) => setSandboxPresetId(value === '__default__' ? '' : value || '')}
+          data={[
+            {
+              value: '__default__',
+              label: defaultSandboxPresetId
+                ? `Default (${defaultSandboxPresetId})`
+                : 'Default / legacy',
+            },
+            ...sandboxPresets.map((preset) => ({ value: preset.id, label: preset.name })),
+          ]}
+          allowDeselect={false}
+        />
       </div>
 
       <div className="flex justify-end gap-2">

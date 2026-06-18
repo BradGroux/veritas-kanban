@@ -66,6 +66,7 @@ const hostPreviewSchema = z.object({
   workspacePath: z.string().max(1000).optional(),
   requiredTools: z.array(z.string().max(80)).max(50).optional(),
   verificationGates: z.array(z.string().max(200)).max(50).optional(),
+  sandboxPresetId: z.string().max(80).optional(),
   manualHostId: z.string().max(120).optional(),
   projectDefaultHostId: z.string().max(120).optional(),
   autoRouting: z.boolean().optional(),
