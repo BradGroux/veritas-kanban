@@ -3,6 +3,7 @@
 import type { AgentType, TaskPriority, TaskStatus } from './task.types.js';
 import type { TelemetryConfig } from './telemetry.types.js';
 import type { WatcherContinuationSettings } from './watcher-policy.types.js';
+import type { SandboxPolicyPreset } from './sandbox-policy.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -25,6 +26,7 @@ export interface AgentConfig {
   enabled: boolean;
   provider?: AgentProvider;
   model?: string;
+  sandboxPresetId?: string;
 }
 
 export type AgentProvider =
@@ -160,6 +162,8 @@ export interface AppConfig {
   telemetry?: TelemetryConfig;
   features?: FeatureSettings;
   coolify?: CoolifyConfig;
+  sandboxPolicyPresets?: SandboxPolicyPreset[];
+  defaultSandboxPresetId?: string;
 }
 
 // ============ Feature Settings Types ============

@@ -27,6 +27,7 @@ import { digestApi } from './digest';
 import { scheduledDeliverablesApi } from './deliverables';
 import { evidenceApi } from './evidence';
 import { timeBreakdownsApi } from './time-breakdowns';
+import { sandboxPoliciesApi } from './sandbox-policies';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -65,6 +66,7 @@ export const api = {
   scheduledDeliverables: scheduledDeliverablesApi,
   evidence: evidenceApi,
   timeBreakdowns: timeBreakdownsApi,
+  sandboxPolicies: sandboxPoliciesApi,
 };
 
 export type {

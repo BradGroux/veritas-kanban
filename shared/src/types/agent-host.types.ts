@@ -1,3 +1,5 @@
+import type { SandboxProviderCapabilityId } from './sandbox-policy.types.js';
+
 export type AgentHostPosture =
   | 'connected'
   | 'stale'
@@ -25,6 +27,7 @@ export interface AgentHostRecord {
   supportedProviders: string[];
   supportedModels: string[];
   supportedTools: string[];
+  sandboxCapabilities: SandboxProviderCapabilityId[];
   workspaceLabels: string[];
   activeSessions: number;
   queueDepth: number;
@@ -53,6 +56,7 @@ export type AgentHostCompatibilityCheckId =
   | 'model-supported'
   | 'agent-supported'
   | 'required-tools'
+  | 'sandbox-policy'
   | 'verification-gates';
 
 export interface AgentHostCompatibilityCheck {
@@ -79,6 +83,7 @@ export interface AgentHostPreviewRequest {
   workspacePath?: string;
   requiredTools?: string[];
   verificationGates?: string[];
+  sandboxPresetId?: string;
   manualHostId?: string;
   projectDefaultHostId?: string;
   autoRouting?: boolean;

@@ -34,6 +34,12 @@ Recommended default shape:
 codex exec --cwd <task-worktree> --sandbox workspace-write --json <prompt>
 ```
 
+When a Codex agent profile or workflow agent has `sandboxPresetId`, Veritas
+dry-runs the sandbox policy before launching the CLI process. The resulting
+filesystem mode, network posture, and environment passthrough are applied where
+the provider supports them. Required unsupported controls fail closed before
+execution and write a redacted `sandbox-policy` governance trace.
+
 ### Codex SDK Provider
 
 The SDK path supports long-lived local Codex threads, resumable session IDs, and richer follow-up workflows. Veritas starts `@openai/codex-sdk` threads in the task worktree, streams SDK events into attempt logs, emits token telemetry, and persists the SDK `threadId` on the active/completed attempt.
@@ -48,6 +54,11 @@ const thread = codex.startThread({
   networkAccessEnabled: true,
 });
 ```
+
+The SDK provider also honors sandbox policy presets. This is the preferred path
+for deny-by-default network policies because the SDK capability check supports
+network disablement, whereas the CLI path is limited to the controls exposed by
+`codex exec`.
 
 ### Codex Cloud Delegation
 
@@ -114,6 +125,7 @@ Workflow agent steps execute through provider-aware step handling. Codex-backed 
 - step output files
 - retry and failure handling through the workflow runner
 - tool-policy hints in prompt/config where direct enforcement is unavailable
+- per-agent `sandboxPresetId` launch guardrails
 
 Workflow agents can opt into Codex with provider metadata:
 

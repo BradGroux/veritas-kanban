@@ -65,10 +65,17 @@ export VK_API_KEY="<agent-role-key-if-auth-required>"
 export CODEX_API_KEY="<optional-api-key-for-automation>"
 ```
 
+When the selected agent profile has `sandboxPresetId`, Veritas validates the
+policy before launch and derives the effective Codex sandbox arguments and
+environment passthrough from that preset. Required unsupported controls block
+the attempt before Codex starts; advisory controls continue with warnings and a
+redacted governance trace.
+
 ### Veritas Behavior
 
 1. Resolve the selected agent to a provider: `codex-cli`.
-2. Create an attempt with provider metadata:
+2. Dry-run the selected sandbox policy preset when one is assigned.
+3. Create an attempt with provider metadata:
    ```json
    {
      "agent": "codex",
@@ -77,8 +84,8 @@ export CODEX_API_KEY="<optional-api-key-for-automation>"
      "sandbox": "workspace-write"
    }
    ```
-3. Run Codex in the task worktree.
-4. Parse JSONL events:
+4. Run Codex in the task worktree.
+5. Parse JSONL events:
    - `thread.started`
    - `turn.started`
    - `item.started`
@@ -86,9 +93,9 @@ export CODEX_API_KEY="<optional-api-key-for-automation>"
    - `turn.completed`
    - `turn.failed`
    - `error`
-5. Append human-readable attempt logs.
-6. Preserve final response as the completion summary.
-7. Emit telemetry and token usage when available.
+6. Append human-readable attempt logs.
+7. Preserve final response as the completion summary.
+8. Emit telemetry and token usage when available.
 
 ---
 
@@ -108,6 +115,9 @@ const thread = codex.startThread({
 });
 const result = await thread.run('Implement the Veritas task in the current worktree.');
 ```
+
+Codex SDK starts use the same preset dry-run path as CLI starts. Prefer SDK mode
+for required network disablement because the SDK supports that control directly.
 
 Veritas persists the Codex thread ID in attempt metadata:
 

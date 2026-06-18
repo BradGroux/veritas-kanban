@@ -118,6 +118,7 @@ export interface WorkflowAgent {
   model?: string; // default model for this agent
   provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | string;
   command?: string;
+  sandboxPresetId?: string;
   description: string;
   tools?: string[]; // Phase 2: Tool restrictions (#110)
 }

@@ -136,6 +136,30 @@ limits are tracked in
 Compatibility errors and debug bundles must redact tokens, cookies, private
 keys, local private paths, raw chat content, and task body text.
 
+## Agent Sandbox Policies
+
+Agent sandbox policy presets live in the shared app config and are managed from
+**Settings -> Agents -> Sandbox Policies** or `/api/sandbox-policies`.
+
+Use them to constrain:
+
+- Filesystem read/write paths, denied paths, dotfile masking, and local-only handles.
+- Network egress defaults, allowlisted hosts and path prefixes, and private network or metadata endpoint blocks.
+- Environment variable passthrough.
+- Credential access mode: none, brokered references, or explicit environment passthrough.
+
+Launch-time validation compares the preset with the selected provider's
+capabilities. Required unsupported controls block the agent or workflow step
+before execution. Advisory unsupported controls continue with warnings. Every
+dry-run and launch-time decision writes a governance trace with raw detail
+redacted; credential references and environment-style `name=value` strings are
+shown as `[redacted]`.
+
+For untrusted or externally sourced work, prefer a required preset with
+repository-scoped writes, default-deny network egress, metadata endpoint
+blocking, and brokered credentials. Keep the legacy permissive preset only for
+existing local Codex CLI workflows that still need broad compatibility.
+
 ## Configuration Reference
 
 ### Environment Variables
@@ -258,7 +282,11 @@ ws.onclose = (event) => {
 
 5. **Monitor access** - The server logs connection attempts with role information
 
-6. **Keep remote mode explicit** - Binding outside loopback, reverse proxying,
+6. **Constrain agent launches** - Assign sandbox policy presets before running
+   untrusted work. Default-deny network egress and broker credentials when a
+   workflow does not need broad host access.
+
+7. **Keep remote mode explicit** - Binding outside loopback, reverse proxying,
    tunneling, or serving mobile/PWA clients requires auth enabled, localhost
    bypass disabled, exact CORS/WebSocket origins, and redacted diagnostics. See
    [ADR 0002](architecture/ADR-0002-v5-remote-server-security-posture.md).

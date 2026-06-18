@@ -13,13 +13,14 @@
 3. [Workflow Runs](#workflow-runs)
 4. [Gate Operations](#gate-operations)
 5. [Tool Policies](#tool-policies)
-6. [Task Dependencies](#task-dependencies) (NEW — v3.3)
-7. [Crash-Recovery Checkpointing](#crash-recovery-checkpointing) (NEW — v3.3)
-8. [Observational Memory](#observational-memory) (NEW — v3.3)
-9. [Agent Filter](#agent-filter) (NEW — v3.3)
-10. [WebSocket Events](#websocket-events)
-11. [TypeScript Interfaces](#typescript-interfaces)
-12. [Error Responses](#error-responses)
+6. [Sandbox Policies](#sandbox-policies)
+7. [Task Dependencies](#task-dependencies) (NEW — v3.3)
+8. [Crash-Recovery Checkpointing](#crash-recovery-checkpointing) (NEW — v3.3)
+9. [Observational Memory](#observational-memory) (NEW — v3.3)
+10. [Agent Filter](#agent-filter) (NEW — v3.3)
+11. [WebSocket Events](#websocket-events)
+12. [TypeScript Interfaces](#typescript-interfaces)
+13. [Error Responses](#error-responses)
 
 ---
 
@@ -1203,6 +1204,27 @@ curl -X POST http://localhost:3001/api/tool-policies/planner/validate \
 
 ---
 
+## Sandbox Policies
+
+Workflow agents can set `sandboxPresetId` to select a sandbox policy preset for
+that role. The workflow executor dry-runs the preset against the selected
+provider before launching the step. Required unsupported controls block the
+step before execution and write a `sandbox-policy` governance trace; advisory
+unsupported controls continue with warnings.
+
+Use `/api/sandbox-policies/validate` to preflight a workflow agent's preset in
+the authoring UI or custom automation. Presets can also be assigned visually in
+the workflow authoring panel.
+
+Sandbox policies are complementary to tool policies:
+
+- Tool policies decide which Veritas/OpenClaw tools a workflow role may use.
+- Sandbox policies decide what the underlying provider process may access at
+  launch time: filesystem paths, network egress, environment variables, and
+  credentials.
+
+---
+
 ## Task Dependencies
 
 ### GET /api/tasks/:id/dependencies
@@ -1906,6 +1928,7 @@ export interface WorkflowAgent {
   id: string;
   name: string;
   role: string; // maps to tool policy
+  sandboxPresetId?: string; // maps to a sandbox policy preset
   model?: string; // default model for this agent
   description: string;
   tools?: string[]; // tool restrictions (overrides role policy)

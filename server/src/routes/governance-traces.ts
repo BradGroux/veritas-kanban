@@ -8,7 +8,14 @@ const router: RouterType = Router();
 
 const traceListQuerySchema = z.object({
   kind: z
-    .enum(['policy', 'tool-policy', 'agent-permission', 'routing', 'workflow-gate'])
+    .enum([
+      'policy',
+      'tool-policy',
+      'sandbox-policy',
+      'agent-permission',
+      'routing',
+      'workflow-gate',
+    ])
     .optional(),
   outcome: z
     .enum(['allowed', 'warned', 'blocked', 'approval-required', 'routed', 'fallback', 'skipped'])

@@ -39,6 +39,7 @@ const agentSchema = z.object({
     ])
     .optional(),
   model: z.string().optional(),
+  sandboxPresetId: z.string().min(1).max(80).optional(),
 });
 
 const setDefaultAgentSchema = z.object({

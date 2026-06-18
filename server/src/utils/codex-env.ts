@@ -35,10 +35,16 @@ export function isSensitiveCodexEnvKey(key: string): boolean {
   return SECRET_ENV_KEY_PATTERN.test(key);
 }
 
-export function buildSafeCodexEnv(source: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function buildSafeCodexEnv(
+  source: NodeJS.ProcessEnv = process.env,
+  passthroughKeys?: Iterable<string>
+): Record<string, string> {
   const env: Record<string, string> = {};
+  const allowlist = passthroughKeys
+    ? new Set(Array.from(passthroughKeys, (key) => key.toUpperCase()))
+    : CODEX_ENV_ALLOWLIST;
 
-  for (const key of CODEX_ENV_ALLOWLIST) {
+  for (const key of allowlist) {
     const value = source[key];
     if (typeof value === 'string' && !isSensitiveCodexEnvKey(key)) {
       env[key] = value;

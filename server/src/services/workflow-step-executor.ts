@@ -7,7 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import yaml from 'yaml';
-import type { AgentHostRoutingDecision } from '@veritas-kanban/shared';
+import type { AgentHostRoutingDecision, SandboxPolicyDryRunResult } from '@veritas-kanban/shared';
 import type {
   WorkflowStep,
   WorkflowRun,
@@ -31,6 +31,7 @@ import {
 } from './openclaw-workflow-adapter.js';
 import { getToolPolicyService } from './tool-policy-service.js';
 import { getAgentHostService } from './agent-host-service.js';
+import { getSandboxPolicyService } from './sandbox-policy-service.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -99,13 +100,26 @@ export class WorkflowStepExecutor {
 
     // Get tool policy filter for this agent role (#110)
     const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
+    const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
+    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+      presetId: agentDef?.sandboxPresetId,
+      provider: agentDef?.provider,
+      workspacePath: workingDirectory,
+    });
+    const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
+    if (sandboxPolicy.result.decision === 'block') {
+      throw new Error(
+        `Workflow step ${step.id} cannot enforce sandbox preset ${sandboxPolicy.result.preset.id}; trace ${sandboxTrace.id}`
+      );
+    }
     const hostPreview = getAgentHostService().preview({
       agent: step.agent,
       provider: agentDef?.provider,
       model: agentDef?.model,
-      workspacePath: this.expandPath(this.getWorkflowWorkingDirectory(run)),
+      workspacePath: workingDirectory,
       requiredTools: this.routingTools(agentDef, toolPolicyFilter),
       verificationGates: step.acceptance_criteria,
+      sandboxPresetId: sandboxPolicy.result.preset.id,
     });
     this.recordAgentHostRouting(run, step, hostPreview.decision, hostPreview.generatedAt);
 
@@ -132,7 +146,8 @@ export class WorkflowStepExecutor {
         prompt,
         sessionConfig,
         toolPolicyFilter,
-        hostPreview.decision
+        hostPreview.decision,
+        sandboxPolicy.result
       );
     }
 
@@ -408,7 +423,8 @@ export class WorkflowStepExecutor {
     prompt: string,
     sessionConfig: StepSessionConfig,
     toolPolicyFilter: { allowed?: string[]; denied?: string[] },
-    hostRouting: AgentHostRoutingDecision
+    hostRouting: AgentHostRoutingDecision,
+    sandboxPolicy: SandboxPolicyDryRunResult
   ): Promise<StepExecutionResult> {
     this.assertCodexToolPolicySupported(step, agentDef, toolPolicyFilter);
 
@@ -420,7 +436,7 @@ export class WorkflowStepExecutor {
     const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
     const codex = new Codex({
       codexPathOverride,
-      env: buildSafeCodexEnv(),
+      env: buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
     });
 
     const sessionKey = step.agent || agentDef?.id || step.id;
@@ -431,17 +447,17 @@ export class WorkflowStepExecutor {
     const thread = existingThreadId
       ? codex.resumeThread(existingThreadId, {
           workingDirectory,
-          sandboxMode: 'workspace-write',
+          sandboxMode: sandboxPolicy.effective.sandboxMode,
           approvalPolicy: 'never',
-          networkAccessEnabled: true,
+          networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
           model: agentDef?.model,
         })
       : codex.startThread({
           workingDirectory,
           skipGitRepoCheck: true,
-          sandboxMode: 'workspace-write',
+          sandboxMode: sandboxPolicy.effective.sandboxMode,
           approvalPolicy: 'never',
-          networkAccessEnabled: true,
+          networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
           model: agentDef?.model,
         });
 

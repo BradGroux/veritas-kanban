@@ -14,6 +14,7 @@ import { API_BASE, handleResponse } from './helpers';
 export interface StartAgentRequest {
   agent?: AgentType;
   overrideReason?: string;
+  sandboxPresetId?: string;
 }
 
 export const worktreeApi = {

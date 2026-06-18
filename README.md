@@ -124,7 +124,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 2. **Never trigger agents from uncontrolled inputs.** Don't let inbound emails, webhooks from third parties, or public form submissions automatically spawn agent work. An attacker who can craft an input can control your agent.
 
-3. **Principle of least privilege.** Give agents the minimum permissions they need. Use the `agent` role (not `admin`) for API keys. Restrict file system access. Don't run agents as root.
+3. **Principle of least privilege.** Give agents the minimum permissions they need. Use the `agent` role (not `admin`) for API keys. Restrict file system access with sandbox policy presets. Don't run agents as root.
 
 4. **Review before merge.** Agents can write code — that doesn't mean the code is correct or safe. Always review agent-generated code before merging to production branches. Use the built-in code review workflow.
 
@@ -134,7 +134,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 7. **Rotate credentials regularly.** If an agent has access to API keys, tokens, or secrets, rotate them on a schedule. Don't embed real credentials in task descriptions or prompts.
 
-8. **Isolate environments.** Run agents in containers, VMs, or sandboxed environments when possible. Keep agent workspaces separate from sensitive data.
+8. **Isolate environments.** Run agents in containers, VMs, or sandboxed environments when possible. Keep agent workspaces separate from sensitive data, use deny-by-default network presets for untrusted work, and broker credentials instead of exposing broad environment variables.
 
 **The bottom line:** Agentic AI is transformational, but it amplifies both your capabilities and your mistakes. Plan accordingly, start small, and add autonomy gradually as you build confidence in your guardrails.
 
@@ -144,7 +144,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 ### 🛡️ Agent Governance
 
-**Policy Engine** — Define what agents can and can't do. Configurable tool/action policies with `allow`, `deny`, and `require-approval` guard rules. Every policy decision is logged. **Decision Audit Trail** — Log agent decisions with confidence scores, supporting evidence, and stated assumptions. Record outcomes afterward to see whether assumptions held. **Behavioral Drift Detection** — Set metric baselines and thresholds; get alerted when an agent's behavior deviates. **User Feedback Loop** — Collect feedback on agent outputs with sentiment tagging and category analytics. **Output Evaluation** — Score agent outputs against weighted criteria profiles (regex, keyword, numeric range, custom expressions).
+**Policy Engine** — Define what agents can and can't do. Configurable tool/action policies with `allow`, `deny`, and `require-approval` guard rules. Every policy decision is logged. **Sandbox Policy Presets** — Assign reusable filesystem, network, environment, and credential rules to agents, workflow agents, or one-off runs; unsupported required controls fail closed before launch with redacted audit traces. **Decision Audit Trail** — Log agent decisions with confidence scores, supporting evidence, and stated assumptions. Record outcomes afterward to see whether assumptions held. **Behavioral Drift Detection** — Set metric baselines and thresholds; get alerted when an agent's behavior deviates. **User Feedback Loop** — Collect feedback on agent outputs with sentiment tagging and category analytics. **Output Evaluation** — Score agent outputs against weighted criteria profiles (regex, keyword, numeric range, custom expressions).
 
 ### 🤖 Agent Orchestration
 
@@ -223,6 +223,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **HermesAgent support** — documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, MCP setup, and default routing for fresh installs
 - **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
+- **Sandbox policy presets** — Built-in and custom presets for filesystem scope, network egress, environment passthrough, and credential brokering, with Settings dry-runs before agent launch
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
 - **@Mention notifications** — @agent-name parsing in comments, thread subscriptions
@@ -678,7 +679,7 @@ vk agents:pending
 ### Codex + HermesAgent
 
 - Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when Codex should implement, review, or delegate Veritas tasks.
-- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex, Ollama, LM Studio, or provider-specific routing in the web app or macOS app.
+- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex, Ollama, LM Studio, provider-specific routing, or sandbox presets in the web app or macOS app.
 - Use the [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) when routing work through the HermesAgent roster, enforcing QA evidence, or creating GitHub-backed task templates.
 - Configure Codex MCP access with the [MCP Server Guide](docs/mcp/README.md#codex) so Codex reads and updates Veritas through typed tools instead of one-off HTTP calls.
 

@@ -52,6 +52,7 @@ import {
   type WorkflowRecipeInput,
   type WorkflowRecipeMaterialization,
 } from '@/lib/api/workflows';
+import { useSandboxPolicies } from '@/hooks/useSandboxPolicies';
 
 interface WorkflowAuthoringPanelProps {
   canSaveWorkflow: boolean;
@@ -695,10 +696,15 @@ function WorkflowDefinitionEditor({
   workflow: WorkflowDefinition;
   onChange: (workflow: WorkflowDefinition) => void;
 }) {
+  const { data: sandboxPresets = [] } = useSandboxPolicies();
   const agentOptions = workflow.agents.map((agent) => ({
     value: agent.id,
     label: agent.name || agent.id,
   }));
+  const sandboxPresetOptions = [
+    { value: '__default__', label: 'Default / agent preset' },
+    ...sandboxPresets.map((preset) => ({ value: preset.id, label: preset.name })),
+  ];
   const schedule = workflow.schedule ?? { mode: 'manual', enabled: false };
 
   const update = (patch: Partial<WorkflowDefinition>) => onChange({ ...workflow, ...patch });
@@ -823,6 +829,18 @@ function WorkflowDefinitionEditor({
                   </ActionIcon>
                 </Tooltip>
               </Group>
+              <Select
+                mt="sm"
+                label="Sandbox Preset"
+                value={agent.sandboxPresetId ?? '__default__'}
+                onChange={(value) =>
+                  updateAgent(index, {
+                    sandboxPresetId: value === '__default__' ? undefined : value || undefined,
+                  })
+                }
+                data={sandboxPresetOptions}
+                allowDeselect={false}
+              />
             </div>
           ))}
         </Stack>
