@@ -8,6 +8,7 @@ import type {
   AgentType,
   AgentRoutingConfig,
   RoutingResult,
+  AgentBudgetPolicy,
 } from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
 
@@ -15,6 +16,7 @@ export interface StartAgentRequest {
   agent?: AgentType;
   overrideReason?: string;
   sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
 }
 
 export const worktreeApi = {

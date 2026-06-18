@@ -1,21 +1,39 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
-import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
+import { Select, TextInput } from '@mantine/core';
+import { ToggleRow, NumberRow, SectionHeader, SaveIndicator, SettingRow } from '../shared';
 
 export function DataTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
 
-  const updateTelemetry = (key: string, value: any) => {
+  const updateTelemetry = (key: string, value: unknown) => {
     debouncedUpdate({ telemetry: { [key]: value } });
   };
 
-  const updateArchive = (key: string, value: any) => {
+  const updateArchive = (key: string, value: unknown) => {
     debouncedUpdate({ archive: { [key]: value } });
   };
 
-  const updateBudget = (key: string, value: any) => {
+  const updateBudget = (key: string, value: unknown) => {
     debouncedUpdate({ budget: { [key]: value } });
+  };
+  const defaultRunBudget =
+    settings.budget?.defaultRunBudget ?? DEFAULT_FEATURE_SETTINGS.budget.defaultRunBudget;
+  const defaultRunLimits = defaultRunBudget?.limits ?? {};
+  const updateDefaultRunBudget = (patch: Record<string, unknown>) => {
+    updateBudget('defaultRunBudget', {
+      ...defaultRunBudget,
+      ...patch,
+    });
+  };
+  const updateDefaultRunLimit = (key: string, value: number) => {
+    updateDefaultRunBudget({
+      limits: {
+        ...defaultRunLimits,
+        [key]: value,
+      },
+    });
   };
 
   const resetData = () => {
@@ -135,6 +153,123 @@ export function DataTab() {
                 hideSpinners
                 maxLength={2}
               />
+              <ToggleRow
+                label="Default Run Budget"
+                description="Enforce workspace defaults on agent and workflow runs"
+                checked={defaultRunBudget?.enabled ?? false}
+                onCheckedChange={(v) =>
+                  updateDefaultRunBudget({
+                    enabled: v,
+                    scope: 'workspace',
+                    name: defaultRunBudget?.name ?? 'Workspace default run budget',
+                  })
+                }
+              />
+              {(defaultRunBudget?.enabled ?? false) && (
+                <>
+                  <NumberRow
+                    label="Run Token Limit"
+                    description="Maximum total tokens per run (0 = no limit)"
+                    value={defaultRunLimits.totalTokens ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('totalTokens', v)}
+                    min={0}
+                    max={9_999_999_999}
+                    unit="tokens"
+                    hideSpinners
+                    maxLength={10}
+                  />
+                  <NumberRow
+                    label="Run Cost Limit"
+                    description="Maximum provider-reported spend per run (0 = no limit)"
+                    value={defaultRunLimits.costUsd ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('costUsd', v)}
+                    min={0}
+                    max={1_000_000}
+                    unit="USD"
+                    hideSpinners
+                    maxLength={8}
+                  />
+                  <NumberRow
+                    label="Tool Call Limit"
+                    description="Maximum counted tool calls per run (0 = no limit)"
+                    value={defaultRunLimits.toolCalls ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('toolCalls', v)}
+                    min={0}
+                    max={100_000}
+                    unit="calls"
+                    hideSpinners
+                    maxLength={6}
+                  />
+                  <NumberRow
+                    label="Runtime Limit"
+                    description="Maximum wall-clock runtime per run (0 = no limit)"
+                    value={defaultRunLimits.runtimeSeconds ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('runtimeSeconds', v)}
+                    min={0}
+                    max={604_800}
+                    unit="sec"
+                    hideSpinners
+                    maxLength={6}
+                  />
+                  <NumberRow
+                    label="Retry Limit"
+                    description="Maximum workflow retry count per run (0 = no limit)"
+                    value={defaultRunLimits.retries ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('retries', v)}
+                    min={0}
+                    max={100}
+                    unit="retries"
+                    hideSpinners
+                    maxLength={3}
+                  />
+                  <NumberRow
+                    label="Fan-out Limit"
+                    description="Maximum parallel branch width per workflow run (0 = no limit)"
+                    value={defaultRunLimits.fanOut ?? 0}
+                    onChange={(v) => updateDefaultRunLimit('fanOut', v)}
+                    min={0}
+                    max={100}
+                    unit="branches"
+                    hideSpinners
+                    maxLength={3}
+                  />
+                  <SettingRow
+                    label="Hard Threshold Action"
+                    description="Action when a run reaches a hard budget limit"
+                  >
+                    <Select
+                      aria-label="Hard Threshold Action"
+                      className="w-48"
+                      data={[
+                        { value: 'require-approval', label: 'Require approval' },
+                        { value: 'pause', label: 'Pause' },
+                        { value: 'downgrade', label: 'Downgrade model' },
+                        { value: 'cancel', label: 'Cancel' },
+                      ]}
+                      value={defaultRunBudget?.hardAction ?? 'require-approval'}
+                      onChange={(value) =>
+                        updateDefaultRunBudget({ hardAction: value ?? 'require-approval' })
+                      }
+                    />
+                  </SettingRow>
+                  {defaultRunBudget?.hardAction === 'downgrade' && (
+                    <SettingRow
+                      label="Downgrade Model"
+                      description="Model route to use after a hard threshold downgrade"
+                    >
+                      <TextInput
+                        aria-label="Downgrade Model"
+                        className="w-48"
+                        value={defaultRunBudget?.downgradeModel ?? ''}
+                        onChange={(event) =>
+                          updateDefaultRunBudget({ downgradeModel: event.currentTarget.value })
+                        }
+                        placeholder="gpt-4.1-mini"
+                      />
+                    </SettingRow>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

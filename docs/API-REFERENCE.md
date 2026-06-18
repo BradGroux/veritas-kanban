@@ -2666,7 +2666,7 @@ Update a specific assumption by its zero-based index.
 
 ### Governance Decision Traces (`/api/governance/traces`)
 
-Inspect policy, tool-policy, sandbox-policy, agent-permission, routing, and workflow-gate decisions with evaluated rules, matched rules, remediation, and redacted raw detail.
+Inspect policy, tool-policy, sandbox-policy, budget-policy, agent-permission, routing, and workflow-gate decisions with evaluated rules, matched rules, remediation, and redacted raw detail.
 
 #### List Governance Traces
 
@@ -2676,7 +2676,7 @@ GET /api/governance/traces
 
 Query params: `kind`, `outcome`, `agent`, `taskId`, `actionType`, `startTime`, `endTime`, `limit`.
 
-`kind` values: `policy`, `tool-policy`, `sandbox-policy`, `agent-permission`, `routing`, `workflow-gate`.
+`kind` values: `policy`, `tool-policy`, `sandbox-policy`, `budget-policy`, `agent-permission`, `routing`, `workflow-gate`.
 
 `outcome` values: `allowed`, `warned`, `blocked`, `approval-required`, `routed`, `fallback`, `skipped`.
 

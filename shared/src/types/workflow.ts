@@ -29,6 +29,7 @@ export interface WorkflowConfig {
   fresh_session_default?: boolean;
   progress_file?: string;
   telemetry_tags?: string[];
+  budget?: import('./agent-budget.types.js').AgentBudgetPolicy;
 }
 
 export type WorkflowPipelineMode = 'single-agent' | 'orchestrated';
@@ -145,6 +146,7 @@ export interface WorkflowAgent {
   role: string; // maps to toolPolicy
   model?: string; // default model for this agent
   sandboxPresetId?: string;
+  budget?: import('./agent-budget.types.js').AgentBudgetPolicy;
   description: string;
   tools?: string[]; // Phase 2: Tool restrictions (#110)
 }
@@ -236,6 +238,7 @@ export interface WorkflowRun {
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps
+  budget?: import('./agent-budget.types.js').AgentBudgetState;
   startedAt: string;
   completedAt?: string;
   lastCheckpoint?: string; // Phase 2: Last state persistence timestamp (#113)
@@ -288,6 +291,7 @@ export interface StepSessionConfig {
 export interface StepExecutionResult {
   output: unknown; // Parsed output (for context passing)
   outputPath: string; // Path to output file
+  budgetUsage?: Partial<import('./agent-budget.types.js').AgentBudgetUsage>;
 }
 
 // ==================== RBAC & Audit Types ====================

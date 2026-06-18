@@ -7,6 +7,7 @@ import type { AgentType, TokenTelemetryEvent } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
+import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 
 const router: RouterType = Router();
 
@@ -16,6 +17,8 @@ const AgentTypeSchema = z.string().min(1).max(50);
 const startAgentSchema = z.object({
   agent: AgentTypeSchema.optional(),
   overrideReason: z.string().trim().min(8).max(1000).optional(),
+  sandboxPresetId: z.string().trim().min(1).max(80).optional(),
+  budget: AgentBudgetPolicySchema.optional(),
 });
 
 const completeAgentSchema = z.object({
@@ -29,6 +32,7 @@ const reportTokensSchema = z.object({
   inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
   outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),
+  cost: z.number().nonnegative().optional(),
   model: z.string().optional(),
   agent: AgentTypeSchema.optional(),
 });
@@ -41,11 +45,13 @@ router.post(
     let agent: AgentType | undefined;
     let overrideReason: string | undefined;
     let sandboxPresetId: string | undefined;
+    let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
     try {
-      ({ agent, overrideReason, sandboxPresetId } = startAgentSchema.parse(req.body) as {
+      ({ agent, overrideReason, sandboxPresetId, budget } = startAgentSchema.parse(req.body) as {
         agent?: AgentType;
         overrideReason?: string;
         sandboxPresetId?: string;
+        budget?: z.infer<typeof AgentBudgetPolicySchema>;
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -58,6 +64,7 @@ router.post(
       status = await clawdbotAgentService.startAgent(req.params.taskId as string, agent, {
         overrideReason,
         sandboxPresetId,
+        budget,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {
@@ -156,6 +163,7 @@ router.post(
     let inputTokens: number;
     let outputTokens: number;
     let totalTokens: number | undefined;
+    let cost: number | undefined;
     let model: string | undefined;
     let agent: AgentType | undefined;
     try {
@@ -164,6 +172,7 @@ router.post(
       inputTokens = parsed.inputTokens;
       outputTokens = parsed.outputTokens;
       totalTokens = parsed.totalTokens;
+      cost = parsed.cost;
       model = parsed.model;
       agent = parsed.agent as AgentType | undefined;
     } catch (error) {
@@ -198,7 +207,15 @@ router.post(
       inputTokens,
       outputTokens,
       totalTokens: totalTokens ?? inputTokens + outputTokens,
+      cost,
       model,
+    });
+
+    await clawdbotAgentService.recordBudgetUsage(taskId, {
+      inputTokens,
+      outputTokens,
+      totalTokens: totalTokens ?? inputTokens + outputTokens,
+      costUsd: cost,
     });
 
     res.status(201).json({

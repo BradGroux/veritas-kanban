@@ -12,6 +12,7 @@ const traceListQuerySchema = z.object({
       'policy',
       'tool-policy',
       'sandbox-policy',
+      'budget-policy',
       'agent-permission',
       'routing',
       'workflow-gate',

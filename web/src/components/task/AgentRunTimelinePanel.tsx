@@ -623,6 +623,22 @@ export function buildAgentRunTimelineEvents({
         link: { label: 'Agent logs', href: '#agent', target: 'agent' },
       });
     }
+    if (currentAttempt.budget?.enabled) {
+      events.push({
+        id: `budget-${currentAttempt.id}`,
+        sequence: nextSequence++,
+        type: currentAttempt.budget.decision === 'allow' ? 'usage' : 'policy',
+        source: 'derived',
+        timestamp: currentAttempt.ended || currentAttempt.started || task.updated,
+        title: `Budget ${currentAttempt.budget.decision}`,
+        detail:
+          currentAttempt.budget.thresholdEvents.length > 0
+            ? currentAttempt.budget.thresholdEvents.map((event) => event.message).join(' ')
+            : 'No budget threshold events recorded',
+        metadata: currentAttempt.budget as unknown as Record<string, unknown>,
+        link: { label: 'Agent logs', href: '#agent', target: 'agent' },
+      });
+    }
   }
 
   if (task.git?.worktreePath) {

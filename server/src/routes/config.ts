@@ -5,6 +5,7 @@ import type { RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared'
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError, BadRequestError } from '../middleware/error-handler.js';
 import { authorize } from '../middleware/auth.js';
+import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
@@ -40,6 +41,7 @@ const agentSchema = z.object({
     .optional(),
   model: z.string().optional(),
   sandboxPresetId: z.string().min(1).max(80).optional(),
+  budget: AgentBudgetPolicySchema.optional(),
 });
 
 const setDefaultAgentSchema = z.object({

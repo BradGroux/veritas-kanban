@@ -155,6 +155,13 @@ dry-run and launch-time decision writes a governance trace with raw detail
 redacted; credential references and environment-style `name=value` strings are
 shown as `[redacted]`.
 
+Agent budget policies are enforced through the same governance path. Workspace,
+agent, workflow, workflow-agent, and per-run budgets can cap tokens,
+provider-reported cost, tool-call counts, runtime, retry count, and workflow
+fan-out. Soft thresholds write `budget-policy` warning traces. Hard thresholds
+pause or block for approval, downgrade to a configured model route, or cancel
+the run with recorded trace and completion-packet evidence.
+
 For untrusted or externally sourced work, prefer a required preset with
 repository-scoped writes, default-deny network egress, metadata endpoint
 blocking, and brokered credentials. Keep the legacy permissive preset only for
@@ -282,9 +289,10 @@ ws.onclose = (event) => {
 
 5. **Monitor access** - The server logs connection attempts with role information
 
-6. **Constrain agent launches** - Assign sandbox policy presets before running
-   untrusted work. Default-deny network egress and broker credentials when a
-   workflow does not need broad host access.
+6. **Constrain agent launches** - Assign sandbox policy presets and run budgets
+   before running untrusted or expensive work. Default-deny network egress,
+   broker credentials, and cap token, spend, tool-call, runtime, retry, and
+   fan-out exposure when a workflow does not need broad access.
 
 7. **Keep remote mode explicit** - Binding outside loopback, reverse proxying,
    tunneling, or serving mobile/PWA clients requires auth enabled, localhost

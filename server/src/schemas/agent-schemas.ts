@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
 
 const AgentTypeSchema = z.string().min(1).max(50);
 
@@ -9,6 +10,7 @@ export const StartAgentBodySchema = z.object({
   agent: AgentTypeSchema.optional(),
   overrideReason: z.string().trim().min(8).max(1000).optional(),
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
+  budget: AgentBudgetPolicySchema.optional(),
 });
 
 export type StartAgentBody = z.infer<typeof StartAgentBodySchema>;
@@ -32,6 +34,7 @@ export const ReportTokensBodySchema = z.object({
   inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
   outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),
+  cost: z.number().nonnegative().optional(),
   model: z.string().optional(),
   agent: AgentTypeSchema.optional(),
 });

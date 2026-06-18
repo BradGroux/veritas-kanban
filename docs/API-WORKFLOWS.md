@@ -493,6 +493,21 @@ curl -X POST http://localhost:3001/api/workflows/feature-dev/runs \
     clientMode?: "local" | "remote" | "cloud"; // Optional: workflow skill gate mode
     [key: string]: unknown;
   };
+  budget?: {
+    enabled?: boolean;
+    limits?: {
+      totalTokens?: number;
+      costUsd?: number;
+      toolCalls?: number;
+      runtimeSeconds?: number;
+      idleRuntimeSeconds?: number;
+      retries?: number;
+      fanOut?: number;
+    };
+    softThresholdPercent?: number;
+    hardAction?: "pause" | "require-approval" | "downgrade" | "cancel";
+    downgradeModel?: string;
+  };
 }
 ```
 
@@ -501,6 +516,11 @@ cloud execution when a referenced shared skill is missing, unscanned, or blocked
 The run context includes the resulting `skillAudit` summary when execution is
 allowed. Workflows with `pipeline` metadata also include `context.pipeline`,
 which rolls subagent role status and time/token telemetry into the run record.
+
+Run budgets are merged with workspace, workflow, and workflow-agent defaults
+using the strictest positive limit. Soft thresholds write `budget-policy`
+governance traces. Hard thresholds pause/block, require approval, downgrade the
+model route, or cancel according to the effective policy.
 
 **Response**:
 
@@ -1225,6 +1245,36 @@ Sandbox policies are complementary to tool policies:
 
 ---
 
+## Budget Policies
+
+Workflow definitions can set `config.budget` for workflow-wide defaults and
+`agents[].budget` for stricter role-specific caps. Launch callers can also pass
+a stricter `budget` override to `POST /api/workflows/:id/runs`.
+
+Supported budget limits:
+
+- `totalTokens`, `inputTokens`, and `outputTokens`
+- `costUsd`
+- `toolCalls`
+- `runtimeSeconds` and `idleRuntimeSeconds`
+- `retries`
+- `fanOut`
+
+Budget evaluation is policy enforcement, not dashboard-only analytics. Soft
+thresholds create visible warnings and `budget-policy` governance traces. Hard
+thresholds enforce the configured action:
+
+- `pause` or `require-approval` blocks the workflow run for operator review.
+- `downgrade` records a routed decision and applies `downgradeModel` to Codex
+  workflow steps.
+- `cancel` fails the run immediately.
+
+The run record includes `budget.usage`, `budget.thresholdEvents`, `budget.traceIds`,
+and `budget.modelOverride` so run detail, timelines, and completion packets can
+show exactly what happened.
+
+---
+
 ## Task Dependencies
 
 ### GET /api/tasks/:id/dependencies
@@ -1918,6 +1968,7 @@ export interface WorkflowConfig {
   fresh_session_default?: boolean;
   progress_file?: string;
   telemetry_tags?: string[];
+  budget?: AgentBudgetPolicy;
 }
 ```
 
@@ -1929,6 +1980,7 @@ export interface WorkflowAgent {
   name: string;
   role: string; // maps to tool policy
   sandboxPresetId?: string; // maps to a sandbox policy preset
+  budget?: AgentBudgetPolicy; // stricter workflow-agent budget
   model?: string; // default model for this agent
   description: string;
   tools?: string[]; // tool restrictions (overrides role policy)
@@ -2053,6 +2105,7 @@ export interface WorkflowRun {
   status: WorkflowRunStatus;
   currentStep?: string; // current step ID
   context: Record<string, unknown>; // shared context across steps
+  budget?: AgentBudgetState; // effective budget, usage, threshold events, traces
   startedAt: string;
   completedAt?: string;
   lastCheckpoint?: string; // last state persistence timestamp

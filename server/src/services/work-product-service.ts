@@ -478,6 +478,8 @@ export class WorkProductService {
       orchestrationRoles: task.attempt?.orchestration?.totals.roles ?? 0,
       orchestrationBlocked: task.attempt?.orchestration?.totals.blocked ?? 0,
       orchestrationFailed: task.attempt?.orchestration?.totals.failed ?? 0,
+      budgetDecision: task.attempt?.budget?.decision ?? null,
+      budgetTraceCount: task.attempt?.budget?.traceIds.length ?? 0,
     };
   }
 
@@ -652,8 +654,35 @@ export class WorkProductService {
       task.costPrediction
         ? `Predicted cost: ${this.formatCost(task.costPrediction.estimatedCost)} (${task.costPrediction.confidence} confidence)`
         : 'Predicted cost: Not recorded.',
+      ...this.budgetLines(task),
     ];
     return this.packetText(lines.join('\n'));
+  }
+
+  private budgetLines(task: Task): string[] {
+    const budget = task.attempt?.budget;
+    if (!budget?.enabled) return ['Run budget: Not enforced.'];
+    const usage = budget.usage;
+    const limits = budget.policy?.limits ?? {};
+    const used = [
+      `tokens ${usage.totalTokens.toLocaleString()}${limits.totalTokens ? `/${limits.totalTokens.toLocaleString()}` : ''}`,
+      `cost ${this.formatCost(usage.costUsd)}${limits.costUsd ? `/${this.formatCost(limits.costUsd)}` : ''}`,
+      `tools ${usage.toolCalls.toLocaleString()}${limits.toolCalls ? `/${limits.toolCalls.toLocaleString()}` : ''}`,
+      `runtime ${this.formatDurationSeconds(usage.runtimeSeconds)}${limits.runtimeSeconds ? `/${this.formatDurationSeconds(limits.runtimeSeconds)}` : ''}`,
+      `retries ${usage.retries.toLocaleString()}${limits.retries ? `/${limits.retries.toLocaleString()}` : ''}`,
+      `fan-out ${usage.fanOut.toLocaleString()}${limits.fanOut ? `/${limits.fanOut.toLocaleString()}` : ''}`,
+    ].join(', ');
+    const thresholdEvents =
+      budget.thresholdEvents.length > 0
+        ? budget.thresholdEvents.map((event) => event.message).join(' ')
+        : 'No threshold events.';
+    const traces =
+      budget.traceIds.length > 0 ? ` Budget traces: ${budget.traceIds.join(', ')}.` : '';
+    const override = budget.overrideReason ? ` Override: ${budget.overrideReason}.` : '';
+    return [
+      `Run budget: ${budget.decision}. Used ${used}.`,
+      `Budget thresholds: ${thresholdEvents}.${traces}${override}`,
+    ];
   }
 
   private deliverablesSection(task: Task): string {

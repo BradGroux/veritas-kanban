@@ -6,6 +6,7 @@ import type {
   WorkflowSchedule,
   WorkflowStep,
   WorkflowSkillAuditSummary,
+  AgentBudgetPolicy,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -147,13 +148,16 @@ export const workflowsApi = {
       body: JSON.stringify(workflow),
     }),
 
-  startRun: async (workflowId: string): Promise<WorkflowRunStartResponse> => {
+  startRun: async (
+    workflowId: string,
+    options: { budget?: AgentBudgetPolicy; context?: Record<string, unknown> } = {}
+  ): Promise<WorkflowRunStartResponse> => {
     const response = await apiFetch<WorkflowRunStartResponse | { data: WorkflowRunStartResponse }>(
       `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/runs`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(options),
       }
     );
     return unwrapData(response);

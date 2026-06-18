@@ -287,6 +287,7 @@ First-class support for autonomous coding agents.
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
+- **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
 - **Agent request tracking** — VK can create and display pending agent requests; a configured external runner/provider must execute the work
 - **Automation tasks** — Separate automation task type with pending/running/complete lifecycle, session key tracking, and sub-agent spawning
@@ -1325,6 +1326,7 @@ New endpoints for advanced metrics and visualization (v1.6):
 - **Blocked task breakdown** — Blocked task counts by category (feedback, technical snag, prerequisite, other)
 - **Sprint velocity** — Track task completion rate over time
 - **Cost budget tracking** — Token usage and cost metrics with budget cards
+- **Run budget policy traces** — Budget threshold decisions are recorded as `budget-policy` governance traces and appear in workflow run detail, task timelines, work products, and completion packets
 - **Agent comparison** — Side-by-side performance metrics across different AI agents (uses `apiFetch()` to properly unwrap the API envelope)
 - **Drill-down panels** — Click any metric card to drill into tasks, errors, tokens, or duration details; focus rings use `ring-inset` to prevent clipping
   - **Tasks drill-down** — List of tasks matching the selected metric; clicking a task opens its detail panel (with API fallback for deleted tasks via `open-task` event)

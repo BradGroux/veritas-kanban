@@ -13,6 +13,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   buildWorkflowPipelineSummary,
   type WorkflowDefinition as SharedWorkflowDefinition,
+  type AgentBudgetState,
+  type AgentBudgetMetric,
   type WorkflowPipelineSummary,
   type WorkflowSubagentRunStatus,
 } from '@veritas-kanban/shared';
@@ -79,6 +81,7 @@ interface WorkflowRun {
   startedAt: string;
   completedAt?: string;
   context?: Record<string, unknown>;
+  budget?: AgentBudgetState;
   error?: string;
   steps: StepRun[];
 }
@@ -142,6 +145,20 @@ function formatPipelineDuration(seconds?: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${minutes}m ${remainder}s`;
+}
+
+function formatBudgetMetric(metric: AgentBudgetMetric, value: number): string {
+  if (metric === 'costUsd') return `$${value.toFixed(value < 1 ? 4 : 2)}`;
+  if (metric.endsWith('Seconds')) return `${value}s`;
+  return Math.round(value).toLocaleString();
+}
+
+function budgetDecisionColor(decision: AgentBudgetState['decision']): string {
+  if (decision === 'allow') return 'green';
+  if (decision === 'warn') return 'yellow';
+  if (decision === 'downgrade') return 'blue';
+  if (decision === 'pause' || decision === 'require-approval') return 'orange';
+  return 'red';
 }
 
 export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
@@ -441,6 +458,8 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
         </Stack>
       </Paper>
 
+      {run.budget?.enabled && <WorkflowBudgetCard budget={run.budget} />}
+
       {pipelineSummary && <WorkflowPipelineCard pipeline={pipelineSummary} />}
 
       {/* Step Timeline */}
@@ -467,6 +486,85 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
         })}
       </Stack>
     </Stack>
+  );
+}
+
+function WorkflowBudgetCard({ budget }: { budget: AgentBudgetState }) {
+  const usage = budget.usage;
+  const limits = budget.policy?.limits ?? {};
+  const metrics = (
+    [
+      'totalTokens',
+      'costUsd',
+      'toolCalls',
+      'runtimeSeconds',
+      'idleRuntimeSeconds',
+      'retries',
+      'fanOut',
+    ] as AgentBudgetMetric[]
+  ).filter((metric) => limits[metric] !== undefined || usage[metric] > 0);
+
+  return (
+    <Paper className="p-6" radius="md" withBorder>
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start">
+          <div className="space-y-1">
+            <Group gap="xs">
+              <ThemeIcon variant="light" color={budgetDecisionColor(budget.decision)}>
+                <AlertCircle className="h-4 w-4" />
+              </ThemeIcon>
+              <Title order={2} className="text-lg">
+                Budget Posture
+              </Title>
+            </Group>
+            <Text size="sm" c="dimmed">
+              {budget.policy?.name ?? 'Run budget'} · hard action{' '}
+              {budget.policy?.hardAction ?? 'require-approval'}
+            </Text>
+          </div>
+          <Group gap="xs">
+            <Badge color={budgetDecisionColor(budget.decision)} variant="light">
+              {budget.decision}
+            </Badge>
+            {budget.modelOverride && (
+              <Badge color="blue" variant="outline">
+                model {budget.modelOverride}
+              </Badge>
+            )}
+          </Group>
+        </Group>
+
+        {metrics.length > 0 && (
+          <Group gap="xs">
+            {metrics.map((metric) => {
+              const limit = limits[metric];
+              return (
+                <Badge key={metric} variant="outline" color="gray">
+                  {metric}: {formatBudgetMetric(metric, usage[metric])}
+                  {typeof limit === 'number' ? ` / ${formatBudgetMetric(metric, limit)}` : ''}
+                </Badge>
+              );
+            })}
+          </Group>
+        )}
+
+        {budget.thresholdEvents.length > 0 && (
+          <Stack gap={4}>
+            {budget.thresholdEvents.map((event) => (
+              <Text key={`${event.metric}-${event.threshold}-${event.action}`} size="sm">
+                {event.threshold} {event.metric}: {event.message} Action: {event.action}.
+              </Text>
+            ))}
+          </Stack>
+        )}
+
+        {budget.traceIds.length > 0 && (
+          <Text size="xs" c="dimmed">
+            Trace IDs: {budget.traceIds.join(', ')}
+          </Text>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 

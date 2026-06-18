@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   WorkflowAgent,
+  AgentBudgetLimits,
   WorkflowDefinition,
   WorkflowOutputTarget,
   WorkflowPipelineSummary,
@@ -706,14 +707,74 @@ function WorkflowDefinitionEditor({
     ...sandboxPresets.map((preset) => ({ value: preset.id, label: preset.name })),
   ];
   const schedule = workflow.schedule ?? { mode: 'manual', enabled: false };
+  const workflowBudget = workflow.config?.budget;
 
   const update = (patch: Partial<WorkflowDefinition>) => onChange({ ...workflow, ...patch });
+
+  const updateWorkflowBudget = (
+    patch: NonNullable<NonNullable<WorkflowDefinition['config']>['budget']>
+  ) => {
+    update({
+      config: {
+        ...(workflow.config ?? {}),
+        budget: {
+          ...(workflow.config?.budget ?? {}),
+          ...patch,
+          scope: 'workflow',
+          name: workflow.config?.budget?.name ?? `${workflow.name || workflow.id} workflow budget`,
+        },
+      },
+    });
+  };
+
+  const updateWorkflowBudgetLimit = (key: keyof AgentBudgetLimits, value: number | string) => {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    updateWorkflowBudget({
+      enabled: true,
+      limits: {
+        ...(workflow.config?.budget?.limits ?? {}),
+        [key]: Number.isFinite(numeric) ? Math.max(0, numeric) : 0,
+      },
+      softThresholdPercent: workflow.config?.budget?.softThresholdPercent ?? 80,
+      hardAction: workflow.config?.budget?.hardAction ?? 'require-approval',
+    });
+  };
 
   const updateAgent = (index: number, patch: Partial<WorkflowAgent>) => {
     update({
       agents: workflow.agents.map((agent, candidateIndex) =>
         candidateIndex === index ? { ...agent, ...patch } : agent
       ),
+    });
+  };
+
+  const updateAgentBudget = (index: number, patch: NonNullable<WorkflowAgent['budget']>) => {
+    const current = workflow.agents[index];
+    updateAgent(index, {
+      budget: {
+        ...(current.budget ?? {}),
+        ...patch,
+        scope: 'workflow-agent',
+        name: current.budget?.name ?? `${current.name || current.id} workflow budget`,
+      },
+    });
+  };
+
+  const updateAgentBudgetLimit = (
+    index: number,
+    key: keyof AgentBudgetLimits,
+    value: number | string
+  ) => {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    const current = workflow.agents[index];
+    updateAgentBudget(index, {
+      enabled: true,
+      limits: {
+        ...(current.budget?.limits ?? {}),
+        [key]: Number.isFinite(numeric) ? Math.max(0, numeric) : 0,
+      },
+      softThresholdPercent: current.budget?.softThresholdPercent ?? 80,
+      hardAction: current.budget?.hardAction ?? 'require-approval',
     });
   };
 
@@ -752,6 +813,55 @@ function WorkflowDefinitionEditor({
             onChange={(event) => update({ description: event.currentTarget.value })}
             minRows={2}
           />
+          <div className="rounded-md border bg-background/70 p-3">
+            <Switch
+              label="Workflow Budget"
+              description="Apply default caps to every run of this workflow"
+              checked={workflowBudget?.enabled ?? false}
+              onChange={(event) =>
+                updateWorkflowBudget({
+                  enabled: event.currentTarget.checked,
+                  limits: workflowBudget?.limits ?? {},
+                  softThresholdPercent: workflowBudget?.softThresholdPercent ?? 80,
+                  hardAction: workflowBudget?.hardAction ?? 'require-approval',
+                })
+              }
+            />
+            {workflowBudget?.enabled && (
+              <SimpleGrid cols={{ base: 1, md: 4 }} spacing="sm" mt="sm">
+                <NumberInput
+                  label="Tokens"
+                  value={workflowBudget?.limits?.totalTokens ?? 0}
+                  onChange={(value) => updateWorkflowBudgetLimit('totalTokens', value)}
+                  min={0}
+                  hideControls
+                  thousandSeparator=","
+                />
+                <NumberInput
+                  label="Cost"
+                  value={workflowBudget?.limits?.costUsd ?? 0}
+                  onChange={(value) => updateWorkflowBudgetLimit('costUsd', value)}
+                  min={0}
+                  hideControls
+                  prefix="$"
+                />
+                <NumberInput
+                  label="Retries"
+                  value={workflowBudget?.limits?.retries ?? 0}
+                  onChange={(value) => updateWorkflowBudgetLimit('retries', value)}
+                  min={0}
+                  hideControls
+                />
+                <NumberInput
+                  label="Fan-out"
+                  value={workflowBudget?.limits?.fanOut ?? 0}
+                  onChange={(value) => updateWorkflowBudgetLimit('fanOut', value)}
+                  min={0}
+                  hideControls
+                />
+              </SimpleGrid>
+            )}
+          </div>
         </Stack>
       </Paper>
 
@@ -841,6 +951,55 @@ function WorkflowDefinitionEditor({
                 data={sandboxPresetOptions}
                 allowDeselect={false}
               />
+              <div className="mt-3 rounded-md border bg-background/70 p-3">
+                <Switch
+                  label="Workflow Agent Budget"
+                  description="Apply stricter caps when this workflow agent runs"
+                  checked={agent.budget?.enabled ?? false}
+                  onChange={(event) =>
+                    updateAgentBudget(index, {
+                      enabled: event.currentTarget.checked,
+                      limits: agent.budget?.limits ?? {},
+                      softThresholdPercent: agent.budget?.softThresholdPercent ?? 80,
+                      hardAction: agent.budget?.hardAction ?? 'require-approval',
+                    })
+                  }
+                />
+                {agent.budget?.enabled && (
+                  <SimpleGrid cols={{ base: 1, md: 4 }} spacing="sm" mt="sm">
+                    <NumberInput
+                      label="Tokens"
+                      value={agent.budget?.limits?.totalTokens ?? 0}
+                      onChange={(value) => updateAgentBudgetLimit(index, 'totalTokens', value)}
+                      min={0}
+                      hideControls
+                      thousandSeparator=","
+                    />
+                    <NumberInput
+                      label="Cost"
+                      value={agent.budget?.limits?.costUsd ?? 0}
+                      onChange={(value) => updateAgentBudgetLimit(index, 'costUsd', value)}
+                      min={0}
+                      hideControls
+                      prefix="$"
+                    />
+                    <NumberInput
+                      label="Tool Calls"
+                      value={agent.budget?.limits?.toolCalls ?? 0}
+                      onChange={(value) => updateAgentBudgetLimit(index, 'toolCalls', value)}
+                      min={0}
+                      hideControls
+                    />
+                    <NumberInput
+                      label="Runtime Sec"
+                      value={agent.budget?.limits?.runtimeSeconds ?? 0}
+                      onChange={(value) => updateAgentBudgetLimit(index, 'runtimeSeconds', value)}
+                      min={0}
+                      hideControls
+                    />
+                  </SimpleGrid>
+                )}
+              </div>
             </div>
           ))}
         </Stack>

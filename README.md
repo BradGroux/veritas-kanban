@@ -124,7 +124,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 2. **Never trigger agents from uncontrolled inputs.** Don't let inbound emails, webhooks from third parties, or public form submissions automatically spawn agent work. An attacker who can craft an input can control your agent.
 
-3. **Principle of least privilege.** Give agents the minimum permissions they need. Use the `agent` role (not `admin`) for API keys. Restrict file system access with sandbox policy presets. Don't run agents as root.
+3. **Principle of least privilege.** Give agents the minimum permissions they need. Use the `agent` role (not `admin`) for API keys. Restrict file system access with sandbox policy presets, enforce run budgets before long-running work, and don't run agents as root.
 
 4. **Review before merge.** Agents can write code — that doesn't mean the code is correct or safe. Always review agent-generated code before merging to production branches. Use the built-in code review workflow.
 
@@ -224,6 +224,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, MCP setup, and default routing for fresh installs
 - **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
 - **Sandbox policy presets** — Built-in and custom presets for filesystem scope, network egress, environment passthrough, and credential brokering, with Settings dry-runs before agent launch
+- **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run caps for tokens, cost, tool calls, runtime, retries, and fan-out with auditable warn, approval, downgrade, pause, or cancel decisions
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
 - **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events, model attribution per message, and configurable display names
 - **@Mention notifications** — @agent-name parsing in comments, thread subscriptions

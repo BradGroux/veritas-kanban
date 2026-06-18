@@ -21,6 +21,7 @@ import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
+import { getAgentBudgetService } from './agent-budget-service.js';
 import { AgentHealthService, type AgentHealthChecker } from './agent-health-service.js';
 import { getBreaker } from './circuit-registry.js';
 import { activityService } from './activity-service.js';
@@ -44,9 +45,14 @@ import type {
   TokenTelemetryEvent,
   TaskReadinessSummary,
   SandboxPolicyDryRunResult,
+  AgentBudgetPolicy,
+  AgentBudgetState,
+  AgentBudgetUsage,
+  AgentBudgetDecision,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
+import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 const log = createLogger('clawdbot-agent-service');
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
@@ -115,6 +121,7 @@ export interface AgentOutput {
 export interface AgentStartOptions {
   overrideReason?: string;
   sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
 }
 
 export class AgentReadinessError extends Error {
@@ -136,6 +143,8 @@ interface PendingAgent {
   emitter: EventEmitter;
   provider: AgentProvider;
   model?: string;
+  budget?: AgentBudgetState;
+  budgetStopped?: boolean;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -212,8 +221,42 @@ export class ClawdbotAgentService {
     const agentConfig = this.resolveAgentConfig(config.agents, agent);
     await this.assertAgentAvailable(agent, agentConfig);
     const provider = this.resolveAgentProvider(agentConfig, agent);
+    const budgetService = getAgentBudgetService();
+    const budgetPolicy = budgetService.resolve({
+      workspaceBudget: config.features?.budget?.enabled
+        ? config.features.budget.defaultRunBudget
+        : undefined,
+      agentBudget: agentConfig?.budget,
+      runBudget: options.budget,
+    });
+    const budgetEvaluation = budgetService.evaluate(
+      budgetPolicy,
+      { fanOut: 1 },
+      {
+        taskId,
+        agentId: agent,
+        actionType: 'agent.start',
+        project: task.project,
+      }
+    );
+    const budgetTraceIds: string[] = [];
+    if (budgetEvaluation.trace) {
+      const trace = await getGovernanceTraceService().record(budgetEvaluation.trace);
+      budgetTraceIds.push(trace.id);
+    }
+    if (this.isBlockingBudgetDecision(budgetEvaluation.decision)) {
+      throw new ConflictError('Agent run budget requires operator action before launch', {
+        decision: budgetEvaluation.decision,
+        thresholdEvents: budgetEvaluation.thresholdEvents,
+        traceId: budgetTraceIds[0],
+      });
+    }
+    const launchAgentConfig =
+      budgetEvaluation.modelOverride && agentConfig
+        ? { ...agentConfig, model: budgetEvaluation.modelOverride }
+        : agentConfig;
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
-      presetId: options.sandboxPresetId ?? agentConfig?.sandboxPresetId,
+      presetId: options.sandboxPresetId ?? launchAgentConfig?.sandboxPresetId,
       provider,
       workspacePath: task.git.worktreePath,
     });
@@ -279,7 +322,18 @@ export class ClawdbotAgentService {
       startedAt,
       emitter,
       provider,
-      model: agentConfig?.model,
+      model: launchAgentConfig?.model,
+      budget: budgetPolicy
+        ? {
+            ...budgetService.initialState(budgetPolicy),
+            usage: budgetEvaluation.usage,
+            decision: budgetEvaluation.decision,
+            thresholdEvents: budgetEvaluation.thresholdEvents,
+            traceIds: budgetTraceIds,
+            modelOverride: budgetEvaluation.modelOverride,
+            overrideReason: options.overrideReason,
+          }
+        : undefined,
     });
 
     // Validate path segments for log file
@@ -301,7 +355,8 @@ export class ClawdbotAgentService {
       status: 'running',
       started: startedAt,
       provider,
-      model: agentConfig?.model,
+      model: launchAgentConfig?.model,
+      budget: pendingAgents.get(taskId)?.budget,
     };
 
     await this.taskService.updateTask(taskId, {
@@ -315,7 +370,7 @@ export class ClawdbotAgentService {
       taskId,
       attemptId,
       agent,
-      model: agentConfig?.model,
+      model: launchAgentConfig?.model,
       project: task.project,
     });
 
@@ -323,7 +378,7 @@ export class ClawdbotAgentService {
     try {
       await adapter.start({
         task,
-        agentConfig,
+        agentConfig: launchAgentConfig,
         prompt: taskPrompt,
         logPath,
         attemptId,
@@ -424,6 +479,14 @@ export class ClawdbotAgentService {
     const endedAt = new Date().toISOString();
     const status: AttemptStatus = result.success ? 'complete' : 'failed';
     const durationMs = new Date(endedAt).getTime() - new Date(pending.startedAt).getTime();
+    if (pending.budget?.enabled) {
+      await this.evaluatePendingBudget(
+        taskId,
+        { runtimeSeconds: Math.ceil(durationMs / 1000) },
+        'agent.complete',
+        false
+      );
+    }
 
     // Update task
     await this.taskService.updateTask(taskId, {
@@ -437,6 +500,7 @@ export class ClawdbotAgentService {
         provider: pending.provider,
         model: pending.model,
         threadId: pending.threadId,
+        budget: pending.budget,
       },
     });
 
@@ -528,6 +592,66 @@ export class ClawdbotAgentService {
     await this.completeAgent(taskId, {
       success: false,
       error: 'Stopped by user',
+    });
+  }
+
+  async recordBudgetUsage(taskId: string, delta: Partial<AgentBudgetUsage>): Promise<void> {
+    await this.evaluatePendingBudget(taskId, delta, 'agent.usage', true);
+  }
+
+  private isBlockingBudgetDecision(decision: AgentBudgetDecision): boolean {
+    return decision === 'pause' || decision === 'require-approval' || decision === 'cancel';
+  }
+
+  private async evaluatePendingBudget(
+    taskId: string,
+    delta: Partial<AgentBudgetUsage>,
+    actionType: string,
+    enforce: boolean
+  ): Promise<void> {
+    const pending = pendingAgents.get(taskId);
+    if (!pending?.budget?.enabled || !pending.budget.policy) return;
+
+    const task = await this.taskService.getTask(taskId);
+    const budgetService = getAgentBudgetService();
+    pending.budget.usage = budgetService.mergeUsage(pending.budget.usage, delta);
+    const evaluation = budgetService.evaluate(pending.budget.policy, pending.budget.usage, {
+      taskId,
+      agentId: pending.agent,
+      actionType,
+      project: task?.project,
+    });
+
+    pending.budget.decision = evaluation.decision;
+    pending.budget.modelOverride ??= evaluation.modelOverride;
+    pending.budget.thresholdEvents = mergeThresholdEvents(
+      pending.budget.thresholdEvents,
+      evaluation.thresholdEvents
+    );
+
+    if (evaluation.trace) {
+      const trace = await getGovernanceTraceService().record(evaluation.trace);
+      pending.budget.traceIds = [...new Set([...pending.budget.traceIds, trace.id])];
+    }
+
+    if (!enforce || pending.budgetStopped || !this.isBlockingBudgetDecision(evaluation.decision)) {
+      return;
+    }
+
+    pending.budgetStopped = true;
+    const logPath = path.join(this.logsDir, `${taskId}_${pending.attemptId}.md`);
+    await this.appendLog(
+      logPath,
+      `\n## Budget Enforcement\n\nDecision: ${evaluation.decision}\n\n${evaluation.thresholdEvents
+        .map((event) => `- ${event.message}`)
+        .join('\n')}\n`
+    );
+    await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+    await this.completeAgent(taskId, {
+      success: false,
+      error: `Budget ${evaluation.decision}: ${evaluation.thresholdEvents
+        .map((event) => event.message)
+        .join(' ')}`,
     });
   }
 
@@ -727,7 +851,13 @@ export class ClawdbotAgentService {
     let stderrBuffer = '';
     let finalSummary = '';
     let tokenUsage:
-      | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          totalTokens?: number;
+          cost?: number;
+          model?: string;
+        }
       | undefined;
 
     child.stdout.setEncoding('utf-8');
@@ -791,8 +921,20 @@ export class ClawdbotAgentService {
             inputTokens: tokenUsage.inputTokens,
             outputTokens: tokenUsage.outputTokens,
             totalTokens: tokenUsage.totalTokens,
+            cost: tokenUsage.cost,
             model: tokenUsage.model || agentConfig?.model,
           });
+          await this.evaluatePendingBudget(
+            task.id,
+            {
+              inputTokens: tokenUsage.inputTokens,
+              outputTokens: tokenUsage.outputTokens,
+              totalTokens: tokenUsage.totalTokens,
+              costUsd: tokenUsage.cost,
+            },
+            'agent.tokens',
+            false
+          );
         }
 
         await this.appendLog(
@@ -897,7 +1039,13 @@ export class ClawdbotAgentService {
     let finalSummary = '';
     let failureMessage = '';
     let tokenUsage:
-      | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          totalTokens?: number;
+          cost?: number;
+          model?: string;
+        }
       | undefined;
 
     for await (const event of streamed.events) {
@@ -926,8 +1074,20 @@ export class ClawdbotAgentService {
         inputTokens: tokenUsage.inputTokens,
         outputTokens: tokenUsage.outputTokens,
         totalTokens: tokenUsage.totalTokens,
+        cost: tokenUsage.cost,
         model: tokenUsage.model || agentConfig?.model,
       });
+      await this.evaluatePendingBudget(
+        task.id,
+        {
+          inputTokens: tokenUsage.inputTokens,
+          outputTokens: tokenUsage.outputTokens,
+          totalTokens: tokenUsage.totalTokens,
+          costUsd: tokenUsage.cost,
+        },
+        'agent.tokens',
+        false
+      );
     }
 
     await this.appendLog(
@@ -951,7 +1111,13 @@ export class ClawdbotAgentService {
     agentConfig?: AgentConfig
   ): {
     summary?: string;
-    usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
+    usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens?: number;
+      cost?: number;
+      model?: string;
+    };
   } {
     const trimmed = line.trim();
     if (!trimmed) return {};
@@ -973,7 +1139,13 @@ export class ClawdbotAgentService {
     agentConfig?: AgentConfig
   ): {
     summary?: string;
-    usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
+    usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens?: number;
+      cost?: number;
+      model?: string;
+    };
   } {
     const record = event as Record<string, unknown>;
     const type = String(record.type || record.event || 'codex.event');
@@ -984,7 +1156,18 @@ export class ClawdbotAgentService {
       `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n\n</details>\n`
     );
     if (task && attemptId) {
-      void this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary);
+      void this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary).catch(
+        (error) => {
+          log.warn(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              taskId: task.id,
+              attemptId,
+            },
+            'Failed to record Codex event'
+          );
+        }
+      );
     }
     return { summary, usage };
   }
@@ -1139,6 +1322,10 @@ export class ClawdbotAgentService {
         },
         agent
       );
+    }
+
+    if (tool) {
+      await this.evaluatePendingBudget(task.id, { toolCalls: 1 }, 'agent.tool', true);
     }
 
     if (files.length > 0) {
@@ -1489,10 +1676,14 @@ export class ClawdbotAgentService {
     return visit(event);
   }
 
-  private extractCodexUsage(
-    event: unknown
-  ):
-    | { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string }
+  private extractCodexUsage(event: unknown):
+    | {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens?: number;
+        cost?: number;
+        model?: string;
+      }
     | undefined {
     const seen = new Set<unknown>();
     const visit = (value: unknown): Record<string, unknown> | undefined => {
@@ -1526,10 +1717,12 @@ export class ClawdbotAgentService {
       usage.completion_tokens ??
       usage.completionTokens) as number;
     const total = usage.total_tokens ?? usage.totalTokens;
+    const cost = usage.cost ?? usage.cost_usd ?? usage.costUsd;
     return {
       inputTokens: input,
       outputTokens: output,
       totalTokens: typeof total === 'number' ? total : input + output,
+      cost: typeof cost === 'number' ? cost : undefined,
       model: typeof usage.model === 'string' ? usage.model : undefined,
     };
   }
@@ -1702,3 +1895,14 @@ ${prompt}
 
 // Export singleton
 export const clawdbotAgentService = new ClawdbotAgentService();
+
+function mergeThresholdEvents(
+  existing: AgentBudgetThresholdEvent[],
+  next: AgentBudgetThresholdEvent[]
+): AgentBudgetThresholdEvent[] {
+  const byKey = new Map<string, AgentBudgetThresholdEvent>();
+  for (const event of [...existing, ...next]) {
+    byKey.set(`${event.metric}:${event.threshold}:${event.action}`, event);
+  }
+  return Array.from(byKey.values());
+}

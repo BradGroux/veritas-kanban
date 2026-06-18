@@ -16,6 +16,7 @@ import { NotFoundError, ValidationError, BadRequestError } from '../middleware/e
 import { checkWorkflowPermission, assertWorkflowPermission } from '../middleware/workflow-auth.js';
 import { diffWorkflows } from '../utils/workflow-diff.js';
 import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
+import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 
 const router = Router();
 const workflowService = getWorkflowService();
@@ -42,6 +43,7 @@ function getRequestPermissions(req: AuthenticatedRequest): string[] | undefined 
 const startRunSchema = z.object({
   taskId: z.string().optional(),
   context: z.record(z.string(), z.unknown()).optional(),
+  budget: AgentBudgetPolicySchema.optional(),
 });
 
 const resumeRunSchema = z.object({
@@ -429,7 +431,7 @@ router.post(
     await assertWorkflowPermission(workflowId, userId, 'execute');
 
     // Validate input
-    const { taskId, context } = startRunSchema.parse(req.body);
+    const { taskId, context, budget } = startRunSchema.parse(req.body);
     const workflow = await workflowService.loadWorkflow(workflowId);
     if (!workflow) {
       throw new NotFoundError(`Workflow ${workflowId} not found`);
@@ -460,10 +462,15 @@ router.post(
     }
 
     // Start run
-    const run = await workflowRunService.startRun(workflowId, taskId, {
-      ...context,
-      skillAudit: dryRun.skillAudit,
-    });
+    const run = await workflowRunService.startRun(
+      workflowId,
+      taskId,
+      {
+        ...context,
+        skillAudit: dryRun.skillAudit,
+      },
+      budget
+    );
 
     // Audit log
     await workflowService.auditChange({

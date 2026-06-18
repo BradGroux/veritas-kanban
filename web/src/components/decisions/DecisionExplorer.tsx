@@ -26,6 +26,7 @@ const traceKindOptions: Array<{ value: 'all' | GovernanceTraceKind; label: strin
   { value: 'all', label: 'All trace types' },
   { value: 'policy', label: 'Policies' },
   { value: 'tool-policy', label: 'Tool policies' },
+  { value: 'budget-policy', label: 'Budget policies' },
   { value: 'agent-permission', label: 'Agent permissions' },
   { value: 'routing', label: 'Routing' },
   { value: 'workflow-gate', label: 'Workflow gates' },

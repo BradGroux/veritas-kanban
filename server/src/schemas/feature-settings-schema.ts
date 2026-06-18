@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
 import { BOARD_COLUMN_ID_PATTERN } from '@veritas-kanban/shared';
 
 // Dangerous keys check
@@ -205,6 +206,7 @@ const BudgetSettingsSchema = z
     monthlyTokenLimit: z.number().int().min(0).optional(),
     monthlyCostLimit: z.number().min(0).optional(),
     warningThreshold: z.number().min(0).max(100).optional(),
+    defaultRunBudget: AgentBudgetPolicySchema.optional(),
   })
   .strict()
   .optional();

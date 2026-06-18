@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Modal,
+  NumberInput,
   Select,
   Switch,
   Text,
@@ -48,6 +49,7 @@ import type {
   AgentType,
   RoutingRule,
   AgentRoutingConfig,
+  AgentBudgetLimits,
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
 } from '@veritas-kanban/shared';
@@ -318,6 +320,17 @@ function formatAgentProvider(provider: AgentProvider): string {
     AGENT_PROVIDER_OPTIONS.find((option) => option.value === provider)?.label ??
     formatProviderState(provider)
   );
+}
+
+function cleanBudgetLimits(limits: AgentBudgetLimits): AgentBudgetLimits {
+  const clean: AgentBudgetLimits = {};
+  for (const key of ['totalTokens', 'costUsd', 'toolCalls', 'runtimeSeconds'] as const) {
+    const value = limits[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      clean[key] = value;
+    }
+  }
+  return clean;
 }
 
 function ProviderHealthPanel({
@@ -1411,6 +1424,11 @@ function AgentItem({
                   {sandboxPreset.name}
                 </Badge>
               )}
+              {agent.budget?.enabled && (
+                <Badge size="xs" variant="light" color="orange">
+                  Budget
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -2087,6 +2105,8 @@ function AgentForm({
   const [provider, setProvider] = useState<AgentProvider | ''>(agent?.provider || '');
   const [model, setModel] = useState(agent?.model || '');
   const [sandboxPresetId, setSandboxPresetId] = useState(agent?.sandboxPresetId || '');
+  const [budgetEnabled, setBudgetEnabled] = useState(agent?.budget?.enabled ?? false);
+  const [budgetLimits, setBudgetLimits] = useState<AgentBudgetLimits>(agent?.budget?.limits ?? {});
 
   const typeSlug =
     type ||
@@ -2112,7 +2132,26 @@ function AgentForm({
       provider: provider || undefined,
       model: model.trim() || undefined,
       sandboxPresetId: sandboxPresetId || undefined,
+      budget: budgetEnabled
+        ? {
+            enabled: true,
+            scope: 'agent',
+            name: `${name.trim()} run budget`,
+            limits: cleanBudgetLimits(budgetLimits),
+            softThresholdPercent: agent?.budget?.softThresholdPercent ?? 80,
+            hardAction: agent?.budget?.hardAction ?? 'require-approval',
+            downgradeModel: agent?.budget?.downgradeModel,
+          }
+        : undefined,
     });
+  };
+
+  const updateBudgetLimit = (key: keyof AgentBudgetLimits, value: number | string) => {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    setBudgetLimits((current) => ({
+      ...current,
+      [key]: Number.isFinite(numeric) ? Math.max(0, numeric) : 0,
+    }));
   };
 
   return (
@@ -2207,6 +2246,49 @@ function AgentForm({
           ]}
           allowDeselect={false}
         />
+
+        <div className="rounded-md border bg-background/70 p-3 space-y-3">
+          <Switch
+            label="Agent Budget Defaults"
+            description="Apply stricter caps when this agent launches runs"
+            checked={budgetEnabled}
+            onChange={(event) => setBudgetEnabled(event.currentTarget.checked)}
+          />
+          {budgetEnabled && (
+            <div className="grid grid-cols-2 gap-3">
+              <NumberInput
+                label="Token Limit"
+                value={budgetLimits.totalTokens ?? 0}
+                onChange={(value) => updateBudgetLimit('totalTokens', value)}
+                min={0}
+                hideControls
+                thousandSeparator=","
+              />
+              <NumberInput
+                label="Cost Limit"
+                value={budgetLimits.costUsd ?? 0}
+                onChange={(value) => updateBudgetLimit('costUsd', value)}
+                min={0}
+                hideControls
+                prefix="$"
+              />
+              <NumberInput
+                label="Tool Calls"
+                value={budgetLimits.toolCalls ?? 0}
+                onChange={(value) => updateBudgetLimit('toolCalls', value)}
+                min={0}
+                hideControls
+              />
+              <NumberInput
+                label="Runtime Seconds"
+                value={budgetLimits.runtimeSeconds ?? 0}
+                onChange={(value) => updateBudgetLimit('runtimeSeconds', value)}
+                min={0}
+                hideControls
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-end gap-2">

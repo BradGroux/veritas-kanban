@@ -8,6 +8,11 @@ import path from 'path';
 import { nanoid } from 'nanoid';
 import {
   buildWorkflowPipelineSummary,
+  ZERO_AGENT_BUDGET_USAGE,
+  type AgentBudgetDecision,
+  type AgentBudgetPolicy,
+  type AgentBudgetThresholdEvent,
+  type AgentBudgetUsage,
   type WorkflowPipelineRoleStatusPatch,
   type WorkflowSubagentRunStatus,
   type WorkflowSubagentTelemetry,
@@ -21,6 +26,9 @@ import { broadcastWorkflowStatus } from './broadcast-service.js';
 import { getTaskService } from './task-service.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkflowRunRepository } from '../storage/sqlite/workflow-repositories.js';
+import { getConfigService } from './config-service.js';
+import { getAgentBudgetService } from './agent-budget-service.js';
+import { getGovernanceTraceService } from './governance-trace-service.js';
 
 const log = createLogger('workflow-run');
 
@@ -189,6 +197,86 @@ export class WorkflowRunService {
     return 'pending';
   }
 
+  private isBlockingBudgetDecision(decision: AgentBudgetDecision): boolean {
+    return decision === 'pause' || decision === 'require-approval' || decision === 'cancel';
+  }
+
+  private async evaluateRunBudget(
+    run: WorkflowRun,
+    workflow: WorkflowDefinition,
+    step: WorkflowStep,
+    actionType: string,
+    enforce: boolean,
+    delta: Partial<AgentBudgetUsage> = {}
+  ): Promise<boolean> {
+    if (!run.budget?.enabled) return false;
+
+    const agentDef = step.agent
+      ? workflow.agents.find((candidate) => candidate.id === step.agent)
+      : undefined;
+    const activeAgentBudget =
+      agentDef?.budget?.enabled &&
+      agentDef.budget.limits &&
+      Object.keys(agentDef.budget.limits).length > 0
+        ? agentDef.budget
+        : undefined;
+    const budgetService = getAgentBudgetService();
+    const effectivePolicy =
+      budgetService.resolve({
+        workflowBudget: run.budget.policy,
+        workflowAgentBudget: activeAgentBudget,
+      }) ?? run.budget.policy;
+    if (!effectivePolicy) return false;
+    const runtimeSeconds = Math.ceil((Date.now() - new Date(run.startedAt).getTime()) / 1000);
+    const retries = run.steps.reduce((sum, stepRun) => sum + stepRun.retries, 0);
+    const fanOut = Math.max(run.budget.usage.fanOut, step.parallel?.steps.length ?? 1);
+    run.budget.usage = budgetService.mergeUsage(run.budget.usage, {
+      ...delta,
+      runtimeSeconds,
+      retries,
+      fanOut,
+    });
+
+    const evaluation = budgetService.evaluate(effectivePolicy, run.budget.usage, {
+      workflowId: run.workflowId,
+      runId: run.id,
+      taskId: run.taskId,
+      stepId: step.id,
+      agentId: step.agent,
+      actionType,
+    });
+    if (!activeAgentBudget) {
+      run.budget.policy = effectivePolicy;
+    }
+    run.budget.decision = evaluation.decision;
+    run.budget.modelOverride ??= evaluation.modelOverride;
+    run.budget.thresholdEvents = mergeBudgetThresholdEvents(
+      run.budget.thresholdEvents,
+      evaluation.thresholdEvents
+    );
+
+    if (evaluation.trace) {
+      const trace = await getGovernanceTraceService().record(evaluation.trace);
+      run.budget.traceIds = [...new Set([...run.budget.traceIds, trace.id])];
+    }
+
+    if (!enforce || !this.isBlockingBudgetDecision(evaluation.decision)) {
+      return false;
+    }
+
+    const detail = evaluation.thresholdEvents.map((event) => event.message).join(' ');
+    if (evaluation.decision === 'cancel') {
+      run.status = 'failed';
+      run.error = `Budget cancel: ${detail}`;
+      run.completedAt = new Date().toISOString();
+    } else {
+      run.status = 'blocked';
+      run.error = `Budget ${evaluation.decision}: ${detail}`;
+    }
+    this.syncPipelineSummary(run, workflow);
+    return true;
+  }
+
   private mergeStepTelemetry(telemetry: WorkflowSubagentTelemetry, stepRun: StepRun): void {
     if (stepRun.startedAt) {
       telemetry.startedAt =
@@ -210,7 +298,8 @@ export class WorkflowRunService {
   async startRun(
     workflowId: string,
     taskId?: string,
-    initialContext?: Record<string, unknown>
+    initialContext?: Record<string, unknown>,
+    runBudget?: AgentBudgetPolicy
   ): Promise<WorkflowRun> {
     // Check concurrency limit
     if (activeRunCount >= MAX_CONCURRENT_RUNS) {
@@ -228,6 +317,39 @@ export class WorkflowRunService {
     const taskService = getTaskService();
     const task = taskId ? await taskService.getTask(taskId) : null;
     const safeInitialContext = this.validateExternalContext(initialContext, 'Initial context');
+    const config = await getConfigService().getConfig();
+    const budgetService = getAgentBudgetService();
+    const budgetPolicy = budgetService.resolve({
+      workspaceBudget: config.features?.budget?.enabled
+        ? config.features.budget.defaultRunBudget
+        : undefined,
+      workflowBudget: workflow.config?.budget,
+      runBudget,
+    });
+    const hasWorkflowAgentBudget = workflow.agents.some(
+      (agent) =>
+        agent.budget?.enabled && agent.budget.limits && Object.keys(agent.budget.limits).length > 0
+    );
+    const budgetEvaluation = budgetService.evaluate(
+      budgetPolicy,
+      { fanOut: 1 },
+      {
+        workflowId: workflow.id,
+        taskId,
+        actionType: 'workflow.start',
+        project: task?.project,
+      }
+    );
+    const budgetTraceIds: string[] = [];
+    if (budgetEvaluation.trace) {
+      const trace = await getGovernanceTraceService().record(budgetEvaluation.trace);
+      budgetTraceIds.push(trace.id);
+    }
+    if (this.isBlockingBudgetDecision(budgetEvaluation.decision)) {
+      throw new ValidationError(
+        `Workflow run budget requires operator action before launch: ${budgetEvaluation.decision}`
+      );
+    }
 
     const runId = `run_${Date.now()}_${nanoid(8)}`;
     const now = new Date().toISOString();
@@ -264,6 +386,24 @@ export class WorkflowRunService {
         // Phase 2: Session tracking for reuse mode (#111)
         _sessions: {},
       },
+      budget: budgetPolicy
+        ? {
+            ...budgetService.initialState(budgetPolicy),
+            usage: budgetEvaluation.usage,
+            decision: budgetEvaluation.decision,
+            thresholdEvents: budgetEvaluation.thresholdEvents,
+            traceIds: budgetTraceIds,
+            modelOverride: budgetEvaluation.modelOverride,
+          }
+        : hasWorkflowAgentBudget
+          ? {
+              enabled: true,
+              usage: { ...ZERO_AGENT_BUDGET_USAGE },
+              decision: 'allow',
+              thresholdEvents: [],
+              traceIds: [],
+            }
+          : undefined,
       startedAt: now,
       steps: workflow.steps.map((step) => ({
         stepId: step.id,
@@ -302,6 +442,11 @@ export class WorkflowRunService {
       while (stepQueue.length > 0) {
         const stepId = stepQueue.shift()!;
         const step = workflow.steps.find((s) => s.id === stepId)!;
+        if (await this.evaluateRunBudget(run, workflow, step, 'workflow.step.start', true)) {
+          await this.saveRun(run);
+          broadcastWorkflowStatus(run);
+          return;
+        }
 
         // Skip if step already completed/skipped (defensive when retry_step rebuilds queue)
         const existingStepRun = run.steps.find((s) => s.stepId === step.id)!;
@@ -322,6 +467,21 @@ export class WorkflowRunService {
 
         try {
           const result = await this.stepExecutor.executeStep(step, run);
+          if (result.budgetUsage) {
+            const budgetBlocked = await this.evaluateRunBudget(
+              run,
+              workflow,
+              step,
+              'workflow.step.usage',
+              true,
+              result.budgetUsage
+            );
+            if (budgetBlocked) {
+              await this.saveRun(run);
+              broadcastWorkflowStatus(run);
+              return;
+            }
+          }
 
           stepRun.status = 'completed';
           stepRun.completedAt = new Date().toISOString();
@@ -353,7 +513,7 @@ export class WorkflowRunService {
             throw err;
           }
 
-          if (run.status === 'blocked') {
+          if ((run.status as WorkflowRun['status']) === 'blocked') {
             log.info({ runId: run.id, stepId: step.id }, 'Workflow run blocked — awaiting resume');
             return;
           }
@@ -910,4 +1070,15 @@ export function getWorkflowRunService(): WorkflowRunService {
     workflowRunServiceInstance = new WorkflowRunService();
   }
   return workflowRunServiceInstance;
+}
+
+function mergeBudgetThresholdEvents(
+  existing: AgentBudgetThresholdEvent[],
+  next: AgentBudgetThresholdEvent[]
+): AgentBudgetThresholdEvent[] {
+  const byKey = new Map<string, AgentBudgetThresholdEvent>();
+  for (const event of [...existing, ...next]) {
+    byKey.set(`${event.metric}:${event.threshold}:${event.action}`, event);
+  }
+  return Array.from(byKey.values());
 }

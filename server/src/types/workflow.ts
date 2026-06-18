@@ -31,6 +31,7 @@ export interface WorkflowConfig {
   fresh_session_default?: boolean;
   progress_file?: string;
   telemetry_tags?: string[];
+  budget?: import('@veritas-kanban/shared').AgentBudgetPolicy;
 }
 
 export type WorkflowPipelineMode = 'single-agent' | 'orchestrated';
@@ -119,6 +120,7 @@ export interface WorkflowAgent {
   provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | string;
   command?: string;
   sandboxPresetId?: string;
+  budget?: import('@veritas-kanban/shared').AgentBudgetPolicy;
   description: string;
   tools?: string[]; // Phase 2: Tool restrictions (#110)
 }
@@ -210,6 +212,7 @@ export interface WorkflowRun {
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps
+  budget?: import('@veritas-kanban/shared').AgentBudgetState;
   startedAt: string;
   completedAt?: string;
   lastCheckpoint?: string; // Phase 2: Last state persistence timestamp (#113)
@@ -262,6 +265,7 @@ export interface StepSessionConfig {
 export interface StepExecutionResult {
   output: unknown; // Parsed output (for context passing)
   outputPath: string; // Path to output file
+  budgetUsage?: Partial<import('@veritas-kanban/shared').AgentBudgetUsage>;
 }
 
 // ==================== RBAC & Audit Types ====================

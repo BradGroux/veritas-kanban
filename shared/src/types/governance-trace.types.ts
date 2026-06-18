@@ -2,6 +2,7 @@ export type GovernanceTraceKind =
   | 'policy'
   | 'tool-policy'
   | 'sandbox-policy'
+  | 'budget-policy'
   | 'agent-permission'
   | 'routing'
   | 'workflow-gate';

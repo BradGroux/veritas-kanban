@@ -81,7 +81,10 @@ export class WorkflowStepExecutor {
       throw new Error(`Agent step ${step.id} missing agent`);
     }
 
-    const agentDef = this.getAgentDefinition(run, step.agent);
+    let agentDef = this.getAgentDefinition(run, step.agent);
+    if (agentDef && run.budget?.modelOverride) {
+      agentDef = { ...agentDef, model: run.budget.modelOverride };
+    }
     const workflowConfig = run.context.workflow as
       | { config?: { fresh_session_default?: boolean } }
       | undefined;
@@ -466,9 +469,20 @@ export class WorkflowStepExecutor {
     let threadId = existingThreadId || '';
     let finalResponse = '';
     let failureMessage = '';
+    let toolCalls = 0;
+    let tokenUsage:
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          totalTokens?: number;
+          cost?: number;
+        }
+      | undefined;
 
     for await (const event of streamed.events) {
       events.push(event);
+      if (this.isCodexToolEvent(event)) toolCalls++;
+      tokenUsage = this.extractCodexBudgetUsage(event) ?? tokenUsage;
       if (event.type === 'thread.started') {
         threadId = event.thread_id;
         run.context._sessions = {
@@ -527,7 +541,76 @@ export class WorkflowStepExecutor {
     return {
       output: parsed,
       outputPath,
+      budgetUsage: {
+        inputTokens: tokenUsage?.inputTokens,
+        outputTokens: tokenUsage?.outputTokens,
+        totalTokens: tokenUsage?.totalTokens,
+        costUsd: tokenUsage?.cost,
+        toolCalls,
+      },
     };
+  }
+
+  private extractCodexBudgetUsage(event: unknown):
+    | {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens?: number;
+        cost?: number;
+      }
+    | undefined {
+    const seen = new Set<unknown>();
+    const visit = (value: unknown): Record<string, unknown> | undefined => {
+      if (!value || typeof value !== 'object') return undefined;
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+      const record = value as Record<string, unknown>;
+      const input =
+        record.input_tokens ?? record.inputTokens ?? record.prompt_tokens ?? record.promptTokens;
+      const output =
+        record.output_tokens ??
+        record.outputTokens ??
+        record.completion_tokens ??
+        record.completionTokens;
+      if (typeof input === 'number' && typeof output === 'number') return record;
+      for (const child of Object.values(record)) {
+        const result = visit(child);
+        if (result) return result;
+      }
+      return undefined;
+    };
+
+    const usage = visit(event);
+    if (!usage) return undefined;
+    const input = (usage.input_tokens ??
+      usage.inputTokens ??
+      usage.prompt_tokens ??
+      usage.promptTokens) as number;
+    const output = (usage.output_tokens ??
+      usage.outputTokens ??
+      usage.completion_tokens ??
+      usage.completionTokens) as number;
+    const total = usage.total_tokens ?? usage.totalTokens;
+    const cost = usage.cost ?? usage.cost_usd ?? usage.costUsd;
+    return {
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: typeof total === 'number' ? total : input + output,
+      cost: typeof cost === 'number' ? cost : undefined,
+    };
+  }
+
+  private isCodexToolEvent(event: unknown): boolean {
+    if (!event || typeof event !== 'object') return false;
+    const record = event as Record<string, unknown>;
+    const type = String(record.type || record.event || '').toLowerCase();
+    if (type.includes('tool')) return true;
+    const item = record.item;
+    if (item && typeof item === 'object') {
+      const itemType = String((item as Record<string, unknown>).type || '').toLowerCase();
+      return itemType.includes('tool') || itemType.includes('function_call');
+    }
+    return false;
   }
 
   private assertCodexToolPolicySupported(

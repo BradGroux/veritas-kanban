@@ -4,6 +4,7 @@ import type { AgentType, TaskPriority, TaskStatus } from './task.types.js';
 import type { TelemetryConfig } from './telemetry.types.js';
 import type { WatcherContinuationSettings } from './watcher-policy.types.js';
 import type { SandboxPolicyPreset } from './sandbox-policy.types.js';
+import type { AgentBudgetPolicy } from './agent-budget.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -27,6 +28,7 @@ export interface AgentConfig {
   provider?: AgentProvider;
   model?: string;
   sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
 }
 
 export type AgentProvider =
@@ -304,6 +306,7 @@ export interface BudgetSettings {
   monthlyTokenLimit: number; // Monthly token budget (0 = no limit)
   monthlyCostLimit: number; // Monthly cost budget in dollars (0 = no limit)
   warningThreshold: number; // Percentage threshold for warning (0-100, default 80)
+  defaultRunBudget?: AgentBudgetPolicy;
 }
 
 /** Structural enforcement toggles (all on by default). */
@@ -503,6 +506,14 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     monthlyTokenLimit: 0, // 0 = no limit
     monthlyCostLimit: 0, // 0 = no limit (dollars)
     warningThreshold: 80, // Warn at 80% of budget
+    defaultRunBudget: {
+      enabled: false,
+      name: 'Workspace default run budget',
+      scope: 'workspace',
+      limits: {},
+      softThresholdPercent: 80,
+      hardAction: 'require-approval',
+    },
   },
   enforcement: {
     squadChat: false,
