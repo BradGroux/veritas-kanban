@@ -226,13 +226,13 @@ If you need to debug inside a container, use `docker exec` to inspect — don't 
 | Requirement | Version |
 | ----------- | ------- |
 | Node.js     | 22.0.0+ |
-| pnpm        | 9.0.0+  |
+| pnpm        | 11.1.1+ |
 
 Install pnpm if not present:
 
 ```bash
 corepack enable
-corepack prepare pnpm@9.15.4 --activate
+corepack prepare pnpm@11.1.1 --activate
 ```
 
 ### Build Steps

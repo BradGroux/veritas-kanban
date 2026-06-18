@@ -33,14 +33,14 @@ This guide walks you through every self-hosting scenario — from running locall
 | Requirement | Version | Install                                                      |
 | ----------- | ------- | ------------------------------------------------------------ |
 | Node.js     | 22.0.0+ | https://nodejs.org or `nvm install 22`                       |
-| pnpm        | 9.0.0+  | `corepack enable && corepack prepare pnpm@9.15.4 --activate` |
+| pnpm        | 11.1.1+ | `corepack enable && corepack prepare pnpm@11.1.1 --activate` |
 | Git         | any     | https://git-scm.com                                          |
 
 Verify:
 
 ```bash
 node --version   # v22.x.x
-pnpm --version   # 9.x.x
+pnpm --version   # 11.x.x
 ```
 
 ---

@@ -45,9 +45,6 @@ LICENSE
 coverage
 
 # Development tools
-cli/
-mcp/
-scripts/
 tasks/
 eslint.config.js
 .prettierrc

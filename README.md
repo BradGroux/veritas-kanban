@@ -335,7 +335,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 | **Git**             | simple-git, worktree management      | —                                |
 | **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4        |
 | **Runtime**         | Node.js                              | 22+                              |
-| **Package Manager** | pnpm                                 | 9+                               |
+| **Package Manager** | pnpm                                 | 11.1.1+                          |
 
 ---
 

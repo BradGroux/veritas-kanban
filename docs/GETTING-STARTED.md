@@ -28,12 +28,12 @@ A working board is not the same as agent-ready or external wake/delivery-ready. 
 
 ## Prerequisites (30 seconds)
 
-| What              | Command            | Notes                                              |
-| ----------------- | ------------------ | -------------------------------------------------- |
-| Node.js           | `node -v`          | Requires **22+**. Install via Volta/nvm if older.  |
-| pnpm              | `pnpm -v`          | Requires **9+**. `npm install -g pnpm` if missing. |
-| Git               | `git --version`    | Any current version works.                         |
-| (Optional) Docker | `docker --version` | Needed only if you prefer containers.              |
+| What              | Command            | Notes                                                                   |
+| ----------------- | ------------------ | ----------------------------------------------------------------------- |
+| Node.js           | `node -v`          | Requires **22+**. Install via Volta/nvm if older.                       |
+| pnpm              | `pnpm -v`          | Requires **11.1.1+**. Prefer `corepack prepare pnpm@11.1.1 --activate`. |
+| Git               | `git --version`    | Any current version works.                                              |
+| (Optional) Docker | `docker --version` | Needed only if you prefer containers.                                   |
 
 That's it. No database, no extra services.
 
