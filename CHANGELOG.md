@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-06-18
+
+### Added
+
+- Added shared live run sessions with workspace-scoped view, co-drive, and fork
+  permissions. Shared viewers receive live output and run events, editors send
+  attributed messages and mobile-safe approval responses, and forks create
+  linked tasks without mutating parent run state (#721, #731).
+- Added reusable agent profile packages with YAML/JSON validation, import,
+  export, metadata editing, and profile-aware agent launch posture (#720).
+- Added enforceable agent run budgets for token, cost, tool-call, runtime,
+  retry, and fan-out limits with auditable enforcement decisions (#722).
+- Added sandbox policy presets for filesystem, network, environment, and
+  credential access with dry-run validation before launch (#723).
+- Added multi-participant decision review sessions with independent responses,
+  critique rounds, synthesis packets, work-product attachment, and decision
+  audit links (#724).
+
+### Changed
+
+- Bumped the release from `5.0.1` to `5.1.0` across the root, shared, server,
+  web, CLI, MCP, and desktop package manifests.
+- Updated the README version badge, API reference, release notes, permission
+  coverage manifest, and MCP documentation footer for `5.1.0`.
+
+### Fixed
+
+- Fixed Docker source builds by restoring required Dockerfile inputs to the
+  build context (#725).
+
 ## [5.0.1] - 2026-06-12
 
 ### Changed
@@ -1584,7 +1614,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v4.3.2...v5.0.0
 [4.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v4.0.1...v4.1.0

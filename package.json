@@ -1,6 +1,6 @@
 {
   "name": "veritas-kanban",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "private": true,
   "description": "Local-first task management and AI agent orchestration platform",
   "author": "Brad Groux <brad@digitalmeld.io>",

@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/server",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

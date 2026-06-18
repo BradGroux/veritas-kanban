@@ -10,7 +10,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-5.0.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.1.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -96,7 +96,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) — release-safe dummy screenshots and GIFs for the v5 desktop shell, resizable workbench, agent providers, task work view, Maintenance Center, and mobile/PWA shell.
 - [v5 Upgrade, Install, Remote, And Admin Guide](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v4-to-v5 upgrade, desktop setup, remote/server, mobile/PWA, admin, backup, and diagnostics paths.
 - [v5 Compatibility And Release Policy](docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md) — supported version combinations, update channels, stale-client behavior, rollback limits, and release validation.
-- [v5 Release Notes](docs/V5-RELEASE-NOTES.md) — breaking changes, migration warnings, published v5.0.x artifacts, and deferred post-GA backlog.
+- [v5 Release Notes](docs/V5-RELEASE-NOTES.md) — breaking changes, migration warnings, published v5.1.0 artifacts, and deferred post-GA backlog.
 - [v5 Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
 - [Post-GA Desktop Agent Workbench Spec](docs/DESKTOP-AGENT-WORKBENCH.md) — desktop workbench UX, run controls, approvals, evidence, native affordances, and safety coverage.
 - [Post-GA Native Mobile Offline ADR](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md) — native mobile authority model, offline queue semantics, conflict handling, and security review.

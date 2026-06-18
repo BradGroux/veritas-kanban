@@ -1,7 +1,7 @@
 {
   "version": 1,
   "lastReviewed": "2026-06-18",
-  "notes": "Authority surface manifest for v5.0. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
+  "notes": "Authority surface manifest for v5. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
   "surfaces": [
     {
       "id": "rest:v1-route-map",

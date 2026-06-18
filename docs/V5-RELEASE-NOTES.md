@@ -1,13 +1,39 @@
-# v5.0 Release Notes
+# v5 Release Notes
 
-These notes describe the published Veritas Kanban v5.0 stable release line.
+These notes describe the published Veritas Kanban v5 stable release line.
 
 - GitHub release:
-  [Veritas Kanban v5.0.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.0.1)
+  [Veritas Kanban v5.1.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
-  [Veritas-Kanban-5.0.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.0.0/Veritas-Kanban-5.0.0-mac-arm64.zip)
+  [Veritas-Kanban-5.1.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.1.0/Veritas-Kanban-5.1.0-mac-arm64.zip)
+
+## v5.1.0 Release
+
+v5.1.0 completes the post-v5.0 agent governance and collaboration release
+train while preserving the v5 storage, desktop, security, and migration
+posture.
+
+- Docker source builds include the required server, web, shared, CLI, MCP, and
+  desktop workspace inputs so self-host validation can build from a clean
+  context.
+- Sandbox policy presets define reusable filesystem, network, environment, and
+  credential boundaries for agent launches, with dry-run validation before run
+  start.
+- Agent budget enforcement adds auditable token, cost, tool-call, runtime,
+  retry, and fan-out guardrails across workspace, agent, workflow, workflow
+  agent, and one-off run scopes.
+- Agent profile packages can be imported, validated, exported, enabled, edited,
+  and used at launch so role/runtime/prompt/tool/sandbox/budget posture can
+  travel as YAML or JSON.
+- Decision review sessions capture independent participant responses, critique
+  rounds, final synthesis packets, work-product attachment, and decision audit
+  links.
+- Shared live run sessions let workspace members create view, co-drive, or fork
+  shares for active task runs. Viewers receive live output and events, editors
+  send attributed messages and mobile-safe approvals, and forks create linked
+  tasks without changing the parent run.
 
 ## v5.0.1 Patch
 
@@ -93,7 +119,13 @@ desktop, security, and migration posture unchanged from v5.0.0.
 
 ## Release Artifacts
 
-The v5.0.0 stable desktop release includes:
+The v5.1.0 stable desktop release publishes signed/notarized macOS ZIP and DMG
+assets plus `latest-mac.yml`, blockmaps, and SHA-256 sidecars under the
+[v5.1.0 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0).
+Use the release-attached `.sha256` files as the checksum source of truth.
+
+The v5.0.0 stable desktop release artifacts are retained here as the v5 baseline
+used by the updater evidence packet:
 
 | Artifact                                                                                                                                                        | SHA-256                                                            |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
