@@ -49,10 +49,12 @@ import type {
   AgentBudgetState,
   AgentBudgetUsage,
   AgentBudgetDecision,
+  AgentProfileLaunchMetadata,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
 import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
+import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
@@ -119,6 +121,7 @@ export interface AgentOutput {
 }
 
 export interface AgentStartOptions {
+  profileId?: string;
   overrideReason?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
@@ -145,6 +148,7 @@ interface PendingAgent {
   model?: string;
   budget?: AgentBudgetState;
   budgetStopped?: boolean;
+  agentProfile?: AgentProfileLaunchMetadata;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -203,14 +207,21 @@ export class ClawdbotAgentService {
 
     // Get agent config — use routing engine when agent is "auto" or not specified
     const config = await this.configService.getConfig();
+    const profileLaunch = options.profileId
+      ? await getAgentProfilePackageService().resolveLaunch(options.profileId)
+      : undefined;
     let agent: AgentType;
-    let routingReason: string | undefined;
 
-    if (!agentType || agentType === 'auto') {
+    if (profileLaunch) {
+      agent = profileLaunch.agent;
+      log.info(
+        `[ClawdbotAgent] Profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent} for task ${taskId}`
+      );
+    } else if (!agentType || agentType === 'auto') {
       const routing = getAgentRoutingService();
       const result = await routing.resolveAgent(task);
       agent = result.agent;
-      routingReason = result.reason;
+      const routingReason = result.reason;
       log.info(
         `[ClawdbotAgent] Routing resolved agent for task ${taskId}: ${agent} (${routingReason})`
       );
@@ -218,16 +229,24 @@ export class ClawdbotAgentService {
       agent = agentType;
     }
 
-    const agentConfig = this.resolveAgentConfig(config.agents, agent);
-    await this.assertAgentAvailable(agent, agentConfig);
-    const provider = this.resolveAgentProvider(agentConfig, agent);
+    const agentConfig = profileLaunch?.agentConfig ?? this.resolveAgentConfig(config.agents, agent);
+    const profileAgentConfig =
+      profileLaunch && agentConfig
+        ? {
+            ...agentConfig,
+            provider: profileLaunch.profile.runtime.provider ?? agentConfig.provider,
+            model: profileLaunch.model ?? agentConfig.model,
+          }
+        : agentConfig;
+    await this.assertAgentAvailable(agent, profileAgentConfig);
+    const provider = this.resolveAgentProvider(profileAgentConfig, agent);
     const budgetService = getAgentBudgetService();
     const budgetPolicy = budgetService.resolve({
       workspaceBudget: config.features?.budget?.enabled
         ? config.features.budget.defaultRunBudget
         : undefined,
-      agentBudget: agentConfig?.budget,
-      runBudget: options.budget,
+      agentBudget: profileAgentConfig?.budget,
+      runBudget: options.budget ?? profileLaunch?.budget,
     });
     const budgetEvaluation = budgetService.evaluate(
       budgetPolicy,
@@ -252,11 +271,14 @@ export class ClawdbotAgentService {
       });
     }
     const launchAgentConfig =
-      budgetEvaluation.modelOverride && agentConfig
-        ? { ...agentConfig, model: budgetEvaluation.modelOverride }
-        : agentConfig;
+      budgetEvaluation.modelOverride && profileAgentConfig
+        ? { ...profileAgentConfig, model: budgetEvaluation.modelOverride }
+        : profileAgentConfig;
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
-      presetId: options.sandboxPresetId ?? launchAgentConfig?.sandboxPresetId,
+      presetId:
+        options.sandboxPresetId ??
+        profileLaunch?.sandboxPresetId ??
+        launchAgentConfig?.sandboxPresetId,
       provider,
       workspacePath: task.git.worktreePath,
     });
@@ -323,6 +345,7 @@ export class ClawdbotAgentService {
       emitter,
       provider,
       model: launchAgentConfig?.model,
+      agentProfile: profileLaunch?.metadata,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -342,7 +365,12 @@ export class ClawdbotAgentService {
 
     // Build the task prompt for Clawdbot
     const worktreePath = this.expandPath(task.git.worktreePath);
-    const taskPrompt = this.buildTaskPrompt(task, worktreePath, attemptId);
+    const taskPrompt = this.buildTaskPrompt(
+      task,
+      worktreePath,
+      attemptId,
+      profileLaunch?.instructions
+    );
 
     // Initialize log file (ensure it stays within logs dir)
     ensureWithinBase(this.logsDir, logPath);
@@ -357,12 +385,32 @@ export class ClawdbotAgentService {
       provider,
       model: launchAgentConfig?.model,
       budget: pendingAgents.get(taskId)?.budget,
+      agentProfile: profileLaunch?.metadata,
     };
 
     await this.taskService.updateTask(taskId, {
       status: 'in-progress',
       attempt,
     });
+
+    if (profileLaunch) {
+      await activityService.logActivity(
+        'agent_event',
+        taskId,
+        task.title,
+        {
+          event: 'profile_launch',
+          profile: profileLaunch.metadata,
+          effectivePolicy: {
+            sandboxPresetId: options.sandboxPresetId ?? profileLaunch.sandboxPresetId,
+            budgetEnabled: pendingAgents.get(taskId)?.budget?.enabled ?? false,
+            model: launchAgentConfig?.model,
+            provider,
+          },
+        },
+        agent
+      );
+    }
 
     const telemetry = getTelemetryService();
     await telemetry.emit<RunStartedEvent>({
@@ -501,6 +549,7 @@ export class ClawdbotAgentService {
         model: pending.model,
         threadId: pending.threadId,
         budget: pending.budget,
+        agentProfile: pending.agentProfile,
       },
     });
 
@@ -1815,7 +1864,12 @@ export class ClawdbotAgentService {
       .map((f) => f.replace(`${taskId}_`, '').replace('.md', ''));
   }
 
-  private buildTaskPrompt(task: Task, worktreePath: string, attemptId: string): string {
+  private buildTaskPrompt(
+    task: Task,
+    worktreePath: string,
+    attemptId: string,
+    profileInstructions?: string
+  ): string {
     // Build checkpoint context if available
     let checkpointSection = '';
     if (task.checkpoint) {
@@ -1848,6 +1902,8 @@ ${checkpointSection}
 ## Task: ${task.title}
 
 ${task.description || 'No description provided.'}
+
+${profileInstructions ? `${profileInstructions}\n` : ''}
 
 ## Instructions
 

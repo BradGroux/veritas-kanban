@@ -156,6 +156,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'settings:write',
     overrides: [
       { methods: ['POST'], path: /^\/repos\/validate\/?$/, permissions: 'settings:read' },
+      {
+        methods: ['POST'],
+        path: /^\/agent-profiles\/validate\/?$/,
+        permissions: 'settings:read',
+      },
     ],
   },
   { prefix: '/api/changes', read: 'task:read' },

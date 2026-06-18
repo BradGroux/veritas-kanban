@@ -1421,6 +1421,52 @@ PUT /api/agents/routing
 }
 ```
 
+### Start Agent With Profile Package
+
+```
+POST /api/agents/:taskId/start
+```
+
+In addition to `agent`, `sandboxPresetId`, and `budget`, callers can pass a portable profile package ID:
+
+```json
+{
+  "profileId": "docs-reviewer"
+}
+```
+
+The launch path resolves the package runtime against configured provider profiles, applies package model/sandbox/budget posture, injects package instructions into the run prompt, and records the profile ID and version on the task attempt plus activity audit history.
+
+---
+
+## Agent Profile Packages
+
+Reusable YAML/JSON packages for agent role, runtime, prompt, tools, permissions, policy posture, workflow entrypoint, and health metadata.
+
+Mounted at `/api/config/agent-profiles`.
+
+| Method   | Path                                                | Description                                       | Permissions      |
+| -------- | --------------------------------------------------- | ------------------------------------------------- | ---------------- |
+| `GET`    | `/api/config/agent-profiles`                        | List imported profile package summaries           | `settings:read`  |
+| `POST`   | `/api/config/agent-profiles/validate`               | Validate YAML/JSON content with field-path errors | `settings:read`  |
+| `POST`   | `/api/config/agent-profiles/import`                 | Import or replace a profile package               | `settings:write` |
+| `GET`    | `/api/config/agent-profiles/:id`                    | Get one stored profile package                    | `settings:read`  |
+| `GET`    | `/api/config/agent-profiles/:id/export?format=yaml` | Export a package as YAML or JSON                  | `settings:read`  |
+| `PATCH`  | `/api/config/agent-profiles/:id`                    | Edit metadata and enablement                      | `settings:write` |
+| `DELETE` | `/api/config/agent-profiles/:id`                    | Remove a package                                  | `settings:write` |
+
+### Import Package
+
+```json
+{
+  "format": "yaml",
+  "source": "settings",
+  "content": "id: docs-reviewer\nschemaVersion: agent-profile-package/v1\nversion: 1.0.0\n..."
+}
+```
+
+Invalid packages return `valid: false` from `/validate` with issues like `$.runtime.agent: Required`. Import rejects invalid packages and never installs third-party binaries, tools, credentials, or MCP servers.
+
 ---
 
 ## Sandbox Policies

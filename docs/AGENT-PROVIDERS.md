@@ -28,6 +28,35 @@ The launch path dry-runs the selected preset before starting Codex CLI, Codex SD
 
 Credential references and environment-style `name=value` values are redacted from dry-run output and governance traces. Prefer brokered credential presets for workflows that need scoped secrets instead of exposing broad environment passthrough.
 
+## Agent Profile Packages
+
+Use **Settings -> Agents -> Agent Profile Packages** or `vk profiles` to import reusable YAML/JSON packages that sit above provider profiles. Provider profiles still own low-level command, args, and availability. Profile packages add portable launch metadata:
+
+```yaml
+id: docs-reviewer
+schemaVersion: agent-profile-package/v1
+version: 1.0.0
+displayName: Documentation Reviewer
+role: Reviews documentation changes for accuracy and release readiness
+enabled: true
+capabilities: [docs-review, release-notes]
+defaultTaskTypes: [docs]
+runtime:
+  agent: codex
+  provider: codex-cli
+  model: gpt-5.1
+instructions:
+  prompt: Check docs against shipped behavior and call out stale roadmap language.
+tools:
+  allowed: [shell, git]
+permissions:
+  level: specialist
+policy:
+  sandboxPresetId: workspace-write-default
+```
+
+Profile launches pass `profileId` to `/api/agents/:taskId/start`. Veritas resolves the package runtime against the configured provider profile, applies the package model, sandbox preset, and budget policy, injects package instructions into the run prompt, and records the profile ID/version in the task attempt plus an `agent_event` activity entry.
+
 ## Budget Policies
 
 Use **Settings -> Agents** and **Settings -> Data & Storage -> Budget Tracking** to define workspace defaults, agent defaults, workflow budgets, workflow-agent budgets, and per-run overrides. Budgets can cap tokens, provider-reported cost, tool calls, runtime, retries, and workflow fan-out.

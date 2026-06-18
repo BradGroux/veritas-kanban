@@ -11,10 +11,21 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import { useCodexHealth, useConfig, useProviderHealth, useUpdateAgents } from '@/hooks/useConfig';
+import {
+  useAgentProfiles,
+  useCodexHealth,
+  useConfig,
+  useDeleteAgentProfile,
+  useExportAgentProfile,
+  useImportAgentProfile,
+  useProviderHealth,
+  useUpdateAgentProfile,
+  useUpdateAgents,
+  useValidateAgentProfile,
+} from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useRoutingConfig, useUpdateRoutingConfig } from '@/hooks/useRouting';
-import { useAgentHostPreview, useAgentHosts } from '@/hooks/useAgent';
+import { useAgentHostPreview, useAgentHosts, useStartAgent } from '@/hooks/useAgent';
 import {
   useCreateSandboxPolicy,
   useDeleteSandboxPolicy,
@@ -37,6 +48,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Server,
+  Upload,
+  Download,
+  Rocket,
 } from 'lucide-react';
 import type {
   AgentConfig,
@@ -50,6 +64,8 @@ import type {
   RoutingRule,
   AgentRoutingConfig,
   AgentBudgetLimits,
+  AgentProfilePackageFormat,
+  AgentProfilePackageSummary,
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
 } from '@veritas-kanban/shared';
@@ -93,6 +109,7 @@ export function AgentsTab() {
     isFetching: isProviderHealthFetching,
     refetch: refetchProviderHealth,
   } = useProviderHealth();
+  const { data: agentProfiles = [], isLoading: isAgentProfilesLoading } = useAgentProfiles();
   const { data: sandboxPresets = [], isLoading: isSandboxPoliciesLoading } = useSandboxPolicies();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
@@ -201,6 +218,12 @@ export function AgentsTab() {
           </div>
         )}
       </div>
+
+      <AgentProfilePackagesSection
+        profiles={agentProfiles}
+        agents={config?.agents || []}
+        isLoading={isAgentProfilesLoading}
+      />
 
       <CodexHealthPanel
         health={codexHealth}
@@ -331,6 +354,348 @@ function cleanBudgetLimits(limits: AgentBudgetLimits): AgentBudgetLimits {
     }
   }
   return clean;
+}
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const SAMPLE_PROFILE_PACKAGE = `id: docs-reviewer
+schemaVersion: agent-profile-package/v1
+version: 1.0.0
+displayName: Documentation Reviewer
+role: Reviews documentation changes for accuracy and release readiness
+enabled: true
+capabilities:
+  - docs-review
+  - release-notes
+defaultTaskTypes:
+  - docs
+runtime:
+  agent: codex
+  provider: codex-cli
+  model: gpt-5.1
+instructions:
+  prompt: Check docs against shipped behavior and call out stale roadmap language.
+tools:
+  allowed:
+    - shell
+    - git
+permissions:
+  level: specialist
+policy:
+  sandboxPresetId: workspace-write-default
+`;
+
+function AgentProfilePackagesSection({
+  profiles,
+  agents,
+  isLoading,
+}: {
+  profiles: AgentProfilePackageSummary[];
+  agents: AgentConfig[];
+  isLoading: boolean;
+}) {
+  const [format, setFormat] = useState<AgentProfilePackageFormat>('yaml');
+  const [content, setContent] = useState(SAMPLE_PROFILE_PACKAGE);
+  const [validationMessage, setValidationMessage] = useState<string>('');
+  const [exportContent, setExportContent] = useState<string>('');
+  const validateProfile = useValidateAgentProfile();
+  const importProfile = useImportAgentProfile();
+  const exportProfile = useExportAgentProfile();
+
+  const handleValidate = async () => {
+    const result = await validateProfile.mutateAsync({ content, format });
+    setValidationMessage(
+      result.valid
+        ? `Valid: ${result.profile?.displayName ?? result.profile?.id}`
+        : result.issues.map((issue) => `${issue.path}: ${issue.message}`).join('\n')
+    );
+  };
+
+  const handleImport = async () => {
+    const result = await importProfile.mutateAsync({ content, format, source: 'settings' });
+    setValidationMessage(
+      `${result.created ? 'Imported' : 'Updated'}: ${result.profile.displayName} ${result.profile.version}`
+    );
+  };
+
+  const handleExport = async (id: string, selectedFormat: AgentProfilePackageFormat) => {
+    const result = await exportProfile.mutateAsync({ id, format: selectedFormat });
+    setFormat(result.format);
+    setExportContent(result.content);
+  };
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Agent Profile Packages</h3>
+          <p className="text-xs text-muted-foreground">
+            {profiles.length} package{profiles.length === 1 ? '' : 's'} installed
+          </p>
+        </div>
+        <Badge variant="light" color="gray">
+          YAML / JSON
+        </Badge>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
+        <div className="space-y-2">
+          {isLoading ? (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              Loading packages...
+            </div>
+          ) : profiles.length === 0 ? (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No profile packages installed.
+            </div>
+          ) : (
+            profiles.map((profile) => (
+              <AgentProfileCard
+                key={profile.id}
+                profile={profile}
+                agents={agents}
+                onExport={handleExport}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="rounded-md border bg-background/60 p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Text size="sm" fw={500}>
+              Import Package
+            </Text>
+            <Select
+              size="xs"
+              className="w-28"
+              value={format}
+              onChange={(value) => setFormat((value as AgentProfilePackageFormat) || 'yaml')}
+              data={[
+                { value: 'yaml', label: 'YAML' },
+                { value: 'json', label: 'JSON' },
+              ]}
+              allowDeselect={false}
+            />
+          </div>
+          <Textarea
+            value={content}
+            onChange={(event) => setContent(event.currentTarget.value)}
+            minRows={12}
+            spellCheck={false}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={handleValidate}
+              loading={validateProfile.isPending}
+            >
+              Validate
+            </Button>
+            <Button
+              size="xs"
+              leftSection={<Upload className="h-4 w-4" />}
+              onClick={handleImport}
+              loading={importProfile.isPending}
+            >
+              Import
+            </Button>
+          </div>
+          {validationMessage && (
+            <pre className="max-h-36 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">
+              {validationMessage}
+            </pre>
+          )}
+          {exportContent && (
+            <Textarea
+              label="Last Export"
+              value={exportContent}
+              onChange={(event) => setExportContent(event.currentTarget.value)}
+              minRows={8}
+              spellCheck={false}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentProfileCard({
+  profile,
+  agents,
+  onExport,
+}: {
+  profile: AgentProfilePackageSummary;
+  agents: AgentConfig[];
+  onExport: (id: string, format: AgentProfilePackageFormat) => void;
+}) {
+  const updateProfile = useUpdateAgentProfile();
+  const deleteProfile = useDeleteAgentProfile();
+  const startAgent = useStartAgent();
+  const [displayName, setDisplayName] = useState(profile.displayName);
+  const [role, setRole] = useState(profile.role);
+  const [description, setDescription] = useState(profile.description ?? '');
+  const [capabilities, setCapabilities] = useState(profile.capabilities.join(', '));
+  const [defaultTaskTypes, setDefaultTaskTypes] = useState(profile.defaultTaskTypes.join(', '));
+  const [launchTaskId, setLaunchTaskId] = useState('');
+  const runtimeAgent = agents.find((agent) => agent.type === profile.runtime.agent);
+
+  useEffect(() => {
+    setDisplayName(profile.displayName);
+    setRole(profile.role);
+    setDescription(profile.description ?? '');
+    setCapabilities(profile.capabilities.join(', '));
+    setDefaultTaskTypes(profile.defaultTaskTypes.join(', '));
+  }, [profile]);
+
+  const saveMetadata = () => {
+    updateProfile.mutate({
+      id: profile.id,
+      patch: {
+        displayName,
+        role,
+        description,
+        capabilities: splitCsv(capabilities),
+        defaultTaskTypes: splitCsv(defaultTaskTypes),
+      },
+    });
+  };
+
+  const launch = () => {
+    if (!launchTaskId.trim()) return;
+    startAgent.mutate({ taskId: launchTaskId.trim(), profileId: profile.id });
+  };
+
+  return (
+    <div className="rounded-md border bg-background/70 p-3 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Bot className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{profile.displayName}</span>
+            <Badge size="xs" variant="light" color={profile.enabled ? 'green' : 'gray'}>
+              {profile.enabled ? 'Enabled' : 'Disabled'}
+            </Badge>
+            <Badge size="xs" variant="outline">
+              {profile.id}@{profile.version}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{profile.role}</p>
+        </div>
+        <Switch
+          checked={profile.enabled}
+          onChange={(event) =>
+            updateProfile.mutate({
+              id: profile.id,
+              patch: { enabled: event.currentTarget.checked },
+            })
+          }
+          aria-label={`Toggle ${profile.displayName}`}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge size="xs" variant={runtimeAgent?.enabled ? 'light' : 'outline'} color="gray">
+          {profile.runtime.agent}
+        </Badge>
+        {profile.runtime.provider && (
+          <Badge size="xs" variant="outline" color="gray">
+            {profile.runtime.provider}
+          </Badge>
+        )}
+        {profile.runtime.model && (
+          <Badge size="xs" variant="outline" color="blue">
+            {profile.runtime.model}
+          </Badge>
+        )}
+        {profile.policy?.sandboxPresetId && (
+          <Badge size="xs" variant="light" color="teal">
+            {profile.policy.sandboxPresetId}
+          </Badge>
+        )}
+        {profile.policy?.budget?.enabled && (
+          <Badge size="xs" variant="light" color="orange">
+            Budget
+          </Badge>
+        )}
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2">
+        <TextInput
+          label="Name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.currentTarget.value)}
+        />
+        <TextInput label="Role" value={role} onChange={(e) => setRole(e.currentTarget.value)} />
+        <TextInput
+          label="Capabilities"
+          value={capabilities}
+          onChange={(e) => setCapabilities(e.currentTarget.value)}
+        />
+        <TextInput
+          label="Task Types"
+          value={defaultTaskTypes}
+          onChange={(e) => setDefaultTaskTypes(e.currentTarget.value)}
+        />
+      </div>
+      <Textarea
+        label="Description"
+        value={description}
+        onChange={(e) => setDescription(e.currentTarget.value)}
+        minRows={2}
+      />
+
+      <div className="flex flex-wrap items-end gap-2">
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={saveMetadata}
+          loading={updateProfile.isPending}
+        >
+          Save Metadata
+        </Button>
+        <Button
+          size="xs"
+          variant="outline"
+          leftSection={<Download className="h-4 w-4" />}
+          onClick={() => onExport(profile.id, 'yaml')}
+        >
+          Export YAML
+        </Button>
+        <Button
+          size="xs"
+          variant="subtle"
+          color="red"
+          onClick={() => deleteProfile.mutate(profile.id)}
+          loading={deleteProfile.isPending}
+        >
+          Remove
+        </Button>
+        <TextInput
+          size="xs"
+          label="Launch Task"
+          value={launchTaskId}
+          onChange={(event) => setLaunchTaskId(event.currentTarget.value)}
+          placeholder="task id"
+        />
+        <Button
+          size="xs"
+          leftSection={<Rocket className="h-4 w-4" />}
+          onClick={launch}
+          loading={startAgent.isPending}
+          disabled={!profile.enabled || !launchTaskId.trim()}
+        >
+          Launch
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function ProviderHealthPanel({

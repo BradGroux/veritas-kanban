@@ -8,6 +8,7 @@ const AgentTypeSchema = z.string().min(1).max(50);
  */
 export const StartAgentBodySchema = z.object({
   agent: AgentTypeSchema.optional(),
+  profileId: AgentTypeSchema.optional(),
   overrideReason: z.string().trim().min(8).max(1000).optional(),
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),

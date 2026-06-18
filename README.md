@@ -223,6 +223,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **HermesAgent support** — documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, MCP setup, and default routing for fresh installs
 - **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
+- **Agent profile packages** — Portable YAML/JSON packages that bundle role, runtime, prompt, tools, permissions, sandbox, budget, workflow, and health metadata for reusable launches
 - **Sandbox policy presets** — Built-in and custom presets for filesystem scope, network egress, environment passthrough, and credential brokering, with Settings dry-runs before agent launch
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run caps for tokens, cost, tool calls, runtime, retries, and fan-out with auditable warn, approval, downgrade, pause, or cancel decisions
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents
@@ -594,6 +595,10 @@ vk github mappings               # List issue↔task mappings
 vk agents:pending                # List pending agent requests
 vk agents:status <id>            # Check if agent running
 vk agents:complete <id> -s       # Mark agent complete
+vk profiles list                 # List reusable agent profile packages
+vk profiles validate ./agent.yml # Validate a package before import
+vk profiles import ./agent.yml   # Import or replace a package
+vk start <task> --profile <id>   # Launch a task with a profile package
 ```
 
 ### Utilities

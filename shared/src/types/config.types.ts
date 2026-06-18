@@ -5,6 +5,7 @@ import type { TelemetryConfig } from './telemetry.types.js';
 import type { WatcherContinuationSettings } from './watcher-policy.types.js';
 import type { SandboxPolicyPreset } from './sandbox-policy.types.js';
 import type { AgentBudgetPolicy } from './agent-budget.types.js';
+import type { AgentProfilePackage } from './agent-profile-package.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -166,6 +167,7 @@ export interface AppConfig {
   coolify?: CoolifyConfig;
   sandboxPolicyPresets?: SandboxPolicyPreset[];
   defaultSandboxPresetId?: string;
+  agentProfiles?: AgentProfilePackage[];
 }
 
 // ============ Feature Settings Types ============

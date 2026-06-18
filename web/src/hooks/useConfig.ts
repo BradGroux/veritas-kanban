@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { RepoConfig, AgentConfig, AgentType } from '@veritas-kanban/shared';
+import type { AgentProfilePackage, AgentProfilePackageFormat } from '@veritas-kanban/shared';
 
 export function useConfig() {
   return useQuery({
@@ -99,5 +100,74 @@ export function useSetDefaultAgent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['config'] });
     },
+  });
+}
+
+export function useAgentProfiles() {
+  return useQuery({
+    queryKey: ['config', 'agent-profiles'],
+    queryFn: api.config.agentProfiles.list,
+  });
+}
+
+export function useValidateAgentProfile() {
+  return useMutation({
+    mutationFn: (input: { content: string; format?: AgentProfilePackageFormat; source?: string }) =>
+      api.config.agentProfiles.validate(input),
+  });
+}
+
+export function useImportAgentProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { content: string; format?: AgentProfilePackageFormat; source?: string }) =>
+      api.config.agentProfiles.import(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ['config', 'agent-profiles'] });
+    },
+  });
+}
+
+export function useUpdateAgentProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<
+        Pick<
+          AgentProfilePackage,
+          'enabled' | 'displayName' | 'role' | 'description' | 'capabilities' | 'defaultTaskTypes'
+        >
+      >;
+    }) => api.config.agentProfiles.update(id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ['config', 'agent-profiles'] });
+    },
+  });
+}
+
+export function useDeleteAgentProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.config.agentProfiles.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ['config', 'agent-profiles'] });
+    },
+  });
+}
+
+export function useExportAgentProfile() {
+  return useMutation({
+    mutationFn: ({ id, format }: { id: string; format?: AgentProfilePackageFormat }) =>
+      api.config.agentProfiles.export(id, format),
   });
 }

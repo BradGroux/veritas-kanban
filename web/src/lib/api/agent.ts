@@ -14,6 +14,7 @@ import { API_BASE, handleResponse } from './helpers';
 
 export interface StartAgentRequest {
   agent?: AgentType;
+  profileId?: string;
   overrideReason?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;

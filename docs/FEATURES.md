@@ -286,6 +286,7 @@ First-class support for autonomous coding agents.
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
+- **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle

@@ -4,6 +4,7 @@ import { api, AgentOutput } from '@/lib/api';
 import { apiFetch, API_BASE } from '@/lib/api/helpers';
 import { useWebSocket, type WebSocketMessage } from './useWebSocket';
 import type {
+  AgentBudgetPolicy,
   AgentHealthClassificationResponse,
   AgentHostPreviewRequest,
   AgentType,
@@ -12,7 +13,10 @@ import type {
 export interface StartAgentInput {
   taskId: string;
   agent?: AgentType;
+  profileId?: string;
   overrideReason?: string;
+  sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
 }
 
 export interface AgentApprovalRequest {
@@ -47,8 +51,15 @@ export function useStartAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, agent, overrideReason }: StartAgentInput) =>
-      api.agent.start(taskId, { agent, overrideReason }),
+    mutationFn: ({
+      taskId,
+      agent,
+      profileId,
+      overrideReason,
+      sandboxPresetId,
+      budget,
+    }: StartAgentInput) =>
+      api.agent.start(taskId, { agent, profileId, overrideReason, sandboxPresetId, budget }),
     onSuccess: (_, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });

@@ -15,6 +15,7 @@ const { mockConfigService } = vi.hoisted(() => ({
     getRepoBranches: vi.fn(),
     updateAgents: vi.fn(),
     setDefaultAgent: vi.fn(),
+    saveConfig: vi.fn(),
   },
 }));
 
@@ -67,6 +68,101 @@ describe('Config Routes (actual module)', () => {
       mockConfigService.getConfig.mockRejectedValue(new Error('fail'));
       const res = await request(app).get('/api/config/repos');
       expect(res.status).toBe(500);
+    });
+  });
+
+  describe('agent profile packages', () => {
+    const profileYaml = `id: qa-reviewer
+schemaVersion: agent-profile-package/v1
+version: 1.0.0
+displayName: QA Reviewer
+role: Reviews QA evidence
+enabled: true
+capabilities:
+  - qa
+defaultTaskTypes:
+  - review
+runtime:
+  agent: codex
+`;
+
+    it('validates package content with field paths', async () => {
+      const res = await request(app)
+        .post('/api/config/agent-profiles/validate')
+        .send({ content: 'displayName: Broken', format: 'yaml' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.issues.map((issue: { path: string }) => issue.path)).toContain('$.id');
+    });
+
+    it('imports and lists profile packages', async () => {
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        agentProfiles: [],
+      });
+      mockConfigService.saveConfig.mockResolvedValue(undefined);
+
+      const imported = await request(app)
+        .post('/api/config/agent-profiles/import')
+        .send({ content: profileYaml, format: 'yaml', source: 'test' });
+
+      expect(imported.status).toBe(201);
+      expect(imported.body.profile.id).toBe('qa-reviewer');
+      expect(mockConfigService.saveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentProfiles: [expect.objectContaining({ id: 'qa-reviewer' })],
+        })
+      );
+
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        agentProfiles: [imported.body.profile],
+      });
+      const listed = await request(app).get('/api/config/agent-profiles');
+      expect(listed.status).toBe(200);
+      expect(listed.body).toHaveLength(1);
+      expect(listed.body[0]).toMatchObject({ id: 'qa-reviewer', displayName: 'QA Reviewer' });
+    });
+
+    it('updates and exports profile packages', async () => {
+      const profile = {
+        id: 'qa-reviewer',
+        schemaVersion: 'agent-profile-package/v1',
+        version: '1.0.0',
+        displayName: 'QA Reviewer',
+        role: 'Reviews QA evidence',
+        enabled: true,
+        capabilities: ['qa'],
+        defaultTaskTypes: ['review'],
+        runtime: { agent: 'codex' },
+      };
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        agentProfiles: [profile],
+      });
+      mockConfigService.saveConfig.mockResolvedValue(undefined);
+
+      const updated = await request(app)
+        .patch('/api/config/agent-profiles/qa-reviewer')
+        .send({ enabled: false, displayName: 'QA Gate Reviewer' });
+
+      expect(updated.status).toBe(200);
+      expect(updated.body).toMatchObject({ enabled: false, displayName: 'QA Gate Reviewer' });
+
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        agentProfiles: [updated.body],
+      });
+      const exported = await request(app).get('/api/config/agent-profiles/qa-reviewer/export');
+
+      expect(exported.status).toBe(200);
+      expect(exported.body.format).toBe('yaml');
+      expect(exported.body.content).toContain('QA Gate Reviewer');
     });
   });
 

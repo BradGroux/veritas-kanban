@@ -7,6 +7,11 @@ import type {
   AgentConfig,
   AgentType,
   FeatureSettings,
+  AgentProfileExportResult,
+  AgentProfilePackage,
+  AgentProfilePackageFormat,
+  AgentProfilePackageSummary,
+  AgentProfileValidationResult,
 } from '@veritas-kanban/shared';
 import { API_BASE, handleResponse } from './helpers';
 
@@ -196,6 +201,77 @@ export const configApi = {
         body: JSON.stringify({ agent }),
       });
       return handleResponse<AppConfig>(response);
+    },
+  },
+
+  agentProfiles: {
+    list: async (): Promise<AgentProfilePackageSummary[]> => {
+      const response = await fetch(`${API_BASE}/config/agent-profiles`);
+      return handleResponse<AgentProfilePackageSummary[]>(response);
+    },
+
+    validate: async (input: {
+      content: string;
+      format?: AgentProfilePackageFormat;
+      source?: string;
+    }): Promise<AgentProfileValidationResult> => {
+      const response = await fetch(`${API_BASE}/config/agent-profiles/validate`, {
+        credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      return handleResponse<AgentProfileValidationResult>(response);
+    },
+
+    import: async (input: {
+      content: string;
+      format?: AgentProfilePackageFormat;
+      source?: string;
+    }): Promise<{ profile: AgentProfilePackage; created: boolean }> => {
+      const response = await fetch(`${API_BASE}/config/agent-profiles/import`, {
+        credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      return handleResponse<{ profile: AgentProfilePackage; created: boolean }>(response);
+    },
+
+    export: async (
+      id: string,
+      format: AgentProfilePackageFormat = 'yaml'
+    ): Promise<AgentProfileExportResult> => {
+      const response = await fetch(
+        `${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}/export?format=${format}`
+      );
+      return handleResponse<AgentProfileExportResult>(response);
+    },
+
+    update: async (
+      id: string,
+      patch: Partial<
+        Pick<
+          AgentProfilePackage,
+          'enabled' | 'displayName' | 'role' | 'description' | 'capabilities' | 'defaultTaskTypes'
+        >
+      >
+    ): Promise<AgentProfilePackage> => {
+      const response = await fetch(`${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`, {
+        credentials: 'include',
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      return handleResponse<AgentProfilePackage>(response);
+    },
+
+    remove: async (id: string): Promise<void> => {
+      const response = await fetch(`${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`, {
+        credentials: 'include',
+        method: 'DELETE',
+      });
+      return handleResponse<void>(response);
     },
   },
 };

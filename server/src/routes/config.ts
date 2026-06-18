@@ -6,9 +6,17 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError, BadRequestError } from '../middleware/error-handler.js';
 import { authorize } from '../middleware/auth.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
+import { AgentProfilePackageService } from '../services/agent-profile-package-service.js';
+import {
+  AgentProfileImportBodySchema,
+  AgentProfileUpdateBodySchema,
+  AgentProfileValidateBodySchema,
+  AgentProfilePackageFormatSchema,
+} from '../schemas/agent-profile-package-schemas.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
+const agentProfilePackageService = new AgentProfilePackageService(configService);
 
 // Validation schemas
 const repoSchema = z.object({
@@ -67,6 +75,99 @@ router.get(
   asyncHandler(async (_req, res) => {
     const config = await configService.getConfig();
     res.json(config.repos);
+  })
+);
+
+// GET /api/config/agent-profiles - List reusable agent profile packages
+router.get(
+  '/agent-profiles',
+  asyncHandler(async (_req, res) => {
+    res.json(await agentProfilePackageService.listProfiles());
+  })
+);
+
+// POST /api/config/agent-profiles/validate - Validate profile package YAML/JSON
+router.post(
+  '/agent-profiles/validate',
+  asyncHandler(async (req, res) => {
+    const input = AgentProfileValidateBodySchema.parse(req.body);
+    res.json(agentProfilePackageService.validateContent(input));
+  })
+);
+
+// POST /api/config/agent-profiles/import - Import or replace a profile package
+router.post(
+  '/agent-profiles/import',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const input = AgentProfileImportBodySchema.parse(req.body);
+    try {
+      const result = await agentProfilePackageService.importProfile(input);
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      throw new BadRequestError(error instanceof Error ? error.message : 'Invalid profile package');
+    }
+  })
+);
+
+// GET /api/config/agent-profiles/:id - Get a profile package
+router.get(
+  '/agent-profiles/:id',
+  asyncHandler(async (req, res) => {
+    const profile = await agentProfilePackageService.getProfile(req.params.id as string);
+    if (!profile) {
+      throw new BadRequestError(`Agent profile package not found: ${req.params.id}`);
+    }
+    res.json(profile);
+  })
+);
+
+// GET /api/config/agent-profiles/:id/export - Export a profile as YAML or JSON
+router.get(
+  '/agent-profiles/:id/export',
+  asyncHandler(async (req, res) => {
+    const format =
+      AgentProfilePackageFormatSchema.parse(req.query.format) ??
+      (req.query.format === 'json' ? 'json' : 'yaml');
+    try {
+      res.json(await agentProfilePackageService.exportProfile(req.params.id as string, format));
+    } catch (error) {
+      throw new BadRequestError(
+        error instanceof Error ? error.message : 'Failed to export profile package'
+      );
+    }
+  })
+);
+
+// PATCH /api/config/agent-profiles/:id - Edit profile metadata and enablement
+router.patch(
+  '/agent-profiles/:id',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const patch = AgentProfileUpdateBodySchema.parse(req.body);
+    try {
+      res.json(await agentProfilePackageService.updateProfile(req.params.id as string, patch));
+    } catch (error) {
+      throw new BadRequestError(
+        error instanceof Error ? error.message : 'Failed to update profile package'
+      );
+    }
+  })
+);
+
+// DELETE /api/config/agent-profiles/:id - Remove a profile package
+router.delete(
+  '/agent-profiles/:id',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    try {
+      await agentProfilePackageService.deleteProfile(req.params.id as string);
+      res.status(204).send();
+    } catch (error) {
+      throw new BadRequestError(
+        error instanceof Error ? error.message : 'Failed to delete profile package'
+      );
+    }
   })
 );
 

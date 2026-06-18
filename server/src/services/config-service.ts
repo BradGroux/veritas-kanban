@@ -106,6 +106,7 @@ const DEFAULT_CONFIG: AppConfig = {
     },
   ],
   defaultAgent: 'codex',
+  agentProfiles: [],
 };
 
 export function createDefaultConfig(): AppConfig {
@@ -119,6 +120,7 @@ export function normalizeAppConfig(config: AppConfig): AppConfig {
   const normalized = cloneJson(config);
   normalized.features = deepMergeDefaults(normalized.features || {}, DEFAULT_FEATURE_SETTINGS);
   normalized.agents = mergeDefaultAgents(normalized.agents || []);
+  normalized.agentProfiles = normalized.agentProfiles || [];
   return normalized;
 }
 

@@ -16,6 +16,7 @@ const AgentTypeSchema = z.string().min(1).max(50);
 
 const startAgentSchema = z.object({
   agent: AgentTypeSchema.optional(),
+  profileId: AgentTypeSchema.optional(),
   overrideReason: z.string().trim().min(8).max(1000).optional(),
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),
@@ -43,12 +44,16 @@ router.post(
   requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
     let agent: AgentType | undefined;
+    let profileId: string | undefined;
     let overrideReason: string | undefined;
     let sandboxPresetId: string | undefined;
     let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
     try {
-      ({ agent, overrideReason, sandboxPresetId, budget } = startAgentSchema.parse(req.body) as {
+      ({ agent, profileId, overrideReason, sandboxPresetId, budget } = startAgentSchema.parse(
+        req.body
+      ) as {
         agent?: AgentType;
+        profileId?: string;
         overrideReason?: string;
         sandboxPresetId?: string;
         budget?: z.infer<typeof AgentBudgetPolicySchema>;
@@ -62,6 +67,7 @@ router.post(
     let status;
     try {
       status = await clawdbotAgentService.startAgent(req.params.taskId as string, agent, {
+        profileId,
         overrideReason,
         sandboxPresetId,
         budget,

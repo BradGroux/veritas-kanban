@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { AgentsTab } from '@/components/settings/tabs/AgentsTab';
 import { renderWithProviders } from './test-utils';
 import type { AgentConfig, AgentRoutingConfig, AgentType } from '@veritas-kanban/shared';
@@ -51,6 +51,12 @@ const mocks = vi.hoisted(() => ({
   refetchHostHealth: vi.fn(),
   updateAgents: vi.fn(),
   updateRouting: vi.fn(),
+  updateProfile: vi.fn(),
+  importProfile: vi.fn(),
+  validateProfile: vi.fn(),
+  exportProfile: vi.fn(),
+  deleteProfile: vi.fn(),
+  startAgent: vi.fn(),
 }));
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -172,6 +178,53 @@ vi.mock('@/hooks/useConfig', () => ({
   useUpdateAgents: () => ({
     mutate: mocks.updateAgents,
   }),
+  useAgentProfiles: () => ({
+    data: [
+      {
+        id: 'qa-reviewer',
+        version: '1.0.0',
+        displayName: 'QA Reviewer',
+        role: 'Reviews QA evidence',
+        enabled: true,
+        capabilities: ['qa'],
+        defaultTaskTypes: ['review'],
+        runtime: { agent: 'codex', provider: 'codex-cli', model: 'gpt-5' },
+        policy: { sandboxPresetId: 'codex-repo-contained' },
+      },
+    ],
+    isLoading: false,
+  }),
+  useValidateAgentProfile: () => ({
+    mutateAsync: mocks.validateProfile.mockResolvedValue({
+      valid: true,
+      profile: { id: 'qa-reviewer', displayName: 'QA Reviewer' },
+      issues: [],
+    }),
+    isPending: false,
+  }),
+  useImportAgentProfile: () => ({
+    mutateAsync: mocks.importProfile.mockResolvedValue({
+      created: true,
+      profile: { id: 'qa-reviewer', displayName: 'QA Reviewer', version: '1.0.0' },
+    }),
+    isPending: false,
+  }),
+  useUpdateAgentProfile: () => ({
+    mutate: mocks.updateProfile,
+    isPending: false,
+  }),
+  useDeleteAgentProfile: () => ({
+    mutate: mocks.deleteProfile,
+    isPending: false,
+  }),
+  useExportAgentProfile: () => ({
+    mutateAsync: mocks.exportProfile.mockResolvedValue({
+      id: 'qa-reviewer',
+      format: 'yaml',
+      content: 'id: qa-reviewer\n',
+    }),
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/useFeatureSettings', () => ({
@@ -275,6 +328,10 @@ vi.mock('@/hooks/useAgent', () => ({
     },
     isFetching: false,
   }),
+  useStartAgent: () => ({
+    mutate: mocks.startAgent,
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/useSandboxPolicies', () => ({
@@ -371,10 +428,12 @@ describe('Agents settings Mantine migration', () => {
 
     expect(screen.getByText('Installed Agents')).toBeDefined();
     expect(screen.getAllByText('Codex CLI').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('gpt-5')).toBeDefined();
+    expect(screen.getAllByText('gpt-5').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Codex Health')).toBeDefined();
     expect(screen.getByText('Context Provider Health')).toBeDefined();
     expect(screen.getByText('Agent Host Health')).toBeDefined();
+    expect(screen.getByText('Agent Profile Packages')).toBeDefined();
+    expect(screen.getByText('QA Reviewer')).toBeDefined();
     expect(screen.getByText('Launch Compatibility')).toBeDefined();
     expect(screen.getAllByText('Local Supervisor').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('OpenClaw').length).toBeGreaterThanOrEqual(1);
@@ -486,5 +545,27 @@ describe('Agents settings Mantine migration', () => {
         ],
       })
     );
+  });
+
+  it('imports profile packages and launches a profile from a task id', async () => {
+    renderWithProviders(<AgentsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => {
+      expect(mocks.importProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ format: 'yaml', source: 'settings' })
+      );
+    });
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Launch Task' }), {
+      target: { value: 'task_123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+
+    expect(mocks.startAgent).toHaveBeenCalledWith({
+      taskId: 'task_123',
+      profileId: 'qa-reviewer',
+    });
   });
 });

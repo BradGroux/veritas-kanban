@@ -59,6 +59,7 @@ export interface TaskAttempt {
   cloudTarget?: string;
   orchestration?: import('./workflow.js').WorkflowPipelineSummary;
   budget?: import('./agent-budget.types.js').AgentBudgetState;
+  agentProfile?: import('./agent-profile-package.types.js').AgentProfileLaunchMetadata;
 }
 
 export interface Subtask {
