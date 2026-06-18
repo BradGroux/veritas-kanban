@@ -393,6 +393,16 @@ Role-based autonomy control for multi-agent teams.
 - **Approval workflows** — Configurable approval requirements per permission level
 - **API enforcement** — Permission checks on agent actions, not just UI display
 
+### Shared Live Run Sessions
+
+Workspace-scoped live collaboration for active task runs. Added in v5.1.
+
+- **View-only shares** — Create stable `/runs/shared/:id` links from task detail so permitted workspace members can watch live output, tool-call/status events, artifacts, and share history without refresh.
+- **Co-drive access** — Upgrade a share to edit access or revoke it from task detail. Editors can send messages into the active run, and the server records the editor as the actor instead of the original operator.
+- **Mobile-safe approvals** — Paired mobile/PWA clients can respond only to approval classes marked safe for that share; unsafe classes fail closed at the API layer.
+- **Fork isolation** — Fork shares create a new linked task with redacted parent context and run excerpt. The fork does not inherit worktrees, thread IDs, credentials, or other local-only handles, and it does not change parent run state.
+- **Live delivery** — The `run-sessions` WebSocket channel fans out share, message, approval, revoke, and fork events to authorized same-workspace clients.
+
 ### Error Learning
 
 Structured failure analysis to prevent recurring issues.

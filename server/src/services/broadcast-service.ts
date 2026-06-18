@@ -1,5 +1,5 @@
 import type { WebSocketServer } from 'ws';
-import type { AnyTelemetryEvent, SquadMessage } from '@veritas-kanban/shared';
+import type { AnyTelemetryEvent, RunSessionEvent, SquadMessage } from '@veritas-kanban/shared';
 import type { AuthenticatedWebSocket } from '../middleware/auth.js';
 import {
   notifyTaskChange,
@@ -281,6 +281,36 @@ export interface BroadcastMessageEvent {
   timestamp: string;
   sequence: number;
   workspaceId: string;
+}
+
+export interface RunSessionBroadcastEvent {
+  type: 'run-session:event';
+  event: RunSessionEvent;
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
+}
+
+export function broadcastRunSessionEvent(
+  event: RunSessionEvent,
+  options: { workspaceId?: string } = {}
+): void {
+  if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(options.workspaceId);
+
+  const message: RunSessionBroadcastEvent = {
+    type: 'run-session:event',
+    event,
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
+  };
+
+  broadcastToClients(JSON.stringify(message), {
+    permissions: ['task:read'],
+    workspaceId,
+    channel: 'run-sessions',
+  });
 }
 
 /**

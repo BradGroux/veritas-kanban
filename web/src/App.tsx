@@ -21,6 +21,7 @@ import { usePendingProductMode } from './hooks/usePendingProductMode';
 import { DesktopShellProvider, useDesktopShell } from './components/layout/DesktopShellContext';
 import { DesktopLeftSidebar } from './components/layout/DesktopLeftSidebar';
 import { DesktopBottomPanel } from './components/layout/DesktopBottomPanel';
+import { RunSessionShareView } from './components/task/RunSessionSharesSection';
 
 const LAZY_VIEW_COMPONENTS = Object.fromEntries(
   NAVIGATION_VIEWS.map((definition) => {
@@ -69,9 +70,19 @@ function ViewLoading({ view }: { view: AppView }) {
   );
 }
 
+function runSessionShareIdFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname.replace(/\/+$/, '');
+  const match = path.match(/\/runs\/shared\/([^/]+)$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 /** Renders the current view (board, activity feed, or backlog). */
 function MainContent() {
   const { view, setView, navigateToTask } = useView();
+  const runSessionShareId = runSessionShareIdFromLocation();
+
+  if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
 
   if (view === 'board') return <KanbanBoard />;
 

@@ -131,6 +131,7 @@ import { skillCapabilityRoutes } from '../skill-capabilities.js';
 import { skillSecurityRoutes } from '../skill-security.js';
 import { watcherPolicyRoutes } from '../watcher-policies.js';
 import sandboxPolicyRoutes from '../sandbox-policies.js';
+import { runSessionRoutes } from '../run-sessions.js';
 
 const v1Router: IRouter = Router();
 
@@ -235,6 +236,7 @@ v1Router.use('/transcripts', transcriptAccess, transcriptRoutes);
 v1Router.use('/scoring', scoringAccess, scoringRoutes);
 v1Router.use('/system/health', workspaceAccess, systemHealthRouter);
 v1Router.use('/decisions', taskAccess, decisionRoutes);
+v1Router.use('/run-sessions', taskAccess, runSessionRoutes);
 v1Router.use('/governance/traces', policyAccess, governanceTraceRoutes);
 v1Router.use('/feedback', feedbackAccess, feedbackRoutes);
 v1Router.use('/prompt-registry', promptRegistryAccess, promptRegistryRoutes);

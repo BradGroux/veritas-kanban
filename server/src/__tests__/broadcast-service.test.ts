@@ -3,12 +3,13 @@
  * Tests WebSocket broadcast functions for task changes and telemetry.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
+import type { AnyTelemetryEvent, RunSessionEvent } from '@veritas-kanban/shared';
 import type { WebSocketServer } from 'ws';
 import {
   broadcastChatMessage,
   closeWebSocketClientsForRevokedCredential,
   initBroadcast,
+  broadcastRunSessionEvent,
   broadcastTaskChange,
   broadcastTelemetryEvent,
   broadcastWorkflowStatus,
@@ -102,6 +103,23 @@ function workflowRun(status: string) {
         retries: 0,
       },
     ],
+  };
+}
+
+function runSessionEvent(type: RunSessionEvent['type'] = 'message.sent'): RunSessionEvent {
+  return {
+    id: `run_event_${type}`,
+    shareId: 'run_share_721',
+    taskId: 'task_721',
+    attemptId: 'attempt_721',
+    type,
+    actor: {
+      id: 'editor-1',
+      label: 'Pair Editor',
+      workspaceId: 'local',
+    },
+    createdAt: '2026-06-18T10:00:00.000Z',
+    message: type === 'message.sent' ? 'Continue the run' : undefined,
   };
 }
 
@@ -330,6 +348,58 @@ describe('BroadcastService', () => {
       initBroadcast(null as unknown as WebSocketServer);
       // Should not throw
       broadcastTelemetryEvent(telemetryEvent());
+    });
+  });
+
+  describe('broadcastRunSessionEvent()', () => {
+    it('fans out shared run session updates to subscribed same-workspace readers', () => {
+      const wss = createMockWss();
+      const firstSubscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['run-sessions']),
+      });
+      const secondSubscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['run-sessions']),
+      });
+      const taskOnly = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['tasks']),
+      });
+      const otherWorkspace = wss.addClient(
+        1,
+        { role: 'read-only', isLocalhost: false, workspaceId: 'other' },
+        { subscribedChannels: new Set(['run-sessions']) }
+      );
+      initBroadcast(asWebSocketServer(wss));
+
+      broadcastRunSessionEvent(runSessionEvent(), { workspaceId: 'local' });
+
+      expect(firstSubscriber.sent).toHaveLength(1);
+      expect(secondSubscriber.sent).toHaveLength(1);
+      expect(taskOnly.sent).toHaveLength(0);
+      expect(otherWorkspace.sent).toHaveLength(0);
+      expect(wss.sentMessages).toHaveLength(2);
+      expect(JSON.parse(firstSubscriber.sent[0])).toMatchObject({
+        type: 'run-session:event',
+        event: {
+          type: 'message.sent',
+          shareId: 'run_share_721',
+          message: 'Continue the run',
+        },
+        workspaceId: 'local',
+        sequence: expect.any(Number),
+      });
+    });
+
+    it('broadcasts revoke events so viewers can fail closed after access changes', () => {
+      const wss = createMockWss();
+      const subscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['run-sessions']),
+      });
+      initBroadcast(asWebSocketServer(wss));
+
+      broadcastRunSessionEvent(runSessionEvent('share.revoked'), { workspaceId: 'local' });
+
+      expect(subscriber.sent).toHaveLength(1);
+      expect(JSON.parse(subscriber.sent[0]).event.type).toBe('share.revoked');
     });
   });
 

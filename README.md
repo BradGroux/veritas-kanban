@@ -148,7 +148,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 ### 🤖 Agent Orchestration
 
-Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
+Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Shared live run sessions let workspace members observe an active task run, co-drive with attributed messages, or fork a clean follow-up task without taking over the parent run. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
 ![Agent orchestration board](docs/assets/v5/v5-board-overview.png)
 
@@ -225,6 +225,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
 - **Agent profile packages** — Portable YAML/JSON packages that bundle role, runtime, prompt, tools, permissions, sandbox, budget, workflow, and health metadata for reusable launches
 - **Decision review sessions** — Multi-participant decision reviews with independent responses, critique rounds, final synthesis packets, work-product attachment, and decision audit links
+- **Shared live run sessions** — Create workspace-scoped view, co-drive, or fork links for active task runs; viewers receive live output and events, editors send attributed messages and mobile-safe approval responses, and forks create linked tasks without mutating the parent run
 - **Sandbox policy presets** — Built-in and custom presets for filesystem scope, network egress, environment passthrough, and credential brokering, with Settings dry-runs before agent launch
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run caps for tokens, cost, tool calls, runtime, retries, and fan-out with auditable warn, approval, downgrade, pause, or cancel decisions
 - **Optional OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) when you want OpenClaw to execute or wake agents

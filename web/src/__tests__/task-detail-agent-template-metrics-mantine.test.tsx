@@ -225,7 +225,7 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
 
     const { baseElement, container } = renderWithProviders(<AgentPanel task={task} />);
 
-    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(2);
+    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(3);
     expect(container.querySelector('.mantine-Button-root')).toBeDefined();
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();

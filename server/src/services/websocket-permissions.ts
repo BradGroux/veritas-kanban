@@ -18,6 +18,7 @@ export type WebSocketEventChannel =
   | 'squad'
   | 'tasks'
   | 'telemetry'
+  | 'run-sessions'
   | 'workflows';
 
 export interface WebSocketDeliveryOptions {

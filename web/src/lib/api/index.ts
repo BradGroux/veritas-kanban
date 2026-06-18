@@ -28,6 +28,7 @@ import { scheduledDeliverablesApi } from './deliverables';
 import { evidenceApi } from './evidence';
 import { timeBreakdownsApi } from './time-breakdowns';
 import { sandboxPoliciesApi } from './sandbox-policies';
+import { runSessionsApi } from './run-sessions';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -67,6 +68,7 @@ export const api = {
   evidence: evidenceApi,
   timeBreakdowns: timeBreakdownsApi,
   sandboxPolicies: sandboxPoliciesApi,
+  runSessions: runSessionsApi,
 };
 
 export type {
@@ -197,6 +199,9 @@ export type {
   DecisionReviewSession,
   DecisionWithChain,
   DecisionListFilters,
+  RunSessionEvent,
+  RunSessionFork,
+  RunSessionShare,
 } from '@veritas-kanban/shared';
 
 export type {

@@ -183,6 +183,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/hosts\/preview\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
+      { methods: ['POST'], path: /^\/[^/]+\/message\/?$/, permissions: 'task:write' },
     ],
   },
   {
@@ -314,6 +315,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
   },
   { prefix: '/api/system/health', read: 'workspace:read', write: 'admin:manage' },
   { prefix: '/api/decisions', read: 'task:read', write: 'task:write' },
+  { prefix: '/api/run-sessions', read: 'task:read', write: 'task:write' },
   { prefix: '/api/governance/traces', read: 'policy:read' },
   { prefix: '/api/feedback', read: 'report:read', write: 'comment:write' },
   {

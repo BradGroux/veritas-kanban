@@ -18,6 +18,7 @@ export * from './shared-resources.types.js';
 export * from './doc-freshness.types.js';
 export * from './drift.types.js';
 export * from './decision.types.js';
+export * from './run-session.types.js';
 export * from './evaluation.types.js';
 export * from './policy.types.js';
 export * from './prompt-registry.types.js';

@@ -8,6 +8,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router: RouterType = Router();
 
@@ -26,6 +27,11 @@ const completeAgentSchema = z.object({
   success: z.boolean(),
   summary: z.string().optional(),
   error: z.string().optional(),
+});
+
+const sendAgentMessageSchema = z.object({
+  message: z.string().trim().min(1).max(4000),
+  actor: z.string().trim().min(1).max(120).optional(),
 });
 
 const reportTokensSchema = z.object({
@@ -116,6 +122,40 @@ router.post(
   asyncHandler(async (req, res) => {
     await clawdbotAgentService.stopAgent(req.params.taskId as string);
     res.json({ stopped: true });
+  })
+);
+
+// POST /api/agents/:taskId/message - Send an attributed operator message to a running agent
+router.post(
+  '/:taskId/message',
+  asyncHandler(async (req, res) => {
+    let message: string;
+    let actorOverride: string | undefined;
+    try {
+      const parsed = sendAgentMessageSchema.parse(req.body);
+      message = parsed.message;
+      actorOverride = parsed.actor;
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', err.issues);
+      }
+      throw err;
+    }
+
+    const auth = (req as AuthenticatedRequest).auth;
+    const actor =
+      actorOverride ||
+      auth?.userId ||
+      auth?.tokenName ||
+      auth?.keyName ||
+      auth?.clientId ||
+      auth?.role ||
+      'operator';
+    const delivery = await clawdbotAgentService.sendMessage(req.params.taskId as string, message, {
+      actor,
+      source: 'agent-route',
+    });
+    res.json(delivery);
   })
 );
 

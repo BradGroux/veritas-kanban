@@ -50,6 +50,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useIdentity } from '@/hooks/useIdentity';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
+import { RunSessionSharesSection } from './RunSessionSharesSection';
 
 interface AgentPanelProps {
   task: Task;
@@ -523,6 +524,8 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
             </Stack>
           </Paper>
         )}
+
+        <RunSessionSharesSection task={task} isAgentRunning={isAgentRunning} />
 
         <Modal
           opened={stopDialogOpen}

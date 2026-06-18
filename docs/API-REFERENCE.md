@@ -1,8 +1,8 @@
 # Veritas Kanban — API Reference
 
-**Version**: 3.4.0  
-**Last Updated**: 2026-03-08  
-**Base URL**: `http://localhost:3001/api`  
+**Version**: 5.1.0
+**Last Updated**: 2026-06-18
+**Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
 
 > This is the source-of-truth companion to the Swagger/OpenAPI spec. For workflow-engine-specific endpoints, see [API-WORKFLOWS.md](API-WORKFLOWS.md).
@@ -28,31 +28,32 @@
 15. [Telemetry](#telemetry)
 16. [Health](#health)
 17. [WebSocket](#websocket)
-18. [Task Verification](#task-verification)
-19. [Task Comments](#task-comments)
-20. [Task Subtasks](#task-subtasks)
-21. [Task Deliverables](#task-deliverables)
-22. [Task Archive](#task-archive)
-23. [Attachments](#attachments)
-24. [Agent Permissions](#agent-permissions)
-25. [Agent Routing](#agent-routing)
-26. [Sandbox Policies](#sandbox-policies)
-27. [Shared Resources](#shared-resources)
-28. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-29. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-30. [Doc Freshness](#doc-freshness)
-31. [Cost Prediction](#cost-prediction)
-32. [Error Learning](#error-learning)
-33. [Tool Policies](#tool-policies)
-34. [Watcher Continuation Policies](#watcher-continuation-policies)
-35. [Traces](#traces)
-36. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-37. [Audit](#audit)
-38. [Maintenance Center](#maintenance-center-apiv1maintenance)
-39. [Common Workflows](#common-workflows)
-40. [Versioning & Deprecation](#versioning--deprecation)
-41. [Rate Limits](#rate-limits)
-42. [Additional Endpoint Groups](#additional-endpoint-groups)
+18. [Shared Run Sessions](#shared-run-sessions)
+19. [Task Verification](#task-verification)
+20. [Task Comments](#task-comments)
+21. [Task Subtasks](#task-subtasks)
+22. [Task Deliverables](#task-deliverables)
+23. [Task Archive](#task-archive)
+24. [Attachments](#attachments)
+25. [Agent Permissions](#agent-permissions)
+26. [Agent Routing](#agent-routing)
+27. [Sandbox Policies](#sandbox-policies)
+28. [Shared Resources](#shared-resources)
+29. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+30. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+31. [Doc Freshness](#doc-freshness)
+32. [Cost Prediction](#cost-prediction)
+33. [Error Learning](#error-learning)
+34. [Tool Policies](#tool-policies)
+35. [Watcher Continuation Policies](#watcher-continuation-policies)
+36. [Traces](#traces)
+37. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+38. [Audit](#audit)
+39. [Maintenance Center](#maintenance-center-apiv1maintenance)
+40. [Common Workflows](#common-workflows)
+41. [Versioning & Deprecation](#versioning--deprecation)
+42. [Rate Limits](#rate-limits)
+43. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -894,6 +895,15 @@ or `X-API-Key`. In production, do not rely on localhost bypass.
 { "type": "chat:subscribe", "sessionId": "session-abc" }
 ```
 
+**Subscribe to shared run session events**:
+
+```json
+{ "type": "run-session:subscribe" }
+```
+
+The server confirms with `run-session:subscribed` after the connection has
+`task:read` access in the current workspace.
+
 ### Server → Client Messages
 
 **Task change broadcast**:
@@ -924,6 +934,125 @@ or `X-API-Key`. In production, do not rely on localhost bypass.
 ```json
 { "type": "agent:status", "status": "working", "activeAgents": [ ... ] }
 ```
+
+**Shared run session event**:
+
+```json
+{
+  "type": "run-session:event",
+  "event": {
+    "id": "run_event_abc",
+    "shareId": "run_share_abc",
+    "taskId": "TASK-001",
+    "attemptId": "attempt_001",
+    "type": "message.sent",
+    "actor": { "id": "editor-1", "label": "Pair Editor" },
+    "message": "Run the focused verification gate",
+    "createdAt": "2026-06-18T10:00:00.000Z"
+  },
+  "workspaceId": "local",
+  "sequence": 42,
+  "timestamp": "2026-06-18T10:00:00.000Z"
+}
+```
+
+---
+
+## Shared Run Sessions
+
+Workspace-scoped live sharing for active task agent runs.
+
+Mounted at `/api/run-sessions`.
+
+| Method  | Path                              | Description                                               | Permissions  |
+| ------- | --------------------------------- | --------------------------------------------------------- | ------------ |
+| `GET`   | `/api/run-sessions`               | List shares in the current workspace. Supports filters.   | `task:read`  |
+| `POST`  | `/api/run-sessions`               | Create a view, edit, or fork share for a task run.        | `task:write` |
+| `GET`   | `/api/run-sessions/:id`           | Read an active share snapshot.                            | `task:read`  |
+| `GET`   | `/api/run-sessions/:id/events`    | Read share lifecycle, message, approval, and fork events. | `task:read`  |
+| `PATCH` | `/api/run-sessions/:id`           | Update permission, expiry, label, or mobile-safe classes. | `task:write` |
+| `POST`  | `/api/run-sessions/:id/revoke`    | Revoke a share.                                           | `task:write` |
+| `POST`  | `/api/run-sessions/:id/messages`  | Send an attributed co-drive message into the run.         | `task:write` |
+| `POST`  | `/api/run-sessions/:id/approvals` | Record an approval response.                              | `task:write` |
+| `POST`  | `/api/run-sessions/:id/fork`      | Create a linked fork task without mutating the parent.    | `task:write` |
+
+### Create Share
+
+```http
+POST /api/run-sessions
+```
+
+```json
+{
+  "taskId": "TASK-001",
+  "permission": "view",
+  "expiresAt": "2026-06-19T10:00:00.000Z",
+  "actorLabel": "Release reviewer",
+  "mobileSafeApprovalClasses": ["human-review", "task-comment", "low-risk"]
+}
+```
+
+`permission` is one of `view`, `edit`, or `fork`.
+
+The response includes `stablePath`, `snapshot`, `mobileSafeApprovalClasses`,
+`status`, and `forkedTaskIds`. The share path is not anonymous public access; it
+still requires workspace authentication and task read/write permissions.
+
+### Co-drive Message
+
+```http
+POST /api/run-sessions/run_share_abc/messages
+```
+
+```json
+{
+  "message": "Run the focused verification gate before release."
+}
+```
+
+The server records the request actor on the resulting `message.sent` event and
+forwards the message to the active run when the backing provider exposes an
+interactive stream. If interactive stdin is unavailable, the message is still
+recorded and streamed as session history.
+
+### Mobile-safe Approval
+
+```http
+POST /api/run-sessions/run_share_abc/approvals
+```
+
+```json
+{
+  "actionClass": "human-review",
+  "response": "approved",
+  "note": "Diff and focused tests look safe from mobile."
+}
+```
+
+Mobile/PWA clients can respond only to approval classes listed on the share.
+Unsafe approval classes fail closed with `403`.
+
+### Fork Session
+
+```http
+POST /api/run-sessions/run_share_abc/fork
+```
+
+```json
+{
+  "title": "Investigate forked run",
+  "priority": "high",
+  "reason": "Continue independently without changing the parent run."
+}
+```
+
+Forking creates a new task linked to the parent task and attempt. The fork
+description includes redacted parent context and a redacted run excerpt when
+available, but it does not inherit worktrees, thread IDs, credentials, or
+local-only handles.
+
+Revoked and expired shares fail closed for reads, messages, approvals, and
+forks. Share lists are scoped to the current workspace.
 
 ---
 

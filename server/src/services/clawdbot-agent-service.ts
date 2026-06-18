@@ -127,6 +127,16 @@ export interface AgentStartOptions {
   budget?: AgentBudgetPolicy;
 }
 
+export interface AgentMessageOptions {
+  actor?: string;
+  source?: string;
+}
+
+export interface AgentMessageDelivery {
+  delivered: boolean;
+  note: string;
+}
+
 export class AgentReadinessError extends Error {
   constructor(
     public readiness: TaskReadinessSummary,
@@ -642,6 +652,58 @@ export class ClawdbotAgentService {
       success: false,
       error: 'Stopped by user',
     });
+  }
+
+  async sendMessage(
+    taskId: string,
+    message: string,
+    options: AgentMessageOptions = {}
+  ): Promise<AgentMessageDelivery> {
+    const pending = pendingAgents.get(taskId);
+    if (!pending) {
+      throw new Error('No agent running for this task');
+    }
+
+    const content = message.trim();
+    if (!content) {
+      throw new Error('Message cannot be empty');
+    }
+
+    const actor = options.actor?.trim() || 'operator';
+    const timestamp = new Date().toISOString();
+    const redacted = this.redactTraceText(content);
+    const logPath = path.join(this.logsDir, `${taskId}_${pending.attemptId}.md`);
+
+    await this.appendLog(
+      logPath,
+      `\n## Operator Message\n\n**Actor:** ${actor}\n**Source:** ${
+        options.source || 'agent-panel'
+      }\n\n${redacted}\n`
+    );
+    pending.emitter.emit('output', {
+      type: 'stdin',
+      content: `${actor}: ${redacted}`,
+      timestamp,
+    } satisfies AgentOutput);
+    this.recordTraceStep(pending.attemptId, 'execute', {
+      eventType: 'operator.message',
+      actor,
+      source: options.source,
+      summary: redacted,
+      agent: pending.agent,
+      provider: pending.provider,
+      model: pending.model,
+    });
+
+    if (pending.process?.stdin?.writable) {
+      pending.process.stdin.write(`${content}\n`);
+      return { delivered: true, note: 'Message written to provider stdin.' };
+    }
+
+    return {
+      delivered: false,
+      note: 'Provider does not expose interactive stdin; message was recorded and streamed.',
+    };
   }
 
   async recordBudgetUsage(taskId: string, delta: Partial<AgentBudgetUsage>): Promise<void> {

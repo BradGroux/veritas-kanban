@@ -819,6 +819,25 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         );
       }
 
+      if (message.type === 'run-session:subscribe') {
+        const workspaceId = getMessageWorkspaceId(message);
+        const permissions: AuthPermission[] = ['task:read'];
+        if (!canReceiveWebSocketEvent(ws, { workspaceId, permissions })) {
+          sendWebSocketForbidden(ws, 'run-session:subscribe', permissions, workspaceId);
+          return;
+        }
+
+        subscribeWebSocketChannel(ws, 'run-sessions');
+        ws.send(
+          JSON.stringify({
+            type: 'run-session:subscribed',
+            workspaceId,
+            sequence: nextWebSocketEventSequence(),
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+
       // Handle subscription to chat session
       if (message.type === 'chat:subscribe' && message.sessionId) {
         const workspaceId = getMessageWorkspaceId(message);
