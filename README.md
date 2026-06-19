@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bradgroux-veritas-kanban-badge.png)](https://mseep.ai/app/bradgroux-veritas-kanban)
+
 <div align="center">
 
 # ⚖️ Veritas Kanban
