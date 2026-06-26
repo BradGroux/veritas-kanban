@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-06-26
+
+### Added
+
+- Added workspace team roster manifests and capability routing rules for
+  capability-aware delegation (#734).
+- Added cross-workspace capability discovery and delegated work intake (#735).
+- Added policy-gated queue intake monitoring for GitHub issues and agent runs
+  (#736).
+- Added a unified recurring work scheduler for monitors, workflows, and digests
+  (#737).
+- Added Squad Chat threads, unread state, mentions, and search (#738).
+- Added bidirectional human reply adapters for Squad Chat and notifications
+  (#739).
+- Added ceremony enforcement for design reviews and failure retrospectives
+  (#740).
+- Added reflection-to-memory promotion for agent corrections and lessons (#741).
+- Added external tracker schema introspection for configurable work items
+  (#742).
+
+### Changed
+
+- Bumped the release from `5.1.0` to `5.2.0` across the root, shared, server,
+  web, CLI, MCP, and desktop package manifests.
+- Updated the README version badge, API reference, v5 release notes, and MCP
+  documentation footer for `5.2.0`.
+
+### Fixed
+
+- Fixed CLI/MCP compatibility smoke checks so missing `VK_API_KEY` records
+  explicit skip results after local package/build validation instead of failing
+  unrelated release gates (#753).
+- Removed vulnerable frontmatter dependencies from the server by using the
+  existing YAML parser and preserving malformed-prompt fallback behavior
+  (#754).
+- Upgraded DOMPurify and kept the Mantine QA gate below the initial bundle
+  budget by deferring drag/drop code outside the first page load (#754, #755).
+
 ## [5.1.0] - 2026-06-18
 
 ### Added
@@ -1614,7 +1652,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.1.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.0...HEAD
+[5.2.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.1.0...v5.2.0
 [5.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v4.3.2...v5.0.0
