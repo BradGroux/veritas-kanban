@@ -10,14 +10,15 @@ Squad Chat stores and streams messages. It does not wake an external agent proce
 
 ## Terminology
 
-| Term                    | What it means                                                                                                                                    | External delivery?                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **Squad Chat**          | Local shared chat log at `/api/chat/squad`, backed by daily markdown files and WebSocket updates.                                                | No. It stores and streams messages to VK clients only.                                              |
-| **Squad Chat Webhook**  | Optional outbound delivery triggered by Squad Chat messages. Supports generic HTTP and OpenClaw Direct modes.                                    | Yes, when enabled and configured. HTTP success means VK delivered the event to the configured URL.  |
-| **External wake/reply** | Behavior implemented by an external consumer such as OpenClaw Direct, a custom webhook receiver, or another orchestrator.                        | Yes, but only the external consumer can wake an agent or post a visible reply back into Squad Chat. |
-| **Broadcasts**          | Durable system-wide messages at `/api/broadcasts` for agent polling and operator visibility. Priorities are `info`, `action-required`, `urgent`. | No. Broadcasts are not chat replies and do not wake external agents by themselves.                  |
-| **Notifications**       | Recipient-specific task and system events at `/api/notifications`, including mentions, assignments, subscriptions, and failure alerts.           | Optional. Local records exist even when delivery channels are disabled.                             |
-| **Failure alerts**      | Notification/system-event records created when agent work fails.                                                                                 | Optional. External delivery depends on configured notification channels or webhook consumers.       |
+| Term                    | What it means                                                                                                                                    | External delivery?                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Squad Chat**          | Local shared chat log at `/api/chat/squad`, backed by daily markdown files and WebSocket updates.                                                | No. It stores and streams messages to VK clients only.                                                |
+| **Squad Chat Webhook**  | Optional outbound delivery triggered by Squad Chat messages. Supports generic HTTP and OpenClaw Direct modes.                                    | Yes, when enabled and configured. HTTP success means VK delivered the event to the configured URL.    |
+| **Human reply adapter** | Adapter posture, thread mapping, health, and reply ingestion for approved external channels such as Teams.                                       | Yes. External replies are accepted through an authenticated ingest API and become Squad Chat replies. |
+| **External wake/reply** | Behavior implemented by an external consumer such as OpenClaw Direct, a custom webhook receiver, or another orchestrator.                        | Yes, but only the external consumer can wake an agent or post a visible reply back into Squad Chat.   |
+| **Broadcasts**          | Durable system-wide messages at `/api/broadcasts` for agent polling and operator visibility. Priorities are `info`, `action-required`, `urgent`. | No. Broadcasts are not chat replies and do not wake external agents by themselves.                    |
+| **Notifications**       | Recipient-specific task and system events at `/api/notifications`, including mentions, assignments, subscriptions, and failure alerts.           | Optional. Local records exist even when delivery channels are disabled.                               |
+| **Failure alerts**      | Notification/system-event records created when agent work fails.                                                                                 | Optional. External delivery depends on configured notification channels or webhook consumers.         |
 
 ## Features
 
@@ -32,6 +33,7 @@ Squad Chat stores and streams messages. It does not wake an external agent proce
 - **Human participation** — Humans can post messages and interact with agents
 - **Message persistence** — Daily markdown files stored in `.veritas-kanban/chats/squad/`
 - **Webhook integration** — Route messages to external systems (OpenClaw, custom webhooks)
+- **Human reply ingestion** — Map external threads to Squad Chat targets and ingest human replies with attribution, sanitization, idempotency, and audit records
 
 ## API Endpoints
 
@@ -135,6 +137,59 @@ curl -X POST http://localhost:3001/api/chat/squad/msg_decision/react \
 ```
 
 Search operates over redacted message text and returns bounded snippets. Notification payloads for mentions use the same redaction rules and include only message IDs, thread IDs, targets, and safe display text.
+
+### Human Reply Adapter
+
+The communication adapter contract lets a trusted external channel map human
+replies back into Veritas without storing secrets in chat content.
+
+```bash
+# Configure Teams adapter posture
+curl -X PUT http://localhost:3001/api/integrations/communication/adapters/msteams-default \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{
+    "kind": "msteams",
+    "displayName": "Microsoft Teams",
+    "enabled": true,
+    "deliveryMode": "webhook",
+    "destinationType": "channel",
+    "teamId": "team-id",
+    "channelId": "channel-id",
+    "webhookUrl": "https://example.com/teams-adapter",
+    "credential": "write-only-token"
+  }'
+
+# Send or queue an external thread mapping
+curl -X POST http://localhost:3001/api/integrations/communication/adapters/msteams-default/send \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{
+    "target": { "kind": "squad", "squadMessageId": "msg_parent", "taskId": "task-123" },
+    "message": "Please review this in Teams.",
+    "actor": "veritas"
+  }'
+
+# Ingest an external human reply
+curl -X POST http://localhost:3001/api/integrations/communication/adapters/msteams-default/replies \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{
+    "externalThreadId": "teams-thread-1",
+    "externalReplyId": "reply-42",
+    "actor": "alice@example.com",
+    "displayName": "Alice",
+    "message": "Looks good. Please ship it.",
+    "target": { "kind": "squad", "squadMessageId": "msg_parent", "taskId": "task-123" }
+  }'
+```
+
+Setup and health operations require settings permissions. Reply ingestion
+requires comment-write permission, and approval-targeted replies require the
+same approval-capable authority as in-app approvals. Inbound reply bodies are
+HTML-stripped, secret-redacted, size-limited, and deduped by external reply ID.
+Adapter responses expose only redacted connection posture such as
+`webhookUrlConfigured`, `webhookUrlRedacted`, and `hasCredential`.
 
 ## System Message Events
 

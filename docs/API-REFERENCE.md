@@ -651,6 +651,69 @@ POST /api/chat/squad/:messageId/react
 
 Search returns redacted snippets only. Mention notifications link back to the squad message and do not include raw secrets beyond the existing redaction rules.
 
+### Communication Adapters
+
+Bidirectional human reply adapters live under integrations. The first adapter
+contract is provider-neutral with Microsoft Teams posture fields and a local
+ingest API. It stores external thread mappings separately from message content.
+
+```
+GET  /api/integrations/communication/adapters
+PUT  /api/integrations/communication/adapters/:adapterId
+GET  /api/integrations/communication/adapters/:adapterId/health
+POST /api/integrations/communication/adapters/:adapterId/test
+POST /api/integrations/communication/adapters/:adapterId/send
+POST /api/integrations/communication/adapters/:adapterId/replies
+POST /api/integrations/communication/adapters/:adapterId/poll
+POST /api/integrations/communication/adapters/:adapterId/disconnect
+GET  /api/integrations/communication/mappings
+GET  /api/integrations/communication/deliveries
+```
+
+Adapter setup uses `settings:write`. External reply ingestion uses
+`comment:write`; approval-targeted replies also require `workflow:execute`,
+`task:write`, or admin authority. Reply ingestion sanitizes the body, redacts
+secret-like text, dedupes `externalReplyId`, creates a Squad Chat reply through
+the normal chat service, and broadcasts it to connected clients.
+
+**Configure body**:
+
+```json
+{
+  "kind": "msteams",
+  "displayName": "Microsoft Teams",
+  "enabled": true,
+  "deliveryMode": "webhook",
+  "destinationType": "channel",
+  "tenantId": "tenant-id",
+  "teamId": "team-id",
+  "channelId": "channel-id",
+  "webhookUrl": "https://example.com/teams-adapter",
+  "credential": "write-only-token"
+}
+```
+
+Responses never return credentials or raw webhook query strings. Redacted
+posture appears as `webhookUrlConfigured`, `webhookUrlRedacted`, and
+`hasCredential`.
+
+**Reply ingest body**:
+
+```json
+{
+  "externalThreadId": "teams-thread-1",
+  "externalReplyId": "reply-42",
+  "actor": "alice@example.com",
+  "displayName": "Alice",
+  "message": "Looks good. Please ship it.",
+  "target": {
+    "kind": "squad",
+    "squadMessageId": "msg_parent",
+    "taskId": "task-123"
+  }
+}
+```
+
 ### Chat Sessions
 
 ```
@@ -2905,45 +2968,45 @@ Rate limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-R
 
 These endpoints follow the same auth/error patterns documented above:
 
-| Mount                            | Purpose                                       |
-| -------------------------------- | --------------------------------------------- |
-| `/api/projects`                  | Project CRUD                                  |
-| `/api/sprints`                   | Sprint management                             |
-| `/api/backlog`                   | Backlog operations                            |
-| `/api/agents`                    | Agent CRUD, routing                           |
-| `/api/agents/register`           | Agent self-registration                       |
-| `/api/agents/permissions`        | Agent permission management                   |
-| `/api/templates`                 | Task templates                                |
-| `/api/task-types`                | Custom task type definitions                  |
-| `/api/activity`                  | Activity feed                                 |
-| `/api/notifications`             | User notifications                            |
-| `/api/broadcasts`                | Broadcast messages                            |
-| `/api/changes`                   | Efficient agent polling (change feed)         |
-| `/api/diff`                      | Task diff comparisons                         |
-| `/api/automation`                | Automation rules                              |
-| `/api/summary`                   | Board summaries                               |
-| `/api/github`                    | GitHub integration                            |
-| `/api/conflicts`                 | Merge conflict detection                      |
-| `/api/watcher-policies`          | Agent continuation guardrail decisions        |
-| `/api/metrics`                   | Prometheus-style metrics                      |
-| `/api/traces`                    | Distributed tracing                           |
-| `/api/cost-prediction`           | Token cost forecasting                        |
-| `/api/error-learning`            | Error pattern learning                        |
-| `/api/reports`                   | Generated reports                             |
-| `/api/deliverables`              | Scheduled deliverables                        |
-| `/api/doc-freshness`             | Documentation freshness tracking              |
-| `/api/docs`                      | Docs endpoint                                 |
-| `/api/shared-resources`          | Shared resource management                    |
-| `/api/status-history`            | Task status history                           |
-| `/api/digest`                    | Digest generation                             |
-| `/api/audit`                     | Audit log                                     |
-| `/api/lessons`                   | Lessons learned                               |
-| `/api/delegation`                | Task delegation                               |
-| `/api/workflows`                 | Workflow engine ([details](API-WORKFLOWS.md)) |
-| `/api/tool-policies`             | Tool access policies                          |
-| `/api/sandbox-policies`          | Agent sandbox policy presets                  |
-| `/api/integrations`              | External integrations                         |
-| `/api/settings/transition-hooks` | Status transition hooks                       |
+| Mount                            | Purpose                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `/api/projects`                  | Project CRUD                                                             |
+| `/api/sprints`                   | Sprint management                                                        |
+| `/api/backlog`                   | Backlog operations                                                       |
+| `/api/agents`                    | Agent CRUD, routing                                                      |
+| `/api/agents/register`           | Agent self-registration                                                  |
+| `/api/agents/permissions`        | Agent permission management                                              |
+| `/api/templates`                 | Task templates                                                           |
+| `/api/task-types`                | Custom task type definitions                                             |
+| `/api/activity`                  | Activity feed                                                            |
+| `/api/notifications`             | User notifications                                                       |
+| `/api/broadcasts`                | Broadcast messages                                                       |
+| `/api/changes`                   | Efficient agent polling (change feed)                                    |
+| `/api/diff`                      | Task diff comparisons                                                    |
+| `/api/automation`                | Automation rules                                                         |
+| `/api/summary`                   | Board summaries                                                          |
+| `/api/github`                    | GitHub integration                                                       |
+| `/api/conflicts`                 | Merge conflict detection                                                 |
+| `/api/watcher-policies`          | Agent continuation guardrail decisions                                   |
+| `/api/metrics`                   | Prometheus-style metrics                                                 |
+| `/api/traces`                    | Distributed tracing                                                      |
+| `/api/cost-prediction`           | Token cost forecasting                                                   |
+| `/api/error-learning`            | Error pattern learning                                                   |
+| `/api/reports`                   | Generated reports                                                        |
+| `/api/deliverables`              | Scheduled deliverables                                                   |
+| `/api/doc-freshness`             | Documentation freshness tracking                                         |
+| `/api/docs`                      | Docs endpoint                                                            |
+| `/api/shared-resources`          | Shared resource management                                               |
+| `/api/status-history`            | Task status history                                                      |
+| `/api/digest`                    | Digest generation                                                        |
+| `/api/audit`                     | Audit log                                                                |
+| `/api/lessons`                   | Lessons learned                                                          |
+| `/api/delegation`                | Task delegation                                                          |
+| `/api/workflows`                 | Workflow engine ([details](API-WORKFLOWS.md))                            |
+| `/api/tool-policies`             | Tool access policies                                                     |
+| `/api/sandbox-policies`          | Agent sandbox policy presets                                             |
+| `/api/integrations`              | External integrations, outbound delivery audit, and human reply adapters |
+| `/api/settings/transition-hooks` | Status transition hooks                                                  |
 
 | `/api/feedback` | User feedback & sentiment analytics |
 | `/api/decisions` | Decision audit trail |

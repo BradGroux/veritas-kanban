@@ -456,20 +456,22 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 - **Configurable display names** — Agents set custom display names for chat identity
 - **Squad Chat Webhook** — Optional outbound delivery for chat messages; supports generic HTTP and OpenClaw Direct modes
 - **OpenClaw Direct gateway wake** — Optional real-time Squad Chat events pushed to OpenClaw gateway for agent orchestration
+- **Human reply adapters** — Configure Teams reply posture, run health checks and test sends, store external thread mappings, and ingest audited human replies back into the correct Squad Chat thread
 - **Searchable history** — Browse and search past squad chat messages
 
 ### API Endpoints
 
-| Endpoint                            | Method | Description                                   |
-| ----------------------------------- | ------ | --------------------------------------------- |
-| `/api/chat/squad`                   | POST   | Send a squad chat message                     |
-| `/api/chat/squad`                   | GET    | Retrieve squad chat history                   |
-| `/api/chat/squad/search`            | GET    | Search redacted snippets                      |
-| `/api/chat/squad/unread`            | GET    | Get actor-scoped unread state                 |
-| `/api/chat/squad/read`              | POST   | Mark messages read for an actor               |
-| `/api/chat/squad/:messageId/thread` | GET    | Read a compact thread                         |
-| `/api/chat/squad/:messageId/pin`    | POST   | Pin/unpin or mark/unmark a decision           |
-| `/api/chat/squad/:messageId/react`  | POST   | Add a lightweight reaction or acknowledgement |
+| Endpoint                                                      | Method | Description                                    |
+| ------------------------------------------------------------- | ------ | ---------------------------------------------- |
+| `/api/chat/squad`                                             | POST   | Send a squad chat message                      |
+| `/api/chat/squad`                                             | GET    | Retrieve squad chat history                    |
+| `/api/chat/squad/search`                                      | GET    | Search redacted snippets                       |
+| `/api/chat/squad/unread`                                      | GET    | Get actor-scoped unread state                  |
+| `/api/chat/squad/read`                                        | POST   | Mark messages read for an actor                |
+| `/api/chat/squad/:messageId/thread`                           | GET    | Read a compact thread                          |
+| `/api/chat/squad/:messageId/pin`                              | POST   | Pin/unpin or mark/unmark a decision            |
+| `/api/chat/squad/:messageId/react`                            | POST   | Add a lightweight reaction or acknowledgement  |
+| `/api/integrations/communication/adapters/:adapterId/replies` | POST   | Ingest an external human reply into Squad Chat |
 
 ---
 
@@ -1127,6 +1129,7 @@ Notification and broadcast features provide local visibility and optional delive
 - **Per-event toggles** — Enable/disable notification types in Settings → Notifications
 - **Broadcast messages** — Durable system-wide messages at `/api/broadcasts` with `info`, `action-required`, and `urgent` priorities
 - **External delivery boundary** — Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled
+- **Human reply adapter health** — Settings -> Notifications shows Teams reply posture, redacted webhook state, recent delivery audit, test send, and disconnect controls
 
 ### API Endpoints
 

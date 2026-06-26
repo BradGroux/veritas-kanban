@@ -75,6 +75,13 @@ export const statusHistoryAccess = routeAccess('telemetry:read', 'admin:manage')
 export const delegationAccess = routeAccess('agent:read', 'admin:manage');
 export const transcriptAccess = routeAccess('workspace:read', 'workflow:execute');
 export const feedbackAccess = routeAccess('report:read', 'comment:write');
+export const integrationsAccess = routeAccess('settings:read', 'settings:write', [
+  {
+    methods: ['POST'],
+    path: /^\/communication\/adapters\/[^/]+\/replies\/?$/,
+    permissions: 'comment:write',
+  },
+]);
 
 export const configAccess = routeAccess('settings:read', 'settings:write', [
   { methods: ['POST'], path: /^\/repos\/validate\/?$/, permissions: 'settings:read' },

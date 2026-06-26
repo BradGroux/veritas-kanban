@@ -18,7 +18,8 @@ export type OutboundEndpointType =
   | 'squad-webhook'
   | 'openclaw-wake'
   | 'openclaw-gateway'
-  | 'failure-alert-webhook';
+  | 'failure-alert-webhook'
+  | 'communication-adapter-webhook';
 
 export type OutboundDeliveryStatus = 'success' | 'failed' | 'blocked' | 'timeout' | 'skipped';
 
