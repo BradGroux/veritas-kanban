@@ -595,6 +595,7 @@ export class TaskService {
         git: data.git,
         github: data.github,
         delegatedWork: data.delegatedWork,
+        externalWorkItems: data.externalWorkItems,
         attempt: data.attempt,
         attempts: data.attempts,
         reviewComments,

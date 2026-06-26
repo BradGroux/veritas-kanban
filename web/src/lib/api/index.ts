@@ -106,6 +106,17 @@ export type {
   CommunicationSendInput,
   CommunicationSendResult,
   CommunicationThreadMapping,
+  ExternalTrackerConnectionInput,
+  ExternalTrackerConnectionRecord,
+  ExternalTrackerCreateWorkItemInput,
+  ExternalTrackerCreateWorkItemResult,
+  ExternalTrackerDryRunCreateInput,
+  ExternalTrackerDryRunCreateResult,
+  ExternalTrackerMappingProfile,
+  ExternalTrackerMappingProfileInput,
+  ExternalTrackerSchema,
+  ExternalTrackerSyncAudit,
+  ExternalTrackerValidationResult,
 } from '@veritas-kanban/shared';
 export type {
   OutboundDeliveryAttempt,

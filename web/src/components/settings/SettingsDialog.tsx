@@ -26,6 +26,7 @@ import {
   Network,
   CalendarClock,
   BrainCircuit,
+  Waypoints,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
@@ -84,6 +85,9 @@ const LazyQueueMonitorsTab = lazy(() =>
 const LazyReflectionTab = lazy(() =>
   import('./tabs/ReflectionTab').then((m) => ({ default: m.ReflectionTab }))
 );
+const LazyTrackersTab = lazy(() =>
+  import('./tabs/TrackersTab').then((m) => ({ default: m.TrackersTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -120,6 +124,7 @@ type TabId =
   | 'scheduler'
   | 'queue-monitors'
   | 'reflections'
+  | 'trackers'
   | 'maintenance'
   | 'manage';
 
@@ -162,6 +167,12 @@ const TABS: TabDef[] = [
     label: 'Reflections',
     icon: BrainCircuit,
     requiredPermission: 'workflow:read',
+  },
+  {
+    id: 'trackers',
+    label: 'Trackers',
+    icon: Waypoints,
+    requiredPermission: 'settings:read',
   },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
   { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
@@ -460,6 +471,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'reflections' && (
           <SettingsErrorBoundary tabName="Reflections">
             <LazyReflectionTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'trackers' && (
+          <SettingsErrorBoundary tabName="Trackers">
+            <LazyTrackersTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'delegation' && (

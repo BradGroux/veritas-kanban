@@ -242,6 +242,9 @@ export interface Task {
   // Cross-workspace delegation status links
   delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];
 
+  // External tracker backlinks created through configured integration mappings
+  externalWorkItems?: import('./external-tracker.types.js').ExternalWorkItemLink[];
+
   // Current attempt
   attempt?: TaskAttempt;
 
@@ -393,6 +396,7 @@ export interface UpdateTaskInput {
   git?: Partial<TaskGit>;
   github?: TaskGitHub;
   delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];
+  externalWorkItems?: import('./external-tracker.types.js').ExternalWorkItemLink[];
   attempt?: TaskAttempt;
   reviewComments?: ReviewComment[];
   reviewScores?: [number, number, number, number];

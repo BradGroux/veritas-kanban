@@ -19,6 +19,7 @@ import {
   getCommunicationAdapterService,
 } from '../services/communication-adapter-service.js';
 import { getOutboundIntegrationService } from '../services/outbound-integration-service.js';
+import { externalTrackerRoutes } from './external-trackers.js';
 import { safeFetch } from '../utils/url-validation.js';
 import { createLogger } from '../lib/logger.js';
 
@@ -30,6 +31,8 @@ const communicationAdapters = getCommunicationAdapterService();
 
 const SERVICE_NAMES = ['supabase', 'openpanel', 'n8n', 'plane', 'appsmith'] as const;
 type ServiceName = (typeof SERVICE_NAMES)[number];
+
+router.use('/trackers', externalTrackerRoutes);
 
 /** Timeout for health check pings (ms) */
 const PING_TIMEOUT_MS = 5_000;
