@@ -101,6 +101,12 @@ export const schedulerAccess = routeAccess('workflow:read', 'workflow:write', [
   { methods: ['POST'], path: /^\/due\/run\/?$/, permissions: 'workflow:execute' },
 ]);
 
+export const queueMonitorAccess = routeAccess('workflow:read', 'workflow:write', [
+  { methods: ['POST'], path: /^\/[^/]+\/run\/?$/, permissions: 'workflow:execute' },
+  { methods: ['GET', 'POST'], path: /^\/[^/]+\/explain\/?$/, permissions: 'workflow:read' },
+  { methods: ['GET'], path: /^\/[^/]+\/health\/?$/, permissions: 'workflow:read' },
+]);
+
 export const watcherPolicyAccess = routeAccess('policy:read', 'policy:write', [
   { methods: ['POST'], path: /^\/evaluate\/?$/, permissions: ['policy:read', 'agent:read'] },
 ]);

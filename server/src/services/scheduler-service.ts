@@ -12,6 +12,7 @@ import type {
   SchedulerRunStatus,
   SchedulerValidationIssue,
   SchedulerValidationResult,
+  QueueMonitorSnapshot,
   WorkflowDefinition,
   WorkflowSchedule,
   WorkflowScheduleMode,
@@ -34,6 +35,10 @@ import {
 } from './workflow-authoring-service.js';
 import { getWorkflowRunService, type WorkflowRunService } from './workflow-run-service.js';
 import { getWorkflowService, type WorkflowService } from './workflow-service.js';
+import {
+  getQueueIntakeMonitorService,
+  type QueueIntakeMonitorService,
+} from './queue-intake-monitor-service.js';
 
 const log = createLogger('scheduler');
 const STATE_VERSION = 1;
@@ -66,6 +71,7 @@ interface SchedulerServiceOptions {
   workflowService?: WorkflowService;
   workflowRunService?: WorkflowRunService;
   workflowAuthoringService?: WorkflowAuthoringService;
+  queueMonitorService?: QueueIntakeMonitorService;
   telemetryService?: TelemetryService;
 }
 
@@ -75,6 +81,7 @@ export class SchedulerService {
   private readonly workflowService: WorkflowService;
   private readonly workflowRunService: WorkflowRunService;
   private readonly workflowAuthoringService: WorkflowAuthoringService;
+  private readonly queueMonitorService: QueueIntakeMonitorService;
   private readonly telemetryService: TelemetryService;
   private state: SchedulerStateFile | null = null;
   private runningDue = false;
@@ -87,6 +94,7 @@ export class SchedulerService {
     this.workflowRunService = options.workflowRunService ?? getWorkflowRunService();
     this.workflowAuthoringService =
       options.workflowAuthoringService ?? getWorkflowAuthoringService();
+    this.queueMonitorService = options.queueMonitorService ?? getQueueIntakeMonitorService();
     this.telemetryService = options.telemetryService ?? getTelemetryService();
   }
 
@@ -152,6 +160,8 @@ export class SchedulerService {
 
     if (item.kind === 'scheduled-deliverable') {
       await this.deliverablesService.update(item.sourceId, { enabled: false });
+    } else if (item.kind === 'queue-monitor') {
+      await this.queueMonitorService.updateMonitor(item.sourceId, { enabled: false }, now);
     } else {
       await this.updateWorkflowSchedule(item.sourceId, { enabled: false });
     }
@@ -181,6 +191,8 @@ export class SchedulerService {
 
     if (item.kind === 'scheduled-deliverable') {
       await this.deliverablesService.update(item.sourceId, { enabled: true });
+    } else if (item.kind === 'queue-monitor') {
+      await this.queueMonitorService.updateMonitor(item.sourceId, { enabled: true }, now);
     } else {
       await this.updateWorkflowSchedule(item.sourceId, { enabled: true });
     }
@@ -239,7 +251,9 @@ export class SchedulerService {
       const result =
         item.kind === 'scheduled-deliverable'
           ? await this.runDeliverable(item, trigger, now, startedAt)
-          : await this.runWorkflow(item, trigger, now, startedAt);
+          : item.kind === 'queue-monitor'
+            ? await this.runQueueMonitor(item, trigger, now, startedAt)
+            : await this.runWorkflow(item, trigger, now, startedAt);
       await this.saveState();
       return result;
     } finally {
@@ -375,6 +389,27 @@ export class SchedulerService {
     return { item: await this.getItem(item.id, now), event };
   }
 
+  private async runQueueMonitor(
+    item: SchedulerItem,
+    trigger: Extract<SchedulerEventType, 'manual-run' | 'due-run'>,
+    now: Date,
+    startedAt: number
+  ): Promise<SchedulerRunResult> {
+    const result = await this.queueMonitorService.runOnce(item.sourceId, trigger, now);
+    const event = await this.recordEvent({
+      item,
+      type: trigger,
+      status: queueMonitorStatus(result.event.status),
+      summary: result.event.summary,
+      error: result.event.error,
+      sourceRunId: result.event.sourceRunId,
+      durationMs: Date.now() - startedAt,
+      now,
+      nextRunAt: result.monitor.nextRunAt,
+    });
+    return { item: await this.getItem(item.id, now), event };
+  }
+
   private async updateWorkflowSchedule(
     workflowId: string,
     update: Partial<Pick<WorkflowSchedule, 'enabled'>>
@@ -391,9 +426,10 @@ export class SchedulerService {
 
   private async buildItems(now: Date): Promise<SchedulerItem[]> {
     await this.ensureLoaded();
-    const [deliverables, workflows] = await Promise.all([
+    const [deliverables, workflows, queueMonitors] = await Promise.all([
       this.deliverablesService.list(),
       this.workflowService.listWorkflows(),
+      this.queueMonitorService.list(now),
     ]);
 
     const items = [
@@ -401,6 +437,7 @@ export class SchedulerService {
       ...workflows
         .filter((workflow) => shouldExposeWorkflow(workflow))
         .map((workflow) => this.workflowItem(workflow, now)),
+      ...queueMonitors.monitors.map((monitor) => this.queueMonitorItem(monitor)),
     ];
 
     return items.sort((a, b) => {
@@ -478,6 +515,36 @@ export class SchedulerService {
     });
   }
 
+  private queueMonitorItem(monitor: QueueMonitorSnapshot): SchedulerItem {
+    const id = itemId('queue-monitor', monitor.id);
+    const state = this.currentState().items[id] ?? {};
+    return this.decorateItem({
+      id,
+      kind: 'queue-monitor',
+      provider: 'local-server',
+      sourceId: monitor.id,
+      name: monitor.name,
+      description: monitor.description,
+      enabled: monitor.enabled,
+      trigger: {
+        mode: 'custom',
+        description: `Every ${monitor.intervalMinutes} minute${monitor.intervalMinutes === 1 ? '' : 's'}`,
+        customDueRunnerSupported: true,
+      },
+      tags: monitor.tags,
+      nextRunAt: monitor.nextRunAt,
+      lastRunAt: monitor.lastScanAt,
+      lastStatus: state.lastStatus ?? queueMonitorStatus(monitor.lastStatus),
+      lastSummary: state.lastSummary ?? monitor.lastSummary,
+      lastError: state.lastError ?? monitor.lastError,
+      sourceRunId: state.sourceRunId ?? monitor.lastAction?.sourceRunId,
+      health: monitor.health,
+      healthSummary: monitor.healthSummary,
+      retry: retryState(state),
+      actions: baseActions(monitor.enabled),
+    });
+  }
+
   private decorateItem(item: SchedulerItem): SchedulerItem {
     const issues = this.validateItem(item);
     const retryBlocked =
@@ -488,6 +555,9 @@ export class SchedulerService {
     if (!item.enabled) {
       return { ...item, health: 'paused', healthSummary: 'Paused' };
     }
+    if (item.health === 'blocked') {
+      return { ...item, health: 'blocked', healthSummary: item.healthSummary };
+    }
     if (retryBlocked || error) {
       return {
         ...item,
@@ -496,6 +566,9 @@ export class SchedulerService {
           ? 'Retry limit reached; run manually or resume to reset.'
           : (error?.message ?? 'Blocked'),
       };
+    }
+    if (item.health === 'warning') {
+      return { ...item, health: 'warning', healthSummary: item.healthSummary };
     }
     if (warning) {
       return { ...item, health: 'warning', healthSummary: warning.message };
@@ -513,7 +586,12 @@ export class SchedulerService {
         remediation: 'Name the scheduled deliverable or workflow.',
       });
     }
-    if (item.enabled && item.trigger.mode === 'custom' && !item.trigger.cronExpr) {
+    if (
+      item.enabled &&
+      item.kind !== 'queue-monitor' &&
+      item.trigger.mode === 'custom' &&
+      !item.trigger.cronExpr
+    ) {
       issues.push({
         severity: 'error',
         path: 'trigger.cronExpr',
@@ -521,7 +599,7 @@ export class SchedulerService {
         remediation: 'Add cronExpr or switch to a standard interval schedule.',
       });
     }
-    if (item.enabled && !item.trigger.customDueRunnerSupported) {
+    if (item.enabled && item.kind !== 'queue-monitor' && !item.trigger.customDueRunnerSupported) {
       issues.push({
         severity: 'warning',
         path: 'trigger.mode',
@@ -752,6 +830,14 @@ function deliverableRunnerStatus(result: {
   if (result.failed > 0) return 'failed';
   if (result.executed > 0) return 'success';
   if (result.skipped > 0) return 'skipped';
+  return 'skipped';
+}
+
+function queueMonitorStatus(status: QueueMonitorSnapshot['lastStatus']): SchedulerRunStatus {
+  if (status === 'failed' || status === 'blocked') return 'failed';
+  if (status === 'skipped') return 'skipped';
+  if (status === 'started') return 'started';
+  if (status === 'success') return 'success';
   return 'skipped';
 }
 

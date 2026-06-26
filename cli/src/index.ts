@@ -21,6 +21,7 @@ import { registerSnapshotCommand } from './commands/snapshot.js';
 import { registerPromptCommands } from './commands/prompts.js';
 import { registerWorkspaceCommands } from './commands/workspaces.js';
 import { registerSchedulerCommands } from './commands/scheduler.js';
+import { registerQueueMonitorCommands } from './commands/queue-monitors.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -53,5 +54,6 @@ registerSnapshotCommand(program);
 registerPromptCommands(program);
 registerWorkspaceCommands(program);
 registerSchedulerCommands(program);
+registerQueueMonitorCommands(program);
 
 program.parse();

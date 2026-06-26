@@ -47,6 +47,7 @@ For current v5 screenshots and GIFs, see the
 - [Broadcast Notifications](#broadcast-notifications)
 - [Task Deliverables](#task-deliverables)
 - [Recurring Work Scheduler](#recurring-work-scheduler)
+- [Queue Intake Monitors](#queue-intake-monitors)
 - [Efficient Polling](#efficient-polling)
 - [Approval Delegation](#approval-delegation)
 - [Lifecycle Hooks](#task-lifecycle-hooks)
@@ -1158,12 +1159,12 @@ First-class deliverable objects attached to tasks with type and status tracking.
 
 ## Recurring Work Scheduler
 
-Unified operator surface for scheduled deliverables and scheduled workflow definitions.
+Unified operator surface for scheduled deliverables, scheduled workflow definitions, and queue intake monitors.
 
 - **Single scheduler dashboard** — Settings exposes all recurring work with health, retry, next run, last run, and recent events
 - **Manual controls** — Run, pause, resume, and validate individual scheduler items
 - **Due runner** — `POST /api/scheduler/due/run` and `vk scheduler run-due` execute due items while refusing overlapping passes
-- **Existing service adapters** — Deliverables execute through the scheduled deliverables runner; workflows start through the workflow run service
+- **Existing service adapters** — Deliverables execute through the scheduled deliverables runner; workflows start through the workflow run service; queue monitors scan through the GitHub adapter
 - **Operations telemetry** — Scheduler events emit bounded run telemetry with `agent=scheduler` for operations digest visibility
 - **Custom cron guardrail** — Cron schedules are visible and manually runnable, but automatic custom-cron due execution is deferred until a cron adapter is configured
 
@@ -1180,6 +1181,33 @@ Unified operator surface for scheduled deliverables and scheduled workflow defin
 | `/api/scheduler/items/:id/resume`   | POST   | Resume one scheduler item       |
 | `/api/scheduler/items/:id/validate` | POST   | Validate one scheduler item     |
 | `/api/scheduler/due/run`            | POST   | Run due scheduler items         |
+
+---
+
+## Queue Intake Monitors
+
+Policy-gated monitors that scan GitHub issue and PR queues, build bounded candidate packets, and decide the next safe action.
+
+- **GitHub queue packets** — Monitor definitions specify repo, labels, issue/PR inclusion, interval, candidate cap, runner, mode, budget, sandbox preset, and stop conditions
+- **Deterministic selection** — Candidates are scored by priority, assignment state, issue/PR readiness, and CI state; blocked labels, draft PRs, and failed checks become skipped-work reasons
+- **Fail-closed execution** — Dry-run is the default. Assign-only and execute modes require watcher policy, budget, sandbox, auth, stop-condition, and workflow validation gates to pass
+- **Visible circuit state** — Repeated failures trip the monitor health state and expose an action item instead of retrying indefinitely
+- **Shared operations surfaces** — Queue monitors appear in Settings -> Queues, in the recurring scheduler, in `vk queue-monitors`, and in operations digest output
+
+→ [Full guide](features/queue-intake-monitor.md) — monitor model, API, CLI, execution gates, and digest behavior
+
+### API Endpoints
+
+| Endpoint                          | Method | Description                         |
+| --------------------------------- | ------ | ----------------------------------- |
+| `/api/queue-monitors`             | GET    | List monitors, health, and events   |
+| `/api/queue-monitors/:id`         | GET    | Read one monitor                    |
+| `/api/queue-monitors/:id`         | PUT    | Update monitor mode and filters     |
+| `/api/queue-monitors/:id/health`  | GET    | Read health and action item state   |
+| `/api/queue-monitors/:id/explain` | GET    | Build a fresh packet without mutate |
+| `/api/queue-monitors/:id/run`     | POST   | Run one monitor now                 |
+| `/api/queue-monitors/:id/pause`   | POST   | Pause one monitor                   |
+| `/api/queue-monitors/:id/resume`  | POST   | Resume one monitor                  |
 
 ---
 
@@ -1487,6 +1515,28 @@ Added in v3.3.2.
 | `vk automation:running`       | `ar`  | List running automation tasks      |
 | `vk automation:start <id>`    | `as`  | Start an automation task           |
 | `vk automation:complete <id>` | `ac`  | Mark automation complete or failed |
+
+### Scheduler Commands
+
+| Command                      | Description                    |
+| ---------------------------- | ------------------------------ |
+| `vk scheduler list`          | List recurring scheduler items |
+| `vk scheduler run-due`       | Run all due recurring work     |
+| `vk scheduler run <id>`      | Run one scheduler item now     |
+| `vk scheduler pause <id>`    | Pause one scheduler item       |
+| `vk scheduler resume <id>`   | Resume one scheduler item      |
+| `vk scheduler validate <id>` | Validate one scheduler item    |
+
+### Queue Monitor Commands
+
+| Command                          | Description                                     |
+| -------------------------------- | ----------------------------------------------- |
+| `vk queue-monitors list`         | List queue intake monitors                      |
+| `vk queue-monitors run <id>`     | Run one monitor now                             |
+| `vk queue-monitors explain <id>` | Build a fresh candidate packet without mutation |
+| `vk queue-monitors health <id>`  | Show monitor health and action item state       |
+| `vk queue-monitors pause <id>`   | Pause one monitor                               |
+| `vk queue-monitors resume <id>`  | Resume one monitor                              |
 
 ### GitHub Sync Commands
 

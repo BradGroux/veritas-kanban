@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { WorkflowDefinition } from '@veritas-kanban/shared';
+import type { QueueMonitorSnapshot, WorkflowDefinition } from '@veritas-kanban/shared';
 import { SchedulerService } from '../services/scheduler-service.js';
 import {
   ScheduledDeliverablesService,
@@ -134,19 +134,126 @@ describe('SchedulerService', () => {
     );
   });
 
+  it('exposes due queue monitors through scheduler run-due', async () => {
+    const monitor = queueMonitorSnapshot({
+      nextRunAt: '2026-06-05T08:59:00.000Z',
+    });
+    const queueMonitorService = {
+      list: vi.fn(async () => ({
+        generatedAt: '2026-06-05T09:00:00.000Z',
+        summary: { total: 1, enabled: 1, paused: 0, blocked: 0, failed: 0, due: 1 },
+        monitors: [monitor],
+        recentEvents: [],
+      })),
+      updateMonitor: vi.fn(),
+      runOnce: vi.fn(async () => ({
+        monitor: {
+          ...monitor,
+          lastScanAt: '2026-06-05T09:00:00.000Z',
+          nextRunAt: '2026-06-05T09:30:00.000Z',
+        },
+        packet: monitor.lastPacket,
+        action: monitor.lastAction,
+        event: {
+          id: 'qm_evt_1',
+          monitorId: monitor.id,
+          type: 'due-run',
+          status: 'success',
+          action: 'dry-run',
+          summary: 'Dry run selected BradGroux/veritas-kanban#736.',
+          createdAt: '2026-06-05T09:00:00.000Z',
+          skippedReasons: [],
+        },
+      })),
+    };
+    const service = new SchedulerService({
+      stateFile: path.join(testRoot, 'scheduler-state.json'),
+      deliverablesService,
+      workflowService,
+      queueMonitorService: queueMonitorService as never,
+      telemetryService: telemetry as never,
+    });
+
+    const list = await service.list(new Date('2026-06-05T09:00:00.000Z'));
+    expect(list.items.map((item) => item.id)).toContain('queue-monitor:veritas-backlog');
+
+    const result = await service.runDue(new Date('2026-06-05T09:00:00.000Z'));
+    expect(result.executed).toBe(1);
+    expect(queueMonitorService.runOnce).toHaveBeenCalledWith(
+      'veritas-backlog',
+      'due-run',
+      new Date('2026-06-05T09:00:00.000Z')
+    );
+  });
+
   function schedulerService(): SchedulerService {
     return new SchedulerService({
       stateFile: path.join(testRoot, 'scheduler-state.json'),
       deliverablesService,
       workflowService,
+      queueMonitorService: emptyQueueMonitorService() as never,
       telemetryService: telemetry as never,
     });
   }
 });
 
+function emptyQueueMonitorService() {
+  return {
+    list: vi.fn(async () => ({
+      generatedAt: '2026-06-05T09:00:00.000Z',
+      summary: { total: 0, enabled: 0, paused: 0, blocked: 0, failed: 0, due: 0 },
+      monitors: [],
+      recentEvents: [],
+    })),
+    updateMonitor: vi.fn(),
+    runOnce: vi.fn(),
+  };
+}
+
 async function seedDeliverables(root: string, deliverables: Deliverable[]): Promise<void> {
   await fs.writeFile(path.join(root, 'scheduled-deliverables.json'), JSON.stringify(deliverables));
   await fs.writeFile(path.join(root, 'deliverable-runs.json'), '[]');
+}
+
+function queueMonitorSnapshot(overrides: Partial<QueueMonitorSnapshot> = {}): QueueMonitorSnapshot {
+  return {
+    id: 'veritas-backlog',
+    name: 'Veritas backlog',
+    description: 'Scan backlog.',
+    enabled: true,
+    source: {
+      kind: 'github',
+      repo: 'BradGroux/veritas-kanban',
+      state: 'open',
+      labels: ['priority: high'],
+      includeIssues: true,
+      includePullRequests: true,
+    },
+    mode: 'dry-run',
+    runner: 'local',
+    intervalMinutes: 30,
+    maxCandidates: 20,
+    stopConditions: {
+      maxFailureStreak: 3,
+      skipBlockedLabels: ['blocked'],
+      skipDraftPullRequests: true,
+      skipFailedChecks: true,
+    },
+    tags: ['backlog'],
+    createdAt: '2026-06-01T09:00:00.000Z',
+    updatedAt: '2026-06-01T09:00:00.000Z',
+    health: 'healthy',
+    healthSummary: 'Ready',
+    failureStreak: 0,
+    nextRunAt: '2026-06-05T08:59:00.000Z',
+    actions: {
+      canRun: true,
+      canPause: true,
+      canResume: false,
+      canExplain: true,
+    },
+    ...overrides,
+  };
 }
 
 function scheduledDeliverable(overrides: Partial<Deliverable> = {}): Deliverable {

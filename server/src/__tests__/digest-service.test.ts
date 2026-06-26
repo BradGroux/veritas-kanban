@@ -8,6 +8,14 @@ import type { RunTelemetryEvent, Task, TokenTelemetryEvent } from '@veritas-kanb
 import { DigestService, type DailyDigest } from '../services/digest-service.js';
 
 const mockPendingApprovals = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockQueueMonitorList = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    generatedAt: '2026-06-04T12:00:00.000Z',
+    summary: { total: 0, enabled: 0, paused: 0, blocked: 0, failed: 0, due: 0 },
+    monitors: [],
+    recentEvents: [],
+  })
+);
 
 // Mock dependencies
 vi.mock('../services/metrics/index.js', () => ({
@@ -39,6 +47,12 @@ vi.mock('../services/task-service.js', () => ({
 vi.mock('../services/agent-permission-service.js', () => ({
   getAgentPermissionService: () => ({
     getPendingApprovals: mockPendingApprovals,
+  }),
+}));
+
+vi.mock('../services/queue-intake-monitor-service.js', () => ({
+  getQueueIntakeMonitorService: () => ({
+    list: mockQueueMonitorList,
   }),
 }));
 
@@ -98,6 +112,12 @@ describe('DigestService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPendingApprovals.mockResolvedValue([]);
+    mockQueueMonitorList.mockResolvedValue({
+      generatedAt: '2026-06-04T12:00:00.000Z',
+      summary: { total: 0, enabled: 0, paused: 0, blocked: 0, failed: 0, due: 0 },
+      monitors: [],
+      recentEvents: [],
+    });
     service = new DigestService();
   });
 
@@ -235,6 +255,58 @@ describe('DigestService', () => {
         action: 'push_branch',
       });
       expect(digest.totals.openApprovals).toBe(1);
+    });
+
+    it('includes queue monitor activity and skipped reasons', async () => {
+      const serviceOverrides = service as unknown as {
+        telemetry: { getEvents: ReturnType<typeof vi.fn> };
+        taskService: { listTasks: ReturnType<typeof vi.fn> };
+      };
+      serviceOverrides.telemetry = { getEvents: vi.fn().mockResolvedValue([]) };
+      serviceOverrides.taskService = { listTasks: vi.fn().mockResolvedValue([]) };
+      mockQueueMonitorList.mockResolvedValue({
+        generatedAt: '2026-06-04T12:00:00.000Z',
+        summary: { total: 1, enabled: 1, paused: 0, blocked: 0, failed: 0, due: 0 },
+        monitors: [
+          {
+            id: 'veritas-backlog',
+            source: { repo: 'veritas-kanban' },
+          },
+        ],
+        recentEvents: [
+          {
+            id: 'qm_evt_1',
+            monitorId: 'veritas-backlog',
+            type: 'manual-run',
+            status: 'success',
+            action: 'dry-run',
+            summary: 'Dry run selected BradGroux/veritas-kanban#736.',
+            createdAt: '2026-06-04T11:30:00.000Z',
+            skippedReasons: ['Blocked item: needs-info'],
+          },
+        ],
+      });
+
+      const digest = await service.generateOperationsDigest({
+        from: '2026-06-04T00:00:00.000Z',
+        to: '2026-06-04T12:00:00.000Z',
+        project: 'operations',
+      });
+      const markdown = service.formatOperationsDigestMarkdown(digest);
+
+      expect(digest.hasActivity).toBe(true);
+      expect(digest.groups[0]).toMatchObject({
+        project: 'operations',
+        repo: 'veritas-kanban',
+      });
+      expect(digest.groups[0].queueMonitors[0]).toMatchObject({
+        id: 'qm_evt_1',
+        status: 'success',
+        action: 'dry-run',
+        skippedReasons: ['Blocked item: needs-info'],
+      });
+      expect(markdown.markdown).toContain('Queue monitors:');
+      expect(markdown.markdown).toContain('skipped 1');
     });
 
     it('filters deterministic operations by repository and cwd', async () => {

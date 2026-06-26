@@ -7,6 +7,7 @@ import {
   Settings2,
   Layout,
   ListTodo,
+  ListChecks,
   Cpu,
   Database,
   Bell,
@@ -76,6 +77,9 @@ const LazyWorkspaceCapabilitiesTab = lazy(() =>
 const LazySchedulerTab = lazy(() =>
   import('./tabs/SchedulerTab').then((m) => ({ default: m.SchedulerTab }))
 );
+const LazyQueueMonitorsTab = lazy(() =>
+  import('./tabs/QueueMonitorsTab').then((m) => ({ default: m.QueueMonitorsTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -110,6 +114,7 @@ type TabId =
   | 'multi-user'
   | 'workspace-capabilities'
   | 'scheduler'
+  | 'queue-monitors'
   | 'maintenance'
   | 'manage';
 
@@ -139,6 +144,12 @@ const TABS: TabDef[] = [
     id: 'scheduler',
     label: 'Scheduler',
     icon: CalendarClock,
+    requiredPermission: 'workflow:read',
+  },
+  {
+    id: 'queue-monitors',
+    label: 'Queues',
+    icon: ListChecks,
     requiredPermission: 'workflow:read',
   },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
@@ -428,6 +439,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'scheduler' && (
           <SettingsErrorBoundary tabName="Scheduler">
             <LazySchedulerTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'queue-monitors' && (
+          <SettingsErrorBoundary tabName="Queues">
+            <LazyQueueMonitorsTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'delegation' && (

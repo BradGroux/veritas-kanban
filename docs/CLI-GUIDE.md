@@ -20,6 +20,8 @@ Comprehensive guide to the `vk` command-line tool for Veritas Kanban.
   - [Project Management](#project-management)
   - [Agent Commands](#agent-commands)
   - [Automation Commands](#automation-commands)
+  - [Scheduler Commands](#scheduler-commands)
+  - [Queue Monitor Commands](#queue-monitor-commands)
   - [GitHub Sync](#github-sync)
   - [Utilities](#utilities)
 - [Workflow Commands Deep Dive](#workflow-commands-deep-dive)
@@ -465,6 +467,40 @@ Manage automation tasks.
 | `vk automation:running`       | `ar`  | List running automation tasks      |
 | `vk automation:start <id>`    | `as`  | Start an automation task           |
 | `vk automation:complete <id>` | `ac`  | Mark automation complete or failed |
+
+---
+
+### Scheduler Commands
+
+Inspect and control recurring work from the terminal.
+
+| Command                      | Description                                      |
+| ---------------------------- | ------------------------------------------------ |
+| `vk scheduler list`          | List recurring scheduler items and recent events |
+| `vk scheduler run-due`       | Run all due scheduler items                      |
+| `vk scheduler run <id>`      | Run one scheduler item now                       |
+| `vk scheduler pause <id>`    | Pause one scheduler item                         |
+| `vk scheduler resume <id>`   | Resume one scheduler item                        |
+| `vk scheduler validate <id>` | Validate one scheduler item                      |
+
+Item IDs include a source prefix: `scheduled-deliverable:<id>`, `workflow:<id>`, or `queue-monitor:<id>`.
+
+---
+
+### Queue Monitor Commands
+
+Inspect and run policy-gated GitHub queue intake monitors.
+
+| Command                          | Description                                     |
+| -------------------------------- | ----------------------------------------------- |
+| `vk queue-monitors list`         | List queue monitors, health, and recent events  |
+| `vk queue-monitors run <id>`     | Run one monitor now                             |
+| `vk queue-monitors explain <id>` | Build a fresh candidate packet without mutation |
+| `vk queue-monitors health <id>`  | Show monitor health and action item state       |
+| `vk queue-monitors pause <id>`   | Pause one monitor                               |
+| `vk queue-monitors resume <id>`  | Resume one monitor                              |
+
+Every queue monitor command supports `--json`. `run` requires `workflow:execute`; list, health, and explain require `workflow:read`.
 
 ---
 

@@ -142,4 +142,30 @@ describe('CLI API permission preflight', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
   });
+
+  it('requires workflow execute permission for queue monitor run actions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        role: 'read-only',
+        isLocalhost: false,
+        permissions: ['workflow:read'],
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'reader-key');
+
+    await expect(
+      api('/api/queue-monitors/veritas-backlog/run', {
+        method: 'POST',
+      })
+    ).rejects.toMatchObject({
+      required: ['workflow:execute'],
+      path: '/api/queue-monitors/veritas-backlog/run',
+      method: 'POST',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
+  });
 });

@@ -268,6 +268,16 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   {
+    prefix: '/api/queue-monitors',
+    read: 'workflow:read',
+    write: 'workflow:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/[^/]+\/run\/?$/, permissions: 'workflow:execute' },
+      { methods: ['GET', 'POST'], path: /^\/[^/]+\/explain\/?$/, permissions: 'workflow:read' },
+      { methods: ['GET'], path: /^\/[^/]+\/health\/?$/, permissions: 'workflow:read' },
+    ],
+  },
+  {
     prefix: '/api/watcher-policies',
     read: 'policy:read',
     write: 'policy:write',

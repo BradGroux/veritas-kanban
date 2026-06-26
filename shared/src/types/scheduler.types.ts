@@ -1,7 +1,7 @@
 import type { WorkflowScheduleMode } from './workflow.js';
 
 export type SchedulerDeliverableSchedule = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
-export type SchedulerItemKind = 'scheduled-deliverable' | 'workflow';
+export type SchedulerItemKind = 'scheduled-deliverable' | 'workflow' | 'queue-monitor';
 export type SchedulerItemProvider = 'local-server';
 export type SchedulerHealth = 'healthy' | 'warning' | 'paused' | 'blocked';
 export type SchedulerRunStatus = 'success' | 'failed' | 'skipped' | 'started';

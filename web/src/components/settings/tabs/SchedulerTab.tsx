@@ -126,10 +126,20 @@ export function SchedulerTab() {
                       </Text>
                       <Badge
                         size="xs"
-                        color={item.kind === 'workflow' ? 'blue' : 'grape'}
+                        color={
+                          item.kind === 'workflow'
+                            ? 'blue'
+                            : item.kind === 'queue-monitor'
+                              ? 'teal'
+                              : 'grape'
+                        }
                         variant="light"
                       >
-                        {item.kind === 'workflow' ? 'Workflow' : 'Deliverable'}
+                        {item.kind === 'workflow'
+                          ? 'Workflow'
+                          : item.kind === 'queue-monitor'
+                            ? 'Queue'
+                            : 'Deliverable'}
                       </Badge>
                       <HealthBadge item={item} />
                     </Group>

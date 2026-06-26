@@ -7,6 +7,7 @@ It currently surfaces:
 - scheduled deliverables, including operations digest deliverables
 - workflow definitions with enabled non-manual schedules
 - workflow scheduled-snapshot outputs
+- queue intake monitors
 
 ## Operator Controls
 
@@ -20,9 +21,11 @@ Each scheduler item exposes:
 - recent scheduler events
 - manual run, pause, resume, and validate actions
 
+Queue monitors appear as `queue-monitor:<monitorId>` items. They use the monitor interval and execute through the queue monitor service, so Run Due can scan GitHub queues without bypassing monitor policy gates.
+
 ## Execution Model
 
-Scheduled deliverables run through the existing scheduled deliverables runner. Workflow schedules run through the existing workflow run service and create a normal workflow run record.
+Scheduled deliverables run through the existing scheduled deliverables runner. Workflow schedules run through the existing workflow run service and create a normal workflow run record. Queue monitors run through the policy-gated queue monitor service and record their own candidate packet before the scheduler records the recurring event.
 
 The due-runner refuses overlapping scheduler passes and refuses overlapping item runs in the same server process. Failed scheduler runs record retry state with exponential backoff up to the configured retry limit. Scheduler executions also emit bounded run telemetry with `agent=scheduler` and `project=operations`, so operations digests can include scheduler activity.
 
@@ -36,6 +39,7 @@ Custom cron schedules are visible, manually runnable, and validated for a cron e
 vk scheduler list
 vk scheduler run-due
 vk scheduler run "scheduled-deliverable:del_ops"
+vk scheduler run "queue-monitor:veritas-backlog-high-priority"
 vk scheduler pause "workflow:weekly-snapshot"
 vk scheduler resume "workflow:weekly-snapshot"
 vk scheduler validate "workflow:weekly-snapshot"

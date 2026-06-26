@@ -31,6 +31,7 @@ import { sandboxPoliciesApi } from './sandbox-policies';
 import { runSessionsApi } from './run-sessions';
 import { workspaceCapabilitiesApi } from './workspace-capabilities';
 import { schedulerApi } from './scheduler';
+import { queueMonitorsApi } from './queue-monitors';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -73,6 +74,7 @@ export const api = {
   runSessions: runSessionsApi,
   workspaceCapabilities: workspaceCapabilitiesApi,
   scheduler: schedulerApi,
+  queueMonitors: queueMonitorsApi,
 };
 
 export type {
@@ -100,6 +102,7 @@ export type {
   AgentOperationsDigestFilters,
   AgentOperationsDigestGroup,
   AgentOperationsFailure,
+  AgentOperationsQueueMonitorActivity,
   AgentOperationsMarkdown,
   AgentOperationsSourceLink,
 } from './digest';

@@ -2,7 +2,9 @@ import { getMetricsService, type MetricsService } from './metrics/index.js';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
 import { getAgentPermissionService, type ApprovalRequest } from './agent-permission-service.js';
+import { getQueueIntakeMonitorService } from './queue-intake-monitor-service.js';
 import type {
+  QueueMonitorEvent,
   RunTelemetryEvent,
   Task,
   TaskTelemetryEvent,
@@ -96,6 +98,12 @@ export interface AgentOperationsApproval extends AgentOperationsSourceLink {
   details?: string;
 }
 
+export interface AgentOperationsQueueMonitorActivity extends AgentOperationsSourceLink {
+  status: QueueMonitorEvent['status'];
+  action: QueueMonitorEvent['action'];
+  skippedReasons: string[];
+}
+
 export interface AgentOperationsDigestGroup {
   key: string;
   project: string;
@@ -126,6 +134,7 @@ export interface AgentOperationsDigestGroup {
   topPlanCompletions: AgentOperationsSourceLink[];
   notableFailures: AgentOperationsFailure[];
   openApprovals: AgentOperationsApproval[];
+  queueMonitors: AgentOperationsQueueMonitorActivity[];
 }
 
 export interface AgentOperationsDigest {
@@ -156,6 +165,7 @@ export interface DigestMarkdownMessage {
 const DEFAULT_OPERATIONS_WINDOW_HOURS = 24;
 const MAX_OPERATIONS_WINDOW_HOURS = 24 * 30;
 const STUCK_TASK_MS = 2 * 60 * 60 * 1000;
+const MONITOR_PROJECT = 'operations';
 
 /**
  * Service for generating daily digest summaries
@@ -281,7 +291,7 @@ export class DigestService {
   ): Promise<AgentOperationsDigest> {
     const filters = normalizeOperationsOptions(options);
     const period = resolveOperationsPeriod(filters);
-    const [tasks, events, approvals] = await Promise.all([
+    const [tasks, events, approvals, queueMonitorList] = await Promise.all([
       this.taskService.listTasks(),
       this.telemetry.getEvents({
         since: period.start,
@@ -291,9 +301,11 @@ export class DigestService {
         limit: 10000,
       }),
       getAgentPermissionService().getPendingApprovals(),
+      getQueueIntakeMonitorService().list(new Date(period.end)),
     ]);
 
     const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const monitorById = new Map(queueMonitorList.monitors.map((monitor) => [monitor.id, monitor]));
     const groups = new Map<string, AgentOperationsDigestGroup>();
     const signalTimesByGroup = new Map<string, number[]>();
 
@@ -321,6 +333,7 @@ export class DigestService {
         topPlanCompletions: [],
         notableFailures: [],
         openApprovals: [],
+        queueMonitors: [],
       };
       groups.set(key, group);
       signalTimesByGroup.set(key, []);
@@ -431,12 +444,27 @@ export class DigestService {
       recordSignal(group, approval.createdAt);
     }
 
+    for (const event of queueMonitorList.recentEvents) {
+      if (!inPeriod(event.createdAt, period.start, period.end)) continue;
+      const monitor = monitorById.get(event.monitorId);
+      const context = {
+        project: MONITOR_PROJECT,
+        repo: monitor?.source.repo ?? 'unknown',
+      };
+      if (!matchesOperationsFilters(context, filters)) continue;
+      const group = getGroup(context.project, context.repo);
+      const monitorLink = queueMonitorSourceLink(event);
+      pushUnique(group.queueMonitors, monitorLink);
+      recordSignal(group, event.createdAt);
+    }
+
     for (const group of groups.values()) {
       const signals = signalTimesByGroup.get(group.key) ?? [];
       group.totals.wallTimeMs = observedWallTime(signals);
       group.topPlanCompletions = group.topPlanCompletions.slice(0, 5);
       group.notableFailures = group.notableFailures.slice(0, 5);
       group.openApprovals = group.openApprovals.slice(0, 10);
+      group.queueMonitors = group.queueMonitors.slice(0, 10);
     }
 
     const sortedGroups = Array.from(groups.values())
@@ -509,6 +537,14 @@ export class DigestService {
         lines.push('- Open approvals:');
         for (const approval of group.openApprovals) {
           lines.push(`  - ${approval.agent}: ${approval.action} (${approval.id})`);
+        }
+      }
+      if (group.queueMonitors.length > 0) {
+        lines.push('- Queue monitors:');
+        for (const monitor of group.queueMonitors) {
+          const skipped =
+            monitor.skippedReasons.length > 0 ? `; skipped ${monitor.skippedReasons.length}` : '';
+          lines.push(`  - ${monitor.label}: ${monitor.status}/${monitor.action}${skipped}`);
         }
       }
       lines.push('');
@@ -686,6 +722,7 @@ function groupHasActivity(group: AgentOperationsDigestGroup): boolean {
   return (
     groupActivityRank(group) > 0 ||
     group.openApprovals.length > 0 ||
+    group.queueMonitors.length > 0 ||
     group.sourceLinks.tokenEvents.length > 0
   );
 }
@@ -831,6 +868,18 @@ function approvalSourceLink(approval: ApprovalRequest): AgentOperationsApproval 
     agent: approval.agentId,
     action: approval.action,
     details: approval.details,
+  };
+}
+
+function queueMonitorSourceLink(event: QueueMonitorEvent): AgentOperationsQueueMonitorActivity {
+  return {
+    kind: 'telemetry',
+    id: event.id,
+    label: `${event.monitorId}: ${event.summary}`,
+    timestamp: event.createdAt,
+    status: event.status,
+    action: event.action,
+    skippedReasons: event.skippedReasons,
   };
 }
 

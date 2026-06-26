@@ -28,6 +28,12 @@ export interface AgentOperationsApproval extends AgentOperationsSourceLink {
   details?: string;
 }
 
+export interface AgentOperationsQueueMonitorActivity extends AgentOperationsSourceLink {
+  status: 'success' | 'failed' | 'skipped' | 'started' | 'blocked';
+  action: 'none' | 'dry-run' | 'assign' | 'draft-plan' | 'start-workflow' | 'blocked' | 'escalate';
+  skippedReasons: string[];
+}
+
 export interface AgentOperationsDigestGroup {
   key: string;
   project: string;
@@ -58,6 +64,7 @@ export interface AgentOperationsDigestGroup {
   topPlanCompletions: AgentOperationsSourceLink[];
   notableFailures: AgentOperationsFailure[];
   openApprovals: AgentOperationsApproval[];
+  queueMonitors?: AgentOperationsQueueMonitorActivity[];
 }
 
 export interface AgentOperationsDigest {

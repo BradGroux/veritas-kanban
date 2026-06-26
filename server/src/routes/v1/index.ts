@@ -33,6 +33,7 @@ import {
   feedbackAccess,
   notificationAccess,
   policyAccess,
+  queueMonitorAccess,
   skillCapabilityAccess,
   skillSecurityAccess,
   previewAccess,
@@ -136,6 +137,7 @@ import sandboxPolicyRoutes from '../sandbox-policies.js';
 import { runSessionRoutes } from '../run-sessions.js';
 import { workspaceCapabilityRoutes } from '../workspace-capabilities.js';
 import { schedulerRoutes } from '../scheduler.js';
+import { queueMonitorRoutes } from '../queue-monitors.js';
 
 const v1Router: IRouter = Router();
 
@@ -230,6 +232,7 @@ v1Router.use('/lessons', taskReadAccess, lessonsRoutes);
 v1Router.use('/delegation', delegationAccess, delegationRoutes);
 v1Router.use('/workflows', workflowAccess, workflowRoutes);
 v1Router.use('/scheduler', schedulerAccess, schedulerRoutes);
+v1Router.use('/queue-monitors', queueMonitorAccess, queueMonitorRoutes);
 v1Router.use('/watcher-policies', watcherPolicyAccess, watcherPolicyRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);

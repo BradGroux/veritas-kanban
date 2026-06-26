@@ -34,27 +34,28 @@
 21. [Task Subtasks](#task-subtasks)
 22. [Task Deliverables](#task-deliverables)
 23. [Recurring Work Scheduler](#recurring-work-scheduler)
-24. [Task Archive](#task-archive)
-25. [Attachments](#attachments)
-26. [Agent Permissions](#agent-permissions)
-27. [Agent Routing](#agent-routing)
-28. [Sandbox Policies](#sandbox-policies)
-29. [Shared Resources](#shared-resources)
-30. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-31. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-32. [Doc Freshness](#doc-freshness)
-33. [Cost Prediction](#cost-prediction)
-34. [Error Learning](#error-learning)
-35. [Tool Policies](#tool-policies)
-36. [Watcher Continuation Policies](#watcher-continuation-policies)
-37. [Traces](#traces)
-38. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-39. [Audit](#audit)
-40. [Maintenance Center](#maintenance-center-apiv1maintenance)
-41. [Common Workflows](#common-workflows)
-42. [Versioning & Deprecation](#versioning--deprecation)
-43. [Rate Limits](#rate-limits)
-44. [Additional Endpoint Groups](#additional-endpoint-groups)
+24. [Queue Intake Monitors](#queue-intake-monitors)
+25. [Task Archive](#task-archive)
+26. [Attachments](#attachments)
+27. [Agent Permissions](#agent-permissions)
+28. [Agent Routing](#agent-routing)
+29. [Sandbox Policies](#sandbox-policies)
+30. [Shared Resources](#shared-resources)
+31. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+32. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+33. [Doc Freshness](#doc-freshness)
+34. [Cost Prediction](#cost-prediction)
+35. [Error Learning](#error-learning)
+36. [Tool Policies](#tool-policies)
+37. [Watcher Continuation Policies](#watcher-continuation-policies)
+38. [Traces](#traces)
+39. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+40. [Audit](#audit)
+41. [Maintenance Center](#maintenance-center-apiv1maintenance)
+42. [Common Workflows](#common-workflows)
+43. [Versioning & Deprecation](#versioning--deprecation)
+44. [Rate Limits](#rate-limits)
+45. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1290,6 +1291,7 @@ Item IDs use the source prefix:
 
 - `scheduled-deliverable:<deliverableId>`
 - `workflow:<workflowId>`
+- `queue-monitor:<monitorId>`
 
 ### Run Item Now
 
@@ -1330,6 +1332,47 @@ POST /api/scheduler/due/run
 ```
 
 Runs all due standard schedules and refuses overlapping due-run passes.
+
+---
+
+## Queue Intake Monitors
+
+Scan bounded GitHub issue and PR queues, build candidate packets, and gate assign/execute actions through policy, budget, sandbox, auth, and workflow preflight checks.
+
+Mounted at `/api/queue-monitors`.
+
+| Method | Path                              | Description                                                |
+| ------ | --------------------------------- | ---------------------------------------------------------- |
+| `GET`  | `/api/queue-monitors`             | List monitors, health, candidate packet state, and events  |
+| `GET`  | `/api/queue-monitors/:id`         | Read one monitor                                           |
+| `PUT`  | `/api/queue-monitors/:id`         | Update mode, runner, labels, caps, workflow, and guardrail |
+| `GET`  | `/api/queue-monitors/:id/health`  | Read health and visible action item state                  |
+| `GET`  | `/api/queue-monitors/:id/explain` | Build a fresh packet and planned action without mutation   |
+| `POST` | `/api/queue-monitors/:id/run`     | Run one monitor now                                        |
+| `POST` | `/api/queue-monitors/:id/pause`   | Pause one monitor                                          |
+| `POST` | `/api/queue-monitors/:id/resume`  | Resume one monitor                                         |
+
+### Monitor Modes
+
+- `dry-run` records the selected candidate and skipped reasons without assigning or starting work.
+- `assign-only` can assign the selected GitHub issue/PR only after watcher policy, budget, sandbox, and stop-condition checks pass.
+- `draft-plan` records a local plan intent without GitHub mutation or workflow launch.
+- `execute` can start `workflowId` only after watcher policy, budget, sandbox, workflow dry-run, auth, and stop-condition checks pass.
+
+`runner: "local"` is executable in this version. `runner: "github-actions"` is persisted for monitor definitions but launch is blocked until a workflow-dispatch adapter is configured.
+
+### Candidate Packet
+
+Each run stores a bounded packet with:
+
+- `candidates`: issue/PR records with labels, assignees, CI state, score, reasons, and blockers
+- `selected`: first unblocked candidate after deterministic scoring
+- `skipped`: candidate IDs and skipped-work reasons
+- `checks`: GitHub scan, watcher policy, sandbox, budget, and workflow gate checks
+
+Repeated `failed` or `blocked` runs increment `failureStreak`. When the monitor reaches `stopConditions.maxFailureStreak`, health becomes `blocked` and `actionItem` explains what must be fixed before resuming.
+
+Queue monitor events are included in the operations digest when they fall inside the selected digest window.
 
 ---
 
