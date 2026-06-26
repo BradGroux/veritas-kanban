@@ -1,21 +1,33 @@
 import {
   Badge,
+  Button,
   Code,
   Group,
   Paper,
+  PasswordInput,
   Select,
   SimpleGrid,
   Stack,
   Text,
   TextInput,
 } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
-import { api, type OutboundDeliveryAttempt, type OutboundEndpointRecord } from '@/lib/api';
+import {
+  api,
+  type CommunicationAdapterInput,
+  type CommunicationAdapterRecord,
+  type CommunicationDeliveryAudit,
+  type OutboundDeliveryAttempt,
+  type OutboundEndpointRecord,
+} from '@/lib/api';
 
 type CommunicationState = 'ok' | 'warn' | 'off' | 'unknown';
+
+const DEFAULT_COMMUNICATION_ADAPTER_ID = 'msteams-default';
 
 const STATE_COLORS: Record<CommunicationState, string> = {
   ok: 'green',
@@ -100,14 +112,139 @@ function endpointLabel(endpoint?: OutboundEndpointRecord): string {
   return endpoint.enabled ? 'endpoint enabled' : 'endpoint disabled';
 }
 
+function adapterHealthState(adapter?: CommunicationAdapterRecord): CommunicationState {
+  if (!adapter || !adapter.enabled) return 'off';
+  if (adapter.lastHealth?.status === 'error') return 'warn';
+  if (adapter.lastHealth?.status === 'warning') return 'warn';
+  return 'ok';
+}
+
+function formatCommunicationDelivery(delivery?: CommunicationDeliveryAudit): string {
+  if (!delivery) return 'not recorded';
+  const target = delivery.target?.kind ? ` ${delivery.target.kind}` : '';
+  return `${delivery.operation}${target}: ${delivery.status} at ${new Date(delivery.createdAt).toLocaleString()}`;
+}
+
+interface AdapterFormState {
+  displayName: string;
+  enabled: boolean;
+  deliveryMode: 'manual' | 'webhook';
+  destinationType: 'channel' | 'direct';
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+  chatId: string;
+  webhookUrl: string;
+  credential: string;
+}
+
+function adapterToForm(adapter?: CommunicationAdapterRecord): AdapterFormState {
+  return {
+    displayName: adapter?.displayName ?? 'Microsoft Teams',
+    enabled: adapter?.enabled ?? false,
+    deliveryMode: adapter?.deliveryMode ?? 'manual',
+    destinationType: adapter?.destinationType ?? 'channel',
+    tenantId: adapter?.tenantId ?? '',
+    teamId: adapter?.teamId ?? '',
+    channelId: adapter?.channelId ?? '',
+    chatId: adapter?.chatId ?? '',
+    webhookUrl: adapter?.webhookUrlRedacted ? '' : (adapter?.webhookUrl ?? ''),
+    credential: '',
+  };
+}
+
+function formToInput(form: AdapterFormState): CommunicationAdapterInput {
+  return {
+    kind: 'msteams',
+    displayName: form.displayName,
+    enabled: form.enabled,
+    deliveryMode: form.deliveryMode,
+    destinationType: form.destinationType,
+    tenantId: form.tenantId || undefined,
+    teamId: form.teamId || undefined,
+    channelId: form.channelId || undefined,
+    chatId: form.chatId || undefined,
+    webhookUrl: form.webhookUrl || undefined,
+    credential: form.credential || undefined,
+  };
+}
+
 export function NotificationsTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const queryClient = useQueryClient();
   const { data: outboundEndpoints = [] } = useQuery({
     queryKey: ['integrations', 'outbound', 'endpoints'],
     queryFn: api.integrations.outboundEndpoints,
     staleTime: 30_000,
     retry: false,
+  });
+  const { data: communicationAdapters = [] } = useQuery({
+    queryKey: ['integrations', 'communication', 'adapters'],
+    queryFn: api.integrations.communicationAdapters,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const communicationAdapter = communicationAdapters.find(
+    (adapter) => adapter.id === DEFAULT_COMMUNICATION_ADAPTER_ID
+  );
+  const { data: communicationDeliveries = [] } = useQuery({
+    queryKey: ['integrations', 'communication', 'deliveries', DEFAULT_COMMUNICATION_ADAPTER_ID, 10],
+    queryFn: () => api.integrations.communicationDeliveries(10, DEFAULT_COMMUNICATION_ADAPTER_ID),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const { data: communicationHealth } = useQuery({
+    queryKey: ['integrations', 'communication', 'health', DEFAULT_COMMUNICATION_ADAPTER_ID],
+    queryFn: () => api.integrations.communicationHealth(DEFAULT_COMMUNICATION_ADAPTER_ID),
+    enabled: Boolean(communicationAdapter),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const [adapterForm, setAdapterForm] = useState<AdapterFormState>(() =>
+    adapterToForm(communicationAdapter)
+  );
+  const [adapterDirty, setAdapterDirty] = useState(false);
+
+  useEffect(() => {
+    if (adapterDirty) return;
+    setAdapterForm(adapterToForm(communicationAdapter));
+  }, [adapterDirty, communicationAdapter]);
+
+  const invalidateCommunication = () => {
+    void queryClient.invalidateQueries({ queryKey: ['integrations', 'communication'] });
+    void queryClient.invalidateQueries({ queryKey: ['integrations', 'outbound'] });
+  };
+
+  const saveAdapter = useMutation({
+    mutationFn: () =>
+      api.integrations.configureCommunicationAdapter(
+        DEFAULT_COMMUNICATION_ADAPTER_ID,
+        formToInput(adapterForm)
+      ),
+    onSuccess: () => {
+      setAdapterDirty(false);
+      setAdapterForm((current) => ({ ...current, credential: '' }));
+      invalidateCommunication();
+    },
+  });
+
+  const testAdapter = useMutation({
+    mutationFn: () =>
+      api.integrations.testCommunicationAdapter(
+        DEFAULT_COMMUNICATION_ADAPTER_ID,
+        'Veritas communication adapter test'
+      ),
+    onSuccess: invalidateCommunication,
+  });
+
+  const disconnectAdapter = useMutation({
+    mutationFn: () =>
+      api.integrations.disconnectCommunicationAdapter(DEFAULT_COMMUNICATION_ADAPTER_ID),
+    onSuccess: () => {
+      setAdapterDirty(false);
+      invalidateCommunication();
+    },
   });
   const { data: outboundDeliveries = [] } = useQuery({
     queryKey: ['integrations', 'outbound', 'deliveries', 25],
@@ -116,11 +253,11 @@ export function NotificationsTab() {
     retry: false,
   });
 
-  const updateNotifications = (key: string, value: any) => {
+  const updateNotifications = (key: string, value: unknown) => {
     debouncedUpdate({ notifications: { [key]: value } });
   };
 
-  const updateSquadWebhook = (key: string, value: any) => {
+  const updateSquadWebhook = (key: string, value: unknown) => {
     debouncedUpdate({ squadWebhook: { [key]: value } });
   };
 
@@ -154,6 +291,16 @@ export function NotificationsTab() {
   const squadDelivery = findDelivery(outboundDeliveries, squadEndpointId);
   const notificationEndpoint = findEndpoint(outboundEndpoints, 'notifications.failureAlert');
   const failureDelivery = findDelivery(outboundDeliveries, 'notifications.failureAlert');
+  const latestCommunicationDelivery = communicationDeliveries[0];
+  const effectiveCommunicationHealth = communicationHealth ?? communicationAdapter?.lastHealth;
+
+  const updateAdapterForm = <K extends keyof AdapterFormState>(
+    key: K,
+    value: AdapterFormState[K]
+  ) => {
+    setAdapterDirty(true);
+    setAdapterForm((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <div className="space-y-4">
@@ -204,17 +351,18 @@ export function NotificationsTab() {
           />
           <HealthCard
             title="Inbound Wake / Replies"
-            state={
-              webhookMode === 'openclaw' && squadWebhookEnabled && squadDestinationConfigured
-                ? 'ok'
-                : 'off'
-            }
+            state={adapterHealthState(communicationAdapter)}
             label={
-              webhookMode === 'openclaw' && squadWebhookEnabled && squadDestinationConfigured
-                ? 'OpenClaw configured'
-                : 'Not configured'
+              !communicationAdapter?.enabled
+                ? 'Disabled'
+                : effectiveCommunicationHealth?.status === 'ok'
+                  ? 'Configured'
+                  : 'Needs check'
             }
-            detail="Generic webhooks are outbound only. OpenClaw Direct can wake a gateway; replies still require the external orchestrator."
+            detail={
+              effectiveCommunicationHealth?.detail ??
+              'Configure a bidirectional adapter to map external replies back into Squad Chat threads.'
+            }
           />
           <Paper withBorder radius="md" p="sm">
             <Stack gap={4}>
@@ -237,6 +385,178 @@ export function NotificationsTab() {
             </Stack>
           </Paper>
         </SimpleGrid>
+      </div>
+
+      <div className="border-t my-6" />
+
+      <div className="space-y-4">
+        <SectionHeader title="Human Reply Adapter" />
+        <p className="text-sm text-muted-foreground -mt-2">
+          Route approved external replies back into Squad Chat threads with attribution and audit
+        </p>
+        <Paper withBorder radius="md" p="sm">
+          <Stack gap="sm">
+            <Group justify="space-between" gap="sm">
+              <div>
+                <Text size="sm" fw={600}>
+                  Microsoft Teams
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {communicationAdapter?.webhookUrlConfigured
+                    ? `Webhook: ${redactDestination(communicationAdapter.webhookUrl)}`
+                    : adapterForm.deliveryMode === 'webhook'
+                      ? 'Webhook delivery needs a URL'
+                      : 'Manual delivery stores thread mappings for reply ingestion'}
+                </Text>
+              </div>
+              <Badge
+                color={STATE_COLORS[adapterHealthState(communicationAdapter)]}
+                variant="light"
+                tt="none"
+              >
+                {communicationAdapter?.enabled
+                  ? (communicationAdapter.lastHealth?.status ?? 'configured')
+                  : 'disabled'}
+              </Badge>
+            </Group>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+              <TextInput
+                label="Display name"
+                value={adapterForm.displayName}
+                onChange={(event) => updateAdapterForm('displayName', event.target.value)}
+                size="xs"
+              />
+              <Select
+                label="Delivery"
+                value={adapterForm.deliveryMode}
+                onChange={(value) =>
+                  value &&
+                  updateAdapterForm('deliveryMode', value as AdapterFormState['deliveryMode'])
+                }
+                data={[
+                  { value: 'manual', label: 'Manual thread mapping' },
+                  { value: 'webhook', label: 'Webhook send' },
+                ]}
+                allowDeselect={false}
+                size="xs"
+              />
+              <Select
+                label="Destination"
+                value={adapterForm.destinationType}
+                onChange={(value) =>
+                  value &&
+                  updateAdapterForm('destinationType', value as AdapterFormState['destinationType'])
+                }
+                data={[
+                  { value: 'channel', label: 'Channel' },
+                  { value: 'direct', label: 'Direct chat' },
+                ]}
+                allowDeselect={false}
+                size="xs"
+              />
+              <TextInput
+                label="Tenant ID"
+                value={adapterForm.tenantId}
+                onChange={(event) => updateAdapterForm('tenantId', event.target.value)}
+                size="xs"
+              />
+              {adapterForm.destinationType === 'channel' ? (
+                <>
+                  <TextInput
+                    label="Team ID"
+                    value={adapterForm.teamId}
+                    onChange={(event) => updateAdapterForm('teamId', event.target.value)}
+                    size="xs"
+                  />
+                  <TextInput
+                    label="Channel ID"
+                    value={adapterForm.channelId}
+                    onChange={(event) => updateAdapterForm('channelId', event.target.value)}
+                    size="xs"
+                  />
+                </>
+              ) : (
+                <TextInput
+                  label="Chat ID"
+                  value={adapterForm.chatId}
+                  onChange={(event) => updateAdapterForm('chatId', event.target.value)}
+                  size="xs"
+                />
+              )}
+              {adapterForm.deliveryMode === 'webhook' && (
+                <TextInput
+                  label="Webhook URL"
+                  value={adapterForm.webhookUrl}
+                  onChange={(event) => updateAdapterForm('webhookUrl', event.target.value)}
+                  placeholder={
+                    communicationAdapter?.webhookUrlConfigured
+                      ? 'Saved URL is redacted; enter a new URL to replace it'
+                      : 'https://example.com/teams-adapter'
+                  }
+                  type="url"
+                  size="xs"
+                />
+              )}
+              <PasswordInput
+                label="Credential"
+                value={adapterForm.credential}
+                onChange={(event) => updateAdapterForm('credential', event.target.value)}
+                placeholder={
+                  communicationAdapter?.hasCredential
+                    ? 'Saved credential is write-only'
+                    : 'Optional adapter token'
+                }
+                size="xs"
+              />
+            </SimpleGrid>
+            <ToggleRow
+              label="Enable Adapter"
+              description="Allow outbound sends and inbound reply ingestion for this adapter"
+              checked={adapterForm.enabled}
+              onCheckedChange={(value) => updateAdapterForm('enabled', value)}
+            />
+            <Group justify="space-between" gap="sm">
+              <Text size="xs" c="dimmed">
+                Last adapter event: {formatCommunicationDelivery(latestCommunicationDelivery)}
+              </Text>
+              <Group gap="xs">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="light"
+                  color="gray"
+                  onClick={() => testAdapter.mutate()}
+                  disabled={!communicationAdapter || testAdapter.isPending || saveAdapter.isPending}
+                >
+                  Test Send
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="light"
+                  color="red"
+                  onClick={() => disconnectAdapter.mutate()}
+                  disabled={!communicationAdapter || disconnectAdapter.isPending}
+                >
+                  Disconnect
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={() => saveAdapter.mutate()}
+                  disabled={saveAdapter.isPending}
+                >
+                  Save Adapter
+                </Button>
+              </Group>
+            </Group>
+            {(saveAdapter.error || testAdapter.error || disconnectAdapter.error) && (
+              <Text size="xs" c="red">
+                {(saveAdapter.error || testAdapter.error || disconnectAdapter.error)?.message}
+              </Text>
+            )}
+          </Stack>
+        </Paper>
       </div>
 
       <div className="border-t my-6" />

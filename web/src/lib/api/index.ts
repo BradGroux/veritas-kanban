@@ -91,6 +91,17 @@ export type { WorkProductExportFormat, WorkProductExportOptions } from './work-p
 export type { TraceStatus } from './traces';
 export type { SqlitePortabilityReport } from './maintenance';
 export type {
+  CommunicationAdapterHealth,
+  CommunicationAdapterInput,
+  CommunicationAdapterRecord,
+  CommunicationDeliveryAudit,
+  CommunicationReplyIngestInput,
+  CommunicationReplyIngestResult,
+  CommunicationSendInput,
+  CommunicationSendResult,
+  CommunicationThreadMapping,
+} from '@veritas-kanban/shared';
+export type {
   OutboundDeliveryAttempt,
   OutboundDeliveryStatus,
   OutboundEndpointRecord,

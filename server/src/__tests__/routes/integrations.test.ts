@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 
 const { mockLookup } = vi.hoisted(() => ({
@@ -8,6 +8,22 @@ const { mockLookup } = vi.hoisted(() => ({
 
 const { mockSafeFetch } = vi.hoisted(() => ({
   mockSafeFetch: vi.fn(),
+}));
+
+const { mockCommunicationAdapters, mockBroadcastSquadMessage } = vi.hoisted(() => ({
+  mockCommunicationAdapters: {
+    listAdapters: vi.fn(),
+    getAdapter: vi.fn(),
+    configureAdapter: vi.fn(),
+    checkHealth: vi.fn(),
+    send: vi.fn(),
+    ingestReply: vi.fn(),
+    pollReplies: vi.fn(),
+    disconnectAdapter: vi.fn(),
+    listMappings: vi.fn(),
+    listDeliveries: vi.fn(),
+  },
+  mockBroadcastSquadMessage: vi.fn(),
 }));
 
 vi.mock('node:dns/promises', () => ({
@@ -34,8 +50,26 @@ vi.mock('../../services/config-service.js', () => ({
   },
 }));
 
+vi.mock('../../services/communication-adapter-service.js', () => ({
+  DEFAULT_ADAPTER_ID: 'msteams-default',
+  getCommunicationAdapterService: () => mockCommunicationAdapters,
+}));
+
+vi.mock('../../services/broadcast-service.js', () => ({
+  broadcastSquadMessage: mockBroadcastSquadMessage,
+}));
+
 import { integrationsRoutes } from '../../routes/integrations.js';
 import { getOutboundIntegrationService } from '../../services/outbound-integration-service.js';
+
+interface TestAuthRequest extends Request {
+  auth?: { role: string; permissions: string[] };
+}
+
+interface TestError extends Error {
+  statusCode?: number;
+  code?: string;
+}
 
 describe('integrations routes', () => {
   let app: express.Express;
@@ -49,8 +83,102 @@ describe('integrations routes', () => {
       status: 200,
       text: vi.fn().mockResolvedValue(''),
     } as unknown as Response);
+    mockCommunicationAdapters.listAdapters.mockResolvedValue([]);
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'msteams-default',
+      kind: 'msteams',
+      displayName: 'Microsoft Teams',
+      enabled: true,
+    });
+    mockCommunicationAdapters.configureAdapter.mockResolvedValue({
+      id: 'msteams-default',
+      kind: 'msteams',
+      displayName: 'Microsoft Teams',
+      enabled: true,
+      webhookUrl: 'https://example.com/hooks/teams',
+      webhookUrlConfigured: true,
+      webhookUrlRedacted: true,
+      hasCredential: true,
+    });
+    mockCommunicationAdapters.checkHealth.mockResolvedValue({
+      adapterId: 'msteams-default',
+      status: 'ok',
+      configured: true,
+      canSend: true,
+      canReceiveReplies: true,
+      checkedAt: '2026-06-26T18:00:00.000Z',
+      detail: 'ok',
+    });
+    mockCommunicationAdapters.send.mockResolvedValue({
+      delivery: {
+        id: 'comm_1',
+        adapterId: 'msteams-default',
+        operation: 'send',
+        status: 'queued',
+        createdAt: '2026-06-26T18:00:00.000Z',
+      },
+      mapping: {
+        id: 'map_1',
+        adapterId: 'msteams-default',
+        externalThreadId: 'thread-1',
+        target: { kind: 'notification' },
+        createdAt: '2026-06-26T18:00:00.000Z',
+        updatedAt: '2026-06-26T18:00:00.000Z',
+      },
+    });
+    mockCommunicationAdapters.ingestReply.mockResolvedValue({
+      delivery: {
+        id: 'comm_2',
+        adapterId: 'msteams-default',
+        operation: 'reply-ingest',
+        status: 'success',
+        createdAt: '2026-06-26T18:01:00.000Z',
+      },
+      mapping: {
+        id: 'map_1',
+        adapterId: 'msteams-default',
+        externalThreadId: 'thread-1',
+        target: { kind: 'squad', squadMessageId: 'msg_root' },
+        createdAt: '2026-06-26T18:00:00.000Z',
+        updatedAt: '2026-06-26T18:01:00.000Z',
+      },
+      squadMessageId: 'msg_reply',
+      squadMessage: {
+        id: 'msg_reply',
+        agent: 'alice',
+        message: 'reply',
+        timestamp: '2026-06-26T18:01:00.000Z',
+      },
+    });
+    mockCommunicationAdapters.pollReplies.mockResolvedValue({
+      delivery: {
+        id: 'comm_3',
+        adapterId: 'msteams-default',
+        operation: 'poll',
+        status: 'skipped',
+        createdAt: '2026-06-26T18:02:00.000Z',
+      },
+      replies: [],
+    });
+    mockCommunicationAdapters.disconnectAdapter.mockResolvedValue({
+      id: 'msteams-default',
+      kind: 'msteams',
+      displayName: 'Microsoft Teams',
+      enabled: false,
+      hasCredential: false,
+    });
+    mockCommunicationAdapters.listMappings.mockResolvedValue([]);
+    mockCommunicationAdapters.listDeliveries.mockResolvedValue([]);
     app = express();
+    app.use(express.json());
+    app.use((req: TestAuthRequest, _res: Response, next: NextFunction) => {
+      req.auth = { role: 'read-only', permissions: ['settings:read'] };
+      next();
+    });
     app.use('/api/integrations', integrationsRoutes);
+    app.use((err: TestError, _req: Request, res: Response, _next: NextFunction) => {
+      res.status(err.statusCode || 500).json({ code: err.code || 'ERROR', message: err.message });
+    });
   });
 
   afterEach(() => {
@@ -167,5 +295,66 @@ describe('integrations routes', () => {
     const responsePayload = JSON.stringify({ endpoint, attempt });
     expect(responsePayload).not.toContain('query-secret');
     expect(responsePayload).not.toContain('raw-token-value');
+  });
+
+  it('configures communication adapters without exposing secrets', async () => {
+    const res = await request(app)
+      .put('/api/integrations/communication/adapters/msteams-default')
+      .send({
+        displayName: 'Microsoft Teams',
+        enabled: true,
+        deliveryMode: 'webhook',
+        webhookUrl: 'https://example.com/hooks/teams?token=query-secret',
+        credential: 'raw-secret',
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockCommunicationAdapters.configureAdapter).toHaveBeenCalledWith(
+      'msteams-default',
+      expect.objectContaining({ credential: 'raw-secret' })
+    );
+    expect(JSON.stringify(res.body)).not.toContain('query-secret');
+    expect(JSON.stringify(res.body)).not.toContain('raw-secret');
+    expect(res.body).toMatchObject({
+      webhookUrl: 'https://example.com/hooks/teams',
+      webhookUrlConfigured: true,
+      webhookUrlRedacted: true,
+      hasCredential: true,
+    });
+  });
+
+  it('ingests communication replies and broadcasts the resulting squad message', async () => {
+    const res = await request(app)
+      .post('/api/integrations/communication/adapters/msteams-default/replies')
+      .send({
+        externalThreadId: 'thread-1',
+        externalReplyId: 'reply-1',
+        actor: 'alice',
+        message: 'Looks good',
+        target: { kind: 'squad', squadMessageId: 'msg_root' },
+      });
+
+    expect(res.status).toBe(201);
+    expect(mockCommunicationAdapters.ingestReply).toHaveBeenCalledWith(
+      'msteams-default',
+      expect.objectContaining({ externalReplyId: 'reply-1' })
+    );
+    expect(mockBroadcastSquadMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'msg_reply' })
+    );
+  });
+
+  it('rejects approval replies without approval-capable permissions', async () => {
+    const res = await request(app)
+      .post('/api/integrations/communication/adapters/msteams-default/replies')
+      .send({
+        externalThreadId: 'thread-1',
+        actor: 'alice',
+        message: 'approve',
+        target: { kind: 'approval', approvalId: 'approval-1' },
+      });
+
+    expect(res.status).toBe(403);
+    expect(mockCommunicationAdapters.ingestReply).not.toHaveBeenCalled();
   });
 });

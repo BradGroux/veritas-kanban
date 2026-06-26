@@ -67,6 +67,93 @@ const mocks = vi.hoisted(() => ({
       completedAt: '2026-06-04T08:00:02.000Z',
     },
   ]),
+  communicationAdapters: vi.fn(async () => [
+    {
+      id: 'msteams-default',
+      kind: 'msteams',
+      displayName: 'Microsoft Teams',
+      enabled: true,
+      deliveryMode: 'manual',
+      replyMode: 'ingest-api',
+      destinationType: 'channel',
+      teamId: 'team-1',
+      channelId: 'channel-1',
+      hasCredential: false,
+      createdAt: '2026-06-04T08:00:00.000Z',
+      updatedAt: '2026-06-04T08:00:00.000Z',
+      lastHealth: {
+        adapterId: 'msteams-default',
+        status: 'ok',
+        configured: true,
+        canSend: true,
+        canReceiveReplies: true,
+        checkedAt: '2026-06-04T08:00:00.000Z',
+        detail:
+          'Adapter can send through the configured delivery path and receive replies through the ingest API.',
+      },
+    },
+  ]),
+  communicationHealth: vi.fn(async () => ({
+    adapterId: 'msteams-default',
+    status: 'ok',
+    configured: true,
+    canSend: true,
+    canReceiveReplies: true,
+    checkedAt: '2026-06-04T08:00:00.000Z',
+    detail:
+      'Adapter can send through the configured delivery path and receive replies through the ingest API.',
+  })),
+  communicationDeliveries: vi.fn(async () => [
+    {
+      id: 'comm_1',
+      adapterId: 'msteams-default',
+      operation: 'send',
+      status: 'queued',
+      target: { kind: 'notification' },
+      createdAt: '2026-06-04T08:00:00.000Z',
+    },
+  ]),
+  configureCommunicationAdapter: vi.fn(async () => ({
+    id: 'msteams-default',
+    kind: 'msteams',
+    displayName: 'Microsoft Teams',
+    enabled: true,
+    deliveryMode: 'manual',
+    replyMode: 'ingest-api',
+    destinationType: 'channel',
+    hasCredential: false,
+    createdAt: '2026-06-04T08:00:00.000Z',
+    updatedAt: '2026-06-04T08:00:00.000Z',
+  })),
+  testCommunicationAdapter: vi.fn(async () => ({
+    delivery: {
+      id: 'comm_test',
+      adapterId: 'msteams-default',
+      operation: 'send',
+      status: 'queued',
+      createdAt: '2026-06-04T08:00:00.000Z',
+    },
+    mapping: {
+      id: 'map_1',
+      adapterId: 'msteams-default',
+      externalThreadId: 'msteams-default:notification:adapter-test',
+      target: { kind: 'notification', notificationId: 'adapter-test' },
+      createdAt: '2026-06-04T08:00:00.000Z',
+      updatedAt: '2026-06-04T08:00:00.000Z',
+    },
+  })),
+  disconnectCommunicationAdapter: vi.fn(async () => ({
+    id: 'msteams-default',
+    kind: 'msteams',
+    displayName: 'Microsoft Teams',
+    enabled: false,
+    deliveryMode: 'manual',
+    replyMode: 'ingest-api',
+    destinationType: 'channel',
+    hasCredential: false,
+    createdAt: '2026-06-04T08:00:00.000Z',
+    updatedAt: '2026-06-04T08:00:00.000Z',
+  })),
   settings: {
     board: {},
     tasks: {},
@@ -114,6 +201,12 @@ vi.mock('@/lib/api', () => ({
     integrations: {
       outboundEndpoints: mocks.outboundEndpoints,
       outboundDeliveries: mocks.outboundDeliveries,
+      communicationAdapters: mocks.communicationAdapters,
+      communicationHealth: mocks.communicationHealth,
+      communicationDeliveries: mocks.communicationDeliveries,
+      configureCommunicationAdapter: mocks.configureCommunicationAdapter,
+      testCommunicationAdapter: mocks.testCommunicationAdapter,
+      disconnectCommunicationAdapter: mocks.disconnectCommunicationAdapter,
     },
   },
 }));
@@ -180,6 +273,7 @@ describe('Settings tab Mantine controls', () => {
 
     expect(await screen.findByText('Communication Health')).toBeDefined();
     expect(screen.getByText('Local Squad Chat')).toBeDefined();
+    expect(screen.getByText('Human Reply Adapter')).toBeDefined();
     expect(screen.getAllByText('Squad Chat Webhook').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Visually verified: not recorded in VK/).length).toBeGreaterThan(0);
     expect(screen.getByText('X-VK-Signature')).toBeDefined();

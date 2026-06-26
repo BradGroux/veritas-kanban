@@ -325,7 +325,18 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'admin:manage',
     overrides: [{ methods: ['POST'], path: /^\/scan\/?$/, permissions: 'admin:manage' }],
   },
-  { prefix: '/api/integrations', read: 'settings:read', write: 'settings:write' },
+  {
+    prefix: '/api/integrations',
+    read: 'settings:read',
+    write: 'settings:write',
+    overrides: [
+      {
+        methods: ['POST'],
+        path: /^\/communication\/adapters\/[^/]+\/replies\/?$/,
+        permissions: 'comment:write',
+      },
+    ],
+  },
   { prefix: '/api/transcripts', read: 'workspace:read', write: 'workflow:execute' },
   {
     prefix: '/api/scoring',

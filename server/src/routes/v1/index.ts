@@ -31,6 +31,7 @@ import {
   delegationAccess,
   diffAccess,
   feedbackAccess,
+  integrationsAccess,
   notificationAccess,
   policyAccess,
   queueMonitorAccess,
@@ -239,7 +240,7 @@ v1Router.use('/policies', policyAccess, policyRoutes);
 v1Router.use('/sandbox-policies', sandboxPolicyAccess, sandboxPolicyRoutes);
 v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);
 v1Router.use('/skills/security', skillSecurityAccess, skillSecurityRoutes);
-v1Router.use('/integrations', settingsAccess, integrationsRoutes);
+v1Router.use('/integrations', integrationsAccess, integrationsRoutes);
 v1Router.use('/transcripts', transcriptAccess, transcriptRoutes);
 v1Router.use('/scoring', scoringAccess, scoringRoutes);
 v1Router.use('/system/health', workspaceAccess, systemHealthRouter);
