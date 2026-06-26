@@ -8,7 +8,11 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getChatService } from '../services/chat-service.js';
 import { sendGatewayChat, loadGatewayToken } from '../services/gateway-chat-client.js';
-import { broadcastChatMessage, broadcastSquadMessage } from '../services/broadcast-service.js';
+import {
+  broadcastChatMessage,
+  broadcastSquadEvent,
+  broadcastSquadMessage,
+} from '../services/broadcast-service.js';
 import { fireSquadWebhook } from '../services/squad-webhook-service.js';
 import { ConfigService } from '../services/config-service.js';
 import { getVeritasContextService } from '../services/veritas-context-service.js';
@@ -47,6 +51,37 @@ const squadMessageSchema = z.object({
   taskTitle: z.string().optional(),
   duration: z.string().optional(),
   card: z.record(z.string(), z.unknown()).optional(), // Adaptive Card v1.5 JSON
+  replyToId: z.string().optional(),
+  mentions: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({
+          target: z.string().min(1),
+          kind: z.enum(['user', 'agent', 'role', 'owner']).optional(),
+        }),
+      ])
+    )
+    .optional(),
+  taskId: z.string().optional(),
+  runId: z.string().optional(),
+  pinned: z.boolean().optional(),
+  decision: z.boolean().optional(),
+});
+
+const squadReadSchema = z.object({
+  actor: z.string().min(1, 'Actor required'),
+  messageId: z.string().optional(),
+});
+
+const squadStateSchema = z.object({
+  pinned: z.boolean().optional(),
+  decision: z.boolean().optional(),
+});
+
+const squadReactionSchema = z.object({
+  actor: z.string().min(1, 'Actor required'),
+  reaction: z.string().min(1).max(32),
 });
 
 /**
@@ -290,6 +325,12 @@ router.post(
         taskTitle: validatedInput.taskTitle,
         duration: validatedInput.duration,
         card: validatedInput.card,
+        replyToId: validatedInput.replyToId,
+        mentions: validatedInput.mentions,
+        taskId: validatedInput.taskId,
+        runId: validatedInput.runId,
+        pinned: validatedInput.pinned,
+        decision: validatedInput.decision,
       },
       displayName
     );
@@ -301,6 +342,13 @@ router.post(
 
     // Broadcast to WebSocket clients
     broadcastSquadMessage(message);
+    if (message.mentions?.length) {
+      broadcastSquadEvent({
+        type: 'squad:mention',
+        message,
+        mentions: message.mentions,
+      });
+    }
 
     // Fire webhook if configured (async, don't block response)
     if (config.squadWebhook) {
@@ -334,6 +382,141 @@ router.get(
     });
 
     res.json(messages);
+  })
+);
+
+/**
+ * GET /api/chat/squad/search
+ * Search squad messages over redacted, bounded snippets.
+ */
+router.get(
+  '/squad/search',
+  asyncHandler(async (req, res) => {
+    const query = typeof req.query.q === 'string' ? req.query.q : '';
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
+    const agent = typeof req.query.agent === 'string' ? req.query.agent : undefined;
+    const includeSystem = req.query.includeSystem === 'false' ? false : true;
+
+    const results = await chatService.searchSquadMessages({
+      query,
+      limit,
+      agent,
+      includeSystem,
+    });
+
+    res.json(results);
+  })
+);
+
+/**
+ * GET /api/chat/squad/unread
+ * Get unread state for a user/agent actor.
+ */
+router.get(
+  '/squad/unread',
+  asyncHandler(async (req, res) => {
+    const actor = typeof req.query.actor === 'string' ? req.query.actor : undefined;
+    if (!actor) {
+      res.status(400).json({ code: 'INVALID_REQUEST', message: 'actor query param is required' });
+      return;
+    }
+
+    const unread = await chatService.getSquadUnreadState(actor);
+    res.json(unread);
+  })
+);
+
+/**
+ * POST /api/chat/squad/read
+ * Mark squad messages read for a user/agent actor.
+ */
+router.post(
+  '/squad/read',
+  asyncHandler(async (req, res) => {
+    const input = squadReadSchema.parse(req.body);
+    const unread = await chatService.markSquadRead(input);
+
+    broadcastSquadEvent({
+      type: 'squad:read',
+      actor: input.actor,
+      readState: unread,
+    });
+
+    res.json(unread);
+  })
+);
+
+/**
+ * GET /api/chat/squad/:messageId/thread
+ * Get a compact thread for a root or reply message.
+ */
+router.get(
+  '/squad/:messageId/thread',
+  asyncHandler(async (req, res) => {
+    const messageId = Array.isArray(req.params.messageId)
+      ? req.params.messageId[0]
+      : req.params.messageId;
+    const thread = await chatService.getSquadThread(messageId);
+    if (thread.length === 0) {
+      throw new NotFoundError(`Squad message ${messageId} not found`);
+    }
+    res.json(thread);
+  })
+);
+
+/**
+ * POST /api/chat/squad/:messageId/pin
+ * Pin/unpin or mark/unmark a squad message as a decision.
+ */
+router.post(
+  '/squad/:messageId/pin',
+  asyncHandler(async (req, res) => {
+    const messageId = Array.isArray(req.params.messageId)
+      ? req.params.messageId[0]
+      : req.params.messageId;
+    const input = squadStateSchema.parse(req.body);
+    const message = await chatService.updateSquadMessageState(messageId, input);
+    if (!message) {
+      throw new NotFoundError(`Squad message ${messageId} not found`);
+    }
+
+    broadcastSquadEvent({
+      type: 'squad:pin',
+      message,
+    });
+
+    res.json(message);
+  })
+);
+
+/**
+ * POST /api/chat/squad/:messageId/react
+ * Add a lightweight reaction/acknowledgement to a squad message.
+ */
+router.post(
+  '/squad/:messageId/react',
+  asyncHandler(async (req, res) => {
+    const messageId = Array.isArray(req.params.messageId)
+      ? req.params.messageId[0]
+      : req.params.messageId;
+    const input = squadReactionSchema.parse(req.body);
+    const message = await chatService.addSquadReaction({
+      messageId,
+      actor: input.actor,
+      reaction: input.reaction,
+    });
+    if (!message) {
+      throw new NotFoundError(`Squad message ${messageId} not found`);
+    }
+
+    broadcastSquadEvent({
+      type: 'squad:reaction',
+      message,
+      actor: input.actor,
+      reaction: input.reaction,
+    });
+
+    res.json(message);
   })
 );
 

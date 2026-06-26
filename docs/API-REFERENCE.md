@@ -595,9 +595,15 @@ POST /api/chat/squad
 ```json
 {
   "agent": "VERITAS",
-  "message": "Starting cleanup — 14 steps",
+  "message": "Starting cleanup - 14 steps",
   "model": "claude-opus-4.6",
-  "tags": ["cleanup"]
+  "tags": ["cleanup"],
+  "replyToId": "msg_parent",
+  "mentions": [{ "target": "case", "kind": "agent" }],
+  "taskId": "task-123",
+  "runId": "run-456",
+  "pinned": false,
+  "decision": false
 }
 ```
 
@@ -605,7 +611,45 @@ POST /api/chat/squad
 GET /api/chat/squad
 ```
 
-Returns recent squad messages. Supports `?limit=N`.
+Returns recent squad messages. Supports `?limit=N`, `?agent=AGENT`, `?since=ISO`, and `?includeSystem=false`.
+
+```
+GET  /api/chat/squad/search?q=review&limit=20
+GET  /api/chat/squad/unread?actor=case
+POST /api/chat/squad/read
+GET  /api/chat/squad/:messageId/thread
+POST /api/chat/squad/:messageId/pin
+POST /api/chat/squad/:messageId/react
+```
+
+**Read body**:
+
+```json
+{
+  "actor": "case",
+  "messageId": "msg_latest"
+}
+```
+
+**Pin/decision body**:
+
+```json
+{
+  "pinned": true,
+  "decision": true
+}
+```
+
+**Reaction body**:
+
+```json
+{
+  "actor": "case",
+  "reaction": "ack"
+}
+```
+
+Search returns redacted snippets only. Mention notifications link back to the squad message and do not include raw secrets beyond the existing redaction rules.
 
 ### Chat Sessions
 

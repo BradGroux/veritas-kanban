@@ -30,7 +30,7 @@ const RIGHT_RAIL_STORAGE_KEY = 'veritas.desktop.rightRailOpen';
 const BOTTOM_PANEL_STORAGE_KEY = 'veritas.desktop.bottomPanel';
 const BOTTOM_PANEL_HEIGHT_STORAGE_KEY = 'veritas.workbench.bottomPanelHeight';
 export const DEFAULT_BOTTOM_PANEL_HEIGHT = 340;
-export const MIN_BOTTOM_PANEL_HEIGHT = 220;
+export const MIN_BOTTOM_PANEL_HEIGHT = 320;
 export const MAX_BOTTOM_PANEL_HEIGHT = 640;
 
 const DEFAULT_CONTEXT: DesktopShellContextValue = {

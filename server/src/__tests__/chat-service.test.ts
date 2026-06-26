@@ -5,11 +5,21 @@ import path from 'path';
 
 const mockWithFileLock = vi.fn(async (_path, fn) => await fn());
 const mockGetChatsDir = vi.fn();
+const mockCreateNotification = vi.fn();
 let sessionCounter = 0;
 let messageCounter = 0;
 
 vi.mock('../services/file-lock.js', () => ({ withFileLock: mockWithFileLock }));
 vi.mock('../utils/paths.js', () => ({ getChatsDir: mockGetChatsDir }));
+vi.mock('../services/notification-service.js', () => ({
+  getNotificationService: () => ({
+    createNotification: mockCreateNotification,
+  }),
+  parseMentions: (text: string) =>
+    Array.from(text.matchAll(/@([a-zA-Z0-9_-]+)/g), (match) => match[1].toLowerCase()).filter(
+      (value, index, values) => values.indexOf(value) === index
+    ),
+}));
 vi.mock('nanoid', () => ({
   nanoid: (len?: number) => {
     if (len === 12) return `session${String(++sessionCounter).padStart(5, '0')}`;
@@ -25,6 +35,7 @@ describe('ChatService', () => {
     vi.resetModules();
     sessionCounter = 0;
     messageCounter = 0;
+    mockCreateNotification.mockResolvedValue({ id: 'notif_1' });
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chat-service-'));
     mockGetChatsDir.mockReturnValue(tmpDir);
     const mod = await import('../services/chat-service.js');
@@ -115,6 +126,60 @@ describe('ChatService', () => {
       )
     ).toBe(false);
     expect((await service.getSquadMessages({ limit: 1 })).length).toBe(1);
+  });
+
+  it('tracks squad threads, mentions, unread state, pins, reactions, and redacted search', async () => {
+    const root = await service.sendSquadMessage({
+      agent: 'VERITAS',
+      message: 'Need @case review. Bearer abcdefghijklmnopqrstuvwxyz1234567890',
+      taskId: 'task-1',
+    });
+    const reply = await service.sendSquadMessage({
+      agent: 'CASE',
+      message: 'Acknowledged.',
+      replyToId: root.id,
+      runId: 'run-1',
+    });
+
+    expect(root.mentions).toEqual([{ target: 'case', kind: undefined }]);
+    expect(root.links).toEqual([{ taskId: 'task-1', label: 'Task task-1' }]);
+    expect(reply.threadId).toBe(root.id);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetAgent: 'case',
+        fromAgent: 'VERITAS',
+        type: 'squad_mention',
+        targetUrl: `/chat/squad?messageId=${root.id}`,
+      })
+    );
+
+    const thread = await service.getSquadThread(reply.id);
+    expect(thread.map((message: any) => message.id)).toEqual([root.id, reply.id]);
+
+    const unread = await service.getSquadUnreadState('case');
+    expect(unread.unreadCount).toBeGreaterThanOrEqual(1);
+    expect(unread.mentionCount).toBe(1);
+
+    const marked = await service.markSquadRead({ actor: 'case', messageId: root.id });
+    expect(marked.lastReadMessageId).toBe(root.id);
+
+    const pinned = await service.updateSquadMessageState(root.id, {
+      pinned: true,
+      decision: true,
+    });
+    expect(pinned).toMatchObject({ pinned: true, decision: true });
+
+    const acked = await service.addSquadReaction({
+      messageId: root.id,
+      actor: 'case',
+      reaction: 'ack',
+    });
+    expect(acked?.reactions).toEqual([expect.objectContaining({ actor: 'case', reaction: 'ack' })]);
+
+    const search = await service.searchSquadMessages({ query: 'review' });
+    expect(search.results[0]).toMatchObject({ messageId: root.id, agent: 'VERITAS' });
+    expect(search.results[0].snippet).toContain('Bearer [REDACTED]');
+    expect(search.results[0].snippet).not.toContain('abcdefghijklmnopqrstuvwxyz1234567890');
   });
 
   it('handles missing squad/session directories and rejects traversal input', async () => {

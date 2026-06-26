@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   ActionIcon,
+  Badge,
   Button,
   Drawer,
   Group,
@@ -8,9 +9,30 @@ import {
   Select,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
-import { Send, Loader2, Users, Filter, Settings2, X } from 'lucide-react';
-import { useSquadMessages, useSendSquadMessage, useSquadStream } from '@/hooks/useChat';
+import {
+  CheckCircle2,
+  Filter,
+  Loader2,
+  Pin,
+  Reply,
+  Search,
+  Send,
+  Settings2,
+  Users,
+  X,
+} from 'lucide-react';
+import {
+  useAddSquadReaction,
+  useMarkSquadRead,
+  useSendSquadMessage,
+  useSquadMessages,
+  useSquadSearch,
+  useSquadStream,
+  useSquadUnread,
+  useUpdateSquadMessageState,
+} from '@/hooks/useChat';
 import { useConfig } from '@/hooks/useConfig';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { SquadMessage } from '@veritas-kanban/shared';
@@ -83,6 +105,9 @@ export function SquadChatPanel({
   const [message, setMessage] = useState('');
   const [selectedAgent, setSelectedAgent] = useState(humanDisplayName || 'Human'); // Human user default (from settings)
   const [agentFilter, setAgentFilter] = useState<string>('all');
+  const [replyTo, setReplyTo] = useState<SquadMessage | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
 
   // Sync selectedAgent when humanDisplayName loads from settings
   useEffect(() => {
@@ -93,6 +118,17 @@ export function SquadChatPanel({
   const { data: messages = [], isLoading } = useSquadMessages({ limit: 50, includeSystem });
   const { mutate: sendMessage, isPending } = useSendSquadMessage();
   const { newMessage } = useSquadStream();
+  const actorForRead = selectedAgent === humanDisplayName ? 'Human' : selectedAgent;
+  const { data: unreadState } = useSquadUnread(actorForRead);
+  const { data: searchResponse } = useSquadSearch({
+    query: searchQuery,
+    limit: 8,
+    includeSystem,
+    agent: agentFilter === 'all' ? undefined : agentFilter,
+  });
+  const { mutate: markRead, isPending: isMarkingRead } = useMarkSquadRead();
+  const { mutate: updateMessageState } = useUpdateSquadMessageState();
+  const { mutate: addReaction } = useAddSquadReaction();
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -149,10 +185,12 @@ export function SquadChatPanel({
       {
         agent: agentForBackend,
         message: message.trim(),
+        replyToId: replyTo?.id,
       },
       {
         onSuccess: () => {
           setMessage('');
+          setReplyTo(null);
           setShouldAutoScroll(true);
           // Force scroll to bottom immediately after sending
           setTimeout(() => scrollToBottom(), 100);
@@ -170,9 +208,47 @@ export function SquadChatPanel({
     }
   };
 
+  const latestMessageId = messages[messages.length - 1]?.id;
+
+  const handleMarkRead = () => {
+    markRead({ actor: actorForRead, messageId: latestMessageId });
+  };
+
+  const handleJumpToMessage = (messageId: string) => {
+    setActiveMessageId(messageId);
+    requestAnimationFrame(() => {
+      document.getElementById(`squad-message-${messageId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    window.setTimeout(() => setActiveMessageId(null), 2500);
+  };
+
   // Filter messages by agent
   const filteredMessages =
     agentFilter === 'all' ? messages : messages.filter((m) => m.agent === agentFilter);
+
+  const threadedMessages = useMemo(() => {
+    const visibleIds = new Set(filteredMessages.map((msg) => msg.id));
+    const repliesByThread = new Map<string, SquadMessage[]>();
+    const nestedIds = new Set<string>();
+
+    for (const msg of filteredMessages) {
+      if (!msg.replyToId) continue;
+      const rootId = msg.threadId ?? msg.replyToId;
+      if (!visibleIds.has(rootId) || msg.id === rootId) continue;
+      nestedIds.add(msg.id);
+      repliesByThread.set(rootId, [...(repliesByThread.get(rootId) ?? []), msg]);
+    }
+
+    return filteredMessages
+      .filter((msg) => !nestedIds.has(msg.id))
+      .map((msg) => ({
+        message: msg,
+        replies: repliesByThread.get(msg.id) ?? [],
+      }));
+  }, [filteredMessages]);
 
   // Get unique agents from messages
   const uniqueAgents = Array.from(new Set(messages.map((m) => m.agent))).sort();
@@ -218,16 +294,51 @@ export function SquadChatPanel({
           ]}
           aria-label="Filter by agent"
         />
+        <TextInput
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.currentTarget.value)}
+          leftSection={<Search className="h-3.5 w-3.5" />}
+          placeholder="Search"
+          size="xs"
+          aria-label="Search squad chat"
+          className="min-w-0 flex-1"
+        />
+        <Button
+          variant={unreadState?.unreadCount ? 'filled' : 'outline'}
+          size="xs"
+          onClick={handleMarkRead}
+          disabled={!latestMessageId || isMarkingRead}
+          leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
+        >
+          Mark read
+          {unreadState?.unreadCount ? (
+            <Badge size="xs" ml={6} variant="light">
+              {unreadState.mentionCount
+                ? `${unreadState.unreadCount}/${unreadState.mentionCount}`
+                : unreadState.unreadCount}
+            </Badge>
+          ) : null}
+        </Button>
         <Button
           variant={includeSystem ? 'filled' : 'outline'}
           size="xs"
           onClick={() => setIncludeSystem(!includeSystem)}
-          className="ml-auto gap-1.5"
+          className="gap-1.5"
           title={includeSystem ? 'Hide system messages' : 'Show system messages'}
           leftSection={<Settings2 className="h-3.5 w-3.5" />}
         >
           {includeSystem ? 'Hide' : 'Show'} System
         </Button>
+        {variant === 'inline' && (
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label="Close squad chat panel"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </ActionIcon>
+        )}
       </div>
 
       {/* Messages */}
@@ -237,6 +348,39 @@ export function SquadChatPanel({
         ref={scrollAreaRef}
       >
         <div className="py-4 space-y-3">
+          {searchQuery.trim() && (
+            <div className="rounded-md border border-border bg-background/80 p-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <Text size="xs" fw={600}>
+                  Search results
+                </Text>
+                <Badge size="xs" variant="light">
+                  {searchResponse?.results.length ?? 0}
+                </Badge>
+              </div>
+              <div className="space-y-1.5">
+                {(searchResponse?.results ?? []).map((result) => (
+                  <button
+                    key={result.messageId}
+                    type="button"
+                    onClick={() => handleJumpToMessage(result.messageId)}
+                    className="w-full rounded border border-border/70 bg-muted/40 px-2 py-1.5 text-left text-xs hover:bg-muted"
+                  >
+                    <span className="font-medium">{result.displayName || result.agent}</span>
+                    <span className="ml-2 text-muted-foreground">
+                      {new Date(result.timestamp).toLocaleTimeString()}
+                    </span>
+                    <span className="block truncate text-muted-foreground">{result.snippet}</span>
+                  </button>
+                ))}
+                {searchResponse?.results.length === 0 && (
+                  <Text size="xs" c="dimmed">
+                    No matching messages.
+                  </Text>
+                )}
+              </div>
+            </div>
+          )}
           {isLoading && (
             <div className="text-center text-muted-foreground py-8">
               <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
@@ -253,11 +397,29 @@ export function SquadChatPanel({
               </p>
             </div>
           )}
-          {filteredMessages.map((msg) =>
+          {threadedMessages.map(({ message: msg, replies }) =>
             msg.system ? (
-              <SystemMessageDivider key={msg.id} message={msg} />
+              <SystemMessageDivider key={msg.id} message={msg} activeMessageId={activeMessageId} />
             ) : (
-              <SquadMessageBubble key={msg.id} message={msg} humanDisplayName={humanDisplayName} />
+              <SquadMessageBubble
+                key={msg.id}
+                message={msg}
+                replies={replies}
+                humanDisplayName={humanDisplayName}
+                actor={actorForRead}
+                activeMessageId={activeMessageId}
+                onReply={setReplyTo}
+                onJump={handleJumpToMessage}
+                onTogglePin={(target) =>
+                  updateMessageState({ messageId: target.id, pinned: !target.pinned })
+                }
+                onMarkDecision={(target) =>
+                  updateMessageState({ messageId: target.id, decision: !target.decision })
+                }
+                onAck={(target) =>
+                  addReaction({ messageId: target.id, actor: actorForRead, reaction: 'ack' })
+                }
+              />
             )
           )}
           <div ref={messagesEndRef} />
@@ -266,6 +428,21 @@ export function SquadChatPanel({
 
       {/* Input Area */}
       <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
+        {replyTo && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
+            <Text size="xs" c="dimmed" truncate>
+              Replying to {replyTo.displayName || replyTo.agent}: {replyTo.message}
+            </Text>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              aria-label="Cancel reply"
+              onClick={() => setReplyTo(null)}
+            >
+              <X className="h-3.5 w-3.5" />
+            </ActionIcon>
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs text-muted-foreground">Sending as:</span>
           <Select
@@ -308,7 +485,6 @@ export function SquadChatPanel({
   return variant === 'inline' ? (
     open && (
       <section className={cn('flex h-full min-h-0 flex-col', className)} aria-label="Squad Chat">
-        <div className="desktop-no-drag border-b border-border px-4 py-3">{titleContent}</div>
         {panelContent}
       </section>
     )
@@ -332,12 +508,30 @@ export function SquadChatPanel({
 
 interface SquadMessageBubbleProps {
   message: SquadMessage;
+  replies?: SquadMessage[];
   humanDisplayName: string;
+  actor: string;
+  activeMessageId: string | null;
+  onReply: (message: SquadMessage) => void;
+  onJump: (messageId: string) => void;
+  onTogglePin: (message: SquadMessage) => void;
+  onMarkDecision: (message: SquadMessage) => void;
+  onAck: (message: SquadMessage) => void;
+  compact?: boolean;
 }
 
 const SquadMessageBubble = React.memo(function SquadMessageBubble({
   message,
+  replies = [],
   humanDisplayName,
+  actor,
+  activeMessageId,
+  onReply,
+  onJump,
+  onTogglePin,
+  onMarkDecision,
+  onAck,
+  compact = false,
 }: SquadMessageBubbleProps) {
   // Case-insensitive agent color lookup
   const colorClass =
@@ -349,18 +543,56 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
   const isHuman = message.agent === 'Human';
   // Use the display name for Human agents, otherwise use the agent name
   const displayName = isHuman ? humanDisplayName : message.agent;
+  const isActive = activeMessageId === message.id;
+  const ackCount = message.reactions?.filter((reaction) => reaction.reaction === 'ack').length ?? 0;
+  const hasActorAck = message.reactions?.some(
+    (reaction) =>
+      reaction.reaction === 'ack' && reaction.actor.toLowerCase() === actor.toLowerCase()
+  );
+  const replyTargetId = message.replyToId;
 
   return (
     <div
-      className={`rounded-lg border p-3 ${colorClass} ${isHuman ? 'ring-1 ring-emerald-500/50' : ''}`}
+      id={`squad-message-${message.id}`}
+      className={`rounded-lg border p-3 transition-shadow ${colorClass} ${
+        compact ? 'ml-3 border-l-2 py-2' : ''
+      } ${isHuman ? 'ring-1 ring-emerald-500/50' : ''} ${
+        isActive ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-background' : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-semibold text-sm">
             {displayName}
             {isHuman && <span className="ml-1 text-xs opacity-70">(Human)</span>}
           </span>
           {message.model && <span className="text-xs opacity-50 font-mono">{message.model}</span>}
+          {replyTargetId && (
+            <Tooltip label="Jump to parent message">
+              <button
+                type="button"
+                onClick={() => onJump(replyTargetId)}
+                className="text-xs opacity-70 underline-offset-2 hover:underline"
+              >
+                reply
+              </button>
+            </Tooltip>
+          )}
+          {message.pinned && (
+            <Badge size="xs" variant="light" leftSection={<Pin className="h-3 w-3" />}>
+              pinned
+            </Badge>
+          )}
+          {message.decision && (
+            <Badge
+              size="xs"
+              color="green"
+              variant="light"
+              leftSection={<CheckCircle2 className="h-3 w-3" />}
+            >
+              decision
+            </Badge>
+          )}
           {message.tags && message.tags.length > 0 && (
             <div className="flex gap-1">
               {message.tags.map((tag) => (
@@ -373,22 +605,136 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
               ))}
             </div>
           )}
+          {message.links?.map((link) => (
+            <Badge
+              key={`${link.taskId ?? ''}-${link.runId ?? ''}-${link.href ?? ''}`}
+              size="xs"
+              variant="outline"
+            >
+              {link.label || link.taskId || link.runId || 'link'}
+            </Badge>
+          ))}
         </div>
-        <span className="text-xs opacity-70">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-xs opacity-70">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </span>
+          {!compact && (
+            <>
+              <Tooltip label="Reply">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  aria-label="Reply to message"
+                  type="button"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    onReply(message);
+                  }}
+                  onClick={() => onReply(message)}
+                >
+                  <Reply className="h-3.5 w-3.5" />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={message.pinned ? 'Unpin' : 'Pin'}>
+                <ActionIcon
+                  size="sm"
+                  variant={message.pinned ? 'filled' : 'subtle'}
+                  aria-label={message.pinned ? 'Unpin message' : 'Pin message'}
+                  onClick={() => onTogglePin(message)}
+                >
+                  <Pin className="h-3.5 w-3.5" />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={message.decision ? 'Unmark decision' : 'Mark decision'}>
+                <ActionIcon
+                  size="sm"
+                  variant={message.decision ? 'filled' : 'subtle'}
+                  color={message.decision ? 'green' : undefined}
+                  aria-label={message.decision ? 'Unmark decision' : 'Mark decision'}
+                  onClick={() => onMarkDecision(message)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Acknowledge">
+                <ActionIcon
+                  size="sm"
+                  variant={hasActorAck ? 'filled' : 'subtle'}
+                  aria-label="Acknowledge message"
+                  onClick={() => onAck(message)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </ActionIcon>
+              </Tooltip>
+            </>
+          )}
+        </div>
       </div>
-      <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.message}</div>
+      <div className="text-sm whitespace-pre-wrap leading-relaxed">
+        <MentionedText text={message.message} />
+      </div>
+      {(ackCount > 0 || replies.length > 0) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs opacity-75">
+          {ackCount > 0 && (
+            <span>
+              {ackCount} ack{ackCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {replies.length > 0 && (
+            <span>
+              {replies.length} repl{replies.length === 1 ? 'y' : 'ies'}
+            </span>
+          )}
+        </div>
+      )}
+      {replies.length > 0 && (
+        <div className="mt-3 space-y-2 border-l border-current/25 pl-2">
+          {replies.map((reply) => (
+            <SquadMessageBubble
+              key={reply.id}
+              message={reply}
+              humanDisplayName={humanDisplayName}
+              actor={actor}
+              activeMessageId={activeMessageId}
+              onReply={onReply}
+              onJump={onJump}
+              onTogglePin={onTogglePin}
+              onMarkDecision={onMarkDecision}
+              onAck={onAck}
+              compact
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 });
 
+function MentionedText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(@[a-zA-Z0-9_-]+)/g).map((part, index) =>
+        part.startsWith('@') ? (
+          <span key={`${part}-${index}`} className="rounded bg-background/50 px-1 font-medium">
+            {part}
+          </span>
+        ) : (
+          <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>
+        )
+      )}
+    </>
+  );
+}
+
 interface SystemMessageDividerProps {
   message: SquadMessage;
+  activeMessageId: string | null;
 }
 
 const SystemMessageDivider = React.memo(function SystemMessageDivider({
   message,
+  activeMessageId,
 }: SystemMessageDividerProps) {
   // Format system message based on event type
   const getEventIcon = () => {
@@ -427,7 +773,14 @@ const SystemMessageDivider = React.memo(function SystemMessageDivider({
 
   // All system messages use consistent gray/muted styling
   return (
-    <div className="rounded-lg border border-border p-3 bg-muted/50 text-muted-foreground">
+    <div
+      id={`squad-message-${message.id}`}
+      className={`rounded-lg border border-border p-3 bg-muted/50 text-muted-foreground ${
+        activeMessageId === message.id
+          ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-background'
+          : ''
+      }`}
+    >
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="flex items-center gap-2">
           <span className="text-base">{getEventIcon()}</span>

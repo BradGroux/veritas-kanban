@@ -7,6 +7,8 @@ import type {
   ChatSendInput,
   SquadMessage,
   SquadMessageInput,
+  SquadSearchResponse,
+  SquadUnreadState,
 } from '@veritas-kanban/shared';
 
 /**
@@ -154,17 +156,90 @@ export function useSendSquadMessage() {
     mutationFn: (input: SquadMessageInput) => chatApi.sendSquadMessage(input),
     onSuccess: (newMessage) => {
       // Optimistically update all matching query cache entries
-      queryClient.setQueriesData(
-        { queryKey: ['chat', 'squad'] },
-        (old: SquadMessage[] | undefined) => {
-          if (!old) return [newMessage];
-          // Add new message if not already present
-          const exists = old.some((m) => m.id === newMessage.id);
-          return exists ? old : [...old, newMessage];
-        }
-      );
+      queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) => {
+        if (old === undefined) return [newMessage];
+        if (!Array.isArray(old)) return old;
+        // Add new message if not already present
+        const exists = old.some((m) => m.id === newMessage.id);
+        return exists ? old : [...old, newMessage];
+      });
 
       // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
+    },
+  });
+}
+
+export function useSquadSearch(options: {
+  query: string;
+  limit?: number;
+  agent?: string;
+  includeSystem?: boolean;
+}) {
+  const enabled = options.query.trim().length > 0;
+  return useQuery({
+    queryKey: ['chat', 'squad', 'search', options],
+    queryFn: () => chatApi.searchSquadMessages(options),
+    enabled,
+    staleTime: 5_000,
+    placeholderData: (): SquadSearchResponse => ({ query: options.query, results: [] }),
+  });
+}
+
+export function useSquadUnread(actor: string | undefined) {
+  return useQuery({
+    queryKey: ['chat', 'squad', 'unread', actor],
+    queryFn: () => chatApi.getSquadUnread(actor ?? ''),
+    enabled: !!actor,
+    staleTime: 5_000,
+  });
+}
+
+export function useMarkSquadRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { actor: string; messageId?: string }) => chatApi.markSquadRead(input),
+    onSuccess: (unread) => {
+      queryClient.setQueryData(['chat', 'squad', 'unread', unread.actor], unread);
+    },
+  });
+}
+
+export function useUpdateSquadMessageState() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { messageId: string; pinned?: boolean; decision?: boolean }) =>
+      chatApi.updateSquadMessageState(input.messageId, {
+        pinned: input.pinned,
+        decision: input.decision,
+      }),
+    onSuccess: (updatedMessage) => {
+      queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) =>
+        Array.isArray(old)
+          ? old.map((message) => (message.id === updatedMessage.id ? updatedMessage : message))
+          : old
+      );
+      queryClient.invalidateQueries({ queryKey: ['chat', 'squad', 'search'] });
+    },
+  });
+}
+
+export function useAddSquadReaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { messageId: string; actor: string; reaction: string }) =>
+      chatApi.addSquadReaction(input.messageId, {
+        actor: input.actor,
+        reaction: input.reaction,
+      }),
+    onSuccess: (updatedMessage) => {
+      queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) =>
+        Array.isArray(old)
+          ? old.map((message) => (message.id === updatedMessage.id ? updatedMessage : message))
+          : old
+      );
     },
   });
 }
@@ -185,20 +260,38 @@ export function useSquadStream() {
         setNewMessage(incomingMessage);
 
         // Optimistically add the message to cache immediately
-        queryClient.setQueriesData(
-          { queryKey: ['chat', 'squad'] },
-          (old: SquadMessage[] | undefined) => {
-            if (!old) return [incomingMessage];
-            // Add message if not already present
-            const exists = old.some((m) => m.id === incomingMessage.id);
-            return exists ? old : [...old, incomingMessage];
-          }
-        );
+        queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) => {
+          if (old === undefined) return [incomingMessage];
+          if (!Array.isArray(old)) return old;
+          // Add message if not already present
+          const exists = old.some((m) => m.id === incomingMessage.id);
+          return exists ? old : [...old, incomingMessage];
+        });
 
         // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
 
         // Clear the new message notification after a short delay
         setTimeout(() => setNewMessage(null), 3000);
+      }
+
+      if (msg.type === 'squad:pin' || msg.type === 'squad:reaction') {
+        const updatedMessage = msg.message as SquadMessage | undefined;
+        if (!updatedMessage) return;
+        queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) =>
+          Array.isArray(old)
+            ? old.map((message) => (message.id === updatedMessage.id ? updatedMessage : message))
+            : old
+        );
+        queryClient.invalidateQueries({ queryKey: ['chat', 'squad', 'search'] });
+      }
+
+      if (msg.type === 'squad:read') {
+        const readState = msg.readState as SquadUnreadState | undefined;
+        if (readState) {
+          queryClient.setQueryData(['chat', 'squad', 'unread', readState.actor], readState);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['chat', 'squad', 'unread'] });
+        }
       }
     };
 

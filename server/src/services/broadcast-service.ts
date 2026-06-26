@@ -1,5 +1,11 @@
 import type { WebSocketServer } from 'ws';
-import type { AnyTelemetryEvent, RunSessionEvent, SquadMessage } from '@veritas-kanban/shared';
+import type {
+  AnyTelemetryEvent,
+  RunSessionEvent,
+  SquadMention,
+  SquadMessage,
+  SquadUnreadState,
+} from '@veritas-kanban/shared';
 import type { AuthenticatedWebSocket } from '../middleware/auth.js';
 import {
   notifyTaskChange,
@@ -209,8 +215,12 @@ export function broadcastChatMessage(
 }
 
 export interface SquadBroadcastEvent {
-  type: 'squad:message';
-  message: SquadMessage;
+  type: 'squad:message' | 'squad:mention' | 'squad:read' | 'squad:pin' | 'squad:reaction';
+  message?: SquadMessage;
+  mentions?: SquadMention[];
+  actor?: string;
+  readState?: SquadUnreadState;
+  reaction?: string;
   timestamp: string;
   sequence: number;
   workspaceId: string;
@@ -223,18 +233,24 @@ export function broadcastSquadMessage(
   message: SquadMessage,
   options: { workspaceId?: string } = {}
 ): void {
+  broadcastSquadEvent({ type: 'squad:message', message }, options);
+}
+
+export function broadcastSquadEvent(
+  event: Omit<SquadBroadcastEvent, 'timestamp' | 'sequence' | 'workspaceId'>,
+  options: { workspaceId?: string } = {}
+): void {
   if (!wssRef) return;
   const workspaceId = normalizeWorkspaceId(options.workspaceId);
 
-  const event: SquadBroadcastEvent = {
-    type: 'squad:message',
-    message,
+  const payloadEvent: SquadBroadcastEvent = {
+    ...event,
     timestamp: new Date().toISOString(),
     sequence: nextWebSocketEventSequence(),
     workspaceId,
   };
 
-  const payload = JSON.stringify(event);
+  const payload = JSON.stringify(payloadEvent);
 
   broadcastToClients(payload, { permissions: ['agent:read'], workspaceId, channel: 'squad' });
 }

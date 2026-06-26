@@ -58,6 +58,34 @@ export interface SquadMessage {
   taskTitle?: string; // Task title for system messages
   duration?: string; // Duration string for completed/failed events (e.g., "2m 44s")
   card?: Record<string, unknown>; // Adaptive Card v1.5 JSON for rich Teams rendering
+  threadId?: string; // Root message ID for threaded replies
+  replyToId?: string; // Direct parent message ID
+  mentions?: SquadMention[]; // Parsed @mentions and explicit mention targets
+  links?: SquadMessageLink[]; // Optional task/run/UI links associated with the message
+  pinned?: boolean; // Message is pinned for recovery
+  decision?: boolean; // Message records a decision
+  reactions?: SquadReaction[]; // Lightweight acknowledgements/reactions
+  replyCount?: number; // Derived count of direct/indirect replies in the current result set
+}
+
+export type SquadMentionKind = 'user' | 'agent' | 'role' | 'owner';
+
+export interface SquadMention {
+  target: string;
+  kind?: SquadMentionKind;
+}
+
+export interface SquadMessageLink {
+  taskId?: string;
+  runId?: string;
+  href?: string;
+  label?: string;
+}
+
+export interface SquadReaction {
+  actor: string;
+  reaction: string;
+  createdAt: string;
 }
 
 /**
@@ -73,4 +101,37 @@ export interface SquadMessageInput {
   taskTitle?: string;
   duration?: string;
   card?: Record<string, unknown>; // Adaptive Card v1.5 JSON for rich Teams rendering
+  replyToId?: string;
+  mentions?: Array<string | SquadMention>;
+  taskId?: string;
+  runId?: string;
+  pinned?: boolean;
+  decision?: boolean;
+}
+
+export interface SquadUnreadState {
+  actor: string;
+  lastReadAt?: string;
+  lastReadMessageId?: string;
+  unreadCount: number;
+  mentionCount: number;
+  latestUnreadMessageId?: string;
+}
+
+export interface SquadSearchResult {
+  messageId: string;
+  threadId?: string;
+  replyToId?: string;
+  timestamp: string;
+  agent: string;
+  displayName?: string;
+  snippet: string;
+  pinned?: boolean;
+  decision?: boolean;
+  links?: SquadMessageLink[];
+}
+
+export interface SquadSearchResponse {
+  query: string;
+  results: SquadSearchResult[];
 }

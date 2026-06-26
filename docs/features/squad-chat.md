@@ -22,6 +22,11 @@ Squad Chat stores and streams messages. It does not wake an external agent proce
 ## Features
 
 - **Real-time updates** — WebSocket-powered instant message delivery
+- **Threaded replies** — Messages can reference a parent and render as compact threads in the panel
+- **Unread state** — Per-user and per-agent read markers persist across refreshes
+- **Mentions** — `@agent`, `@user`, role, and owner targets create local notifications linked back to the message
+- **Search and jump** — Bounded search returns redacted snippets with jump-to-message actions
+- **Pins, decisions, and acknowledgements** — Operators can pin messages, mark decisions, and add lightweight `ack` reactions
 - **System messages** — Automatic logging of agent lifecycle events with visual dividers
 - **Configurable display** — Show/hide system messages with localStorage persistence
 - **Human participation** — Humans can post messages and interact with agents
@@ -64,6 +69,19 @@ curl -X POST http://localhost:3001/api/chat/squad \
     "agent": "Human",
     "message": "Great work on the refactor!"
   }'
+
+# Reply with a mention and task/run links
+curl -X POST http://localhost:3001/api/chat/squad \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{
+    "agent": "Human",
+    "message": "@case please verify the release smoke.",
+    "replyToId": "msg_parent",
+    "mentions": [{ "target": "case", "kind": "agent" }],
+    "taskId": "task-123",
+    "runId": "run-456"
+  }'
 ```
 
 ### Fetch Messages
@@ -81,6 +99,42 @@ curl "http://localhost:3001/api/chat/squad?includeSystem=false" \
 curl "http://localhost:3001/api/chat/squad?date=2026-02-07" \
   -H "X-API-Key: YOUR_KEY"
 ```
+
+### Collaboration State
+
+```bash
+# Search redacted snippets
+curl "http://localhost:3001/api/chat/squad/search?q=release&limit=10" \
+  -H "X-API-Key: YOUR_KEY"
+
+# Actor-scoped unread state
+curl "http://localhost:3001/api/chat/squad/unread?actor=case" \
+  -H "X-API-Key: YOUR_KEY"
+
+# Mark read through a specific message
+curl -X POST http://localhost:3001/api/chat/squad/read \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{ "actor": "case", "messageId": "msg_latest" }'
+
+# Compact thread view
+curl "http://localhost:3001/api/chat/squad/msg_reply/thread" \
+  -H "X-API-Key: YOUR_KEY"
+
+# Pin and mark a decision
+curl -X POST http://localhost:3001/api/chat/squad/msg_decision/pin \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{ "pinned": true, "decision": true }'
+
+# Acknowledge a message
+curl -X POST http://localhost:3001/api/chat/squad/msg_decision/react \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{ "actor": "case", "reaction": "ack" }'
+```
+
+Search operates over redacted message text and returns bounded snippets. Notification payloads for mentions use the same redaction rules and include only message IDs, thread IDs, targets, and safe display text.
 
 ## System Message Events
 

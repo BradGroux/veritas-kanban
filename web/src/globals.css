@@ -184,7 +184,7 @@ html[data-client='desktop'] .desktop-main-content {
 .workbench-bottom-panel {
   display: flex;
   height: var(--workbench-bottom-panel-height, 340px);
-  min-height: 220px;
+  min-height: 320px;
   max-height: min(68vh, 640px);
   flex: 0 0 var(--workbench-bottom-panel-height, 340px);
   flex-direction: column;
@@ -199,7 +199,7 @@ html:not([data-client='desktop']) .workbench-bottom-panel {
 }
 
 html[data-client='desktop'] .workbench-bottom-panel {
-  min-height: 240px;
+  min-height: 320px;
   max-height: min(68vh, 640px);
   flex: 0 0 var(--workbench-bottom-panel-height, 340px);
 }

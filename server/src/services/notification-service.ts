@@ -387,6 +387,8 @@ export class NotificationService {
     title?: string;
     message: string;
     taskId?: string;
+    targetAgent?: string;
+    fromAgent?: string;
     taskTitle?: string;
     project?: string;
     targetUrl?: string;
@@ -398,9 +400,9 @@ export class NotificationService {
     const notification: Notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       taskId: params.taskId || 'system',
-      targetAgent: 'system',
-      fromAgent: 'system',
-      content: params.message,
+      targetAgent: params.targetAgent?.toLowerCase() || 'system',
+      fromAgent: params.fromAgent || 'system',
+      content: params.message.slice(0, 500),
       type: params.type || 'system',
       title: params.title,
       taskTitle: params.taskTitle,

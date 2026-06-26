@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   refetchActivities: vi.fn(),
   sendChatMessage: vi.fn(),
   sendSquadMessage: vi.fn(),
+  addSquadReaction: vi.fn(),
+  markSquadRead: vi.fn(),
+  updateSquadMessageState: vi.fn(),
   useActivities: vi.fn(),
   useActivityFeed: vi.fn(),
   useChatSession: vi.fn(),
@@ -26,8 +29,10 @@ const mocks = vi.hoisted(() => ({
   useFeatureSetting: vi.fn(),
   useSendChatMessage: vi.fn(),
   useSendSquadMessage: vi.fn(),
+  useSquadSearch: vi.fn(),
   useSquadMessages: vi.fn(),
   useSquadStream: vi.fn(),
+  useSquadUnread: vi.fn(),
   useStatusHistory: vi.fn(),
   useTask: vi.fn(),
 }));
@@ -45,8 +50,13 @@ vi.mock('@/hooks/useChat', () => ({
   useDeleteChatSession: mocks.useDeleteChatSession,
   useSendChatMessage: mocks.useSendChatMessage,
   useSendSquadMessage: mocks.useSendSquadMessage,
+  useAddSquadReaction: () => ({ mutate: mocks.addSquadReaction, isPending: false }),
+  useMarkSquadRead: () => ({ mutate: mocks.markSquadRead, isPending: false }),
   useSquadMessages: mocks.useSquadMessages,
+  useSquadSearch: mocks.useSquadSearch,
   useSquadStream: mocks.useSquadStream,
+  useSquadUnread: mocks.useSquadUnread,
+  useUpdateSquadMessageState: () => ({ mutate: mocks.updateSquadMessageState, isPending: false }),
 }));
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -197,7 +207,13 @@ describe('activity and chat Mantine migration', () => {
       mutate: mocks.sendSquadMessage,
       isPending: false,
     });
+    mocks.useSquadSearch.mockReturnValue({
+      data: { query: '', results: [] },
+    });
     mocks.useSquadStream.mockReturnValue({ newMessage: null });
+    mocks.useSquadUnread.mockReturnValue({
+      data: { actor: 'Human', unreadCount: 0, mentionCount: 0 },
+    });
     mocks.useFeatureSetting.mockReturnValue('Coby');
     mocks.useConfig.mockReturnValue({
       data: {

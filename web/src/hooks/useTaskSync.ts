@@ -46,8 +46,14 @@ export function useTaskSync(): {
         chatEventTarget.dispatchEvent(new CustomEvent('chat', { detail: message }));
       }
 
-      // Forward squad messages to the chat event target
-      if (message.type === 'squad:message') {
+      // Forward squad chat events to the chat event target
+      if (
+        message.type === 'squad:message' ||
+        message.type === 'squad:mention' ||
+        message.type === 'squad:read' ||
+        message.type === 'squad:pin' ||
+        message.type === 'squad:reaction'
+      ) {
         chatEventTarget.dispatchEvent(new CustomEvent('squad', { detail: message }));
       }
 

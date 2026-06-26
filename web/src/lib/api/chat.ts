@@ -64,7 +64,12 @@ export async function deleteSession(sessionId: string): Promise<void> {
  * ============================================================
  */
 
-import type { SquadMessage, SquadMessageInput } from '@veritas-kanban/shared';
+import type {
+  SquadMessage,
+  SquadMessageInput,
+  SquadSearchResponse,
+  SquadUnreadState,
+} from '@veritas-kanban/shared';
 
 /**
  * Send a message to the squad channel
@@ -101,6 +106,79 @@ export async function getSquadMessages(options?: {
   return handleResponse<SquadMessage[]>(response);
 }
 
+export async function searchSquadMessages(options: {
+  query: string;
+  limit?: number;
+  agent?: string;
+  includeSystem?: boolean;
+}): Promise<SquadSearchResponse> {
+  const params = new URLSearchParams();
+  params.set('q', options.query);
+  if (options.limit) params.set('limit', options.limit.toString());
+  if (options.agent) params.set('agent', options.agent);
+  if (options.includeSystem !== undefined)
+    params.set('includeSystem', options.includeSystem.toString());
+
+  const response = await fetch(`${API_BASE}/chat/squad/search?${params}`, {
+    credentials: 'include',
+  });
+  return handleResponse<SquadSearchResponse>(response);
+}
+
+export async function getSquadUnread(actor: string): Promise<SquadUnreadState> {
+  const params = new URLSearchParams({ actor });
+  const response = await fetch(`${API_BASE}/chat/squad/unread?${params}`, {
+    credentials: 'include',
+  });
+  return handleResponse<SquadUnreadState>(response);
+}
+
+export async function markSquadRead(input: {
+  actor: string;
+  messageId?: string;
+}): Promise<SquadUnreadState> {
+  const response = await fetch(`${API_BASE}/chat/squad/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(input),
+  });
+  return handleResponse<SquadUnreadState>(response);
+}
+
+export async function getSquadThread(messageId: string): Promise<SquadMessage[]> {
+  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/thread`, {
+    credentials: 'include',
+  });
+  return handleResponse<SquadMessage[]>(response);
+}
+
+export async function updateSquadMessageState(
+  messageId: string,
+  input: { pinned?: boolean; decision?: boolean }
+): Promise<SquadMessage> {
+  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(input),
+  });
+  return handleResponse<SquadMessage>(response);
+}
+
+export async function addSquadReaction(
+  messageId: string,
+  input: { actor: string; reaction: string }
+): Promise<SquadMessage> {
+  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/react`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(input),
+  });
+  return handleResponse<SquadMessage>(response);
+}
+
 export const chatApi = {
   listSessions,
   getSession,
@@ -108,4 +186,10 @@ export const chatApi = {
   deleteSession,
   sendSquadMessage,
   getSquadMessages,
+  searchSquadMessages,
+  getSquadUnread,
+  markSquadRead,
+  getSquadThread,
+  updateSquadMessageState,
+  addSquadReaction,
 };

@@ -20,7 +20,7 @@ vi.mock('../services/file-lock.js', () => ({
 }));
 
 const { getNotificationService } = await import('../services/notification-service.js');
-import type { Notification, NotificationService } from '../services/notification-service.js';
+import type { NotificationService } from '../services/notification-service.js';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -295,6 +295,21 @@ describe('NotificationService', () => {
       expect(notif.type).toBe('error');
       expect(notif.title).toBe('Build Failed');
       expect(notif.delivered).toBe(false);
+    });
+
+    it('should create targeted direct notifications', async () => {
+      const notif = await service.createNotification({
+        type: 'squad_mention',
+        title: 'Squad Chat mention',
+        message: 'Please review this',
+        taskId: 'squad-chat',
+        targetAgent: 'CASE',
+        fromAgent: 'VERITAS',
+      });
+
+      expect(notif.targetAgent).toBe('case');
+      expect(notif.fromAgent).toBe('VERITAS');
+      expect(notif.type).toBe('squad_mention');
     });
   });
 

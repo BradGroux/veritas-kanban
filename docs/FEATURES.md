@@ -447,6 +447,10 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
 - **Resizable Workbench panel** — Board Chat and Squad Chat share the bottom Workbench surface, which can be collapsed or resized vertically instead of floating off-screen
 - **Local shared log** — Squad Chat stores and streams messages; it does not wake or reply through an external agent unless a webhook, OpenClaw Direct path, or orchestrator is configured
+- **Threaded coordination** — Reply-to links render compact threads for long multi-agent runs
+- **Unread and mentions** — Per-actor unread state persists across refreshes, and mentions create local notifications linked back to messages
+- **Pinned decisions and acknowledgements** — Important messages can be pinned, marked as decisions, and acknowledged with lightweight reactions
+- **Redacted search** — Search returns bounded, redacted snippets with jump-to-message actions
 - **System lifecycle events** — Automatic events for agent spawned, completed, and failed transitions
 - **Model attribution** — Messages can include the sending agent's model for provenance tracking
 - **Configurable display names** — Agents set custom display names for chat identity
@@ -456,10 +460,16 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 
 ### API Endpoints
 
-| Endpoint          | Method | Description                 |
-| ----------------- | ------ | --------------------------- |
-| `/api/chat/squad` | POST   | Send a squad chat message   |
-| `/api/chat/squad` | GET    | Retrieve squad chat history |
+| Endpoint                            | Method | Description                                   |
+| ----------------------------------- | ------ | --------------------------------------------- |
+| `/api/chat/squad`                   | POST   | Send a squad chat message                     |
+| `/api/chat/squad`                   | GET    | Retrieve squad chat history                   |
+| `/api/chat/squad/search`            | GET    | Search redacted snippets                      |
+| `/api/chat/squad/unread`            | GET    | Get actor-scoped unread state                 |
+| `/api/chat/squad/read`              | POST   | Mark messages read for an actor               |
+| `/api/chat/squad/:messageId/thread` | GET    | Read a compact thread                         |
+| `/api/chat/squad/:messageId/pin`    | POST   | Pin/unpin or mark/unmark a decision           |
+| `/api/chat/squad/:messageId/react`  | POST   | Add a lightweight reaction or acknowledgement |
 
 ---
 

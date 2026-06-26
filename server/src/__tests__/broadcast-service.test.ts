@@ -3,11 +3,13 @@
  * Tests WebSocket broadcast functions for task changes and telemetry.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { AnyTelemetryEvent, RunSessionEvent } from '@veritas-kanban/shared';
+import type { AnyTelemetryEvent, RunSessionEvent, SquadMessage } from '@veritas-kanban/shared';
 import type { WebSocketServer } from 'ws';
 import {
   broadcastChatMessage,
   closeWebSocketClientsForRevokedCredential,
+  broadcastSquadEvent,
+  broadcastSquadMessage,
   initBroadcast,
   broadcastRunSessionEvent,
   broadcastTaskChange,
@@ -281,6 +283,55 @@ describe('BroadcastService', () => {
       expect(chatChannelOnly.sent).toHaveLength(0);
       expect(legacyUnsubscribed.sent).toHaveLength(0);
       expect(wss.sentMessages).toHaveLength(1);
+    });
+  });
+
+  describe('broadcastSquadMessage() and broadcastSquadEvent()', () => {
+    it('broadcasts squad message, mention, read, pin, and reaction events to squad subscribers', () => {
+      const wss = createMockWss();
+      const squadSubscriber = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['squad']),
+      });
+      const taskOnly = wss.addClient(1, undefined, {
+        subscribedChannels: new Set(['tasks']),
+      });
+      initBroadcast(asWebSocketServer(wss));
+
+      const message: SquadMessage = {
+        id: 'msg_1',
+        agent: 'VERITAS',
+        message: 'Need @case review',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        mentions: [{ target: 'case' }],
+      };
+
+      broadcastSquadMessage(message);
+      broadcastSquadEvent({ type: 'squad:mention', message, mentions: message.mentions });
+      broadcastSquadEvent({
+        type: 'squad:read',
+        actor: 'case',
+        readState: { actor: 'case', unreadCount: 0, mentionCount: 0 },
+      });
+      broadcastSquadEvent({ type: 'squad:pin', message: { ...message, pinned: true } });
+      broadcastSquadEvent({
+        type: 'squad:reaction',
+        message: {
+          ...message,
+          reactions: [{ actor: 'case', reaction: 'ack', createdAt: '2026-01-01T00:00:01.000Z' }],
+        },
+        actor: 'case',
+        reaction: 'ack',
+      });
+
+      expect(squadSubscriber.sent).toHaveLength(5);
+      expect(taskOnly.sent).toHaveLength(0);
+      expect(squadSubscriber.sent.map((payload) => JSON.parse(payload).type)).toEqual([
+        'squad:message',
+        'squad:mention',
+        'squad:read',
+        'squad:pin',
+        'squad:reaction',
+      ]);
     });
   });
 
