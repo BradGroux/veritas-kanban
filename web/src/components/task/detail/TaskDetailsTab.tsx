@@ -14,8 +14,9 @@ import { BlockedReasonSection } from '../BlockedReasonSection';
 import { LessonsLearnedSection } from '../LessonsLearnedSection';
 import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
-import { Trash2, Archive, Calendar, Clock, RotateCcw } from 'lucide-react';
+import { Trash2, Archive, Calendar, Clock, RotateCcw, ExternalLink } from 'lucide-react';
 import type { Task, BlockedReason } from '@veritas-kanban/shared';
+import { isExternalTargetHref, normalizeSafeHref } from '@veritas-kanban/shared';
 
 interface TaskDetailsTabProps {
   task: Task;
@@ -101,6 +102,21 @@ export function TaskDetailsTab({
 
       {/* Metadata Section */}
       <TaskMetadataSection task={task} onUpdate={onUpdate} readOnly={readOnly} />
+
+      {task.delegatedWork && task.delegatedWork.length > 0 && (
+        <Box className="border-t pt-4">
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed" fw={500}>
+              Delegated Work
+            </Text>
+            <Stack gap="xs">
+              {task.delegatedWork.map((link) => (
+                <DelegatedWorkLink key={link.id} link={link} />
+              ))}
+            </Stack>
+          </Stack>
+        </Box>
+      )}
 
       {/* Blocked Reason (shown when status is blocked) */}
       {task.status === 'blocked' && (
@@ -274,5 +290,44 @@ export function TaskDetailsTab({
         </Stack>
       </Modal>
     </Stack>
+  );
+}
+
+function DelegatedWorkLink({ link }: { link: NonNullable<Task['delegatedWork']>[number] }) {
+  const href = normalizeSafeHref(link.targetUrl);
+  const external = isExternalTargetHref(href);
+  return (
+    <Paper className="border bg-card p-3" radius="md">
+      <Group justify="space-between" gap="sm" wrap="nowrap">
+        <Stack gap={2} className="min-w-0">
+          <Group gap="xs">
+            <Badge variant="light" color={link.status === 'blocked' ? 'red' : 'blue'}>
+              {link.latestState ?? link.status}
+            </Badge>
+            <Text size="xs" c="dimmed">
+              {link.capabilityId}
+            </Text>
+          </Group>
+          <Text size="xs" c="dimmed" className="truncate">
+            {link.sourceWorkspaceId}
+            {' -> '}
+            {link.targetWorkspaceId}
+          </Text>
+        </Stack>
+        {href && (
+          <Button
+            component="a"
+            href={href}
+            target={external ? '_blank' : undefined}
+            rel={external ? 'noreferrer' : undefined}
+            variant="subtle"
+            size="xs"
+            leftSection={<ExternalLink className="h-3.5 w-3.5" />}
+          >
+            Open
+          </Button>
+        )}
+      </Group>
+    </Paper>
   );
 }

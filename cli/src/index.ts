@@ -19,6 +19,7 @@ import { registerSprintCommands } from './commands/sprints.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerSnapshotCommand } from './commands/snapshot.js';
 import { registerPromptCommands } from './commands/prompts.js';
+import { registerWorkspaceCommands } from './commands/workspaces.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -49,5 +50,6 @@ registerSprintCommands(program);
 registerDoctorCommand(program);
 registerSnapshotCommand(program);
 registerPromptCommands(program);
+registerWorkspaceCommands(program);
 
 program.parse();

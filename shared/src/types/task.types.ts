@@ -239,6 +239,9 @@ export interface Task {
   // GitHub Issue cross-reference
   github?: TaskGitHub;
 
+  // Cross-workspace delegation status links
+  delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];
+
   // Current attempt
   attempt?: TaskAttempt;
 
@@ -389,6 +392,7 @@ export interface UpdateTaskInput {
   agents?: AgentType[];
   git?: Partial<TaskGit>;
   github?: TaskGitHub;
+  delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];
   attempt?: TaskAttempt;
   reviewComments?: ReviewComment[];
   reviewScores?: [number, number, number, number];

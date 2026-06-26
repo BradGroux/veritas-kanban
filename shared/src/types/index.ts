@@ -34,6 +34,7 @@ export * from './sandbox-policy.types.js';
 export * from './agent-budget.types.js';
 export * from './agent-profile-package.types.js';
 export * from './team-roster.types.js';
+export * from './workspace-capability.types.js';
 export * from './watcher-policy.types.js';
 export * from './evidence.types.js';
 export * from './time-breakdown.types.js';

@@ -1608,6 +1608,97 @@ Invalid rosters never route agent launches.
 
 ---
 
+## Workspace Capability Discovery
+
+Workspace capability manifests let a board publish what work it accepts and
+register trusted peer manifests for delegated intake. Manifest data is stored in
+app config as `workspaceCapability`, `trustedWorkspaceCapabilities`, and
+`workspaceDelegations`.
+
+Mounted at `/api/workspace-capabilities`.
+
+| Method   | Path                                                  | Description                                      | Permissions      |
+| -------- | ----------------------------------------------------- | ------------------------------------------------ | ---------------- |
+| `GET`    | `/api/workspace-capabilities/manifest`                | Return the local published manifest or `null`    | `workspace:read` |
+| `PUT`    | `/api/workspace-capabilities/manifest`                | Replace the local published manifest             | `settings:write` |
+| `POST`   | `/api/workspace-capabilities/manifest/validate`       | Validate a manifest object or YAML/JSON content  | `workspace:read` |
+| `POST`   | `/api/workspace-capabilities/manifest/import`         | Import and store the local manifest              | `settings:write` |
+| `GET`    | `/api/workspace-capabilities/manifest/export`         | Export the local manifest as YAML or JSON        | `workspace:read` |
+| `GET`    | `/api/workspace-capabilities/trusted`                 | List trusted peer manifests                      | `workspace:read` |
+| `POST`   | `/api/workspace-capabilities/trusted`                 | Register or replace a trusted peer manifest      | `settings:write` |
+| `DELETE` | `/api/workspace-capabilities/trusted/:workspaceId`    | Remove a trusted peer manifest                   | `settings:write` |
+| `GET`    | `/api/workspace-capabilities/discover`                | Return local plus trusted manifests for browsing | `workspace:read` |
+| `POST`   | `/api/workspace-capabilities/intake`                  | Create delegated task intake from a trusted peer | `task:write`     |
+| `GET`    | `/api/workspace-capabilities/delegations`             | List stored delegation records                   | `task:read`      |
+| `POST`   | `/api/workspace-capabilities/delegations/:id/refresh` | Refresh latest target state                      | `task:write`     |
+
+### Manifest Shape
+
+```json
+{
+  "id": "local-board",
+  "schemaVersion": "workspace-capability/v1",
+  "workspaceId": "local",
+  "name": "Local Board",
+  "enabled": true,
+  "boardUrl": "https://veritas.example",
+  "capabilities": [
+    {
+      "id": "docs",
+      "name": "Documentation",
+      "acceptedTaskTypes": ["docs"],
+      "defaultLabels": ["docs"],
+      "defaultProject": "handbook",
+      "defaultPriority": "medium",
+      "requiredContextFields": ["acceptance"],
+      "intakeTargets": ["task"]
+    }
+  ]
+}
+```
+
+Validation rejects duplicate capability IDs and secret-like manifest fields such
+as `token`, `password`, `apiKey`, or `privateKey`. Discovery responses redact
+manifest import source metadata.
+
+### Delegated Intake
+
+```json
+{
+  "source": {
+    "workspaceId": "source",
+    "workspaceName": "Source Board",
+    "taskId": "task_20260626_source",
+    "taskUrl": "https://source.example/tasks/task_20260626_source"
+  },
+  "capabilityId": "docs",
+  "title": "Write operator handoff docs",
+  "context": "Document the delegated queue handoff.",
+  "contextFields": {
+    "acceptance": "Includes handoff and rollback steps"
+  },
+  "type": "docs",
+  "labels": ["handoff"],
+  "requestedBy": "user:brad"
+}
+```
+
+Intake fails closed unless the source workspace is trusted by the local manifest
+or registered as a trusted peer manifest. Successful task intake stores a
+delegation record and, when the source task exists locally, appends a
+`delegatedWork` status link to that originating task.
+
+CLI support is available under `vk workspaces`:
+
+```bash
+vk workspaces discover
+vk workspaces validate ./workspace-capability.yaml
+vk workspaces trust ./peer-workspace.yaml
+vk workspaces intake --source-workspace source --capability docs --title "Write docs" --context "Document handoff" --context-field acceptance="Includes rollback steps"
+```
+
+---
+
 ## Agent Profile Packages
 
 Reusable YAML/JSON packages for agent role, runtime, prompt, tools, permissions, policy posture, workflow entrypoint, and health metadata.

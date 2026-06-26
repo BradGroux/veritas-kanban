@@ -7,6 +7,10 @@ import type { SandboxPolicyPreset } from './sandbox-policy.types.js';
 import type { AgentBudgetPolicy } from './agent-budget.types.js';
 import type { AgentProfilePackage } from './agent-profile-package.types.js';
 import type { TeamRosterManifest } from './team-roster.types.js';
+import type {
+  WorkspaceCapabilityManifest,
+  WorkspaceDelegationRecord,
+} from './workspace-capability.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -170,6 +174,9 @@ export interface AppConfig {
   defaultSandboxPresetId?: string;
   agentProfiles?: AgentProfilePackage[];
   teamRoster?: TeamRosterManifest;
+  workspaceCapability?: WorkspaceCapabilityManifest;
+  trustedWorkspaceCapabilities?: WorkspaceCapabilityManifest[];
+  workspaceDelegations?: WorkspaceDelegationRecord[];
 }
 
 // ============ Feature Settings Types ============

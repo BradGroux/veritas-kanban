@@ -22,6 +22,7 @@ import {
   BookOpen,
   UserCog,
   Wrench,
+  Network,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
@@ -68,6 +69,9 @@ const LazyMultiUserTab = lazy(() =>
 const LazyMaintenanceTab = lazy(() =>
   import('./tabs/MaintenanceTab').then((m) => ({ default: m.MaintenanceTab }))
 );
+const LazyWorkspaceCapabilitiesTab = lazy(() =>
+  import('./tabs/WorkspaceCapabilitiesTab').then((m) => ({ default: m.WorkspaceCapabilitiesTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -100,6 +104,7 @@ type TabId =
   | 'shared-resources'
   | 'doc-freshness'
   | 'multi-user'
+  | 'workspace-capabilities'
   | 'maintenance'
   | 'manage';
 
@@ -119,6 +124,12 @@ const TABS: TabDef[] = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield, requiredPermission: 'settings:read' },
   { id: 'multi-user', label: 'Multi-user', icon: UserCog, requiredPermission: 'workspace:read' },
+  {
+    id: 'workspace-capabilities',
+    label: 'Workspaces',
+    icon: Network,
+    requiredPermission: 'workspace:read',
+  },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
   { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
   { id: 'tool-policies', label: 'Tool Policies', icon: Lock, requiredPermission: 'policy:read' },
@@ -396,6 +407,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'multi-user' && (
           <SettingsErrorBoundary tabName="Multi-user">
             <LazyMultiUserTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'workspace-capabilities' && (
+          <SettingsErrorBoundary tabName="Workspaces">
+            <LazyWorkspaceCapabilitiesTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'delegation' && (
