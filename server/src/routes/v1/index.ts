@@ -40,6 +40,7 @@ import {
   reportAccess,
   reportRoutesAccess,
   sandboxPolicyAccess,
+  schedulerAccess,
   scoringAccess,
   searchAccess,
   settingsAccess,
@@ -134,6 +135,7 @@ import { watcherPolicyRoutes } from '../watcher-policies.js';
 import sandboxPolicyRoutes from '../sandbox-policies.js';
 import { runSessionRoutes } from '../run-sessions.js';
 import { workspaceCapabilityRoutes } from '../workspace-capabilities.js';
+import { schedulerRoutes } from '../scheduler.js';
 
 const v1Router: IRouter = Router();
 
@@ -227,6 +229,7 @@ v1Router.use('/audit', adminAccess, auditRoutes);
 v1Router.use('/lessons', taskReadAccess, lessonsRoutes);
 v1Router.use('/delegation', delegationAccess, delegationRoutes);
 v1Router.use('/workflows', workflowAccess, workflowRoutes);
+v1Router.use('/scheduler', schedulerAccess, schedulerRoutes);
 v1Router.use('/watcher-policies', watcherPolicyAccess, watcherPolicyRoutes);
 v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);

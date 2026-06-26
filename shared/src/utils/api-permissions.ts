@@ -258,6 +258,16 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   {
+    prefix: '/api/scheduler',
+    read: 'workflow:read',
+    write: 'workflow:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/items\/[^/]+\/run\/?$/, permissions: 'workflow:execute' },
+      { methods: ['POST'], path: /^\/items\/[^/]+\/validate\/?$/, permissions: 'workflow:read' },
+      { methods: ['POST'], path: /^\/due\/run\/?$/, permissions: 'workflow:execute' },
+    ],
+  },
+  {
     prefix: '/api/watcher-policies',
     read: 'policy:read',
     write: 'policy:write',

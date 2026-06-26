@@ -30,6 +30,7 @@ import { timeBreakdownsApi } from './time-breakdowns';
 import { sandboxPoliciesApi } from './sandbox-policies';
 import { runSessionsApi } from './run-sessions';
 import { workspaceCapabilitiesApi } from './workspace-capabilities';
+import { schedulerApi } from './scheduler';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -71,6 +72,7 @@ export const api = {
   sandboxPolicies: sandboxPoliciesApi,
   runSessions: runSessionsApi,
   workspaceCapabilities: workspaceCapabilitiesApi,
+  scheduler: schedulerApi,
 };
 
 export type {

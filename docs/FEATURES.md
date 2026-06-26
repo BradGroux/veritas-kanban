@@ -46,6 +46,7 @@ For current v5 screenshots and GIFs, see the
 - [Enforcement Gates](#enforcement-gates)
 - [Broadcast Notifications](#broadcast-notifications)
 - [Task Deliverables](#task-deliverables)
+- [Recurring Work Scheduler](#recurring-work-scheduler)
 - [Efficient Polling](#efficient-polling)
 - [Approval Delegation](#approval-delegation)
 - [Lifecycle Hooks](#task-lifecycle-hooks)
@@ -1152,6 +1153,33 @@ First-class deliverable objects attached to tasks with type and status tracking.
 | `/api/tasks/:id/deliverables/:did` | PUT    | Update a deliverable         |
 | `/api/tasks/:id/deliverables/:did` | DELETE | Remove a deliverable         |
 | `/api/scheduled-deliverables`      | GET    | View scheduled deliverables  |
+
+---
+
+## Recurring Work Scheduler
+
+Unified operator surface for scheduled deliverables and scheduled workflow definitions.
+
+- **Single scheduler dashboard** — Settings exposes all recurring work with health, retry, next run, last run, and recent events
+- **Manual controls** — Run, pause, resume, and validate individual scheduler items
+- **Due runner** — `POST /api/scheduler/due/run` and `vk scheduler run-due` execute due items while refusing overlapping passes
+- **Existing service adapters** — Deliverables execute through the scheduled deliverables runner; workflows start through the workflow run service
+- **Operations telemetry** — Scheduler events emit bounded run telemetry with `agent=scheduler` for operations digest visibility
+- **Custom cron guardrail** — Cron schedules are visible and manually runnable, but automatic custom-cron due execution is deferred until a cron adapter is configured
+
+→ [Full guide](features/recurring-work-scheduler.md) — API, CLI, execution model, and scheduler guardrails
+
+### API Endpoints
+
+| Endpoint                            | Method | Description                     |
+| ----------------------------------- | ------ | ------------------------------- |
+| `/api/scheduler`                    | GET    | List scheduler items and events |
+| `/api/scheduler/items/:id`          | GET    | Read one scheduler item         |
+| `/api/scheduler/items/:id/run`      | POST   | Run one scheduler item now      |
+| `/api/scheduler/items/:id/pause`    | POST   | Pause one scheduler item        |
+| `/api/scheduler/items/:id/resume`   | POST   | Resume one scheduler item       |
+| `/api/scheduler/items/:id/validate` | POST   | Validate one scheduler item     |
+| `/api/scheduler/due/run`            | POST   | Run due scheduler items         |
 
 ---
 

@@ -23,6 +23,7 @@ import {
   UserCog,
   Wrench,
   Network,
+  CalendarClock,
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
@@ -72,6 +73,9 @@ const LazyMaintenanceTab = lazy(() =>
 const LazyWorkspaceCapabilitiesTab = lazy(() =>
   import('./tabs/WorkspaceCapabilitiesTab').then((m) => ({ default: m.WorkspaceCapabilitiesTab }))
 );
+const LazySchedulerTab = lazy(() =>
+  import('./tabs/SchedulerTab').then((m) => ({ default: m.SchedulerTab }))
+);
 
 // ============ Tab Skeleton ============
 
@@ -105,6 +109,7 @@ type TabId =
   | 'doc-freshness'
   | 'multi-user'
   | 'workspace-capabilities'
+  | 'scheduler'
   | 'maintenance'
   | 'manage';
 
@@ -129,6 +134,12 @@ const TABS: TabDef[] = [
     label: 'Workspaces',
     icon: Network,
     requiredPermission: 'workspace:read',
+  },
+  {
+    id: 'scheduler',
+    label: 'Scheduler',
+    icon: CalendarClock,
+    requiredPermission: 'workflow:read',
   },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
   { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
@@ -412,6 +423,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         {activeTab === 'workspace-capabilities' && (
           <SettingsErrorBoundary tabName="Workspaces">
             <LazyWorkspaceCapabilitiesTab />
+          </SettingsErrorBoundary>
+        )}
+        {activeTab === 'scheduler' && (
+          <SettingsErrorBoundary tabName="Scheduler">
+            <LazySchedulerTab />
           </SettingsErrorBoundary>
         )}
         {activeTab === 'delegation' && (

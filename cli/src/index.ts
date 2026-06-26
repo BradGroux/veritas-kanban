@@ -20,6 +20,7 @@ import { registerDoctorCommand } from './commands/doctor.js';
 import { registerSnapshotCommand } from './commands/snapshot.js';
 import { registerPromptCommands } from './commands/prompts.js';
 import { registerWorkspaceCommands } from './commands/workspaces.js';
+import { registerSchedulerCommands } from './commands/scheduler.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -51,5 +52,6 @@ registerDoctorCommand(program);
 registerSnapshotCommand(program);
 registerPromptCommands(program);
 registerWorkspaceCommands(program);
+registerSchedulerCommands(program);
 
 program.parse();

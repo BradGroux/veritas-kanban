@@ -1,7 +1,7 @@
 # Veritas Kanban — API Reference
 
 **Version**: 5.1.0
-**Last Updated**: 2026-06-18
+**Last Updated**: 2026-06-26
 **Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
 
@@ -33,27 +33,28 @@
 20. [Task Comments](#task-comments)
 21. [Task Subtasks](#task-subtasks)
 22. [Task Deliverables](#task-deliverables)
-23. [Task Archive](#task-archive)
-24. [Attachments](#attachments)
-25. [Agent Permissions](#agent-permissions)
-26. [Agent Routing](#agent-routing)
-27. [Sandbox Policies](#sandbox-policies)
-28. [Shared Resources](#shared-resources)
-29. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-30. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-31. [Doc Freshness](#doc-freshness)
-32. [Cost Prediction](#cost-prediction)
-33. [Error Learning](#error-learning)
-34. [Tool Policies](#tool-policies)
-35. [Watcher Continuation Policies](#watcher-continuation-policies)
-36. [Traces](#traces)
-37. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-38. [Audit](#audit)
-39. [Maintenance Center](#maintenance-center-apiv1maintenance)
-40. [Common Workflows](#common-workflows)
-41. [Versioning & Deprecation](#versioning--deprecation)
-42. [Rate Limits](#rate-limits)
-43. [Additional Endpoint Groups](#additional-endpoint-groups)
+23. [Recurring Work Scheduler](#recurring-work-scheduler)
+24. [Task Archive](#task-archive)
+25. [Attachments](#attachments)
+26. [Agent Permissions](#agent-permissions)
+27. [Agent Routing](#agent-routing)
+28. [Sandbox Policies](#sandbox-policies)
+29. [Shared Resources](#shared-resources)
+30. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+31. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+32. [Doc Freshness](#doc-freshness)
+33. [Cost Prediction](#cost-prediction)
+34. [Error Learning](#error-learning)
+35. [Tool Policies](#tool-policies)
+36. [Watcher Continuation Policies](#watcher-continuation-policies)
+37. [Traces](#traces)
+38. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+39. [Audit](#audit)
+40. [Maintenance Center](#maintenance-center-apiv1maintenance)
+41. [Common Workflows](#common-workflows)
+42. [Versioning & Deprecation](#versioning--deprecation)
+43. [Rate Limits](#rate-limits)
+44. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1262,6 +1263,73 @@ PATCH /api/tasks/:id/deliverables/:deliverableId
 ```
 DELETE /api/tasks/:id/deliverables/:deliverableId
 ```
+
+---
+
+## Recurring Work Scheduler
+
+Inspect and control recurring work across scheduled deliverables and scheduled workflow definitions.
+
+Mounted at `/api/scheduler`.
+
+### List Scheduler Items
+
+```
+GET /api/scheduler
+```
+
+Returns scheduler summary counts, scheduler items, retry state, health, and recent events.
+
+### Read Item
+
+```
+GET /api/scheduler/items/:id
+```
+
+Item IDs use the source prefix:
+
+- `scheduled-deliverable:<deliverableId>`
+- `workflow:<workflowId>`
+
+### Run Item Now
+
+```
+POST /api/scheduler/items/:id/run
+```
+
+Runs one scheduler item immediately. Deliverables execute through the scheduled deliverables runner. Workflows start a normal workflow run and return the started run ID.
+
+### Pause Item
+
+```
+POST /api/scheduler/items/:id/pause
+```
+
+Pauses the underlying scheduled deliverable or workflow schedule.
+
+### Resume Item
+
+```
+POST /api/scheduler/items/:id/resume
+```
+
+Re-enables the underlying scheduled deliverable or workflow schedule and clears scheduler retry delay.
+
+### Validate Item
+
+```
+POST /api/scheduler/items/:id/validate
+```
+
+Returns validation issues. Custom cron schedules are visible and manually runnable, but automatic due-run execution is not enabled until a cron adapter is configured.
+
+### Run Due Items
+
+```
+POST /api/scheduler/due/run
+```
+
+Runs all due standard schedules and refuses overlapping due-run passes.
 
 ---
 
