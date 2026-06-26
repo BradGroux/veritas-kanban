@@ -9,6 +9,7 @@ export * from './managed-list.types.js';
 export * from './chat.types.js';
 export * from './communication-adapter.types.js';
 export * from './ceremony.types.js';
+export * from './reflection.types.js';
 export * from './transition-hooks.types.js';
 export * from './delegation.types.js';
 export * from './changes.types.js';

@@ -33,6 +33,7 @@ import { workspaceCapabilitiesApi } from './workspace-capabilities';
 import { schedulerApi } from './scheduler';
 import { queueMonitorsApi } from './queue-monitors';
 import { ceremoniesApi } from './ceremonies';
+import { reflectionsApi } from './reflections';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -77,6 +78,7 @@ export const api = {
   scheduler: schedulerApi,
   queueMonitors: queueMonitorsApi,
   ceremonies: ceremoniesApi,
+  reflections: reflectionsApi,
 };
 
 export type {
@@ -91,6 +93,7 @@ export type {
 
 export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';
 export type { CeremonyListFilters } from './ceremonies';
+export type { ReflectionListFilters } from './reflections';
 export type { TraceStatus } from './traces';
 export type { SqlitePortabilityReport } from './maintenance';
 export type {

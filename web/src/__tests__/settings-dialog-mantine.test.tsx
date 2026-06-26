@@ -79,6 +79,10 @@ vi.mock('@/components/settings/tabs/EnforcementTab', () => ({
   EnforcementTab: () => <div>Enforcement settings loaded</div>,
 }));
 
+vi.mock('@/components/settings/tabs/ReflectionTab', () => ({
+  ReflectionTab: () => <div>Reflection settings loaded</div>,
+}));
+
 vi.mock('@/components/settings/tabs/SharedResourcesTab', () => ({
   SharedResourcesTab: () => <div>Shared resources settings loaded</div>,
 }));

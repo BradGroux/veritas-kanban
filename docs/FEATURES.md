@@ -33,6 +33,7 @@ For current v5 screenshots and GIFs, see the
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
 - [PRD-Driven Development](#prd-driven-autonomous-development)
 - [Task↔Agent State Sync](#taskagent-state-sync)
+- [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
 
 ### Workflow Engine
 
@@ -413,6 +414,19 @@ Structured failure analysis to prevent recurring issues.
 - **Similarity search** — Find similar past failures to suggest fixes
 - **Stats API** — Aggregate error patterns and frequency analysis
 - **Inspired by** @nateherk's Klouse dashboard concept ("spin up agents to analyze what broke")
+
+### Reflection-to-Memory Promotion
+
+Reviewed promotion queue for agent corrections, repeated mistakes, and durable lesson updates.
+
+- **Reflection candidates** — Capture what happened, why the previous approach was wrong, and what should change next time
+- **Source links** — Tie candidates to task runs, chat messages, errors, user corrections, review feedback, or task observations
+- **Human review gate** — Pending candidates do not affect task lessons, launch context, profiles, policy, or templates until accepted
+- **Task lesson promotion** — Accepted task-linked candidates append a reviewed reflection lesson to the task's lessons field
+- **Duplicate grouping and merge** — Similar candidates share a duplicate key and can be soft-merged into a representative while preserving audit history
+- **Redaction at ingestion** — Tokens, credentials, and local private paths are redacted before candidates are stored
+- **Settings UI** — Review, accept, reject, delete, and merge candidates from Settings → Reflections
+- **Audit trail** — Create, accept, reject, merge, and delete actions write metadata-only audit events
 
 ### Shared Resources Registry
 

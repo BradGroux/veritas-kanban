@@ -46,17 +46,18 @@
 33. [Doc Freshness](#doc-freshness)
 34. [Cost Prediction](#cost-prediction)
 35. [Error Learning](#error-learning)
-36. [Tool Policies](#tool-policies)
-37. [Watcher Continuation Policies](#watcher-continuation-policies)
-38. [Traces](#traces)
-39. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-40. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-41. [Audit](#audit)
-42. [Maintenance Center](#maintenance-center-apiv1maintenance)
-43. [Common Workflows](#common-workflows)
-44. [Versioning & Deprecation](#versioning--deprecation)
-45. [Rate Limits](#rate-limits)
-46. [Additional Endpoint Groups](#additional-endpoint-groups)
+36. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
+37. [Tool Policies](#tool-policies)
+38. [Watcher Continuation Policies](#watcher-continuation-policies)
+39. [Traces](#traces)
+40. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+41. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+42. [Audit](#audit)
+43. [Maintenance Center](#maintenance-center-apiv1maintenance)
+44. [Common Workflows](#common-workflows)
+45. [Versioning & Deprecation](#versioning--deprecation)
+46. [Rate Limits](#rate-limits)
+47. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2563,6 +2564,88 @@ Returns past errors similar to the query string — useful for avoiding repeated
 
 ---
 
+## Reflection-to-Memory Promotion
+
+Reviewed queue for turning corrections, repeated mistakes, and failure lessons into durable Veritas records.
+
+Mounted at `/api/reflections`. Requires `workflow:read` for reads and `workflow:write` for writes.
+
+| Method   | Path                          | Description                                                             |
+| -------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `GET`    | `/api/reflections`            | List candidates with filters for status, category, source kind, task ID |
+| `POST`   | `/api/reflections`            | Create a reflection candidate from a linked source                      |
+| `POST`   | `/api/reflections/:id/accept` | Accept a pending candidate and apply its reviewed promotion             |
+| `POST`   | `/api/reflections/:id/reject` | Reject a pending candidate without affecting future context             |
+| `POST`   | `/api/reflections/:id/merge`  | Soft-merge a duplicate into its representative candidate                |
+| `DELETE` | `/api/reflections/:id`        | Soft-delete a candidate while preserving audit history                  |
+
+Candidates support `session`, `agent`, `team`, `policy`, and `template` categories. Sources can link to `task-run`, `chat-message`, `error`, `user-correction`, `review-feedback`, or `task-observation`.
+
+### Create Candidate
+
+```
+POST /api/reflections
+```
+
+**Body**:
+
+```json
+{
+  "category": "team",
+  "promotionTarget": "task-lesson",
+  "confidence": 0.86,
+  "source": {
+    "kind": "user-correction",
+    "taskId": "task_20260626_reflect",
+    "messageId": "msg_123"
+  },
+  "summary": "The agent guessed a config field instead of reading the schema.",
+  "previousApproach": "Used a remembered field name.",
+  "correction": "Read the live schema and nearby route tests first.",
+  "nextAttempt": "Inspect the current schema before changing config behavior.",
+  "evidence": [
+    {
+      "kind": "note",
+      "title": "Correction",
+      "content": "Reviewer corrected the route field during active work."
+    }
+  ],
+  "tags": ["schema", "workflow"]
+}
+```
+
+**Response** `201`: Created pending candidate. Tokens, credential-looking values, and `/Users/...` private paths are redacted before storage.
+
+### Accept Candidate
+
+```
+POST /api/reflections/:id/accept
+```
+
+**Body**:
+
+```json
+{
+  "reviewedBy": "brad",
+  "promotionTarget": "task-lesson",
+  "reviewerNote": "Reusable correction for future agent work."
+}
+```
+
+For `task-lesson`, the candidate must have a linked `source.taskId`; acceptance appends a reviewed reflection lesson to that task and adds `reflection` lesson tags. Other promotion targets are recorded as manual-review targets and do not mutate policy, profile, template, or memory stores automatically.
+
+### Reject or Merge
+
+```
+POST /api/reflections/:id/reject
+POST /api/reflections/:id/merge
+DELETE /api/reflections/:id
+```
+
+Rejected, merged, and deleted candidates remain in the audit trail and do not affect future prompts or policies.
+
+---
+
 ## Search
 
 QMD-ready retrieval across task markdown and docs. The endpoint uses the configured backend and gracefully falls back to keyword search when QMD is unavailable.
@@ -3000,7 +3083,8 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/metrics`                   | Prometheus-style metrics                                                 |
 | `/api/traces`                    | Distributed tracing                                                      |
 | `/api/cost-prediction`           | Token cost forecasting                                                   |
-| `/api/error-learning`            | Error pattern learning                                                   |
+| `/api/errors`                    | Error pattern learning                                                   |
+| `/api/reflections`               | Reviewed reflection-to-memory promotion                                  |
 | `/api/reports`                   | Generated reports                                                        |
 | `/api/deliverables`              | Scheduled deliverables                                                   |
 | `/api/doc-freshness`             | Documentation freshness tracking                                         |

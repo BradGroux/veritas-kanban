@@ -258,6 +258,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   { prefix: '/api/ceremonies', read: 'workflow:read', write: 'workflow:write' },
+  { prefix: '/api/reflections', read: 'workflow:read', write: 'workflow:write' },
   {
     prefix: '/api/scheduler',
     read: 'workflow:read',

@@ -8,5 +8,6 @@ export { MultiUserTab } from './MultiUserTab';
 export { ManageTab } from './ManageTab';
 export { MaintenanceTab } from './MaintenanceTab';
 export { EnforcementTab } from './EnforcementTab';
+export { ReflectionTab } from './ReflectionTab';
 export { SharedResourcesTab } from './SharedResourcesTab';
 export { DocFreshnessTab } from './DocFreshnessTab';

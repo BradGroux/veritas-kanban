@@ -26,6 +26,14 @@ describe('shared API permission metadata', () => {
     ).toEqual(['workflow:write']);
   });
 
+  it('keeps reflection API under workflow read and write permissions', () => {
+    expect(getApiPermissionRequirement('/api/reflections').permissions).toEqual(['workflow:read']);
+    expect(
+      getApiPermissionRequirement('/api/reflections/reflection_1/accept', { method: 'POST' })
+        .permissions
+    ).toEqual(['workflow:write']);
+  });
+
   it('keeps diff reads task-read scoped', () => {
     expect(getApiPermissionRequirement('/api/diff/task_1/full').permissions).toEqual(['task:read']);
   });
