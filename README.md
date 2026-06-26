@@ -336,7 +336,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 | **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 7.3, Tailwind 4.2 |
 | **Backend**         | Express, WebSocket                   | Express 5.2                      |
 | **Language**        | TypeScript (strict mode)             | 6.0                              |
-| **Storage**         | Markdown files with YAML frontmatter | gray-matter                      |
+| **Storage**         | Markdown files with YAML frontmatter | yaml + local frontmatter helper  |
 | **Git**             | simple-git, worktree management      | —                                |
 | **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4        |
 | **Runtime**         | Node.js                              | 22+                              |

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import matter from 'gray-matter';
+import matter, { type MarkdownFrontmatterFile } from '../utils/frontmatter.js';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('integrity');
@@ -203,7 +203,7 @@ async function checkTaskFiles(
     report.filesChecked++;
     try {
       const raw = await fs.readFile(filePath, 'utf-8');
-      let parsed: matter.GrayMatterFile<string>;
+      let parsed: MarkdownFrontmatterFile<string>;
       try {
         parsed = matter(raw);
       } catch (fmErr) {

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 
 // We need to mock the constructor's process.cwd() dependency
 // Instead, let's test the service by creating an instance and overriding the dir

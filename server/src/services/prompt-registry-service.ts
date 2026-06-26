@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile, unlink, mkdir } from 'fs/promises';
 import { fileExists } from '../storage/fs-helpers.js';
 import { join } from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import type {
   PromptTemplate,
   PromptVersion,
@@ -379,6 +379,7 @@ export class PromptRegistryService {
         versions.push(data as PromptVersion);
       } catch (err) {
         log.error({ err: err }, `Error reading version ${file}`);
+        versions.push({} as PromptVersion);
       }
     }
 

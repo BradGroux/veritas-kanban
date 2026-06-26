@@ -7,7 +7,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import type { Task } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { getTasksBacklogDir } from '../utils/paths.js';

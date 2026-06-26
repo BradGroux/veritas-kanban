@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import yaml from 'yaml';
 import { SqlitePortabilityService } from '../services/sqlite-portability-service.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';

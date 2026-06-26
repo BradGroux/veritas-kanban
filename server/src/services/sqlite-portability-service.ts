@@ -4,7 +4,7 @@ import path from 'path';
 import readline from 'readline';
 import { createGunzip } from 'zlib';
 import type { SQLInputValue } from 'node:sqlite';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import yaml from 'yaml';
 import type {
   AnyTelemetryEvent,

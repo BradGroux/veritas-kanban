@@ -36,6 +36,12 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 400,
+    modulePreload: {
+      resolveDependencies(_filename, deps, context) {
+        if (context.hostType !== 'html') return deps;
+        return deps.filter((dep) => !dep.includes('vendor-dnd'));
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

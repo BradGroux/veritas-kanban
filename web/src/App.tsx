@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Box } from '@mantine/core';
-import { KanbanBoard } from './components/board/KanbanBoard';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
 import { KeyboardProvider } from './hooks/useKeyboard';
@@ -31,6 +30,12 @@ const LAZY_VIEW_COMPONENTS = Object.fromEntries(
     return [definition.view, lazy(definition.loadComponent)];
   })
 ) as Record<NavigationView, ReturnType<typeof lazy>>;
+
+const KanbanBoard = lazy(() =>
+  import('./components/board/KanbanBoard').then((mod) => ({
+    default: mod.KanbanBoard,
+  }))
+);
 
 const FloatingChat = lazy(() =>
   import('./components/chat/FloatingChat').then((mod) => ({
@@ -84,7 +89,13 @@ function MainContent() {
 
   if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
 
-  if (view === 'board') return <KanbanBoard />;
+  if (view === 'board') {
+    return (
+      <Suspense fallback={<ViewLoading view="board" />}>
+        <KanbanBoard />
+      </Suspense>
+    );
+  }
 
   const ViewComponent = LAZY_VIEW_COMPONENTS[view];
   return (

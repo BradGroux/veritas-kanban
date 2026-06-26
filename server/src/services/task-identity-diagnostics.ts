@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 
 export type TaskIdentityLocation = 'active' | 'backlog' | 'archive';
 export type TaskIdentityConflictKind = 'task-id' | 'business-id';

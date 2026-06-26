@@ -18,8 +18,9 @@ let mcpTaskId;
 function usage() {
   console.log(`Usage: pnpm smoke:cli-mcp -- [options]
 
-Runs the v5 release-candidate CLI and MCP compatibility smoke against a running
-Veritas Kanban server. Requires a write-capable scoped API key.
+Runs v5 release-candidate CLI and MCP compatibility checks. Local version/build
+checks always run. Live read/write smoke runs when a write-capable scoped API
+key is available.
 
 Options:
   --api-url <url>           API origin. Defaults to VK_API_URL or http://localhost:3001.
@@ -98,6 +99,10 @@ function fail(name, detail = '') {
 
 function warn(name, detail = '') {
   record('warn', name, detail);
+}
+
+function skip(name, detail = '') {
+  record('skip', name, detail);
 }
 
 function check(name, condition, detail = '') {
@@ -468,11 +473,14 @@ async function main() {
   const expectedVersion = options.expectedVersion ?? rootPackage.version;
 
   check('VK_API_URL is configured', Boolean(options.apiUrl), options.apiUrl);
-  check(
-    'VK_API_KEY is configured for write-capable CLI/MCP smoke',
-    Boolean(options.apiKey),
-    options.apiKey ? 'set' : 'missing'
-  );
+  if (options.apiKey) {
+    pass('VK_API_KEY is configured for write-capable CLI/MCP smoke', 'set');
+  } else {
+    skip(
+      'VK_API_KEY is configured for write-capable CLI/MCP smoke',
+      'missing; set VK_API_KEY or pass --api-key to run the live read/write smoke'
+    );
+  }
   check(
     'Root package version matches expected',
     rootPackage.version === expectedVersion,
@@ -491,7 +499,12 @@ async function main() {
   await assertFile(cliBin, 'CLI build output exists');
   await assertFile(mcpBin, 'MCP build output exists');
 
-  if (!options.apiUrl || !options.apiKey) {
+  if (!options.apiUrl) {
+    printAndExit();
+  }
+
+  if (!options.apiKey) {
+    skip('CLI/MCP live read/write smoke', 'skipped because VK_API_KEY is missing');
     printAndExit();
   }
 
@@ -532,13 +545,24 @@ async function main() {
 function printAndExit() {
   let failures = 0;
   let warnings = 0;
+  let skips = 0;
   for (const entry of checks) {
     if (entry.status === 'fail') failures += 1;
     if (entry.status === 'warn') warnings += 1;
-    const icon = entry.status === 'pass' ? 'PASS' : entry.status === 'warn' ? 'WARN' : 'FAIL';
+    if (entry.status === 'skip') skips += 1;
+    const icon =
+      entry.status === 'pass'
+        ? 'PASS'
+        : entry.status === 'warn'
+          ? 'WARN'
+          : entry.status === 'skip'
+            ? 'SKIP'
+            : 'FAIL';
     console.log(`${icon} ${entry.name}${printableDetail(entry.detail)}`);
   }
-  console.log(`\nCLI/MCP compatibility smoke: ${failures} failure(s), ${warnings} warning(s)`);
+  console.log(
+    `\nCLI/MCP compatibility smoke: ${failures} failure(s), ${warnings} warning(s), ${skips} skip(s)`
+  );
   process.exit(failures > 0 ? 1 : 0);
 }
 

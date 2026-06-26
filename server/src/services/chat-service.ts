@@ -8,7 +8,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import { nanoid } from 'nanoid';
 import type {
   ChatSession,

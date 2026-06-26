@@ -110,7 +110,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 
 - **Task types** — Configurable type system with icons and color-coded card borders (code, research, content, automation, and custom types)
 - **Priority levels** — Low, medium, and high with visual indicators on cards
-- **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter (via [gray-matter](https://github.com/jonschlinkert/gray-matter))
+- **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter
 - **Dark/light mode** — Ships dark by default with a toggle in Settings → General → Appearance; persists to localStorage; inline script in `index.html` prevents flash of wrong theme on load
 - **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
 - **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and left/right/bottom panel controls shared by the web and macOS app shells

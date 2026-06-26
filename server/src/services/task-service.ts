@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { watch, batchedMap, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
-import matter from 'gray-matter';
+import matter from '../utils/frontmatter.js';
 import { nanoid } from 'nanoid';
 import type {
   Task,
@@ -543,7 +543,7 @@ export class TaskService {
   private taskToMarkdown(task: Task): string {
     const { description, reviewComments, ...rest } = task;
 
-    // Filter out undefined values (gray-matter can't serialize them)
+    // Filter out undefined values (YAML can't serialize them)
     const frontmatter = this.deepCleanUndefined(rest);
 
     const content = matter.stringify(description || '', frontmatter);
