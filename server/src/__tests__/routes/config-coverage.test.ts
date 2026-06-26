@@ -166,6 +166,104 @@ runtime:
     });
   });
 
+  describe('team roster manifests', () => {
+    const teamRoster = {
+      id: 'core-team',
+      schemaVersion: 'team-roster/v1',
+      workspaceId: 'local',
+      name: 'Core Team',
+      enabled: true,
+      coordinatorMemberId: 'ops-lead',
+      members: [
+        {
+          id: 'ops-lead',
+          displayName: 'Ops Lead',
+          role: 'Coordinates queue work',
+          agent: 'codex',
+          status: 'enabled',
+          capabilities: ['ops', 'triage'],
+          defaultTaskTypes: ['feature'],
+        },
+        {
+          id: 'docs-reviewer',
+          displayName: 'Docs Reviewer',
+          role: 'Reviews docs',
+          agent: 'amp',
+          status: 'enabled',
+          capabilities: ['docs', 'review'],
+          defaultTaskTypes: ['docs'],
+        },
+      ],
+      routingRules: [
+        {
+          id: 'docs',
+          name: 'Docs work',
+          enabled: true,
+          match: { type: 'docs' },
+          memberId: 'docs-reviewer',
+          reviewerMemberIds: ['ops-lead'],
+        },
+      ],
+    };
+
+    it('validates and imports roster manifests', async () => {
+      const invalid = await request(app)
+        .post('/api/config/team-roster/validate')
+        .send({
+          roster: {
+            ...teamRoster,
+            routingRules: [{ ...teamRoster.routingRules[0], memberId: 'missing' }],
+          },
+        });
+
+      expect(invalid.status).toBe(200);
+      expect(invalid.body.valid).toBe(false);
+      expect(invalid.body.issues.map((issue: { message: string }) => issue.message)).toContain(
+        'Unknown member ID: missing'
+      );
+
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        teamRoster: undefined,
+      });
+      mockConfigService.saveConfig.mockResolvedValue(undefined);
+
+      const imported = await request(app)
+        .post('/api/config/team-roster/import')
+        .send({ content: JSON.stringify(teamRoster), format: 'json', source: 'test' });
+
+      expect(imported.status).toBe(201);
+      expect(imported.body.id).toBe('core-team');
+      expect(mockConfigService.saveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamRoster: expect.objectContaining({ id: 'core-team' }),
+        })
+      );
+    });
+
+    it('exports and previews roster routes', async () => {
+      mockConfigService.getConfig.mockResolvedValue({
+        repos: [],
+        agents: [],
+        teamRoster,
+      });
+
+      const exported = await request(app).get('/api/config/team-roster/export?format=json');
+      expect(exported.status).toBe(200);
+      expect(exported.body.content).toContain('"core-team"');
+
+      const preview = await request(app)
+        .post('/api/config/team-roster/preview-route')
+        .send({ type: 'docs' });
+      expect(preview.status).toBe(200);
+      expect(preview.body.member.id).toBe('docs-reviewer');
+      expect(preview.body.reviewerMembers.map((member: { id: string }) => member.id)).toEqual([
+        'ops-lead',
+      ]);
+    });
+  });
+
   describe('POST /api/config/repos', () => {
     it('should add a repo', async () => {
       mockConfigService.addRepo.mockResolvedValue({

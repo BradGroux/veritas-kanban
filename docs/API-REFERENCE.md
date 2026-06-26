@@ -1522,6 +1522,10 @@ Accepts either a task ID or ad-hoc metadata:
 }
 ```
 
+When an enabled team roster exists, `/api/agents/route` evaluates the roster
+before legacy routing rules. Roster-selected responses use a `team-roster:`
+rule prefix.
+
 ### Get/Update Routing Configuration
 
 ```
@@ -1565,6 +1569,42 @@ In addition to `agent`, `sandboxPresetId`, and `budget`, callers can pass a port
 ```
 
 The launch path resolves the package runtime against configured provider profiles, applies package model/sandbox/budget posture, injects package instructions into the run prompt, and records the profile ID and version on the task attempt plus activity audit history.
+
+---
+
+## Team Roster Manifests
+
+Team rosters define the workspace coordinator, enabled agent members, roles,
+capabilities, routing rules, fallbacks, and reviewers. The manifest is stored in
+app config as `teamRoster`.
+
+Mounted at `/api/config/team-roster`.
+
+| Method | Path                                         | Description                                   | Permissions      |
+| ------ | -------------------------------------------- | --------------------------------------------- | ---------------- |
+| `GET`  | `/api/config/team-roster`                    | Return the stored roster or `null`            | `settings:read`  |
+| `PUT`  | `/api/config/team-roster`                    | Replace the roster manifest                   | `settings:write` |
+| `POST` | `/api/config/team-roster/validate`           | Validate a roster object or YAML/JSON content | `settings:read`  |
+| `POST` | `/api/config/team-roster/import`             | Import and store YAML/JSON roster content     | `settings:write` |
+| `GET`  | `/api/config/team-roster/export?format=yaml` | Export the stored roster as YAML or JSON      | `settings:read`  |
+| `POST` | `/api/config/team-roster/preview-route`      | Preview the selected member for task metadata | `settings:read`  |
+
+### Preview Route
+
+```json
+{
+  "type": "docs",
+  "priority": "medium",
+  "project": "docs",
+  "path": "docs/API-REFERENCE.md",
+  "capabilities": ["docs"],
+  "subtaskCount": 2
+}
+```
+
+Preview responses include the matched member, fallback member when used,
+reviewer members, selected agent/profile, reason, and validation issues.
+Invalid rosters never route agent launches.
 
 ---
 

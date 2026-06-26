@@ -192,6 +192,48 @@ describe('AgentRoutingService', () => {
       expect(result.trace.matchedRules?.map((rule) => rule.id)).toEqual(['routing:code-high']);
     });
 
+    it('uses the enabled team roster before legacy routing rules', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...structuredClone(BASE_CONFIG),
+        teamRoster: {
+          id: 'core-team',
+          schemaVersion: 'team-roster/v1',
+          workspaceId: 'local',
+          name: 'Core Team',
+          enabled: true,
+          members: [
+            {
+              id: 'ops-lead',
+              displayName: 'Ops Lead',
+              role: 'Coordinates high-risk work',
+              agent: 'amp',
+              status: 'enabled',
+              capabilities: ['ops'],
+              defaultTaskTypes: ['code'],
+            },
+          ],
+          routingRules: [
+            {
+              id: 'high-code',
+              name: 'High-priority code owner',
+              enabled: true,
+              match: { type: 'code', priority: 'high' },
+              memberId: 'ops-lead',
+            },
+          ],
+        },
+      });
+
+      const result = await service.resolveAgentWithTrace({
+        type: 'code',
+        priority: 'high',
+      });
+
+      expect(result.result.agent).toBe('amp');
+      expect(result.result.rule).toBe('team-roster:high-code');
+      expect(result.trace.matchedRules?.[0]?.id).toBe('team-roster:high-code');
+    });
+
     it('matches medium-priority code task to second rule', async () => {
       const result = await service.resolveAgent({
         type: 'code',

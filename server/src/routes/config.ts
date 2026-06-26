@@ -7,16 +7,25 @@ import { ValidationError, BadRequestError } from '../middleware/error-handler.js
 import { authorize } from '../middleware/auth.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import { AgentProfilePackageService } from '../services/agent-profile-package-service.js';
+import { TeamRosterService } from '../services/team-roster-service.js';
 import {
   AgentProfileImportBodySchema,
   AgentProfileUpdateBodySchema,
   AgentProfileValidateBodySchema,
   AgentProfilePackageFormatSchema,
 } from '../schemas/agent-profile-package-schemas.js';
+import {
+  TeamRosterFormatSchema,
+  TeamRosterImportBodySchema,
+  TeamRosterManifestSchema,
+  TeamRosterRoutePreviewBodySchema,
+  TeamRosterValidateBodySchema,
+} from '../schemas/team-roster-schemas.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
 const agentProfilePackageService = new AgentProfilePackageService(configService);
+const teamRosterService = new TeamRosterService(configService);
 
 // Validation schemas
 const repoSchema = z.object({
@@ -75,6 +84,84 @@ router.get(
   asyncHandler(async (_req, res) => {
     const config = await configService.getConfig();
     res.json(config.repos);
+  })
+);
+
+// GET /api/config/team-roster - Get workspace team roster manifest
+router.get(
+  '/team-roster',
+  asyncHandler(async (_req, res) => {
+    res.json(await teamRosterService.getRoster());
+  })
+);
+
+// POST /api/config/team-roster/validate - Validate roster YAML/JSON or object
+router.post(
+  '/team-roster/validate',
+  asyncHandler(async (req, res) => {
+    const input = TeamRosterValidateBodySchema.parse(req.body);
+    res.json(
+      input.roster
+        ? teamRosterService.validateRoster(input.roster)
+        : teamRosterService.validateContent({
+            content: input.content as string,
+            format: input.format,
+          })
+    );
+  })
+);
+
+// POST /api/config/team-roster/import - Import or replace roster YAML/JSON
+router.post(
+  '/team-roster/import',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const input = TeamRosterImportBodySchema.parse(req.body);
+    try {
+      res.status(201).json(await teamRosterService.importRoster(input));
+    } catch (error) {
+      throw new BadRequestError(error instanceof Error ? error.message : 'Invalid team roster');
+    }
+  })
+);
+
+// PUT /api/config/team-roster - Replace team roster manifest
+router.put(
+  '/team-roster',
+  authorize('admin'),
+  asyncHandler(async (req, res) => {
+    const roster = TeamRosterManifestSchema.parse(req.body);
+    try {
+      res.json(await teamRosterService.saveRoster(roster));
+    } catch (error) {
+      throw new BadRequestError(error instanceof Error ? error.message : 'Invalid team roster');
+    }
+  })
+);
+
+// GET /api/config/team-roster/export - Export roster as YAML or JSON
+router.get(
+  '/team-roster/export',
+  asyncHandler(async (req, res) => {
+    const format =
+      TeamRosterFormatSchema.parse(req.query.format) ??
+      (req.query.format === 'json' ? 'json' : 'yaml');
+    try {
+      res.json(await teamRosterService.exportRoster(format));
+    } catch (error) {
+      throw new BadRequestError(
+        error instanceof Error ? error.message : 'Failed to export team roster'
+      );
+    }
+  })
+);
+
+// POST /api/config/team-roster/preview-route - Preview roster route for task metadata
+router.post(
+  '/team-roster/preview-route',
+  asyncHandler(async (req, res) => {
+    const input = TeamRosterRoutePreviewBodySchema.parse(req.body);
+    res.json(await teamRosterService.previewRoute(input));
   })
 );
 

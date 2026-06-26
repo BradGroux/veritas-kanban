@@ -28,6 +28,7 @@ import {
   type AgentHealthChecker,
   type AgentHealthStatus,
 } from './agent-health-service.js';
+import { TeamRosterService } from './team-roster-service.js';
 
 const log = createLogger('agent-routing');
 
@@ -47,10 +48,12 @@ interface AgentAvailability {
 export class AgentRoutingService {
   private configService: ConfigService;
   private agentHealth: AgentHealthChecker;
+  private teamRoster: TeamRosterService;
 
   constructor(configService?: ConfigService, agentHealth?: AgentHealthChecker) {
     this.configService = configService || new ConfigService();
     this.agentHealth = agentHealth || new AgentHealthService();
+    this.teamRoster = new TeamRosterService(this.configService);
   }
 
   /**
@@ -71,6 +74,71 @@ export class AgentRoutingService {
     const routing: AgentRoutingConfig = config.agentRouting || DEFAULT_ROUTING_CONFIG;
     const evaluatedRules: GovernanceTraceRule[] = [];
     const steps: GovernanceTraceStep[] = [];
+    const rosterPreview = this.teamRoster.resolveRoute(
+      {
+        type: task.type,
+        priority: task.priority,
+        project: task.project,
+        subtaskCount: task.subtasks?.length,
+      },
+      config.teamRoster
+    );
+
+    if (rosterPreview.matched && rosterPreview.agent) {
+      const availability = await this.getAgentAvailability(config.agents, rosterPreview.agent);
+      const ruleId = rosterPreview.ruleId ?? rosterPreview.member?.id ?? 'default';
+      const traceRule: GovernanceTraceRule = {
+        id: `team-roster:${ruleId}`,
+        label: rosterPreview.ruleId ? `Team roster rule ${rosterPreview.ruleId}` : 'Team roster',
+        type: 'routing',
+        status: availability.available ? 'matched' : 'skipped',
+        outcome: availability.available ? 'routed' : 'skipped',
+        message: availability.available
+          ? rosterPreview.reason
+          : `Roster selected ${rosterPreview.agent}, but it is unavailable: ${availability.reason}.`,
+        details: {
+          memberId: rosterPreview.member?.id,
+          profileId: rosterPreview.profileId,
+          reviewerMemberIds: rosterPreview.reviewerMembers.map((member) => member.id),
+        },
+      };
+      evaluatedRules.push(traceRule);
+      steps.push({
+        id: `team-roster:${ruleId}`,
+        label: 'Team roster',
+        status: availability.available ? 'matched' : 'skipped',
+        message: traceRule.message,
+      });
+
+      if (availability.available) {
+        const profile = config.agentProfiles?.find(
+          (candidate) => candidate.id === rosterPreview.profileId
+        );
+        const result: RoutingResult = {
+          agent: rosterPreview.agent,
+          model: profile?.runtime.model ?? availability.agentConfig?.model,
+          rule: traceRule.id,
+          reason: rosterPreview.reason,
+        };
+        return {
+          result,
+          trace: this.buildRoutingTrace(task, context, result, {
+            outcome: 'routed',
+            evaluatedRules,
+            matchedRules: [traceRule],
+            steps,
+            routing,
+          }),
+        };
+      }
+    } else if (rosterPreview.issues.length) {
+      steps.push({
+        id: 'team-roster-invalid',
+        label: 'Team roster',
+        status: 'skipped',
+        message: `Team roster skipped: ${rosterPreview.issues[0]?.message}`,
+      });
+    }
 
     // If routing is disabled, return the global default
     if (!routing.enabled) {
