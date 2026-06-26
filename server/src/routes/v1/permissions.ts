@@ -61,6 +61,12 @@ export const backupAccess = routeAccess('backup:read', 'backup:write', [
 ]);
 export const previewAccess = routeAccess('task:read', 'admin:manage');
 export const workspaceAccess = routeAccess('workspace:read', 'admin:manage');
+export const workspaceCapabilityAccess = routeAccess('workspace:read', 'settings:write', [
+  { methods: ['POST'], path: /^\/manifest\/validate\/?$/, permissions: 'workspace:read' },
+  { methods: ['POST'], path: /^\/intake\/?$/, permissions: 'task:write' },
+  { methods: ['GET'], path: /^\/delegations(?:\/.*)?$/, permissions: 'task:read' },
+  { methods: ['POST'], path: /^\/delegations\/[^/]+\/refresh\/?$/, permissions: 'task:write' },
+]);
 export const notificationAccess = routeAccess('agent:read', 'comment:write');
 export const broadcastAccess = routeAccess('task:read', 'comment:write');
 export const activityAccess = routeAccess('telemetry:read', 'admin:manage');

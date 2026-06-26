@@ -590,6 +590,7 @@ export class TaskService {
         updated: data.updated || new Date().toISOString(),
         git: data.git,
         github: data.github,
+        delegatedWork: data.delegatedWork,
         attempt: data.attempt,
         attempts: data.attempts,
         reviewComments,

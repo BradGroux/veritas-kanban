@@ -89,4 +89,31 @@ describe('CLI API permission preflight', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
   });
+
+  it('requires task write permission for delegated workspace intake', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        role: 'read-only',
+        isLocalhost: false,
+        permissions: ['workspace:read'],
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'reader-key');
+
+    await expect(
+      api('/api/workspace-capabilities/intake', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'blocked' }),
+      })
+    ).rejects.toMatchObject({
+      required: ['task:write'],
+      path: '/api/workspace-capabilities/intake',
+      method: 'POST',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
+  });
 });

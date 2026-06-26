@@ -314,6 +314,17 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     overrides: [{ methods: ['POST'], path: /^\/evaluate\/?$/, permissions: 'report:read' }],
   },
   { prefix: '/api/system/health', read: 'workspace:read', write: 'admin:manage' },
+  {
+    prefix: '/api/workspace-capabilities',
+    read: 'workspace:read',
+    write: 'settings:write',
+    overrides: [
+      { methods: ['POST'], path: /^\/manifest\/validate\/?$/, permissions: 'workspace:read' },
+      { methods: ['POST'], path: /^\/intake\/?$/, permissions: 'task:write' },
+      { methods: ['GET'], path: /^\/delegations(?:\/.*)?$/, permissions: 'task:read' },
+      { methods: ['POST'], path: /^\/delegations\/[^/]+\/refresh\/?$/, permissions: 'task:write' },
+    ],
+  },
   { prefix: '/api/decisions', read: 'task:read', write: 'task:write' },
   { prefix: '/api/run-sessions', read: 'task:read', write: 'task:write' },
   { prefix: '/api/governance/traces', read: 'policy:read' },
