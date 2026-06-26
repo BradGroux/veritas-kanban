@@ -1,13 +1,37 @@
 # v5 Release Notes
 
-These notes describe the published Veritas Kanban v5 stable release line.
+These notes describe the Veritas Kanban v5 stable release line.
 
-- GitHub release:
+- Current source version: `v5.2.0`
+- Latest published GitHub release:
   [Veritas Kanban v5.1.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
   [Veritas-Kanban-5.1.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.1.0/Veritas-Kanban-5.1.0-mac-arm64.zip)
+
+## v5.2.0 Release
+
+v5.2.0 closes the post-v5.1 backlog train and the follow-up audit issues found
+after that work landed. It keeps the v5 storage, desktop, security, and
+migration posture unchanged from v5.1.0.
+
+- Team roster manifests, capability routing, cross-workspace capability
+  discovery, and delegated intake make work handoffs explicit before agents
+  accept tasks.
+- Queue intake monitoring and the recurring scheduler unify GitHub issue
+  watches, agent-run monitors, workflows, digests, and follow-up loops.
+- Squad Chat now has durable threads, unread state, mentions, search, and
+  bidirectional human reply adapters for chat and notification channels.
+- Ceremony enforcement adds design-review and failure-retrospective gates for
+  the workflows that should not proceed without recorded review evidence.
+- Reflection memory promotion turns agent corrections and lessons into a
+  reviewable memory queue instead of losing useful run context in chat history.
+- External tracker schema introspection lets configurable work item mappings
+  inspect tracker field shape before sync.
+- Release audit follow-ups removed the vulnerable frontmatter dependency path,
+  upgraded DOMPurify, made CLI/MCP smoke checks skip cleanly without
+  `VK_API_KEY`, and kept initial Mantine bundle size under the QA budget.
 
 ## v5.1.0 Release
 
