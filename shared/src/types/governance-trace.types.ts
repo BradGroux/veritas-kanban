@@ -5,7 +5,8 @@ export type GovernanceTraceKind =
   | 'budget-policy'
   | 'agent-permission'
   | 'routing'
-  | 'workflow-gate';
+  | 'workflow-gate'
+  | 'ceremony';
 
 export type GovernanceTraceOutcome =
   | 'allowed'

@@ -329,6 +329,8 @@ export interface EnforcementSettings {
   autoTimeTracking: boolean; // Auto-start/stop timers on status changes
   orchestratorDelegation: boolean; // Warn when orchestrator does implementation work instead of delegating
   orchestratorAgent?: string; // The designated orchestrator agent name (e.g. "veritas")
+  ceremonyDesignReview: 'off' | 'warn' | 'block'; // Require design review ceremonies for risky/multi-agent tasks
+  ceremonyFailureRetrospective: 'off' | 'warn' | 'block'; // Require retrospectives after blocked or failed runs
 }
 
 /** Individual hook configuration */
@@ -534,6 +536,8 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     autoTimeTracking: false,
     orchestratorDelegation: false,
     orchestratorAgent: '',
+    ceremonyDesignReview: 'off',
+    ceremonyFailureRetrospective: 'off',
   },
   hooks: {
     enabled: false, // Disabled by default

@@ -1073,18 +1073,31 @@ Real-time monitoring for workflow execution.
 
 ## Enforcement Gates
 
-Structural quality gates that prevent workflow violations. Six gates shipped in v3.1, all disabled by default.
+Structural quality gates that prevent workflow violations. The original six gates shipped in v3.1, all disabled by default. Ceremony gates add off/warn/block controls for review and retrospective records.
 
 ### Available Gates
 
-| Gate                     | What It Enforces                                                        |
-| ------------------------ | ----------------------------------------------------------------------- |
-| `squadChat`              | Agents must post to squad chat at every major step                      |
-| `reviewGate`             | Code tasks must pass 4×10 review scoring before completion              |
-| `closingComments`        | Tasks require a deliverable summary (≥20 chars) before moving to Done   |
-| `autoTelemetry`          | Automatic telemetry event emission on task transitions                  |
-| `autoTimeTracking`       | Automatic time tracking start/stop on status changes                    |
-| `orchestratorDelegation` | Orchestrator agent must delegate work to sub-agents, not do it directly |
+| Gate                           | What It Enforces                                                        |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `squadChat`                    | Agents must post to squad chat at every major step                      |
+| `reviewGate`                   | Code tasks must pass 4×10 review scoring before completion              |
+| `closingComments`              | Tasks require a deliverable summary (≥20 chars) before moving to Done   |
+| `autoTelemetry`                | Automatic telemetry event emission on task transitions                  |
+| `autoTimeTracking`             | Automatic time tracking start/stop on status changes                    |
+| `orchestratorDelegation`       | Orchestrator agent must delegate work to sub-agents, not do it directly |
+| `ceremonyDesignReview`         | Design-review ceremony for critical, review-mode, or multi-agent tasks  |
+| `ceremonyFailureRetrospective` | Retrospective ceremony after blocked work or failed attempts            |
+
+### Ceremony Enforcement
+
+Ceremony gates create durable review records instead of letting risky or failed work move to Done without a trace.
+
+- **Off/warn/block modes** — Each ceremony gate can be disabled, advisory, or blocking
+- **Design-review targeting** — Applies to multi-agent tasks, critical tasks, and `strategy`, `eng-review`, or `paranoid-review` run modes
+- **Failure retrospective targeting** — Applies to blocked tasks, blocked reasons, and failed attempts
+- **Durable queue** — Pending and completed ceremonies live at `/api/ceremonies` with target links, required artifacts, participants, and action items
+- **Governance traces** — Warned and blocked evaluations record `ceremony` traces under `/api/governance/traces`
+- **Settings visibility** — Settings -> Enforcement exposes both ceremony modes and the latest pending ceremony queue
 
 ### Orchestrator Delegation Enforcement
 

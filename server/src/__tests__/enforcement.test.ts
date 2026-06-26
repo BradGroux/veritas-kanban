@@ -115,6 +115,75 @@ describe('Enforcement gates', () => {
     );
   });
 
+  it('blocks completion when a required ceremony is pending', async () => {
+    vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue(
+      buildSettings({ enforcement: { ceremonyDesignReview: 'block' } }) as any
+    );
+    const ceremonyService = {
+      evaluateTaskCompletion: vi.fn().mockResolvedValue({
+        allowed: false,
+        mode: 'block',
+        pending: [
+          {
+            id: 'ceremony_1',
+            kind: 'design_review',
+            title: 'Design review required before completion',
+            reason: 'Task is high-risk, multi-agent, or review-mode work.',
+            requiredArtifacts: ['decision-packet', 'risk-list', 'action-items'],
+            dueAt: '2026-06-27T12:00:00.000Z',
+          },
+        ],
+        warnings: [],
+        blockedReasons: [
+          'Design review required before completion: Task is high-risk, multi-agent, or review-mode work.',
+        ],
+      }),
+    };
+    service = new TaskService({ tasksDir, archiveDir, ceremonyService: ceremonyService as any });
+
+    const task = await service.createTask({ title: 'Ceremony blocked', type: 'code' });
+
+    await expect(service.updateTask(task.id, { status: 'done' })).rejects.toThrow(
+      /Ceremony Enforcement:/
+    );
+    expect(ceremonyService.evaluateTaskCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ id: task.id, status: 'done' }),
+      expect.objectContaining({ ceremonyDesignReview: 'block' })
+    );
+  });
+
+  it('allows completion when ceremony enforcement only warns', async () => {
+    vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue(
+      buildSettings({ enforcement: { ceremonyDesignReview: 'warn' } }) as any
+    );
+    const ceremonyService = {
+      evaluateTaskCompletion: vi.fn().mockResolvedValue({
+        allowed: true,
+        mode: 'warn',
+        pending: [
+          {
+            id: 'ceremony_1',
+            kind: 'design_review',
+            title: 'Design review required before completion',
+            reason: 'Task is high-risk, multi-agent, or review-mode work.',
+            requiredArtifacts: ['decision-packet', 'risk-list', 'action-items'],
+          },
+        ],
+        warnings: [
+          'Design review required before completion: Task is high-risk, multi-agent, or review-mode work.',
+        ],
+        blockedReasons: [],
+      }),
+    };
+    service = new TaskService({ tasksDir, archiveDir, ceremonyService: ceremonyService as any });
+
+    const task = await service.createTask({ title: 'Ceremony warned', type: 'code' });
+    const updated = await service.updateTask(task.id, { status: 'done' });
+
+    expect(updated.status).toBe('done');
+    expect(ceremonyService.evaluateTaskCompletion).toHaveBeenCalledOnce();
+  });
+
   it('skips enforcement when enforcement settings are missing', async () => {
     vi.spyOn(ConfigService.prototype, 'getFeatureSettings').mockResolvedValue({
       ...DEFAULT_FEATURE_SETTINGS,

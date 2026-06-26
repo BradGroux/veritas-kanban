@@ -1,15 +1,48 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useConfig } from '@/hooks/useConfig';
-import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
+import { api } from '@/lib/api';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  type CeremonyEnforcementMode,
+  type CeremonyRequirement,
+} from '@veritas-kanban/shared';
 import { Select } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { ToggleRow, SettingRow, SectionHeader, SaveIndicator } from '../shared';
 import { Shield, ShieldCheck, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const ceremonyModeOptions: Array<{ value: CeremonyEnforcementMode; label: string }> = [
+  { value: 'off', label: 'Off' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'block', label: 'Block' },
+];
+
+function formatCeremonyKind(kind: CeremonyRequirement['kind']): string {
+  return kind === 'design_review' ? 'Design review' : 'Failure retrospective';
+}
+
+function formatCeremonyTarget(requirement: CeremonyRequirement): string {
+  const { target } = requirement;
+  return (
+    target.taskId ||
+    target.runId ||
+    target.workflowId ||
+    target.prUrl ||
+    target.ciUrl ||
+    'workspace'
+  );
+}
 
 export function EnforcementTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
   const { data: config } = useConfig();
+  const { data: pendingCeremonies = [] } = useQuery({
+    queryKey: ['ceremonies', 'pending', 'settings'],
+    queryFn: () => api.ceremonies.list({ status: 'pending', limit: 5 }),
+    staleTime: 30_000,
+  });
 
   const updateEnforcement = (key: string, value: boolean | string) => {
     debouncedUpdate({ enforcement: { [key]: value } });
@@ -60,6 +93,66 @@ export function EnforcementTab() {
               checked={enforcement.closingComments ?? false}
               onCheckedChange={(v) => updateEnforcement('closingComments', v)}
             />
+          </div>
+          <div className="border-t pt-3 space-y-3">
+            <SettingRow
+              label="Design Review Ceremony"
+              description="Require review artifacts before completing high-risk or multi-agent tasks"
+            >
+              <Select
+                value={enforcement.ceremonyDesignReview ?? 'off'}
+                onChange={(value) =>
+                  updateEnforcement(
+                    'ceremonyDesignReview',
+                    (value ?? 'off') as CeremonyEnforcementMode
+                  )
+                }
+                data={ceremonyModeOptions}
+                aria-label="Design Review Ceremony Enforcement"
+                allowDeselect={false}
+                size="xs"
+                w={140}
+              />
+            </SettingRow>
+            <SettingRow
+              label="Failure Retrospective Ceremony"
+              description="Require retrospective artifacts after blocked work or failed attempts"
+            >
+              <Select
+                value={enforcement.ceremonyFailureRetrospective ?? 'off'}
+                onChange={(value) =>
+                  updateEnforcement(
+                    'ceremonyFailureRetrospective',
+                    (value ?? 'off') as CeremonyEnforcementMode
+                  )
+                }
+                data={ceremonyModeOptions}
+                aria-label="Failure Retrospective Ceremony Enforcement"
+                allowDeselect={false}
+                size="xs"
+                w={140}
+              />
+            </SettingRow>
+            <div className="rounded-md bg-muted/50 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-foreground">Pending ceremonies</span>
+                <span className="text-xs text-muted-foreground">{pendingCeremonies.length}</span>
+              </div>
+              {pendingCeremonies.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  {pendingCeremonies.map((requirement) => (
+                    <div key={requirement.id} className="text-xs">
+                      <div className="font-medium text-foreground">{requirement.title}</div>
+                      <div className="text-muted-foreground">
+                        {formatCeremonyKind(requirement.kind)} - {formatCeremonyTarget(requirement)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-1 text-xs text-muted-foreground">No pending ceremonies</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

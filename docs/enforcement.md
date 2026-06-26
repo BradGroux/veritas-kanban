@@ -6,14 +6,16 @@ gates are **disabled by default** and must be explicitly enabled via the Setting
 
 ## Available Gates
 
-| Gate                     | Behavior                                                                      | Default |
-| ------------------------ | ----------------------------------------------------------------------------- | ------- |
-| `squadChat`              | Auto-post task lifecycle events to squad chat                                 | `false` |
-| `reviewGate`             | Blocks completion unless all four `reviewScores` are `10` (4x10 review gate). | `false` |
-| `closingComments`        | Blocks completion unless at least one review comment has ≥20 characters.      | `false` |
-| `autoTelemetry`          | Auto-emits `run.started`/`run.completed` on status changes.                   | `false` |
-| `autoTimeTracking`       | Auto-starts/stops task timers when status changes.                            | `false` |
-| `orchestratorDelegation` | Warn when orchestrator does implementation work instead of delegating         | `false` |
+| Gate                           | Behavior                                                                                                        | Default |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------- |
+| `squadChat`                    | Auto-post task lifecycle events to squad chat                                                                   | `false` |
+| `reviewGate`                   | Blocks completion unless all four `reviewScores` are `10` (4x10 review gate).                                   | `false` |
+| `closingComments`              | Blocks completion unless at least one review comment has ≥20 characters.                                        | `false` |
+| `autoTelemetry`                | Auto-emits `run.started`/`run.completed` on status changes.                                                     | `false` |
+| `autoTimeTracking`             | Auto-starts/stops task timers when status changes.                                                              | `false` |
+| `orchestratorDelegation`       | Warn when orchestrator does implementation work instead of delegating                                           | `false` |
+| `ceremonyDesignReview`         | Requires a design-review ceremony for high-risk or multi-agent task completion. Values: `off`, `warn`, `block`. | `off`   |
+| `ceremonyFailureRetrospective` | Requires a retrospective ceremony after blocked work or failed attempts. Values: `off`, `warn`, `block`.        | `off`   |
 
 ---
 
@@ -67,6 +69,19 @@ curl -X PATCH http://localhost:3001/api/settings/features \
   }'
 ```
 
+### Enable ceremony gates
+
+```bash
+curl -X PATCH http://localhost:3001/api/settings/features \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "enforcement": {
+      "ceremonyDesignReview": "block",
+      "ceremonyFailureRetrospective": "warn"
+    }
+  }'
+```
+
 ### Disable all enforcement gates
 
 ```bash
@@ -79,7 +94,9 @@ curl -X PATCH http://localhost:3001/api/settings/features \
       "closingComments": false,
       "autoTelemetry": false,
       "autoTimeTracking": false,
-      "orchestratorDelegation": false
+      "orchestratorDelegation": false,
+      "ceremonyDesignReview": "off",
+      "ceremonyFailureRetrospective": "off"
     }
   }'
 ```
@@ -266,6 +283,50 @@ Task US-42 started by VERITAS
 
 ---
 
+### 7. ceremonyDesignReview and ceremonyFailureRetrospective
+
+**What they do:** Create auditable ceremony requirements before task completion when the task shape says human or cross-agent review is needed.
+
+**Triggered on:**
+
+- `ceremonyDesignReview`: completing a task with multiple agents, `critical` priority, or review-heavy run modes (`strategy`, `eng-review`, `paranoid-review`)
+- `ceremonyFailureRetrospective`: completing work that was blocked or has failed attempts
+
+**Behavior:**
+
+- `off`: no requirement is created
+- `warn`: a pending ceremony is created, a governance trace is recorded, and completion continues
+- `block`: a pending ceremony is created, a governance trace is recorded, and completion is blocked until the matching ceremony is completed
+
+**Ceremony records:** Stored under `/api/ceremonies` with required artifacts, participants, action items, and target links back to the task/run/workflow.
+
+**Complete a ceremony:**
+
+```bash
+curl -X POST http://localhost:3001/api/ceremonies/ceremony_123/complete \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "completedBy": "brad",
+    "artifacts": [
+      {
+        "kind": "decision-packet",
+        "title": "Design review notes",
+        "body": "Reviewed scope, risks, rollback, and follow-up actions."
+      }
+    ],
+    "actionItems": [
+      {
+        "title": "Track follow-up hardening issue",
+        "priority": "high"
+      }
+    ]
+  }'
+```
+
+**Use case:** Multi-agent and failed-run work should not silently disappear into Done. Ceremony gates leave a durable review or retrospective record, with governance traces explaining whether the gate warned or blocked.
+
+---
+
 ## For AI Agents: How to Interact with Enforcement Gates
 
 If you're an autonomous agent interacting with the Veritas Kanban API, here's how to handle enforcement gates gracefully.
@@ -287,7 +348,9 @@ curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
   "closingComments": true,
   "autoTelemetry": false,
   "autoTimeTracking": false,
-  "orchestratorDelegation": false
+  "orchestratorDelegation": false,
+  "ceremonyDesignReview": "block",
+  "ceremonyFailureRetrospective": "warn"
 }
 ```
 
@@ -297,6 +360,8 @@ curl http://localhost:3001/api/settings/features | jq '.data.enforcement'
 - `closingComments: true` → You must have at least one comment ≥20 characters
 - `autoTelemetry: false` → You are responsible for emitting `run.*` events yourself
 - `autoTimeTracking: false` → You must manually start/stop timers
+- `ceremonyDesignReview: block` → Complete any pending design-review ceremony before marking risky work done
+- `ceremonyFailureRetrospective: warn` → Expect a pending retrospective record after blocked or failed work
 
 ### 2. Pre-Flight Checks
 

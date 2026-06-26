@@ -16,6 +16,7 @@ const traceListQuerySchema = z.object({
       'agent-permission',
       'routing',
       'workflow-gate',
+      'ceremony',
     ])
     .optional(),
   outcome: z

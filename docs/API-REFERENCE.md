@@ -49,13 +49,14 @@
 36. [Tool Policies](#tool-policies)
 37. [Watcher Continuation Policies](#watcher-continuation-policies)
 38. [Traces](#traces)
-39. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-40. [Audit](#audit)
-41. [Maintenance Center](#maintenance-center-apiv1maintenance)
-42. [Common Workflows](#common-workflows)
-43. [Versioning & Deprecation](#versioning--deprecation)
-44. [Rate Limits](#rate-limits)
-45. [Additional Endpoint Groups](#additional-endpoint-groups)
+39. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+40. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+41. [Audit](#audit)
+42. [Maintenance Center](#maintenance-center-apiv1maintenance)
+43. [Common Workflows](#common-workflows)
+44. [Versioning & Deprecation](#versioning--deprecation)
+45. [Rate Limits](#rate-limits)
+46. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -545,9 +546,17 @@ PATCH /api/settings/features   # Toggle feature flags
 {
   "darkMode": true,
   "squadChat": true,
-  "analyticsEnabled": true
+  "analyticsEnabled": true,
+  "enforcement": {
+    "ceremonyDesignReview": "block",
+    "ceremonyFailureRetrospective": "warn"
+  }
 }
 ```
+
+Ceremony enforcement modes are `off`, `warn`, or `block`. `block` prevents task
+completion until the matching ceremony is completed; `warn` records a pending
+ceremony and governance trace without blocking completion.
 
 ---
 
@@ -3003,6 +3012,7 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/lessons`                   | Lessons learned                                                          |
 | `/api/delegation`                | Task delegation                                                          |
 | `/api/workflows`                 | Workflow engine ([details](API-WORKFLOWS.md))                            |
+| `/api/ceremonies`                | Design-review and failure-retrospective requirements                     |
 | `/api/tool-policies`             | Tool access policies                                                     |
 | `/api/sandbox-policies`          | Agent sandbox policy presets                                             |
 | `/api/integrations`              | External integrations, outbound delivery audit, and human reply adapters |
@@ -3217,9 +3227,71 @@ Task-launched review sessions capture independent participant responses, ordered
 
 ---
 
+### Ceremony Requirements (`/api/ceremonies`)
+
+Ceremony requirements are durable review records created by enforcement gates or
+operators. They link back to tasks, runs, workflows, pull requests, or CI runs.
+
+| Method | Path                           | Description                             | Permissions      |
+| ------ | ------------------------------ | --------------------------------------- | ---------------- |
+| `GET`  | `/api/ceremonies`              | List ceremony requirements              | `workflow:read`  |
+| `POST` | `/api/ceremonies`              | Create a ceremony requirement           | `workflow:write` |
+| `POST` | `/api/ceremonies/:id/complete` | Complete a pending ceremony requirement | `workflow:write` |
+
+#### List Ceremony Requirements
+
+```
+GET /api/ceremonies?status=pending&kind=design_review&taskId=task_123&limit=20
+```
+
+Query params: `status`, `kind`, `taskId`, `limit`.
+
+#### Create Ceremony Requirement
+
+```json
+{
+  "kind": "design_review",
+  "enforcementMode": "block",
+  "reason": "Task coordinates multiple agents.",
+  "target": { "taskId": "task_20260626_review" },
+  "trigger": "manual",
+  "requiredArtifacts": ["decision-packet", "risk-list", "action-items"]
+}
+```
+
+#### Complete Ceremony Requirement
+
+```json
+{
+  "completedBy": "brad",
+  "artifacts": [
+    {
+      "kind": "decision-packet",
+      "title": "Design review notes",
+      "body": "Reviewed scope, risks, rollback, and follow-up actions."
+    }
+  ],
+  "actionItems": [
+    {
+      "title": "Track hardening follow-up",
+      "priority": "high",
+      "issueUrl": "https://github.com/BradGroux/veritas-kanban/issues/123"
+    }
+  ]
+}
+```
+
+`completedBy` defaults to the authenticated actor when omitted. Completion keeps
+the record for audit and satisfies future blocking evaluations for the same task
+and ceremony kind.
+
+---
+
 ### Governance Decision Traces (`/api/governance/traces`)
 
-Inspect policy, tool-policy, sandbox-policy, budget-policy, agent-permission, routing, and workflow-gate decisions with evaluated rules, matched rules, remediation, and redacted raw detail.
+Inspect policy, tool-policy, sandbox-policy, budget-policy, agent-permission,
+routing, workflow-gate, and ceremony decisions with evaluated rules, matched
+rules, remediation, and redacted raw detail.
 
 #### List Governance Traces
 
@@ -3229,7 +3301,7 @@ GET /api/governance/traces
 
 Query params: `kind`, `outcome`, `agent`, `taskId`, `actionType`, `startTime`, `endTime`, `limit`.
 
-`kind` values: `policy`, `tool-policy`, `sandbox-policy`, `budget-policy`, `agent-permission`, `routing`, `workflow-gate`.
+`kind` values: `policy`, `tool-policy`, `sandbox-policy`, `budget-policy`, `agent-permission`, `routing`, `workflow-gate`, `ceremony`.
 
 `outcome` values: `allowed`, `warned`, `blocked`, `approval-required`, `routed`, `fallback`, `skipped`.
 

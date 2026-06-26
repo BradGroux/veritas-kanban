@@ -220,6 +220,8 @@ const EnforcementSettingsSchema = z
     autoTimeTracking: z.boolean().optional(),
     orchestratorDelegation: z.boolean().optional(),
     orchestratorAgent: z.string().max(50).optional(),
+    ceremonyDesignReview: z.enum(['off', 'warn', 'block']).optional(),
+    ceremonyFailureRetrospective: z.enum(['off', 'warn', 'block']).optional(),
   })
   .strict()
   .optional();

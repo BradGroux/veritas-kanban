@@ -18,6 +18,14 @@ describe('shared API permission metadata', () => {
     ).toEqual(['workflow:execute']);
   });
 
+  it('keeps ceremony API under workflow read and write permissions', () => {
+    expect(getApiPermissionRequirement('/api/ceremonies').permissions).toEqual(['workflow:read']);
+    expect(
+      getApiPermissionRequirement('/api/ceremonies/ceremony_1/complete', { method: 'POST' })
+        .permissions
+    ).toEqual(['workflow:write']);
+  });
+
   it('keeps diff reads task-read scoped', () => {
     expect(getApiPermissionRequirement('/api/diff/task_1/full').permissions).toEqual(['task:read']);
   });

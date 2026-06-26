@@ -45,6 +45,7 @@ import {
   type TaskIdentityLocation,
   type TaskIdentityScanSource,
 } from './task-identity-diagnostics.js';
+import { getCeremonyService, type CeremonyService } from './ceremony-service.js';
 
 const log = createLogger('task-cache');
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
@@ -96,6 +97,7 @@ export interface TaskServiceOptions {
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
   configService?: Pick<ConfigService, 'getFeatureSettings'>;
+  ceremonyService?: Pick<CeremonyService, 'evaluateTaskCompletion'>;
 }
 
 /** Ignore file-watcher events within this window after our own writes */
@@ -110,6 +112,7 @@ export class TaskService {
   private sqliteTasks: SqliteTaskRepository | null = null;
   private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
   private configService: Pick<ConfigService, 'getFeatureSettings'>;
+  private ceremonyService: Pick<CeremonyService, 'evaluateTaskCompletion'>;
 
   // ============ In-Memory Cache ============
   private cache: Map<string, Task> = new Map();
@@ -128,6 +131,7 @@ export class TaskService {
       options.backlogDir ?? (options.tasksDir || options.archiveDir ? null : getTasksBacklogDir());
     this.telemetry = options.telemetryService || getTelemetryService();
     this.configService = options.configService ?? new ConfigService();
+    this.ceremonyService = options.ceremonyService ?? getCeremonyService();
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -967,6 +971,34 @@ export class TaskService {
               ? undefined
               : (blockedReasonUpdate ?? freshTask.blockedReason),
         };
+
+        if (input.status === 'done' && settings.enforcement) {
+          const ceremonyEvaluation = await this.ceremonyService.evaluateTaskCompletion(
+            previewTask,
+            settings.enforcement
+          );
+          if (!ceremonyEvaluation.allowed) {
+            const detailMessage = `Ceremony Enforcement: ${ceremonyEvaluation.blockedReasons.join(
+              ' '
+            )}`;
+            throw new ValidationError(detailMessage, [
+              {
+                code: 'CEREMONY_REQUIRED',
+                message: detailMessage,
+                path: ['status'],
+                details: ceremonyEvaluation.pending.map((requirement) => ({
+                  id: requirement.id,
+                  kind: requirement.kind,
+                  title: requirement.title,
+                  reason: requirement.reason,
+                  requiredArtifacts: requirement.requiredArtifacts,
+                  dueAt: requirement.dueAt,
+                })),
+              },
+            ]);
+          }
+        }
+
         const validation = await validateTransition(previewTask, previousStatus, input.status);
         if (!validation.allowed) {
           throw new ValidationError(

@@ -154,6 +154,24 @@ const mocks = vi.hoisted(() => ({
     createdAt: '2026-06-04T08:00:00.000Z',
     updatedAt: '2026-06-04T08:00:00.000Z',
   })),
+  ceremonies: vi.fn(async () => [
+    {
+      id: 'ceremony_1',
+      kind: 'design_review',
+      status: 'pending',
+      enforcementMode: 'warn',
+      title: 'Design review required before completion',
+      reason: 'Task is high-risk, multi-agent, or review-mode work.',
+      target: { taskId: 'task_20260626_demo' },
+      trigger: 'task.completion',
+      participants: [{ role: 'coordinator' }],
+      requiredArtifacts: ['decision-packet', 'risk-list', 'action-items'],
+      artifacts: [],
+      actionItems: [],
+      createdAt: '2026-06-04T08:00:00.000Z',
+      updatedAt: '2026-06-04T08:00:00.000Z',
+    },
+  ]),
   settings: {
     board: {},
     tasks: {},
@@ -182,6 +200,8 @@ const mocks = vi.hoisted(() => ({
       closingComments: false,
       autoTelemetry: false,
       autoTimeTracking: false,
+      ceremonyDesignReview: 'warn',
+      ceremonyFailureRetrospective: 'block',
     },
   },
 }));
@@ -207,6 +227,9 @@ vi.mock('@/lib/api', () => ({
       configureCommunicationAdapter: mocks.configureCommunicationAdapter,
       testCommunicationAdapter: mocks.testCommunicationAdapter,
       disconnectCommunicationAdapter: mocks.disconnectCommunicationAdapter,
+    },
+    ceremonies: {
+      list: mocks.ceremonies,
     },
   },
 }));
@@ -295,10 +318,17 @@ describe('Settings tab Mantine controls', () => {
     });
   });
 
-  it('renders Enforcement agent selection through direct Mantine Select', () => {
+  it('renders Enforcement ceremony and agent selection through direct Mantine Select', async () => {
     const { container } = renderWithProviders(<EnforcementTab />);
 
+    expect(
+      screen.getByRole('combobox', { name: 'Design Review Ceremony Enforcement' })
+    ).toBeDefined();
+    expect(
+      screen.getByRole('combobox', { name: 'Failure Retrospective Ceremony Enforcement' })
+    ).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Orchestrator Agent' })).toBeDefined();
+    expect(await screen.findByText('Design review required before completion')).toBeDefined();
     expect(container.querySelector('.mantine-Select-root')).toBeDefined();
   });
 });
