@@ -9,6 +9,17 @@ import type {
   CommunicationSendInput,
   CommunicationSendResult,
   CommunicationThreadMapping,
+  ExternalTrackerConnectionInput,
+  ExternalTrackerConnectionRecord,
+  ExternalTrackerCreateWorkItemInput,
+  ExternalTrackerCreateWorkItemResult,
+  ExternalTrackerDryRunCreateInput,
+  ExternalTrackerDryRunCreateResult,
+  ExternalTrackerMappingProfile,
+  ExternalTrackerMappingProfileInput,
+  ExternalTrackerSchema,
+  ExternalTrackerSyncAudit,
+  ExternalTrackerValidationResult,
 } from '@veritas-kanban/shared';
 
 export type OutboundEndpointType =
@@ -188,5 +199,118 @@ export const integrationsApi = {
       credentials: 'include',
     });
     return handleResponse<CommunicationDeliveryAudit[]>(response);
+  },
+
+  trackerConnection: async (): Promise<ExternalTrackerConnectionRecord> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/connection`, {
+      credentials: 'include',
+    });
+    return handleResponse<ExternalTrackerConnectionRecord>(response);
+  },
+
+  saveTrackerConnection: async (
+    input: ExternalTrackerConnectionInput
+  ): Promise<ExternalTrackerConnectionRecord> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/connection`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    return handleResponse<ExternalTrackerConnectionRecord>(response);
+  },
+
+  introspectTracker: async (
+    input: Partial<ExternalTrackerConnectionInput> = { provider: 'mock' }
+  ): Promise<ExternalTrackerSchema> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/introspect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    return handleResponse<ExternalTrackerSchema>(response);
+  },
+
+  trackerSchema: async (): Promise<ExternalTrackerSchema> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/schema`, {
+      credentials: 'include',
+    });
+    return handleResponse<ExternalTrackerSchema>(response);
+  },
+
+  trackerProfiles: async (): Promise<ExternalTrackerMappingProfile[]> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/profiles`, {
+      credentials: 'include',
+    });
+    return handleResponse<ExternalTrackerMappingProfile[]>(response);
+  },
+
+  saveTrackerProfile: async (
+    profileId: string,
+    input: ExternalTrackerMappingProfileInput
+  ): Promise<ExternalTrackerMappingProfile> => {
+    const response = await fetch(
+      `${API_BASE}/integrations/trackers/profiles/${encodeURIComponent(profileId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(input),
+      }
+    );
+    return handleResponse<ExternalTrackerMappingProfile>(response);
+  },
+
+  validateTrackerProfile: async (profileId: string): Promise<ExternalTrackerValidationResult> => {
+    const response = await fetch(
+      `${API_BASE}/integrations/trackers/profiles/${encodeURIComponent(profileId)}/validate`,
+      {
+        method: 'POST',
+        credentials: 'include',
+      }
+    );
+    return handleResponse<ExternalTrackerValidationResult>(response);
+  },
+
+  dryRunTrackerCreate: async (
+    input: ExternalTrackerDryRunCreateInput
+  ): Promise<ExternalTrackerDryRunCreateResult> => {
+    const response = await fetch(
+      `${API_BASE}/integrations/trackers/profiles/${encodeURIComponent(input.profileId)}/dry-run-create`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ taskId: input.taskId, task: input.task }),
+      }
+    );
+    return handleResponse<ExternalTrackerDryRunCreateResult>(response);
+  },
+
+  createTrackerWorkItem: async (
+    input: ExternalTrackerCreateWorkItemInput
+  ): Promise<ExternalTrackerCreateWorkItemResult> => {
+    const response = await fetch(
+      `${API_BASE}/integrations/trackers/profiles/${encodeURIComponent(input.profileId)}/create`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          taskId: input.taskId,
+          task: input.task,
+          approvedBy: input.approvedBy,
+        }),
+      }
+    );
+    return handleResponse<ExternalTrackerCreateWorkItemResult>(response);
+  },
+
+  trackerAudits: async (limit = 25): Promise<ExternalTrackerSyncAudit[]> => {
+    const response = await fetch(`${API_BASE}/integrations/trackers/audits?limit=${limit}`, {
+      credentials: 'include',
+    });
+    return handleResponse<ExternalTrackerSyncAudit[]>(response);
   },
 };

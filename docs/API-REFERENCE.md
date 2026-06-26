@@ -47,17 +47,18 @@
 34. [Cost Prediction](#cost-prediction)
 35. [Error Learning](#error-learning)
 36. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
-37. [Tool Policies](#tool-policies)
-38. [Watcher Continuation Policies](#watcher-continuation-policies)
-39. [Traces](#traces)
-40. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-41. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-42. [Audit](#audit)
-43. [Maintenance Center](#maintenance-center-apiv1maintenance)
-44. [Common Workflows](#common-workflows)
-45. [Versioning & Deprecation](#versioning--deprecation)
-46. [Rate Limits](#rate-limits)
-47. [Additional Endpoint Groups](#additional-endpoint-groups)
+37. [External Tracker Introspection](#external-tracker-introspection)
+38. [Tool Policies](#tool-policies)
+39. [Watcher Continuation Policies](#watcher-continuation-policies)
+40. [Traces](#traces)
+41. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+42. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+43. [Audit](#audit)
+44. [Maintenance Center](#maintenance-center-apiv1maintenance)
+45. [Common Workflows](#common-workflows)
+46. [Versioning & Deprecation](#versioning--deprecation)
+47. [Rate Limits](#rate-limits)
+48. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2646,6 +2647,106 @@ Rejected, merged, and deleted candidates remain in the audit trail and do not af
 
 ---
 
+## External Tracker Introspection
+
+Configurable external work item schema introspection and mapping lives under `/api/integrations/trackers`. Reads require `settings:read`; writes require `settings:write` through the parent integrations permission guard. External creates also require an explicit `approvedBy` field in the request body.
+
+| Method | Path                                                            | Description                                                   |
+| ------ | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `GET`  | `/api/integrations/trackers/connection`                         | Return redacted connection posture                            |
+| `PUT`  | `/api/integrations/trackers/connection`                         | Save redacted connection metadata; credential values omitted  |
+| `GET`  | `/api/integrations/trackers/schema`                             | Return the latest normalized tracker schema                   |
+| `POST` | `/api/integrations/trackers/introspect`                         | Run adapter introspection and refresh the schema              |
+| `GET`  | `/api/integrations/trackers/profiles`                           | List mapping profiles                                         |
+| `PUT`  | `/api/integrations/trackers/profiles/:profileId`                | Save a mapping profile after schema validation                |
+| `POST` | `/api/integrations/trackers/profiles/:profileId/validate`       | Validate a saved profile                                      |
+| `POST` | `/api/integrations/trackers/profiles/:profileId/dry-run-create` | Build and validate a create payload without an external write |
+| `POST` | `/api/integrations/trackers/profiles/:profileId/create`         | Create a work item after explicit approval                    |
+| `GET`  | `/api/integrations/trackers/audits`                             | List metadata-only sync audit events                          |
+
+### Introspect Schema
+
+```
+POST /api/integrations/trackers/introspect
+```
+
+**Body**:
+
+```json
+{
+  "provider": "mock",
+  "project": "Veritas Kanban"
+}
+```
+
+**Response** `200`: `ExternalTrackerSchema` with work item types, fields, planning paths, priorities, states, tags, assignees, capabilities, and redacted connection posture.
+
+### Save Mapping Profile
+
+```
+PUT /api/integrations/trackers/profiles/default-mock-profile
+```
+
+**Body**:
+
+```json
+{
+  "id": "default-mock-profile",
+  "name": "Default Mock Tracker Mapping",
+  "provider": "mock",
+  "enabled": true,
+  "defaultWorkItemType": "Task",
+  "defaultProjectPath": "Veritas Kanban",
+  "defaultAreaPath": "Veritas Kanban\\Platform",
+  "defaultIterationPath": "Veritas Kanban\\Next",
+  "fieldMappings": [
+    { "trackerFieldId": "System.Title", "source": "title", "required": true },
+    { "trackerFieldId": "System.Description", "source": "description" },
+    { "trackerFieldId": "Microsoft.VSTS.Common.Priority", "source": "priority" },
+    { "trackerFieldId": "System.State", "source": "status" },
+    { "trackerFieldId": "System.Tags", "source": "literal", "literalValue": "veritas" }
+  ],
+  "backlinkFieldId": "Custom.VeritasBacklink"
+}
+```
+
+Invalid work item types, planning paths, tracker field ids, and required-field gaps return `400 VALIDATION_ERROR`.
+
+### Dry-run Create
+
+```
+POST /api/integrations/trackers/profiles/default-mock-profile/dry-run-create
+```
+
+**Body**:
+
+```json
+{
+  "taskId": "task_20260626_tracker"
+}
+```
+
+**Response** `200`: `ExternalTrackerDryRunCreateResult` with `externalWrite: false`, the mapped payload, and validation errors/warnings.
+
+### Approved Create
+
+```
+POST /api/integrations/trackers/profiles/default-mock-profile/create
+```
+
+**Body**:
+
+```json
+{
+  "taskId": "task_20260626_tracker",
+  "approvedBy": "brad"
+}
+```
+
+Successful creates return `201`, append an `externalWorkItems` backlink to the task, and write metadata-only audit/activity events. Credential values and private payload content are not logged.
+
+---
+
 ## Search
 
 QMD-ready retrieval across task markdown and docs. The endpoint uses the configured backend and gracefully falls back to keyword search when QMD is unavailable.
@@ -3078,6 +3179,7 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/automation`                | Automation rules                                                         |
 | `/api/summary`                   | Board summaries                                                          |
 | `/api/github`                    | GitHub integration                                                       |
+| `/api/integrations/trackers`     | External tracker schema introspection and mapping profiles               |
 | `/api/conflicts`                 | Merge conflict detection                                                 |
 | `/api/watcher-policies`          | Agent continuation guardrail decisions                                   |
 | `/api/metrics`                   | Prometheus-style metrics                                                 |

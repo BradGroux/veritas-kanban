@@ -22,6 +22,7 @@ For current v5 screenshots and GIFs, see the
 
 - [Code Workflow](#code-workflow)
 - [GitHub Issues Sync](#github-issues-sync)
+- [External Tracker Introspection](#external-tracker-introspection)
 
 ### AI Agents
 
@@ -1322,6 +1323,27 @@ Bidirectional sync between GitHub Issues and your Kanban board.
 
 ---
 
+## External Tracker Introspection
+
+Configurable external work item mapping for trackers with custom schemas. GitHub sync remains the default path and is unchanged.
+
+- **Adapter schema contract** — Tracker adapters report work item types, required/optional fields, project/area/team/iteration paths, state/priority/tag/assignee constraints, and dry-run/create capabilities.
+- **Mock adapter first pass** — Ships a deterministic mock tracker so mapping, validation, dry-run, and UI workflows can be verified before adding a concrete provider.
+- **Settings UI** — Settings -> Trackers can run introspection, choose default type/path/iteration/team values, map Veritas fields to tracker fields, validate a profile, and dry-run create payloads.
+- **Mapping profiles** — Profiles store normalized mapping metadata only. Connection posture records whether credentials exist, but credential values are not persisted or returned.
+- **Preflight validation** — Required fields, invalid work item types, invalid planning paths, and disallowed picklist/priority values are caught before create/update calls.
+- **Approval-gated writes** — External work item creation requires an explicit approver, records metadata-only audit/activity entries, and stores a Veritas backlink on the source task in `externalWorkItems`.
+- **API endpoints:**
+  - `GET /api/integrations/trackers/schema` — Return the latest normalized schema
+  - `POST /api/integrations/trackers/introspect` — Run adapter introspection
+  - `GET /api/integrations/trackers/profiles` — List mapping profiles
+  - `PUT /api/integrations/trackers/profiles/:id` — Save a mapping profile
+  - `POST /api/integrations/trackers/profiles/:id/validate` — Validate a saved profile
+  - `POST /api/integrations/trackers/profiles/:id/dry-run-create` — Build and validate a create payload without writing externally
+  - `POST /api/integrations/trackers/profiles/:id/create` — Create a work item after explicit approval
+
+---
+
 ## Activity Feed
 
 Streamlined activity page focused on status history with real-time updates.
@@ -1828,6 +1850,7 @@ RESTful API designed for both human and AI agent consumption.
 | `/api/v1/conflicts`                  | Merge conflict status and resolution                          |
 | `/api/v1/github`                     | GitHub PR creation and Issues sync                            |
 | `/api/v1/github/sync`                | GitHub Issues sync (trigger, status, config, mappings)        |
+| `/api/v1/integrations/trackers`      | External tracker introspection, mapping profiles, and dry-run |
 | `/api/v1/summary`                    | Project summary, memory-formatted summary, and standup        |
 | `/api/v1/summary/standup`            | Daily standup summary (json, markdown, text)                  |
 | `/api/v1/notifications`              | Notification CRUD and Teams-formatted pending                 |
