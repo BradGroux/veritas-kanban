@@ -27,6 +27,7 @@ For current v5 screenshots and GIFs, see the
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
+- [Team Roster & Capability Routing](#team-roster--capability-routing)
 - [OpenAI Codex Integration](#openai-codex-integration-v5)
 - [Veritas Cutover & Hermes Support](#veritas-cutover--hermes-support)
 - [Multi-Agent System](#multi-agent-system)
@@ -290,6 +291,8 @@ First-class support for autonomous coding agents.
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
+- **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
+- **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
@@ -322,6 +325,20 @@ Documentation:
 - [OpenAI Codex Integration Roadmap](CODEX-INTEGRATION.md)
 - [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
 - [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
+
+---
+
+## Team Roster & Capability Routing
+
+Workspace-level routing metadata for agent teams and delegated work intake. Added in v5.2.
+
+- **Roster manifests** — Store the coordinator, enabled members, roles, capabilities, routing rules, fallbacks, escalation posture, and review requirements as `teamRoster` app config.
+- **Routing priority** — `/api/agents/route` evaluates enabled rosters before legacy routing rules and labels roster-selected responses with a `team-roster:` rule prefix.
+- **Capability catalogs** — `workspaceCapability` and `trustedWorkspaceCapabilities` describe what a workspace can accept, which evidence it requires, queue/SLA posture, and how delegated work should be packaged.
+- **Delegated intake packets** — Veritas can prepare a bounded handoff from task metadata and capability rules instead of sending raw task context across workspace boundaries.
+- **Settings surfaces** — Settings exposes team roster routing and shared workspace capabilities without requiring hand-edited JSON.
+
+See [API Reference: Team Roster Manifests](API-REFERENCE.md#team-roster-manifests) and [Workspace Capability Discovery](API-REFERENCE.md#workspace-capability-discovery).
 
 ---
 

@@ -148,7 +148,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 ### 🤖 Agent Orchestration
 
-Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Shared live run sessions let workspace members observe an active task run, co-drive with attributed messages, or fork a clean follow-up task without taking over the parent run. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
+Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Team roster manifests and workspace capability discovery route work to the right agent or trusted workspace before a run starts. Shared live run sessions let workspace members observe an active task run, co-drive with attributed messages, or fork a clean follow-up task without taking over the parent run. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
 ![Agent orchestration board](docs/assets/v5/v5-board-overview.png)
 
@@ -223,6 +223,8 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **HermesAgent support** — documents HermesAgent/Hermes Gateway as the active control plane, with Veritas as the GitHub-backed source of truth
 - **OpenAI Codex support** — Local CLI runs, SDK-backed sessions, Codex Cloud delegation, workflow steps, review actions, health checks, MCP setup, and default routing for fresh installs
 - **Local LLM provider profiles** — Optional Ollama Local, Ollama Cloud, and LM Studio Local profiles with health metadata and routing support
+- **Team roster routing** — Workspace coordinator/member manifests route tasks by capabilities, reviewers, fallbacks, and escalation posture
+- **Workspace capability discovery** — Trusted workspace capability catalogs let Veritas package delegated work intake before handing work across workspace boundaries
 - **Agent profile packages** — Portable YAML/JSON packages that bundle role, runtime, prompt, tools, permissions, sandbox, budget, workflow, and health metadata for reusable launches
 - **Decision review sessions** — Multi-participant decision reviews with independent responses, critique rounds, final synthesis packets, work-product attachment, and decision audit links
 - **Shared live run sessions** — Create workspace-scoped view, co-drive, or fork links for active task runs; viewers receive live output and events, editors send attributed messages and mobile-safe approval responses, and forks create linked tasks without mutating the parent run
@@ -331,16 +333,16 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ## 🛠️ Tech Stack
 
-| Layer               | Technology                           | Version                          |
-| ------------------- | ------------------------------------ | -------------------------------- |
-| **Frontend**        | React, Vite, Tailwind CSS, Shadcn UI | React 19, Vite 7.3, Tailwind 4.2 |
-| **Backend**         | Express, WebSocket                   | Express 5.2                      |
-| **Language**        | TypeScript (strict mode)             | 6.0                              |
-| **Storage**         | Markdown files with YAML frontmatter | yaml + local frontmatter helper  |
-| **Git**             | simple-git, worktree management      | —                                |
-| **Testing**         | Playwright (E2E), Vitest (unit)      | Playwright 1.58, Vitest 4        |
-| **Runtime**         | Node.js                              | 22+                              |
-| **Package Manager** | pnpm                                 | 11.1.1+                          |
+| Layer               | Technology                            | Version                                     |
+| ------------------- | ------------------------------------- | ------------------------------------------- |
+| **Frontend**        | React, Vite, Tailwind CSS, Mantine UI | React 19, Vite 8, Tailwind 4.3, Mantine 9.3 |
+| **Backend**         | Express, WebSocket                    | Express 5.2                                 |
+| **Language**        | TypeScript (strict mode)              | 6.0                                         |
+| **Storage**         | Markdown files with YAML frontmatter  | yaml + local frontmatter helper             |
+| **Git**             | simple-git, worktree management       | —                                           |
+| **Testing**         | Playwright (E2E), Vitest (unit)       | Playwright 1.61, Vitest 4.1                 |
+| **Runtime**         | Node.js                               | 22+                                         |
+| **Package Manager** | pnpm                                  | 11.1.1+                                     |
 
 ---
 
