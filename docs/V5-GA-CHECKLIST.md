@@ -1,6 +1,6 @@
 # Veritas Kanban v5 GA Checklist
 
-v5.0.0 stable is published. The current source line is v5.2.0, including the
+v5.0.0 stable is published. The current source line is v5.2.1, including the
 post-v5.1 backlog train for team rosters, workspace capability discovery,
 queue monitors, recurring work, Squad Chat threading and human replies,
 ceremony gates, reflection promotion, external tracker introspection, and audit

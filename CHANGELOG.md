@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.1] - 2026-06-29
+
+### Fixed
+
+- Blocked disabled communication adapters from ingesting inbound human replies
+  into Squad Chat (#760, #764).
+- Made delegated workspace intake recoverable when config persistence fails
+  after target task creation (#761, #764).
+- Verified queue monitor candidate selection already prioritizes runnable work
+  before the bounded candidate cap (#762).
+
+### Changed
+
+- Refreshed the static docs homepage to remove brittle launch-era star and test
+  count claims from current-release copy (#763, #764).
+- Bumped the source metadata from `5.2.0` to `5.2.1` across package manifests
+  and operator-facing version docs (#765).
+
 ## [5.2.0] - 2026-06-26
 
 ### Added
@@ -1652,7 +1670,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.1...HEAD
+[5.2.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.0...v5.2.1
 [5.2.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.1.0...v5.2.0
 [5.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.0...v5.0.1

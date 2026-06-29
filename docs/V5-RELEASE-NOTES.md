@@ -2,13 +2,28 @@
 
 These notes describe the Veritas Kanban v5 stable release line.
 
-- Current source version: `v5.2.0`
+- Current source version: `v5.2.1`
 - Latest published GitHub release:
   [Veritas Kanban v5.1.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
   [Veritas-Kanban-5.1.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.1.0/Veritas-Kanban-5.1.0-mac-arm64.zip)
+
+## v5.2.1 Patch
+
+v5.2.1 records the completed v5.2 audit follow-up pass. It keeps the published
+release/install channel unchanged while updating source metadata and docs.
+
+- Disabled communication adapters now block inbound human reply ingestion
+  before creating Squad Chat messages or thread mappings.
+- Delegated workspace intake now leaves a recoverable pending delegation if
+  persistence fails mid-handoff, and retries can reconcile the target task by
+  delegation ID.
+- The static docs homepage no longer carries brittle launch-era star and exact
+  test-count claims.
+- Queue monitor selection was audited and left unchanged because current sorting
+  already puts runnable candidates ahead of blocked work before the cap.
 
 ## v5.2.0 Release
 
