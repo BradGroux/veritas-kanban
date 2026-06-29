@@ -298,6 +298,35 @@ export class CommunicationAdapterService {
 
     const existing = this.findMapping(adapterId, externalThreadId);
     const target = normalizeTarget(input.target ?? existing?.target ?? { kind: 'squad' });
+    if (!adapter.enabled) {
+      const timestamp = nowIso();
+      const delivery = this.recordDelivery({
+        adapterId,
+        operation: 'reply-ingest',
+        status: 'blocked',
+        target,
+        externalThreadId,
+        actor: input.actor,
+        error: 'Adapter disabled',
+      });
+      await this.saveState();
+      await this.auditDelivery(delivery);
+      return {
+        delivery,
+        mapping: existing ?? {
+          id: `map_${nanoid(10)}`,
+          adapterId,
+          externalThreadId,
+          externalUrl: sanitizeUrl(input.externalUrl),
+          target,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          createdBy: trimOrUndefined(input.actor),
+        },
+        squadMessageId: '',
+      };
+    }
+
     const mapping = this.upsertMapping({
       adapterId,
       externalThreadId,
@@ -306,7 +335,7 @@ export class CommunicationAdapterService {
       createdBy: trimOrUndefined(input.actor),
     });
     const replyKey = input.externalReplyId
-      ? `${adapterId}:${input.externalThreadId}:${input.externalReplyId}`
+      ? `${adapterId}:${externalThreadId}:${input.externalReplyId}`
       : undefined;
     const existingReplyMessageId = replyKey ? this.state.replyIds[replyKey] : undefined;
     if (existingReplyMessageId) {
