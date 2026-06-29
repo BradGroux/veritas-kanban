@@ -4,16 +4,16 @@ These notes describe the Veritas Kanban v5 stable release line.
 
 - Current source version: `v5.2.1`
 - Latest published GitHub release:
-  [Veritas Kanban v5.1.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0)
+  [Veritas Kanban v5.2.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.1)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
-  [Veritas-Kanban-5.1.0-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.1.0/Veritas-Kanban-5.1.0-mac-arm64.zip)
+  [Veritas-Kanban-5.2.1-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.1/Veritas-Kanban-5.2.1-mac-arm64.zip)
 
 ## v5.2.1 Patch
 
-v5.2.1 records the completed v5.2 audit follow-up pass. It keeps the published
-release/install channel unchanged while updating source metadata and docs.
+v5.2.1 records the completed v5.2 audit follow-up pass, publishes signed
+macOS release assets, and updates the supported Homebrew install channel.
 
 - Disabled communication adapters now block inbound human reply ingestion
   before creating Squad Chat messages or thread mappings.
@@ -161,10 +161,13 @@ desktop, security, and migration posture unchanged from v5.0.0.
 
 ## Release Artifacts
 
-The v5.1.0 stable desktop release publishes signed/notarized macOS ZIP and DMG
+The v5.2.1 stable desktop release publishes signed/notarized macOS ZIP and DMG
 assets plus `latest-mac.yml`, blockmaps, and SHA-256 sidecars under the
-[v5.1.0 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.1.0).
+[v5.2.1 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.1).
 Use the release-attached `.sha256` files as the checksum source of truth.
+
+The v5.2.0 desktop assets remain available under the
+[v5.2.0 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.0).
 
 The v5.0.0 stable desktop release artifacts are retained here as the v5 baseline
 used by the updater evidence packet:
