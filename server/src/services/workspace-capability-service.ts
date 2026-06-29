@@ -29,7 +29,10 @@ interface ImportManifestInput {
 }
 
 type WorkspaceCapabilityConfigStore = Pick<ConfigService, 'getConfig' | 'saveConfig'>;
-type WorkspaceCapabilityTaskStore = Pick<TaskService, 'createTask' | 'getTask' | 'updateTask'>;
+type WorkspaceCapabilityTaskStore = Pick<
+  TaskService,
+  'createTask' | 'getTask' | 'updateTask' | 'listTasks'
+>;
 
 export class WorkspaceCapabilityService {
   constructor(
@@ -194,9 +197,56 @@ export class WorkspaceCapabilityService {
       ...(capability.defaultLabels ?? []),
       ...(input.labels ?? []),
     ].filter((label, index, list) => list.indexOf(label) === index);
+
+    const existing = this.findMatchingDelegation(config, input, capability.id, local.workspaceId);
+    if (existing?.target.taskId) {
+      const existingTask = await this.taskService.getTask(existing.target.taskId);
+      if (existingTask) {
+        await this.attachDelegationToSourceTask(input.source.taskId, existing);
+        return { record: existing, taskId: existingTask.id, taskUrl: existing.target.url };
+      }
+    }
+
+    if (existing && !existing.target.taskId) {
+      const recoveredTask = await this.findTaskForDelegation(existing.id);
+      if (recoveredTask) {
+        const recovered = this.finalizeDelegationRecord(
+          existing,
+          input,
+          local,
+          labels,
+          recoveredTask
+        );
+        await this.saveDelegationRecord(config, recovered);
+        await this.attachDelegationToSourceTask(input.source.taskId, recovered);
+        return { record: recovered, taskId: recoveredTask.id, taskUrl: recovered.target.url };
+      }
+    }
+
+    const now = new Date().toISOString();
+    const pendingRecord: WorkspaceDelegationRecord = {
+      id: existing?.id ?? this.generateDelegationId(),
+      capabilityId: capability.id,
+      title: input.title,
+      status: 'blocked',
+      latestState: 'pending-intake',
+      labels,
+      source: input.source,
+      target: {
+        type: 'task',
+        workspaceId: local.workspaceId,
+        workspaceName: local.name,
+        url: input.backlinkUrl,
+      },
+      requestedBy: input.requestedBy,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await this.saveDelegationRecord(config, pendingRecord);
+
     const task = await this.taskService.createTask({
       title: input.title,
-      description: this.buildDelegatedTaskDescription(input, labels),
+      description: this.buildDelegatedTaskDescription(input, labels, pendingRecord.id),
       type: taskType,
       priority: input.priority ?? capability.defaultPriority ?? local.defaultPriority ?? 'medium',
       project: input.project ?? capability.defaultProject ?? local.defaultProject,
@@ -204,26 +254,7 @@ export class WorkspaceCapabilityService {
       updatedBy: input.requestedBy ?? `workspace:${input.source.workspaceId}`,
     } satisfies CreateTaskInput);
 
-    const now = new Date().toISOString();
-    const record: WorkspaceDelegationRecord = {
-      id: this.generateDelegationId(),
-      capabilityId: capability.id,
-      title: input.title,
-      status: 'created',
-      latestState: task.status,
-      labels,
-      source: input.source,
-      target: {
-        type: 'task',
-        workspaceId: local.workspaceId,
-        workspaceName: local.name,
-        taskId: task.id,
-        url: input.backlinkUrl ?? `/tasks/${task.id}`,
-      },
-      requestedBy: input.requestedBy,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const record = this.finalizeDelegationRecord(pendingRecord, input, local, labels, task);
 
     await this.saveDelegationRecord(config, record);
     await this.attachDelegationToSourceTask(input.source.taskId, record);
@@ -343,7 +374,8 @@ export class WorkspaceCapabilityService {
 
   private buildDelegatedTaskDescription(
     input: WorkspaceDelegatedWorkIntakeInput,
-    labels: string[]
+    labels: string[],
+    delegationId?: string
   ): string {
     const contextFields = Object.entries(input.contextFields ?? {})
       .map(([key, value]) => `- ${key}: ${value}`)
@@ -357,11 +389,67 @@ export class WorkspaceCapabilityService {
       input.source.taskUrl ? `- Source task URL: ${input.source.taskUrl}` : undefined,
       input.source.repository ? `- Source repository: ${input.source.repository}` : undefined,
       input.source.issueUrl ? `- Source issue: ${input.source.issueUrl}` : undefined,
+      delegationId ? `- Delegation ID: ${delegationId}` : undefined,
       labels.length > 0 ? `- Labels: ${labels.join(', ')}` : undefined,
       input.requestedBy ? `- Requested by: ${input.requestedBy}` : undefined,
       contextFields ? `\n### Required Context\n${contextFields}` : undefined,
     ];
     return lines.filter(Boolean).join('\n');
+  }
+
+  private findMatchingDelegation(
+    config: AppConfig,
+    input: WorkspaceDelegatedWorkIntakeInput,
+    capabilityId: string,
+    targetWorkspaceId: string
+  ): WorkspaceDelegationRecord | undefined {
+    return (config.workspaceDelegations ?? []).find((record) => {
+      if (record.capabilityId !== capabilityId || record.target.workspaceId !== targetWorkspaceId) {
+        return false;
+      }
+      if (record.source.workspaceId !== input.source.workspaceId || record.title !== input.title) {
+        return false;
+      }
+      if (record.source.taskId || input.source.taskId)
+        return record.source.taskId === input.source.taskId;
+      if (record.source.issueUrl || input.source.issueUrl) {
+        return record.source.issueUrl === input.source.issueUrl;
+      }
+      return true;
+    });
+  }
+
+  private async findTaskForDelegation(delegationId: string): Promise<Task | null> {
+    const tasks = await this.taskService.listTasks();
+    return (
+      tasks.find((task) => task.description.includes(`Delegation ID: ${delegationId}`)) ?? null
+    );
+  }
+
+  private finalizeDelegationRecord(
+    base: WorkspaceDelegationRecord,
+    input: WorkspaceDelegatedWorkIntakeInput,
+    local: WorkspaceCapabilityManifest,
+    labels: string[],
+    task: Task
+  ): WorkspaceDelegationRecord {
+    return {
+      ...base,
+      title: input.title,
+      status: 'created',
+      latestState: task.status,
+      labels,
+      source: input.source,
+      target: {
+        type: 'task',
+        workspaceId: local.workspaceId,
+        workspaceName: local.name,
+        taskId: task.id,
+        url: input.backlinkUrl ?? `/tasks/${task.id}`,
+      },
+      requestedBy: input.requestedBy,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   private async saveDelegationRecord(

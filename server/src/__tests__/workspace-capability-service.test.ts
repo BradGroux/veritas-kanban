@@ -49,6 +49,10 @@ const trustedManifest: WorkspaceCapabilityManifest = {
   },
 };
 
+function cloneConfig(config: AppConfig): AppConfig {
+  return JSON.parse(JSON.stringify(config)) as AppConfig;
+}
+
 function serviceWithConfig(config: AppConfig, sourceTask?: Task) {
   const createdTasks: Task[] = [];
   const updateTask = vi.fn(async (_id: string, input: Partial<Task>) => ({
@@ -79,8 +83,10 @@ function serviceWithConfig(config: AppConfig, sourceTask?: Task) {
         createdTasks.push(task);
         return task;
       },
-      getTask: async (id) => (sourceTask?.id === id ? sourceTask : null),
+      getTask: async (id) =>
+        sourceTask?.id === id ? sourceTask : (createdTasks.find((task) => task.id === id) ?? null),
       updateTask,
+      listTasks: async () => [sourceTask, ...createdTasks].filter(Boolean) as Task[],
     } as never
   );
   return { service, createdTasks, updateTask };
@@ -193,6 +199,7 @@ describe('WorkspaceCapabilityService', () => {
       project: 'handbook',
     });
     expect(createdTasks[0].description).toContain('## Delegated Intake');
+    expect(createdTasks[0].description).toContain(`- Delegation ID: ${result.record.id}`);
     expect(result.record.labels).toEqual(['delegated', 'docs', 'urgent-docs']);
     expect(config.workspaceDelegations).toHaveLength(1);
     expect(updateTask).toHaveBeenCalledWith(
@@ -205,6 +212,88 @@ describe('WorkspaceCapabilityService', () => {
             latestState: 'todo',
           }),
         ],
+      })
+    );
+  });
+
+  it('recovers the target task when final delegation persistence fails', async () => {
+    const sourceTask: Task = {
+      id: 'task_20260626_source',
+      title: 'Source task',
+      description: '',
+      type: 'feature',
+      status: 'todo',
+      priority: 'medium',
+      created: '2026-06-26T00:00:00.000Z',
+      updated: '2026-06-26T00:00:00.000Z',
+    };
+    let persisted = cloneConfig({
+      repos: [],
+      agents: [],
+      defaultAgent: 'codex',
+      workspaceCapability: localManifest,
+      trustedWorkspaceCapabilities: [trustedManifest],
+    });
+    const createdTasks: Task[] = [];
+    const updateTask = vi.fn(async (_id: string, input: Partial<Task>) => ({
+      ...sourceTask,
+      ...input,
+    }));
+    let saveCount = 0;
+    const service = new WorkspaceCapabilityService(
+      {
+        getConfig: async () => cloneConfig(persisted),
+        saveConfig: async (next: AppConfig) => {
+          saveCount += 1;
+          if (saveCount === 2) throw new Error('config write failed');
+          persisted = cloneConfig(next);
+        },
+      } as never,
+      {
+        createTask: async (input) => {
+          const task = {
+            id: `task_20260626_target_${createdTasks.length + 1}`,
+            title: input.title,
+            description: input.description ?? '',
+            type: input.type ?? 'code',
+            status: input.status ?? 'todo',
+            priority: input.priority ?? 'medium',
+            project: input.project,
+            created: '2026-06-26T00:00:00.000Z',
+            updated: '2026-06-26T00:00:00.000Z',
+            revision: 1,
+          } satisfies Task;
+          createdTasks.push(task);
+          return task;
+        },
+        getTask: async (id) =>
+          sourceTask.id === id ? sourceTask : (createdTasks.find((task) => task.id === id) ?? null),
+        updateTask,
+        listTasks: async () => [sourceTask, ...createdTasks],
+      } as never
+    );
+
+    await expect(service.intake(intakeInput())).rejects.toThrow('config write failed');
+
+    const pending = persisted.workspaceDelegations?.[0];
+    expect(createdTasks).toHaveLength(1);
+    expect(pending?.status).toBe('blocked');
+    expect(pending?.target.taskId).toBeUndefined();
+    expect(createdTasks[0].description).toContain(`- Delegation ID: ${pending?.id}`);
+
+    const result = await service.intake(intakeInput());
+
+    expect(createdTasks).toHaveLength(1);
+    expect(result.record).toMatchObject({
+      id: pending?.id,
+      status: 'created',
+      target: { taskId: createdTasks[0].id },
+    });
+    expect(persisted.workspaceDelegations?.[0].target.taskId).toBe(createdTasks[0].id);
+    expect(updateTask).toHaveBeenCalledWith(
+      sourceTask.id,
+      expect.objectContaining({
+        delegatedWork: [expect.objectContaining({ targetId: createdTasks[0].id })],
       })
     );
   });

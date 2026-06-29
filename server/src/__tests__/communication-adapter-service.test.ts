@@ -154,4 +154,30 @@ describe('CommunicationAdapterService', () => {
     expect(retry.delivery).toMatchObject({ status: 'skipped', squadMessageId: 'msg_reply' });
     expect(chatService.sendSquadMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('blocks inbound replies when the adapter is disabled', async () => {
+    await service.configureAdapter('msteams-default', {
+      enabled: false,
+      deliveryMode: 'manual',
+      channelId: 'channel-1',
+    });
+
+    const result = await service.ingestReply('msteams-default', {
+      externalThreadId: 'teams-thread-1',
+      externalReplyId: 'reply-1',
+      actor: 'alice@example.com',
+      displayName: 'Alice',
+      message: 'Approved',
+      target: { kind: 'squad', squadMessageId: 'msg_root', taskId: 'task-1' },
+    });
+
+    expect(result.delivery).toMatchObject({
+      operation: 'reply-ingest',
+      status: 'blocked',
+      error: 'Adapter disabled',
+    });
+    expect(result.squadMessageId).toBe('');
+    expect(chatService.sendSquadMessage).not.toHaveBeenCalled();
+    expect(await service.listMappings('msteams-default')).toEqual([]);
+  });
 });
