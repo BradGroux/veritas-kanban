@@ -323,6 +323,7 @@ describe('WorkflowRunService', () => {
   it('lists runs and metadata with filters while skipping invalid or broken entries', async () => {
     const run1 = await service.startRun('wf-1', 'task-1');
     const run2 = await service.startRun('wf-1', 'task-2');
+    await vi.waitFor(async () => expect((await service.getRun(run1.id)).status).toBe('completed'));
     await vi.waitFor(async () => expect((await service.getRun(run2.id)).status).toBe('completed'));
 
     await fs.mkdir(path.join(tmpDir, 'run_9999999999_brokenxx'), { recursive: true });
