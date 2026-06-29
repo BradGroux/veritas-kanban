@@ -76,6 +76,7 @@ export class ChatService {
   private readonly repository: SqliteChatRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
+  private directorySetup: Promise<void> = Promise.resolve();
 
   constructor(options: ChatServiceOptions = {}) {
     this.chatsDir = options.chatsDir || DEFAULT_CHATS_DIR;
@@ -93,7 +94,10 @@ export class ChatService {
     }
 
     if (!this.repository) {
-      this.ensureDirectories();
+      this.directorySetup = this.ensureDirectories();
+      this.directorySetup.catch((err) => {
+        log.warn({ err }, 'Failed to initialize chat directories');
+      });
     }
   }
 
@@ -101,6 +105,11 @@ export class ChatService {
     await fs.mkdir(this.chatsDir, { recursive: true });
     await fs.mkdir(this.sessionsDir, { recursive: true });
     await fs.mkdir(this.squadDir, { recursive: true });
+  }
+
+  private async ensureFileStorageReady(): Promise<void> {
+    if (this.repository) return;
+    await this.directorySetup;
   }
 
   /**
@@ -243,6 +252,8 @@ export class ChatService {
       return this.repository.getSession(sessionId);
     }
 
+    await this.ensureFileStorageReady();
+
     if (taskMatch) {
       const taskId = taskMatch[1];
       const filePath = this.getSessionPath(sessionId, taskId);
@@ -277,6 +288,8 @@ export class ChatService {
       return this.repository.getSessionForTask(taskId);
     }
 
+    await this.ensureFileStorageReady();
+
     const filePath = this.getSessionPath(`task_${taskId}`, taskId);
 
     try {
@@ -295,6 +308,8 @@ export class ChatService {
     if (this.repository) {
       return this.repository.listBoardSessions();
     }
+
+    await this.ensureFileStorageReady();
 
     try {
       const files = await fs.readdir(this.sessionsDir);
@@ -350,6 +365,8 @@ export class ChatService {
       return session;
     }
 
+    await this.ensureFileStorageReady();
+
     const filePath = this.getSessionPath(sessionId, input.taskId);
     const content = this.serializeSession(session);
 
@@ -398,6 +415,8 @@ export class ChatService {
       return newMessage;
     }
 
+    await this.ensureFileStorageReady();
+
     const filePath = this.getSessionPath(sessionId, taskId);
 
     await withFileLock(filePath, async () => {
@@ -441,6 +460,8 @@ export class ChatService {
       log.info({ sessionId }, 'Deleted chat session');
       return;
     }
+
+    await this.ensureFileStorageReady();
 
     const filePath = this.getSessionPath(sessionId, taskId);
 
@@ -496,12 +517,14 @@ export class ChatService {
   }
 
   private async readSquadMetadata(): Promise<SquadMetadataFile> {
+    await this.ensureFileStorageReady();
     return this.readSquadMetadataFromPath(this.getSquadMetadataPath());
   }
 
   private async updateSquadMetadata<T>(
     mutator: (metadata: SquadMetadataFile) => T | Promise<T>
   ): Promise<T> {
+    await this.ensureFileStorageReady();
     const filePath = this.getSquadMetadataPath();
     await fs.mkdir(this.squadDir, { recursive: true });
 
@@ -695,6 +718,8 @@ export class ChatService {
     if (this.repository) {
       this.repository.appendSquadMessage(squadMessage);
     } else {
+      await this.ensureFileStorageReady();
+
       // Store as daily markdown file: squad/YYYY-MM-DD.md
       const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       const filePath = path.join(this.squadDir, `${date}.md`);
@@ -794,6 +819,8 @@ export class ChatService {
         })
       );
     }
+
+    await this.ensureFileStorageReady();
 
     const messages: SquadMessage[] = [];
     const includeSystem = options.includeSystem !== false; // Default to true

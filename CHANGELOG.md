@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count claims from current-release copy (#763, #764).
 - Bumped the source metadata from `5.2.0` to `5.2.1` across package manifests
   and operator-facing version docs (#765).
+- Stabilized workflow run metadata coverage and file-backed ChatService startup
+  directory setup so release CI does not leak asynchronous test setup errors.
 
 ## [5.2.0] - 2026-06-26
 

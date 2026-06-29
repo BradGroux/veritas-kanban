@@ -24,6 +24,9 @@ release/install channel unchanged while updating source metadata and docs.
   test-count claims.
 - Queue monitor selection was audited and left unchanged because current sorting
   already puts runnable candidates ahead of blocked work before the cap.
+- Release CI was hardened by waiting for workflow-run metadata completion and
+  file-backed ChatService directory initialization before temp workspaces are
+  removed.
 
 ## v5.2.0 Release
 
