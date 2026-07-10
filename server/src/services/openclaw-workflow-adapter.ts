@@ -443,6 +443,17 @@ export class HttpOpenClawWorkflowAdapter implements OpenClawWorkflowAdapter {
         };
       }
 
+      if (delivery.status === 'failed' || !delivery.responseStatus) {
+        return {
+          reachable: false,
+          sessionsSpawnAllowed: false,
+          sessionsSendAllowed: false,
+          error:
+            delivery.error ||
+            'OpenClaw gateway request failed before an HTTP response was received',
+        };
+      }
+
       const body = this.asRecord(this.parseJson(delivery.responseText));
 
       if (!delivery.ok) {
@@ -691,12 +702,27 @@ export class HttpOpenClawTaskAdapter {
     if (!record) return {};
     const details = this.asRecord(record.details);
     if (details) return details;
+
+    const parsedText = this.parseTextPayload(record.text);
+    if (parsedText) return parsedText;
+
     const content = Array.isArray(record.content) ? record.content : [];
     for (const item of content) {
       const itemRecord = this.asRecord(item);
-      if (itemRecord) return itemRecord;
+      const parsed = this.parseTextPayload(itemRecord?.text);
+      if (parsed) return parsed;
     }
     return record;
+  }
+
+  private parseTextPayload(text: unknown): Record<string, unknown> | null {
+    if (typeof text !== 'string' || !text.trim()) return null;
+    try {
+      const parsed = JSON.parse(text);
+      return this.asRecord(parsed);
+    } catch {
+      return { output: text };
+    }
   }
 
   private extractError(value: unknown): string | undefined {

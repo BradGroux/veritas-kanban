@@ -43,8 +43,11 @@ export const BUILT_IN_SANDBOX_PRESETS: SandboxPolicyPreset[] = [
     },
     environment: {
       passthrough: [
+        'ANTHROPIC_API_KEY',
         'CODEX_API_KEY',
         'CODEX_HOME',
+        'HERMES_API_KEY',
+        'HERMES_CONFIG_DIR',
         'HOME',
         'OPENAI_API_KEY',
         'OPENAI_BASE_URL',
@@ -95,10 +98,13 @@ export const BUILT_IN_SANDBOX_PRESETS: SandboxPolicyPreset[] = [
     },
     environment: {
       passthrough: [
+        'ANTHROPIC_API_KEY',
         'CI',
         'CODEX_API_KEY',
         'CODEX_HOME',
         'FORCE_COLOR',
+        'HERMES_API_KEY',
+        'HERMES_CONFIG_DIR',
         'HOME',
         'LANG',
         'LC_ALL',
@@ -176,6 +182,10 @@ export const BUILT_IN_SANDBOX_PRESETS: SandboxPolicyPreset[] = [
 const PROVIDER_CAPABILITIES: Record<string, SandboxProviderCapabilities> = {
   'codex-cli': {
     provider: 'codex-cli',
+    supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
+  },
+  'hermes-cli': {
+    provider: 'hermes-cli',
     supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
   },
   'codex-sdk': {

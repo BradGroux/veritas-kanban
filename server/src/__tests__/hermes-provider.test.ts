@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSafeHermesEnv, isSensitiveHermesEnvKey } from '../utils/hermes-env.js';
 import { AgentHealthService } from '../services/agent-health-service.js';
+import { SandboxPolicyService } from '../services/sandbox-policy-service.js';
 import type { AgentConfig } from '@veritas-kanban/shared';
 
 // ── buildSafeHermesEnv ────────────────────────────────────────────────────────
@@ -57,6 +58,22 @@ describe('buildSafeHermesEnv', () => {
     ]);
     expect(env.MY_GITHUB_TOKEN).toBeUndefined();
     expect(env.HOME).toBe('/home/user');
+  });
+
+  it('preserves the base allowlist when sandbox passthrough keys are provided', () => {
+    const env = buildSafeHermesEnv(
+      {
+        ANTHROPIC_API_KEY: 'sk-ant-test',
+        HERMES_API_KEY: 'hk-test',
+        PATH: '/usr/bin:/bin',
+        EXTRA: 'extra',
+      },
+      ['EXTRA']
+    );
+    expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-test');
+    expect(env.HERMES_API_KEY).toBe('hk-test');
+    expect(env.PATH).toBe('/usr/bin:/bin');
+    expect(env.EXTRA).toBe('extra');
   });
 });
 
@@ -116,6 +133,16 @@ describe('AgentHealthService hermes-cli auth probe', () => {
     expect(result.name).toBe('Hermes');
     expect(result.command).toBe('/nonexistent/hermes');
     expect(result.configured).toBe(true);
+  });
+});
+
+describe('SandboxPolicyService hermes-cli capabilities', () => {
+  it('reports the same local capability set as codex-cli', () => {
+    const service = new SandboxPolicyService();
+    expect(service.capabilitiesForProvider('hermes-cli')).toMatchObject({
+      provider: 'hermes-cli',
+      supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
+    });
   });
 });
 

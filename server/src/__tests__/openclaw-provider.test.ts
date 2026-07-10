@@ -86,6 +86,18 @@ describe('HttpOpenClawWorkflowAdapter.preflight()', () => {
     expect(result.error).toMatch(/timeout|respond/i);
   });
 
+  it('returns reachable: false when delivery fails before an HTTP response exists', async () => {
+    _resetOutboundIntegrationService(
+      mockDelivery({ status: 'failed', error: 'connect ECONNREFUSED 127.0.0.1:18789' })
+    );
+
+    const adapter = new HttpOpenClawWorkflowAdapter({ gatewayUrl: 'http://127.0.0.1:18789' });
+    const result = await adapter.preflight();
+
+    expect(result.reachable).toBe(false);
+    expect(result.error).toMatch(/ECONNREFUSED/);
+  });
+
   it('surfaces policy denial with a configHint when HTTP 403 is returned', async () => {
     _resetOutboundIntegrationService(
       mockDelivery({
@@ -191,6 +203,36 @@ describe('HttpOpenClawTaskAdapter.spawnTask()', () => {
     expect(result.status).toBe('accepted');
   });
 
+  it('parses text-wrapped MCP payloads returned by sessions_spawn', async () => {
+    _resetOutboundIntegrationService(
+      mockDelivery(PREFLIGHT_OK, {
+        status: 'success',
+        ok: true,
+        responseStatus: 200,
+        responseText: JSON.stringify({
+          ok: true,
+          result: {
+            content: [
+              {
+                text: JSON.stringify({
+                  childSessionKey: 'child-session-from-text',
+                  runId: 'run-text-001',
+                  status: 'accepted',
+                }),
+              },
+            ],
+          },
+        }),
+      })
+    );
+
+    const adapter = new HttpOpenClawTaskAdapter({ gatewayUrl: 'http://127.0.0.1:18789' });
+    const result = await adapter.spawnTask(baseInput);
+
+    expect(result.sessionKey).toBe('child-session-from-text');
+    expect(result.runId).toBe('run-text-001');
+  });
+
   it('propagates timeout error from invokeTool', async () => {
     _resetOutboundIntegrationService(mockDelivery(PREFLIGHT_OK, { status: 'timeout' }));
 
@@ -213,17 +255,6 @@ describe('HttpOpenClawTaskAdapter.spawnTask()', () => {
 
     const adapter = new HttpOpenClawTaskAdapter({ gatewayUrl: 'http://127.0.0.1:18789' });
     await expect(adapter.spawnTask(baseInput)).rejects.toThrow(/forbidden|Not allowed/i);
-  });
-});
-
-// ── resolveAgentProvider — hermes and openclaw detection ──────────────────────
-
-describe('resolveAgentProvider detection (via AgentProvider type contract)', () => {
-  it('hermes-cli provider string is accepted by AgentProvider type (compile-time check)', async () => {
-    // This is a compile-time check surfaced as a runtime import. If 'hermes-cli' is
-    // missing from AgentProvider, tsc would have already failed in the build step.
-    const mod = await import('../services/clawdbot-agent-service.js');
-    expect(mod.clawdbotAgentService).toBeDefined();
   });
 });
 
