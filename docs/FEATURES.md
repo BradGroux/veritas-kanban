@@ -34,6 +34,7 @@ For current v5 screenshots and GIFs, see the
 - [Squad Chat](#squad-chat)
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
 - [PRD-Driven Development](#prd-driven-autonomous-development)
+- [PRD Traceability & Work-Item Hierarchy](#prd-traceability--work-item-hierarchy) _(design draft)_
 - [Task↔Agent State Sync](#taskagent-state-sync)
 - [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
 
@@ -537,6 +538,32 @@ Transform product requirements into working code through iterative, quality-gate
 **Avoid for:** Vague requirements, exploratory work, complex architectural decisions, high-risk changes (migrations, auth), research tasks
 
 → [Full guide](features/prd-driven-development.md) — setup, agent execution workflow, complete OAuth2 example walkthrough, configuration tips, troubleshooting
+
+---
+
+## PRD Traceability & Work-Item Hierarchy
+
+**Status:** Design Draft — [#773](https://github.com/BradGroux/veritas-kanban/issues/773)
+
+An optional, additive traceability layer that connects work items to PRD requirements, risks,
+decisions, and verification evidence they satisfy. Adds an explicit five-level work-item
+hierarchy (`initiative → epic → story → task → subtask`) and structured fields for human gates,
+stop conditions, and risk disposition. Enables agents to safely select the next unblocked task
+and humans to view requirement/risk coverage without parsing prose.
+
+**Key capabilities (proposed):**
+
+- **Work-item hierarchy** — `parentId` + `workItemLevel` field on tasks; queryable tree via API
+- **Requirement traceability** — `requirementIds[]` maps tasks to PRD sections; coverage report shows gaps
+- **Risk disposition tracking** — `riskIds[]` + `riskDisposition` map; `mitigated/gated/accepted/blocked/deferred/unknown`
+- **Human gates and stop conditions** — Structured fields that block next-safe agent task selection
+- **Next-safe task selection** — `GET /api/tasks?next_safe=true` considers dependencies, gates, and risk state
+- **Coverage and hierarchy APIs** — `GET /api/coverage/requirements`, `/risks`, `/hierarchy`
+- **CLI** — `vk update --parent`, `--level`, `--requirements`, `--risks`; `vk list --next-safe`; `vk coverage`
+
+**All fields are optional. Existing boards continue to work with zero changes.**
+
+→ [Design document](features/prd-traceability.md) — schema, API design, CLI design, migration strategy, acceptance criteria, rollout sequence, and implementation backlog
 
 ---
 
