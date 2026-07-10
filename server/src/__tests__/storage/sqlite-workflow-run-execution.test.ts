@@ -13,11 +13,15 @@ const mockExecuteStep = vi.fn();
 const mockBroadcastWorkflowStatus = vi.fn();
 const mockGetTask = vi.fn();
 
-vi.mock('../../services/workflow-step-executor.js', () => ({
-  WorkflowStepExecutor: class {
-    executeStep = mockExecuteStep;
-  },
-}));
+vi.mock('../../services/workflow-step-executor.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/workflow-step-executor.js')>();
+  return {
+    HumanGateBlockError: actual.HumanGateBlockError,
+    WorkflowStepExecutor: class {
+      executeStep = mockExecuteStep;
+    },
+  };
+});
 
 vi.mock('../../services/broadcast-service.js', () => ({
   broadcastWorkflowStatus: mockBroadcastWorkflowStatus,
