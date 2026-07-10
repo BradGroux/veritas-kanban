@@ -11,6 +11,7 @@ vi.mock('node:fs/promises', () => {
   const readFile = vi.fn().mockResolvedValue('');
   const writeFile = vi.fn().mockResolvedValue(undefined);
   const readdir = vi.fn().mockResolvedValue([]);
+  const rename = vi.fn().mockResolvedValue(undefined);
   const unlink = vi.fn().mockResolvedValue(undefined);
   const rm = vi.fn().mockResolvedValue(undefined);
   return {
@@ -19,9 +20,10 @@ vi.mock('node:fs/promises', () => {
     readFile,
     writeFile,
     readdir,
+    rename,
     unlink,
     rm,
-    default: { access, mkdir, readFile, writeFile, readdir, unlink, rm },
+    default: { access, mkdir, readFile, writeFile, readdir, rename, unlink, rm },
   };
 });
 

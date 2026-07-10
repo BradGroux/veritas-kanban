@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { fileExists } from '../storage/fs-helpers.js';
+import { fileExists, atomicWriteFile } from '../storage/fs-helpers.js';
 import { join } from 'path';
 import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
@@ -112,14 +112,13 @@ export class ActivityService {
     }
   }
 
-  async getActivities(
-    limit: number = 50,
-    filters?: ActivityFilters,
-    offset: number = 0
-  ): Promise<Activity[]> {
+  /**
+   * Load and filter activities in a single pass. Shared by getActivities and countActivities
+   * to avoid reading + parsing the file twice per paginated request.
+   */
+  private async loadAllFiltered(filters?: ActivityFilters): Promise<Activity[]> {
     let activities = await this.loadAll();
 
-    // Apply filters
     if (filters) {
       if (filters.agent) {
         const agentLower = filters.agent.toLowerCase();
@@ -141,16 +140,37 @@ export class ActivityService {
       }
     }
 
+    return activities;
+  }
+
+  async getActivities(
+    limit: number = 50,
+    filters?: ActivityFilters,
+    offset: number = 0
+  ): Promise<Activity[]> {
+    const activities = await this.loadAllFiltered(filters);
     return activities.slice(offset, offset + limit);
   }
 
   /**
    * Return total count of activities matching the given filters (for pagination).
+   * Shares a single parse+filter pass with getActivities — no double scan.
    */
   async countActivities(filters?: ActivityFilters): Promise<number> {
-    // Re-use getActivities with a high limit to count — simpler than duplicating filter logic
-    const all = await this.getActivities(this.MAX_ACTIVITIES, filters);
-    return all.length;
+    if (this.repository) {
+      // SQLite: delegate to repository if it has a count method; otherwise fall back
+      const repo = this.repository as ActivityRepository & {
+        countActivities?: (filters?: ActivityFilters) => Promise<number>;
+      };
+      if (typeof repo.countActivities === 'function') {
+        return repo.countActivities(filters);
+      }
+      // No native count — load all with filters applied via getActivities
+      const all = await this.getActivities(this.MAX_ACTIVITIES, filters);
+      return all.length;
+    }
+    const filtered = await this.loadAllFiltered(filters);
+    return filtered.length;
   }
 
   /**
@@ -210,7 +230,15 @@ export class ActivityService {
           const content = await readFile(this.activityFile, 'utf-8');
           activities = JSON.parse(content);
         } catch (err) {
-          log.warn({ err }, 'Corrupted activity file — resetting to empty list');
+          // Back up the corrupt file before resetting so the data is recoverable.
+          const backupPath = `${this.activityFile}.corrupt.${Date.now()}`;
+          await readFile(this.activityFile, 'utf-8')
+            .then((raw) => writeFile(backupPath, raw, 'utf-8'))
+            .catch(() => {});
+          log.warn(
+            { err, backupPath },
+            'Corrupted activity file — backed up and resetting to empty list'
+          );
           activities = [];
         }
       }
@@ -224,7 +252,7 @@ export class ActivityService {
         );
       }
 
-      await writeFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
+      await atomicWriteFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
     });
 
     return activity;
@@ -237,7 +265,7 @@ export class ActivityService {
     }
 
     await this.ensureDir();
-    await writeFile(this.activityFile, '[]', 'utf-8');
+    await atomicWriteFile(this.activityFile, '[]', 'utf-8');
   }
 
   dispose(): void {

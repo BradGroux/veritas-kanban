@@ -14,7 +14,6 @@ import type { TaskTelemetryEvent } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { NotFoundError } from '../middleware/error-handler.js';
 import {
-  scanTaskIdentityDiagnostics,
   type TaskIdentityDiagnostics,
   type TaskIdentityScanSource,
 } from './task-identity-diagnostics.js';
@@ -51,10 +50,10 @@ export class BacklogService {
   }
 
   async getTaskIdentityDiagnostics(): Promise<TaskIdentityDiagnostics> {
-    return scanTaskIdentityDiagnostics([
-      ...this.taskService.getIdentityScanSources(),
-      ...this.getIdentityScanSources(),
-    ]);
+    // Delegate to taskService which owns the diagnostics cache (#784).
+    // Passing backlog sources as extras causes a fresh uncached scan, which is
+    // correct because backlog mutations also call invalidateIdentityDiagnosticsCache.
+    return this.taskService.getTaskIdentityDiagnostics(this.getIdentityScanSources());
   }
 
   private async assertTaskIdentityIntegrity(
@@ -66,6 +65,11 @@ export class BacklogService {
       destinationPath,
       extraSources: this.getIdentityScanSources(),
     });
+  }
+
+  /** Invalidate the shared identity diagnostics cache after backlog mutations (#784). */
+  private invalidateIdentityCache(): void {
+    this.taskService.invalidateIdentityDiagnosticsCache();
   }
 
   /**
@@ -163,6 +167,7 @@ export class BacklogService {
     await this.assertTaskIdentityIntegrity('backlog.create', task.id);
 
     const created = await this.backlogRepo.create(task);
+    this.invalidateIdentityCache();
 
     // Log activity
     await activityService.logActivity(
@@ -198,6 +203,7 @@ export class BacklogService {
     }
 
     const updated = await this.backlogRepo.update(id, updates);
+    this.invalidateIdentityCache();
 
     // Log activity if title changed
     if (updates.title && updates.title !== task.title) {
@@ -229,6 +235,7 @@ export class BacklogService {
     const deleted = await this.backlogRepo.delete(id);
 
     if (deleted) {
+      this.invalidateIdentityCache();
       // Log activity
       await activityService.logActivity(
         'task_deleted',
@@ -275,6 +282,7 @@ export class BacklogService {
     await this.backlogRepo.moveToActive(id, activeTasksDir);
 
     // Invalidate task service cache and reload to pick up the new task
+    this.invalidateIdentityCache();
     await this.taskService['initCache'](); // Force cache reload
 
     // Log activity
@@ -318,6 +326,7 @@ export class BacklogService {
 
     // Invalidate task from active cache
     this.taskService['cacheInvalidate'](id); // Access private method
+    this.invalidateIdentityCache();
 
     // Log activity
     await activityService.logActivity(

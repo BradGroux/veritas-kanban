@@ -17,10 +17,12 @@ import {
   mkdir as mkdirAsync,
   readFile as readFileAsync,
   readdir as readdirAsync,
+  rename as renameAsync,
   rm as rmAsync,
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 
 // ---------------------------------------------------------------------------
 // Synchronous helpers (used by security config, agent status persistence)
@@ -69,9 +71,39 @@ export const createWriteStream = fs.createWriteStream;
 export const mkdir = mkdirAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;
+export const rename = renameAsync;
 export const rm = rmAsync;
 export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;
+
+/**
+ * Crash-safe atomic file write.
+ *
+ * Writes `content` to a randomly-named sibling temp file on the same
+ * filesystem as `destPath`, then renames it over `destPath`.  Because
+ * `rename(2)` is atomic on POSIX (same-device) systems, readers either see
+ * the old file or the new file — never a partial write.  The temp file is
+ * cleaned up on failure so it does not accumulate.
+ *
+ * Encoding defaults to `'utf-8'` to match the old `writeFile` call sites.
+ */
+export async function atomicWriteFile(
+  destPath: string,
+  content: string | Buffer,
+  encoding: BufferEncoding = 'utf-8'
+): Promise<void> {
+  const suffix = randomBytes(6).toString('hex');
+  const tmpPath = `${destPath}.tmp.${suffix}`;
+
+  try {
+    await writeFileAsync(tmpPath, content, encoding);
+    await renameAsync(tmpPath, destPath);
+  } catch (err) {
+    // Best-effort cleanup; ignore errors — the original file is untouched.
+    await unlinkAsync(tmpPath).catch(() => {});
+    throw err;
+  }
+}
 
 /**
  * Async file-existence check.
