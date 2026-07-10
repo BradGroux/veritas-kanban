@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { watch, batchedMap, type FSWatcher } from '../storage/fs-helpers.js';
+import { watch, batchedMap, atomicWriteFile, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import matter from '../utils/frontmatter.js';
 import { nanoid } from 'nanoid';
@@ -124,6 +124,11 @@ export class TaskService {
   private taskSyncReconcileInterval: ReturnType<typeof setInterval> | null = null;
   private reconcileRunning = false;
 
+  // ============ Identity Diagnostics Cache ============
+  // Cached to avoid a full filesystem scan on every list request (#784).
+  // Invalidated by any mutation (markWrite path) and by external file changes.
+  private identityDiagnosticsCache: TaskIdentityDiagnostics | null = null;
+
   constructor(options: TaskServiceOptions = {}) {
     this.tasksDir = options.tasksDir || DEFAULT_TASKS_DIR;
     this.archiveDir = options.archiveDir || DEFAULT_ARCHIVE_DIR;
@@ -223,6 +228,8 @@ export class TaskService {
   /** Reload a single file from disk into the cache */
   private async reloadFile(filename: string): Promise<void> {
     const filepath = path.join(this.tasksDir, filename);
+    // External file change also invalidates diagnostics cache (#784)
+    this.identityDiagnosticsCache = null;
     try {
       const content = await fs.readFile(filepath, 'utf-8');
       const task = this.parseTaskFile(content, filename);
@@ -288,6 +295,8 @@ export class TaskService {
   /** Record that we are about to write — suppresses watcher for WRITE_DEBOUNCE_MS */
   private markWrite(): void {
     this.lastWriteTime = Date.now();
+    // Invalidate diagnostics cache on any mutation (#784)
+    this.identityDiagnosticsCache = null;
   }
 
   /** Start watching tasksDir for external file changes */
@@ -415,7 +424,22 @@ export class TaskService {
   async getTaskIdentityDiagnostics(
     extraSources: TaskIdentityScanSource[] = []
   ): Promise<TaskIdentityDiagnostics> {
+    // Use cached result when no extra sources are requested (#784).
+    // The cache is invalidated by markWrite() and by external file changes.
+    if (extraSources.length === 0) {
+      if (!this.identityDiagnosticsCache) {
+        this.identityDiagnosticsCache = await scanTaskIdentityDiagnostics(
+          this.getIdentityScanSources()
+        );
+      }
+      return this.identityDiagnosticsCache;
+    }
     return scanTaskIdentityDiagnostics([...this.getIdentityScanSources(), ...extraSources]);
+  }
+
+  /** Invalidate the identity diagnostics cache (e.g. when backlog tasks change). */
+  invalidateIdentityDiagnosticsCache(): void {
+    this.identityDiagnosticsCache = null;
   }
 
   async assertTaskIdentityIntegrity(
@@ -806,7 +830,7 @@ export class TaskService {
 
       await withFileLock(filepath, async () => {
         this.markWrite();
-        await fs.writeFile(filepath, content, 'utf-8');
+        await atomicWriteFile(filepath, content, 'utf-8');
       });
 
       // Write-through: update cache immediately
@@ -847,12 +871,11 @@ export class TaskService {
       ...restInput
     } = input;
 
-    // Compute filenames for locking. We use the tentative updated task
-    // to determine the new filename (title may have changed).
+    // Compute the current file path for locking. We lock on the CURRENT filepath
+    // (stable for this task ID) so all concurrent updates for the same task
+    // serialize through the same lock regardless of title changes.
     const oldFilename = this.taskToFilename(task);
-    const tentativeTask: Task = { ...task, ...restInput };
-    const newFilename = this.taskToFilename(tentativeTask);
-    const filepath = path.join(this.tasksDir, newFilename);
+    const lockPath = path.join(this.tasksDir, oldFilename);
 
     let updatedTask!: Task;
     let shouldGenerateCompletionPacket = false;
@@ -862,7 +885,7 @@ export class TaskService {
         return;
       }
 
-      await withFileLock(filepath, callback);
+      await withFileLock(lockPath, callback);
     };
 
     await runMutation(async () => {
@@ -872,6 +895,28 @@ export class TaskService {
       const freshTask = this.sqliteTasks
         ? ((await this.sqliteTasks.findById(id)) ?? task)
         : (this.cacheGet(id) ?? task);
+
+      // Revision check inside the lock — prevents a TOCTOU race where two
+      // concurrent requests with the same valid revision both pass the
+      // pre-lock route check, serialize here, and both succeed.
+      if (_expectedRevision !== undefined) {
+        const currentRevision =
+          typeof freshTask.revision === 'number' && freshTask.revision >= 0
+            ? freshTask.revision
+            : 1;
+        if (_expectedRevision !== currentRevision) {
+          throw new ConflictError(
+            `task ${id} has changed since it was loaded. Reload and retry with the latest revision.`,
+            {
+              resourceType: 'task',
+              resourceId: id,
+              expectedRevision: _expectedRevision,
+              currentRevision,
+              current: freshTask,
+            }
+          );
+        }
+      }
 
       const previousStatus = freshTask.status;
       const statusChanged = input.status !== undefined && input.status !== previousStatus;
@@ -1075,6 +1120,12 @@ export class TaskService {
       if (this.sqliteTasks) {
         await this.sqliteTasks.replaceActive(updatedTask);
       } else {
+        // Compute destination filepath inside the lock from the fresh task state.
+        // The new filename may differ from lockPath when the title changed.
+        const freshOldFilename = this.taskToFilename(freshTask);
+        const newFilename = this.taskToFilename(updatedTask);
+        const filepath = path.join(this.tasksDir, newFilename);
+
         await this.assertTaskIdentityIntegrity('task.update', id, {
           candidates: [this.taskIdentityCandidate(updatedTask, 'active', filepath)],
           destinationPath: this.diagnosticPath(filepath),
@@ -1084,11 +1135,15 @@ export class TaskService {
         const content = this.taskToMarkdown(updatedTask);
         this.markWrite();
 
-        if (oldFilename !== newFilename) {
-          // Intentionally silent: old file may already be gone after rename
-          await fs.unlink(path.join(this.tasksDir, oldFilename)).catch(() => {});
+        // Write new content atomically first; only then remove the old slug file.
+        // This ensures the task is never unrecoverable: if the write fails,
+        // the old file is still present under its original name.
+        await atomicWriteFile(filepath, content, 'utf-8');
+
+        if (freshOldFilename !== newFilename) {
+          // Remove old slug file now that new file is durably installed.
+          await fs.unlink(path.join(this.tasksDir, freshOldFilename)).catch(() => {});
         }
-        await fs.writeFile(filepath, content, 'utf-8');
 
         // Write-through: update cache immediately (inside lock for consistency)
         this.cache.set(updatedTask.id, updatedTask);
@@ -1317,8 +1372,11 @@ export class TaskService {
         const destPath = path.join(this.archiveDir, filename);
         await withFileLock(sourcePath, async () => {
           this.markWrite();
-          await fs.rename(sourcePath, destPath);
-          await fs.writeFile(destPath, archivedContent, 'utf-8');
+          // Write updated content atomically to archive destination first so
+          // the source file remains intact until the new file is durable.
+          await atomicWriteFile(destPath, archivedContent, 'utf-8');
+          // Source is now safe to remove — archive copy is confirmed present.
+          await fs.unlink(sourcePath).catch(() => {});
         });
         log.debug({ taskId: id, filename }, 'Archived task file');
       })
@@ -1455,10 +1513,12 @@ export class TaskService {
     const content = this.taskToMarkdown(restoredTask);
 
     await withFileLock(destPath, async () => {
-      // Move back to active and set status to done
-      await fs.rename(sourcePath, destPath);
+      // Write updated content atomically to active destination first so the
+      // archive copy remains intact until the new file is durable.
       this.markWrite();
-      await fs.writeFile(destPath, content, 'utf-8');
+      await atomicWriteFile(destPath, content, 'utf-8');
+      // Archive copy confirmed safe to remove now.
+      await fs.unlink(sourcePath).catch(() => {});
     });
 
     // Restore attachments from archive

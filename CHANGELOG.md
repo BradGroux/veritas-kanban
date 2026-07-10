@@ -17,6 +17,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Isolated QMD result normalization coverage from unrelated persistent search
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).
+- File-backed task mutations (create, update, archive, restore) now use an
+  atomic write-then-rename strategy so a mid-write crash or I/O error cannot
+  leave the task file empty or partially written; the previous valid file
+  remains intact until the replacement is durable (#776).
+- Revision validation is now enforced inside the file-lock / SQLite mutation
+  — not just at the route layer — eliminating the TOCTOU window where two
+  concurrent requests with the same `expectedRevision` could both succeed and
+  the later write silently overwrite the earlier one (#777).
+- Concurrent requests for the same task now always serialize through the lock
+  because the lock key is the task's _current_ filepath (stable per task ID)
+  rather than the tentative new filepath, which differed when titles changed
+  (#777).
+
+### Performance
+
+- Activity-service `countActivities` no longer triggers a second full file
+  parse and filter pass; the filtered result set is shared with `getActivities`
+  in one read (#782).
+- Activity file writes are now atomic (write-temp / rename), and corrupt files
+  are backed up before recovery rather than silently overwritten (#782).
+- Task-identity diagnostics are cached after the first scan and invalidated
+  only on task mutations or external file changes, eliminating the O(N)
+  full-filesystem scan on every `GET /api/tasks` and backlog-list request
+  (#784).
 
 ## [5.2.1] - 2026-06-29
 
