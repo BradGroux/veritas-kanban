@@ -1,13 +1,10 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { fileExists, atomicWriteFile } from '../storage/fs-helpers.js';
+import { mkdir } from 'fs/promises';
 import { join } from 'path';
-import { createLogger } from '../lib/logger.js';
-import { withFileLock } from './file-lock.js';
 import { getDataDir } from '../utils/paths.js';
 import type { ActivityRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteActivityRepository } from '../storage/sqlite/activity-repository.js';
-const log = createLogger('activity-service');
+import { AppendActivityRepository } from '../storage/append-activity-repository.js';
 
 export type ActivityType =
   | 'task_created'
@@ -63,6 +60,7 @@ export interface ActivityPage {
 
 export interface ActivityServiceOptions {
   activityFile?: string;
+  activityDir?: string;
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
@@ -70,13 +68,16 @@ export interface ActivityServiceOptions {
 
 export class ActivityService {
   private activityFile: string;
+  private activityDir: string;
   private readonly MAX_ACTIVITIES = 5000; // Increased from 1000 for longer history
   private repository: ActivityRepository | null = null;
+  private appendRepository: AppendActivityRepository | null = null;
   private sqliteDatabase: SqliteDatabase | null = null;
   private ownsSqliteDatabase = false;
 
   constructor(options: ActivityServiceOptions = {}) {
     this.activityFile = options.activityFile || join(getDataDir(), 'activity.json');
+    this.activityDir = options.activityDir || getDataDir();
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -86,6 +87,11 @@ export class ActivityService {
       this.ownsSqliteDatabase = !options.sqliteDatabase;
       this.sqliteDatabase.open();
       this.repository = new SqliteActivityRepository(this.sqliteDatabase);
+    } else {
+      // Use append-only file storage
+      this.appendRepository = new AppendActivityRepository(this.activityDir, {
+        maxActivities: this.MAX_ACTIVITIES,
+      });
     }
   }
 
@@ -95,26 +101,18 @@ export class ActivityService {
   }
 
   /**
-   * Load all activities from disk (already sorted newest-first).
+   * Load all activities from storage (already sorted newest-first).
    */
   private async loadAll(): Promise<Activity[]> {
     if (this.repository) {
       return this.repository.getActivities(this.MAX_ACTIVITIES);
     }
 
-    await this.ensureDir();
-
-    if (!(await fileExists(this.activityFile))) {
-      return [];
+    if (this.appendRepository) {
+      return this.appendRepository.getAllActivities();
     }
 
-    try {
-      const content = await readFile(this.activityFile, 'utf-8');
-      return JSON.parse(content) as Activity[];
-    } catch {
-      // Intentionally silent: file may not exist or contain invalid JSON — return empty list
-      return [];
-    }
+    return [];
   }
 
   /** Load and filter activities in a single pass. */
@@ -185,6 +183,11 @@ export class ActivityService {
       return { items, total };
     }
 
+    if (this.appendRepository) {
+      // One-pass scan for both items and total
+      return this.appendRepository.getActivitiesPage(limit, offset, filters);
+    }
+
     const filtered = await this.loadAllFiltered(filters);
     return {
       items: filtered.slice(offset, offset + limit),
@@ -228,53 +231,12 @@ export class ActivityService {
       return this.repository.logActivity(type, taskId, taskTitle, details, agent, actor);
     }
 
-    await this.ensureDir();
+    if (this.appendRepository) {
+      return this.appendRepository.logActivity(type, taskId, taskTitle, details, agent, actor);
+    }
 
-    const activity: Activity = {
-      id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      taskId,
-      taskTitle,
-      ...(agent && { agent }),
-      ...(actor && { actor }),
-      details,
-      timestamp: new Date().toISOString(),
-    };
-
-    await withFileLock(this.activityFile, async () => {
-      let activities: Activity[] = [];
-
-      if (await fileExists(this.activityFile)) {
-        try {
-          const content = await readFile(this.activityFile, 'utf-8');
-          activities = JSON.parse(content);
-        } catch (err) {
-          // Back up the corrupt file before resetting so the data is recoverable.
-          const backupPath = `${this.activityFile}.corrupt.${Date.now()}`;
-          await readFile(this.activityFile, 'utf-8')
-            .then((raw) => writeFile(backupPath, raw, 'utf-8'))
-            .catch(() => {});
-          log.warn(
-            { err, backupPath },
-            'Corrupted activity file — backed up and resetting to empty list'
-          );
-          activities = [];
-        }
-      }
-
-      // Prepend new activity and limit to MAX_ACTIVITIES
-      activities = [activity, ...activities].slice(0, this.MAX_ACTIVITIES);
-
-      if (activities.length >= this.MAX_ACTIVITIES) {
-        log.warn(
-          `[Activity] Activity limit reached (${this.MAX_ACTIVITIES}), trimming oldest entries`
-        );
-      }
-
-      await atomicWriteFile(this.activityFile, JSON.stringify(activities, null, 2), 'utf-8');
-    });
-
-    return activity;
+    // Fallback (should not reach here)
+    throw new Error('No activity repository configured');
   }
 
   async clearActivities(): Promise<void> {
@@ -283,8 +245,13 @@ export class ActivityService {
       return;
     }
 
+    if (this.appendRepository) {
+      await this.appendRepository.clearActivities();
+      return;
+    }
+
     await this.ensureDir();
-    await atomicWriteFile(this.activityFile, '[]', 'utf-8');
+    // Fallback: no-op
   }
 
   dispose(): void {

@@ -7,6 +7,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
+// Set to use SQLite for tests (avoids mocking fs/promises)
+process.env.VERITAS_STORAGE = 'sqlite';
+
 // Hoist tmpRoot so it's available when vi.mock factory runs (before const declarations)
 const tmpRoot = vi.hoisted(() => {
   const tmpdir = process.env.TMPDIR || process.env.TEMP || '/tmp';
@@ -38,11 +41,11 @@ describe('ActivityService', () => {
     activityDir = path.join(tmpRoot, '.veritas-kanban');
     await fs.mkdir(activityDir, { recursive: true });
     service = new ActivityService();
-    // Override the activity file path
-    (service as any).activityFile = path.join(activityDir, 'activity.json');
   });
 
   afterEach(async () => {
+    // Clear activities between tests
+    await service.clearActivities();
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
   });
 
@@ -67,10 +70,11 @@ describe('ActivityService', () => {
       expect(activity.timestamp).toBeDefined();
     });
 
-    it('should persist activity to file', async () => {
-      await service.logActivity('task_created', 'task_1', 'Test');
-      const data = JSON.parse(await fs.readFile((service as any).activityFile, 'utf-8'));
-      expect(data).toHaveLength(1);
+    it('should persist activity', async () => {
+      const activity = await service.logActivity('task_created', 'task_1', 'Test');
+      const activities = await service.getActivities();
+      expect(activities).toHaveLength(1);
+      expect(activities[0].id).toBe(activity.id);
     });
 
     it('should prepend new activities (most recent first)', async () => {
@@ -84,9 +88,7 @@ describe('ActivityService', () => {
   });
 
   describe('getActivities', () => {
-    it('should return empty array when no file exists', async () => {
-      // Use a fresh service with non-existent file
-      (service as any).activityFile = path.join(activityDir, 'nonexistent.json');
+    it('should return empty array when no activities exist', async () => {
       const activities = await service.getActivities();
       expect(activities).toEqual([]);
     });
