@@ -323,8 +323,11 @@ entity lands), a follow-up migration can normalize these into `task_requirements
 them. The `ON DELETE SET NULL` on `parent_id` applies only to hard deletes (rare purge path).
 For archived parents, the implementation must define explicit behavior:
 
-- Archiving a task that has active (non-archived) children issues a warning and requires the
-  caller to reparent or also archive children first (enforced at the service layer, not DB FK).
+- Archiving a task that has active (non-archived) children issues a warning in the API
+  response (`archiveWarning: "N active children retain this task as parent"`). The archive
+  proceeds regardless. Children's `parentId` is preserved — callers that want to reparent
+  or cascade the archive must do so explicitly in separate requests.
+  (Enforced at the service layer; not a DB FK constraint.)
 - `/api/tasks/:id/children` excludes archived children by default; pass `?include_archived=true`
   to include them.
 - `GET /api/hierarchy` excludes archived nodes by default; archived ancestors are rendered as
@@ -424,7 +427,9 @@ A task qualifies as "next safe" when **all** of the following hold:
 4. `traceability.humanGates` is absent or empty.
 5. `traceability.stopConditions` is absent or empty, OR every stop condition in
    `stopConditions` has a corresponding `true` entry in `stopConditionResolved`.
-6. None of the `traceability.riskIds` has disposition `blocked` in `traceability.riskDisposition`.
+6. None of the `traceability.riskIds` has disposition `blocked` or `gated` in
+   `traceability.riskDisposition`. Both `blocked` and `gated` explicitly signal "this task may
+   not proceed" and are always excluded with no override available.
 7. None of the `traceability.riskIds` has disposition `unknown` (either absent from
    `riskDisposition` or explicitly set to `unknown`), **unless** `allow_unknown_risks=true`
    is passed.
@@ -825,9 +830,9 @@ The `vk coverage` and `vk hierarchy` commands are new; they do not conflict with
 | 2 | `PATCH /api/tasks/:id` with a valid `traceability` payload persists all fields and returns them in subsequent `GET /api/tasks/:id?include=traceability` responses. |
 | 3 | `PATCH /api/tasks/:id` with `"traceability": { "parentId": null }` clears `parentId` only; other traceability fields are preserved. |
 | 4 | `PATCH /api/tasks/:id` with `"traceability": null` clears all traceability metadata. |
-| 5 | `GET /api/tasks?next_safe=true` returns only `todo` tasks where: (a) all `depends_on` **and** `blockedBy` tasks are `done`, (b) `blockedReason` is absent, (c) `humanGates` is empty, (d) `stopConditions` are all resolved, and (e) no risk has disposition `blocked` or `unknown`. |
+| 5 | `GET /api/tasks?next_safe=true` returns only `todo` tasks where: (a) all `depends_on` **and** `blockedBy` tasks are `done`, (b) `blockedReason` is absent, (c) `humanGates` is empty, (d) `stopConditions` are all resolved, and (e) no risk has disposition `blocked`, `gated`, or `unknown`. |
 | 6 | `GET /api/tasks?next_safe=true` with an explicit `status` other than `todo` returns `400 Bad Request`. |
-| 7 | `GET /api/tasks?next_safe=true&allow_unknown_risks=true` includes tasks whose risks have `unknown` disposition. |
+| 7 | `GET /api/tasks?next_safe=true&allow_unknown_risks=true` includes tasks whose risks have `unknown` disposition but still excludes tasks whose risks have `blocked` or `gated` disposition. |
 | 8 | `GET /api/coverage/requirements?project=<id>` in "derived" mode (no catalog) reports only IDs observed in tasks; the `uncovered` count is 0. In "registered" mode (catalog present), IDs in the catalog but absent from tasks appear as uncovered rows. |
 | 9 | A requirement is reported `verified: true` only when at least one `done` task referencing it has at least one `verificationSteps` entry with `checked = true`, or at least one `verificationIds` entry. |
 | 10 | `GET /api/coverage/risks?project=<id>` returns a risk register with per-disposition counts and correctly identifies open risks; risks with `disposition: 'accepted'` are excluded from the verified check. |
@@ -870,8 +875,8 @@ The `vk coverage` and `vk hierarchy` commands are new; they do not conflict with
     - `blockedReason` absent.
     - `humanGates` empty.
     - All `stopConditions` resolved (or no stop conditions).
-    - No risk with disposition `blocked`; no risk with disposition `unknown` unless
-      `allow_unknown_risks=true` is set.
+    - No risk with disposition `blocked` or `gated`; no risk with disposition `unknown` unless
+      `allow_unknown_risks=true` is set. (`blocked` and `gated` are always excluded — no override.)
     - Returns `400` when combined with a non-`todo` status filter.
 11. Unit tests for storage, validation (circular/cross-project), and next-safe logic.
 
@@ -926,7 +931,7 @@ increment to keep PRs reviewable.
 | B-2 | Add `task_traceability` SQLite migration and repository | 1 | Migration `0050`. `work_item_level` CHECK uses `'child-task'`. Includes file-backed path. |
 | B-3 | Integrate traceability into `GET /api/tasks/:id` and `PATCH /api/tasks/:id` | 1 | `?include=traceability`, null-clear, `parentId: null` clear, circular+cross-project validation. |
 | B-4 | Add `GET /api/tasks/:id/traceability` and `GET /api/tasks/:id/children` | 1 | Children endpoint excludes archived by default. |
-| B-5 | Add `next_safe=true` filter to `GET /api/tasks` | 1 | Evaluates `depends_on ∪ blockedBy`, gates, resolved stop conditions, risk disposition. Returns `400` on bad status combo. Includes `allow_unknown_risks` param. |
+| B-5 | Add `next_safe=true` filter to `GET /api/tasks` | 1 | Evaluates `depends_on ∪ blockedBy`, gates, resolved stop conditions, risk disposition. Excludes `blocked` and `gated` (no override); excludes `unknown` unless `allow_unknown_risks=true`. Returns `400` on bad status combo. |
 | B-6 | Add project requirement and risk catalogs | 2 | `POST /api/projects/:id/catalog/requirements` and `/risks`. Enables uncovered-row semantics. |
 | B-7 | Implement `GET /api/coverage/requirements` | 2 | Derived and registered catalog modes. Verified = done + checked steps. |
 | B-8 | Implement `GET /api/coverage/risks` | 2 | Derived and registered catalog modes. Accepted risks exempt from verified check. |
