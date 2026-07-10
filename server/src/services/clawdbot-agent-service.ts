@@ -28,6 +28,7 @@ import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
+import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type {
@@ -57,8 +58,6 @@ import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 const log = createLogger('clawdbot-agent-service');
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const LOGS_DIR = path.join(PROJECT_ROOT, '.veritas-kanban', 'logs');
 export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -176,12 +175,74 @@ export class ClawdbotAgentService {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
     this.agentHealth = agentHealth || new AgentHealthService();
-    this.logsDir = LOGS_DIR;
+    this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
 
   private async ensureLogsDir(): Promise<void> {
     await fs.mkdir(this.logsDir, { recursive: true });
+  }
+
+  /**
+   * Reconcile persisted running attempts after a server restart.
+   *
+   * After an unexpected restart the in-memory `pendingAgents` map is empty,
+   * but task files can still contain attempts with status `'running'`.
+   * This method scans all tasks and marks those orphaned attempts as `'failed'`
+   * so the UI and operators have a reliable, actionable state (issue #781).
+   *
+   * Safe to call multiple times; only tasks whose current attempt is `'running'`
+   * and whose taskId is NOT in `pendingAgents` are touched.
+   */
+  async reconcileRunningAttempts(): Promise<void> {
+    let tasks: Task[];
+    try {
+      tasks = await this.taskService.listTasks();
+    } catch (err) {
+      log.warn(
+        { err },
+        '[ClawdbotAgent] reconcileRunningAttempts: failed to list tasks — skipping'
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let reconciledCount = 0;
+
+    for (const task of tasks) {
+      if (!task.attempt || task.attempt.status !== 'running') continue;
+      // If there is already a live in-memory entry, leave it alone.
+      if (pendingAgents.has(task.id)) continue;
+
+      try {
+        await this.taskService.updateTask(task.id, {
+          // Revert task status to 'todo' so it can be restarted by the operator.
+          status: 'todo',
+          attempt: {
+            ...task.attempt,
+            status: 'failed',
+            ended: now,
+          },
+        });
+        log.info(
+          { taskId: task.id, attemptId: task.attempt.id },
+          '[ClawdbotAgent] Reconciled orphaned running attempt as failed after restart'
+        );
+        reconciledCount++;
+      } catch (err) {
+        log.warn(
+          { err, taskId: task.id },
+          '[ClawdbotAgent] reconcileRunningAttempts: failed to update task'
+        );
+      }
+    }
+
+    if (reconciledCount > 0) {
+      log.info(
+        { count: reconciledCount },
+        '[ClawdbotAgent] Startup reconciliation complete: orphaned running attempts marked failed'
+      );
+    }
   }
 
   private expandPath(p: string): string {
@@ -493,7 +554,7 @@ export class ClawdbotAgentService {
 
     // Write the task request to a well-known location that Veritas monitors
     // This is simpler than trying to hit the WebSocket API
-    const requestsDir = path.join(PROJECT_ROOT, '.veritas-kanban', 'agent-requests');
+    const requestsDir = path.join(getRuntimeDir(), 'agent-requests');
     const requestFile = path.join(requestsDir, `${taskId}.json`);
     ensureWithinBase(requestsDir, requestFile);
 
@@ -613,12 +674,7 @@ export class ClawdbotAgentService {
     pendingAgents.delete(taskId);
 
     // Remove request file
-    const requestFile = path.join(
-      PROJECT_ROOT,
-      '.veritas-kanban',
-      'agent-requests',
-      `${taskId}.json`
-    );
+    const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
     try {
       await fs.unlink(requestFile);
     } catch {
@@ -1888,7 +1944,7 @@ export class ClawdbotAgentService {
       callbackUrl: string;
     }>
   > {
-    const requestsDir = path.join(PROJECT_ROOT, '.veritas-kanban', 'agent-requests');
+    const requestsDir = path.join(getRuntimeDir(), 'agent-requests');
 
     try {
       const files = await fs.readdir(requestsDir);

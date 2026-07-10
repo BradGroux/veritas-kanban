@@ -17,6 +17,7 @@ import {
   mkdir as mkdirAsync,
   readFile as readFileAsync,
   readdir as readdirAsync,
+  rename as renameAsync,
   rm as rmAsync,
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
@@ -69,6 +70,7 @@ export const createWriteStream = fs.createWriteStream;
 export const mkdir = mkdirAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;
+export const rename = renameAsync;
 export const rm = rmAsync;
 export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;

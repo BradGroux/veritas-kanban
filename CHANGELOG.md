@@ -11,12 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
   development-tool dependencies (#792, #795).
+- Debounced and made asynchronous the agent-registry heartbeat persistence
+  writes; writes are now coalesced over a 2 s window and use atomic
+  rename-on-write instead of synchronous full-file serialisation; `dispose()`
+  flushes any in-flight write on shutdown (#783).
+- Replaced per-request `ConfigService` allocation in the
+  `POST /api/agent/delegation-violation` route handler with the application-level
+  singleton to prevent FSWatcher leaks under sustained traffic (#779).
+- Routed all `.veritas-kanban` path construction in
+  `clawdbot-agent-service.ts` and `agent-status.ts` through the centralised
+  helpers in `server/src/utils/paths.ts` (DATA_DIR / VERITAS_DATA_DIR
+  overrides are now respected consistently in those files; #774).
 
 ### Fixed
 
 - Isolated QMD result normalization coverage from unrelated persistent search
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).
+- Added startup reconciliation for agent attempts that were left in `running`
+  state after a server crash or restart; orphaned attempts are now marked
+  `failed` and their tasks reverted to `todo` so operators can relaunch
+  them (#781).
 
 ## [5.2.1] - 2026-06-29
 

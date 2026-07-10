@@ -417,6 +417,11 @@ The registry is stored as JSON at `.veritas-kanban/agent-registry.json`:
 
 The service loads this file on startup and persists after every change. You can manually edit this file (with the server stopped) to seed or reset the registry.
 
+> **Persistence note:** Registry writes are debounced over a 2-second window and
+> use atomic rename-on-write, so the file is always in a consistent state and
+> heartbeat bursts do not block the event loop. Pending writes are flushed
+> before the server shuts down.
+
 ---
 
 ## Troubleshooting
