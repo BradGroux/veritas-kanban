@@ -117,4 +117,72 @@ describe('updateTask – revision atomicity (#777)', () => {
       })
     ).rejects.toThrow(/has changed since it was loaded/);
   });
+
+  it('serializes same-task updates across slug changes without leaving stale files', async () => {
+    const task = await service.createTask({
+      title: 'Slug Queue Root',
+      type: 'code',
+      priority: 'medium',
+    });
+
+    await Promise.all([
+      service.updateTask(task.id, { title: 'Slug Queue First' }),
+      service.updateTask(task.id, { title: 'Slug Queue Final' }),
+      service.updateTask(task.id, { status: 'in-progress' }),
+    ]);
+
+    const finalTask = await service.getTask(task.id);
+    expect(finalTask?.title).toBe('Slug Queue Final');
+    expect(finalTask?.status).toBe('in-progress');
+
+    const taskFiles = (await fs.readdir(tasksDir)).filter((name) => name.startsWith(`${task.id}-`));
+    expect(taskFiles).toHaveLength(1);
+    expect(taskFiles[0]).toContain('slug-queue-final');
+  });
+
+  it('does not let an older finisher clear a newer queued waiter', async () => {
+    const serviceAny = service as unknown as {
+      withTaskMutex: (id: string, fn: () => Promise<void>) => Promise<void>;
+    };
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+
+    const first = serviceAny.withTaskMutex('task_waiter_cleanup', async () => {
+      order.push('start-1');
+      await firstGate;
+      order.push('end-1');
+    });
+    const second = serviceAny.withTaskMutex('task_waiter_cleanup', async () => {
+      order.push('start-2');
+      await secondGate;
+      order.push('end-2');
+    });
+
+    releaseFirst();
+
+    for (let i = 0; i < 50 && !order.includes('start-2'); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(order).toContain('start-2');
+
+    const third = serviceAny.withTaskMutex('task_waiter_cleanup', async () => {
+      order.push('start-3');
+      order.push('end-3');
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).not.toContain('start-3');
+
+    releaseSecond();
+    await Promise.all([first, second, third]);
+
+    expect(order).toEqual(['start-1', 'end-1', 'start-2', 'end-2', 'start-3', 'end-3']);
+  });
 });
