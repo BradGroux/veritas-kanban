@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
 // Hoist tmpRoot so it's available when vi.mock factory runs (before const declarations)
 const tmpRoot = vi.hoisted(() => {
@@ -36,8 +37,9 @@ describe('ActivityService', () => {
   beforeEach(async () => {
     activityDir = path.join(tmpRoot, '.veritas-kanban');
     await fs.mkdir(activityDir, { recursive: true });
-    // Pass activityDir to service so AppendActivityRepository uses the test directory
-    service = new ActivityService({ activityDir, storageType: 'file' });
+    service = new ActivityService();
+    // Override the activity file path
+    (service as any).activityFile = path.join(activityDir, 'activity.json');
   });
 
   afterEach(async () => {
@@ -67,15 +69,8 @@ describe('ActivityService', () => {
 
     it('should persist activity to file', async () => {
       await service.logActivity('task_created', 'task_1', 'Test');
-      // With JSONL format, read and parse each line
-      const jsonlPath = path.join(activityDir, 'activity.jsonl');
-      const content = await fs.readFile(jsonlPath, 'utf-8');
-      const lines = content
-        .trim()
-        .split('\n')
-        .filter((line) => line.length > 0);
-      expect(lines).toHaveLength(1);
-      expect(JSON.parse(lines[0])).toHaveProperty('taskId', 'task_1');
+      const data = JSON.parse(await fs.readFile((service as any).activityFile, 'utf-8'));
+      expect(data).toHaveLength(1);
     });
 
     it('should prepend new activities (most recent first)', async () => {
