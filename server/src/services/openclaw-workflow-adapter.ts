@@ -4,6 +4,17 @@ import { getOutboundIntegrationService } from './outbound-integration-service.js
 
 const log = createLogger('openclaw-workflow-adapter');
 
+// ── Shared gateway types ──────────────────────────────────────────────────────
+
+export interface OpenClawGatewayPreflightResult {
+  reachable: boolean;
+  sessionsSpawnAllowed: boolean;
+  sessionsSendAllowed: boolean;
+  error?: string;
+  /** Human-readable configuration hint for the operator when tools are blocked. */
+  configHint?: string;
+}
+
 export interface OpenClawWorkflowToolFilter {
   allowed?: string[];
   denied?: string[];
@@ -61,6 +72,28 @@ export interface OpenClawWorkflowAdapter {
   send(input: OpenClawWorkflowSessionInput): Promise<OpenClawWorkflowSessionResult>;
   wait(input: OpenClawWorkflowSessionInput): Promise<OpenClawWorkflowSessionResult>;
   cleanup(input: OpenClawWorkflowCleanupInput): Promise<void>;
+}
+
+// ── Task-level dispatch types ─────────────────────────────────────────────────
+
+export interface OpenClawTaskSpawnInput {
+  taskId: string;
+  attemptId: string;
+  agentId: string;
+  agentName?: string;
+  model?: string;
+  prompt: string;
+  timeoutSeconds: number;
+  cleanup?: 'delete' | 'keep';
+}
+
+export interface OpenClawTaskSpawnResult {
+  /** Durable session key returned by OpenClaw sessions_spawn */
+  sessionKey: string;
+  runId?: string;
+  status: string;
+  error?: string;
+  raw?: unknown;
 }
 
 export interface HttpOpenClawWorkflowAdapterOptions {
@@ -330,6 +363,349 @@ export class HttpOpenClawWorkflowAdapter implements OpenClawWorkflowAdapter {
       .filter(Boolean)
       .join(' / ')
       .slice(0, 180);
+  }
+
+  private readString(
+    record: Record<string, unknown> | null | undefined,
+    key: string
+  ): string | undefined {
+    const value = record?.[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  /**
+   * Preflight check for OpenClaw gateway policy.
+   *
+   * OpenClaw v2026.6.11 blocks sessions_spawn and sessions_send by default at the
+   * operator-level endpoint. This probe attempts a minimal sessions_spawn call with
+   * dry_run: true. If the gateway does not support dry_run, any policy-denial error is
+   * still detected and surfaced as an actionable configuration error.
+   *
+   * Call this before marking any task or workflow step as active.
+   */
+  async preflight(): Promise<OpenClawGatewayPreflightResult> {
+    const url = `${this.gatewayUrl}/tools/invoke`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    try {
+      const delivery = await getOutboundIntegrationService().deliver(
+        {
+          id: 'preflight.openclawGateway',
+          type: 'openclaw-gateway',
+          displayName: 'OpenClaw gateway preflight',
+          url,
+          enabled: true,
+          auth: {
+            type: 'bearer',
+            secretRef: this.token ? 'OPENCLAW_GATEWAY_TOKEN' : undefined,
+            hasSecret: Boolean(this.token),
+          },
+          owner: { source: 'runtime', resourceId: 'openclaw-preflight' },
+          validationOptions: this.validationOptions,
+        },
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            tool: 'sessions_spawn',
+            args: { dry_run: true, task: '__preflight__', runtime: 'subagent', mode: 'session' },
+            sessionKey: this.sessionKey,
+          }),
+          timeoutMs: 10_000,
+          responseBodyLimit: 64 * 1024,
+        }
+      );
+
+      if (delivery.status === 'blocked') {
+        return {
+          reachable: false,
+          sessionsSpawnAllowed: false,
+          sessionsSendAllowed: false,
+          error: 'OpenClaw gateway URL is blocked by outbound URL policy',
+        };
+      }
+
+      if (delivery.status === 'timeout') {
+        return {
+          reachable: false,
+          sessionsSpawnAllowed: false,
+          sessionsSendAllowed: false,
+          error: 'OpenClaw gateway did not respond within 10 s',
+        };
+      }
+
+      const body = this.asRecord(this.parseJson(delivery.responseText));
+
+      if (!delivery.ok) {
+        const errMsg =
+          this.extractError(body) ||
+          `OpenClaw gateway returned HTTP ${delivery.responseStatus || 'unknown'}`;
+        return {
+          reachable: true,
+          sessionsSpawnAllowed: false,
+          sessionsSendAllowed: false,
+          error: errMsg,
+          configHint:
+            'Ensure sessions_spawn and sessions_send are in the operator tool allowlist. ' +
+            'In OpenClaw v2026.6.11 these tools are blocked by default and must be explicitly ' +
+            'permitted under Settings → Gateway → Tool Policy.',
+        };
+      }
+
+      const envelope = body;
+      const isPolicyDenial =
+        envelope?.ok === false ||
+        this.readString(
+          this.asRecord(this.asRecord(envelope?.result ?? envelope)?.details ?? null),
+          'status'
+        )?.toLowerCase() === 'forbidden';
+
+      if (isPolicyDenial) {
+        return {
+          reachable: true,
+          sessionsSpawnAllowed: false,
+          sessionsSendAllowed: false,
+          error: this.extractError(envelope) || 'sessions_spawn is denied by gateway tool policy',
+          configHint:
+            'sessions_spawn and sessions_send must be explicitly allowed in the OpenClaw ' +
+            'gateway tool policy. See docs/AGENT-PROVIDERS.md § OpenClaw for setup steps.',
+        };
+      }
+
+      return { reachable: true, sessionsSpawnAllowed: true, sessionsSendAllowed: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        reachable: false,
+        sessionsSpawnAllowed: false,
+        sessionsSendAllowed: false,
+        error: message,
+      };
+    }
+  }
+}
+
+// ── Task-level HTTP adapter ───────────────────────────────────────────────────
+
+/**
+ * Dispatches a Veritas task to the OpenClaw gateway using sessions_spawn.
+ *
+ * This replaces the legacy request-file approach (sendToClawdbot) which wrote a
+ * JSON file but had no in-repository runner to pick it up. The gateway call is
+ * synchronous acknowledgement: if sessions_spawn succeeds, a durable session key
+ * is returned and the task attempt is safe to mark active.
+ *
+ * The spawned OpenClaw sub-session receives the full task prompt, which includes
+ * the Veritas callback URL so the agent can POST completion status.
+ */
+export class HttpOpenClawTaskAdapter {
+  private readonly gatewayUrl: string;
+  private readonly token?: string;
+  private readonly sessionKey: string;
+  private readonly requestTimeoutMs: number;
+  private readonly validationOptions: UrlValidationOptions;
+
+  constructor(options: HttpOpenClawWorkflowAdapterOptions = {}) {
+    this.gatewayUrl = (
+      options.gatewayUrl ||
+      process.env.OPENCLAW_GATEWAY_URL ||
+      process.env.CLAWDBOT_GATEWAY ||
+      process.env.CLAWDBOT_GATEWAY_URL ||
+      'http://127.0.0.1:18789'
+    ).replace(/\/+$/, '');
+    this.token =
+      options.token || process.env.OPENCLAW_GATEWAY_TOKEN || process.env.CLAWDBOT_GATEWAY_TOKEN;
+    this.sessionKey = options.sessionKey || process.env.OPENCLAW_GATEWAY_SESSION_KEY || 'main';
+    this.requestTimeoutMs = options.requestTimeoutMs || 60_000;
+    this.validationOptions = {
+      allowHttp: true,
+      allowLocalhost: true,
+      allowPrivateIp: process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true',
+      ...options.validationOptions,
+    };
+  }
+
+  /**
+   * Spawn an OpenClaw sub-session for a Veritas task.
+   *
+   * Runs a pre-flight policy check before dispatching so that policy denial is
+   * surfaced as an actionable error rather than a silent stuck run.
+   */
+  async spawnTask(input: OpenClawTaskSpawnInput): Promise<OpenClawTaskSpawnResult> {
+    const preflight = await this.preflight();
+    if (!preflight.sessionsSpawnAllowed) {
+      const hint = preflight.configHint ? ` ${preflight.configHint}` : '';
+      throw new Error(
+        `OpenClaw gateway preflight failed: ${preflight.error || 'sessions_spawn is not allowed'}.${hint}`
+      );
+    }
+
+    const taskName = this.buildTaskName(input);
+    const label =
+      `Veritas task ${input.taskId} / attempt ${input.attemptId} / ${input.agentName || input.agentId}`.slice(
+        0,
+        180
+      );
+    const args: Record<string, unknown> = {
+      task: input.prompt,
+      taskName,
+      label,
+      runtime: 'subagent',
+      agentId: input.agentId,
+      runTimeoutSeconds: input.timeoutSeconds,
+      mode: 'session',
+      cleanup: input.cleanup ?? 'keep',
+      context: 'isolated',
+    };
+    if (input.model) args.model = input.model;
+
+    const result = await this.invokeTool('sessions_spawn', args, input.timeoutSeconds);
+    const sessionKey =
+      this.readString(result, 'childSessionKey') || this.readString(result, 'sessionKey');
+
+    if (!sessionKey) {
+      throw new Error(
+        'OpenClaw sessions_spawn did not return a child session key; ' +
+          'confirm the gateway is running OpenClaw v2026.6.11 or later'
+      );
+    }
+
+    return {
+      sessionKey,
+      runId: this.readString(result, 'runId'),
+      status: this.readString(result, 'status') || 'accepted',
+      error: this.readString(result, 'error'),
+      raw: result,
+    };
+  }
+
+  /** Preflight: verify gateway reachability and tool policy. */
+  async preflight(): Promise<OpenClawGatewayPreflightResult> {
+    const workflowAdapter = new HttpOpenClawWorkflowAdapter({
+      gatewayUrl: this.gatewayUrl,
+      token: this.token,
+      sessionKey: this.sessionKey,
+      requestTimeoutMs: this.requestTimeoutMs,
+      validationOptions: this.validationOptions,
+    });
+    return workflowAdapter.preflight();
+  }
+
+  private async invokeTool(
+    tool: 'sessions_spawn',
+    args: Record<string, unknown>,
+    timeoutSeconds: number
+  ): Promise<Record<string, unknown>> {
+    const url = `${this.gatewayUrl}/tools/invoke`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    const delivery = await getOutboundIntegrationService().deliver(
+      {
+        id: 'task.openclawGateway',
+        type: 'openclaw-gateway',
+        displayName: 'Task OpenClaw gateway',
+        url,
+        enabled: true,
+        auth: {
+          type: 'bearer',
+          secretRef: this.token ? 'OPENCLAW_GATEWAY_TOKEN' : undefined,
+          hasSecret: Boolean(this.token),
+        },
+        owner: { source: 'runtime', resourceId: 'clawdbot-agent-service' },
+        validationOptions: this.validationOptions,
+      },
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ tool, args, sessionKey: this.sessionKey }),
+        timeoutMs: Math.max(this.requestTimeoutMs, timeoutSeconds * 1000),
+        responseBodyLimit: 2 * 1024 * 1024,
+      }
+    );
+
+    if (delivery.status === 'blocked') {
+      throw new Error('OpenClaw gateway URL was blocked by outbound URL policy');
+    }
+    if (delivery.status === 'timeout') {
+      throw new Error(`OpenClaw ${tool} timed out after ${timeoutSeconds}s`);
+    }
+
+    const body = this.parseJson(delivery.responseText);
+    if (!delivery.ok) {
+      throw new Error(
+        this.extractError(body) ||
+          `OpenClaw gateway returned HTTP ${delivery.responseStatus || 'unknown'}`
+      );
+    }
+
+    const envelope = this.asRecord(body);
+    if (envelope?.ok === false) {
+      throw new Error(this.extractError(envelope) || `OpenClaw ${tool} failed`);
+    }
+
+    const toolResult = this.unwrapToolResult(envelope?.result ?? body);
+    const status = this.readString(toolResult, 'status')?.toLowerCase();
+    if (status === 'error' || status === 'failed' || status === 'forbidden') {
+      throw new Error(
+        this.readString(toolResult, 'error') || `OpenClaw ${tool} returned ${status}`
+      );
+    }
+
+    return toolResult;
+  }
+
+  private buildTaskName(input: OpenClawTaskSpawnInput): string {
+    const raw = `task_${input.taskId}_${input.attemptId}`
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const candidate = raw || `task_${input.taskId}`;
+    const withLetter = /^[a-z]/.test(candidate) ? candidate : `t_${candidate}`;
+    return withLetter.slice(0, 64);
+  }
+
+  private parseJson(text: string | undefined): unknown {
+    if (!text) return undefined;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private unwrapToolResult(value: unknown): Record<string, unknown> {
+    const record = this.asRecord(value);
+    if (!record) return {};
+    const details = this.asRecord(record.details);
+    if (details) return details;
+    const content = Array.isArray(record.content) ? record.content : [];
+    for (const item of content) {
+      const itemRecord = this.asRecord(item);
+      if (itemRecord) return itemRecord;
+    }
+    return record;
+  }
+
+  private extractError(value: unknown): string | undefined {
+    const record = this.asRecord(value);
+    if (!record) return undefined;
+    const direct = this.readString(record, 'message') || this.readString(record, 'error');
+    if (direct) return direct;
+    const error = this.asRecord(record.error);
+    return this.readString(error, 'message') || this.readString(error, 'error');
   }
 
   private readString(

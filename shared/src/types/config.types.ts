@@ -42,6 +42,7 @@ export type AgentProvider =
   | 'codex-cli'
   | 'codex-sdk'
   | 'codex-cloud'
+  | 'hermes-cli'
   | 'ollama-local'
   | 'ollama-cloud'
   | 'lm-studio-local'

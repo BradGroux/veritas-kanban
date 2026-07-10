@@ -94,6 +94,26 @@ export class AgentHealthService implements AgentHealthChecker {
       );
     }
 
+    if (provider === 'hermes-cli' || command === 'hermes') {
+      // Hermes v2026.7.7.2: binary existence + version probe. API key is optional at
+      // probe time; the actual run will fail if no key is configured.
+      const versionProbe = await this.runAuthProbe(
+        agent.command,
+        ['--version'],
+        /hermes|version|\d+\.\d+/i
+      );
+      if (!versionProbe.authenticated) return versionProbe;
+      // Check for at least one supported API key in the environment
+      const hasKey = Boolean(process.env.HERMES_API_KEY || process.env.ANTHROPIC_API_KEY);
+      if (!hasKey) {
+        return {
+          authenticated: null,
+          error: 'No HERMES_API_KEY or ANTHROPIC_API_KEY found in environment',
+        };
+      }
+      return { authenticated: true };
+    }
+
     if (provider.startsWith('codex') || command === 'codex') {
       return this.runAuthProbe(agent.command, ['login', 'status'], /logged in/i);
     }

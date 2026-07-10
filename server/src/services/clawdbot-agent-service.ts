@@ -23,12 +23,13 @@ import { getGovernanceTraceService } from './governance-trace-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import { AgentHealthService, type AgentHealthChecker } from './agent-health-service.js';
-import { getBreaker } from './circuit-registry.js';
 import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
+import { buildSafeHermesEnv } from '../utils/hermes-env.js';
+import { HttpOpenClawTaskAdapter } from './openclaw-workflow-adapter.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import { evaluateTaskReadiness } from '@veritas-kanban/shared';
 import type {
@@ -58,7 +59,7 @@ import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 const log = createLogger('clawdbot-agent-service');
 
-export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk';
+export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk' | 'hermes-cli';
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
@@ -161,6 +162,10 @@ interface PendingAgent {
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
+  /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
+  openclawSessionKey?: string;
+  /** Hermes session identity captured from process output (hermes-cli provider only) */
+  hermesSessionId?: string;
 }
 
 const pendingAgents = new Map<string, PendingAgent>();
@@ -866,8 +871,10 @@ export class ClawdbotAgentService {
   ): AgentProvider {
     if (agentConfig?.provider === 'codex-sdk') return 'codex-sdk';
     if (agentConfig?.provider === 'codex-cli') return 'codex-cli';
+    if (agentConfig?.provider === 'hermes-cli') return 'hermes-cli';
     if (agent === 'codex') return 'codex-cli';
     if (agentConfig?.command === 'codex') return 'codex-cli';
+    if (agentConfig?.command === 'hermes') return 'hermes-cli';
     return 'openclaw';
   }
 
@@ -957,11 +964,69 @@ export class ClawdbotAgentService {
       };
     }
 
+    if (provider === 'hermes-cli') {
+      return {
+        id: 'hermes-cli',
+        label: 'Hermes Agent',
+        capabilities: { ...commonCapabilities, stop: true, resume: false },
+        start: ({
+          task,
+          agentConfig,
+          prompt,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+        }) => {
+          this.startHermesCli(
+            task,
+            agentConfig,
+            prompt,
+            logPath,
+            attemptId,
+            startedAt,
+            emitter,
+            sandboxPolicy
+          );
+        },
+        stop: ({ pending }) => {
+          if (pending.process && !pending.process.killed) {
+            pending.process.kill('SIGTERM');
+            // Bounded forced-stop: send SIGKILL after 5 s if the process is still running
+            const forcedStop = setTimeout(() => {
+              if (pending.process && !pending.process.killed) {
+                pending.process.kill('SIGKILL');
+                log.warn(
+                  { taskId: pending.taskId },
+                  '[ClawdbotAgent] Hermes SIGKILL issued after graceful stop timeout'
+                );
+              }
+            }, 5_000);
+            pending.process.once('close', () => clearTimeout(forcedStop));
+          }
+        },
+      };
+    }
+
     return {
       id: 'openclaw',
       label: 'OpenClaw',
       capabilities: { ...commonCapabilities, stop: false, resume: false },
       start: async ({ prompt, task, attemptId, agentConfig }) => {
+        // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
+        // The adapter runs a preflight policy check and throws on policy denial or
+        // gateway unreachability, which the caller's error handler rolls back to 'todo'.
+        const openclawAdapter = new HttpOpenClawTaskAdapter();
+        const result = await openclawAdapter.spawnTask({
+          taskId: task.id,
+          attemptId,
+          agentId: agentConfig?.type || 'openclaw',
+          agentName: agentConfig?.name,
+          model: agentConfig?.model,
+          prompt,
+          timeoutSeconds: 900,
+        });
         void this.recordAgentStarted(
           task,
           attemptId,
@@ -969,11 +1034,144 @@ export class ClawdbotAgentService {
           'openclaw',
           agentConfig
         );
-        const agentBreaker = getBreaker('agent');
-        await agentBreaker.execute(() => this.sendToClawdbot(prompt, task.id, attemptId));
+        const pending = pendingAgents.get(task.id);
+        if (pending) {
+          pending.openclawSessionKey = result.sessionKey;
+        }
+        log.info(
+          { taskId: task.id, attemptId, sessionKey: result.sessionKey },
+          '[ClawdbotAgent] OpenClaw session spawned via gateway'
+        );
       },
-      stop: () => {},
+      stop: async ({ pending }) => {
+        // OpenClaw does not expose a direct stop API for sub-sessions in v2026.6.11.
+        // Completion is driven by the callback URL included in the task prompt.
+        log.warn(
+          { taskId: pending.taskId, sessionKey: pending.openclawSessionKey },
+          '[ClawdbotAgent] OpenClaw stop requested; sub-session will complete via callback'
+        );
+      },
     };
+  }
+
+  private startHermesCli(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    startedAt: string,
+    emitter: EventEmitter,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined
+  ): void {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath) {
+      throw new Error('Task worktree path is required for Hermes CLI');
+    }
+
+    // Hermes v2026.7.7.2 one-shot scripted interface: hermes -z <prompt>
+    // stdout = final response text, stderr = diagnostics, exit 0 = success.
+    // AGENTS.md in the worktree root is loaded automatically by Hermes.
+    const command = agentConfig?.command || 'hermes';
+    const extraArgs = agentConfig?.args?.length ? [...agentConfig.args] : [];
+    // -z = non-interactive one-shot mode (final response text only)
+    const args = ['-z', ...extraArgs, prompt];
+
+    const child = spawn(command, args, {
+      cwd: worktreePath,
+      env: buildSafeHermesEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      shell: false,
+    });
+
+    const pending = pendingAgents.get(task.id);
+    if (pending) {
+      pending.process = child;
+    }
+
+    void this.appendLog(
+      logPath,
+      `\n## Hermes CLI\n\n**Command:** \`${command} -z <prompt>\`\n**PID:** ${child.pid ?? 'unknown'}\n**Worktree:** \`${worktreePath}\`\n\n`
+    );
+    void this.recordAgentStarted(
+      task,
+      attemptId,
+      agentConfig?.type || 'hermes',
+      'hermes-cli',
+      agentConfig
+    );
+
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    const SESSION_ID_PATTERN = /hermes[_-]session[_-]id[:\s]+([a-zA-Z0-9_-]{8,})/i;
+
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (chunk: string) => {
+      stdoutBuffer += chunk;
+      this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stdout', chunk);
+    });
+
+    child.stderr.setEncoding('utf-8');
+    child.stderr.on('data', (chunk: string) => {
+      stderrBuffer += chunk;
+      this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stderr', chunk);
+      void this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+
+      // Extract session identity from stderr output if Hermes emits it
+      const sessionMatch = SESSION_ID_PATTERN.exec(chunk);
+      if (sessionMatch) {
+        const hermesSessionId = sessionMatch[1];
+        const p = pendingAgents.get(task.id);
+        if (p && !p.hermesSessionId) {
+          p.hermesSessionId = hermesSessionId;
+          log.debug(
+            { taskId: task.id, hermesSessionId },
+            '[ClawdbotAgent] Hermes session ID captured'
+          );
+        }
+      }
+    });
+
+    child.on('error', (error) => {
+      this.recordTraceStep(attemptId, 'error', {
+        eventType: 'process.error',
+        error: this.redactTraceText(error.message),
+        provider: 'hermes-cli',
+        agent: agentConfig?.type || 'hermes',
+        model: agentConfig?.model,
+      });
+      void this.appendLog(logPath, `\n## Hermes Process Error\n\n${error.message}\n`);
+      emitter.emit('error', error);
+    });
+
+    child.on('close', (code, signal) => {
+      void (async () => {
+        const finalOutput = stdoutBuffer.trim() || stderrBuffer.trim();
+        const success = code === 0;
+
+        await this.appendLog(
+          logPath,
+          `\n## Hermes Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n\n**Output:**\n\`\`\`\n${this.redactTraceText(finalOutput)}\n\`\`\`\n`
+        );
+        this.recordTraceStep(attemptId, 'finalize', {
+          eventType: 'run.finalizing',
+          exitCode: code,
+          signal,
+          success,
+          durationMs: Date.now() - new Date(startedAt).getTime(),
+          provider: 'hermes-cli',
+          agent: agentConfig?.type || 'hermes',
+          model: agentConfig?.model,
+        });
+
+        await this.completeAgent(task.id, {
+          success,
+          summary: finalOutput || (success ? 'Hermes completed.' : undefined),
+          error: success ? undefined : finalOutput || `Hermes exited with code ${code}`,
+        });
+      })().catch((error) => {
+        log.error({ err: error, taskId: task.id }, 'Failed to finalize Hermes attempt');
+      });
+    });
   }
 
   private startCodexCli(
@@ -1423,7 +1621,9 @@ export class ClawdbotAgentService {
           ? 'codex-sdk:workspace-write:approval-never'
           : provider === 'codex-cli'
             ? 'codex-cli:workspace-write'
-            : 'openclaw:delegated',
+            : provider === 'hermes-cli'
+              ? 'hermes-cli:workspace-write'
+              : 'openclaw:delegated',
       provider,
       model: agentConfig?.model,
       taskType: task.type,
@@ -1438,6 +1638,7 @@ export class ClawdbotAgentService {
     const base = ['start', 'status', 'logs', 'complete'];
     if (provider === 'openclaw') return base;
     if (provider === 'codex-cli') return [...base, 'stop'];
+    if (provider === 'hermes-cli') return [...base, 'stop'];
     return [...base, 'stop', 'resume'];
   }
 

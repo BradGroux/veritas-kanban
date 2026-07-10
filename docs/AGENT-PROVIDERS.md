@@ -65,14 +65,15 @@ Soft thresholds create `budget-policy` governance traces and visible warnings. H
 
 ## Local And Cloud Profiles
 
-| Profile            | Provider          | Default command                               | Auth / readiness                    |
-| ------------------ | ----------------- | --------------------------------------------- | ----------------------------------- |
-| OpenAI Codex       | `codex-cli`       | `codex exec --sandbox workspace-write --json` | `codex login status`                |
-| OpenAI Codex SDK   | `codex-sdk`       | `codex`                                       | SDK import plus Codex login         |
-| OpenAI Codex Cloud | `codex-cloud`     | `gh`                                          | `gh auth status`                    |
-| Ollama Local       | `ollama-local`    | `ollama run llama3.2`                         | `ollama list`                       |
-| Ollama Cloud       | `ollama-cloud`    | `ollama run gpt-oss:120b-cloud`               | `ollama signin` or `OLLAMA_API_KEY` |
-| LM Studio Local    | `lm-studio-local` | `lms server status`                           | `lms server status --json --quiet`  |
+| Profile            | Provider          | Default command                               | Auth / readiness                                             |
+| ------------------ | ----------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| OpenAI Codex       | `codex-cli`       | `codex exec --sandbox workspace-write --json` | `codex login status`                                         |
+| OpenAI Codex SDK   | `codex-sdk`       | `codex`                                       | SDK import plus Codex login                                  |
+| OpenAI Codex Cloud | `codex-cloud`     | `gh`                                          | `gh auth status`                                             |
+| Hermes Agent       | `hermes-cli`      | `hermes`                                      | `hermes --version` + `HERMES_API_KEY` or `ANTHROPIC_API_KEY` |
+| Ollama Local       | `ollama-local`    | `ollama run llama3.2`                         | `ollama list`                                                |
+| Ollama Cloud       | `ollama-cloud`    | `ollama run gpt-oss:120b-cloud`               | `ollama signin` or `OLLAMA_API_KEY`                          |
+| LM Studio Local    | `lm-studio-local` | `lms server status`                           | `lms server status --json --quiet`                           |
 
 Ollama local API access does not require authentication on `localhost:11434`; cloud models require either `ollama signin` from the local install or an `OLLAMA_API_KEY`. See the official Ollama authentication docs: <https://docs.ollama.com/api/authentication>.
 
@@ -103,3 +104,122 @@ Recommended starting point:
 2. Enable `ollama-local` or `lm-studio-local` for local model experiments where privacy and offline operation matter more than model capability.
 3. Enable `ollama-cloud` only when the workflow is allowed to leave local execution.
 4. Use explicit routing rules for local LLM profiles instead of making them global defaults on teams with mixed operating systems.
+
+---
+
+## Hermes Agent (v2026.7.7.2)
+
+**Provider ID:** `hermes-cli`  
+**Tested version:** Hermes Agent v2026.7.7.2
+
+### Overview
+
+Hermes Agent is dispatched using its non-interactive one-shot scripted interface. Veritas spawns
+`hermes -z <prompt>` in the task worktree without a shell, captures the final response from
+stdout, and uses the exit code to determine success or failure. Hermes reads `AGENTS.md` from the
+worktree root automatically.
+
+### Setup
+
+1. Install Hermes via the official distribution channel for your platform.
+2. Verify installation: `hermes --version`
+3. Set `HERMES_API_KEY` or `ANTHROPIC_API_KEY` in the Veritas server environment.
+4. Enable the Hermes provider in **Settings → Agents** and set **Command** to `hermes`.
+5. Set **Provider** to `hermes-cli`.
+
+### Environment
+
+Only the following keys are forwarded to the Hermes subprocess (plus any keys in the sandbox
+passthrough list): `ANTHROPIC_API_KEY`, `HERMES_API_KEY`, `HERMES_CONFIG_DIR`, `HOME`, `PATH`,
+`SHELL`, `TERM`, `TMPDIR`, `USER`, `LANG`, `VK_API_URL`. All other environment variables are
+filtered out.
+
+### Invocation mode
+
+| Mode          | Command              | Notes                                            |
+| ------------- | -------------------- | ------------------------------------------------ |
+| One-shot task | `hermes -z <prompt>` | Final response text only; used for task dispatch |
+| Version probe | `hermes --version`   | Used by readiness / health checks                |
+
+### Limitations
+
+- **Session resume** (`--resume` / `--continue`) is not implemented in this release. Hermes runs
+  are one-shot only. Resume support is tracked for a future iteration.
+- Stop/cancel sends `SIGTERM` to the subprocess, with a 5-second `SIGKILL` fallback.
+- OpenClaw-style callback is not used; Veritas receives the final result directly from the Hermes
+  process exit and stdout.
+
+### Troubleshooting
+
+| Symptom                         | Fix                                                       |
+| ------------------------------- | --------------------------------------------------------- |
+| `Executable "hermes" not found` | Install Hermes and ensure its directory is on `PATH`      |
+| `authenticated: null` in health | Set `HERMES_API_KEY` or `ANTHROPIC_API_KEY` in server env |
+| Empty stdout on exit 0          | Check `AGENTS.md` is present in the worktree root         |
+| Non-zero exit, no clear error   | Inspect stderr in the agent log: `.veritas-kanban/logs/`  |
+
+---
+
+## OpenClaw (v2026.6.11)
+
+**Provider ID:** `openclaw`  
+**Tested version:** OpenClaw v2026.6.11
+
+### Overview
+
+OpenClaw task and workflow runs are dispatched through the OpenClaw gateway HTTP API using
+`POST /tools/invoke` with the `sessions_spawn` tool. A pre-flight check verifies gateway
+reachability and tool policy before any task attempt is marked active. If the policy check fails,
+Veritas returns an actionable configuration error and rolls the attempt back to `todo` rather than
+leaving it in a stuck `running` state.
+
+### Required gateway tool policy
+
+`sessions_spawn` and `sessions_send` are **blocked by default** in a fresh OpenClaw v2026.6.11
+install at the operator-level endpoint. You must explicitly allow them:
+
+1. Open the OpenClaw admin console.
+2. Navigate to **Settings → Gateway → Tool Policy**.
+3. Add `sessions_spawn` and `sessions_send` to the **allowed tools** list.
+4. Save and restart the gateway if required.
+
+### Setup
+
+1. Run an OpenClaw v2026.6.11 instance locally or on a reachable host.
+2. Configure the gateway tool policy (see above).
+3. Set `OPENCLAW_GATEWAY_URL` to the gateway base URL (default: `http://127.0.0.1:18789`).
+4. Optionally set `OPENCLAW_GATEWAY_TOKEN` for bearer-authenticated gateways.
+5. Enable the OpenClaw provider profile in **Settings → Agents**.
+
+### Environment variables
+
+| Variable                         | Default                  | Purpose                       |
+| -------------------------------- | ------------------------ | ----------------------------- |
+| `OPENCLAW_GATEWAY_URL`           | `http://127.0.0.1:18789` | Gateway base URL              |
+| `OPENCLAW_GATEWAY_TOKEN`         | _(none)_                 | Bearer token for the gateway  |
+| `OPENCLAW_GATEWAY_SESSION_KEY`   | `main`                   | Parent session key            |
+| `OPENCLAW_GATEWAY_ALLOW_PRIVATE` | `false`                  | Allow private IP gateway URLs |
+
+### Dispatch flow
+
+1. Veritas calls `preflight()` to verify the gateway and tool policy.
+2. If preflight fails, the task attempt is rolled back to `todo` with an error message.
+3. On success, Veritas calls `sessions_spawn` with the full task prompt (including the
+   callback URL: `http://localhost:3001/api/agents/<taskId>/complete`).
+4. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
+5. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.
+
+### Limitations
+
+- Stop/cancel is not supported for individual sub-sessions in OpenClaw v2026.6.11. A stop request
+  logs a warning but cannot forcibly terminate the sub-session.
+- Session resume is driven by the callback flow; no explicit `--resume` flag is used.
+
+### Troubleshooting
+
+| Symptom                                                      | Fix                                                                                     |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` and `sessions_send` to the gateway tool policy                     |
+| `OpenClaw gateway did not respond`                           | Check `OPENCLAW_GATEWAY_URL` and gateway process is running                             |
+| Task stuck in `running` after old request files appear       | Old request-file artifacts can be safely deleted from `.veritas-kanban/agent-requests/` |
+| `OpenClaw sessions_spawn did not return a child session key` | Verify the gateway is running OpenClaw v2026.6.11 or later                              |

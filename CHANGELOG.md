@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `AGENTS.md` as the canonical repository instruction file for Codex, OpenClaw, Hermes,
+  Claude, and other compatible coding agents (#790). Contains authoritative package manager
+  requirements (pnpm ≥ 11.0.0, Node ≥ 22.22.1), architecture rules, commands, security
+  boundaries, and provider notes.
+- Added first-class `hermes-cli` provider support for Hermes Agent v2026.7.7.2 (#791). Provider
+  dispatches tasks using the one-shot scripted interface (`hermes -z <prompt>`) in the task
+  worktree, captures stdout/stderr/exit code, records timing and session identity into telemetry,
+  and supports graceful stop with a 5-second SIGKILL fallback.
+- Added `buildSafeHermesEnv` utility (`server/src/utils/hermes-env.ts`) with a Hermes-specific
+  environment allowlist and credential redaction consistent with the Codex env policy (#791).
+- Added `hermes-cli` to the `AgentProvider` shared type and to the readiness/health probe in
+  `AgentHealthService` (#791).
+- Added `HttpOpenClawTaskAdapter` in `openclaw-workflow-adapter.ts` that dispatches tasks to the
+  OpenClaw gateway via `sessions_spawn` and stores the returned `childSessionKey` in the attempt
+  record (#794).
+- Added `preflight()` to `HttpOpenClawWorkflowAdapter` and `HttpOpenClawTaskAdapter` that verifies
+  gateway reachability and `sessions_spawn` / `sessions_send` tool policy before any task attempt
+  is marked active (#794). Policy denial returns an actionable configuration hint pointing to the
+  required OpenClaw gateway tool policy settings.
+- Added `openclawSessionKey` and `hermesSessionId` fields to `PendingAgent` for durable session
+  identity tracking (#791, #794).
+- Added contract and regression tests for the Hermes provider (`hermes-provider.test.ts`) and
+  OpenClaw gateway adapter (`openclaw-provider.test.ts`) with mocked delivery, policy denial,
+  timeout, and successful dispatch scenarios (#791, #794).
+- Added Hermes and OpenClaw operator setup sections to `docs/AGENT-PROVIDERS.md` including
+  required gateway tool policy, environment variables, invocation mode, and troubleshooting
+  tables (#790, #791, #794).
+
+### Changed
+
+- Converted `CLAUDE.md` from a duplicate of architectural rules into a Claude-specific supplement
+  that defers to `AGENTS.md` as the source of truth. Corrected the stale pnpm (9+ → ≥ 11.0.0)
+  and Node (22+ → ≥ 22.22.1) version requirements (#790).
+- Replaced the legacy request-file dispatch path in the OpenClaw task provider with a gateway
+  HTTP call (`sessions_spawn`) that throws on policy denial or unreachability, allowing the
+  existing error handler to roll the attempt back to `todo` instead of leaving it stuck in
+  `running` (#794).
+- OpenClaw task provider now records the gateway `childSessionKey` in the attempt for durable
+  session tracking (#794).
+
+### Fixed
+
+- OpenClaw task runs no longer remain indefinitely in `running` when the gateway is unreachable
+  or the tool policy blocks `sessions_spawn` (#794).
+
 ### Changed
 
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
