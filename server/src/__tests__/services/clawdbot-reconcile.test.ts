@@ -113,8 +113,12 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     expect(update.status).toBe('todo');
     expect(update.attempt?.status).toBe('failed');
     expect(update.attempt?.ended).toBeDefined();
+    const ended = update.attempt?.ended;
+    expect(ended).toBeDefined();
     // ended should be a valid ISO timestamp
-    expect(() => new Date(update.attempt!.ended!)).not.toThrow();
+    if (ended) {
+      expect(Number.isNaN(new Date(ended).getTime())).toBe(false);
+    }
   });
 
   it('does not reset task status for non-in-progress tasks with stale running attempts', async () => {
@@ -185,7 +189,6 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
 
   it('preserves all existing attempt fields when updating status to failed', async () => {
     const agent = 'openclaw';
-    const provider = 'openclaw';
     const model = 'gpt-5.3-codex';
     const task = {
       ...makeTask('task-with-model', 'running'),

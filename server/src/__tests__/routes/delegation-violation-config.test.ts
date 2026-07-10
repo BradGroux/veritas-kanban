@@ -45,11 +45,14 @@ vi.mock('../../services/websocket-permissions.js', () => ({
   sendWebSocketEvent: vi.fn(),
 }));
 
-const { agentStatusRoutes, initAgentStatus, setAgentStatusConfigService } =
-  await import('../../routes/agent-status.js');
-const { ConfigService } = await import('../../services/config-service.js');
+async function loadRouteModule() {
+  vi.resetModules();
+  return import('../../routes/agent-status.js');
+}
 
-function makeApp(withInjectedConfig: boolean) {
+async function makeApp(withInjectedConfig: boolean) {
+  const { agentStatusRoutes, initAgentStatus, setAgentStatusConfigService } =
+    await loadRouteModule();
   const app = express();
   app.use(express.json());
 
@@ -57,6 +60,7 @@ function makeApp(withInjectedConfig: boolean) {
   initAgentStatus(wss);
 
   if (withInjectedConfig) {
+    const { ConfigService } = await import('../../services/config-service.js');
     const sharedConfig = new ConfigService();
     // Simulate the async startup path: setAgentStatusConfigService is called
     // after the IIFE completes, not at initAgentStatus time.
@@ -81,8 +85,9 @@ describe('delegation-violation route — ConfigService reuse (issue #779)', () =
   it('does not construct a new ConfigService per request when singleton is injected', async () => {
     // Reset so only the shared instance counts
     constructorCallCount = 0;
+    disposeCallCount = 0;
 
-    const app = makeApp(true);
+    const app = await makeApp(true);
     // One constructor call already happened when we created sharedConfig above in makeApp
 
     const baseline = constructorCallCount;
@@ -97,33 +102,27 @@ describe('delegation-violation route — ConfigService reuse (issue #779)', () =
 
     expect(constructorCallCount).toBe(baseline);
     expect(mockGetFeatureSettings).toHaveBeenCalledTimes(5);
+    expect(disposeCallCount).toBe(0);
   });
 
   it('disposes a fallback ConfigService when no singleton is injected', async () => {
-    // Ensure configServiceRef is cleared — use a fresh module by re-importing
-    // We test the fallback branch: when configServiceRef is null, a new ConfigService
-    // is created and disposed in a finally block.
     constructorCallCount = 0;
     disposeCallCount = 0;
 
-    // Create app without injecting config
-    const app = express();
-    app.use(express.json());
-    // Note: initAgentStatus already called above with a config, so configServiceRef is set.
-    // Test that the injected path always calls getFeatureSettings on the shared instance.
-    app.use('/api/agent', agentStatusRoutes);
+    // Fresh module import keeps configServiceRef null and exercises fallback branch.
+    const app = await makeApp(false);
 
     await request(app)
       .post('/api/agent/delegation-violation')
       .send({ agent: 'VERITAS', action: 'direct-code-edit' })
       .expect(200);
 
-    // constructorCallCount should not have increased
-    expect(constructorCallCount).toBe(0);
+    expect(constructorCallCount).toBe(1);
+    expect(disposeCallCount).toBe(1);
   });
 
   it('returns 200 with enforced:false when enforcement is disabled', async () => {
-    const app = makeApp(true);
+    const app = await makeApp(true);
     const res = await request(app)
       .post('/api/agent/delegation-violation')
       .send({ agent: 'VERITAS', action: 'direct-code-edit', taskId: 'task-123' })
@@ -134,7 +133,7 @@ describe('delegation-violation route — ConfigService reuse (issue #779)', () =
   });
 
   it('returns 400 for invalid request body', async () => {
-    const app = makeApp(true);
+    const app = await makeApp(true);
     await request(app)
       .post('/api/agent/delegation-violation')
       .send({ notAValidField: true })
