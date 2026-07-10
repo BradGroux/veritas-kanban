@@ -7,98 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Added `AGENTS.md` as the canonical repository instruction file for Codex, OpenClaw, Hermes,
-  Claude, and other compatible coding agents (#790). Contains authoritative package manager
-  requirements (pnpm ≥ 11.0.0, Node ≥ 22.22.1), architecture rules, commands, security
-  boundaries, and provider notes.
-- Added first-class `hermes-cli` provider support for Hermes Agent v2026.7.7.2 (#791). Provider
-  dispatches tasks using the one-shot scripted interface (`hermes -z <prompt>`) in the task
-  worktree, captures stdout/stderr/exit code, records timing and session identity into telemetry,
-  and supports graceful stop with a 5-second SIGKILL fallback.
-- Added `buildSafeHermesEnv` utility (`server/src/utils/hermes-env.ts`) with a Hermes-specific
-  environment allowlist and credential redaction consistent with the Codex env policy (#791).
-- Added `hermes-cli` to the `AgentProvider` shared type and to the readiness/health probe in
-  `AgentHealthService` (#791).
-- Added `HttpOpenClawTaskAdapter` in `openclaw-workflow-adapter.ts` that dispatches tasks to the
-  OpenClaw gateway via `sessions_spawn` and stores the returned `childSessionKey` in the attempt
-  record (#794).
-- OpenClaw dispatch uses the real `sessions_spawn` acknowledgement as its reachability and policy
-  check, avoiding a speculative probe that could create an untracked session. Policy denial returns
-  an actionable `gateway.tools.allow` configuration hint (#794).
-- Added `openclawSessionKey` and `hermesSessionId` fields to `PendingAgent` for durable session
-  identity tracking (#791, #794).
-- Added contract and regression tests for the Hermes provider (`hermes-provider.test.ts`) and
-  OpenClaw gateway adapter (`openclaw-provider.test.ts`) with mocked delivery, policy denial,
-  request timeout, supported spawn payload, and successful dispatch scenarios (#791, #794).
-- Added Hermes and OpenClaw operator setup sections to `docs/AGENT-PROVIDERS.md` including
-  required gateway tool policy, environment variables, invocation mode, and troubleshooting
-  tables (#790, #791, #794).
-
-### Changed
-
-- Converted `CLAUDE.md` from a duplicate of architectural rules into a Claude-specific supplement
-  that defers to `AGENTS.md` as the source of truth. Corrected the stale pnpm (9+ → ≥ 11.0.0)
-  and Node (22+ → ≥ 22.22.1) version requirements (#790).
-- Replaced the legacy request-file dispatch path in the OpenClaw task provider with a gateway
-  HTTP call (`sessions_spawn`) that throws on policy denial or unreachability, allowing the
-  existing error handler to roll the attempt back to `todo` instead of leaving it stuck in
-  `running` (#794).
-- OpenClaw task provider now records the gateway `childSessionKey` in the attempt for durable
-  session tracking (#794).
-
-### Fixed
-
-- OpenClaw task runs no longer remain indefinitely in `running` when the gateway is unreachable
-  or the tool policy blocks `sessions_spawn` (#794).
-
 ### Changed
 
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
   development-tool dependencies (#792, #795).
-- Debounced and made asynchronous the agent-registry heartbeat persistence
-  writes; writes are now coalesced over a 2 s window and use atomic
-  rename-on-write instead of synchronous full-file serialisation; `dispose()`
-  flushes any in-flight write on shutdown (#783).
-- Replaced per-request `ConfigService` allocation in the
-  `POST /api/agent/delegation-violation` route handler with the application-level
-  singleton to prevent FSWatcher leaks under sustained traffic (#779).
-- Routed all `.veritas-kanban` path construction in
-  `clawdbot-agent-service.ts` and `agent-status.ts` through the centralised
-  helpers in `server/src/utils/paths.ts` (DATA_DIR / VERITAS_DATA_DIR
-  overrides are now respected consistently in those files; #774).
+- Added `provider` and `command` fields to `WorkflowAgent` in
+  `@veritas-kanban/shared` to align with the server-side definition and prevent
+  silent contract drift (#786).
+- Added `max_reroutes` to `FailurePolicy` and `retryRouteCount` to `WorkflowRun`
+  in both the shared and server workflow type contracts (#780, #786).
 
 ### Fixed
 
 - Isolated QMD result normalization coverage from unrelated persistent search
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).
-- File-backed task mutations (create, update, archive, restore) now use an
-  atomic write-then-rename strategy so readers see either the previous file or
-  its complete replacement rather than a partial write (#776).
-- Revision validation is now enforced inside the file-lock / SQLite mutation
-  — not just at the route layer — eliminating the TOCTOU window where two
-  concurrent requests with the same `expectedRevision` could both succeed and
-  the later write silently overwrite the earlier one (#777).
-- Concurrent file-backed mutations for the same task now serialize through an
-  in-process queue keyed by immutable task ID before asynchronous lookup, while
-  filepath locks continue to provide cross-process exclusion (#777).
-- Added startup reconciliation for agent attempts that were left in `running`
-  state after a server crash or restart; orphaned attempts are now marked
-  `failed` and their tasks reverted to `todo` so operators can relaunch
-  them (#781).
-
-### Performance
-
-- Paginated file-backed activity requests now derive page items and total count
-  from one file load and filter pass (#782).
-- Activity file writes are now atomic (write-temp / rename), and corrupt files
-  are backed up before recovery rather than silently overwritten (#782).
-- Task-identity diagnostics are cached after the first scan and invalidated
-  only on task mutations or external file changes, eliminating the O(N)
-  full-filesystem scan on every `GET /api/tasks` and backlog-list request
-  (#784).
+- Human-gate blocking (`on_false.escalate_to: human`) now transitions the run
+  to `blocked` instead of `failed` via the new `HumanGateBlockError` typed
+  exception; `approveGateStep` and `rejectGateStep` service methods replace the
+  unimplemented route stubs that previously discarded state (#778).
+- `retry_step` cross-step rerouts are now bounded by a persisted
+  `retryRouteCount` field; the default cap is 10 and is configurable via
+  `on_fail.max_reroutes`; exhaustion respects `on_exhausted` policy or fails
+  deterministically (#780).
+- `WorkflowRunService` private `NotFoundError` and `ValidationError` classes
+  replaced with the shared `AppError` hierarchy so workflow domain errors map
+  to stable 404/400 HTTP responses instead of HTTP 500 (#785).
+- `BlockingService` now enforces `dependencies.depends_on` (canonical
+  dependency model) in addition to legacy `blockedBy`; the tasks route
+  transition guard checks both fields so `depends_on` relationships block
+  in-progress transitions (#787).
 
 ## [5.2.1] - 2026-06-29
 

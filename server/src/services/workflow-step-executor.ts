@@ -14,6 +14,7 @@ import type {
   StepExecutionResult,
   WorkflowAgent,
   StepSessionConfig,
+  EscalationPolicy,
 } from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
@@ -34,6 +35,26 @@ import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 
 const log = createLogger('workflow-step-executor');
+
+/**
+ * Thrown by executeGateStep when a gate's on_false policy escalates to human (#778).
+ * Allows WorkflowRunService to distinguish an expected human pause from a real failure.
+ */
+export class HumanGateBlockError extends Error {
+  readonly stepId: string;
+  readonly escalationMessage: string;
+  readonly policy: EscalationPolicy;
+
+  constructor(stepId: string, policy: EscalationPolicy) {
+    const msg =
+      policy.escalate_message || `Gate ${stepId} condition not met — awaiting human input`;
+    super(msg);
+    this.name = 'HumanGateBlockError';
+    this.stepId = stepId;
+    this.escalationMessage = msg;
+    this.policy = policy;
+  }
+}
 
 interface WorkflowStepExecutorOptions {
   openClawAdapter?: OpenClawWorkflowAdapter;
@@ -86,8 +107,7 @@ export class WorkflowStepExecutor {
       agentDef = { ...agentDef, model: run.budget.modelOverride };
     }
     const workflowConfig = run.context.workflow as
-      | { config?: { fresh_session_default?: boolean } }
-      | undefined;
+      { config?: { fresh_session_default?: boolean } } | undefined;
 
     // Build session configuration (#111)
     const sessionConfig = this.buildSessionConfig(step, run, workflowConfig?.config);
@@ -669,8 +689,7 @@ export class WorkflowStepExecutor {
 
   private getWorkflowWorkingDirectory(run: WorkflowRun): string {
     const task = run.context.task as
-      | { git?: { worktreePath?: string; repo?: string }; repoPath?: string }
-      | undefined;
+      { git?: { worktreePath?: string; repo?: string }; repoPath?: string } | undefined;
     return task?.git?.worktreePath || task?.repoPath || process.cwd();
   }
 

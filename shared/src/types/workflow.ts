@@ -35,12 +35,7 @@ export interface WorkflowConfig {
 export type WorkflowPipelineMode = 'single-agent' | 'orchestrated';
 export type WorkflowPipelineCompletion = 'all-required' | 'any-success' | 'manual-review';
 export type WorkflowSubagentRunStatus =
-  | 'pending'
-  | 'running'
-  | 'blocked'
-  | 'completed'
-  | 'failed'
-  | 'skipped';
+  'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'skipped';
 
 export interface WorkflowSubagentTelemetry {
   tokenBudget?: number;
@@ -122,12 +117,7 @@ export interface WorkflowOutputTarget {
 }
 
 export type WorkflowScheduleMode =
-  | 'manual'
-  | 'daily'
-  | 'weekly'
-  | 'biweekly'
-  | 'monthly'
-  | 'custom';
+  'manual' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
 
 export interface WorkflowSchedule {
   mode: WorkflowScheduleMode;
@@ -145,6 +135,8 @@ export interface WorkflowAgent {
   name: string;
   role: string; // maps to toolPolicy
   model?: string; // default model for this agent
+  provider?: string; // Agent provider for web/CLI/MCP (#786)
+  command?: string; // Provider command for execution (#786)
   sandboxPresetId?: string;
   budget?: import('./agent-budget.types.js').AgentBudgetPolicy;
   description: string;
@@ -186,6 +178,7 @@ export interface FailurePolicy {
   retry?: number;
   retry_delay_ms?: number; // Phase 2: Delay between retries (#113)
   retry_step?: string; // Retry a different step ID
+  max_reroutes?: number; // Max cross-step reroutes before on_exhausted fires (#780)
   escalate_to?: 'human' | `agent:${string}` | 'skip';
   escalate_message?: string;
   on_exhausted?: EscalationPolicy;
