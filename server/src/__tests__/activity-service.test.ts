@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 
 // Hoist tmpRoot so it's available when vi.mock factory runs (before const declarations)
 const tmpRoot = vi.hoisted(() => {

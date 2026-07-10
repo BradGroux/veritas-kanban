@@ -1,6 +1,5 @@
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
-import { createLogger } from '../lib/logger.js';
 import { getDataDir } from '../utils/paths.js';
 import type { ActivityRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';

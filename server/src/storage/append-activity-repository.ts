@@ -142,7 +142,7 @@ export class AppendActivityRepository {
       for (const line of lines) {
         try {
           activities.push(JSON.parse(line) as Activity);
-        } catch (_err) {
+        } catch {
           log.warn({ line: line.substring(0, 50) }, 'Skipped malformed JSONL line');
         }
       }
