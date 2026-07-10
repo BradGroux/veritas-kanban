@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
+  development-tool dependencies (#792, #795).
+
+### Fixed
+
+- Isolated QMD result normalization coverage from unrelated persistent search
+  collections and restored test environment state only after temporary search
+  roots are removed, eliminating the intermittent teardown race (#793).
+
 ## [5.2.1] - 2026-06-29
 
 ### Fixed

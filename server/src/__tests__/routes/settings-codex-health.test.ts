@@ -156,7 +156,7 @@ describe('Settings Codex health route', () => {
     mockCodexHealthService.getHealth.mockResolvedValue({
       checkedAt: '2026-05-06T00:00:00.000Z',
       cli: { installed: true, authenticated: true, version: 'codex-cli 0.128.0' },
-      sdk: { available: true },
+      sdk: { available: true, version: '0.144.1' },
       agents: { codexCli: true, codexSdk: true, codexCloud: true, enabled: ['codex'] },
       ready: { cli: true, sdk: true, cloud: true, overall: true },
       recommendations: [],
@@ -166,6 +166,7 @@ describe('Settings Codex health route', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.ready.overall).toBe(true);
+    expect(response.body.sdk.version).toBe('0.144.1');
     expect(mockCodexHealthService.getHealth).toHaveBeenCalled();
   });
 

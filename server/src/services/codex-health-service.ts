@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import { readFile } from 'fs/promises';
 import { promisify } from 'util';
 import { ConfigService } from './config-service.js';
 
@@ -16,6 +17,7 @@ export interface CodexHealthStatus {
   };
   sdk: {
     available: boolean;
+    version?: string;
     error?: string;
   };
   agents: {
@@ -107,7 +109,15 @@ export class CodexHealthService {
   private async checkSdk(): Promise<CodexHealthStatus['sdk']> {
     try {
       await import('@openai/codex-sdk');
-      return { available: true };
+      const moduleUrl = import.meta.resolve('@openai/codex-sdk');
+      const packageUrl = new URL('../package.json', moduleUrl);
+      const packageMetadata = JSON.parse(await readFile(packageUrl, 'utf8')) as {
+        version?: unknown;
+      };
+      return {
+        available: true,
+        version: typeof packageMetadata.version === 'string' ? packageMetadata.version : undefined,
+      };
     } catch (error: any) {
       return { available: false, error: error.message || 'Codex SDK is not available' };
     }

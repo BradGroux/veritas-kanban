@@ -85,6 +85,7 @@ vi.mock('../services/circuit-registry.js', () => ({
 }));
 
 import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import type { ThreadEvent } from '@openai/codex-sdk';
 import type { AgentConfig, Task } from '@veritas-kanban/shared';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -359,6 +360,7 @@ describe('ClawdbotAgentService Codex providers', () => {
         })
       );
     });
+
     expect(mockStartStep).toHaveBeenCalledWith(
       'attempt_fixture',
       'execute',
@@ -375,6 +377,47 @@ describe('ClawdbotAgentService Codex providers', () => {
       expect.objectContaining({ attemptId: 'attempt_fixture', deliverableCount: 1 }),
       'codex'
     );
+  });
+
+  it('accepts every Codex SDK 0.144 event contract consumed by the stream adapter', () => {
+    const service = testableService(tmpDir);
+    const logPath = path.join(tmpDir, 'codex.md');
+    const events = [
+      { type: 'thread.started', thread_id: 'thread_fixture' },
+      { type: 'turn.started' },
+      {
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 10,
+          cached_input_tokens: 2,
+          output_tokens: 5,
+          reasoning_output_tokens: 1,
+        },
+      },
+      { type: 'turn.failed', error: { message: 'fixture failure' } },
+      {
+        type: 'item.started',
+        item: { id: 'item_started', type: 'agent_message', text: 'starting' },
+      },
+      {
+        type: 'item.updated',
+        item: { id: 'item_updated', type: 'agent_message', text: 'working' },
+      },
+      {
+        type: 'item.completed',
+        item: { id: 'item_completed', type: 'agent_message', text: 'finished' },
+      },
+      { type: 'error', message: 'fixture stream error' },
+    ] satisfies ThreadEvent[];
+
+    const parsed = events.map((event) => service.handleCodexEvent(event, logPath));
+
+    expect(parsed[2]?.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+    });
+    expect(parsed[6]?.summary).toBe('finished');
   });
 
   it('classifies streamed output, retry, and abort lifecycle events in traces', async () => {

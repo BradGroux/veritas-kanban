@@ -167,7 +167,10 @@ Settings exposes Codex readiness through a dedicated health check:
 GET /api/settings/codex/health
 ```
 
-The response reports Codex CLI install/version/auth state, SDK import availability, Codex agent profile readiness, enabled Codex profiles, and recommendations.
+The response reports Codex CLI install/version/auth state, the installed Codex
+SDK version and import availability, Codex agent profile readiness, enabled
+Codex profiles, and recommendations. Veritas Kanban currently validates its
+stream adapter against `@openai/codex-sdk` 0.144.1 event contracts.
 
 ## MCP And Project Instructions
 

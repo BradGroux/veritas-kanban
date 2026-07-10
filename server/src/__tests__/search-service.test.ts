@@ -36,8 +36,8 @@ describe('SearchService', () => {
   });
 
   afterEach(async () => {
-    process.env = oldEnv;
     await fs.rm(root, { recursive: true, force: true });
+    process.env = oldEnv;
   });
 
   it('searches task and docs markdown with keyword fallback', async () => {
@@ -135,7 +135,10 @@ describe('SearchService', () => {
       );
     });
 
-    const result = await new SearchService().search({ query: 'semantic search' });
+    const result = await new SearchService().search({
+      query: 'semantic search',
+      collections: ['tasks-active'],
+    });
 
     expect(result.backend).toBe('qmd');
     expect(result.degraded).toBe(false);

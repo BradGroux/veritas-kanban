@@ -16,7 +16,7 @@
     "reset-password": "tsx src/scripts/reset-password.ts"
   },
   "dependencies": {
-    "@openai/codex-sdk": "0.140.0",
+    "@openai/codex-sdk": "0.144.1",
     "@veritas-kanban/shared": "workspace:*",
     "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
