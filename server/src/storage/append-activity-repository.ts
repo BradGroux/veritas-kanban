@@ -1,12 +1,19 @@
 /**
- * Append-only activity storage backed by JSONL + index.
+ * JSONL activity storage with index caching and retention bounds.
  *
  * Maintains two files:
  * - activity.jsonl: One activity per line, newest-first (prepended)
  * - activity.index: Metadata { version, total, retained, lastWrite, lastIndex }
  *
- * Writes are append-only (no full rewrites). Compaction trims oldest entries
- * when size exceeds threshold. Corrupted files are backed up before recovery.
+ * Design tradeoffs:
+ * - Prepends new activities (newest-first ordering) for efficient chronological queries
+ * - Prepending requires full file rewrites; this is a performance tradeoff vs true append-only
+ * - Index caching enables O(1) pagination metadata lookups without scanning the entire file
+ * - Compaction trims oldest entries when file size exceeds threshold
+ * - Corrupted files are backed up before recovery; data loss is prevented via backups
+ *
+ * Key optimization: pagination uses cached index (total count) + single scan with offset,
+ * eliminating duplicate full-file reads that occurred in the legacy implementation.
  */
 
 import { readFile, writeFile, mkdir, rm } from 'fs/promises';
@@ -174,7 +181,7 @@ export class AppendActivityRepository {
   private matchesFilters(activity: Activity, filters: ActivityFilters): boolean {
     if (filters.agent) {
       const agentLower = filters.agent.toLowerCase();
-      if (!activity.agent?.toLowerCase().includes(agentLower)) {
+      if (activity.agent?.toLowerCase() !== agentLower) {
         return false;
       }
     }
@@ -243,9 +250,9 @@ export class AppendActivityRepository {
   }
 
   /**
-   * Append a new activity to the JSONL file.
-   * Prepend by reading all lines, prepending new activity, and rewriting.
-   * JSONL format: newest activities first (prepended).
+   * Log a new activity. Prepends it to maintain newest-first ordering.
+   * Note: prepending requires rewriting the file; this is a tradeoff for ordering efficiency.
+   * The index cache mitigates the cost by avoiding duplicate reads during pagination.
    */
   async logActivity(
     type: ActivityType,
