@@ -145,6 +145,10 @@ export interface WorkflowAgent {
   name: string;
   role: string; // maps to toolPolicy
   model?: string; // default model for this agent
+  /** Execution provider (e.g. 'openclaw', 'codex-cli', 'codex-sdk', 'codex-cloud') */
+  provider?: 'openclaw' | 'codex-cli' | 'codex-sdk' | 'codex-cloud' | string;
+  /** Provider-specific launch command */
+  command?: string;
   sandboxPresetId?: string;
   budget?: import('./agent-budget.types.js').AgentBudgetPolicy;
   description: string;
@@ -186,6 +190,8 @@ export interface FailurePolicy {
   retry?: number;
   retry_delay_ms?: number; // Phase 2: Delay between retries (#113)
   retry_step?: string; // Retry a different step ID
+  /** Maximum cross-step reroutes allowed (for retry_step). Defaults to MAX_REROUTES_DEFAULT. */
+  max_reroutes?: number;
   escalate_to?: 'human' | `agent:${string}` | 'skip';
   escalate_message?: string;
   on_exhausted?: EscalationPolicy;
@@ -244,6 +250,8 @@ export interface WorkflowRun {
   lastCheckpoint?: string; // Phase 2: Last state persistence timestamp (#113)
   error?: string;
   steps: StepRun[];
+  /** Persisted reroute counter for cross-step retry_step bounds (#780) */
+  retryRouteCount?: number;
 }
 
 export interface StepRun {

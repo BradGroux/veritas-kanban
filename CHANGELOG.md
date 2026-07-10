@@ -11,12 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
   development-tool dependencies (#792, #795).
+- Added `provider` and `command` fields to `WorkflowAgent` in
+  `@veritas-kanban/shared` to align with the server-side definition and prevent
+  silent contract drift (#786).
+- Added `max_reroutes` to `FailurePolicy` and `retryRouteCount` to `WorkflowRun`
+  in both the shared and server workflow type contracts (#780, #786).
 
 ### Fixed
 
 - Isolated QMD result normalization coverage from unrelated persistent search
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).
+- Human-gate blocking (`on_false.escalate_to: human`) now transitions the run
+  to `blocked` instead of `failed` via the new `HumanGateBlockError` typed
+  exception; `approveGateStep` and `rejectGateStep` service methods replace the
+  unimplemented route stubs that previously discarded state (#778).
+- `retry_step` cross-step rerouts are now bounded by a persisted
+  `retryRouteCount` field; the default cap is 10 and is configurable via
+  `on_fail.max_reroutes`; exhaustion respects `on_exhausted` policy or fails
+  deterministically (#780).
+- `WorkflowRunService` private `NotFoundError` and `ValidationError` classes
+  replaced with the shared `AppError` hierarchy so workflow domain errors map
+  to stable 404/400 HTTP responses instead of HTTP 500 (#785).
+- `BlockingService` now enforces `dependencies.depends_on` (canonical
+  dependency model) in addition to legacy `blockedBy`; the tasks route
+  transition guard checks both fields so `depends_on` relationships block
+  in-progress transitions (#787).
 
 ## [5.2.1] - 2026-06-29
 

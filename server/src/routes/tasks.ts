@@ -728,11 +728,12 @@ router.patch(
       // (human users can still approve, or API keys with admin/agent role)
     }
 
-    // Check if trying to move a blocked task to in-progress
+    // Check if trying to move a blocked task to in-progress.
+    // Enforce both legacy blockedBy and canonical dependencies.depends_on (#787).
     if (
       input.status === 'in-progress' &&
       oldTask.status !== 'in-progress' &&
-      oldTask.blockedBy?.length
+      (oldTask.blockedBy?.length || oldTask.dependencies?.depends_on?.length)
     ) {
       const allTasks = await taskService.listTasks();
       const { allowed, blockers } = blockingService.canMoveToInProgress(oldTask, allTasks);

@@ -19,7 +19,7 @@ import {
 } from '@veritas-kanban/shared';
 import type { WorkflowRun, StepRun, WorkflowDefinition, WorkflowStep } from '../types/workflow.js';
 import { getWorkflowService } from './workflow-service.js';
-import { WorkflowStepExecutor } from './workflow-step-executor.js';
+import { WorkflowStepExecutor, HumanGateBlockError } from './workflow-step-executor.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { broadcastWorkflowStatus } from './broadcast-service.js';
@@ -29,11 +29,14 @@ import { SqliteWorkflowRunRepository } from '../storage/sqlite/workflow-reposito
 import { getConfigService } from './config-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
+import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 
 const log = createLogger('workflow-run');
 
 // Concurrency limits
 const MAX_CONCURRENT_RUNS = 10;
+/** Default maximum cross-step reroutes per run before exhaustion policy fires (#780) */
+const MAX_REROUTES_DEFAULT = 10;
 let activeRunCount = 0;
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
 const RESERVED_CONTEXT_KEYS = new Set([
@@ -44,20 +47,6 @@ const RESERVED_CONTEXT_KEYS = new Set([
   '_sessions',
   '_retryContext',
 ]);
-
-class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
-
-class ValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
 
 export class WorkflowRunService {
   private runsDir: string;
@@ -498,6 +487,31 @@ export class WorkflowRunService {
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
         } catch (err: unknown) {
+          // --- Gate human-escalation (#778) ---
+          // HumanGateBlockError is a clean, expected pause — not a real failure.
+          // Handle it before the generic failure path so on_fail is not misapplied.
+          if (err instanceof HumanGateBlockError) {
+            stepRun.status = 'failed';
+            stepRun.error = err.escalationMessage;
+            stepRun.completedAt = new Date().toISOString();
+            run.status = 'blocked';
+            run.error = err.escalationMessage;
+            // Persist gate blocking context for resume / approve endpoints.
+            run.context._gateBlock = {
+              stepId: err.stepId,
+              escalationMessage: err.escalationMessage,
+              blockedAt: new Date().toISOString(),
+            };
+            this.syncPipelineSummary(run, workflow);
+            await this.saveRun(run);
+            broadcastWorkflowStatus(run);
+            log.warn(
+              { runId: run.id, stepId: err.stepId },
+              'Workflow blocked at human gate — awaiting resume'
+            );
+            return;
+          }
+
           // Step failed
           stepRun.status = 'failed';
           stepRun.error = err instanceof Error ? err.message : 'Unknown error';
@@ -593,6 +607,48 @@ export class WorkflowRunService {
         throw new Error(`retry_step references unknown step: ${policy.retry_step}`);
       }
 
+      // Enforce cross-step reroute budget (#780)
+      const maxReroutes = policy.max_reroutes ?? MAX_REROUTES_DEFAULT;
+      run.retryRouteCount = (run.retryRouteCount ?? 0) + 1;
+
+      if (run.retryRouteCount > maxReroutes) {
+        // Budget exhausted — apply on_exhausted policy or fail/block
+        const exhausted = policy.on_exhausted;
+        log.warn(
+          {
+            runId: run.id,
+            stepId: step.id,
+            retryStep: retryStep.id,
+            retryRouteCount: run.retryRouteCount,
+            maxReroutes,
+          },
+          'retry_step reroute budget exhausted'
+        );
+
+        if (exhausted?.escalate_to === 'human') {
+          run.status = 'blocked';
+          run.error =
+            exhausted.escalate_message ||
+            `retry_step budget exhausted after ${maxReroutes} reroutes`;
+          this.syncPipelineSummary(run, workflow);
+          await this.saveRun(run);
+          log.warn({ runId: run.id, stepId: step.id }, 'Workflow blocked: retry_step exhausted');
+          return true;
+        }
+
+        if (exhausted?.escalate_to === 'skip') {
+          stepRun.status = 'skipped';
+          this.syncPipelineSummary(run, workflow);
+          await this.saveRun(run);
+          return true;
+        }
+
+        // Default: fail deterministically
+        throw new Error(
+          `retry_step budget exhausted: step "${step.id}" has rerouted ${run.retryRouteCount} times (max ${maxReroutes})`
+        );
+      }
+
       // Reset the retry step's state
       const retryStepRun = run.steps.find((s) => s.stepId === retryStep.id)!;
       retryStepRun.status = 'pending';
@@ -612,11 +668,15 @@ export class WorkflowRunService {
         failedStep: step.id,
         error: stepRun.error,
         retries: stepRun.retries,
+        retryRouteCount: run.retryRouteCount,
       };
 
       this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
-      log.info({ failedStep: step.id, retryStep: retryStep.id }, 'Routing to retry step');
+      log.info(
+        { failedStep: step.id, retryStep: retryStep.id, retryRouteCount: run.retryRouteCount },
+        'Routing to retry step'
+      );
       return true;
     }
 
@@ -819,6 +879,8 @@ export class WorkflowRunService {
       ...run.context,
       ...this.validateExternalContext(resumeContext, 'Resume context'),
     };
+    // Clear gate block context on resume
+    delete run.context._gateBlock;
     run.status = 'running';
     await this.saveRun(run);
 
@@ -837,6 +899,85 @@ export class WorkflowRunService {
       log.error({ runId, err }, 'Workflow resume failed');
     });
 
+    return run;
+  }
+
+  /**
+   * Approve a blocked human-gate step and resume the run (#778).
+   * Marks the gate step as 'completed' (human-approved) so resume skips it.
+   */
+  async approveGateStep(
+    runId: string,
+    stepId: string,
+    approvedBy: string,
+    resumeContext?: Record<string, unknown>
+  ): Promise<WorkflowRun> {
+    const run = await this.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Run ${runId} not found`);
+    }
+
+    if (run.status !== 'blocked') {
+      throw new ValidationError(`Run ${runId} is not blocked (status: ${run.status})`);
+    }
+
+    const stepRun = run.steps.find((s) => s.stepId === stepId);
+    if (!stepRun) {
+      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
+    }
+
+    // Mark the gate step as completed (human approved it — override the false condition).
+    stepRun.status = 'completed';
+    stepRun.completedAt = new Date().toISOString();
+    stepRun.error = undefined;
+
+    // Record approval in context for audit/trace.
+    run.context._gateApproval = {
+      stepId,
+      approved: true,
+      approvedBy,
+      approvedAt: new Date().toISOString(),
+    };
+
+    // Persist the gate-step completion BEFORE resumeRun re-loads from storage.
+    await this.saveRun(run);
+
+    log.info({ runId, stepId, approvedBy }, 'Gate step approved — resuming run');
+
+    return this.resumeRun(runId, resumeContext);
+  }
+
+  /**
+   * Reject a blocked human-gate step — terminates the run as failed (#778).
+   */
+  async rejectGateStep(runId: string, stepId: string, rejectedBy: string): Promise<WorkflowRun> {
+    const run = await this.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Run ${runId} not found`);
+    }
+
+    if (run.status !== 'blocked') {
+      throw new ValidationError(`Run ${runId} is not blocked (status: ${run.status})`);
+    }
+
+    const stepRun = run.steps.find((s) => s.stepId === stepId);
+    if (!stepRun) {
+      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
+    }
+
+    run.status = 'failed';
+    run.error = `Gate step ${stepId} rejected by ${rejectedBy}`;
+    run.completedAt = new Date().toISOString();
+    delete run.context._gateBlock;
+
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (workflow) {
+      this.syncPipelineSummary(run, workflow);
+    }
+    await this.saveRun(run);
+    broadcastWorkflowStatus(run);
+
+    log.warn({ runId, stepId, rejectedBy }, 'Gate step rejected — run failed');
     return run;
   }
 

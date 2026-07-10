@@ -14,6 +14,7 @@ import type {
   StepExecutionResult,
   WorkflowAgent,
   StepSessionConfig,
+  EscalationPolicy,
 } from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
@@ -34,6 +35,26 @@ import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 
 const log = createLogger('workflow-step-executor');
+
+/**
+ * Thrown by executeGateStep when a gate's on_false policy escalates to human (#778).
+ * Allows WorkflowRunService to distinguish an expected human pause from a real failure.
+ */
+export class HumanGateBlockError extends Error {
+  readonly stepId: string;
+  readonly escalationMessage: string;
+  readonly policy: EscalationPolicy;
+
+  constructor(stepId: string, policy: EscalationPolicy) {
+    const msg =
+      policy.escalate_message || `Gate ${stepId} condition not met — awaiting human input`;
+    super(msg);
+    this.name = 'HumanGateBlockError';
+    this.stepId = stepId;
+    this.escalationMessage = msg;
+    this.policy = policy;
+  }
+}
 
 interface WorkflowStepExecutorOptions {
   openClawAdapter?: OpenClawWorkflowAdapter;
@@ -1060,8 +1081,8 @@ export class WorkflowStepExecutor {
       await this.recordWorkflowGateTrace(step, run, false, policy);
 
       if (policy?.escalate_to === 'human') {
-        // Block the workflow (will be handled by workflow-run-service)
-        throw new Error(policy.escalate_message || `Gate ${step.id} condition not met`);
+        // Signal a clean human-pause to WorkflowRunService (#778)
+        throw new HumanGateBlockError(step.id, policy);
       }
 
       throw new Error(`Gate ${step.id} condition failed: ${step.condition}`);

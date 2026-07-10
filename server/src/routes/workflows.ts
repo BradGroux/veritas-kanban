@@ -620,7 +620,7 @@ router.post(
 
 /**
  * POST /api/workflow-runs/:runId/steps/:stepId/approve — Approve a gate step
- * Phase 4: Gate approval endpoint
+ * Phase 4: Gate approval endpoint — fixed for human-gate blocking (#778)
  */
 router.post(
   '/runs/:runId/steps/:stepId/approve',
@@ -637,19 +637,13 @@ router.post(
     // Check execute permission on the workflow
     await assertWorkflowPermission(run.workflowId, userId, 'execute');
 
-    // Find the step
-    const stepRun = run.steps.find((s) => s.stepId === stepId);
-    if (!stepRun) {
-      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
-    }
-
-    if (stepRun.status !== 'failed') {
+    if (run.status !== 'blocked') {
       throw new ValidationError(
-        `Step ${stepId} is not awaiting approval (current status: ${stepRun.status})`
+        `Run ${runId} is not blocked (current status: ${run.status}). Only blocked runs can be approved.`
       );
     }
 
-    // Security: Verify this is actually a gate step
+    // Security: Verify this is actually a gate step with human escalation
     const workflow = await workflowService.loadWorkflow(run.workflowId);
     if (!workflow) {
       throw new NotFoundError(`Workflow ${run.workflowId} not found`);
@@ -662,18 +656,14 @@ router.post(
       );
     }
 
-    // Approve: add approval to context and resume
-    const approvalContext = {
-      ...run.context,
-      _gateApproval: {
-        stepId,
-        approved: true,
-        approvedBy: userId,
-        approvedAt: new Date().toISOString(),
-      },
-    };
+    if (stepDef.on_false?.escalate_to !== 'human') {
+      throw new ValidationError(`Gate step ${stepId} does not have a human escalation policy`);
+    }
 
-    const resumed = await workflowRunService.resumeRun(runId, approvalContext);
+    // Validate optional resume context
+    const { context } = resumeRunSchema.parse(req.body || {});
+
+    const resumed = await workflowRunService.approveGateStep(runId, stepId, userId, context);
 
     res.json(resumed);
   })
@@ -681,7 +671,7 @@ router.post(
 
 /**
  * POST /api/workflow-runs/:runId/steps/:stepId/reject — Reject a gate step
- * Phase 4: Gate rejection endpoint
+ * Phase 4: Gate rejection endpoint — fixed to persist state (#778)
  */
 router.post(
   '/runs/:runId/steps/:stepId/reject',
@@ -698,19 +688,13 @@ router.post(
     // Check execute permission on the workflow
     await assertWorkflowPermission(run.workflowId, userId, 'execute');
 
-    // Find the step
-    const stepRun = run.steps.find((s) => s.stepId === stepId);
-    if (!stepRun) {
-      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
-    }
-
-    if (stepRun.status !== 'failed') {
+    if (run.status !== 'blocked') {
       throw new ValidationError(
-        `Step ${stepId} is not awaiting approval (current status: ${stepRun.status})`
+        `Run ${runId} is not blocked (current status: ${run.status}). Only blocked runs can be rejected.`
       );
     }
 
-    // Security: Verify this is actually a gate step
+    // Security: Verify this is actually a gate step with human escalation
     const workflow = await workflowService.loadWorkflow(run.workflowId);
     if (!workflow) {
       throw new NotFoundError(`Workflow ${run.workflowId} not found`);
@@ -723,14 +707,13 @@ router.post(
       );
     }
 
-    // Reject: mark run as failed
-    run.status = 'failed';
-    run.error = `Step ${stepId} rejected by ${userId}`;
-    run.completedAt = new Date().toISOString();
+    if (stepDef.on_false?.escalate_to !== 'human') {
+      throw new ValidationError(`Gate step ${stepId} does not have a human escalation policy`);
+    }
 
-    // This would be saved by the workflow run service
-    // For now, just return the updated run
-    res.json(run);
+    const rejected = await workflowRunService.rejectGateStep(runId, stepId, userId);
+
+    res.json(rejected);
   })
 );
 
