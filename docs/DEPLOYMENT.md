@@ -737,6 +737,32 @@ pre-migration backup and journal, and follow
 SQLite migration is limited by schema compatibility; restore the pre-migration
 file-backed backup when an older app cannot open a newer database.
 
+### Source-Checkout Runtime Data Separation
+
+When running from a source checkout (not Docker), runtime data and source
+files share the same directory tree by default:
+
+| Lifecycle        | Paths                                        | Action on upgrade           |
+| ---------------- | -------------------------------------------- | --------------------------- |
+| **Source**       | `server/`, `web/`, `cli/`, `shared/`, `mcp/` | Safe to `git pull`, rebuild |
+| **Runtime data** | `.veritas-kanban/`, `tasks/`, `storage/`     | Preserve across upgrades    |
+
+`.gitignore` excludes all runtime directories, so `git pull` will not overwrite
+them. However, to make the separation explicit and protect runtime data on
+bare-metal or CI setups, set `VERITAS_DATA_DIR` (or `DATA_DIR`) to a directory
+outside the source tree:
+
+```bash
+export VERITAS_DATA_DIR=/var/lib/veritas-kanban
+```
+
+All services resolve runtime paths through `server/src/utils/paths.ts`, which
+respects `DATA_DIR` / `VERITAS_DATA_DIR` as the authoritative override (#774).
+
+**Startup reconciliation:** If the server was stopped uncleanly while agents
+were running, the next startup automatically marks any orphaned `running`
+agent attempts as `failed` and reverts the owning task to `todo` (#781).
+
 ---
 
 ## Health Check

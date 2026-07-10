@@ -11,6 +11,8 @@ import {
 } from '../services/status-history-service.js';
 import { sendWebSocketEvent } from '../services/websocket-permissions.js';
 import { createLogger } from '../lib/logger.js';
+import { getRuntimeDir } from '../utils/paths.js';
+import type { ConfigService } from '../services/config-service.js';
 const log = createLogger('agent-status');
 
 const router: RouterType = Router();
@@ -38,18 +40,20 @@ export interface AgentStatus {
   errorMessage?: string;
 }
 
-// Persistence file path
-const DATA_DIR = process.env.DATA_DIR || '.veritas-kanban';
-const STATUS_FILE = path.join(DATA_DIR, 'agent-status.json');
+// Persistence file path — resolved lazily so DATA_DIR/VERITAS_DATA_DIR overrides are respected
+function getStatusFile(): string {
+  return path.join(getRuntimeDir(), 'agent-status.json');
+}
 
 /**
  * Load persisted agent status from disk (survives server restarts).
  * Falls back to idle if file doesn't exist or is corrupt.
  */
 function loadPersistedStatus(): AgentStatus {
+  const statusFile = getStatusFile();
   try {
-    if (existsSync(STATUS_FILE)) {
-      const raw = readFileSync(STATUS_FILE, 'utf-8');
+    if (existsSync(statusFile)) {
+      const raw = readFileSync(statusFile, 'utf-8');
       const parsed = JSON.parse(raw) as AgentStatus;
       // Validate it has the expected shape
       if (parsed.status && typeof parsed.subAgentCount === 'number') {
@@ -74,12 +78,13 @@ function loadPersistedStatus(): AgentStatus {
  * Persist current status to disk (async, fire-and-forget).
  */
 function persistStatus(status: AgentStatus): void {
+  const statusFile = getStatusFile();
   try {
-    const dir = path.dirname(STATUS_FILE);
+    const dir = path.dirname(statusFile);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2), 'utf-8');
+    writeFileSync(statusFile, JSON.stringify(status, null, 2), 'utf-8');
   } catch (err) {
     log.warn({ data: err }, '[AgentStatus] Failed to persist status');
   }
@@ -95,11 +100,18 @@ let idleTimeoutHandle: NodeJS.Timeout | null = null;
 // WebSocket server reference for broadcasting
 let wssRef: WebSocketServer | null = null;
 
+// Application-level ConfigService — injected by initAgentStatus to avoid per-request allocation
+let configServiceRef: ConfigService | null = null;
+
 /**
- * Initialize the agent status service with WebSocket server reference
+ * Initialize the agent status service with WebSocket server reference and
+ * the application-level ConfigService singleton (prevents per-request watcher leaks).
  */
-export function initAgentStatus(wss: WebSocketServer): void {
+export function initAgentStatus(wss: WebSocketServer, configService?: ConfigService): void {
   wssRef = wss;
+  if (configService) {
+    configServiceRef = configService;
+  }
 }
 
 /**
@@ -316,10 +328,20 @@ router.post(
 
     const { agent, action, taskId, details } = parsed.data;
 
-    // Import ConfigService dynamically to avoid circular deps
-    const { ConfigService } = await import('../services/config-service.js');
-    const configService = new ConfigService();
-    const settings = await configService.getFeatureSettings();
+    // Reuse the application-level ConfigService to avoid spawning a new watcher per request.
+    // Falls back to a lazy import only when called before initAgentStatus (e.g. in isolated tests).
+    let settings: Awaited<ReturnType<ConfigService['getFeatureSettings']>>;
+    if (configServiceRef) {
+      settings = await configServiceRef.getFeatureSettings();
+    } else {
+      const { ConfigService } = await import('../services/config-service.js');
+      const fallbackService = new ConfigService();
+      try {
+        settings = await fallbackService.getFeatureSettings();
+      } finally {
+        fallbackService.dispose();
+      }
+    }
 
     const enforcementEnabled = settings.enforcement?.orchestratorDelegation ?? false;
 

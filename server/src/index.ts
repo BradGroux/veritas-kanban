@@ -28,6 +28,7 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
+import { disposeAgentRegistryService } from './services/agent-registry-service.js';
 import {
   startScheduledDeliverablesRunner,
   stopScheduledDeliverablesRunner,
@@ -560,6 +561,15 @@ let storageInitialized = false;
       storageInitialized = true;
       log.info('SQLite storage initialized');
     }
+
+    // 4. Reconcile any agent attempts that were left in `running` state from
+    //    a previous server crash/restart (issue #781).
+    try {
+      await agentService.reconcileRunningAttempts();
+    } catch (reconcileErr) {
+      // Non-fatal: log and continue — the server can still serve requests.
+      log.warn({ err: reconcileErr }, 'Startup: agent attempt reconciliation failed');
+    }
   } catch (err) {
     log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
     process.exit(1);
@@ -609,8 +619,9 @@ const wss = new WebSocketServer({
 // Initialize broadcast service for task change notifications
 initBroadcast(wss);
 
-// Initialize agent status service for WebSocket broadcasts
-initAgentStatus(wss);
+// Initialize agent status service for WebSocket broadcasts; pass the app ConfigService
+// so the delegation-violation route never allocates a per-request watcher (issue #779).
+initAgentStatus(wss, configService ?? undefined);
 
 // Provide WSS reference to health checks for connection counting
 setHealthWss(wss);
@@ -1097,6 +1108,10 @@ async function gracefulShutdown(signal: string) {
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
     log.info('Task service disposed');
+
+    // Flush agent-registry debounced writes and dispose (issue #783)
+    await disposeAgentRegistryService();
+    log.info('Agent registry service disposed');
 
     // Dispose config service (closes file watcher, clears cache)
     if (configService) {

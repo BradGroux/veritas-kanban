@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
   development-tool dependencies (#792, #795).
+- Debounced and made asynchronous the agent-registry heartbeat persistence
+  writes; writes are now coalesced over a 2 s window and use atomic
+  rename-on-write instead of synchronous full-file serialisation; `dispose()`
+  flushes any in-flight write on shutdown (#783).
+- Replaced per-request `ConfigService` allocation in the
+  `POST /api/agent/delegation-violation` route handler with the application-level
+  singleton to prevent FSWatcher leaks under sustained traffic (#779).
+- Routed all `.veritas-kanban` path construction in
+  `clawdbot-agent-service.ts` and `agent-status.ts` through the centralised
+  helpers in `server/src/utils/paths.ts` (DATA_DIR / VERITAS_DATA_DIR
+  overrides are now respected consistently in those files; #774).
 
 ### Fixed
 
@@ -18,23 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).
 - File-backed task mutations (create, update, archive, restore) now use an
-  atomic write-then-rename strategy so a mid-write crash or I/O error cannot
-  leave the task file empty or partially written; the previous valid file
-  remains intact until the replacement is durable (#776).
+  atomic write-then-rename strategy so readers see either the previous file or
+  its complete replacement rather than a partial write (#776).
 - Revision validation is now enforced inside the file-lock / SQLite mutation
   — not just at the route layer — eliminating the TOCTOU window where two
   concurrent requests with the same `expectedRevision` could both succeed and
   the later write silently overwrite the earlier one (#777).
-- Concurrent requests for the same task now always serialize through the lock
-  because the lock key is the task's _current_ filepath (stable per task ID)
-  rather than the tentative new filepath, which differed when titles changed
-  (#777).
+- Concurrent file-backed mutations for the same task now serialize through an
+  in-process queue keyed by immutable task ID before asynchronous lookup, while
+  filepath locks continue to provide cross-process exclusion (#777).
+- Added startup reconciliation for agent attempts that were left in `running`
+  state after a server crash or restart; orphaned attempts are now marked
+  `failed` and their tasks reverted to `todo` so operators can relaunch
+  them (#781).
 
 ### Performance
 
-- Activity-service `countActivities` no longer triggers a second full file
-  parse and filter pass; the filtered result set is shared with `getActivities`
-  in one read (#782).
+- Paginated file-backed activity requests now derive page items and total count
+  from one file load and filter pass (#782).
 - Activity file writes are now atomic (write-temp / rename), and corrupt files
   are backed up before recovery rather than silently overwritten (#782).
 - Task-identity diagnostics are cached after the first scan and invalidated
