@@ -7,6 +7,7 @@ const createFsPromisesMock = vi.hoisted(() => () => {
     copyFile: vi.fn().mockResolvedValue(undefined),
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
+    rename: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     rename: vi.fn().mockResolvedValue(undefined),
@@ -25,6 +26,7 @@ vi.mock('node:fs', () => {
   const mockPromises = {
     readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    rename: vi.fn().mockResolvedValue(undefined),
     mkdir: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     unlink: vi.fn().mockResolvedValue(undefined),
@@ -38,6 +40,7 @@ vi.mock('node:fs', () => {
     }),
     readFileSync: vi.fn(() => ''),
     writeFileSync: vi.fn(),
+    renameSync: vi.fn(),
     mkdirSync: vi.fn(),
     promises: mockPromises,
   };

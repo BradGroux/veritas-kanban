@@ -9,21 +9,21 @@ vi.mock('node:fs/promises', () => {
   const access = vi.fn().mockResolvedValue(undefined);
   const mkdir = vi.fn().mockResolvedValue(undefined);
   const readFile = vi.fn().mockResolvedValue('');
+  const rename = vi.fn().mockResolvedValue(undefined);
   const writeFile = vi.fn().mockResolvedValue(undefined);
   const readdir = vi.fn().mockResolvedValue([]);
-  const rename = vi.fn().mockResolvedValue(undefined);
   const unlink = vi.fn().mockResolvedValue(undefined);
   const rm = vi.fn().mockResolvedValue(undefined);
   return {
     access,
     mkdir,
     readFile,
+    rename,
     writeFile,
     readdir,
-    rename,
     unlink,
     rm,
-    default: { access, mkdir, readFile, writeFile, readdir, rename, unlink, rm },
+    default: { access, mkdir, readFile, rename, writeFile, readdir, unlink, rm },
   };
 });
 
@@ -35,6 +35,11 @@ vi.mock('fs', () => {
     }),
     writeFile: vi.fn((path: string, data: string) => {
       mockFs[path] = data;
+      return Promise.resolve(undefined);
+    }),
+    rename: vi.fn((from: string, to: string) => {
+      mockFs[to] = mockFs[from];
+      delete mockFs[from];
       return Promise.resolve(undefined);
     }),
     mkdir: vi.fn().mockResolvedValue(undefined),

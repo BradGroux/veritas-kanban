@@ -75,7 +75,7 @@ function loadPersistedStatus(): AgentStatus {
 }
 
 /**
- * Persist current status to disk (async, fire-and-forget).
+ * Persist current status to disk synchronously.
  */
 function persistStatus(status: AgentStatus): void {
   const statusFile = getStatusFile();

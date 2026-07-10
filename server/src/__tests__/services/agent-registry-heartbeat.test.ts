@@ -22,11 +22,11 @@ const { getAgentRegistryService, disposeAgentRegistryService } =
   await import('../../services/agent-registry-service.js');
 
 describe('AgentRegistryService — heartbeat persistence (issue #783)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers();
     writeFileMock.mockClear();
     renameMock.mockClear();
-    disposeAgentRegistryService();
+    await disposeAgentRegistryService();
   });
 
   afterEach(async () => {
