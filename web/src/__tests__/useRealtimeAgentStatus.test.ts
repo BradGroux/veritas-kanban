@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 import { createMockWebSocket } from './test-utils';
+import type { GlobalAgentStatus } from '@/lib/api';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ function makeStatusMsg(overrides: object = {}) {
   };
 }
 
-function makeGlobalStatus(overrides: object = {}) {
+function makeGlobalStatus(overrides: Partial<GlobalAgentStatus> = {}): GlobalAgentStatus {
   return {
     status: 'idle',
     subAgentCount: 0,
@@ -84,7 +85,7 @@ function makeGlobalStatus(overrides: object = {}) {
 
 describe('useRealtimeAgentStatus', () => {
   it('returns idle state on initial render before any data arrives', () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus());
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
     expect(result.current.status).toBe('idle');
@@ -97,7 +98,7 @@ describe('useRealtimeAgentStatus', () => {
       activeTask: 'task-1',
       subAgentCount: 2,
     });
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(snapshot as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(snapshot);
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
 
@@ -109,7 +110,7 @@ describe('useRealtimeAgentStatus', () => {
   });
 
   it('updates status when a WebSocket agent:status message is received', async () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus());
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
 
@@ -138,7 +139,7 @@ describe('useRealtimeAgentStatus', () => {
   });
 
   it('ignores unrecognised WebSocket message types', async () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus());
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
 
@@ -155,7 +156,7 @@ describe('useRealtimeAgentStatus', () => {
 
   it('falls back to REST polling when WebSocket disconnects', async () => {
     vi.mocked(api.agent.globalStatus).mockResolvedValue(
-      makeGlobalStatus({ status: 'working', subAgentCount: 3 }) as any
+      makeGlobalStatus({ status: 'working', subAgentCount: 3 })
     );
 
     renderHook(() => useRealtimeAgentStatus());
@@ -175,7 +176,7 @@ describe('useRealtimeAgentStatus', () => {
   });
 
   it('stops polling when WebSocket reconnects, using WS messages instead', async () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus());
 
     renderHook(() => useRealtimeAgentStatus());
 
@@ -210,10 +211,11 @@ describe('useRealtimeAgentStatus', () => {
   });
 
   it('marks status as stale after 5 minutes without an update', async () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus({ status: 'working' }));
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
     await flushPromises();
+    expect(result.current.isStale).toBe(false);
 
     // Advance past 5-minute stale threshold + one stale-check interval (30s)
     await act(async () => {
@@ -225,10 +227,11 @@ describe('useRealtimeAgentStatus', () => {
   });
 
   it('clears stale flag when a fresh WebSocket message arrives', async () => {
-    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus() as any);
+    vi.mocked(api.agent.globalStatus).mockResolvedValue(makeGlobalStatus({ status: 'working' }));
 
     const { result } = renderHook(() => useRealtimeAgentStatus());
     await flushPromises();
+    expect(result.current.isStale).toBe(false);
 
     // Make it stale
     await act(async () => {
@@ -251,7 +254,7 @@ describe('useRealtimeAgentStatus', () => {
 
   it('does not throw when hook unmounts during an in-flight fetch', async () => {
     // Make globalStatus a slow-resolving promise
-    let resolveStatus!: (v: any) => void;
+    let resolveStatus: ((value: GlobalAgentStatus) => void) | undefined;
     vi.mocked(api.agent.globalStatus).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveStatus = resolve;
@@ -265,6 +268,9 @@ describe('useRealtimeAgentStatus', () => {
 
     // Resolve after unmount — should not throw / cause state update warnings
     await act(async () => {
+      if (!resolveStatus) {
+        throw new Error('Expected resolveStatus to be assigned');
+      }
       resolveStatus(makeGlobalStatus());
       await Promise.resolve();
     });

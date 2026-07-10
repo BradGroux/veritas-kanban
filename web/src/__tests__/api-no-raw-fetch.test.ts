@@ -32,7 +32,11 @@ const ALLOWLISTED: Record<string, number> = {
 
 describe('API module raw fetch policy', () => {
   for (const [path, source] of Object.entries(apiSources)) {
-    const filename = path.split('/').pop()!;
+    const filenameCandidate = path.split('/').pop();
+    if (!filenameCandidate) {
+      throw new Error(`Unable to derive filename from API source path: ${path}`);
+    }
+    const filename = filenameCandidate;
 
     it(`${filename} does not contain unapproved raw fetch() calls`, () => {
       const matches = [...source.matchAll(/\bfetch\s*\(/g)];
