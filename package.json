@@ -55,19 +55,19 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@playwright/test": "^1.61.0",
-    "@types/node": "^26.0.1",
-    "@typescript-eslint/eslint-plugin": "^8.61.1",
-    "@typescript-eslint/parser": "^8.61.1",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.63.0",
+    "@typescript-eslint/parser": "^8.63.0",
     "concurrently": "^10.0.3",
-    "eslint": "10.5.0",
+    "eslint": "10.6.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.7",
-    "prettier": "^3.8.4",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.5",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
