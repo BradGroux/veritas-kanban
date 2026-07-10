@@ -648,7 +648,7 @@ export class WorkflowRunService {
 
         // Default: fail deterministically
         throw new Error(
-          `retry_step budget exhausted: step "${step.id}" has rerouted ${run.retryRouteCount} times (max ${maxReroutes})`
+          `retry_step budget exhausted: step "${step.id}" has rerouted ${run.retryRouteCount - 1} times (max ${maxReroutes})`
         );
       }
 
@@ -926,7 +926,10 @@ export class WorkflowRunService {
     }
 
     const blockedGateId = (run.context._gateBlock as { stepId?: string } | undefined)?.stepId;
-    if (blockedGateId && blockedGateId !== stepId) {
+    if (!blockedGateId) {
+      throw new ValidationError(`Run ${runId} is not blocked at a human gate`);
+    }
+    if (blockedGateId !== stepId) {
       throw new ValidationError(
         `Run ${runId} is blocked at gate "${blockedGateId}", not "${stepId}"`
       );
@@ -980,7 +983,10 @@ export class WorkflowRunService {
     }
 
     const blockedGateId = (run.context._gateBlock as { stepId?: string } | undefined)?.stepId;
-    if (blockedGateId && blockedGateId !== stepId) {
+    if (!blockedGateId) {
+      throw new ValidationError(`Run ${runId} is not blocked at a human gate`);
+    }
+    if (blockedGateId !== stepId) {
       throw new ValidationError(
         `Run ${runId} is blocked at gate "${blockedGateId}", not "${stepId}"`
       );
