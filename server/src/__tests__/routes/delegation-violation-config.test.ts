@@ -45,7 +45,8 @@ vi.mock('../../services/websocket-permissions.js', () => ({
   sendWebSocketEvent: vi.fn(),
 }));
 
-const { agentStatusRoutes, initAgentStatus } = await import('../../routes/agent-status.js');
+const { agentStatusRoutes, initAgentStatus, setAgentStatusConfigService } =
+  await import('../../routes/agent-status.js');
 const { ConfigService } = await import('../../services/config-service.js');
 
 function makeApp(withInjectedConfig: boolean) {
@@ -53,12 +54,13 @@ function makeApp(withInjectedConfig: boolean) {
   app.use(express.json());
 
   const wss = { clients: new Set() } as unknown as WebSocketServer;
+  initAgentStatus(wss);
 
   if (withInjectedConfig) {
     const sharedConfig = new ConfigService();
-    initAgentStatus(wss, sharedConfig);
-  } else {
-    initAgentStatus(wss);
+    // Simulate the async startup path: setAgentStatusConfigService is called
+    // after the IIFE completes, not at initAgentStatus time.
+    setAgentStatusConfigService(sharedConfig);
   }
 
   app.use('/api/agent', agentStatusRoutes);

@@ -216,8 +216,10 @@ export class ClawdbotAgentService {
 
       try {
         await this.taskService.updateTask(task.id, {
-          // Revert task status to 'todo' so it can be restarted by the operator.
-          status: 'todo',
+          // Only revert task status if it is still 'in-progress' from this run.
+          // Tasks in other states (blocked, done, todo, etc.) keep their status;
+          // we only fix the orphaned attempt record.
+          ...(task.status === 'in-progress' ? { status: 'todo' } : {}),
           attempt: {
             ...task.attempt,
             status: 'failed',

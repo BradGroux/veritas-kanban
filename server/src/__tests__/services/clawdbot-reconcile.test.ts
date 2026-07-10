@@ -101,8 +101,8 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     mockUpdateTask.mockResolvedValue({} as Task);
   });
 
-  it('marks orphaned running attempts as failed and task status as todo', async () => {
-    const runningTask = makeTask('task-running-1', 'running');
+  it('marks orphaned running attempts as failed and reverts in-progress task to todo', async () => {
+    const runningTask = makeTask('task-running-1', 'running'); // status: 'in-progress'
     mockListTasks.mockResolvedValue([runningTask]);
 
     await service.reconcileRunningAttempts();
@@ -115,6 +115,23 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     expect(update.attempt?.ended).toBeDefined();
     // ended should be a valid ISO timestamp
     expect(() => new Date(update.attempt!.ended!)).not.toThrow();
+  });
+
+  it('does not reset task status for non-in-progress tasks with stale running attempts', async () => {
+    // Task was moved to 'blocked' by a human but still has a stale running attempt
+    const blockedTask: Task = {
+      ...makeTask('task-blocked', 'running'),
+      status: 'blocked',
+    } as Task;
+    mockListTasks.mockResolvedValue([blockedTask]);
+
+    await service.reconcileRunningAttempts();
+
+    expect(mockUpdateTask).toHaveBeenCalledTimes(1);
+    const [, update] = mockUpdateTask.mock.calls[0];
+    // Task status should NOT be overridden when already non-in-progress
+    expect(update.status).toBeUndefined();
+    expect(update.attempt?.status).toBe('failed');
   });
 
   it('does not touch tasks whose attempt status is not running', async () => {
