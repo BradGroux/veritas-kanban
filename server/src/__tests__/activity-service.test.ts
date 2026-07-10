@@ -36,9 +36,8 @@ describe('ActivityService', () => {
   beforeEach(async () => {
     activityDir = path.join(tmpRoot, '.veritas-kanban');
     await fs.mkdir(activityDir, { recursive: true });
-    service = new ActivityService();
-    // Override the activity file path
-    (service as any).activityFile = path.join(activityDir, 'activity.json');
+    // Pass activityDir to service so AppendActivityRepository uses the test directory
+    service = new ActivityService({ activityDir, storageType: 'file' });
   });
 
   afterEach(async () => {
