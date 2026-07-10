@@ -7,6 +7,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
+// Set to use SQLite for tests (avoids mocking fs/promises)
+process.env.VERITAS_STORAGE = 'sqlite';
+
 // Hoist tmpRoot so it's available when vi.mock factory runs (before const declarations)
 const tmpRoot = vi.hoisted(() => {
   const tmpdir = process.env.TMPDIR || process.env.TEMP || '/tmp';
