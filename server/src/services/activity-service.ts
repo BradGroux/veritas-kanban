@@ -56,6 +56,11 @@ export interface ActivityFilters {
   until?: string;
 }
 
+export interface ActivityPage {
+  items: Activity[];
+  total: number;
+}
+
 export interface ActivityServiceOptions {
   activityFile?: string;
   storageType?: 'file' | 'sqlite';
@@ -112,10 +117,7 @@ export class ActivityService {
     }
   }
 
-  /**
-   * Load and filter activities in a single pass. Shared by getActivities and countActivities
-   * to avoid reading + parsing the file twice per paginated request.
-   */
+  /** Load and filter activities in a single pass. */
   private async loadAllFiltered(filters?: ActivityFilters): Promise<Activity[]> {
     let activities = await this.loadAll();
 
@@ -152,10 +154,7 @@ export class ActivityService {
     return activities.slice(offset, offset + limit);
   }
 
-  /**
-   * Return total count of activities matching the given filters (for pagination).
-   * Shares a single parse+filter pass with getActivities — no double scan.
-   */
+  /** Return total count of activities matching the given filters. */
   async countActivities(filters?: ActivityFilters): Promise<number> {
     if (this.repository) {
       // SQLite: delegate to repository if it has a count method; otherwise fall back
@@ -171,6 +170,26 @@ export class ActivityService {
     }
     const filtered = await this.loadAllFiltered(filters);
     return filtered.length;
+  }
+
+  async getActivitiesPage(
+    limit: number,
+    filters?: ActivityFilters,
+    offset: number = 0
+  ): Promise<ActivityPage> {
+    if (this.repository) {
+      const [items, total] = await Promise.all([
+        this.getActivities(limit, filters, offset),
+        this.countActivities(filters),
+      ]);
+      return { items, total };
+    }
+
+    const filtered = await this.loadAllFiltered(filters);
+    return {
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+    };
   }
 
   /**

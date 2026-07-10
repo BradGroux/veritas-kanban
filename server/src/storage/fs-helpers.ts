@@ -77,13 +77,14 @@ export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;
 
 /**
- * Crash-safe atomic file write.
+ * Atomic file replacement.
  *
  * Writes `content` to a randomly-named sibling temp file on the same
- * filesystem as `destPath`, then renames it over `destPath`.  Because
- * `rename(2)` is atomic on POSIX (same-device) systems, readers either see
- * the old file or the new file — never a partial write.  The temp file is
- * cleaned up on failure so it does not accumulate.
+ * filesystem as `destPath`, then renames it over `destPath`. On filesystems
+ * where same-device replacement rename is atomic, readers either see the old
+ * file or the new file — never a partial write. This does not claim crash
+ * durability because the file and parent directory are not explicitly synced.
+ * The temp file is cleaned up on failure so it does not accumulate.
  *
  * Encoding defaults to `'utf-8'` to match the old `writeFile` call sites.
  */

@@ -24,6 +24,7 @@ const {
 } = vi.hoisted(() => ({
   mockActivityService: {
     getActivities: vi.fn(),
+    getActivitiesPage: vi.fn(),
     clearActivities: vi.fn(),
     logActivity: vi.fn().mockResolvedValue(undefined),
   },
@@ -176,6 +177,19 @@ describe('Activity Routes', () => {
     const res = await request(app).get('/api/activity?limit=10');
     expect(res.status).toBe(200);
     expect(mockActivityService.getActivities).toHaveBeenCalledWith(10, undefined);
+  });
+
+  it('GET / should obtain a paginated response in one service call', async () => {
+    mockActivityService.getActivitiesPage.mockResolvedValue({
+      items: [{ id: 'a1' }],
+      total: 3,
+    });
+
+    const res = await request(app).get('/api/activity?page=2&limit=1&agent=codex');
+
+    expect(res.status).toBe(200);
+    expect(mockActivityService.getActivitiesPage).toHaveBeenCalledWith(1, { agent: 'codex' }, 1);
+    expect(mockActivityService.getActivities).not.toHaveBeenCalled();
   });
 
   it('DELETE / should clear activities', async () => {

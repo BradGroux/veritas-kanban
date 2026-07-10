@@ -895,6 +895,13 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
+    if (this.sqliteTasks) {
+      return this.updateTaskMutation(id, input);
+    }
+    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
+  }
+
+  private async updateTaskMutation(id: string, input: UpdateTaskInput): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.update', id);
 
     // Initial read to check existence and compute the lock filepath.
@@ -928,392 +935,385 @@ export class TaskService {
       }
 
       // File lock provides cross-process protection.
-      // withTaskMutex (below) provides in-process serialization by task ID.
+      // updateTask provides in-process serialization by task ID.
       await withFileLock(lockPath, callback);
     };
 
-    await this.withTaskMutex(id, () =>
-      runMutation(async () => {
-        // Re-read from cache inside the lock to get the latest state.
-        // This prevents concurrent writes (e.g., debounced field save vs.
-        // timer start) from overwriting each other's changes.
-        const freshTask = this.sqliteTasks
-          ? ((await this.sqliteTasks.findById(id)) ?? task)
-          : (this.cacheGet(id) ?? task);
+    await runMutation(async () => {
+      // Re-read from cache inside the lock to get the latest state.
+      // This prevents concurrent writes (e.g., debounced field save vs.
+      // timer start) from overwriting each other's changes.
+      const freshTask = this.sqliteTasks
+        ? ((await this.sqliteTasks.findById(id)) ?? task)
+        : (this.cacheGet(id) ?? task);
 
-        // Revision check inside the lock — prevents a TOCTOU race where two
-        // concurrent requests with the same valid revision both pass the
-        // pre-lock route check, serialize here, and both succeed.
-        if (_expectedRevision !== undefined) {
-          const currentRevision = normalizedTaskRevision(freshTask);
-          if (_expectedRevision !== currentRevision) {
-            throw new ConflictError(
-              `task ${id} has changed since it was loaded. Reload and retry with the latest revision.`,
-              {
-                resourceType: 'task',
-                resourceId: id,
-                expectedRevision: _expectedRevision,
-                currentRevision,
-                current: freshTask,
-              }
-            );
-          }
-        }
-
-        const previousStatus = freshTask.status;
-        const statusChanged = input.status !== undefined && input.status !== previousStatus;
-        let settings: Awaited<ReturnType<ConfigService['getFeatureSettings']>> | null = null;
-
-        if (statusChanged) {
-          settings = await this.configService.getFeatureSettings();
-          const columns = normalizeBoardColumns(settings.board?.columns);
-          this.assertConfiguredStatus(input.status as TaskStatus, {
-            columns,
-            defaultStatus: normalizeBoardDefaultStatus(settings.board?.defaultStatus, columns),
-            activeStatusIds: new Set(columns.map((column) => column.id)),
-          });
-        }
-
-        // Validate transition hooks (quality gates) before allowing status change
-        if (statusChanged && input.status && settings) {
-          // Check requireDeliverableForDone setting
-          if (input.status === 'done') {
-            if (settings.tasks.requireDeliverableForDone) {
-              const deliverables = input.deliverables ?? freshTask.deliverables ?? [];
-              if (deliverables.length === 0) {
-                throw new ValidationError(
-                  'Cannot complete task without at least one deliverable (required by settings)',
-                  [
-                    {
-                      code: 'DELIVERABLE_REQUIRED',
-                      message: 'Task requires at least one deliverable to be marked as done',
-                      path: ['status'],
-                    },
-                  ]
-                );
-              }
+      // Revision check inside the lock — prevents a TOCTOU race where two
+      // concurrent requests with the same valid revision both pass the
+      // pre-lock route check, serialize here, and both succeed.
+      if (_expectedRevision !== undefined) {
+        const currentRevision = normalizedTaskRevision(freshTask);
+        if (_expectedRevision !== currentRevision) {
+          throw new ConflictError(
+            `task ${id} has changed since it was loaded. Reload and retry with the latest revision.`,
+            {
+              resourceType: 'task',
+              resourceId: id,
+              expectedRevision: _expectedRevision,
+              currentRevision,
+              current: freshTask,
             }
+          );
+        }
+      }
 
-            // Enforcement: 4x10 Review Gate (only if enforcement settings are explicitly configured)
-            // Only applies to code-related task types
-            if (
-              settings.enforcement?.reviewGate === true &&
-              CODE_TASK_TYPES.includes(freshTask.type?.toLowerCase())
-            ) {
-              const scores = input.reviewScores ?? freshTask.reviewScores ?? [];
-              const allPerfect = scores.length === 4 && scores.every((s: number) => s === 10);
-              if (!allPerfect) {
-                const scoresDisplay =
-                  scores.length === 4
+      const previousStatus = freshTask.status;
+      const statusChanged = input.status !== undefined && input.status !== previousStatus;
+      let settings: Awaited<ReturnType<ConfigService['getFeatureSettings']>> | null = null;
+
+      if (statusChanged) {
+        settings = await this.configService.getFeatureSettings();
+        const columns = normalizeBoardColumns(settings.board?.columns);
+        this.assertConfiguredStatus(input.status as TaskStatus, {
+          columns,
+          defaultStatus: normalizeBoardDefaultStatus(settings.board?.defaultStatus, columns),
+          activeStatusIds: new Set(columns.map((column) => column.id)),
+        });
+      }
+
+      // Validate transition hooks (quality gates) before allowing status change
+      if (statusChanged && input.status && settings) {
+        // Check requireDeliverableForDone setting
+        if (input.status === 'done') {
+          if (settings.tasks.requireDeliverableForDone) {
+            const deliverables = input.deliverables ?? freshTask.deliverables ?? [];
+            if (deliverables.length === 0) {
+              throw new ValidationError(
+                'Cannot complete task without at least one deliverable (required by settings)',
+                [
+                  {
+                    code: 'DELIVERABLE_REQUIRED',
+                    message: 'Task requires at least one deliverable to be marked as done',
+                    path: ['status'],
+                  },
+                ]
+              );
+            }
+          }
+
+          // Enforcement: 4x10 Review Gate (only if enforcement settings are explicitly configured)
+          // Only applies to code-related task types
+          if (
+            settings.enforcement?.reviewGate === true &&
+            CODE_TASK_TYPES.includes(freshTask.type?.toLowerCase())
+          ) {
+            const scores = input.reviewScores ?? freshTask.reviewScores ?? [];
+            const allPerfect = scores.length === 4 && scores.every((s: number) => s === 10);
+            if (!allPerfect) {
+              const scoresDisplay =
+                scores.length === 4
+                  ? scores.join('/')
+                  : scores.length > 0
                     ? scores.join('/')
-                    : scores.length > 0
-                      ? scores.join('/')
-                      : 'none';
-                const detailMessage =
-                  scores.length === 4
-                    ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay}`
-                    : scores.length > 0
-                      ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay} (incomplete)`
-                      : `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. No review scores set yet.`;
+                    : 'none';
+              const detailMessage =
+                scores.length === 4
+                  ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay}`
+                  : scores.length > 0
+                    ? `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. Current scores: ${scoresDisplay} (incomplete)`
+                    : `Review Gate: This ${freshTask.type} task requires all four review scores to be 10/10/10/10 before completion. No review scores set yet.`;
 
-                throw new ValidationError(detailMessage, [
-                  {
-                    code: 'REVIEW_GATE',
-                    message: detailMessage,
-                    path: ['reviewScores'],
-                  },
-                ]);
-              }
-            }
-
-            // Enforcement: Closing Comments Required (only if enforcement settings are explicitly configured)
-            if (settings.enforcement?.closingComments === true) {
-              const comments = input.reviewComments ?? freshTask.reviewComments ?? [];
-              const hasClosingComment =
-                comments.length > 0 &&
-                comments.some((c: { content: string }) => c.content && c.content.length >= 20);
-              if (!hasClosingComment) {
-                const commentCount = comments.length;
-                const detailMessage =
-                  commentCount === 0
-                    ? 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. No comments added yet.'
-                    : 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. Current comments are too short.';
-
-                throw new ValidationError(detailMessage, [
-                  {
-                    code: 'CLOSING_COMMENTS_REQUIRED',
-                    message: detailMessage,
-                    path: ['reviewComments'],
-                  },
-                ]);
-              }
-            }
-          }
-
-          // Create a preview of the task with proposed changes for validation
-          const previewTask: Task = {
-            ...freshTask,
-            ...restInput,
-            blockedReason:
-              blockedReasonUpdate === null
-                ? undefined
-                : (blockedReasonUpdate ?? freshTask.blockedReason),
-          };
-
-          if (input.status === 'done' && settings.enforcement) {
-            const ceremonyEvaluation = await this.ceremonyService.evaluateTaskCompletion(
-              previewTask,
-              settings.enforcement
-            );
-            if (!ceremonyEvaluation.allowed) {
-              const detailMessage = `Ceremony Enforcement: ${ceremonyEvaluation.blockedReasons.join(
-                ' '
-              )}`;
               throw new ValidationError(detailMessage, [
                 {
-                  code: 'CEREMONY_REQUIRED',
+                  code: 'REVIEW_GATE',
                   message: detailMessage,
-                  path: ['status'],
-                  details: ceremonyEvaluation.pending.map((requirement) => ({
-                    id: requirement.id,
-                    kind: requirement.kind,
-                    title: requirement.title,
-                    reason: requirement.reason,
-                    requiredArtifacts: requirement.requiredArtifacts,
-                    dueAt: requirement.dueAt,
-                  })),
+                  path: ['reviewScores'],
                 },
               ]);
             }
           }
 
-          const validation = await validateTransition(previewTask, previousStatus, input.status);
-          if (!validation.allowed) {
-            throw new ValidationError(
-              validation.errorMessage || 'Transition blocked by quality gates',
-              validation.failedGates.map(
-                (g: { gate: { type: string; name: string }; message?: string }) => ({
-                  code: g.gate.type,
-                  message: g.message || g.gate.name,
-                  path: ['status'],
-                })
-              )
-            );
+          // Enforcement: Closing Comments Required (only if enforcement settings are explicitly configured)
+          if (settings.enforcement?.closingComments === true) {
+            const comments = input.reviewComments ?? freshTask.reviewComments ?? [];
+            const hasClosingComment =
+              comments.length > 0 &&
+              comments.some((c: { content: string }) => c.content && c.content.length >= 20);
+            if (!hasClosingComment) {
+              const commentCount = comments.length;
+              const detailMessage =
+                commentCount === 0
+                  ? 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. No comments added yet.'
+                  : 'Closing Comments: At least one review comment with a deliverable summary (≥20 characters) is required before marking this task as done. Current comments are too short.';
+
+              throw new ValidationError(detailMessage, [
+                {
+                  code: 'CLOSING_COMMENTS_REQUIRED',
+                  message: detailMessage,
+                  path: ['reviewComments'],
+                },
+              ]);
+            }
           }
         }
 
-        // Handle checkpoint resumption: increment resumeCount if transitioning to in-progress with checkpoint
-        const hasCheckpointInput = Object.prototype.hasOwnProperty.call(input, 'checkpoint');
-        let checkpointUpdate = input.checkpoint;
-        let clearCheckpoint = hasCheckpointInput && input.checkpoint === undefined;
-        if (
-          !hasCheckpointInput &&
-          freshTask.checkpoint &&
-          input.status === 'in-progress' &&
-          previousStatus !== 'in-progress'
-        ) {
-          // Task is being resumed — increment resumeCount
-          checkpointUpdate = {
-            ...freshTask.checkpoint,
-            resumeCount: (freshTask.checkpoint.resumeCount || 0) + 1,
-          };
-        }
+        // Create a preview of the task with proposed changes for validation
+        const previewTask: Task = {
+          ...freshTask,
+          ...restInput,
+          blockedReason:
+            blockedReasonUpdate === null
+              ? undefined
+              : (blockedReasonUpdate ?? freshTask.blockedReason),
+        };
 
-        // Clear checkpoint when task completes successfully
-        if (input.status === 'done' && freshTask.checkpoint) {
-          clearCheckpoint = true;
-        }
-
-        // Validate agent ref against registry if being changed (#157)
-        if (restInput.agent !== undefined && restInput.agent !== freshTask.agent) {
-          const registry = getAgentRegistryService();
-          const validation = registry.validateAgentRef(restInput.agent);
-          if (!validation.valid) {
-            throw new ValidationError(validation.reason || 'Invalid agent ref', [
+        if (input.status === 'done' && settings.enforcement) {
+          const ceremonyEvaluation = await this.ceremonyService.evaluateTaskCompletion(
+            previewTask,
+            settings.enforcement
+          );
+          if (!ceremonyEvaluation.allowed) {
+            const detailMessage = `Ceremony Enforcement: ${ceremonyEvaluation.blockedReasons.join(
+              ' '
+            )}`;
+            throw new ValidationError(detailMessage, [
               {
-                code: 'INVALID_AGENT_REF',
-                message: validation.reason || 'Invalid agent ref',
-                path: ['agent'],
+                code: 'CEREMONY_REQUIRED',
+                message: detailMessage,
+                path: ['status'],
+                details: ceremonyEvaluation.pending.map((requirement) => ({
+                  id: requirement.id,
+                  kind: requirement.kind,
+                  title: requirement.title,
+                  reason: requirement.reason,
+                  requiredArtifacts: requirement.requiredArtifacts,
+                  dueAt: requirement.dueAt,
+                })),
               },
             ]);
           }
         }
 
-        updatedTask = {
-          ...freshTask,
-          ...restInput,
-          git: gitUpdate ? ({ ...freshTask.git, ...gitUpdate } as Task['git']) : freshTask.git,
-          github: githubUpdate ?? freshTask.github,
-          // Handle blockedReason: null means clear, undefined means keep existing
-          blockedReason:
-            blockedReasonUpdate === null
-              ? undefined
-              : (blockedReasonUpdate ?? freshTask.blockedReason),
-          // Apply checkpoint update (resume count or clear)
-          checkpoint: clearCheckpoint
+        const validation = await validateTransition(previewTask, previousStatus, input.status);
+        if (!validation.allowed) {
+          throw new ValidationError(
+            validation.errorMessage || 'Transition blocked by quality gates',
+            validation.failedGates.map(
+              (g: { gate: { type: string; name: string }; message?: string }) => ({
+                code: g.gate.type,
+                message: g.message || g.gate.name,
+                path: ['status'],
+              })
+            )
+          );
+        }
+      }
+
+      // Handle checkpoint resumption: increment resumeCount if transitioning to in-progress with checkpoint
+      const hasCheckpointInput = Object.prototype.hasOwnProperty.call(input, 'checkpoint');
+      let checkpointUpdate = input.checkpoint;
+      let clearCheckpoint = hasCheckpointInput && input.checkpoint === undefined;
+      if (
+        !hasCheckpointInput &&
+        freshTask.checkpoint &&
+        input.status === 'in-progress' &&
+        previousStatus !== 'in-progress'
+      ) {
+        // Task is being resumed — increment resumeCount
+        checkpointUpdate = {
+          ...freshTask.checkpoint,
+          resumeCount: (freshTask.checkpoint.resumeCount || 0) + 1,
+        };
+      }
+
+      // Clear checkpoint when task completes successfully
+      if (input.status === 'done' && freshTask.checkpoint) {
+        clearCheckpoint = true;
+      }
+
+      // Validate agent ref against registry if being changed (#157)
+      if (restInput.agent !== undefined && restInput.agent !== freshTask.agent) {
+        const registry = getAgentRegistryService();
+        const validation = registry.validateAgentRef(restInput.agent);
+        if (!validation.valid) {
+          throw new ValidationError(validation.reason || 'Invalid agent ref', [
+            {
+              code: 'INVALID_AGENT_REF',
+              message: validation.reason || 'Invalid agent ref',
+              path: ['agent'],
+            },
+          ]);
+        }
+      }
+
+      updatedTask = {
+        ...freshTask,
+        ...restInput,
+        git: gitUpdate ? ({ ...freshTask.git, ...gitUpdate } as Task['git']) : freshTask.git,
+        github: githubUpdate ?? freshTask.github,
+        // Handle blockedReason: null means clear, undefined means keep existing
+        blockedReason:
+          blockedReasonUpdate === null
             ? undefined
-            : checkpointUpdate !== undefined
-              ? checkpointUpdate
-              : freshTask.checkpoint,
-          revision: normalizedTaskRevision(freshTask) + 1,
-          updated: new Date().toISOString(),
+            : (blockedReasonUpdate ?? freshTask.blockedReason),
+        // Apply checkpoint update (resume count or clear)
+        checkpoint: clearCheckpoint
+          ? undefined
+          : checkpointUpdate !== undefined
+            ? checkpointUpdate
+            : freshTask.checkpoint,
+        revision: normalizedTaskRevision(freshTask) + 1,
+        updated: new Date().toISOString(),
+      };
+
+      if (this.sqliteTasks) {
+        await this.sqliteTasks.replaceActive(updatedTask);
+      } else {
+        // Compute destination filepath inside the lock from the fresh task state.
+        // The new filename may differ from lockPath when the title changed.
+        const freshOldFilename = this.taskToFilename(freshTask);
+        const newFilename = this.taskToFilename(updatedTask);
+        const filepath = path.join(this.tasksDir, newFilename);
+
+        await this.assertTaskIdentityIntegrity('task.update', id, {
+          candidates: [this.taskIdentityCandidate(updatedTask, 'active', filepath)],
+          destinationPath: this.diagnosticPath(filepath),
+          excludeTaskIds: [id],
+        });
+
+        const content = this.taskToMarkdown(updatedTask);
+        this.markWrite();
+
+        // Write new content atomically first; only then remove the old slug file.
+        // This ensures the task is never unrecoverable: if the write fails,
+        // the old file is still present under its original name.
+        await atomicWriteFile(filepath, content, 'utf-8');
+
+        if (freshOldFilename !== newFilename) {
+          // Remove the old slug only after the replacement file is installed.
+          await fs.unlink(path.join(this.tasksDir, freshOldFilename)).catch((err) => {
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+            throw err;
+          });
+        }
+
+        // Write-through: update cache immediately (inside lock for consistency)
+        this.cache.set(updatedTask.id, updatedTask);
+      }
+
+      // Emit telemetry event if status changed
+      if (statusChanged) {
+        this.syncAgentRegistryForStatusTransition(updatedTask);
+
+        await this.telemetry.emit<TaskTelemetryEvent>({
+          type: 'task.status_changed',
+          taskId: updatedTask.id,
+          project: updatedTask.project,
+          status: updatedTask.status,
+          previousStatus,
+        });
+
+        // Fire lifecycle hook if applicable
+        const hookEvent = getHookEventForStatusChange(previousStatus, updatedTask.status);
+        if (hookEvent) {
+          fireHook(hookEvent, updatedTask, previousStatus).catch((err) => {
+            log.warn({ taskId: updatedTask.id, hookEvent }, 'Hook execution failed: %s', err);
+          });
+        }
+
+        // Enforcement: Auto-telemetry emission (run.started/run.completed)
+        const autoTelemetry = settings?.enforcement?.autoTelemetry === true;
+
+        if (autoTelemetry) {
+          const agent = updatedTask.agent || 'veritas';
+          if (updatedTask.status === 'in-progress' && previousStatus !== 'in-progress') {
+            // Emit run.started
+            this.telemetry
+              .emit<RunStartedEvent>({
+                type: 'run.started',
+                taskId: updatedTask.id,
+                agent,
+              })
+              .catch((err) => {
+                log.warn({ taskId: updatedTask.id }, 'Auto run.started emission failed: %s', err);
+              });
+          } else if (updatedTask.status === 'done' && previousStatus !== 'done') {
+            // Emit run.completed
+            const durationMs = updatedTask.timeTracking?.totalSeconds
+              ? updatedTask.timeTracking.totalSeconds * 1000
+              : 0;
+            this.telemetry
+              .emit<RunCompletedEvent>({
+                type: 'run.completed',
+                taskId: updatedTask.id,
+                agent,
+                success: true,
+                durationMs,
+              })
+              .catch((err) => {
+                log.warn({ taskId: updatedTask.id }, 'Auto run.completed emission failed: %s', err);
+              });
+          }
+        }
+
+        // Enforcement: Auto time tracking start/stop (only if enforcement is configured)
+        const autoTimeTracking = settings?.enforcement?.autoTimeTracking === true;
+        if (autoTimeTracking) {
+          if (updatedTask.status === 'in-progress' && previousStatus !== 'in-progress') {
+            // Auto-start timer
+            if (!updatedTask.timeTracking?.isRunning) {
+              this.startTimer(updatedTask.id).catch((err) => {
+                log.warn({ taskId: updatedTask.id }, 'Auto timer start failed: %s', err);
+              });
+            }
+          } else if (
+            (updatedTask.status === 'done' || updatedTask.status === 'blocked') &&
+            previousStatus !== 'done' &&
+            previousStatus !== 'blocked'
+          ) {
+            // Auto-stop timer
+            if (updatedTask.timeTracking?.isRunning) {
+              this.stopTimer(updatedTask.id).catch((err) => {
+                log.warn({ taskId: updatedTask.id }, 'Auto timer stop failed: %s', err);
+              });
+            }
+          }
+        }
+
+        // Execute post-transition actions (quality gates)
+        const actionCallbacks: TransitionActionCallbacks = {
+          onAutoStartTimer: async (t) => {
+            // Start time tracking if not already active
+            if (!t.timeTracking?.isRunning) {
+              await this.startTimer(t.id);
+            }
+          },
+          onAutoStopTimer: async (t) => {
+            // Stop time tracking if currently running
+            if (t.timeTracking?.isRunning) {
+              await this.stopTimer(t.id);
+            }
+          },
+          onLogActivity: async (t, from, to) => {
+            log.info({ taskId: t.id, from, to }, 'Transition action: logged activity');
+          },
+          onPromptLessonsLearned: async (t) => {
+            // Flag task for lessons learned capture (could set a field or emit event)
+            log.info({ taskId: t.id }, 'Transition action: prompt lessons learned');
+          },
         };
 
-        if (this.sqliteTasks) {
-          await this.sqliteTasks.replaceActive(updatedTask);
-        } else {
-          // Compute destination filepath inside the lock from the fresh task state.
-          // The new filename may differ from lockPath when the title changed.
-          const freshOldFilename = this.taskToFilename(freshTask);
-          const newFilename = this.taskToFilename(updatedTask);
-          const filepath = path.join(this.tasksDir, newFilename);
+        executePostTransitionActions(
+          updatedTask,
+          previousStatus,
+          updatedTask.status,
+          actionCallbacks
+        ).catch((err) => {
+          log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
+        });
 
-          await this.assertTaskIdentityIntegrity('task.update', id, {
-            candidates: [this.taskIdentityCandidate(updatedTask, 'active', filepath)],
-            destinationPath: this.diagnosticPath(filepath),
-            excludeTaskIds: [id],
-          });
-
-          const content = this.taskToMarkdown(updatedTask);
-          this.markWrite();
-
-          // Write new content atomically first; only then remove the old slug file.
-          // This ensures the task is never unrecoverable: if the write fails,
-          // the old file is still present under its original name.
-          await atomicWriteFile(filepath, content, 'utf-8');
-
-          if (freshOldFilename !== newFilename) {
-            // Remove old slug file now that new file is durably installed.
-            await fs.unlink(path.join(this.tasksDir, freshOldFilename)).catch((err) => {
-              if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
-              throw err;
-            });
-          }
-
-          // Write-through: update cache immediately (inside lock for consistency)
-          this.cache.set(updatedTask.id, updatedTask);
-        }
-
-        // Emit telemetry event if status changed
-        if (statusChanged) {
-          this.syncAgentRegistryForStatusTransition(updatedTask);
-
-          await this.telemetry.emit<TaskTelemetryEvent>({
-            type: 'task.status_changed',
-            taskId: updatedTask.id,
-            project: updatedTask.project,
-            status: updatedTask.status,
-            previousStatus,
-          });
-
-          // Fire lifecycle hook if applicable
-          const hookEvent = getHookEventForStatusChange(previousStatus, updatedTask.status);
-          if (hookEvent) {
-            fireHook(hookEvent, updatedTask, previousStatus).catch((err) => {
-              log.warn({ taskId: updatedTask.id, hookEvent }, 'Hook execution failed: %s', err);
-            });
-          }
-
-          // Enforcement: Auto-telemetry emission (run.started/run.completed)
-          const autoTelemetry = settings?.enforcement?.autoTelemetry === true;
-
-          if (autoTelemetry) {
-            const agent = updatedTask.agent || 'veritas';
-            if (updatedTask.status === 'in-progress' && previousStatus !== 'in-progress') {
-              // Emit run.started
-              this.telemetry
-                .emit<RunStartedEvent>({
-                  type: 'run.started',
-                  taskId: updatedTask.id,
-                  agent,
-                })
-                .catch((err) => {
-                  log.warn({ taskId: updatedTask.id }, 'Auto run.started emission failed: %s', err);
-                });
-            } else if (updatedTask.status === 'done' && previousStatus !== 'done') {
-              // Emit run.completed
-              const durationMs = updatedTask.timeTracking?.totalSeconds
-                ? updatedTask.timeTracking.totalSeconds * 1000
-                : 0;
-              this.telemetry
-                .emit<RunCompletedEvent>({
-                  type: 'run.completed',
-                  taskId: updatedTask.id,
-                  agent,
-                  success: true,
-                  durationMs,
-                })
-                .catch((err) => {
-                  log.warn(
-                    { taskId: updatedTask.id },
-                    'Auto run.completed emission failed: %s',
-                    err
-                  );
-                });
-            }
-          }
-
-          // Enforcement: Auto time tracking start/stop (only if enforcement is configured)
-          const autoTimeTracking = settings?.enforcement?.autoTimeTracking === true;
-          if (autoTimeTracking) {
-            if (updatedTask.status === 'in-progress' && previousStatus !== 'in-progress') {
-              // Auto-start timer
-              if (!updatedTask.timeTracking?.isRunning) {
-                this.startTimer(updatedTask.id).catch((err) => {
-                  log.warn({ taskId: updatedTask.id }, 'Auto timer start failed: %s', err);
-                });
-              }
-            } else if (
-              (updatedTask.status === 'done' || updatedTask.status === 'blocked') &&
-              previousStatus !== 'done' &&
-              previousStatus !== 'blocked'
-            ) {
-              // Auto-stop timer
-              if (updatedTask.timeTracking?.isRunning) {
-                this.stopTimer(updatedTask.id).catch((err) => {
-                  log.warn({ taskId: updatedTask.id }, 'Auto timer stop failed: %s', err);
-                });
-              }
-            }
-          }
-
-          // Execute post-transition actions (quality gates)
-          const actionCallbacks: TransitionActionCallbacks = {
-            onAutoStartTimer: async (t) => {
-              // Start time tracking if not already active
-              if (!t.timeTracking?.isRunning) {
-                await this.startTimer(t.id);
-              }
-            },
-            onAutoStopTimer: async (t) => {
-              // Stop time tracking if currently running
-              if (t.timeTracking?.isRunning) {
-                await this.stopTimer(t.id);
-              }
-            },
-            onLogActivity: async (t, from, to) => {
-              log.info({ taskId: t.id, from, to }, 'Transition action: logged activity');
-            },
-            onPromptLessonsLearned: async (t) => {
-              // Flag task for lessons learned capture (could set a field or emit event)
-              log.info({ taskId: t.id }, 'Transition action: prompt lessons learned');
-            },
-          };
-
-          executePostTransitionActions(
-            updatedTask,
-            previousStatus,
-            updatedTask.status,
-            actionCallbacks
-          ).catch((err) => {
-            log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
-          });
-
-          shouldGenerateCompletionPacket =
-            updatedTask.status === 'done' && previousStatus !== 'done';
-        }
-      })
-    );
+        shouldGenerateCompletionPacket = updatedTask.status === 'done' && previousStatus !== 'done';
+      }
+    });
 
     if (shouldGenerateCompletionPacket) {
       try {
@@ -1327,68 +1327,73 @@ export class TaskService {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    await this.assertTaskIdentityIntegrity('task.delete', id, {
-      allowSameLocationTaskIdDuplicates: true,
-    });
-
-    const task = await this.getTaskWithoutIdentityCheck(id);
-    if (!task) return false;
-
     if (this.sqliteTasks) {
+      await this.assertTaskIdentityIntegrity('task.delete', id, {
+        allowSameLocationTaskIdDuplicates: true,
+      });
+      const task = await this.getTaskWithoutIdentityCheck(id);
+      if (!task) return false;
+
       const sqliteTasks = this.sqliteTasks;
       return this.runSqliteMutation(() => sqliteTasks.deleteActive(id));
     }
 
-    // Find ALL files on disk with this task ID (handles orphaned slug variations)
-    const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
-    if (allFilenames.length === 0) {
-      log.warn({ taskId: id }, 'No task files found on disk for deletion');
-      return false;
-    }
+    return this.withTaskMutex(id, async () => {
+      await this.assertTaskIdentityIntegrity('task.delete', id, {
+        allowSameLocationTaskIdDuplicates: true,
+      });
+      const task = await this.getTaskWithoutIdentityCheck(id);
+      if (!task) return false;
 
-    // Delete ALL matching files (cleanup orphaned files from title changes)
-    await Promise.all(
-      allFilenames.map(async (filename) => {
-        const filepath = path.join(this.tasksDir, filename);
-        await withFileLock(filepath, async () => {
-          this.markWrite();
-          await fs.unlink(filepath);
-        });
-        log.debug({ taskId: id, filename }, 'Deleted task file');
-      })
-    );
+      // Find ALL files on disk with this task ID (handles orphaned slug variations)
+      const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
+      if (allFilenames.length === 0) {
+        log.warn({ taskId: id }, 'No task files found on disk for deletion');
+        return false;
+      }
 
-    // Remove from cache
-    this.cacheInvalidate(id);
+      // Delete ALL matching files (cleanup orphaned files from title changes)
+      await Promise.all(
+        allFilenames.map(async (filename) => {
+          const filepath = path.join(this.tasksDir, filename);
+          await withFileLock(filepath, async () => {
+            this.markWrite();
+            await fs.unlink(filepath);
+          });
+          log.debug({ taskId: id, filename }, 'Deleted task file');
+        })
+      );
 
-    // Delete attachments
-    const { getAttachmentService } = await import('./attachment-service.js');
-    const attachmentService = getAttachmentService();
-    await attachmentService.deleteAllAttachments(id);
+      // Remove from cache
+      this.cacheInvalidate(id);
 
-    return true;
+      // Delete attachments
+      const { getAttachmentService } = await import('./attachment-service.js');
+      const attachmentService = getAttachmentService();
+      await attachmentService.deleteAllAttachments(id);
+
+      return true;
+    });
   }
 
   async archiveTask(
     id: string,
     options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
   ): Promise<boolean> {
-    await this.assertTaskIdentityIntegrity('task.archive', id, {
-      allowSameLocationTaskIdDuplicates: true,
-    });
-
-    const task = await this.getTaskWithoutIdentityCheck(id);
-    if (!task) return false;
-
-    const archivedTask: Task = {
-      ...task,
-      updated: new Date().toISOString(),
-      deletedAt: options?.deletedAt ?? task.deletedAt,
-      deletedBy: options?.deletedBy ?? task.deletedBy,
-      purgeAfter: options?.purgeAfter ?? task.purgeAfter,
-    };
-
     if (this.sqliteTasks) {
+      await this.assertTaskIdentityIntegrity('task.archive', id, {
+        allowSameLocationTaskIdDuplicates: true,
+      });
+      const task = await this.getTaskWithoutIdentityCheck(id);
+      if (!task) return false;
+
+      const archivedTask: Task = {
+        ...task,
+        updated: new Date().toISOString(),
+        deletedAt: options?.deletedAt ?? task.deletedAt,
+        deletedBy: options?.deletedBy ?? task.deletedBy,
+        purgeAfter: options?.purgeAfter ?? task.purgeAfter,
+      };
       const sqliteTasks = this.sqliteTasks;
       const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id, archivedTask));
       if (!archived) return false;
@@ -1407,59 +1412,72 @@ export class TaskService {
       return true;
     }
 
-    const archivedContent = this.taskToMarkdown(archivedTask);
+    return this.withTaskMutex(id, async () => {
+      await this.assertTaskIdentityIntegrity('task.archive', id, {
+        allowSameLocationTaskIdDuplicates: true,
+      });
+      const freshTask = await this.getTaskWithoutIdentityCheck(id);
+      if (!freshTask) return false;
 
-    // Find ALL files on disk with this task ID (handles orphaned slug variations)
-    const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
-    if (allFilenames.length === 0) {
-      log.warn({ taskId: id }, 'No task files found on disk for archiving');
-      return false;
-    }
+      const freshArchivedTask: Task = {
+        ...freshTask,
+        updated: new Date().toISOString(),
+        deletedAt: options?.deletedAt ?? freshTask.deletedAt,
+        deletedBy: options?.deletedBy ?? freshTask.deletedBy,
+        purgeAfter: options?.purgeAfter ?? freshTask.purgeAfter,
+      };
+      const archivedContent = this.taskToMarkdown(freshArchivedTask);
 
-    // Archive ALL matching files (cleanup orphaned files from title changes)
-    await Promise.all(
-      allFilenames.map(async (filename) => {
-        const sourcePath = path.join(this.tasksDir, filename);
-        const destPath = path.join(this.archiveDir, filename);
-        await withFileLock(sourcePath, async () => {
-          this.markWrite();
-          // Write updated content atomically to archive destination first so
-          // the source file remains intact until the new file is durable.
-          await atomicWriteFile(destPath, archivedContent, 'utf-8');
-          // Source is now safe to remove — archive copy is confirmed present.
-          await fs.unlink(sourcePath);
-        });
-        log.debug({ taskId: id, filename }, 'Archived task file');
-      })
-    );
+      // Find ALL files on disk with this task ID (handles orphaned slug variations)
+      const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
+      if (allFilenames.length === 0) {
+        log.warn({ taskId: id }, 'No task files found on disk for archiving');
+        return false;
+      }
 
-    // Remove from active cache (archived tasks are not cached)
-    this.cacheInvalidate(id);
+      // Archive ALL matching files (cleanup orphaned files from title changes)
+      await Promise.all(
+        allFilenames.map(async (filename) => {
+          const sourcePath = path.join(this.tasksDir, filename);
+          const destPath = path.join(this.archiveDir, filename);
+          await withFileLock(sourcePath, async () => {
+            this.markWrite();
+            // Install the archive copy before removing the active source.
+            await atomicWriteFile(destPath, archivedContent, 'utf-8');
+            await fs.unlink(sourcePath);
+          });
+          log.debug({ taskId: id, filename }, 'Archived task file');
+        })
+      );
 
-    // Move attachments to archive
-    const { getAttachmentService } = await import('./attachment-service.js');
-    const attachmentService = getAttachmentService();
-    await attachmentService.archiveAttachments(id);
+      // Remove from active cache (archived tasks are not cached)
+      this.cacheInvalidate(id);
 
-    // Delete progress file (cleanup when archived)
-    const { getProgressService } = await import('./progress-service.js');
-    const progressService = getProgressService();
-    await progressService.deleteProgress(id);
+      // Move attachments to archive
+      const { getAttachmentService } = await import('./attachment-service.js');
+      const attachmentService = getAttachmentService();
+      await attachmentService.archiveAttachments(id);
 
-    // Emit telemetry event
-    await this.telemetry.emit<TaskTelemetryEvent>({
-      type: 'task.archived',
-      taskId: archivedTask.id,
-      project: archivedTask.project,
-      status: archivedTask.status,
+      // Delete progress file (cleanup when archived)
+      const { getProgressService } = await import('./progress-service.js');
+      const progressService = getProgressService();
+      await progressService.deleteProgress(id);
+
+      // Emit telemetry event
+      await this.telemetry.emit<TaskTelemetryEvent>({
+        type: 'task.archived',
+        taskId: freshArchivedTask.id,
+        project: freshArchivedTask.project,
+        status: freshArchivedTask.status,
+      });
+
+      // Fire onArchived hook
+      fireHook('onArchived', freshArchivedTask).catch((err) => {
+        log.warn({ taskId: freshArchivedTask.id }, 'onArchived hook failed: %s', err);
+      });
+
+      return true;
     });
-
-    // Fire onArchived hook
-    fireHook('onArchived', archivedTask).catch((err) => {
-      log.warn({ taskId: archivedTask.id }, 'onArchived hook failed: %s', err);
-    });
-
-    return true;
   }
 
   async listArchivedTasks(): Promise<Task[]> {
@@ -1517,16 +1535,11 @@ export class TaskService {
   }
 
   async restoreTask(id: string): Promise<Task | null> {
-    await this.assertTaskIdentityIntegrity('task.restore', id);
-
-    const task = await this.getArchivedTask(id);
-    if (!task) return null;
-
-    if (this.isRestoreWindowExpired(task)) {
-      return null;
-    }
-
     if (this.sqliteTasks) {
+      await this.assertTaskIdentityIntegrity('task.restore', id);
+      const task = await this.getArchivedTask(id);
+      if (!task || this.isRestoreWindowExpired(task)) return null;
+
       const sqliteTasks = this.sqliteTasks;
       const restoredTask = await this.runSqliteMutation(() => sqliteTasks.restore(id));
       if (!restoredTask) return null;
@@ -1541,54 +1554,58 @@ export class TaskService {
       return restoredTask;
     }
 
-    // Find actual file on disk (slug may differ from current title)
-    const actualFilename = await this.findTaskFile(this.archiveDir, id);
-    if (!actualFilename) {
-      log.warn({ taskId: id }, 'Archived task file not found on disk for restoration');
-      return null;
-    }
+    return this.withTaskMutex(id, async () => {
+      await this.assertTaskIdentityIntegrity('task.restore', id);
+      const freshTask = await this.getArchivedTask(id);
+      if (!freshTask || this.isRestoreWindowExpired(freshTask)) return null;
 
-    const sourcePath = path.join(this.archiveDir, actualFilename);
-    const destPath = path.join(this.tasksDir, actualFilename);
+      // Find actual file on disk (slug may differ from current title)
+      const actualFilename = await this.findTaskFile(this.archiveDir, id);
+      if (!actualFilename) {
+        log.warn({ taskId: id }, 'Archived task file not found on disk for restoration');
+        return null;
+      }
 
-    // Update status to done
-    const restoredTask: Task = {
-      ...task,
-      status: 'done',
-      updated: new Date().toISOString(),
-      deletedAt: undefined,
-      deletedBy: undefined,
-      purgeAfter: undefined,
-    };
+      const sourcePath = path.join(this.archiveDir, actualFilename);
+      const destPath = path.join(this.tasksDir, actualFilename);
 
-    const content = this.taskToMarkdown(restoredTask);
+      // Update status to done
+      const restoredTask: Task = {
+        ...freshTask,
+        status: 'done',
+        updated: new Date().toISOString(),
+        deletedAt: undefined,
+        deletedBy: undefined,
+        purgeAfter: undefined,
+      };
 
-    await withFileLock(destPath, async () => {
-      // Write updated content atomically to active destination first so the
-      // archive copy remains intact until the new file is durable.
-      this.markWrite();
-      await atomicWriteFile(destPath, content, 'utf-8');
-      // Archive copy confirmed safe to remove now.
-      await fs.unlink(sourcePath);
+      const content = this.taskToMarkdown(restoredTask);
+
+      await withFileLock(destPath, async () => {
+        // Install the active copy before removing the archive source.
+        this.markWrite();
+        await atomicWriteFile(destPath, content, 'utf-8');
+        await fs.unlink(sourcePath);
+      });
+
+      // Restore attachments from archive
+      const { getAttachmentService } = await import('./attachment-service.js');
+      const attachmentService = getAttachmentService();
+      await attachmentService.restoreAttachments(id);
+
+      // Write-through: add restored task to active cache
+      this.cache.set(restoredTask.id, restoredTask);
+
+      // Emit telemetry event
+      await this.telemetry.emit<TaskTelemetryEvent>({
+        type: 'task.restored',
+        taskId: restoredTask.id,
+        project: restoredTask.project,
+        status: restoredTask.status,
+      });
+
+      return restoredTask;
     });
-
-    // Restore attachments from archive
-    const { getAttachmentService } = await import('./attachment-service.js');
-    const attachmentService = getAttachmentService();
-    await attachmentService.restoreAttachments(id);
-
-    // Write-through: add restored task to active cache
-    this.cache.set(restoredTask.id, restoredTask);
-
-    // Emit telemetry event
-    await this.telemetry.emit<TaskTelemetryEvent>({
-      type: 'task.restored',
-      taskId: restoredTask.id,
-      project: restoredTask.project,
-      status: restoredTask.status,
-    });
-
-    return restoredTask;
   }
 
   /**

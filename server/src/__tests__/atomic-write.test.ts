@@ -7,7 +7,7 @@
  * - A failed rename does not silently corrupt (no stray .tmp.* files remain).
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs/promises';
+import { promises as fs } from 'node:fs';
 import path from 'path';
 import os from 'os';
 import { atomicWriteFile } from '../storage/fs-helpers.js';
@@ -50,7 +50,7 @@ describe('atomicWriteFile', () => {
     expect(tmpFiles).toHaveLength(0);
   });
 
-  it('cleans up the temp file and rejects when rename fails (dest is a directory)', async () => {
+  it('preserves an existing destination and cleans up when replacement rename fails', async () => {
     const suffix = Math.random().toString(36).substring(7);
     testDir = path.join(os.tmpdir(), `vk-atomic-fail-${suffix}`);
     await fs.mkdir(testDir, { recursive: true });
@@ -71,23 +71,5 @@ describe('atomicWriteFile', () => {
 
     // The blocking directory must still be intact — nothing was destroyed
     await expect(fs.readFile(blockingFile, 'utf-8')).resolves.toBe('sentinel');
-  });
-
-  it('preserves the original file when a second write fails', async () => {
-    const suffix = Math.random().toString(36).substring(7);
-    testDir = path.join(os.tmpdir(), `vk-atomic-preserve-${suffix}`);
-    await fs.mkdir(testDir, { recursive: true });
-
-    const destPath = path.join(testDir, 'task.md');
-    const originalContent = '# safe original';
-
-    // First write succeeds
-    await atomicWriteFile(destPath, originalContent);
-
-    // Second write: write the temp, then try to rename fails because we make
-    // dest a directory via a sibling .tmp directory trickery — instead just
-    // verify the first write survived after success path works correctly.
-    const current = await fs.readFile(destPath, 'utf-8');
-    expect(current).toBe(originalContent);
   });
 });

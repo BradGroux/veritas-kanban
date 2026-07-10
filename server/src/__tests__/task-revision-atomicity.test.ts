@@ -185,4 +185,87 @@ describe('updateTask – revision atomicity (#777)', () => {
 
     expect(order).toEqual(['start-1', 'end-1', 'start-2', 'end-2', 'start-3', 'end-3']);
   });
+
+  it.each(['deleteTask', 'archiveTask'] as const)(
+    'serializes %s behind an existing task mutation',
+    async (method) => {
+      const task = await service.createTask({
+        title: `Queued ${method}`,
+        type: 'code',
+        priority: 'medium',
+      });
+      const serviceAny = service as unknown as {
+        withTaskMutex: (id: string, fn: () => Promise<void>) => Promise<void>;
+      };
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const blocker = serviceAny.withTaskMutex(task.id, () => gate);
+      let settled = false;
+
+      const mutation = service[method](task.id).finally(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(settled).toBe(false);
+
+      release();
+      await blocker;
+      await expect(mutation).resolves.toBe(true);
+    }
+  );
+
+  it('serializes restoreTask behind an existing task mutation', async () => {
+    const task = await service.createTask({
+      title: 'Queued restore',
+      type: 'code',
+      priority: 'medium',
+    });
+    await service.archiveTask(task.id);
+
+    const serviceAny = service as unknown as {
+      withTaskMutex: (id: string, fn: () => Promise<void>) => Promise<void>;
+    };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = serviceAny.withTaskMutex(task.id, () => gate);
+    let settled = false;
+
+    const mutation = service.restoreTask(task.id).finally(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+
+    release();
+    await blocker;
+    await expect(mutation).resolves.toMatchObject({ id: task.id, status: 'done' });
+  });
+
+  it('preserves call order when archive and restore queue for the same task', async () => {
+    const task = await service.createTask({
+      title: 'Archive then restore',
+      type: 'code',
+      priority: 'medium',
+    });
+    const serviceAny = service as unknown as {
+      withTaskMutex: (id: string, fn: () => Promise<void>) => Promise<void>;
+    };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = serviceAny.withTaskMutex(task.id, () => gate);
+
+    const archive = service.archiveTask(task.id);
+    const restore = service.restoreTask(task.id);
+    release();
+    await blocker;
+
+    await expect(archive).resolves.toBe(true);
+    await expect(restore).resolves.toMatchObject({ id: task.id, status: 'done' });
+  });
 });

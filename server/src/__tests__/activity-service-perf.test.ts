@@ -2,7 +2,7 @@
  * Tests for activity service performance improvements (#782)
  *
  * Verifies that:
- * - getActivities and countActivities share a single parse/filter pass (no double scan).
+ * - A paginated file-backed request uses a single parse/filter pass.
  * - Writes are atomic (no partial JSON visible to readers).
  * - A corrupt activity file is backed up before a reset — not silently overwritten.
  */
@@ -49,25 +49,25 @@ describe('ActivityService – performance & integrity (#782)', () => {
   });
 
   describe('single-scan pagination (#782)', () => {
-    it('getActivities and countActivities share one parse — loadAll called once per request', async () => {
+    it('reads and parses the activity file once for a paginated result', async () => {
       await service.logActivity('task_created', 'task_1', 'Alpha');
       await service.logActivity('task_updated', 'task_2', 'Beta', {}, 'codex');
 
-      // Spy on readFile to count disk reads
-      const readFileSpy = vi.spyOn(fs, 'readFile');
+      const loadAllSpy = vi.spyOn(
+        service as unknown as { loadAll(): Promise<unknown[]> },
+        'loadAll'
+      );
 
-      const [items, count] = await Promise.all([
-        service.getActivities(10),
-        service.countActivities(),
-      ]);
+      const { items, total } = await service.getActivitiesPage(10);
 
       expect(items).toHaveLength(2);
-      expect(count).toBe(2);
+      expect(total).toBe(2);
+      expect(loadAllSpy).toHaveBeenCalledTimes(1);
 
-      readFileSpy.mockRestore();
+      loadAllSpy.mockRestore();
     });
 
-    it('countActivities applies filters without a second full scan', async () => {
+    it('countActivities applies filters', async () => {
       await service.logActivity('task_created', 'task_1', 'Alpha', {}, 'codex');
       await service.logActivity('task_updated', 'task_2', 'Beta', {}, 'tars');
       await service.logActivity('task_created', 'task_3', 'Gamma', {}, 'codex');
@@ -81,7 +81,7 @@ describe('ActivityService – performance & integrity (#782)', () => {
       expect(totalCount).toBe(3);
     });
 
-    it('getActivities with filters + countActivities with same filters agree on totals', async () => {
+    it('returns filtered page items and total from one result', async () => {
       for (let i = 0; i < 10; i++) {
         await service.logActivity(
           'task_created',
@@ -93,10 +93,9 @@ describe('ActivityService – performance & integrity (#782)', () => {
       }
 
       const filters = { agent: 'codex' };
-      const page = await service.getActivities(3, filters, 0);
-      const total = await service.countActivities(filters);
+      const { items, total } = await service.getActivitiesPage(3, filters, 0);
 
-      expect(page).toHaveLength(3);
+      expect(items).toHaveLength(3);
       expect(total).toBe(5); // 5 even indices: 0,2,4,6,8
     });
   });

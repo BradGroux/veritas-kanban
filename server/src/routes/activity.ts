@@ -43,14 +43,13 @@ router.get(
 
     // If pagination is requested, use the sendPaginated helper
     if (page > 0) {
-      const total = await activityService.countActivities(hasFilters ? filters : undefined);
       const offset = (page - 1) * limit;
-      const paged = await activityService.getActivities(
+      const { items, total } = await activityService.getActivitiesPage(
         limit,
         hasFilters ? filters : undefined,
         offset
       );
-      sendPaginated(res, paged, { page, limit, total });
+      sendPaginated(res, items, { page, limit, total });
     } else {
       const activities = await activityService.getActivities(
         limit,
