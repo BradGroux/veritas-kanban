@@ -7,7 +7,6 @@ const createFsPromisesMock = vi.hoisted(() => () => {
     copyFile: vi.fn().mockResolvedValue(undefined),
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
-    rename: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     rename: vi.fn().mockResolvedValue(undefined),
