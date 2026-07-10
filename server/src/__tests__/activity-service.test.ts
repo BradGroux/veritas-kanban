@@ -68,8 +68,15 @@ describe('ActivityService', () => {
 
     it('should persist activity to file', async () => {
       await service.logActivity('task_created', 'task_1', 'Test');
-      const data = JSON.parse(await fs.readFile((service as any).activityFile, 'utf-8'));
-      expect(data).toHaveLength(1);
+      // With JSONL format, read and parse each line
+      const jsonlPath = path.join(activityDir, 'activity.jsonl');
+      const content = await fs.readFile(jsonlPath, 'utf-8');
+      const lines = content
+        .trim()
+        .split('\n')
+        .filter((line) => line.length > 0);
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0])).toHaveProperty('taskId', 'task_1');
     });
 
     it('should prepend new activities (most recent first)', async () => {
