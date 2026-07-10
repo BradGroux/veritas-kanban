@@ -271,6 +271,48 @@ updated: '2026-01-26T10:00:00.000Z'
       expect(result).toBeNull();
     });
 
+    it('should patch the current attempt without overwriting a newer status', async () => {
+      const task = await service.createTask({ title: 'OpenClaw task' });
+      await service.updateTask(task.id, {
+        attempt: {
+          id: 'attempt_001',
+          agent: 'openclaw',
+          status: 'complete',
+          started: '2026-01-26T11:00:00.000Z',
+          ended: '2026-01-26T11:01:00.000Z',
+        },
+      });
+
+      const patched = await service.patchTaskAttempt(task.id, 'attempt_001', {
+        sessionKey: 'agent:main:subagent:child-123',
+      });
+
+      expect(patched?.attempt).toMatchObject({
+        id: 'attempt_001',
+        status: 'complete',
+        ended: '2026-01-26T11:01:00.000Z',
+        sessionKey: 'agent:main:subagent:child-123',
+      });
+    });
+
+    it('should reject an attempt patch when the current attempt has changed', async () => {
+      const task = await service.createTask({ title: 'Retried OpenClaw task' });
+      await service.updateTask(task.id, {
+        attempt: {
+          id: 'attempt_002',
+          agent: 'openclaw',
+          status: 'running',
+          started: '2026-01-26T11:02:00.000Z',
+        },
+      });
+
+      await expect(
+        service.patchTaskAttempt(task.id, 'attempt_001', {
+          sessionKey: 'agent:main:subagent:stale-child',
+        })
+      ).resolves.toBeNull();
+    });
+
     it('should validate status updates against configured columns', async () => {
       featureSettings = {
         ...DEFAULT_FEATURE_SETTINGS,

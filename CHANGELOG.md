@@ -24,15 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `HttpOpenClawTaskAdapter` in `openclaw-workflow-adapter.ts` that dispatches tasks to the
   OpenClaw gateway via `sessions_spawn` and stores the returned `childSessionKey` in the attempt
   record (#794).
-- Added `preflight()` to `HttpOpenClawWorkflowAdapter` and `HttpOpenClawTaskAdapter` that verifies
-  gateway reachability and `sessions_spawn` / `sessions_send` tool policy before any task attempt
-  is marked active (#794). Policy denial returns an actionable configuration hint pointing to the
-  required OpenClaw gateway tool policy settings.
+- OpenClaw dispatch uses the real `sessions_spawn` acknowledgement as its reachability and policy
+  check, avoiding a speculative probe that could create an untracked session. Policy denial returns
+  an actionable `gateway.tools.allow` configuration hint (#794).
 - Added `openclawSessionKey` and `hermesSessionId` fields to `PendingAgent` for durable session
   identity tracking (#791, #794).
 - Added contract and regression tests for the Hermes provider (`hermes-provider.test.ts`) and
   OpenClaw gateway adapter (`openclaw-provider.test.ts`) with mocked delivery, policy denial,
-  timeout, and successful dispatch scenarios (#791, #794).
+  request timeout, supported spawn payload, and successful dispatch scenarios (#791, #794).
 - Added Hermes and OpenClaw operator setup sections to `docs/AGENT-PROVIDERS.md` including
   required gateway tool policy, environment variables, invocation mode, and troubleshooting
   tables (#790, #791, #794).

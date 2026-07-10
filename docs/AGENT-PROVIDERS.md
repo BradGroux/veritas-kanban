@@ -168,20 +168,20 @@ filtered out.
 ### Overview
 
 OpenClaw task and workflow runs are dispatched through the OpenClaw gateway HTTP API using
-`POST /tools/invoke` with the `sessions_spawn` tool. A pre-flight check verifies gateway
-reachability and tool policy before any task attempt is marked active. If the policy check fails,
-Veritas returns an actionable configuration error and rolls the attempt back to `todo` rather than
-leaving it in a stuck `running` state.
+`POST /tools/invoke` with the `sessions_spawn` tool. The spawn acknowledgement is the reachability
+and policy check: if it fails, Veritas returns an actionable configuration error and rolls the
+attempt back to `todo` rather than leaving it in a stuck `running` state. Veritas does not issue a
+separate probe because OpenClaw v2026.6.11 ignores the endpoint's reserved `dryRun` field.
 
 ### Required gateway tool policy
 
 `sessions_spawn` and `sessions_send` are **blocked by default** in a fresh OpenClaw v2026.6.11
 install at the operator-level endpoint. You must explicitly allow them:
 
-1. Open the OpenClaw admin console.
-2. Navigate to **Settings → Gateway → Tool Policy**.
-3. Add `sessions_spawn` and `sessions_send` to the **allowed tools** list.
-4. Save and restart the gateway if required.
+1. Add `sessions_spawn` to `gateway.tools.allow` in the OpenClaw configuration.
+2. Add `sessions_send` too if workflow session reuse is enabled.
+3. Confirm the active agent/tool profile also permits these tools.
+4. Save the configuration and restart the gateway.
 
 ### Setup
 
@@ -202,24 +202,25 @@ install at the operator-level endpoint. You must explicitly allow them:
 
 ### Dispatch flow
 
-1. Veritas calls `preflight()` to verify the gateway and tool policy.
-2. If preflight fails, the task attempt is rolled back to `todo` with an error message.
-3. On success, Veritas calls `sessions_spawn` with the full task prompt (including the
+1. Veritas calls `sessions_spawn` with the full task prompt (including the
    callback URL: `http://localhost:3001/api/agents/<taskId>/complete`).
-4. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
-5. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.
+2. A policy or connection failure rolls the task attempt back to `todo` with an error message.
+3. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
+4. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.
 
 ### Limitations
 
 - Stop/cancel is not supported for individual sub-sessions in OpenClaw v2026.6.11. A stop request
   logs a warning but cannot forcibly terminate the sub-session.
 - Session resume is driven by the callback flow; no explicit `--resume` flag is used.
+- OpenClaw v2026.6.11 does not accept per-spawn run timeouts. Configure
+  `agents.defaults.subagents.runTimeoutSeconds` in OpenClaw instead.
 
 ### Troubleshooting
 
 | Symptom                                                      | Fix                                                                                     |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` and `sessions_send` to the gateway tool policy                     |
+| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` to `gateway.tools.allow`; add `sessions_send` for workflow reuse   |
 | `OpenClaw gateway did not respond`                           | Check `OPENCLAW_GATEWAY_URL` and gateway process is running                             |
 | Task stuck in `running` after old request files appear       | Old request-file artifacts can be safely deleted from `.veritas-kanban/agent-requests/` |
 | `OpenClaw sessions_spawn did not return a child session key` | Verify the gateway is running OpenClaw v2026.6.11 or later                              |

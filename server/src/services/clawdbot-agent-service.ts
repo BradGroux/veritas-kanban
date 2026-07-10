@@ -1015,8 +1015,8 @@ export class ClawdbotAgentService {
       capabilities: { ...commonCapabilities, stop: false, resume: false },
       start: async ({ prompt, task, attemptId, agentConfig }) => {
         // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
-        // The adapter runs a preflight policy check and throws on policy denial or
-        // gateway unreachability, which the caller's error handler rolls back to 'todo'.
+        // The real spawn acknowledgement surfaces policy denial or gateway
+        // unreachability, which the caller's error handler rolls back to 'todo'.
         const openclawAdapter = new HttpOpenClawTaskAdapter();
         const result = await openclawAdapter.spawnTask({
           taskId: task.id,
@@ -1026,6 +1026,9 @@ export class ClawdbotAgentService {
           model: agentConfig?.model,
           prompt,
           timeoutSeconds: 900,
+        });
+        await this.taskService.patchTaskAttempt(task.id, attemptId, {
+          sessionKey: result.sessionKey,
         });
         void this.recordAgentStarted(
           task,

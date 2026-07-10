@@ -86,6 +86,7 @@ const attemptSchema = z
     provider: z.string().max(80).optional(),
     model: z.string().max(160).optional(),
     threadId: z.string().max(240).optional(),
+    sessionKey: z.string().max(240).optional(),
     cloudUrl: z.string().max(500).optional(),
     cloudTarget: z.string().max(240).optional(),
     orchestration: z.unknown().optional(),
@@ -328,34 +329,32 @@ router.get(
       });
     } else if (viewParam === 'summary') {
       // Summary mode: lightweight board-view payload
-      result = tasks.map(
-        (task): TaskSummary => ({
-          id: task.id,
-          title: task.title,
-          status: task.status,
-          priority: task.priority,
-          type: task.type,
-          project: task.project,
-          sprint: task.sprint,
-          created: task.created,
-          updated: task.updated,
-          subtasks: task.subtasks,
-          verificationSteps: task.verificationSteps,
-          blockedBy: task.blockedBy,
-          blockedReason: task.blockedReason,
-          position: task.position,
-          attachmentCount: task.attachments?.length ?? 0,
-          deliverableCount: task.deliverables?.length ?? 0,
-          github: task.github,
-          timeTracking: task.timeTracking
-            ? {
-                totalSeconds: task.timeTracking.totalSeconds,
-                isRunning: task.timeTracking.isRunning,
-              }
-            : undefined,
-          attempt: task.attempt,
-        })
-      );
+      result = tasks.map((task): TaskSummary => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        type: task.type,
+        project: task.project,
+        sprint: task.sprint,
+        created: task.created,
+        updated: task.updated,
+        subtasks: task.subtasks,
+        verificationSteps: task.verificationSteps,
+        blockedBy: task.blockedBy,
+        blockedReason: task.blockedReason,
+        position: task.position,
+        attachmentCount: task.attachments?.length ?? 0,
+        deliverableCount: task.deliverables?.length ?? 0,
+        github: task.github,
+        timeTracking: task.timeTracking
+          ? {
+              totalSeconds: task.timeTracking.totalSeconds,
+              isRunning: task.timeTracking.isRunning,
+            }
+          : undefined,
+        attempt: task.attempt,
+      }));
     } else {
       // Full response — strip empty arrays to reduce payload
       result = tasks.map((task) => {

@@ -14,6 +14,7 @@ import type {
   RunCompletedEvent,
   BoardColumnConfig,
   TaskStatus,
+  TaskAttempt,
 } from '@veritas-kanban/shared';
 import { normalizeBoardColumns, normalizeBoardDefaultStatus } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
@@ -79,6 +80,10 @@ interface BoardStatusConfig {
   defaultStatus: TaskStatus;
   activeStatusIds: Set<string>;
 }
+
+type TaskMutationInput = UpdateTaskInput & {
+  attemptPatch?: Pick<TaskAttempt, 'id'> & Partial<Omit<TaskAttempt, 'id'>>;
+};
 
 // Simple slug function to avoid CJS/ESM issues with slugify
 function makeSlug(text: string): string {
@@ -901,7 +906,21 @@ export class TaskService {
     return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
   }
 
-  private async updateTaskMutation(id: string, input: UpdateTaskInput): Promise<Task | null> {
+  async patchTaskAttempt(
+    id: string,
+    attemptId: string,
+    patch: Partial<Omit<TaskAttempt, 'id'>>
+  ): Promise<Task | null> {
+    const input: TaskMutationInput = {
+      attemptPatch: { id: attemptId, ...patch },
+    };
+    if (this.sqliteTasks) {
+      return this.updateTaskMutation(id, input);
+    }
+    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
+  }
+
+  private async updateTaskMutation(id: string, input: TaskMutationInput): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.update', id);
 
     // Initial read to check existence and compute the lock filepath.
@@ -916,6 +935,7 @@ export class TaskService {
       github: githubUpdate,
       blockedReason: blockedReasonUpdate,
       expectedRevision: _expectedRevision,
+      attemptPatch,
       ...restInput
     } = input;
 
@@ -928,6 +948,7 @@ export class TaskService {
 
     let updatedTask!: Task;
     let shouldGenerateCompletionPacket = false;
+    let attemptPatchApplied = attemptPatch === undefined;
     const runMutation = async (callback: () => Promise<void>): Promise<void> => {
       if (this.sqliteTasks) {
         await this.runSqliteMutation(callback);
@@ -946,6 +967,12 @@ export class TaskService {
       const freshTask = this.sqliteTasks
         ? ((await this.sqliteTasks.findById(id)) ?? task)
         : (this.cacheGet(id) ?? task);
+
+      if (attemptPatch && freshTask.attempt?.id !== attemptPatch.id) {
+        updatedTask = freshTask;
+        return;
+      }
+      attemptPatchApplied = true;
 
       // Revision check inside the lock — prevents a TOCTOU race where two
       // concurrent requests with the same valid revision both pass the
@@ -1148,6 +1175,12 @@ export class TaskService {
       updatedTask = {
         ...freshTask,
         ...restInput,
+        attempt:
+          attemptPatch && freshTask.attempt?.id === attemptPatch.id
+            ? { ...freshTask.attempt, ...attemptPatch }
+            : restInput.attempt !== undefined
+              ? restInput.attempt
+              : freshTask.attempt,
         git: gitUpdate ? ({ ...freshTask.git, ...gitUpdate } as Task['git']) : freshTask.git,
         github: githubUpdate ?? freshTask.github,
         // Handle blockedReason: null means clear, undefined means keep existing
@@ -1314,6 +1347,10 @@ export class TaskService {
         shouldGenerateCompletionPacket = updatedTask.status === 'done' && previousStatus !== 'done';
       }
     });
+
+    if (!attemptPatchApplied) {
+      return null;
+    }
 
     if (shouldGenerateCompletionPacket) {
       try {

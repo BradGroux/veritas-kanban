@@ -55,6 +55,7 @@ export interface TaskAttempt {
   provider?: string;
   model?: string;
   threadId?: string;
+  sessionKey?: string;
   cloudUrl?: string;
   cloudTarget?: string;
   orchestration?: import('./workflow.js').WorkflowPipelineSummary;

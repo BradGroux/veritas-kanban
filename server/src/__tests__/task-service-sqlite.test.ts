@@ -76,6 +76,30 @@ describe('TaskService SQLite mode', () => {
     await expect(fs.readdir(tasksDir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('patches the current attempt without overwriting a newer status', async () => {
+    const task = await service.createTask({ title: 'SQLite OpenClaw task' });
+    await service.updateTask(task.id, {
+      attempt: {
+        id: 'attempt_001',
+        agent: 'openclaw',
+        status: 'complete',
+        started: '2026-01-26T11:00:00.000Z',
+        ended: '2026-01-26T11:01:00.000Z',
+      },
+    });
+
+    const patched = await service.patchTaskAttempt(task.id, 'attempt_001', {
+      sessionKey: 'agent:main:subagent:child-123',
+    });
+
+    expect(patched?.attempt).toMatchObject({
+      id: 'attempt_001',
+      status: 'complete',
+      ended: '2026-01-26T11:01:00.000Z',
+      sessionKey: 'agent:main:subagent:child-123',
+    });
+  });
+
   it('archives, lists archived tasks, restores, and deletes without task files', async () => {
     const task = await service.createTask({ title: 'Archive SQLite task' });
     const deletedAt = new Date().toISOString();
