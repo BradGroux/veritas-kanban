@@ -106,12 +106,22 @@ let configServiceRef: ConfigService | null = null;
 /**
  * Initialize the agent status service with WebSocket server reference and
  * the application-level ConfigService singleton (prevents per-request watcher leaks).
+ * The configService may be omitted here and supplied later via setAgentStatusConfigService
+ * once the startup async init completes.
  */
 export function initAgentStatus(wss: WebSocketServer, configService?: ConfigService): void {
   wssRef = wss;
   if (configService) {
     configServiceRef = configService;
   }
+}
+
+/**
+ * Wire the application-level ConfigService after async startup completes.
+ * Call this from the startup IIFE once ConfigService is initialized.
+ */
+export function setAgentStatusConfigService(configService: ConfigService): void {
+  configServiceRef = configService;
 }
 
 /**

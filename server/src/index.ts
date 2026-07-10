@@ -24,7 +24,7 @@ import { createLogger } from './lib/logger.js';
 import { v1Router } from './routes/v1/index.js';
 import { agentService } from './routes/agents.js';
 import { syncSettingsToServices } from './routes/settings.js';
-import { initAgentStatus } from './routes/agent-status.js';
+import { initAgentStatus, setAgentStatusConfigService } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
@@ -550,6 +550,11 @@ let storageInitialized = false;
 
     // 3. Initialize telemetry service and sync with feature settings
     configService = new ConfigService();
+    // Wire the singleton into the agent-status route so delegation-violation
+    // requests never allocate a per-request ConfigService (issue #779).
+    // This must happen after configService is assigned (the IIFE is async so
+    // initAgentStatus at module eval time receives null).
+    setAgentStatusConfigService(configService);
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
@@ -619,9 +624,11 @@ const wss = new WebSocketServer({
 // Initialize broadcast service for task change notifications
 initBroadcast(wss);
 
-// Initialize agent status service for WebSocket broadcasts; pass the app ConfigService
-// so the delegation-violation route never allocates a per-request watcher (issue #779).
-initAgentStatus(wss, configService ?? undefined);
+// Initialize agent status service for WebSocket broadcasts.
+// The ConfigService singleton is wired via setAgentStatusConfigService()
+// inside the async startup IIFE (after configService is created), because
+// the IIFE completes asynchronously after this point (issue #779).
+initAgentStatus(wss);
 
 // Provide WSS reference to health checks for connection counting
 setHealthWss(wss);

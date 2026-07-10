@@ -172,8 +172,12 @@ class AgentRegistryService {
   // ── Debounced-persist state (issue #783) ──────────────────────────────────
   /** Timer handle for the coalesced write; cleared on flush/dispose. */
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Promise for the in-flight async write, so dispose() can await it. */
-  private persistInFlight: Promise<void> | null = null;
+  /**
+   * Promise chain that all async writes are serialized through.
+   * New writes are appended to this chain so overlapping writes never
+   * race over the same *.tmp path (fixes cross-write race noted in code review).
+   */
+  private persistChain: Promise<void> = Promise.resolve();
   /** Debounce window: heartbeats within this window share a single write. */
   private static readonly PERSIST_DEBOUNCE_MS = 2_000;
 
@@ -595,10 +599,21 @@ class AgentRegistryService {
     }
     this.persistTimer = setTimeout(() => {
       this.persistTimer = null;
-      this.persistInFlight = this.writeToDisk().finally(() => {
-        this.persistInFlight = null;
-      });
+      this.enqueueWrite();
     }, AgentRegistryService.PERSIST_DEBOUNCE_MS);
+  }
+
+  /**
+   * Append one write to the serialized promise chain.
+   * All writes go through this chain, so concurrent writes never race
+   * over the same *.tmp path.
+   */
+  private enqueueWrite(): void {
+    this.persistChain = this.persistChain
+      .then(() => this.writeToDisk())
+      .catch((err) => {
+        log.warn({ err }, 'Failed to persist agent registry (chain)');
+      });
   }
 
   /**
@@ -609,13 +624,9 @@ class AgentRegistryService {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
-      this.persistInFlight = this.writeToDisk().finally(() => {
-        this.persistInFlight = null;
-      });
+      this.enqueueWrite();
     }
-    if (this.persistInFlight) {
-      await this.persistInFlight;
-    }
+    await this.persistChain;
   }
 
   /**
@@ -641,7 +652,7 @@ class AgentRegistryService {
   }
 
   /**
-   * Clean up resources. Awaits any in-flight write before returning.
+   * Clean up resources. Awaits the full write chain before returning.
    */
   async dispose(): Promise<void> {
     if (this.staleCheckInterval) {
