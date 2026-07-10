@@ -1,7 +1,7 @@
 /**
  * Enforcement test: all first-party API modules must use apiFetch, not raw fetch().
  *
- * This test catches regressions where a developer adds a direct `await fetch(` call
+ * This test catches regressions where a developer adds a direct `fetch(` call
  * in web/src/lib/api/ that bypasses credential handling and base-URL resolution.
  *
  * Documented exceptions (text/stream responses that cannot use apiFetch):
@@ -12,10 +12,13 @@
  * Any new exception must be added to the allowlist below with a justification comment.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 
-const API_DIR = resolve(__dirname, '../lib/api');
+// Load raw source of every API module via Vite's import.meta.glob (no Node.js globals needed)
+const apiSources = import.meta.glob('../lib/api/*.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
 
 /** Files that may contain raw fetch() calls with documented justification. */
 const ALLOWLISTED: Record<string, number> = {
@@ -28,18 +31,19 @@ const ALLOWLISTED: Record<string, number> = {
 };
 
 describe('API module raw fetch policy', () => {
-  const files = readdirSync(API_DIR).filter((f) => f.endsWith('.ts'));
+  for (const [path, source] of Object.entries(apiSources)) {
+    const filename = path.split('/').pop()!;
 
-  for (const file of files) {
-    it(`${file} does not contain unapproved raw fetch() calls`, () => {
-      const content = readFileSync(join(API_DIR, file), 'utf-8');
-      const matches = [...content.matchAll(/\bawait fetch\(/g)];
-      const allowed = ALLOWLISTED[file] ?? 0;
-      expect(matches.length).toBeLessThanOrEqual(
-        allowed,
-        `${file} has ${matches.length} raw fetch() call(s) but only ${allowed} are allowed. ` +
-          `Use apiFetch() from ./helpers instead, or add a justified allowlist entry.`
-      );
+    it(`${filename} does not contain unapproved raw fetch() calls`, () => {
+      const matches = [...source.matchAll(/\bfetch\s*\(/g)];
+      const allowed = ALLOWLISTED[filename] ?? 0;
+      if (matches.length > allowed) {
+        throw new Error(
+          `${filename} has ${matches.length} raw fetch() call(s) but only ${allowed} are allowed. ` +
+            `Use apiFetch() from ./helpers instead, or add a justified allowlist entry.`
+        );
+      }
+      expect(matches.length).toBeLessThanOrEqual(allowed);
     });
   }
 });
