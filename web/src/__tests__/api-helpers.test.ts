@@ -133,6 +133,60 @@ describe('handleResponse', () => {
     expect(fetch).toHaveBeenNthCalledWith(2, `${API_BASE}/metrics`, expect.any(Object));
   });
 
+  it('apiFetch always includes credentials: include for cross-origin auth', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, data: {} })));
+
+    // GET request — no explicit init
+    await apiFetch('/api/status');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ credentials: 'include' })
+    );
+    vi.mocked(fetch).mockClear();
+
+    // Mutation — init provided but credentials should still be included
+    await apiFetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ credentials: 'include', method: 'POST' })
+    );
+  });
+
+  it('apiFetch honours an AbortSignal passed in init', async () => {
+    const ac = new AbortController();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.signal?.aborted) {
+          return Promise.reject(new DOMException('Aborted', 'AbortError'));
+        }
+        return Promise.resolve(
+          jsonResponse({ success: true, data: null, meta: { timestamp: '2025-01-01T00:00:00Z' } })
+        );
+      })
+    );
+
+    // Normal call succeeds and returns unwrapped data (null)
+    await expect(apiFetch('/api/tasks', { signal: ac.signal })).resolves.toBeNull();
+
+    // After aborting, the fetch is rejected
+    ac.abort();
+    await expect(apiFetch('/api/tasks', { signal: ac.signal })).rejects.toThrow('Aborted');
+  });
+
+  it('apiFetch handles 204 No Content (no JSON body) without error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 204, json: vi.fn() } as unknown as Response)
+    );
+    const result = await apiFetch<void>('/api/tasks/1/archive', { method: 'POST' });
+    expect(result).toBeUndefined();
+  });
+
   it('normalizes a pure API origin to the /api base path', () => {
     expect(normalizeApiBase('http://127.0.0.1:3101')).toBe('http://127.0.0.1:3101/api');
     expect(normalizeApiBase('https://example.com/')).toBe('https://example.com/api');

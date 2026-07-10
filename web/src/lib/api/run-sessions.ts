@@ -10,7 +10,7 @@ import type {
   Task,
   UpdateRunSessionShareInput,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 function queryFromFilters(filters: RunSessionShareListFilters): string {
   const params = new URLSearchParams();
@@ -22,98 +22,85 @@ function queryFromFilters(filters: RunSessionShareListFilters): string {
 export const runSessionsApi = {
   list: async (filters: RunSessionShareListFilters = {}): Promise<RunSessionShare[]> => {
     const query = queryFromFilters(filters);
-    const response = await fetch(`${API_BASE}/run-sessions${query ? `?${query}` : ''}`, {
-      credentials: 'include',
-    });
-    return handleResponse<RunSessionShare[]>(response);
+    return apiFetch<RunSessionShare[]>(`${API_BASE}/run-sessions${query ? `?${query}` : ''}`);
   },
 
   create: async (input: CreateRunSessionShareInput): Promise<RunSessionShare> => {
-    const response = await fetch(`${API_BASE}/run-sessions`, {
-      credentials: 'include',
+    return apiFetch<RunSessionShare>(`${API_BASE}/run-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<RunSessionShare>(response);
   },
 
   get: async (shareId: string): Promise<RunSessionShare> => {
-    const response = await fetch(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}`, {
-      credentials: 'include',
-    });
-    return handleResponse<RunSessionShare>(response);
+    return apiFetch<RunSessionShare>(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}`);
   },
 
   events: async (shareId: string): Promise<RunSessionEvent[]> => {
-    const response = await fetch(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/events`, {
-      credentials: 'include',
-    });
-    return handleResponse<RunSessionEvent[]>(response);
+    return apiFetch<RunSessionEvent[]>(
+      `${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/events`
+    );
   },
 
   update: async (shareId: string, input: UpdateRunSessionShareInput): Promise<RunSessionShare> => {
-    const response = await fetch(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}`, {
-      credentials: 'include',
+    return apiFetch<RunSessionShare>(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<RunSessionShare>(response);
   },
 
   revoke: async (shareId: string, reason?: string): Promise<RunSessionShare> => {
-    const response = await fetch(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/revoke`, {
-      credentials: 'include',
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    });
-    return handleResponse<RunSessionShare>(response);
+    return apiFetch<RunSessionShare>(
+      `${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/revoke`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }
+    );
   },
 
   sendMessage: async (
     shareId: string,
     input: SendRunSessionMessageInput
   ): Promise<RunSessionEvent> => {
-    const response = await fetch(
+    return apiFetch<RunSessionEvent>(
       `${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/messages`,
       {
-        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       }
     );
-    return handleResponse<RunSessionEvent>(response);
   },
 
   respondToApproval: async (
     shareId: string,
     input: RunSessionApprovalResponseInput
   ): Promise<RunSessionEvent> => {
-    const response = await fetch(
+    return apiFetch<RunSessionEvent>(
       `${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/approvals`,
       {
-        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       }
     );
-    return handleResponse<RunSessionEvent>(response);
   },
 
   fork: async (
     shareId: string,
     input: ForkRunSessionInput
   ): Promise<{ fork: RunSessionFork; task: Task }> => {
-    const response = await fetch(`${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/fork`, {
-      credentials: 'include',
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    return handleResponse<{ fork: RunSessionFork; task: Task }>(response);
+    return apiFetch<{ fork: RunSessionFork; task: Task }>(
+      `${API_BASE}/run-sessions/${encodeURIComponent(shareId)}/fork`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
   },
 };

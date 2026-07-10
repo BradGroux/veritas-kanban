@@ -5,55 +5,45 @@ import type {
   ScoringProfile,
   UpdateScoringProfileInput,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const scoringApi = {
   listProfiles: async (): Promise<ScoringProfile[]> => {
-    const response = await fetch(`${API_BASE}/scoring/profiles`);
-    return handleResponse<ScoringProfile[]>(response);
+    return apiFetch<ScoringProfile[]>(`${API_BASE}/scoring/profiles`);
   },
 
   getProfile: async (id: string): Promise<ScoringProfile> => {
-    const response = await fetch(`${API_BASE}/scoring/profiles/${id}`);
-    return handleResponse<ScoringProfile>(response);
+    return apiFetch<ScoringProfile>(`${API_BASE}/scoring/profiles/${id}`);
   },
 
   createProfile: async (input: CreateScoringProfileInput): Promise<ScoringProfile> => {
-    const response = await fetch(`${API_BASE}/scoring/profiles`, {
-      credentials: 'include',
+    return apiFetch<ScoringProfile>(`${API_BASE}/scoring/profiles`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<ScoringProfile>(response);
   },
 
   updateProfile: async (id: string, input: UpdateScoringProfileInput): Promise<ScoringProfile> => {
-    const response = await fetch(`${API_BASE}/scoring/profiles/${id}`, {
-      credentials: 'include',
+    return apiFetch<ScoringProfile>(`${API_BASE}/scoring/profiles/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<ScoringProfile>(response);
   },
 
   deleteProfile: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/scoring/profiles/${id}`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/scoring/profiles/${id}`, {
       method: 'DELETE',
     });
-    return handleResponse<void>(response);
   },
 
   evaluate: async (input: EvaluationRequest): Promise<EvaluationResult> => {
-    const response = await fetch(`${API_BASE}/scoring/evaluate`, {
-      credentials: 'include',
+    return apiFetch<EvaluationResult>(`${API_BASE}/scoring/evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<EvaluationResult>(response);
   },
 
   getHistory: async (filters?: {
@@ -68,7 +58,6 @@ export const scoringApi = {
     if (filters?.taskId) params.set('taskId', filters.taskId);
     if (filters?.limit) params.set('limit', String(filters.limit));
     const query = params.toString();
-    const response = await fetch(`${API_BASE}/scoring/history${query ? `?${query}` : ''}`);
-    return handleResponse<EvaluationResult[]>(response);
+    return apiFetch<EvaluationResult[]>(`${API_BASE}/scoring/history${query ? `?${query}` : ''}`);
   },
 };

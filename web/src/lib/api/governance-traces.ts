@@ -1,5 +1,5 @@
 import type { GovernanceTraceListFilters, GovernanceTraceRecord } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 function toQuery(filters: GovernanceTraceListFilters = {}): string {
   const params = new URLSearchParams();
@@ -19,16 +19,12 @@ function toQuery(filters: GovernanceTraceListFilters = {}): string {
 
 export const governanceTracesApi = {
   list: async (filters: GovernanceTraceListFilters = {}): Promise<GovernanceTraceRecord[]> => {
-    const response = await fetch(`${API_BASE}/governance/traces${toQuery(filters)}`, {
-      credentials: 'include',
-    });
-    return handleResponse<GovernanceTraceRecord[]>(response);
+    return apiFetch<GovernanceTraceRecord[]>(`${API_BASE}/governance/traces${toQuery(filters)}`);
   },
 
   get: async (id: string): Promise<GovernanceTraceRecord> => {
-    const response = await fetch(`${API_BASE}/governance/traces/${encodeURIComponent(id)}`, {
-      credentials: 'include',
-    });
-    return handleResponse<GovernanceTraceRecord>(response);
+    return apiFetch<GovernanceTraceRecord>(
+      `${API_BASE}/governance/traces/${encodeURIComponent(id)}`
+    );
   },
 };

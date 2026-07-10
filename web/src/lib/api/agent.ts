@@ -10,7 +10,7 @@ import type {
   RoutingResult,
   AgentBudgetPolicy,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export interface StartAgentRequest {
   agent?: AgentType;
@@ -22,53 +22,42 @@ export interface StartAgentRequest {
 
 export const worktreeApi = {
   create: async (taskId: string): Promise<WorktreeInfo> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree`, {
-      credentials: 'include',
+    return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree`, {
       method: 'POST',
     });
-    return handleResponse<WorktreeInfo>(response);
   },
 
   status: async (taskId: string): Promise<WorktreeInfo> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree`);
-    return handleResponse<WorktreeInfo>(response);
+    return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree`);
   },
 
   delete: async (taskId: string, force: boolean = false): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree?force=${force}`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/worktree?force=${force}`, {
       method: 'DELETE',
     });
-    return handleResponse<void>(response);
   },
 
   rebase: async (taskId: string): Promise<WorktreeInfo> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree/rebase`, {
-      credentials: 'include',
+    return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree/rebase`, {
       method: 'POST',
     });
-    return handleResponse<WorktreeInfo>(response);
   },
 
   merge: async (taskId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree/merge`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/worktree/merge`, {
       method: 'POST',
     });
-    return handleResponse<void>(response);
   },
 
   getOpenCommand: async (taskId: string): Promise<{ command: string }> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/worktree/open`);
-    return handleResponse<{ command: string }>(response);
+    return apiFetch<{ command: string }>(`${API_BASE}/tasks/${taskId}/worktree/open`);
   },
 };
 
 export const agentApi = {
   // Global agent status (not per-task)
   globalStatus: async (): Promise<GlobalAgentStatus> => {
-    const response = await fetch(`${API_BASE}/agent/status`);
-    return handleResponse<GlobalAgentStatus>(response);
+    return apiFetch<GlobalAgentStatus>(`${API_BASE}/agent/status`);
   },
 
   start: async (
@@ -77,45 +66,40 @@ export const agentApi = {
   ): Promise<AgentStatus> => {
     const body =
       typeof agentOrRequest === 'string' ? { agent: agentOrRequest } : (agentOrRequest ?? {});
-    const response = await fetch(`${API_BASE}/agents/${taskId}/start`, {
-      credentials: 'include',
+    return apiFetch<AgentStatus>(`${API_BASE}/agents/${taskId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return handleResponse<AgentStatus>(response);
   },
 
   sendMessage: async (taskId: string, message: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/agents/${taskId}/message`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/agents/${taskId}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     });
-    return handleResponse<void>(response);
   },
 
   stop: async (taskId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/agents/${taskId}/stop`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/agents/${taskId}/stop`, {
       method: 'POST',
     });
-    return handleResponse<void>(response);
   },
 
   status: async (taskId: string): Promise<AgentStatusResponse> => {
-    const response = await fetch(`${API_BASE}/agents/${taskId}/status`);
-    return handleResponse<AgentStatusResponse>(response);
+    return apiFetch<AgentStatusResponse>(`${API_BASE}/agents/${taskId}/status`);
   },
 
   listAttempts: async (taskId: string): Promise<string[]> => {
-    const response = await fetch(`${API_BASE}/agents/${taskId}/attempts`);
-    return handleResponse<string[]>(response);
+    return apiFetch<string[]>(`${API_BASE}/agents/${taskId}/attempts`);
   },
 
   getLog: async (taskId: string, attemptId: string): Promise<string> => {
-    const response = await fetch(`${API_BASE}/agents/${taskId}/attempts/${attemptId}/log`);
+    // Log endpoint returns plain text, not a JSON envelope — keep raw fetch.
+    const response = await fetch(`${API_BASE}/agents/${taskId}/attempts/${attemptId}/log`, {
+      credentials: 'include',
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch log');
     }
@@ -155,50 +139,42 @@ export const registryApi = {
     if (filters?.status) params.set('status', filters.status);
     if (filters?.capability) params.set('capability', filters.capability);
     const qs = params.toString();
-    const response = await fetch(`${API_BASE}/agents/register${qs ? `?${qs}` : ''}`);
-    return handleResponse<RegisteredAgent[]>(response);
+    return apiFetch<RegisteredAgent[]>(`${API_BASE}/agents/register${qs ? `?${qs}` : ''}`);
   },
 
   /** Get registry statistics */
   stats: async (): Promise<RegistryStats> => {
-    const response = await fetch(`${API_BASE}/agents/register/stats`);
-    return handleResponse<RegistryStats>(response);
+    return apiFetch<RegistryStats>(`${API_BASE}/agents/register/stats`);
   },
 
   /** Get a specific agent */
   get: async (id: string): Promise<RegisteredAgent> => {
-    const response = await fetch(`${API_BASE}/agents/register/${id}`);
-    return handleResponse<RegisteredAgent>(response);
+    return apiFetch<RegisteredAgent>(`${API_BASE}/agents/register/${id}`);
   },
 };
 
 export const routingApi = {
   /** Get current routing configuration */
   getConfig: async (): Promise<AgentRoutingConfig> => {
-    const response = await fetch(`${API_BASE}/agents/routing`);
-    return handleResponse<AgentRoutingConfig>(response);
+    return apiFetch<AgentRoutingConfig>(`${API_BASE}/agents/routing`);
   },
 
   /** Update routing configuration */
   updateConfig: async (config: AgentRoutingConfig): Promise<AgentRoutingConfig> => {
-    const response = await fetch(`${API_BASE}/agents/routing`, {
-      credentials: 'include',
+    return apiFetch<AgentRoutingConfig>(`${API_BASE}/agents/routing`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     });
-    return handleResponse<AgentRoutingConfig>(response);
   },
 
   /** Resolve the best agent for a task */
   resolveForTask: async (taskId: string): Promise<RoutingResult> => {
-    const response = await fetch(`${API_BASE}/agents/route`, {
-      credentials: 'include',
+    return apiFetch<RoutingResult>(`${API_BASE}/agents/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taskId }),
     });
-    return handleResponse<RoutingResult>(response);
   },
 
   /** Resolve the best agent for metadata (ad-hoc, e.g. from create dialog) */
@@ -208,58 +184,47 @@ export const routingApi = {
     project?: string;
     subtaskCount?: number;
   }): Promise<RoutingResult> => {
-    const response = await fetch(`${API_BASE}/agents/route`, {
-      credentials: 'include',
+    return apiFetch<RoutingResult>(`${API_BASE}/agents/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(metadata),
     });
-    return handleResponse<RoutingResult>(response);
   },
 };
 
 export const agentHostApi = {
   getHealth: async (): Promise<AgentHostHealthResponse> => {
-    const response = await fetch(`${API_BASE}/agents/hosts`);
-    return handleResponse<AgentHostHealthResponse>(response);
+    return apiFetch<AgentHostHealthResponse>(`${API_BASE}/agents/hosts`);
   },
 
   preview: async (request: AgentHostPreviewRequest): Promise<AgentHostCompatibilityResponse> => {
-    const response = await fetch(`${API_BASE}/agents/hosts/preview`, {
-      credentials: 'include',
+    return apiFetch<AgentHostCompatibilityResponse>(`${API_BASE}/agents/hosts/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
-    return handleResponse<AgentHostCompatibilityResponse>(response);
   },
 };
 
 export const previewApi = {
   getStatus: async (taskId: string): Promise<PreviewServer | { status: 'stopped' }> => {
-    const response = await fetch(`${API_BASE}/preview/${taskId}`);
-    return handleResponse<PreviewServer | { status: 'stopped' }>(response);
+    return apiFetch<PreviewServer | { status: 'stopped' }>(`${API_BASE}/preview/${taskId}`);
   },
 
   getOutput: async (taskId: string, lines: number = 50): Promise<{ output: string[] }> => {
-    const response = await fetch(`${API_BASE}/preview/${taskId}/output?lines=${lines}`);
-    return handleResponse<{ output: string[] }>(response);
+    return apiFetch<{ output: string[] }>(`${API_BASE}/preview/${taskId}/output?lines=${lines}`);
   },
 
   start: async (taskId: string): Promise<PreviewServer> => {
-    const response = await fetch(`${API_BASE}/preview/${taskId}/start`, {
-      credentials: 'include',
+    return apiFetch<PreviewServer>(`${API_BASE}/preview/${taskId}/start`, {
       method: 'POST',
     });
-    return handleResponse<PreviewServer>(response);
   },
 
   stop: async (taskId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/preview/${taskId}/stop`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/preview/${taskId}/stop`, {
       method: 'POST',
     });
-    return handleResponse<void>(response);
   },
 };
 

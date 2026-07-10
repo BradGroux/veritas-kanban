@@ -1,51 +1,44 @@
 /**
  * Diff, conflicts, and GitHub API endpoints.
  */
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const diffApi = {
   getSummary: async (taskId: string): Promise<DiffSummary> => {
-    const response = await fetch(`${API_BASE}/diff/${taskId}`);
-    return handleResponse<DiffSummary>(response);
+    return apiFetch<DiffSummary>(`${API_BASE}/diff/${taskId}`);
   },
 
   getFileDiff: async (taskId: string, filePath: string): Promise<FileDiff> => {
-    const response = await fetch(
+    return apiFetch<FileDiff>(
       `${API_BASE}/diff/${taskId}/file?path=${encodeURIComponent(filePath)}`
     );
-    return handleResponse<FileDiff>(response);
   },
 
   getFullDiff: async (taskId: string): Promise<FileDiff[]> => {
-    const response = await fetch(`${API_BASE}/diff/${taskId}/full`);
-    return handleResponse<FileDiff[]>(response);
+    return apiFetch<FileDiff[]>(`${API_BASE}/diff/${taskId}/full`);
   },
 
   runCodexReview: async (
     taskId: string,
     input: CodexReviewInput = {}
   ): Promise<CodexReviewResult> => {
-    const response = await fetch(`${API_BASE}/diff/${taskId}/codex-review`, {
-      credentials: 'include',
+    return apiFetch<CodexReviewResult>(`${API_BASE}/diff/${taskId}/codex-review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<CodexReviewResult>(response);
   },
 };
 
 export const conflictsApi = {
   getStatus: async (taskId: string): Promise<ConflictStatus> => {
-    const response = await fetch(`${API_BASE}/conflicts/${taskId}`);
-    return handleResponse<ConflictStatus>(response);
+    return apiFetch<ConflictStatus>(`${API_BASE}/conflicts/${taskId}`);
   },
 
   getFile: async (taskId: string, filePath: string): Promise<ConflictFile> => {
-    const response = await fetch(
+    return apiFetch<ConflictFile>(
       `${API_BASE}/conflicts/${taskId}/file?path=${encodeURIComponent(filePath)}`
     );
-    return handleResponse<ConflictFile>(response);
   },
 
   resolve: async (
@@ -54,74 +47,64 @@ export const conflictsApi = {
     resolution: 'ours' | 'theirs' | 'manual',
     manualContent?: string
   ): Promise<ResolveResult> => {
-    const response = await fetch(
+    return apiFetch<ResolveResult>(
       `${API_BASE}/conflicts/${taskId}/resolve?path=${encodeURIComponent(filePath)}`,
       {
-        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resolution, manualContent }),
       }
     );
-    return handleResponse<ResolveResult>(response);
   },
 
   abort: async (taskId: string): Promise<{ success: boolean }> => {
-    const response = await fetch(`${API_BASE}/conflicts/${taskId}/abort`, {
-      credentials: 'include',
+    return apiFetch<{ success: boolean }>(`${API_BASE}/conflicts/${taskId}/abort`, {
       method: 'POST',
     });
-    return handleResponse<{ success: boolean }>(response);
   },
 
   continue: async (
     taskId: string,
     message?: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const response = await fetch(`${API_BASE}/conflicts/${taskId}/continue`, {
-      credentials: 'include',
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-    return handleResponse<{ success: boolean; error?: string }>(response);
+    return apiFetch<{ success: boolean; error?: string }>(
+      `${API_BASE}/conflicts/${taskId}/continue`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      }
+    );
   },
 };
 
 export const githubApi = {
   getStatus: async (): Promise<GitHubStatus> => {
-    const response = await fetch(`${API_BASE}/github/status`);
-    return handleResponse<GitHubStatus>(response);
+    return apiFetch<GitHubStatus>(`${API_BASE}/github/status`);
   },
 
   createPR: async (input: CreatePRInput): Promise<PRInfo> => {
-    const response = await fetch(`${API_BASE}/github/pr`, {
-      credentials: 'include',
+    return apiFetch<PRInfo>(`${API_BASE}/github/pr`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<PRInfo>(response);
   },
 
   delegateCodexCloud: async (
     input: CodexCloudDelegationInput
   ): Promise<CodexCloudDelegationResult> => {
-    const response = await fetch(`${API_BASE}/github/codex/delegate`, {
-      credentials: 'include',
+    return apiFetch<CodexCloudDelegationResult>(`${API_BASE}/github/codex/delegate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<CodexCloudDelegationResult>(response);
   },
 
   openPR: async (taskId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/github/pr/${taskId}/open`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/github/pr/${taskId}/open`, {
       method: 'POST',
     });
-    return handleResponse<void>(response);
   },
 };
 

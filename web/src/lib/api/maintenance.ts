@@ -5,7 +5,7 @@ import type {
   MaintenanceSqliteImportInput,
   MaintenanceSummary,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export interface SqlitePortabilityReport {
   operation: 'file-to-sqlite' | 'sqlite-export' | 'sqlite-import';
@@ -39,28 +39,22 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  return apiFetch<T>(`${API_BASE}${path}`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return handleResponse<T>(response);
 }
 
 export const maintenanceApi = {
   summary: async (): Promise<MaintenanceSummary> => {
-    const response = await fetch(`${API_BASE}/maintenance/summary`, {
-      credentials: 'include',
-    });
-    return handleResponse<MaintenanceSummary>(response);
+    return apiFetch<MaintenanceSummary>(`${API_BASE}/maintenance/summary`);
   },
 
   tailLog: async (source: string, tail = 200): Promise<MaintenanceLogTail> => {
-    const response = await fetch(`${API_BASE}/maintenance/logs${buildQuery({ source, tail })}`, {
-      credentials: 'include',
-    });
-    return handleResponse<MaintenanceLogTail>(response);
+    return apiFetch<MaintenanceLogTail>(
+      `${API_BASE}/maintenance/logs${buildQuery({ source, tail })}`
+    );
   },
 
   createDebugBundle: async (): Promise<MaintenanceDebugBundle> =>

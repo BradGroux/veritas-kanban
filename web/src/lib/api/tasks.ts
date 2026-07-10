@@ -2,39 +2,33 @@
  * Task API endpoints: CRUD, archive, subtasks, comments, blocking, reorder.
  */
 import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const tasksApi = {
   list: async (): Promise<Task[]> => {
-    const response = await fetch(`${API_BASE}/tasks`);
-    return handleResponse<Task[]>(response);
+    return apiFetch<Task[]>(`${API_BASE}/tasks`);
   },
 
   listArchived: async (): Promise<Task[]> => {
-    const response = await fetch(`${API_BASE}/tasks/archived`);
-    return handleResponse<Task[]>(response);
+    return apiFetch<Task[]>(`${API_BASE}/tasks/archived`);
   },
 
   get: async (id: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${id}`);
-    return handleResponse<Task>(response);
+    return apiFetch<Task>(`${API_BASE}/tasks/${id}`);
   },
 
   create: async (input: CreateTaskInput): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<Task>(response);
   },
 
   update: async (id: string, input: UpdateTaskInput, expectedRevision?: number): Promise<Task> => {
     const { expectedRevision: bodyExpectedRevision, ...body } = input;
     const revision = expectedRevision ?? bodyExpectedRevision;
-    const response = await fetch(`${API_BASE}/tasks/${id}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -42,54 +36,45 @@ export const tasksApi = {
       },
       body: JSON.stringify(body),
     });
-    return handleResponse<Task>(response);
   },
 
   delete: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${id}`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${id}`, {
       method: 'DELETE',
     });
-    return handleResponse<void>(response);
   },
 
   archive: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${id}/archive`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${id}/archive`, {
       method: 'POST',
     });
-    return handleResponse<void>(response);
   },
 
   bulkArchive: async (sprint: string): Promise<{ archived: string[]; count: number }> => {
-    const response = await fetch(`${API_BASE}/tasks/bulk-archive`, {
-      credentials: 'include',
+    return apiFetch(`${API_BASE}/tasks/bulk-archive`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sprint }),
     });
-    return handleResponse(response);
   },
 
   restore: async (id: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${id}/restore`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${id}/restore`, {
       method: 'POST',
     });
-    return handleResponse<Task>(response);
   },
 
   getArchiveSuggestions: async (): Promise<ArchiveSuggestion[]> => {
-    const response = await fetch(`${API_BASE}/tasks/archive/suggestions`);
-    return handleResponse<ArchiveSuggestion[]>(response);
+    return apiFetch<ArchiveSuggestion[]>(`${API_BASE}/tasks/archive/suggestions`);
   },
 
   archiveSprint: async (sprint: string): Promise<{ archived: number; taskIds: string[] }> => {
-    const response = await fetch(`${API_BASE}/tasks/archive/sprint/${encodeURIComponent(sprint)}`, {
-      credentials: 'include',
-      method: 'POST',
-    });
-    return handleResponse<{ archived: number; taskIds: string[] }>(response);
+    return apiFetch<{ archived: number; taskIds: string[] }>(
+      `${API_BASE}/tasks/archive/sprint/${encodeURIComponent(sprint)}`,
+      {
+        method: 'POST',
+      }
+    );
   },
 
   addSubtask: async (
@@ -97,13 +82,11 @@ export const tasksApi = {
     title: string,
     acceptanceCriteria?: string[]
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/subtasks`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/subtasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, acceptanceCriteria }),
     });
-    return handleResponse<Task>(response);
   },
 
   updateSubtask: async (
@@ -111,21 +94,17 @@ export const tasksApi = {
     subtaskId: string,
     updates: { title?: string; completed?: boolean }
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/subtasks/${subtaskId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/subtasks/${subtaskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteSubtask: async (taskId: string, subtaskId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/subtasks/${subtaskId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/subtasks/${subtaskId}`, {
       method: 'DELETE',
     });
-    return handleResponse<Task>(response);
   },
 
   toggleSubtaskCriteria: async (
@@ -133,24 +112,20 @@ export const tasksApi = {
     subtaskId: string,
     criteriaIndex: number
   ): Promise<Task> => {
-    const response = await fetch(
+    return apiFetch<Task>(
       `${API_BASE}/tasks/${taskId}/subtasks/${subtaskId}/criteria/${criteriaIndex}`,
       {
-        credentials: 'include',
         method: 'PATCH',
       }
     );
-    return handleResponse<Task>(response);
   },
 
   addVerificationStep: async (taskId: string, description: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/verification`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description }),
     });
-    return handleResponse<Task>(response);
   },
 
   updateVerificationStep: async (
@@ -158,21 +133,17 @@ export const tasksApi = {
     stepId: string,
     updates: { description?: string; checked?: boolean }
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteVerificationStep: async (taskId: string, stepId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/verification/${stepId}`, {
       method: 'DELETE',
     });
-    return handleResponse<Task>(response);
   },
 
   addComment: async (
@@ -181,8 +152,7 @@ export const tasksApi = {
     text: string,
     expectedRevision?: number
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/comments`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/comments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +162,6 @@ export const tasksApi = {
       },
       body: JSON.stringify({ author, text }),
     });
-    return handleResponse<Task>(response);
   },
 
   editComment: async (
@@ -201,8 +170,7 @@ export const tasksApi = {
     text: string,
     expectedRevision?: number
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -212,7 +180,6 @@ export const tasksApi = {
       },
       body: JSON.stringify({ text }),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteComment: async (
@@ -220,15 +187,13 @@ export const tasksApi = {
     commentId: string,
     expectedRevision?: number
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, {
       method: 'DELETE',
       headers:
         typeof expectedRevision === 'number'
           ? { 'If-Match': `"task:${taskId}:${expectedRevision}"` }
           : undefined,
     });
-    return handleResponse<Task>(response);
   },
 
   // Observations
@@ -241,21 +206,17 @@ export const tasksApi = {
       agent?: string;
     }
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/observations`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/observations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteObservation: async (taskId: string, observationId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/observations/${observationId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/observations/${observationId}`, {
       method: 'DELETE',
     });
-    return handleResponse<Task>(response);
   },
 
   // Deliverables
@@ -269,13 +230,11 @@ export const tasksApi = {
       agent?: string;
     }
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/deliverables`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(deliverable),
     });
-    return handleResponse<Task>(response);
   },
 
   updateDeliverable: async (
@@ -290,21 +249,17 @@ export const tasksApi = {
       agent?: string;
     }
   ): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteDeliverable: async (taskId: string, deliverableId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/deliverables/${deliverableId}`, {
       method: 'DELETE',
     });
-    return handleResponse<Task>(response);
   },
 
   getBlockingStatus: async (
@@ -314,18 +269,15 @@ export const tasksApi = {
     blockers: Array<{ id: string; title: string; status: string }>;
     completedBlockers: Array<{ id: string; title: string }>;
   }> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/blocking-status`);
-    return handleResponse(response);
+    return apiFetch(`${API_BASE}/tasks/${taskId}/blocking-status`);
   },
 
   reorder: async (orderedIds: string[]): Promise<{ updated: number }> => {
-    const response = await fetch(`${API_BASE}/tasks/reorder`, {
-      credentials: 'include',
+    return apiFetch<{ updated: number }>(`${API_BASE}/tasks/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderedIds }),
     });
-    return handleResponse<{ updated: number }>(response);
   },
 
   applyTemplate: async (
@@ -334,65 +286,54 @@ export const tasksApi = {
     templateName: string,
     fieldsChanged: string[]
   ): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/apply-template`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/apply-template`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ templateId, templateName, fieldsChanged }),
     });
-    return handleResponse<void>(response);
   },
 
   bulkUpdate: async (
     ids: string[],
     status: Task['status']
   ): Promise<{ updated: string[]; count: number; failed: string[] }> => {
-    const response = await fetch(`${API_BASE}/tasks/bulk-update`, {
-      credentials: 'include',
+    return apiFetch(`${API_BASE}/tasks/bulk-update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids, status }),
     });
-    return handleResponse(response);
   },
 
   bulkArchiveByIds: async (
     ids: string[]
   ): Promise<{ archived: string[]; count: number; failed: string[] }> => {
-    const response = await fetch(`${API_BASE}/tasks/bulk-archive-by-ids`, {
-      credentials: 'include',
+    return apiFetch(`${API_BASE}/tasks/bulk-archive-by-ids`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     });
-    return handleResponse(response);
   },
 
   // Progress
   fetchProgress: async (taskId: string): Promise<string> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/progress`);
-    const data = await handleResponse<{ content: string }>(response);
+    const data = await apiFetch<{ content: string }>(`${API_BASE}/tasks/${taskId}/progress`);
     return data.content;
   },
 
   updateProgress: async (taskId: string, content: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/progress`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/progress`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
-    return handleResponse<void>(response);
   },
 
   appendProgress: async (taskId: string, section: string, content: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/progress/append`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/progress/append`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ section, content }),
     });
-    return handleResponse<void>(response);
   },
 };
 

@@ -2,80 +2,68 @@
  * Time tracking and status history API endpoints.
  */
 import type { Task } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const timeApi = {
   getSummary: async (): Promise<TimeSummary> => {
-    const response = await fetch(`${API_BASE}/tasks/time/summary`);
-    return handleResponse<TimeSummary>(response);
+    return apiFetch<TimeSummary>(`${API_BASE}/tasks/time/summary`);
   },
 
   start: async (taskId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/time/start`, {
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/time/start`, {
       method: 'POST',
-      credentials: 'include',
     });
-    return handleResponse<Task>(response);
   },
 
   stop: async (taskId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/time/stop`, {
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/time/stop`, {
       method: 'POST',
-      credentials: 'include',
     });
-    return handleResponse<Task>(response);
   },
 
   addEntry: async (taskId: string, duration: number, description?: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/time/entry`, {
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/time/entry`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ duration, description }),
     });
-    return handleResponse<Task>(response);
   },
 
   deleteEntry: async (taskId: string, entryId: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${taskId}/time/entry/${entryId}`, {
+    return apiFetch<Task>(`${API_BASE}/tasks/${taskId}/time/entry/${entryId}`, {
       method: 'DELETE',
-      credentials: 'include',
     });
-    return handleResponse<Task>(response);
   },
 };
 
 export const statusHistoryApi = {
   list: async (limit: number = 100, offset: number = 0): Promise<StatusHistoryEntry[]> => {
-    const response = await fetch(`${API_BASE}/status-history?limit=${limit}&offset=${offset}`);
-    return handleResponse<StatusHistoryEntry[]>(response);
+    return apiFetch<StatusHistoryEntry[]>(
+      `${API_BASE}/status-history?limit=${limit}&offset=${offset}`
+    );
   },
 
   getDailySummary: async (date?: string): Promise<DailySummary> => {
     const url = date
       ? `${API_BASE}/status-history/summary/daily?date=${date}`
       : `${API_BASE}/status-history/summary/daily`;
-    const response = await fetch(url);
-    return handleResponse<DailySummary>(response);
+    return apiFetch<DailySummary>(url);
   },
 
   getWeeklySummary: async (): Promise<DailySummary[]> => {
-    const response = await fetch(`${API_BASE}/status-history/summary/weekly`);
-    return handleResponse<DailySummary[]>(response);
+    return apiFetch<DailySummary[]>(`${API_BASE}/status-history/summary/weekly`);
   },
 
   getByDateRange: async (startDate: string, endDate: string): Promise<StatusHistoryEntry[]> => {
-    const response = await fetch(
+    return apiFetch<StatusHistoryEntry[]>(
       `${API_BASE}/status-history/range?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
     );
-    return handleResponse<StatusHistoryEntry[]>(response);
   },
 
   clear: async (): Promise<void> => {
-    const response = await fetch(`${API_BASE}/status-history`, {
+    return apiFetch<void>(`${API_BASE}/status-history`, {
       method: 'DELETE',
     });
-    return handleResponse<void>(response);
   },
 };
 

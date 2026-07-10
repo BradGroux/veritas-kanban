@@ -1,5 +1,5 @@
 import type { AgentRunTrace } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export interface TraceStatus {
   enabled: boolean;
@@ -7,23 +7,14 @@ export interface TraceStatus {
 
 export const tracesApi = {
   status: async (): Promise<TraceStatus> => {
-    const response = await fetch(`${API_BASE}/traces/status`, {
-      credentials: 'include',
-    });
-    return handleResponse<TraceStatus>(response);
+    return apiFetch<TraceStatus>(`${API_BASE}/traces/status`);
   },
 
   get: async (attemptId: string): Promise<AgentRunTrace> => {
-    const response = await fetch(`${API_BASE}/traces/${encodeURIComponent(attemptId)}`, {
-      credentials: 'include',
-    });
-    return handleResponse<AgentRunTrace>(response);
+    return apiFetch<AgentRunTrace>(`${API_BASE}/traces/${encodeURIComponent(attemptId)}`);
   },
 
   listForTask: async (taskId: string): Promise<AgentRunTrace[]> => {
-    const response = await fetch(`${API_BASE}/traces/task/${encodeURIComponent(taskId)}`, {
-      credentials: 'include',
-    });
-    return handleResponse<AgentRunTrace[]>(response);
+    return apiFetch<AgentRunTrace[]>(`${API_BASE}/traces/task/${encodeURIComponent(taskId)}`);
   },
 };

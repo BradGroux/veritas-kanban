@@ -26,8 +26,6 @@ export {
   type AgentStatusState,
   type ActiveAgentInfo,
 } from './useAgentStatus';
-// Polling-based global agent status (legacy, prefer useRealtimeAgentStatus)
-export * from './useGlobalAgentStatus';
 export * from './useKeyboard';
 export * from './useManagedList';
 export * from './useMetrics';

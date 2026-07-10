@@ -2,7 +2,7 @@
  * Backlog API endpoints: CRUD, promote, demote operations.
  */
 import type { Task, CreateTaskInput } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export interface BacklogListResponse {
   tasks: Task[];
@@ -29,84 +29,67 @@ export const backlogApi = {
     if (options.page) params.append('page', options.page.toString());
 
     const url = `${API_BASE}/backlog${params.toString() ? `?${params.toString()}` : ''}`;
-    const response = await fetch(url);
-    return handleResponse<Task[]>(response);
+    return apiFetch<Task[]>(url);
   },
 
   getCount: async (): Promise<number> => {
-    const response = await fetch(`${API_BASE}/backlog/count`);
-    const data = await handleResponse<{ count: number }>(response);
+    const data = await apiFetch<{ count: number }>(`${API_BASE}/backlog/count`);
     return data.count;
   },
 
   get: async (id: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/backlog/${id}`);
-    return handleResponse<Task>(response);
+    return apiFetch<Task>(`${API_BASE}/backlog/${id}`);
   },
 
   create: async (input: CreateTaskInput): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/backlog`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/backlog`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<Task>(response);
   },
 
   update: async (id: string, updates: Partial<Task>): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/backlog/${id}`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/backlog/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    return handleResponse<Task>(response);
   },
 
   delete: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/backlog/${id}`, {
-      credentials: 'include',
+    return apiFetch<void>(`${API_BASE}/backlog/${id}`, {
       method: 'DELETE',
     });
-    return handleResponse<void>(response);
   },
 
   promote: async (id: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/backlog/${id}/promote`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/backlog/${id}/promote`, {
       method: 'POST',
     });
-    return handleResponse<Task>(response);
   },
 
   bulkPromote: async (ids: string[]): Promise<{ promoted: string[]; failed: string[] }> => {
-    const response = await fetch(`${API_BASE}/backlog/bulk-promote`, {
-      credentials: 'include',
+    return apiFetch<{ promoted: string[]; failed: string[] }>(`${API_BASE}/backlog/bulk-promote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     });
-    return handleResponse<{ promoted: string[]; failed: string[] }>(response);
   },
 
   demote: async (id: string): Promise<Task> => {
-    const response = await fetch(`${API_BASE}/tasks/${id}/demote`, {
-      credentials: 'include',
+    return apiFetch<Task>(`${API_BASE}/tasks/${id}/demote`, {
       method: 'POST',
     });
-    return handleResponse<Task>(response);
   },
 
   bulkDemote: async (
     ids: string[]
   ): Promise<{ demoted: string[]; count: number; failed: string[] }> => {
-    const response = await fetch(`${API_BASE}/backlog/bulk-demote`, {
-      credentials: 'include',
+    return apiFetch(`${API_BASE}/backlog/bulk-demote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     });
-    return handleResponse(response);
   },
 };

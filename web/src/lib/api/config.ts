@@ -13,32 +13,27 @@ import type {
   AgentProfilePackageSummary,
   AgentProfileValidationResult,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const settingsApi = {
   getFeatures: async (): Promise<FeatureSettings> => {
-    const response = await fetch(`${API_BASE}/settings/features`);
-    return handleResponse<FeatureSettings>(response);
+    return apiFetch<FeatureSettings>(`${API_BASE}/settings/features`);
   },
 
   getCodexHealth: async (): Promise<CodexHealthStatus> => {
-    const response = await fetch(`${API_BASE}/settings/codex/health`);
-    return handleResponse<CodexHealthStatus>(response);
+    return apiFetch<CodexHealthStatus>(`${API_BASE}/settings/codex/health`);
   },
 
   getProviderHealth: async (): Promise<ContextProviderHealthResponse> => {
-    const response = await fetch(`${API_BASE}/settings/provider-health`);
-    return handleResponse<ContextProviderHealthResponse>(response);
+    return apiFetch<ContextProviderHealthResponse>(`${API_BASE}/settings/provider-health`);
   },
 
   updateFeatures: async (patch: Partial<FeatureSettings>): Promise<FeatureSettings> => {
-    const response = await fetch(`${API_BASE}/settings/features`, {
-      credentials: 'include',
+    return apiFetch<FeatureSettings>(`${API_BASE}/settings/features`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
-    return handleResponse<FeatureSettings>(response);
   },
 };
 
@@ -128,86 +123,70 @@ export interface ContextProviderHealthResponse {
 
 export const configApi = {
   get: async (): Promise<AppConfig> => {
-    const response = await fetch(`${API_BASE}/config`);
-    return handleResponse<AppConfig>(response);
+    return apiFetch<AppConfig>(`${API_BASE}/config`);
   },
 
   repos: {
     list: async (): Promise<RepoConfig[]> => {
-      const response = await fetch(`${API_BASE}/config/repos`);
-      return handleResponse<RepoConfig[]>(response);
+      return apiFetch<RepoConfig[]>(`${API_BASE}/config/repos`);
     },
 
     add: async (repo: RepoConfig): Promise<AppConfig> => {
-      const response = await fetch(`${API_BASE}/config/repos`, {
-        credentials: 'include',
+      return apiFetch<AppConfig>(`${API_BASE}/config/repos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(repo),
       });
-      return handleResponse<AppConfig>(response);
     },
 
     update: async (name: string, updates: Partial<RepoConfig>): Promise<AppConfig> => {
-      const response = await fetch(`${API_BASE}/config/repos/${encodeURIComponent(name)}`, {
-        credentials: 'include',
+      return apiFetch<AppConfig>(`${API_BASE}/config/repos/${encodeURIComponent(name)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      return handleResponse<AppConfig>(response);
     },
 
     remove: async (name: string): Promise<AppConfig> => {
-      const response = await fetch(`${API_BASE}/config/repos/${encodeURIComponent(name)}`, {
-        credentials: 'include',
+      return apiFetch<AppConfig>(`${API_BASE}/config/repos/${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
-      return handleResponse<AppConfig>(response);
     },
 
     validate: async (path: string): Promise<{ valid: boolean; branches: string[] }> => {
-      const response = await fetch(`${API_BASE}/config/repos/validate`, {
-        credentials: 'include',
+      return apiFetch<{ valid: boolean; branches: string[] }>(`${API_BASE}/config/repos/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
       });
-      return handleResponse<{ valid: boolean; branches: string[] }>(response);
     },
 
     branches: async (name: string): Promise<string[]> => {
-      const response = await fetch(`${API_BASE}/config/repos/${encodeURIComponent(name)}/branches`);
-      return handleResponse<string[]>(response);
+      return apiFetch<string[]>(`${API_BASE}/config/repos/${encodeURIComponent(name)}/branches`);
     },
   },
 
   agents: {
     update: async (agents: AgentConfig[]): Promise<AppConfig> => {
-      const response = await fetch(`${API_BASE}/config/agents`, {
-        credentials: 'include',
+      return apiFetch<AppConfig>(`${API_BASE}/config/agents`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agents),
       });
-      return handleResponse<AppConfig>(response);
     },
 
     setDefault: async (agent: AgentType): Promise<AppConfig> => {
-      const response = await fetch(`${API_BASE}/config/default-agent`, {
-        credentials: 'include',
+      return apiFetch<AppConfig>(`${API_BASE}/config/default-agent`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent }),
       });
-      return handleResponse<AppConfig>(response);
     },
   },
 
   agentProfiles: {
     list: async (): Promise<AgentProfilePackageSummary[]> => {
-      const response = await fetch(`${API_BASE}/config/agent-profiles`);
-      return handleResponse<AgentProfilePackageSummary[]>(response);
+      return apiFetch<AgentProfilePackageSummary[]>(`${API_BASE}/config/agent-profiles`);
     },
 
     validate: async (input: {
@@ -215,13 +194,11 @@ export const configApi = {
       format?: AgentProfilePackageFormat;
       source?: string;
     }): Promise<AgentProfileValidationResult> => {
-      const response = await fetch(`${API_BASE}/config/agent-profiles/validate`, {
-        credentials: 'include',
+      return apiFetch<AgentProfileValidationResult>(`${API_BASE}/config/agent-profiles/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-      return handleResponse<AgentProfileValidationResult>(response);
     },
 
     import: async (input: {
@@ -229,23 +206,23 @@ export const configApi = {
       format?: AgentProfilePackageFormat;
       source?: string;
     }): Promise<{ profile: AgentProfilePackage; created: boolean }> => {
-      const response = await fetch(`${API_BASE}/config/agent-profiles/import`, {
-        credentials: 'include',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      return handleResponse<{ profile: AgentProfilePackage; created: boolean }>(response);
+      return apiFetch<{ profile: AgentProfilePackage; created: boolean }>(
+        `${API_BASE}/config/agent-profiles/import`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
     },
 
     export: async (
       id: string,
       format: AgentProfilePackageFormat = 'yaml'
     ): Promise<AgentProfileExportResult> => {
-      const response = await fetch(
+      return apiFetch<AgentProfileExportResult>(
         `${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}/export?format=${format}`
       );
-      return handleResponse<AgentProfileExportResult>(response);
     },
 
     update: async (
@@ -257,21 +234,20 @@ export const configApi = {
         >
       >
     ): Promise<AgentProfilePackage> => {
-      const response = await fetch(`${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`, {
-        credentials: 'include',
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      return handleResponse<AgentProfilePackage>(response);
+      return apiFetch<AgentProfilePackage>(
+        `${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
     },
 
     remove: async (id: string): Promise<void> => {
-      const response = await fetch(`${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`, {
-        credentials: 'include',
+      return apiFetch<void>(`${API_BASE}/config/agent-profiles/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
-      return handleResponse<void>(response);
     },
   },
 };

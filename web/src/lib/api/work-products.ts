@@ -5,7 +5,7 @@ import type {
   WorkProductPreview,
   WorkProductVersion,
 } from '@veritas-kanban/shared';
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export type WorkProductExportFormat = 'markdown' | 'json';
 
@@ -46,10 +46,7 @@ function getErrorMessage(body: unknown, status: number): string {
 
 export const workProductsApi = {
   maintenancePreview: async (): Promise<WorkProductMaintenancePreview> => {
-    const response = await fetch(`${API_BASE}/work-products/maintenance-preview`, {
-      credentials: 'include',
-    });
-    return handleResponse<WorkProductMaintenancePreview>(response);
+    return apiFetch<WorkProductMaintenancePreview>(`${API_BASE}/work-products/maintenance-preview`);
   },
 
   listForTask: async (
@@ -61,33 +58,28 @@ export const workProductsApi = {
       includeArchived: options.includeArchived,
       limit: options.limit,
     });
-    const response = await fetch(
-      `${API_BASE}/tasks/${encodeURIComponent(taskId)}/work-products${query}`,
-      {
-        credentials: 'include',
-      }
+    return apiFetch<WorkProductPreview[]>(
+      `${API_BASE}/tasks/${encodeURIComponent(taskId)}/work-products${query}`
     );
-    return handleResponse<WorkProductPreview[]>(response);
   },
 
   listVersions: async (id: string): Promise<WorkProductVersion[]> => {
-    const response = await fetch(`${API_BASE}/work-products/${encodeURIComponent(id)}/versions`, {
-      credentials: 'include',
-    });
-    return handleResponse<WorkProductVersion[]>(response);
+    return apiFetch<WorkProductVersion[]>(
+      `${API_BASE}/work-products/${encodeURIComponent(id)}/versions`
+    );
   },
 
   update: async (id: string, input: UpdateWorkProductInput): Promise<WorkProduct> => {
-    const response = await fetch(`${API_BASE}/work-products/${encodeURIComponent(id)}`, {
+    return apiFetch<WorkProduct>(`${API_BASE}/work-products/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(input),
     });
-    return handleResponse<WorkProduct>(response);
   },
 
   export: async (id: string, options: WorkProductExportOptions = {}): Promise<string> => {
+    // This endpoint returns plain text (markdown export), not a JSON envelope.
+    // Uses raw fetch intentionally; apiFetch does not support text() responses.
     const query = buildQuery({
       format: options.format ?? 'markdown',
       redacted: options.redacted ?? true,

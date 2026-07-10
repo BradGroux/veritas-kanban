@@ -1,27 +1,21 @@
 /**
  * Chat API functions
  */
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 import type { ChatSession, ChatSendInput } from '@veritas-kanban/shared';
 
 /**
  * List all chat sessions
  */
 export async function listSessions(): Promise<ChatSession[]> {
-  const response = await fetch(`${API_BASE}/chat/sessions`, {
-    credentials: 'include',
-  });
-  return handleResponse<ChatSession[]>(response);
+  return apiFetch<ChatSession[]>(`${API_BASE}/chat/sessions`);
 }
 
 /**
  * Get a single chat session with messages
  */
 export async function getSession(sessionId: string): Promise<ChatSession> {
-  const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}`, {
-    credentials: 'include',
-  });
-  return handleResponse<ChatSession>(response);
+  return apiFetch<ChatSession>(`${API_BASE}/chat/sessions/${sessionId}`);
 }
 
 /**
@@ -38,24 +32,20 @@ export interface ChatSendResponse {
  * Send a chat message
  */
 export async function sendMessage(input: ChatSendInput): Promise<ChatSendResponse> {
-  const response = await fetch(`${API_BASE}/chat/send`, {
+  return apiFetch<ChatSendResponse>(`${API_BASE}/chat/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
-  return handleResponse<ChatSendResponse>(response);
 }
 
 /**
  * Delete a chat session
  */
 export async function deleteSession(sessionId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}`, {
+  return apiFetch<void>(`${API_BASE}/chat/sessions/${sessionId}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
-  return handleResponse<void>(response);
 }
 
 /**
@@ -75,13 +65,11 @@ import type {
  * Send a message to the squad channel
  */
 export async function sendSquadMessage(input: SquadMessageInput): Promise<SquadMessage> {
-  const response = await fetch(`${API_BASE}/chat/squad`, {
+  return apiFetch<SquadMessage>(`${API_BASE}/chat/squad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
-  return handleResponse<SquadMessage>(response);
 }
 
 /**
@@ -100,10 +88,7 @@ export async function getSquadMessages(options?: {
   if (options?.includeSystem !== undefined)
     params.set('includeSystem', options.includeSystem.toString());
 
-  const response = await fetch(`${API_BASE}/chat/squad?${params}`, {
-    credentials: 'include',
-  });
-  return handleResponse<SquadMessage[]>(response);
+  return apiFetch<SquadMessage[]>(`${API_BASE}/chat/squad?${params}`);
 }
 
 export async function searchSquadMessages(options: {
@@ -119,64 +104,49 @@ export async function searchSquadMessages(options: {
   if (options.includeSystem !== undefined)
     params.set('includeSystem', options.includeSystem.toString());
 
-  const response = await fetch(`${API_BASE}/chat/squad/search?${params}`, {
-    credentials: 'include',
-  });
-  return handleResponse<SquadSearchResponse>(response);
+  return apiFetch<SquadSearchResponse>(`${API_BASE}/chat/squad/search?${params}`);
 }
 
 export async function getSquadUnread(actor: string): Promise<SquadUnreadState> {
   const params = new URLSearchParams({ actor });
-  const response = await fetch(`${API_BASE}/chat/squad/unread?${params}`, {
-    credentials: 'include',
-  });
-  return handleResponse<SquadUnreadState>(response);
+  return apiFetch<SquadUnreadState>(`${API_BASE}/chat/squad/unread?${params}`);
 }
 
 export async function markSquadRead(input: {
   actor: string;
   messageId?: string;
 }): Promise<SquadUnreadState> {
-  const response = await fetch(`${API_BASE}/chat/squad/read`, {
+  return apiFetch<SquadUnreadState>(`${API_BASE}/chat/squad/read`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
-  return handleResponse<SquadUnreadState>(response);
 }
 
 export async function getSquadThread(messageId: string): Promise<SquadMessage[]> {
-  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/thread`, {
-    credentials: 'include',
-  });
-  return handleResponse<SquadMessage[]>(response);
+  return apiFetch<SquadMessage[]>(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/thread`);
 }
 
 export async function updateSquadMessageState(
   messageId: string,
   input: { pinned?: boolean; decision?: boolean }
 ): Promise<SquadMessage> {
-  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/pin`, {
+  return apiFetch<SquadMessage>(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/pin`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
-  return handleResponse<SquadMessage>(response);
 }
 
 export async function addSquadReaction(
   messageId: string,
   input: { actor: string; reaction: string }
 ): Promise<SquadMessage> {
-  const response = await fetch(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/react`, {
+  return apiFetch<SquadMessage>(`${API_BASE}/chat/squad/${encodeURIComponent(messageId)}/react`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
-  return handleResponse<SquadMessage>(response);
 }
 
 export const chatApi = {

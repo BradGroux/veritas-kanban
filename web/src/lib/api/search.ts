@@ -1,4 +1,4 @@
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export type SearchBackend = 'auto' | 'qmd' | 'keyword';
 export type SearchCollection =
@@ -90,12 +90,10 @@ export interface SearchResponse {
 
 export const searchApi = {
   query: async (input: SearchRequest): Promise<SearchResponse> => {
-    const response = await fetch(`${API_BASE}/search`, {
-      credentials: 'include',
+    return apiFetch<SearchResponse>(`${API_BASE}/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
-    return handleResponse<SearchResponse>(response);
   },
 };

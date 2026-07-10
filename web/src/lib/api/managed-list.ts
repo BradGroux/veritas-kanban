@@ -1,7 +1,7 @@
 /**
  * Generic managed list API helper for CRUD endpoints with consistent patterns.
  */
-import { API_BASE, handleResponse } from './helpers';
+import { API_BASE, apiFetch } from './helpers';
 
 export const managedList = {
   /**
@@ -12,58 +12,48 @@ export const managedList = {
       const url = includeHidden
         ? `${API_BASE}${endpoint}?includeHidden=true`
         : `${API_BASE}${endpoint}`;
-      const response = await fetch(url);
-      return handleResponse<T[]>(response);
+      return apiFetch<T[]>(url);
     },
 
     get: async (id: string): Promise<T> => {
-      const response = await fetch(`${API_BASE}${endpoint}/${id}`);
-      return handleResponse<T>(response);
+      return apiFetch<T>(`${API_BASE}${endpoint}/${id}`);
     },
 
     create: async (input: any): Promise<T> => {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        credentials: 'include',
+      return apiFetch<T>(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-      return handleResponse<T>(response);
     },
 
     update: async (id: string, patch: any): Promise<T> => {
-      const response = await fetch(`${API_BASE}${endpoint}/${id}`, {
-        credentials: 'include',
+      return apiFetch<T>(`${API_BASE}${endpoint}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      return handleResponse<T>(response);
     },
 
     remove: async (id: string, force = false): Promise<void> => {
       const url = force
         ? `${API_BASE}${endpoint}/${id}?force=true`
         : `${API_BASE}${endpoint}/${id}`;
-      const response = await fetch(url, { credentials: 'include', method: 'DELETE' });
-      return handleResponse<void>(response);
+      return apiFetch<void>(url, { credentials: 'include', method: 'DELETE' });
     },
 
     canDelete: async (
       id: string
     ): Promise<{ allowed: boolean; referenceCount: number; isDefault: boolean }> => {
-      const response = await fetch(`${API_BASE}${endpoint}/${id}/can-delete`);
-      return handleResponse(response);
+      return apiFetch(`${API_BASE}${endpoint}/${id}/can-delete`);
     },
 
     reorder: async (orderedIds: string[]): Promise<T[]> => {
-      const response = await fetch(`${API_BASE}${endpoint}/reorder`, {
-        credentials: 'include',
+      return apiFetch<T[]>(`${API_BASE}${endpoint}/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderedIds }),
       });
-      return handleResponse<T[]>(response);
     },
   }),
 };
