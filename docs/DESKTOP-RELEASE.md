@@ -169,6 +169,9 @@ policy is tracked in
 - Update `CHANGELOG.md`.
 - Run `pnpm typecheck`, `pnpm lint:budget`, `pnpm build`, and
   `pnpm test:unit`.
+- Confirm `pnpm desktop:check:electron-artifacts` passes. The emitted main and
+  preload bundles must import Electron's runtime API and must not contain the
+  npm install/download shim.
 - Run `pnpm desktop:smoke:mac:local` to verify local packaging does not prune
   root dev tooling.
 - Run `pnpm desktop:package:mac:unsigned` and inspect artifact names.

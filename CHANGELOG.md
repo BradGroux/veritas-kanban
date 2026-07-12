@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Kept Electron's runtime API external in Vite 8/Rolldown desktop builds,
+  preventing the npm executable-path shim from replacing `app`,
+  `BrowserWindow`, `contextBridge`, and related native APIs in emitted main and
+  preload artifacts; desktop builds now fail closed if the shim reappears
+  (#809).
 - Isolated QMD result normalization coverage from unrelated persistent search
   collections and restored test environment state only after temporary search
   roots are removed, eliminating the intermittent teardown race (#793).

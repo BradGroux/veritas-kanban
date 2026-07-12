@@ -93,7 +93,10 @@ release guide are promoted.
 ## Production Scaffold
 
 `pnpm desktop:build` compiles the Electron main, preload, and fallback renderer.
-Packaging, signing, notarization, updater metadata, and bundled server/web asset
-layout are handled by later v5 desktop issues. Packaged mode expects a built
-server entry at `server/dist/index.js` unless `VERITAS_DESKTOP_SERVER_ENTRY` is
-provided.
+The build then verifies that main and preload import Electron from the native
+runtime and do not contain Electron's npm installer shim. Run the artifact
+check directly with `pnpm desktop:check:electron-artifacts` when inspecting an
+existing build. Packaging, signing, notarization, updater metadata, and bundled
+server/web asset layout follow the release workflow documented above. Packaged
+mode expects a built server entry at `server/dist/index.js` unless
+`VERITAS_DESKTOP_SERVER_ENTRY` is provided.

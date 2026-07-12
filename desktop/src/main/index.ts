@@ -45,6 +45,24 @@ let quitting = false;
 let shutdownStarted = false;
 const pendingDeepLinks: string[] = [];
 
+function activeMainWindow(): BrowserWindow | null {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return null;
+  }
+  return mainWindow;
+}
+
+function showDesktopError(message: string): void {
+  if (quitting) return;
+
+  const window = activeMainWindow();
+  if (!window) return;
+
+  void window
+    .loadURL(statusPageUrl('Veritas Kanban desktop error', message, runtime?.snapshot()))
+    .catch(() => undefined);
+}
+
 function isPackagedRuntime(): boolean {
   return app.isPackaged || process.env.VERITAS_DESKTOP_PRODUCTION === 'true';
 }
@@ -99,6 +117,11 @@ function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
       writeDesktopWindowStateSync(windowStatePaths, captureDesktopWindowState(window));
     }
   });
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
+  });
   window.webContents.setWindowOpenHandler(({ url }) => {
     void openValidatedExternalUrl(shell, url);
     return { action: 'deny' };
@@ -131,7 +154,7 @@ function handleDeepLink(url: string): void {
     const deepLink = parseDesktopDeepLink(url);
     void commandDispatcher.dispatch(deepLink.command);
   } catch (error) {
-    mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.communicationCheck.channel, {
+    activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.communicationCheck.channel, {
       target: 'external',
       state: 'failed',
       detail: error instanceof Error ? error.message : String(error),
@@ -249,7 +272,7 @@ async function boot(): Promise<void> {
     ),
     forceDevUpdateConfig: process.env.VERITAS_DESKTOP_UPDATER_FORCE_DEV === 'true',
     emitStatus: (status) => {
-      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
+      activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
       refreshDesktopMenu();
     },
   });
@@ -259,7 +282,7 @@ async function boot(): Promise<void> {
     shell,
     quit: () => app.quit(),
     sendRendererCommand: (command) => {
-      mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.menuCommand.channel, command);
+      activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.menuCommand.channel, command);
     },
     checkForUpdates: () =>
       updateService?.checkForUpdates() ?? Promise.resolve(updateServiceFallback(packaged)),
@@ -283,20 +306,21 @@ async function boot(): Promise<void> {
 
   registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher, updateService, {
     toggleMaximize: () => {
-      if (!mainWindow) {
+      const window = activeMainWindow();
+      if (!window) {
         return { maximized: false };
       }
-      if (mainWindow.isMaximized()) {
-        mainWindow.unmaximize();
+      if (window.isMaximized()) {
+        window.unmaximize();
       } else {
-        mainWindow.maximize();
+        window.maximize();
       }
-      return { maximized: mainWindow.isMaximized() };
+      return { maximized: window.isMaximized() };
     },
   });
   refreshDesktopMenu();
   runtime.on('status', (status) => {
-    mainWindow?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
+    activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
     refreshDesktopMenu();
   });
 
@@ -359,12 +383,10 @@ app.on('activate', () => {
 });
 
 process.on('uncaughtException', (error) => {
-  mainWindow?.loadURL(
-    statusPageUrl('Veritas Kanban desktop error', error.message, runtime?.snapshot())
-  );
+  showDesktopError(error.message);
 });
 
 process.on('unhandledRejection', (reason) => {
   const message = reason instanceof Error ? reason.message : String(reason);
-  mainWindow?.loadURL(statusPageUrl('Veritas Kanban desktop error', message, runtime?.snapshot()));
+  showDesktopError(message);
 });

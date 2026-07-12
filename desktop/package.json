@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "dev:fresh": "VERITAS_DESKTOP_PROFILE=fresh electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && pnpm --dir .. desktop:check:electron-artifacts",
     "package:prepare": "node ../scripts/prepare-desktop-release.mjs",
     "package:mac:dir": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --mac dir --publish never --config.mac.identity=null --config.mac.notarize=false",
     "package:mac:unsigned": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --mac dmg zip --publish never --config.mac.identity=null --config.mac.notarize=false",
