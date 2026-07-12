@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made SQLite activity ordering deterministic for multiple events written in
   the same millisecond, preserving the newest-first feed contract and stable
   retention trimming (#823).
+- Removed untracked asynchronous directory creation from `AttachmentService`
+  construction; attachment and archive paths are now created lazily by the
+  operations that need them (#825).
 - Prevented compact bottom-navigation labels from overlapping, kept the mobile
   header within 320 px, and restored a fixed, safe-area-aware Board Chat entry
   point (#811).

@@ -18,10 +18,7 @@ describe('AttachmentService', () => {
     testRoot = path.join(os.tmpdir(), `veritas-test-attachments-${uniqueSuffix}`);
     attachmentsDir = path.join(testRoot, 'attachments');
     archiveDir = path.join(testRoot, 'archive-attachments');
-    
-    await fs.mkdir(attachmentsDir, { recursive: true });
-    await fs.mkdir(archiveDir, { recursive: true });
-    
+
     service = new AttachmentService({
       attachmentsDir,
       archiveAttachmentsDir: archiveDir,
@@ -36,6 +33,23 @@ describe('AttachmentService', () => {
   });
 
   describe('File upload', () => {
+    it('creates attachment directories lazily on the first write', async () => {
+      await expect(fs.access(attachmentsDir)).rejects.toThrow();
+      await expect(fs.access(archiveDir)).rejects.toThrow();
+
+      const mockFile = {
+        originalname: 'lazy-create.txt',
+        mimetype: 'text/plain',
+        size: 12,
+        buffer: Buffer.from('Lazy create'),
+      } as Express.Multer.File;
+
+      await service.saveAttachment(testTaskId, mockFile);
+
+      await expect(fs.access(attachmentsDir)).resolves.toBeUndefined();
+      await expect(fs.access(archiveDir)).rejects.toThrow();
+    });
+
     it('should save an attachment and return metadata', async () => {
       const mockFile = {
         originalname: 'test-file.txt',
@@ -97,9 +111,7 @@ describe('AttachmentService', () => {
         buffer: Buffer.from('Test'),
       } as Express.Multer.File;
 
-      await expect(service.saveAttachment(testTaskId, mockFile)).rejects.toThrow(
-        /not allowed/
-      );
+      await expect(service.saveAttachment(testTaskId, mockFile)).rejects.toThrow(/not allowed/);
     });
 
     it('should reject when max files per task is reached', async () => {
@@ -122,9 +134,9 @@ describe('AttachmentService', () => {
         buffer: Buffer.from('Test'),
       } as Express.Multer.File;
 
-      await expect(service.saveAttachment(testTaskId, mockFile, existingAttachments)).rejects.toThrow(
-        /Maximum number of attachments.*already reached/
-      );
+      await expect(
+        service.saveAttachment(testTaskId, mockFile, existingAttachments)
+      ).rejects.toThrow(/Maximum number of attachments.*already reached/);
     });
   });
 
@@ -265,7 +277,7 @@ describe('AttachmentService', () => {
 
       const files = await service.listFiles(testTaskId);
       expect(files).toHaveLength(2);
-      expect(files.every(f => f !== '.extracted')).toBe(true);
+      expect(files.every((f) => f !== '.extracted')).toBe(true);
     });
 
     it('should return empty array for non-existent task', async () => {

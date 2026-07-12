@@ -32,12 +32,6 @@ export class AttachmentService {
     this.attachmentsDir = options.attachmentsDir || DEFAULT_ATTACHMENTS_DIR;
     this.archiveAttachmentsDir = options.archiveAttachmentsDir || DEFAULT_ARCHIVE_ATTACHMENTS_DIR;
     this.limits = options.limits || DEFAULT_ATTACHMENT_LIMITS;
-    this.ensureDirectories();
-  }
-
-  private async ensureDirectories(): Promise<void> {
-    await fs.mkdir(this.attachmentsDir, { recursive: true });
-    await fs.mkdir(this.archiveAttachmentsDir, { recursive: true });
   }
 
   private sanitizeFilename(filename: string): string {
