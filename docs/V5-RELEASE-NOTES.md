@@ -2,13 +2,68 @@
 
 These notes describe the Veritas Kanban v5 stable release line.
 
-- Current source version: `v5.2.1`
+- Current source version: `v5.2.2`
 - Latest published GitHub release:
-  [Veritas Kanban v5.2.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.1)
+  [Veritas Kanban v5.2.2](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
-  [Veritas-Kanban-5.2.1-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.1/Veritas-Kanban-5.2.1-mac-arm64.zip)
+  [Veritas-Kanban-5.2.2-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.2/Veritas-Kanban-5.2.2-mac-arm64.zip)
+
+## v5.2.2 Patch
+
+v5.2.2 is the July 2026 reliability and interface-audit patch. It restores a
+launchable macOS build, closes the web and desktop Apple-design audit backlog,
+and hardens workflow and storage behavior without changing the supported v5
+data model or requiring an operator migration.
+
+### Desktop and release reliability
+
+- Electron runtime APIs remain external in Vite/Rolldown output, preventing the
+  Electron npm installer shim from replacing the native main and preload APIs.
+- Desktop builds now inspect emitted artifacts and fail before packaging if the
+  installer shim or missing Electron runtime bindings reappear.
+- The patched native app was exercised through fresh setup, readiness and
+  Keychain status, native menus, keyboard onboarding, window chrome, and local
+  notification wiring before release.
+- Signed/notarized macOS DMG and ZIP assets, update metadata, blockmaps, and
+  SHA-256 sidecars replace the broken v5.2.1 desktop artifact set.
+
+### Interface, accessibility, and motion
+
+- Keyboard users can move and reorder Kanban cards across populated and empty
+  columns with announcements, rollback, and focus restoration.
+- Compact Settings, bottom navigation, Board Chat, and Scoring Profiles now use
+  deliberate phone layouts with reachable, touch-sized actions at 320-430 px.
+- Scoring Profiles preserves selection across create and duplicate flows and
+  protects unsaved edits when navigating away.
+- Overlays honor reduced-transparency and increased-contrast preferences, and
+  stale task-card tooltips are dismissed before Task Detail opens.
+- Dashboard charts and sections no longer animate layout properties or rely on
+  broad `transition-all` behavior; reduced-motion updates are immediate.
+
+### Workflow and storage correctness
+
+- Human-gate blocks, bounded cross-step reroutes, workflow HTTP errors, shared
+  contracts, and canonical `depends_on` enforcement now follow the documented
+  workflow state model.
+- File-backed mutations have stronger ordering, rollback, recovery, and
+  lifecycle cleanup across concurrent operations.
+- Activity history gains append-only JSONL durability, deterministic
+  same-millisecond ordering, and stable retention trimming.
+- Attachment directories are created lazily by the operations that need them,
+  removing an asynchronous startup/teardown race.
+- Security artifact matching normalizes path case before classification.
+
+### Compatibility and upgrade notes
+
+- No v5 schema migration is required for v5.2.1 installations.
+- Server, web, CLI, MCP, shared, and desktop package versions move together to
+  5.2.2.
+- Linux and Windows desktop outputs remain unsigned preview artifacts; macOS
+  Apple Silicon remains the supported signed desktop target.
+- Operators using the v5.2.1 macOS app should replace it with v5.2.2 rather
+  than relying on the broken v5.2.1 application bundle to self-update.
 
 ## v5.2.1 Patch
 
@@ -161,10 +216,14 @@ desktop, security, and migration posture unchanged from v5.0.0.
 
 ## Release Artifacts
 
-The v5.2.1 stable desktop release publishes signed/notarized macOS ZIP and DMG
+The v5.2.2 stable desktop release publishes signed/notarized macOS ZIP and DMG
 assets plus `latest-mac.yml`, blockmaps, and SHA-256 sidecars under the
-[v5.2.1 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.1).
+[v5.2.2 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2).
 Use the release-attached `.sha256` files as the checksum source of truth.
+
+The v5.2.1 desktop assets remain available for provenance, but the application
+bundle is not a supported rollback target because its emitted Electron main
+process contains the installer shim fixed in v5.2.2.
 
 The v5.2.0 desktop assets remain available under the
 [v5.2.0 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.0).

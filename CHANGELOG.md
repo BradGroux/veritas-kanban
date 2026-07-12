@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.2] - 2026-07-12
+
+### Added
+
+- Added append-only JSONL activity storage with recovery and compatibility
+  coverage for durable event history (#782, #808).
+
 ### Changed
 
+- Added canonical repository guidance for Codex, OpenClaw, and Hermes and
+  documented validated provider behavior (#803).
+- Routed web API requests through the shared authenticated client and retired
+  the deprecated polling hook (#802).
 - Updated the Codex SDK integration to `0.144.1` and pinned patched transitive
   development-tool dependencies (#792, #795).
 - Added `provider` and `command` fields to `WorkflowAgent` in
@@ -19,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hardened file-storage mutation ordering, rollback behavior, and integrity
+  recovery across concurrent writes (#804).
+- Fixed runtime lifecycle leaks, async registry persistence, attempt
+  reconciliation, and cross-platform path helpers (#774, #779, #781, #783,
+  #801).
+- Normalized security artifact paths before matching so mixed-case paths cannot
+  bypass expected classification (#807).
 - Reworked Scoring Profiles into a compact list/detail flow at phone widths,
   preserved the selected profile across create and duplicate actions, and
   guarded unsaved drafts when returning to the list, changing tabs, or leaving
