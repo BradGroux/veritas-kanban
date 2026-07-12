@@ -2152,6 +2152,10 @@ Working toward WCAG 2.1 AA compliance.
 - **Keyboard navigation** — Navigate with j/k, open with Enter, move directly with number keys, or press Space on a board card to pick it up and use arrow keys to reorder or cross columns; Escape cancels and restores focus
 - **Keyboard shortcuts dialog** — Discoverable via `?` key with grouped shortcut reference
 - **Focus management** — Focus trapped in dialogs and sheets; restored on close
+- **Display preferences** — Dialog, sheet, alert, and Task Detail overlays remove
+  blur and use solid materials for reduced-transparency users; increased-contrast
+  mode strengthens backdrops, surface boundaries, muted text, and focus rings in
+  light and dark themes
 - **Screen reader support** — Semantic HTML, ARIA roles, and descriptive labels throughout
 - **Color contrast** — Dark and light mode palettes designed for readability; purple primary (`270° 50% 40%`) buttons with white text in dark mode
 - **Skip navigation** — Keyboard users can navigate efficiently between sections

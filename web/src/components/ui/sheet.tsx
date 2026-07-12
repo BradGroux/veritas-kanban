@@ -76,8 +76,7 @@ function cloneButtonChild(
   if (React.isValidElement(children)) {
     const child = children as React.ReactElement<Record<string, unknown>>;
     const childOnClick = child.props.onClick as
-      | ((event: React.MouseEvent<HTMLElement>) => void)
-      | undefined;
+      ((event: React.MouseEvent<HTMLElement>) => void) | undefined;
 
     return React.cloneElement(child, {
       ...props,
@@ -157,12 +156,12 @@ function SheetContent({
       size="auto"
       trapFocus
     >
-      <Drawer.Overlay className="fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs" />
+      <Drawer.Overlay className="veritas-overlay fixed inset-0 z-50" />
       <Drawer.Content
         data-side={side}
         data-slot="sheet-content"
         className={cn(
-          'flex flex-col gap-4 bg-background bg-clip-padding text-sm shadow-lg data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm',
+          'veritas-overlay-surface flex flex-col gap-4 bg-background bg-clip-padding text-sm shadow-lg data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm',
           className
         )}
         {...props}

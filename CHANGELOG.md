@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Made dialog, sheet, alert, and Task Detail overlays honor reduced-transparency
+  and increased-contrast preferences, strengthened modal focus boundaries, and
+  dismissed task-card tooltips when opening Task Detail (#815).
 - Restored keyboard drag-and-drop parity on the Kanban board with spatial
   cross-column movement, empty-column targeting, same-column reordering,
   accurate screen-reader announcements, mutation rollback, and post-move focus

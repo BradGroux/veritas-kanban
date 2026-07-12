@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskCard } from '@/components/task/TaskCard';
 import { createMockTask } from './test-utils';
@@ -199,6 +199,23 @@ describe('TaskCard', () => {
 
     const card = screen.getByRole('article');
     fireEvent.click(card);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('dismisses its tooltip when activated and keeps it suppressed until pointer exit', async () => {
+    const onClick = vi.fn();
+    const task = createMockTask({ title: 'Open task details' });
+    const { baseElement } = renderCard(task, { onClick });
+    const card = screen.getByRole('article');
+
+    fireEvent.mouseEnter(card);
+    await waitFor(() => expect(baseElement.querySelector('[role="tooltip"]')).not.toBeNull(), {
+      timeout: 1000,
+    });
+
+    fireEvent.click(card);
+
+    await waitFor(() => expect(baseElement.querySelector('[role="tooltip"]')).toBeNull());
     expect(onClick).toHaveBeenCalledOnce();
   });
 

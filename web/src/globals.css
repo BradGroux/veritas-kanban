@@ -121,6 +121,50 @@
   }
 }
 
+/* Shared modal material for browser and macOS accessibility preferences. */
+.veritas-overlay {
+  background-color: rgb(0 0 0 / 10%) !important;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .veritas-overlay {
+    background-color: rgb(0 0 0 / 72%) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .veritas-overlay-surface {
+    background-color: var(--background) !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .veritas-overlay {
+    background-color: rgb(0 0 0 / 84%) !important;
+  }
+
+  .veritas-overlay-surface {
+    background-color: var(--background) !important;
+    outline: 2px solid var(--foreground);
+    outline-offset: -2px;
+    box-shadow:
+      0 0 0 1px var(--background),
+      0 24px 80px rgb(0 0 0 / 60%);
+  }
+
+  .veritas-overlay-surface .text-muted-foreground {
+    color: color-mix(in oklch, var(--foreground) 82%, var(--background)) !important;
+  }
+
+  .veritas-overlay-surface :focus-visible {
+    outline-color: var(--foreground) !important;
+    outline-width: 3px !important;
+    box-shadow: 0 0 0 2px var(--background) !important;
+  }
+}
+
 html[data-client='desktop'],
 html[data-client='desktop'] body,
 html[data-client='desktop'] #root {

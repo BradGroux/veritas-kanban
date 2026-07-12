@@ -73,8 +73,7 @@ function cloneButtonChild(
   if (React.isValidElement(children)) {
     const child = children as React.ReactElement<Record<string, unknown>>;
     const childOnClick = child.props.onClick as
-      | ((event: React.MouseEvent<HTMLElement>) => void)
-      | undefined;
+      ((event: React.MouseEvent<HTMLElement>) => void) | undefined;
 
     return React.cloneElement(child, {
       ...props,
@@ -117,10 +116,7 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentProps<'div'>
   return (
     <div
       data-slot="alert-dialog-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs',
-        className
-      )}
+      className={cn('veritas-overlay fixed inset-0 z-50', className)}
       {...props}
     />
   );
@@ -151,12 +147,12 @@ function AlertDialogContent({
       size="auto"
       trapFocus
     >
-      <Modal.Overlay className="fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs" />
+      <Modal.Overlay className="veritas-overlay fixed inset-0 z-50" />
       <Modal.Content
         data-size={size}
         data-slot="alert-dialog-content"
         className={cn(
-          'group/alert-dialog-content grid w-full gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm',
+          'veritas-overlay-surface group/alert-dialog-content grid w-full gap-4 rounded-xl bg-background p-4 ring-1 ring-foreground/10 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm',
           className
         )}
         {...props}

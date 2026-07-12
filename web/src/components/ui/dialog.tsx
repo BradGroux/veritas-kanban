@@ -74,8 +74,7 @@ function cloneButtonChild(
   if (React.isValidElement(children)) {
     const child = children as React.ReactElement<Record<string, unknown>>;
     const childOnClick = child.props.onClick as
-      | ((event: React.MouseEvent<HTMLElement>) => void)
-      | undefined;
+      ((event: React.MouseEvent<HTMLElement>) => void) | undefined;
 
     return React.cloneElement(child, {
       ...props,
@@ -138,10 +137,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-overlay"
-      className={cn(
-        'fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs',
-        className
-      )}
+      className={cn('veritas-overlay fixed inset-0 isolate z-50', className)}
       {...props}
     />
   );
@@ -171,11 +167,11 @@ function DialogContent({
       size="auto"
       trapFocus
     >
-      <Modal.Overlay className="fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs" />
+      <Modal.Overlay className="veritas-overlay fixed inset-0 isolate z-50" />
       <Modal.Content
         data-slot="dialog-content"
         className={cn(
-          'grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 outline-none sm:max-w-sm',
+          'veritas-overlay-surface grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 outline-none sm:max-w-sm',
           className
         )}
         {...props}

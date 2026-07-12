@@ -191,6 +191,10 @@ describe('task detail Mantine migration', () => {
     expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Chat' })).toBeDefined();
     expect(container.querySelector('.mantine-Drawer-content')).toBeDefined();
+    expect(container.querySelector('.mantine-Drawer-overlay')?.className).toContain(
+      'veritas-overlay'
+    );
+    expect(screen.getByTestId('task-detail-panel').className).toContain('veritas-overlay-surface');
     expect(container.querySelector('.mantine-Tabs-root')).toBeDefined();
     expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(5);

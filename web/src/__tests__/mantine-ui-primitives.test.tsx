@@ -1,4 +1,8 @@
+/// <reference types="node" />
+
 import * as React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { notifications } from '@mantine/notifications';
@@ -52,6 +56,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/useToast';
+
+const globalStyles = readFileSync(resolve(process.cwd(), 'src/globals.css'), 'utf8');
 
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 
@@ -256,6 +262,14 @@ describe('Mantine-backed shared UI primitives', () => {
     expect(screen.getByTestId('scroll-area').getAttribute('data-slot')).toBe('scroll-area');
   });
 
+  it('defines reduced-transparency and increased-contrast overlay materials', () => {
+    expect(globalStyles).toContain('@media (prefers-reduced-transparency: reduce)');
+    expect(globalStyles).toContain('@media (prefers-contrast: more)');
+    expect(globalStyles).toContain('.veritas-overlay');
+    expect(globalStyles).toContain('.veritas-overlay-surface');
+    expect(globalStyles).toContain('backdrop-filter: none !important');
+  });
+
   it('applies legacy text field classes to the native input slot', () => {
     renderWithProviders(
       <div>
@@ -364,7 +378,7 @@ describe('Mantine-backed shared UI primitives', () => {
   });
 
   it('opens and closes Mantine-backed dialogs through the legacy API', async () => {
-    renderWithProviders(<DialogProbe />);
+    const { baseElement } = renderWithProviders(<DialogProbe />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }));
 
@@ -380,6 +394,10 @@ describe('Mantine-backed shared UI primitives', () => {
         description.textContent
       );
       expect(screen.getByTestId('dialog-state').textContent).toBe('true');
+      expect(baseElement.querySelector('.mantine-Modal-overlay')?.className).toContain(
+        'veritas-overlay'
+      );
+      expect(dialog.className).toContain('veritas-overlay-surface');
     });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
@@ -390,7 +408,7 @@ describe('Mantine-backed shared UI primitives', () => {
   });
 
   it('opens and closes Mantine-backed sheets through the legacy API', async () => {
-    renderWithProviders(<SheetProbe />);
+    const { baseElement } = renderWithProviders(<SheetProbe />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open sheet' }));
 
@@ -407,6 +425,10 @@ describe('Mantine-backed shared UI primitives', () => {
         description.textContent
       );
       expect(screen.getByTestId('sheet-state').textContent).toBe('true');
+      expect(baseElement.querySelector('.mantine-Drawer-overlay')?.className).toContain(
+        'veritas-overlay'
+      );
+      expect(dialog.className).toContain('veritas-overlay-surface');
     });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
@@ -417,7 +439,7 @@ describe('Mantine-backed shared UI primitives', () => {
   });
 
   it('opens and closes Mantine-backed alert dialogs through the legacy API', async () => {
-    renderWithProviders(<AlertDialogProbe />);
+    const { baseElement } = renderWithProviders(<AlertDialogProbe />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open alert' }));
 
@@ -433,6 +455,10 @@ describe('Mantine-backed shared UI primitives', () => {
         description.textContent
       );
       expect(screen.getByTestId('alert-state').textContent).toBe('true');
+      expect(baseElement.querySelector('.mantine-Modal-overlay')?.className).toContain(
+        'veritas-overlay'
+      );
+      expect(dialog.className).toContain('veritas-overlay-surface');
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));

@@ -196,11 +196,11 @@ export function TaskDetailPanel({
         size="auto"
         trapFocus
       >
-        <Drawer.Overlay className="fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs" />
+        <Drawer.Overlay className="veritas-overlay fixed inset-0 z-50" />
         <Drawer.Content
           aria-label={`Task details: ${localTask.title}`}
           data-testid="task-detail-panel"
-          className="flex h-full max-h-[100dvh] w-[min(100vw,700px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
+          className="veritas-overlay-surface flex h-full max-h-[100dvh] w-[min(100vw,700px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
         >
           <Drawer.Body className="contents">
             <Stack gap={0} className="h-full overflow-hidden">

@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Select, Tooltip } from '@mantine/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -216,6 +216,7 @@ export const TaskCard = memo(function TaskCard({
     disabled: !dragEnabled,
   });
   const { isSelecting, toggleSelect, isSelected: isBulkSelected } = useBulkActions();
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
   const isChecked = isBulkSelected(task.id);
   const { settings: featureSettings } = useFeatureSettings();
   const boardSettings = featureSettings.board;
@@ -240,6 +241,7 @@ export const TaskCard = memo(function TaskCard({
 
   const handleClick = () => {
     if (isCurrentlyDragging || isDragging) return;
+    setTooltipDismissed(true);
     if (isSelecting) {
       toggleSelect(task.id);
       return;
@@ -321,7 +323,7 @@ export const TaskCard = memo(function TaskCard({
   const readinessAria = readinessSummary ? `, Readiness: ${readinessSummary.percent}%` : '';
 
   // Suppress the outer card tooltip entirely during any drag operation
-  const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging;
+  const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging || tooltipDismissed;
 
   return (
     <Tooltip
@@ -347,6 +349,7 @@ export const TaskCard = memo(function TaskCard({
         {...(dragEnabled ? attributes : {})}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
+        onMouseLeave={() => setTooltipDismissed(false)}
         role="article"
         tabIndex={0}
         aria-label={`Task: ${task.title}, Priority: ${task.priority}${readinessAria}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
