@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Kept mobile Settings navigation visible and touch-sized in the dialog content
+  flow, and stacked the Product Mode summary and selector at compact widths
+  (#810).
 - Made dialog, sheet, alert, and Task Detail overlays honor reduced-transparency
   and increased-contrast preferences, strengthened modal focus boundaries, and
   dismissed task-card tooltips when opening Task Detail (#815).

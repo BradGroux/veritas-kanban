@@ -91,6 +91,14 @@ describe('General settings Mantine migration', () => {
     expect(container.querySelector('.mantine-Button-root')).toBeDefined();
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
 
+    const productModeLayout = screen.getByTestId('product-mode-layout');
+    expect(productModeLayout.className).toContain('flex-col');
+    expect(productModeLayout.className).toContain('sm:flex-row');
+    expect(
+      screen.getByRole('combobox', { name: 'Product Mode' }).closest('.mantine-Select-root')
+        ?.className
+    ).toContain('w-full');
+
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle dark mode' }));
 
     expect(mocks.setTheme).toHaveBeenCalledWith('light');

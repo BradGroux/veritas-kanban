@@ -90,7 +90,10 @@ export function GeneralTab() {
       <div className="space-y-3">
         <h3 className="text-sm font-medium">Product Mode</h3>
         <div className="rounded-md border p-4 bg-card space-y-4">
-          <Group justify="space-between" align="flex-start" gap="md">
+          <div
+            data-testid="product-mode-layout"
+            className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+          >
             <div className="min-w-0 flex-1 space-y-1">
               <Group gap={8}>
                 <Badge variant="light" color={selectedProductMode === 'advanced' ? 'gray' : 'cyan'}>
@@ -109,7 +112,7 @@ export function GeneralTab() {
               value={selectedProductMode}
               data={PRODUCT_MODE_OPTIONS}
               allowDeselect={false}
-              maw={260}
+              className="w-full shrink-0 sm:w-[260px]"
               onChange={(value) => {
                 if (!value) return;
                 debouncedUpdate({
@@ -120,7 +123,7 @@ export function GeneralTab() {
                 });
               }}
             />
-          </Group>
+          </div>
 
           <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
             <ModeDetail label="Surfaces" items={activeProductMode.visibleSurfaces} />

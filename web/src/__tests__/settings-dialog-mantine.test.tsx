@@ -98,6 +98,7 @@ vi.mock('@/components/settings/tabs/MultiUserTab', () => ({
 describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
     mocks.hasPermission.mockReturnValue(true);
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
   afterEach(() => {
@@ -123,5 +124,25 @@ describe('SettingsDialog Mantine shell', () => {
 
     expect(await screen.findByText('Board settings loaded')).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Board' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('keeps compact section navigation in the mobile header flow', async () => {
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+
+    const selector = screen.getByRole('combobox', { name: 'Select settings section' });
+    const mobileHeader = selector.closest('[data-settings-mobile-header]');
+
+    expect(mobileHeader).not.toBeNull();
+    expect(mobileHeader?.className).toContain('sm:hidden');
+    expect(mobileHeader?.className).not.toContain('absolute');
+    expect(selector.closest('.mantine-Select-root')?.className).toContain('w-full');
+
+    fireEvent.click(selector);
+    fireEvent.click(await screen.findByRole('option', { name: 'Board' }));
+
+    expect(await screen.findByText('Board settings loaded')).toBeDefined();
+    expect(screen.getByRole('tabpanel', { name: 'Board' }).className).toContain(
+      'focus-visible:outline-2'
+    );
   });
 });

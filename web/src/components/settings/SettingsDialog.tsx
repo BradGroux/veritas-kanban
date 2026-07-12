@@ -641,32 +641,28 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             </Stack>
           </div>
 
-          {/* Mobile Tab Selector */}
-          <div className="sm:hidden absolute top-3 right-12">
-            <Select
-              value={activeTab}
-              onChange={(value) => {
-                if (value) setActiveTab(value as TabId);
-              }}
-              data={mobileTabOptions}
-              aria-label="Select settings section"
-              size="sm"
-              checkIconPosition="right"
-              className="w-40"
-              styles={{ input: { minHeight: '2rem' } }}
-            />
-          </div>
-
           {/* Content */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="px-6 py-4 border-b sm:hidden">
+            <div data-settings-mobile-header className="shrink-0 border-b px-4 py-3 sm:hidden">
               <h2 className="text-lg font-semibold">Settings</h2>
+              <Select
+                value={activeTab}
+                onChange={(value) => {
+                  if (value) setActiveTab(value as TabId);
+                }}
+                data={mobileTabOptions}
+                aria-label="Select settings section"
+                size="sm"
+                checkIconPosition="right"
+                className="mt-3 w-full"
+                styles={{ input: { minHeight: '2.75rem' } }}
+              />
             </div>
             <ScrollArea className="flex-1 min-h-0">
               <div
                 id="settings-tab-content"
                 ref={contentAreaRef}
-                className="px-6 py-4"
+                className="px-4 py-4 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 sm:px-6"
                 role="tabpanel"
                 tabIndex={-1}
                 aria-labelledby={`tab-${activeTab}`}

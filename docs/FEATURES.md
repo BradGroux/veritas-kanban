@@ -1838,7 +1838,7 @@ The click-through tutorial roadmap lives in [Click-through Tutorials Roadmap](CL
 
 ## Settings & Customization
 
-Modular settings system with 8 focused tabs.
+Modular settings system with focused, permission-aware sections.
 
 ![v5 Maintenance Center settings surface](assets/v5/v5-maintenance-center.png)
 
@@ -1861,6 +1861,7 @@ Modular settings system with 8 focused tabs.
 - **Import/Export** — Backup all settings to JSON; restore with validation
 - **Reset to defaults** — Per-section reset with confirmation
 - **Managed list manager** — Reusable sortable list component with drag-and-drop reordering (used for projects, sprints, task types)
+- **Compact layout** — Mobile section navigation stays in the dialog content flow, controls use touch-sized targets, and dense General settings stack instead of compressing explanatory copy
 
 ---
 
