@@ -1830,6 +1830,7 @@ Optimizations spanning server, frontend, and data lifecycle.
 - **Memoized task cards** — Custom `React.memo` comparison function avoids unnecessary re-renders from React Query refetches
 - **Debounced saves** — Task edits debounced to reduce API calls
 - **Loading skeletons** — Board, settings tabs, and dashboard show shimmer placeholders during load
+- **Safe dashboard motion** — Data bars update without animating layout dimensions, dashboard expansion is immediate, and interactive card feedback uses an explicit 150 ms shadow transition with a reduced-motion override
 
 ---
 
@@ -2158,6 +2159,7 @@ Working toward WCAG 2.1 AA compliance.
   blur and use solid materials for reduced-transparency users; increased-contrast
   mode strengthens backdrops, surface boundaries, muted text, and focus rings in
   light and dark themes
+- **Reduced motion** — Dashboard data and expand/collapse state avoid vestibular layout animation; remaining interaction feedback resolves immediately when reduced motion is requested
 - **Screen reader support** — Semantic HTML, ARIA roles, and descriptive labels throughout
 - **Color contrast** — Dark and light mode palettes designed for readability; purple primary (`270° 50% 40%`) buttons with white text in dark mode
 - **Skip navigation** — Keyboard users can navigate efficiently between sections

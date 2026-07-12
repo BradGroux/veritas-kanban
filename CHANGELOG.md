@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserved the selected profile across create and duplicate actions, and
   guarded unsaved drafts when returning to the list, changing tabs, or leaving
   the scoring surface (#813).
+- Replaced broad and layout-property dashboard transitions with instant chart
+  updates, explicit short hover feedback, and accessible immediate section
+  expansion, including intentional reduced-motion behavior (#814).
 - Made SQLite activity ordering deterministic for multiple events written in
   the same millisecond, preserving the newest-first feed contract and stable
   retention trimming (#823).

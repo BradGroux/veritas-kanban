@@ -81,7 +81,8 @@ function StatCard({ title, children, onClick, clickable }: StatCardProps) {
     <div
       className={cn(
         'rounded-lg border bg-card p-4',
-        clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all'
+        clickable &&
+          'cursor-pointer transition-shadow duration-150 hover:ring-2 hover:ring-ring motion-reduce:transition-none'
       )}
       onClick={onClick}
       role={clickable ? 'button' : undefined}
@@ -441,7 +442,7 @@ export function Dashboard({ onTaskClick }: DashboardProps = {}) {
                         </span>
                         <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
                           <div
-                            className="h-full bg-green-500 rounded-sm transition-all"
+                            className="h-full rounded-sm bg-green-500"
                             style={{ width: `${Math.min(100, d.utilizationPercent)}%` }}
                           />
                         </div>

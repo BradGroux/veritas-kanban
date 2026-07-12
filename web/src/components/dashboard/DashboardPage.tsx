@@ -72,7 +72,8 @@ function StatCard({ title, children, onClick, clickable }: StatCardProps) {
     <div
       className={cn(
         'rounded-lg bg-card',
-        clickable && 'cursor-pointer hover:ring-2 hover:ring-ring transition-all'
+        clickable &&
+          'cursor-pointer transition-shadow duration-150 hover:ring-2 hover:ring-ring motion-reduce:transition-none'
       )}
       onClick={onClick}
       role={clickable ? 'button' : undefined}
@@ -321,7 +322,7 @@ export function DashboardPage() {
             <span className="text-muted-foreground w-20 shrink-0 text-xs">{d.date.slice(5)}</span>
             <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
               <div
-                className="h-full bg-green-500 rounded-sm transition-all"
+                className="h-full rounded-sm bg-green-500"
                 style={{ width: `${Math.min(100, d.utilizationPercent)}%` }}
               />
             </div>

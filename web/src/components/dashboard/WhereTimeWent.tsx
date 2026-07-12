@@ -97,7 +97,7 @@ export function WhereTimeWent({ period }: WhereTimeWentProps) {
                 </div>
                 <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all duration-500"
+                    className="h-full rounded-full"
                     style={{
                       width: `${item.percentage}%`,
                       backgroundColor: color,

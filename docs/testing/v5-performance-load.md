@@ -98,6 +98,31 @@ The profile covers:
 Thresholds keep p95 read/write paths between 250 ms and 750 ms and require
 HTTP errors below 1 percent plus WebSocket connection errors below 5 percent.
 
+## Dashboard Motion Profile
+
+Review date: 2026-07-12
+
+The active Activity, dashboard, timeline, and chart sources are guarded by
+`dashboard-motion-contract.test.tsx`. The contract rejects `transition-all`,
+layout-property transition utilities, and the former 5,000 px max-height
+collapse technique. Chart widths and heights still represent the data, but
+they update immediately instead of scheduling layout work across animation
+frames. Dashboard section expansion also updates immediately and exposes its
+state through `aria-expanded` and `aria-controls`.
+
+A live Activity view with representative status-history rows was inspected in
+the in-app browser after the change:
+
+| Check                                              | Result |
+| -------------------------------------------------- | -----: |
+| `.transition-all` nodes in the active view         |      0 |
+| Active animations after representative render      |      0 |
+| Inline layout-sized nodes with transition duration |    0 s |
+| Active animations with reduced motion emulated     |      0 |
+
+The remaining dashboard card hover response is an explicit 150 ms shadow
+transition and becomes immediate under `prefers-reduced-motion: reduce`.
+
 ## Recommended Limits
 
 - Treat the target dataset above as the supported v5.0 GA local/small-team

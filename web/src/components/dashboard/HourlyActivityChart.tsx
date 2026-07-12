@@ -42,7 +42,16 @@ export function HourlyActivityChart({ period }: HourlyActivityChartProps) {
       hour,
       count,
       height: (count / max) * 100,
-      label: hour % 6 === 0 ? (hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`) : '',
+      label:
+        hour % 6 === 0
+          ? hour === 0
+            ? '12a'
+            : hour < 12
+              ? `${hour}a`
+              : hour === 12
+                ? '12p'
+                : `${hour - 12}p`
+          : '',
     }));
   }, [entries]);
 
@@ -57,14 +66,19 @@ export function HourlyActivityChart({ period }: HourlyActivityChartProps) {
       </h3>
 
       <div className="flex items-end gap-[2px] h-[80px]">
-        <span className="text-[8px] text-muted-foreground/40 self-start -mr-1 rotate-0 w-6 text-right leading-tight">Events</span>
+        <span className="text-[8px] text-muted-foreground/40 self-start -mr-1 rotate-0 w-6 text-right leading-tight">
+          Events
+        </span>
         {hourlyBars.map((bar) => (
           <div key={bar.hour} className="flex-1 flex flex-col items-center justify-end h-full">
             <div
-              className="w-full rounded-t-sm transition-all duration-300 min-h-[2px]"
+              className="min-h-[2px] w-full rounded-t-sm"
               style={{
                 height: `${Math.max(bar.height, 3)}%`,
-                backgroundColor: bar.count > 0 ? `rgba(139, 92, 246, ${0.3 + (bar.height / 100) * 0.7})` : 'rgba(139, 92, 246, 0.08)',
+                backgroundColor:
+                  bar.count > 0
+                    ? `rgba(139, 92, 246, ${0.3 + (bar.height / 100) * 0.7})`
+                    : 'rgba(139, 92, 246, 0.08)',
               }}
               title={`${bar.hour}:00 — ${bar.count} events`}
             />
@@ -74,9 +88,11 @@ export function HourlyActivityChart({ period }: HourlyActivityChartProps) {
 
       {/* X-axis labels */}
       <div className="flex justify-between text-[9px] text-muted-foreground/50 mt-1 ml-6 px-0.5">
-        {hourlyBars.filter((b) => b.label).map((bar) => (
-          <span key={bar.hour}>{bar.label}</span>
-        ))}
+        {hourlyBars
+          .filter((b) => b.label)
+          .map((bar) => (
+            <span key={bar.hour}>{bar.label}</span>
+          ))}
       </div>
     </div>
   );

@@ -45,7 +45,10 @@ export function DashboardSection() {
     <div className="mt-6 border-t pt-4">
       {/* Collapsible Header */}
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="dashboard-section-content"
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 rounded-lg',
           'hover:bg-muted/50 transition-colors',
@@ -63,12 +66,7 @@ export function DashboardSection() {
       </button>
 
       {/* Dashboard Content */}
-      <div
-        className={cn(
-          'transition-all duration-300 ease-in-out',
-          expanded ? 'max-h-[5000px] opacity-100 mt-4' : 'max-h-0 opacity-0 overflow-hidden'
-        )}
-      >
+      <div id="dashboard-section-content" hidden={!expanded} className={cn(expanded && 'mt-4')}>
         {expanded && <Dashboard />}
       </div>
     </div>

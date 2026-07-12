@@ -31,7 +31,7 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
     <Group className="h-8 overflow-hidden rounded-md" gap={0} wrap="nowrap">
       {activePercent > 0 && (
         <div
-          className="bg-green-500 flex items-center justify-center text-xs text-white font-medium transition-all"
+          className="flex items-center justify-center bg-green-500 text-xs font-medium text-white"
           style={{ width: `${activePercent}%` }}
           title={`Active: ${formatDurationMs(summary.activeMs)}`}
         >
@@ -40,7 +40,7 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
       )}
       {idlePercent > 0 && (
         <div
-          className="bg-gray-400 flex items-center justify-center text-xs text-white font-medium transition-all"
+          className="flex items-center justify-center bg-gray-400 text-xs font-medium text-white"
           style={{ width: `${idlePercent}%` }}
           title={`Idle: ${formatDurationMs(summary.idleMs)}`}
         >
@@ -49,7 +49,7 @@ function TimelineBar({ summary }: { summary: DailySummary }) {
       )}
       {errorPercent > 0 && (
         <div
-          className="bg-red-500 flex items-center justify-center text-xs text-white font-medium transition-all"
+          className="flex items-center justify-center bg-red-500 text-xs font-medium text-white"
           style={{ width: `${errorPercent}%` }}
           title={`Error: ${formatDurationMs(summary.errorMs)}`}
         >
