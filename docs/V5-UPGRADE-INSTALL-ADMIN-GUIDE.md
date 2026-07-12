@@ -24,6 +24,11 @@ candidate, belongs in the reusable
 
 ## Fresh Mac Desktop Install
 
+> **Current v5.2.2 status:** signed/notarized assets and the matching Homebrew
+> cask are pending because Apple notarization is blocked by a team agreement.
+> Do not install the v5.2.1 desktop app; track the corrected installer in #809.
+> Use the source path until the release assets are published.
+
 1. Install the signed/notarized desktop app with Homebrew:
 
    ```bash

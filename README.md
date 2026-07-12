@@ -59,7 +59,13 @@ cp server/.env.example server/.env   # Edit to change VERITAS_ADMIN_KEY
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for source runs, or launch `Veritas Kanban.app` from `/Applications` after the Homebrew install. The board auto-seeds with example tasks on first run so you can explore right away.
+Open [http://localhost:3000](http://localhost:3000) for source runs. The board auto-seeds with example tasks on first run so you can explore right away.
+
+> **macOS release status:** v5.2.2 signed/notarized installers and the matching
+> Homebrew cask are pending while Apple resolves a team agreement required for
+> notarization. Do not install the v5.2.1 desktop app; its Electron main bundle
+> does not launch correctly. Track the corrected installer in
+> [#809](https://github.com/BradGroux/veritas-kanban/issues/809).
 
 A working board means the UI loads and `http://localhost:3001/api/health` returns healthy. Agent-ready and external wake/delivery-ready are separate setup levels; use [Setup Paths](docs/SETUP-PATHS.md#readiness-levels) before adding those layers.
 

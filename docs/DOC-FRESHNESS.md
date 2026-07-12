@@ -58,6 +58,7 @@ When a doc is older than the current version, it may need review.
 
 | Date       | Scope                                                               | Agent   |
 | ---------- | ------------------------------------------------------------------- | ------- |
+| 2026-07-12 | v5.2.2 UI-audit fixes, release gates, desktop state, and evidence   | Release |
 | 2026-06-05 | v5.0.0 stable release docs, install paths, release assets, RC notes | Codex   |
 | 2026-03-25 | Full v3→v4 version references, governance docs, CHANGELOG, examples | VERITAS |
 | 2026-03-21 | v4.0 release documentation                                          | TARS    |

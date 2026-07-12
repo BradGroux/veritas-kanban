@@ -1,4 +1,167 @@
-# v5.0.0 Release Evidence Packet
+# v5 Release Evidence Packets
+
+## v5.2.2 Release Evidence Packet
+
+This section records the July 2026 UI-audit remediation and v5.2.2 release
+state. It supplements the retained v5.0.0 evidence below. Evidence is limited
+to public issue, pull request, workflow, and sanitized command results.
+
+### Executive Summary
+
+v5.2.2 fixes the Electron packaging defect that made the signed v5.2.1 macOS
+application recursively launch the npm installer shim instead of opening a
+window. It also completes the six web findings from the Apple-design audit:
+keyboard board movement, compact Settings and navigation, reachable mobile
+Board Chat, responsive Scoring Profiles, preference-aware overlays, and
+compositor-safe dashboard motion.
+
+The source release is published from `4b84eccd1bf827c842e93a82afd0240e6855b3df`.
+The production signing workflow successfully applies the Developer ID
+Application signature, but Apple notarization returns HTTP 403 because the team
+has a missing or expired agreement. The GitHub release therefore has no macOS
+assets and explicitly warns users not to install it yet. Signed installation,
+update, checksum, Homebrew, and final Gatekeeper evidence remain pending #809.
+
+| Field               | Value                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| Release version     | 5.2.2                                                                                       |
+| Git tag             | `v5.2.2`                                                                                    |
+| Release commit      | `4b84eccd1bf827c842e93a82afd0240e6855b3df`                                                  |
+| GitHub release      | <https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2>                           |
+| Desktop Release run | <https://github.com/BradGroux/veritas-kanban/actions/runs/29213420721>                      |
+| Release state       | Source published; signed/notarized macOS assets blocked by Apple team agreement             |
+| Evidence date       | 2026-07-12                                                                                  |
+| Toolchain           | macOS 26.5.1; Node 26.5.0; pnpm 11.1.1; Playwright Chromium and WebKit; Docker legacy build |
+
+### Issue And Pull Request Traceability
+
+| Issue | Priority     | Outcome                                                                                               | Pull request    | State                                                  |
+| ----- | ------------ | ----------------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------ |
+| #809  | Critical     | Externalize Electron runtime APIs, reject emitted installer shims, and restore a single native window | #817            | Code merged; signed installed-build acceptance pending |
+| #810  | High         | Make compact Settings navigation visible and stack dense controls                                     | #820            | Closed                                                 |
+| #811  | High         | Prevent mobile navigation collisions and restore Board Chat                                           | #821            | Closed                                                 |
+| #812  | High         | Restore keyboard movement, ordering, announcements, rollback, and focus                               | #818            | Closed                                                 |
+| #813  | Medium       | Add a deliberate compact Scoring Profiles master-detail flow                                          | #826            | Closed                                                 |
+| #814  | Medium       | Remove layout-driven dashboard animation and honor reduced motion                                     | #822            | Closed                                                 |
+| #815  | Medium       | Honor transparency/contrast preferences and dismiss stale tooltips                                    | #819            | Closed                                                 |
+| #816  | Tracker      | Apple-design audit coverage and final native follow-up                                                | #817-#822, #826 | Open until #809 signed acceptance completes            |
+| #828  | Release QA   | Repair stale release E2E selectors without changing product behavior                                  | #829            | Closed                                                 |
+| #830  | Release docs | Preserve this evidence and the v5.2.2 freshness sweep                                                 | pending         | In progress                                            |
+
+PR #824 additionally stabilized storage mutation ordering and asynchronous
+startup/teardown behavior discovered while exercising the release candidate.
+PR #827 aligned all workspace versions at 5.2.2 and published the release
+source. Tracker #796 remains open for a non-sensitive external follow-up; its
+private advisory context is intentionally not reproduced here.
+
+### Electron Root Cause And Remediation
+
+The desktop Vite/Rolldown build bundled the npm `electron` package shim into
+`desktop/out/main/index.js`. At runtime, code expecting Electron APIs received
+the shim's executable-path export and recursively spawned `install.js`, so the
+development build and signed v5.2.1 application never rendered a window.
+
+PR #817 keeps `electron` and `electron/*` imports external in main and preload
+output, adds artifact assertions for forbidden shim markers and required API
+bindings, and adds packaged-launch coverage. The patched development build and
+local unsigned v5.2.2 package each launched one native application window with
+no installer recursion. Native setup, server/renderer readiness, Keychain
+status, menus, keyboard onboarding, window chrome, and notification command
+wiring were exercised. Close/reopen, updater, VoiceOver, and the rest of the
+signed installed-build matrix cannot be completed until Apple notarization
+succeeds.
+
+### Interface Outcomes
+
+- Keyboard users can move tasks within and across columns, including empty
+  columns, with accurate instructions/announcements and predictable focus.
+- Settings, mobile navigation, Board Chat, and Scoring Profiles remain usable at
+  320-430 px without hidden actions or page-level horizontal overflow.
+- Overlay materials become solid and more strongly bounded for reduced
+  transparency or increased contrast; opening Task Detail dismisses its
+  trigger tooltip.
+- Dashboard transitions name explicit properties and avoid animated layout
+  dimensions. Reduced-motion state changes are immediate.
+- Focus states, accessible names, touch-sized primary actions, light/dark
+  themes, and responsive layouts were covered by focused tests and runtime QA.
+
+### Verification Matrix
+
+| Gate                                                      | Result  | Environment and evidence                                                                   |
+| --------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `pnpm install --frozen-lockfile`                          | PASS    | Local clean dependency verification with pnpm 11.1.1                                       |
+| `pnpm test:unit`                                          | PASS    | Desktop 57; server 2107 passed and 2 skipped; web 405                                      |
+| `pnpm lint`                                               | PASS    | 0 errors and 597 warnings, within the 600-warning budget                                   |
+| `pnpm lint:budget`                                        | PASS    | Warning budget enforced                                                                    |
+| `pnpm typecheck`                                          | PASS    | All workspaces after shared build                                                          |
+| `pnpm build`                                              | PASS    | Shared, server, web, CLI, MCP, and desktop outputs                                         |
+| `pnpm qa:mantine`                                         | PASS    | Mantine adoption and bundle budgets                                                        |
+| `pnpm test:e2e`                                           | PASS    | 34/34 across Chromium, mobile Chromium, and mobile WebKit after #829                       |
+| `pnpm audit`                                              | PASS    | No known production vulnerabilities                                                        |
+| `pnpm smoke:cli-mcp`                                      | PARTIAL | CLI/MCP build and metadata passed; live write skipped because no test API key was supplied |
+| `pnpm desktop:package:mac:unsigned`                       | PASS    | ARM64 DMG, ZIP, blockmaps, and launchable unpacked app produced locally                    |
+| `pnpm validate:release -- --version 5.2.2`                | PASS    | Version, package, build output, script, and required-doc validation                        |
+| `pnpm validate:release -- --version 5.2.2 --docker-build` | PASS    | Production image `veritas-kanban:validate-5.2.2` built with the Docker legacy builder      |
+| Pull request CI                                           | PASS    | Required build, unit, lint/typecheck, and security checks passed for all merged changes    |
+| Cross-model review                                        | NOT RUN | Explicitly waived by the release operator for this workstream                              |
+
+### Compatibility, Security, And Rollback
+
+- v5.2.2 requires no schema migration from v5.2.1. Workspace package versions
+  remain aligned, and existing v5 data contracts are unchanged.
+- macOS 14+ on Apple Silicon remains the signed desktop target. Linux and
+  Windows packages remain unsigned preview artifacts.
+- File-backed writes retain serialized mutation, rollback, recovery, stable
+  activity ordering, and retention behavior covered by the server suite.
+- `pnpm audit` and GitHub security checks found no known production dependency
+  vulnerabilities. Evidence contains no credentials or private advisory text.
+- Because the v5.2.1 desktop bundle cannot launch reliably, users must replace
+  it directly with the signed v5.2.2 app once published. Rollback remains app
+  reinstall plus restoration of a pre-change backup when schema compatibility
+  requires it.
+
+### macOS Artifact And Distribution Inventory
+
+| Evidence                            | State   | Notes                                                                                  |
+| ----------------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| Developer ID signing                | PASS    | Desktop Release run signs with Digital Meld's Developer ID Application identity        |
+| Apple notarization                  | BLOCKED | `notarytool` returns HTTP 403 for a missing or expired team agreement on two attempts  |
+| Signed DMG and ZIP                  | PENDING | No assets are attached to the v5.2.2 release                                           |
+| SHA-256 sidecars and blockmaps      | PENDING | Publish and independently verify after notarization                                    |
+| Gatekeeper, stapler, and `codesign` | PENDING | Run against downloaded release assets                                                  |
+| Clean signed install and launch     | PENDING | Verify one process/window, onboarding, close/reopen, quit, update check, and VoiceOver |
+| Homebrew cask                       | PENDING | Update only after the signed ZIP exists and its SHA-256 is verified                    |
+
+The release body accurately states that macOS installation is not yet ready.
+Do not substitute the locally generated unsigned artifacts for public release
+assets or the Homebrew cask.
+
+### Documentation Freshness And Known Limits
+
+The v5.2.2 sweep inspected `README.md`, `CHANGELOG.md`, `AGENTS.md`,
+`docs/FEATURES.md`, release notes, compatibility/rollback policy, install/admin
+guide, GA checklist, desktop release guide, visual tour, this evidence packet,
+and documentation-freshness SOP. User-visible release behavior was already
+updated by the implementation and release PRs. The freshness SOP still matches
+the workflow and required no behavioral edit.
+
+Open follow-ups:
+
+- #809: publish, verify, install, and exercise the signed/notarized assets.
+- #816: complete the post-fix native audit and close the Apple-design tracker.
+- #830: replace pending artifact rows with sizes, SHA-256 values, workflow
+  evidence, installed-launch results, updater evidence, and Homebrew validation.
+- #796: retain the non-sensitive external follow-up without exposing private
+  advisory content.
+
+### Release Decision
+
+The v5.2.2 source and web/server/CLI/MCP changes pass the required release
+gates. The macOS distribution is not approved for installation until #809 is
+complete. The public release warning, open issues, and this packet all reflect
+that limitation.
+
+## v5.0.0 Retained Release Evidence
 
 Retained evidence for the published v5.0.0 release and the v5 follow-up
 issues:
