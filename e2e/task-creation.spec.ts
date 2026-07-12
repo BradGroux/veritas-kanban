@@ -64,7 +64,9 @@ test.describe('Task Creation', () => {
     await expect(dialog).not.toBeVisible({ timeout: 15_000 });
 
     // The new task should appear on the board (in the To Do column)
-    const taskCard = page.locator('text=E2E Created Task');
+    const taskCard = page
+      .getByRole('region', { name: 'To Do' })
+      .getByRole('heading', { name: 'E2E Created Task', exact: true });
     await expect(taskCard).toBeVisible({ timeout: 10_000 });
 
     // Clean up — find the task ID via API and queue for deletion

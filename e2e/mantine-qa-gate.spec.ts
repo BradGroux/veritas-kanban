@@ -585,7 +585,7 @@ test.describe('v5 Mantine migration QA gate', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });
 
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Mobile settings', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
     await assertNoHorizontalOverflow(page);
     await assertMobileTouchTargets(page);
