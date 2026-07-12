@@ -20,7 +20,7 @@ export class SqliteActivityRepository implements ActivityRepository {
           SELECT activity_json
           FROM activity_events
           WHERE workspace_id = 'local'
-          ORDER BY datetime(created_at) DESC, id DESC
+          ORDER BY created_at DESC, rowid DESC
           LIMIT ?
         `
       )
@@ -101,7 +101,7 @@ export class SqliteActivityRepository implements ActivityRepository {
           SELECT id
           FROM activity_events
           WHERE workspace_id = 'local'
-          ORDER BY datetime(created_at) DESC, id DESC
+          ORDER BY created_at DESC, rowid DESC
           LIMIT -1 OFFSET ?
         )
       `

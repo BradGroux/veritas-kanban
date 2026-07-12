@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Made SQLite activity ordering deterministic for multiple events written in
+  the same millisecond, preserving the newest-first feed contract and stable
+  retention trimming (#823).
 - Prevented compact bottom-navigation labels from overlapping, kept the mobile
   header within 320 px, and restored a fixed, safe-area-aware Board Chat entry
   point (#811).

@@ -44,6 +44,7 @@ describe('ActivityService', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     // Clear activities between tests
     await service.clearActivities();
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
@@ -78,6 +79,9 @@ describe('ActivityService', () => {
     });
 
     it('should prepend new activities (most recent first)', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-07-12T12:00:00.123Z'));
+
       await service.logActivity('task_created', 'task_1', 'First');
       await service.logActivity('task_updated', 'task_2', 'Second');
 
