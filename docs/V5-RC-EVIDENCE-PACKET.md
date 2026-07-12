@@ -102,6 +102,7 @@ succeeds.
 | `pnpm desktop:package:mac:unsigned`                       | PASS    | ARM64 DMG and ZIP mounted/expanded as 5.2.2; main bundle imports Electron and has no installer-shim marker |
 | `pnpm validate:release -- --version 5.2.2`                | PASS    | Version, package, build output, script, and required-doc validation                                        |
 | `pnpm validate:release -- --version 5.2.2 --docker-build` | PASS    | Production image `veritas-kanban:validate-5.2.2` built with the Docker legacy builder                      |
+| `pnpm validate:release -- --version 5.2.2 --github`       | PASS    | Local/origin tag and the published GitHub release verified                                                 |
 | Pull request CI                                           | PASS    | Required build, unit, lint/typecheck, and security checks passed for all merged changes                    |
 | Cross-model review                                        | NOT RUN | Explicitly waived by the release operator for this workstream                                              |
 
