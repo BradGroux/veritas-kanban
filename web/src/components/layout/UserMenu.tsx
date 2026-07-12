@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Badge,
+  ActionIcon,
   Box,
   Button,
   Group,
@@ -15,11 +16,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIdentity } from '@/hooks/useIdentity';
 
 interface UserMenuProps {
+  compact?: boolean;
   onOpenSecuritySettings?: () => void;
   onOpenIdentitySettings?: () => void;
 }
 
-export function UserMenu({ onOpenSecuritySettings, onOpenIdentitySettings }: UserMenuProps) {
+export function UserMenu({
+  compact = false,
+  onOpenSecuritySettings,
+  onOpenIdentitySettings,
+}: UserMenuProps) {
   const { status, logout } = useAuth();
   const { activeMembership, activeWorkspace, authContext, profile, canManageMembers } =
     useIdentity();
@@ -100,23 +106,36 @@ export function UserMenu({ onOpenSecuritySettings, onOpenIdentitySettings }: Use
       withinPortal
     >
       <Popover.Target>
-        <Button
-          variant="subtle"
-          color="gray"
-          size="sm"
-          aria-label="Session menu"
-          leftSection={<Lock className="h-4 w-4 text-emerald-500" aria-hidden="true" />}
-          rightSection={
-            <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-          }
-          title="Session menu"
-          className="min-h-8"
-          onClick={() => setOpen((current) => !current)}
-        >
-          <Text span size="xs" c="dimmed" className="hidden sm:inline">
-            {displayName}
-          </Text>
-        </Button>
+        {compact ? (
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size={32}
+            aria-label="Session menu"
+            title="Session menu"
+            onClick={() => setOpen((current) => !current)}
+          >
+            <Lock className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+          </ActionIcon>
+        ) : (
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            aria-label="Session menu"
+            leftSection={<Lock className="h-4 w-4 text-emerald-500" aria-hidden="true" />}
+            rightSection={
+              <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            }
+            title="Session menu"
+            className="min-h-8"
+            onClick={() => setOpen((current) => !current)}
+          >
+            <Text span size="xs" c="dimmed" className="hidden sm:inline">
+              {displayName}
+            </Text>
+          </Button>
+        )}
       </Popover.Target>
       <Popover.Dropdown className="w-72 bg-popover p-0 text-popover-foreground">
         <Box className="border-b border-border p-3">

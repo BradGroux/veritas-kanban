@@ -271,7 +271,9 @@ describe('activity and chat Mantine migration', () => {
     expect(screen.getByText('Ready to help with the board.')).toBeDefined();
     expect(screen.getByText('Squad Chat')).toBeDefined();
     expect(screen.getByText('Code review ready.')).toBeDefined();
-    expect(screen.getByLabelText('Open chat')).toBeDefined();
+    const chatTrigger = screen.getByLabelText('Open chat');
+    expect(chatTrigger.style.position).toBe('fixed');
+    expect(chatTrigger.className).toContain('floating-chat-trigger');
     expect(baseElement.querySelectorAll('.mantine-Drawer-root').length).toBeGreaterThanOrEqual(2);
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
@@ -300,5 +302,16 @@ describe('activity and chat Mantine migration', () => {
     expect(screen.getByLabelText('Close chat panel')).toBeDefined();
     expect(screen.getByLabelText('Close squad chat panel')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Drawer-root')).toBeNull();
+  });
+
+  it('opens the floating Board Chat trigger from the keyboard', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<FloatingChat />);
+
+    const trigger = screen.getByRole('button', { name: 'Open chat' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('dialog', { name: 'Board Chat' })).toBeDefined();
   });
 });
