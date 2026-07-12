@@ -60,6 +60,14 @@ describe('mobile shell', () => {
 
     expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeDefined();
     expect(screen.getByText('mobile-pwa')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Mobile notifications' }).textContent).toContain(
+      'Alerts'
+    );
+
+    for (const button of screen.getAllByRole('button', { name: /^Mobile / })) {
+      expect(button.className).toContain('min-w-0');
+      expect(button.querySelector('[data-mobile-nav-label]')?.className).toContain('w-full');
+    }
 
     await user.click(screen.getByRole('button', { name: 'Mobile notifications' }));
     expect(await screen.findByText('Open mobile approval')).toBeDefined();

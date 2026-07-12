@@ -58,6 +58,7 @@ export function MobileShell() {
     },
     {
       label: 'Notifications',
+      compactLabel: 'Alerts',
       active: inboxOpen,
       icon: Bell,
       onClick: () => setInboxOpen(true),
@@ -108,7 +109,7 @@ export function MobileShell() {
                 disabled={item.disabled}
                 onClick={item.onClick}
                 className={[
-                  'flex min-h-12 flex-col items-center justify-center rounded-md px-1 text-[11px] leading-tight text-muted-foreground transition-colors',
+                  'flex min-h-12 min-w-0 flex-col items-center justify-center overflow-hidden rounded-md px-1 text-[11px] leading-tight text-muted-foreground transition-colors',
                   item.active
                     ? 'bg-primary/15 text-primary'
                     : 'hover:bg-muted hover:text-foreground',
@@ -116,7 +117,9 @@ export function MobileShell() {
                 ].join(' ')}
               >
                 <Icon className="mb-0.5 h-4 w-4" aria-hidden="true" />
-                <span className="truncate">{item.label}</span>
+                <span data-mobile-nav-label className="block w-full truncate text-center">
+                  {'compactLabel' in item ? item.compactLabel : item.label}
+                </span>
               </button>
             );
           })}

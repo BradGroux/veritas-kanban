@@ -232,6 +232,14 @@ describe('layout chrome Mantine migration', () => {
     expect(onOpenIdentitySettings).toHaveBeenCalledOnce();
   });
 
+  it('renders an icon-only session target for compact headers', () => {
+    const { container } = renderWithProviders(<UserMenu compact />);
+
+    const sessionMenu = screen.getByRole('button', { name: 'Session menu' });
+    expect(sessionMenu.className).toContain('mantine-ActionIcon-root');
+    expect(container.querySelector('.mantine-Button-root')).toBeNull();
+  });
+
   it('renders WebSocket status with a direct Mantine popover', async () => {
     const user = userEvent.setup();
     const { baseElement } = renderWithProviders(<WebSocketIndicator />);

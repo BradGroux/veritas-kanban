@@ -520,17 +520,19 @@ export function Header() {
                 </ActionIcon>
               </>
             )}
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={32}
-              onClick={() => openSettingsDialog()}
-              disabled={!canOpenSettings}
-              aria-label="Settings"
-              title={canOpenSettings ? 'Settings' : 'Settings permission required'}
-            >
-              <Settings className="h-4 w-4" aria-hidden="true" />
-            </ActionIcon>
+            {!isCompactHeader && (
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size={32}
+                onClick={() => openSettingsDialog()}
+                disabled={!canOpenSettings}
+                aria-label="Settings"
+                title={canOpenSettings ? 'Settings' : 'Settings permission required'}
+              >
+                <Settings className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            )}
             {!isCompactHeader && (
               <ActionIcon
                 variant="subtle"
@@ -548,6 +550,7 @@ export function Header() {
               </ActionIcon>
             )}
             <UserMenu
+              compact={isCompactHeader}
               onOpenSecuritySettings={openSecuritySettings}
               onOpenIdentitySettings={openIdentitySettings}
             />

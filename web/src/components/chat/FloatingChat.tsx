@@ -54,9 +54,9 @@ export function FloatingChat() {
         size={56}
         radius="xl"
         variant="filled"
+        style={{ position: 'fixed' }}
         className={cn(
-          'fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-lg',
-          'max-md:bottom-24',
+          'floating-chat-trigger z-40 h-14 w-14 rounded-full shadow-lg',
           'bg-primary hover:bg-primary/90 text-primary-foreground',
           'transition-all duration-200 hover:scale-105',
           open && 'hidden'
