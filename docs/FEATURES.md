@@ -2240,6 +2240,8 @@ Define scoring profiles with weighted criteria and evaluate agent outputs agains
 - Composite scoring methods: `weightedAvg`, `minimum`, `geometricMean`
 - Per-evaluation history with scorer-level breakdowns
 - Attach evaluations to a task (`taskId`) or agent (`agent`) for trend analysis
+- Phone layouts use a touch-sized list/detail flow with selection restoration
+  and unsaved-change protection; desktop layouts retain the split-pane editor
 
 **API endpoints:**
 

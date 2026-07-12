@@ -528,6 +528,59 @@ describe('governance surfaces Mantine migration', () => {
     expectNoLegacySlots(baseElement);
   });
 
+  it('supports compact scoring list and detail flows with unsaved-change protection', async () => {
+    const user = userEvent.setup();
+    const confirmDiscard = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithProviders(<ScoringProfiles onBack={vi.fn()} />);
+
+    const list = screen.getByTestId('scoring-profile-list');
+    const detail = screen.getByTestId('scoring-profile-detail');
+    expect(list.className).toContain('w-full');
+    expect(list.className).toContain('md:w-[340px]');
+    expect(detail.className).toContain('hidden');
+    expect(detail.className).toContain('md:flex');
+    expect(screen.getByTestId('scoring-save-action').className).toContain('hidden');
+    expect(screen.getByTestId('scoring-mobile-back').className).toContain('md:hidden');
+
+    await user.click(screen.getByRole('button', { name: /Quality/ }));
+    expect(list.className).toContain('hidden');
+    expect(detail.className).toContain('flex');
+    expect(screen.getByTestId('scoring-save-action').className).toBe('contents');
+
+    const name = screen.getByRole('textbox', { name: 'Profile name' });
+    await user.clear(name);
+    await user.type(name, 'Quality updated');
+    await user.click(screen.getByRole('button', { name: 'Back to profiles' }));
+
+    expect(confirmDiscard).toHaveBeenCalledOnce();
+    expect(detail.className).toContain('flex');
+
+    confirmDiscard.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Back to profiles' }));
+    expect(list.className).not.toContain('hidden');
+    expect(screen.getByRole('button', { name: /Quality/ }).getAttribute('aria-current')).toBe(
+      'true'
+    );
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Quality/ }));
+
+    await user.click(screen.getByRole('button', { name: 'New Profile' }));
+    expect(screen.getByRole('heading', { name: 'New scoring profile' })).toBeDefined();
+    await user.type(screen.getByRole('textbox', { name: 'Profile name' }), 'Phone profile');
+    await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+    expect(mocks.createScoringProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Phone profile' })
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Back to profiles' }));
+    await user.click(screen.getByRole('button', { name: /Quality/ }));
+    await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+    expect((screen.getByRole('textbox', { name: 'Profile name' }) as HTMLInputElement).value).toBe(
+      'Quality Copy'
+    );
+
+    confirmDiscard.mockRestore();
+  });
+
   it('renders feedback submission, browse, and analytics panels with Mantine controls', async () => {
     const user = userEvent.setup();
     const { baseElement } = renderWithProviders(<FeedbackPanel />);

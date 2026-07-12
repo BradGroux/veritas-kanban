@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reworked Scoring Profiles into a compact list/detail flow at phone widths,
+  preserved the selected profile across create and duplicate actions, and
+  guarded unsaved drafts when returning to the list, changing tabs, or leaving
+  the scoring surface (#813).
 - Made SQLite activity ordering deterministic for multiple events written in
   the same millisecond, preserving the newest-first feed contract and stable
   retention trimming (#823).

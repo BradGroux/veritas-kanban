@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CreateScoringProfileInput,
   EvaluationRequest,
@@ -35,6 +35,8 @@ interface ScoringProfilesProps {
 }
 
 type ProfileDraft = CreateScoringProfileInput;
+type DraftMode = 'create' | 'edit';
+type MobileView = 'detail' | 'list';
 
 const createScorer = (type: ScorerType = 'KeywordContains'): Scorer => {
   const base = {
@@ -71,6 +73,13 @@ const createEmptyDraft = (): ProfileDraft => ({
   scorers: [createScorer()],
 });
 
+const profileToDraft = (profile: ScoringProfile): ProfileDraft => ({
+  name: profile.name,
+  description: profile.description || '',
+  compositeMethod: profile.compositeMethod,
+  scorers: profile.scorers,
+});
+
 const scorerTypeOptions: ScorerType[] = [
   'KeywordContains',
   'RegexMatch',
@@ -101,7 +110,13 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   const runEvaluation = useRunEvaluation();
   const [activeTab, setActiveTab] = useState('profiles');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
-  const [draft, setDraft] = useState<ProfileDraft>(createEmptyDraft());
+  const [draft, setDraft] = useState<ProfileDraft>(createEmptyDraft);
+  const [cleanDraft, setCleanDraft] = useState<ProfileDraft | null>(null);
+  const [draftMode, setDraftMode] = useState<DraftMode>('edit');
+  const [mobileView, setMobileView] = useState<MobileView>('list');
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null);
+  const selectedProfileButtonRef = useRef<HTMLButtonElement>(null);
+  const shouldFocusListRef = useRef(false);
   const [evaluationForm, setEvaluationForm] = useState<EvaluationRequest>({
     profileId: '',
     action: '',
@@ -115,47 +130,99 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId]
   );
+  const isDirty = cleanDraft
+    ? JSON.stringify(draft) !== JSON.stringify(cleanDraft)
+    : Boolean(draft.name.trim());
+  const draftReadOnly = draftMode === 'edit' && Boolean(selectedProfile?.builtIn);
+
+  const confirmDiscardChanges = () => !isDirty || window.confirm('Discard unsaved changes?');
 
   useEffect(() => {
     if (profiles.length === 0) return;
     if (!selectedProfileId) {
       const first = profiles[0];
+      const nextDraft = profileToDraft(first);
       setSelectedProfileId(first.id);
-      setDraft({
-        name: first.name,
-        description: first.description || '',
-        compositeMethod: first.compositeMethod,
-        scorers: first.scorers,
-      });
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('edit');
       setEvaluationForm((current) => ({ ...current, profileId: first.id }));
     }
   }, [profiles, selectedProfileId]);
 
+  useEffect(() => {
+    if (mobileView === 'detail') {
+      detailHeadingRef.current?.focus();
+      return;
+    }
+
+    if (shouldFocusListRef.current) {
+      shouldFocusListRef.current = false;
+      selectedProfileButtonRef.current?.focus();
+    }
+  }, [mobileView, selectedProfileId]);
+
   const loadProfileIntoDraft = (profile: ScoringProfile) => {
+    if (!confirmDiscardChanges()) return;
+    const nextDraft = profileToDraft(profile);
     setSelectedProfileId(profile.id);
-    setDraft({
-      name: profile.name,
-      description: profile.description || '',
-      compositeMethod: profile.compositeMethod,
-      scorers: profile.scorers,
-    });
+    setDraft(nextDraft);
+    setCleanDraft(nextDraft);
+    setDraftMode('edit');
+    setMobileView('detail');
     setEvaluationForm((current) => ({ ...current, profileId: profile.id }));
   };
 
   const handleCreateNew = () => {
-    setSelectedProfileId('');
-    setDraft(createEmptyDraft());
+    if (!confirmDiscardChanges()) return;
+    const nextDraft = createEmptyDraft();
+    setDraft(nextDraft);
+    setCleanDraft(nextDraft);
+    setDraftMode('create');
+    setMobileView('detail');
   };
 
   const handleDuplicate = (profile: ScoringProfile) => {
-    setSelectedProfileId('');
+    if (!confirmDiscardChanges()) return;
     setDraft({
       name: `${profile.name} Copy`,
       description: profile.description || '',
       compositeMethod: profile.compositeMethod,
       scorers: profile.scorers.map((scorer) => ({ ...scorer, id: `${scorer.id}-copy` })),
     });
+    setCleanDraft(null);
+    setDraftMode('create');
+    setMobileView('detail');
     setActiveTab('profiles');
+  };
+
+  const handleBackToProfiles = () => {
+    if (!confirmDiscardChanges()) return;
+
+    if (selectedProfile) {
+      const nextDraft = profileToDraft(selectedProfile);
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('edit');
+    } else {
+      const nextDraft = createEmptyDraft();
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('create');
+    }
+
+    shouldFocusListRef.current = true;
+    setMobileView('list');
+  };
+
+  const handleTabChange = (value: string | null) => {
+    const nextTab = value ?? 'profiles';
+    if (nextTab !== activeTab && !confirmDiscardChanges()) return;
+    setActiveTab(nextTab);
+  };
+
+  const handleBackToBoard = () => {
+    if (confirmDiscardChanges()) onBack();
   };
 
   const updateScorer = (index: number, updater: (scorer: Scorer) => Scorer) => {
@@ -174,16 +241,19 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
     }
 
     try {
-      if (selectedProfile && !selectedProfile.builtIn) {
+      if (draftMode === 'edit' && selectedProfile && !selectedProfile.builtIn) {
         const updated = await updateProfile.mutateAsync({
           id: selectedProfile.id,
           input: draft,
         });
         setSelectedProfileId(updated.id);
+        setCleanDraft(draft);
         toast({ title: 'Scoring profile updated' });
       } else {
         const created = await createProfile.mutateAsync(draft);
         setSelectedProfileId(created.id);
+        setCleanDraft(draft);
+        setDraftMode('edit');
         setEvaluationForm((current) => ({ ...current, profileId: created.id }));
         toast({ title: 'Scoring profile created' });
       }
@@ -197,10 +267,15 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   };
 
   const handleDelete = async (profile: ScoringProfile) => {
+    if (!confirmDiscardChanges()) return;
     try {
       await deleteProfile.mutateAsync(profile.id);
+      const nextDraft = createEmptyDraft();
       setSelectedProfileId('');
-      setDraft(createEmptyDraft());
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('create');
+      setMobileView('list');
       toast({ title: 'Scoring profile deleted' });
     } catch (error) {
       toast({
@@ -238,50 +313,77 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   };
 
   return (
-    <div className="flex h-screen flex-col gap-4 bg-background">
-      <div className="border-b bg-card px-6 py-4">
+    <div className="flex h-[100dvh] min-h-0 flex-col gap-4 bg-background">
+      <div className="border-b bg-card px-3 py-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <ActionIcon variant="subtle" onClick={onBack} aria-label="Back to board">
+          <div className="flex min-w-0 items-center gap-3">
+            <ActionIcon
+              size={48}
+              miw={48}
+              variant="subtle"
+              onClick={handleBackToBoard}
+              aria-label="Back to board"
+            >
               <ArrowLeft className="h-4 w-4" />
             </ActionIcon>
-            <div>
-              <h1 className="text-2xl font-bold">Agent Output Scoring</h1>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold sm:text-2xl">Agent Output Scoring</h1>
               <p className="text-sm text-muted-foreground">
                 Manage scoring profiles and inspect evaluation trends over time
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCreateNew}>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <Button
+              h={48}
+              className="flex-1 sm:flex-none"
+              variant="outline"
+              onClick={handleCreateNew}
+            >
               <Plus className="mr-2 h-4 w-4" />
               New Profile
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={createProfile.isPending || updateProfile.isPending}
+            <div
+              data-testid="scoring-save-action"
+              className={mobileView === 'list' ? 'hidden md:block' : 'contents'}
             >
-              <Save className="mr-2 h-4 w-4" />
-              Save Profile
-            </Button>
+              <Button
+                h={48}
+                className="w-full flex-1 sm:w-auto sm:flex-none"
+                onClick={handleSave}
+                disabled={draftReadOnly || createProfile.isPending || updateProfile.isPending}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save Profile
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden px-6 pb-6">
+      <div className="min-h-0 flex-1 overflow-hidden px-3 pb-3 sm:px-6 sm:pb-6">
         <Tabs
           value={activeTab}
-          onChange={(value) => setActiveTab(value ?? 'profiles')}
+          onChange={handleTabChange}
           keepMounted={false}
           className="flex h-full flex-col gap-4"
         >
-          <Tabs.List className="w-fit">
-            <Tabs.Tab value="profiles">Profiles</Tabs.Tab>
-            <Tabs.Tab value="explorer">Score Explorer</Tabs.Tab>
+          <Tabs.List className="w-full sm:w-fit">
+            <Tabs.Tab h={48} value="profiles">
+              Profiles
+            </Tabs.Tab>
+            <Tabs.Tab h={48} value="explorer">
+              Score Explorer
+            </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="profiles" className="m-0 flex min-h-0 flex-1 gap-4">
-            <div className="flex w-[340px] min-w-[320px] flex-col rounded-lg border bg-card">
+          <Tabs.Panel value="profiles" className="m-0 flex min-h-0 min-w-0 flex-1 gap-4">
+            <div
+              data-testid="scoring-profile-list"
+              className={`${
+                mobileView === 'detail' ? 'hidden md:flex' : 'flex'
+              } w-full min-w-0 flex-col rounded-lg border bg-card md:w-[340px] md:min-w-[320px]`}
+            >
               <div className="border-b px-4 py-3">
                 <div className="font-semibold">Scoring Profiles</div>
                 <div className="text-sm text-muted-foreground">
@@ -296,7 +398,11 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     profiles.map((profile) => (
                       <button
                         key={profile.id}
-                        className={`w-full space-y-2 p-4 text-left transition-colors hover:bg-muted/30 ${
+                        ref={
+                          selectedProfileId === profile.id ? selectedProfileButtonRef : undefined
+                        }
+                        aria-current={selectedProfileId === profile.id ? 'true' : undefined}
+                        className={`min-h-12 w-full space-y-2 p-4 text-left transition-colors hover:bg-muted/30 motion-reduce:transition-none ${
                           selectedProfileId === profile.id ? 'bg-primary/5' : ''
                         }`}
                         onClick={() => loadProfileIntoDraft(profile)}
@@ -327,21 +433,40 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
               </ScrollArea>
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden">
+            <div
+              data-testid="scoring-profile-detail"
+              className={`${
+                mobileView === 'list' ? 'hidden md:flex' : 'flex'
+              } w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto`}
+            >
+              <div data-testid="scoring-mobile-back" className="md:hidden">
+                <Button h={48} variant="subtle" onClick={handleBackToProfiles}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to profiles
+                </Button>
+              </div>
               <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
                 <div className="space-y-4 rounded-lg border bg-card p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-lg font-semibold">
-                        {selectedProfile ? selectedProfile.name : 'New scoring profile'}
+                  <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0">
+                      <h2
+                        ref={detailHeadingRef}
+                        tabIndex={-1}
+                        className="text-lg font-semibold focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      >
+                        {draftMode === 'create'
+                          ? 'New scoring profile'
+                          : selectedProfile?.name || 'Scoring profile'}
                       </h2>
                       <p className="text-sm text-muted-foreground">
                         Define weighted scorers and a composite strategy.
                       </p>
                     </div>
-                    {selectedProfile && (
-                      <div className="flex gap-2">
+                    {draftMode === 'edit' && selectedProfile && (
+                      <div className="flex flex-wrap gap-2">
                         <Button
+                          h={48}
+                          className="flex-1 sm:flex-none"
                           variant="outline"
                           size="sm"
                           onClick={() => handleDuplicate(selectedProfile)}
@@ -351,6 +476,8 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         </Button>
                         {!selectedProfile.builtIn && (
                           <Button
+                            h={48}
+                            className="flex-1 sm:flex-none"
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete(selectedProfile)}
@@ -372,7 +499,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         onChange={(event) =>
                           setDraft((current) => ({ ...current, name: event.target.value }))
                         }
-                        disabled={selectedProfile?.builtIn}
+                        disabled={draftReadOnly}
                       />
                     </div>
                     <div className="space-y-2">
@@ -389,7 +516,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                           }))
                         }
                         data={compositeMethodSelectData}
-                        disabled={selectedProfile?.builtIn}
+                        disabled={draftReadOnly}
                         allowDeselect={false}
                       />
                     </div>
@@ -404,7 +531,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         setDraft((current) => ({ ...current, description: event.target.value }))
                       }
                       rows={3}
-                      disabled={selectedProfile?.builtIn}
+                      disabled={draftReadOnly}
                     />
                   </div>
 
@@ -412,6 +539,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="font-semibold">Scorers</h3>
                       <Button
+                        h={48}
                         variant="outline"
                         size="sm"
                         onClick={() =>
@@ -420,7 +548,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                             scorers: [...current.scorers, createScorer()],
                           }))
                         }
-                        disabled={selectedProfile?.builtIn}
+                        disabled={draftReadOnly}
                       >
                         <Plus className="mr-2 h-4 w-4" />
                         Add Scorer
@@ -445,7 +573,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       name: event.target.value,
                                     }))
                                   }
-                                  disabled={selectedProfile?.builtIn}
+                                  disabled={draftReadOnly}
                                 />
                                 <Select
                                   aria-label={`Scorer ${index + 1} type`}
@@ -460,7 +588,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                     }));
                                   }}
                                   data={scorerTypeSelectData}
-                                  disabled={selectedProfile?.builtIn}
+                                  disabled={draftReadOnly}
                                   allowDeselect={false}
                                 />
                                 <TextInput
@@ -475,10 +603,12 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                       weight: Number(event.target.value) || 0,
                                     }))
                                   }
-                                  disabled={selectedProfile?.builtIn}
+                                  disabled={draftReadOnly}
                                 />
                               </div>
                               <ActionIcon
+                                size={48}
+                                miw={48}
                                 variant="subtle"
                                 onClick={() =>
                                   setDraft((current) => ({
@@ -488,7 +618,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                     ),
                                   }))
                                 }
-                                disabled={selectedProfile?.builtIn || draft.scorers.length === 1}
+                                disabled={draftReadOnly || draft.scorers.length === 1}
                                 aria-label="Remove scorer"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -510,7 +640,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                     }))
                                   }
                                   data={targetSelectData}
-                                  disabled={selectedProfile?.builtIn}
+                                  disabled={draftReadOnly}
                                   allowDeselect={false}
                                 />
                               </div>
@@ -532,7 +662,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                           .filter(Boolean),
                                       }))
                                     }
-                                    disabled={selectedProfile?.builtIn}
+                                    disabled={draftReadOnly}
                                   />
                                 </div>
                               )}
@@ -552,7 +682,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                           pattern: event.target.value,
                                         }))
                                       }
-                                      disabled={selectedProfile?.builtIn}
+                                      disabled={draftReadOnly}
                                     />
                                   </div>
                                   <div className="space-y-2">
@@ -568,7 +698,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                           flags: event.target.value,
                                         }))
                                       }
-                                      disabled={selectedProfile?.builtIn}
+                                      disabled={draftReadOnly}
                                     />
                                   </div>
                                 </>
@@ -589,7 +719,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                           valuePath: event.target.value,
                                         }))
                                       }
-                                      disabled={selectedProfile?.builtIn}
+                                      disabled={draftReadOnly}
                                     />
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-2">
@@ -607,7 +737,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                               : Number(event.target.value),
                                         }))
                                       }
-                                      disabled={selectedProfile?.builtIn}
+                                      disabled={draftReadOnly}
                                     />
                                     <TextInput
                                       aria-label={`Scorer ${index + 1} maximum value`}
@@ -623,7 +753,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                               : Number(event.target.value),
                                         }))
                                       }
-                                      disabled={selectedProfile?.builtIn}
+                                      disabled={draftReadOnly}
                                     />
                                   </div>
                                 </>
@@ -644,7 +774,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                         expression: event.target.value,
                                       }))
                                     }
-                                    disabled={selectedProfile?.builtIn}
+                                    disabled={draftReadOnly}
                                   />
                                 </div>
                               )}
@@ -712,7 +842,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                       }
                     />
 
-                    <Button onClick={handleEvaluate} disabled={runEvaluation.isPending}>
+                    <Button h={48} onClick={handleEvaluate} disabled={runEvaluation.isPending}>
                       Score Output
                     </Button>
                   </div>
