@@ -87,23 +87,23 @@ succeeds.
 
 ### Verification Matrix
 
-| Gate                                                      | Result  | Environment and evidence                                                                   |
-| --------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `pnpm install --frozen-lockfile`                          | PASS    | Local clean dependency verification with pnpm 11.1.1                                       |
-| `pnpm test:unit`                                          | PASS    | Desktop 57; server 2107 passed and 2 skipped; web 405                                      |
-| `pnpm lint`                                               | PASS    | 0 errors and 597 warnings, within the 600-warning budget                                   |
-| `pnpm lint:budget`                                        | PASS    | Warning budget enforced                                                                    |
-| `pnpm typecheck`                                          | PASS    | All workspaces after shared build                                                          |
-| `pnpm build`                                              | PASS    | Shared, server, web, CLI, MCP, and desktop outputs                                         |
-| `pnpm qa:mantine`                                         | PASS    | Mantine adoption and bundle budgets                                                        |
-| `pnpm test:e2e`                                           | PASS    | 34/34 across Chromium, mobile Chromium, and mobile WebKit after #829                       |
-| `pnpm audit`                                              | PASS    | No known production vulnerabilities                                                        |
-| `pnpm smoke:cli-mcp`                                      | PARTIAL | CLI/MCP build and metadata passed; live write skipped because no test API key was supplied |
-| `pnpm desktop:package:mac:unsigned`                       | PASS    | ARM64 DMG, ZIP, blockmaps, and launchable unpacked app produced locally                    |
-| `pnpm validate:release -- --version 5.2.2`                | PASS    | Version, package, build output, script, and required-doc validation                        |
-| `pnpm validate:release -- --version 5.2.2 --docker-build` | PASS    | Production image `veritas-kanban:validate-5.2.2` built with the Docker legacy builder      |
-| Pull request CI                                           | PASS    | Required build, unit, lint/typecheck, and security checks passed for all merged changes    |
-| Cross-model review                                        | NOT RUN | Explicitly waived by the release operator for this workstream                              |
+| Gate                                                      | Result  | Environment and evidence                                                                                   |
+| --------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `pnpm install --frozen-lockfile`                          | PASS    | Local clean dependency verification with pnpm 11.1.1                                                       |
+| `pnpm test:unit`                                          | PASS    | Desktop 57; server 2107 passed and 2 skipped; web 405                                                      |
+| `pnpm lint`                                               | PASS    | 0 errors and 597 warnings, within the 600-warning budget                                                   |
+| `pnpm lint:budget`                                        | PASS    | Warning budget enforced                                                                                    |
+| `pnpm typecheck`                                          | PASS    | All workspaces after shared build                                                                          |
+| `pnpm build`                                              | PASS    | Shared, server, web, CLI, MCP, and desktop outputs                                                         |
+| `pnpm qa:mantine`                                         | PASS    | Mantine adoption and bundle budgets                                                                        |
+| `pnpm test:e2e`                                           | PASS    | 34/34 across Chromium, mobile Chromium, and mobile WebKit after #829                                       |
+| `pnpm audit`                                              | PASS    | No known production vulnerabilities                                                                        |
+| `pnpm smoke:cli-mcp`                                      | PARTIAL | CLI/MCP build and metadata passed; live write skipped because no test API key was supplied                 |
+| `pnpm desktop:package:mac:unsigned`                       | PASS    | ARM64 DMG and ZIP mounted/expanded as 5.2.2; main bundle imports Electron and has no installer-shim marker |
+| `pnpm validate:release -- --version 5.2.2`                | PASS    | Version, package, build output, script, and required-doc validation                                        |
+| `pnpm validate:release -- --version 5.2.2 --docker-build` | PASS    | Production image `veritas-kanban:validate-5.2.2` built with the Docker legacy builder                      |
+| Pull request CI                                           | PASS    | Required build, unit, lint/typecheck, and security checks passed for all merged changes                    |
+| Cross-model review                                        | NOT RUN | Explicitly waived by the release operator for this workstream                                              |
 
 ### Compatibility, Security, And Rollback
 
