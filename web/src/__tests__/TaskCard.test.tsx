@@ -12,11 +12,13 @@ import type { Task } from '@veritas-kanban/shared';
 
 // ── Mocks ────────────────────────────────────────────────────
 
+const { sortableKeyDown } = vi.hoisted(() => ({ sortableKeyDown: vi.fn() }));
+
 // Mock @dnd-kit/sortable — card uses useSortable
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},
-    listeners: {},
+    listeners: { onKeyDown: sortableKeyDown },
     setNodeRef: vi.fn(),
     transform: null,
     transition: undefined,
@@ -147,6 +149,7 @@ function renderCard(task: Task, props: Partial<React.ComponentProps<typeof TaskC
 describe('TaskCard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    sortableKeyDown.mockClear();
   });
 
   afterEach(() => {
@@ -235,14 +238,27 @@ describe('TaskCard', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('handles Space key press', () => {
+  it('opens with Space when drag and drop is disabled', () => {
     const onClick = vi.fn();
     const task = createMockTask();
-    renderCard(task, { onClick });
+    renderCard(task, { dragEnabled: false, onClick });
 
     const card = screen.getByRole('article');
     fireEvent.keyDown(card, { key: ' ' });
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('delegates Space to the keyboard drag sensor when drag and drop is enabled', () => {
+    const onClick = vi.fn();
+    const task = createMockTask();
+    renderCard(task, { dragEnabled: true, onClick });
+
+    const card = screen.getByRole('article');
+    fireEvent.keyDown(card, { key: ' ' });
+
+    expect(sortableKeyDown).toHaveBeenCalledOnce();
+    expect(onClick).not.toHaveBeenCalled();
+    expect(card.getAttribute('data-task-id')).toBe(task.id);
   });
 
   it('applies selected ring when isSelected', () => {

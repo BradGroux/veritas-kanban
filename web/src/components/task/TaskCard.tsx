@@ -248,7 +248,11 @@ export const TaskCard = memo(function TaskCard({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (dragEnabled && e.key === ' ') {
+      listeners?.onKeyDown?.(e);
+      return;
+    }
+    if (e.key === 'Enter' || (!dragEnabled && e.key === ' ')) {
       e.preventDefault();
       handleClick();
     }
@@ -337,6 +341,7 @@ export const TaskCard = memo(function TaskCard({
     >
       <div
         ref={setNodeRef}
+        data-task-id={task.id}
         style={style}
         {...(dragEnabled ? listeners : {})}
         {...(dragEnabled ? attributes : {})}

@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restored keyboard drag-and-drop parity on the Kanban board with spatial
+  cross-column movement, empty-column targeting, same-column reordering,
+  accurate screen-reader announcements, mutation rollback, and post-move focus
+  restoration (#812).
 - Kept Electron's runtime API external in Vite 8/Rolldown desktop builds,
   preventing the npm executable-path shim from replacing `app`,
   `BrowserWindow`, `contextBridge`, and related native APIs in emitted main and

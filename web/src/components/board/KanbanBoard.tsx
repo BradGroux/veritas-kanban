@@ -418,21 +418,25 @@ export function KanbanBoard() {
     liveTasksByStatus,
     sensors,
     collisionDetection,
+    announcements,
+    screenReaderInstructions,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
+    handleDragCancel,
   } = useBoardDragDrop({
     tasks: filteredTasks,
     tasksByStatus,
     columns,
-    onStatusChange: (taskId, status) => {
-      if (!canWriteTasks || !isOnline) return;
-      updateTask.mutate({ id: taskId, input: { status } });
+    onStatusChange: async (taskId, status) => {
+      if (!canWriteTasks || !isOnline) throw new Error('Task movement is unavailable');
+      await updateTask.mutateAsync({ id: taskId, input: { status } });
     },
-    onReorder: (taskIds) => {
-      if (!canWriteTasks || !isOnline) return;
-      reorderTasks.mutate(taskIds);
+    onReorder: async (taskIds) => {
+      if (!canWriteTasks || !isOnline) throw new Error('Task movement is unavailable');
+      await reorderTasks.mutateAsync(taskIds);
     },
+    announce,
   });
 
   const handleDetailClose = (open: boolean) => {
@@ -543,9 +547,11 @@ export function KanbanBoard() {
               <DndContext
                 sensors={sensors}
                 collisionDetection={collisionDetection}
+                accessibility={{ announcements, screenReaderInstructions, restoreFocus: false }}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
               >
                 <div
                   className={boardColumnGridClassName}

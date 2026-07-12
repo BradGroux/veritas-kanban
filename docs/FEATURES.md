@@ -99,7 +99,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 | ![v5 Workbench panel](assets/v5/v5-workbench-panel.png) | ![v5 mobile PWA board](assets/v5/v5-mobile-pwa-board.png) |
 
 - **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
-- **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; custom collision detection (pointerWithin + rectIntersection fallback) for reliable cross-column moves; tooltips suppressed during drag; local state management for real-time column updates
+- **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; keyboard users press Space to pick up or drop, use spatial arrow-key movement across populated or empty columns, and press Escape to cancel; custom collision detection (pointerWithin + rectIntersection fallback) supports pointer and keyboard moves; tooltips are suppressed during drag; local state provides real-time column updates
 
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
@@ -2149,14 +2149,14 @@ Multi-layer testing strategy.
 Working toward WCAG 2.1 AA compliance.
 
 - **ARIA labels** — Applied to interactive elements: buttons, dialogs, form controls, navigation
-- **Keyboard navigation** — Full keyboard support: j/k navigation, Enter to open, Esc to close, number keys for column moves
+- **Keyboard navigation** — Navigate with j/k, open with Enter, move directly with number keys, or press Space on a board card to pick it up and use arrow keys to reorder or cross columns; Escape cancels and restores focus
 - **Keyboard shortcuts dialog** — Discoverable via `?` key with grouped shortcut reference
 - **Focus management** — Focus trapped in dialogs and sheets; restored on close
 - **Screen reader support** — Semantic HTML, ARIA roles, and descriptive labels throughout
 - **Color contrast** — Dark and light mode palettes designed for readability; purple primary (`270° 50% 40%`) buttons with white text in dark mode
 - **Skip navigation** — Keyboard users can navigate efficiently between sections
 - **Sortable list accessibility** — Drag-and-drop lists in settings include keyboard-accessible reordering
-- **Interactive cards** — Task cards, metric cards, and stat cards support keyboard activation (Enter/Space)
+- **Interactive cards** — Enter opens a task card; Space opens it when drag-and-drop is unavailable or starts keyboard drag when board sorting is enabled
 - **Error boundaries** — Crash recovery UI accessible via keyboard
 
 ---
