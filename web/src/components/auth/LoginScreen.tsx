@@ -151,7 +151,7 @@ export function LoginScreen() {
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-6">
+        <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 mb-4">
               <Key className="w-8 h-8" />
@@ -160,43 +160,49 @@ export function LoginScreen() {
             <p className="text-muted-foreground">Enter your recovery key and a new password.</p>
           </div>
 
-          <form onSubmit={handleRecover} className="space-y-4">
-            <div className="space-y-2">
-              <TextInput
-                id="recovery-key"
-                label="Recovery Key"
-                value={recoveryKey}
-                onChange={(e) => setRecoveryKey(e.target.value.toUpperCase())}
-                placeholder="XXXX-XXXX-XXXX-XXXX"
-                classNames={{ input: 'font-mono tracking-wider' }}
-                autoFocus
-              />
-            </div>
+          <Stack component="form" onSubmit={handleRecover} gap="md">
+            <TextInput
+              id="recovery-key"
+              name="recovery-key"
+              label="Recovery Key"
+              value={recoveryKey}
+              onChange={(e) => setRecoveryKey(e.target.value.toUpperCase())}
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              classNames={{ input: 'font-mono tracking-wider' }}
+              size="md"
+              autoCapitalize="characters"
+              spellCheck={false}
+              autoFocus
+            />
 
-            <div className="space-y-2">
-              <PasswordInput
-                id="new-password"
-                label="New Password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (8+ characters)"
-                visible={showPassword}
-                onVisibilityChange={setShowPassword}
-              />
-            </div>
+            <PasswordInput
+              id="new-password"
+              name="new-password"
+              label="New Password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password (8+ characters)"
+              visible={showPassword}
+              onVisibilityChange={setShowPassword}
+              autoComplete="new-password"
+              size="md"
+            />
 
-            <div className="space-y-2">
+            <div>
               <PasswordInput
                 id="confirm-new-password"
+                name="confirm-new-password"
                 label="Confirm New Password"
                 value={confirmNewPassword}
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
                 placeholder="Confirm new password"
                 visible={showPassword}
                 onVisibilityChange={setShowPassword}
+                autoComplete="new-password"
+                size="md"
               />
               {confirmNewPassword && !passwordsMatch && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
+                <p className="mt-2 text-xs text-destructive">Passwords do not match</p>
               )}
             </div>
 
@@ -206,23 +212,25 @@ export function LoginScreen() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={!isValid || isSubmitting}>
-              {isSubmitting ? 'Resetting...' : 'Reset Password'}
-            </Button>
+            <Stack gap="xs">
+              <Button type="submit" fullWidth size="md" disabled={!isValid || isSubmitting}>
+                {isSubmitting ? 'Resetting...' : 'Reset Password'}
+              </Button>
 
-            <Button
-              type="button"
-              variant="subtle"
-              color="gray"
-              onClick={() => {
-                setShowRecovery(false);
-                setError(null);
-              }}
-              className="w-full text-sm text-muted-foreground hover:text-foreground"
-            >
-              Back to login
-            </Button>
-          </form>
+              <Button
+                type="button"
+                variant="subtle"
+                color="gray"
+                fullWidth
+                onClick={() => {
+                  setShowRecovery(false);
+                  setError(null);
+                }}
+              >
+                Back to login
+              </Button>
+            </Stack>
+          </Stack>
         </div>
       </div>
     );
@@ -243,12 +251,14 @@ export function LoginScreen() {
         <Stack component="form" onSubmit={handleLogin} gap="md">
           <PasswordInput
             id="password"
+            name="password"
             label="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
             visible={showPassword}
             onVisibilityChange={setShowPassword}
+            autoComplete="current-password"
             size="md"
             autoFocus
           />

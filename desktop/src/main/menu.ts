@@ -58,6 +58,7 @@ export function createDesktopMenuTemplate(
         command('create-backup'),
       ],
     },
+    { role: 'editMenu' },
     {
       label: 'Navigate',
       submenu: [command('open-command-center'), command('open-search'), command('open-settings')],
