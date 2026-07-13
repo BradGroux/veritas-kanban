@@ -95,6 +95,13 @@ describe('auth screens Mantine migration', () => {
     expect(container.querySelector('[data-slot="button"]')).toBeNull();
     expect(container.querySelector('[data-slot="checkbox"]')).toBeNull();
 
+    const loginButton = screen.getByRole('button', { name: 'Login' });
+    const forgotPasswordButton = screen.getByRole('button', { name: 'Forgot password?' });
+    expect(loginButton.getAttribute('data-block')).toBe('true');
+    expect(forgotPasswordButton.getAttribute('data-block')).toBe('true');
+    expect(loginButton.parentElement).toBe(forgotPasswordButton.parentElement);
+    expect(loginButton.parentElement?.classList.contains('mantine-Stack-root')).toBe(true);
+
     fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: 'StrongPass1!' },
     });

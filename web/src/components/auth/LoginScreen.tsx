@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Checkbox, PasswordInput, TextInput } from '@mantine/core';
+import { Button, Checkbox, PasswordInput, Stack, TextInput } from '@mantine/core';
 import { useAuth } from '@/hooks/useAuth';
 import { Lock, Key, Check, Copy, Download } from 'lucide-react';
 
@@ -231,7 +231,7 @@ export function LoginScreen() {
   // Login form
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">
             <Lock className="w-8 h-8" />
@@ -240,29 +240,26 @@ export function LoginScreen() {
           <p className="text-muted-foreground">Enter your password to access Veritas Kanban.</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <PasswordInput
-              id="password"
-              label="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              visible={showPassword}
-              onVisibilityChange={setShowPassword}
-              autoFocus
-            />
-          </div>
+        <Stack component="form" onSubmit={handleLogin} gap="md">
+          <PasswordInput
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            visible={showPassword}
+            onVisibilityChange={setShowPassword}
+            size="md"
+            autoFocus
+          />
 
-          <div>
-            <Checkbox
-              id="remember-me"
-              checked={rememberMe}
-              onChange={(event) => setRememberMe(event.currentTarget.checked)}
-              label="Remember me for 30 days"
-              classNames={{ label: 'text-sm cursor-pointer' }}
-            />
-          </div>
+          <Checkbox
+            id="remember-me"
+            checked={rememberMe}
+            onChange={(event) => setRememberMe(event.currentTarget.checked)}
+            label="Remember me for 30 days"
+            classNames={{ label: 'text-sm cursor-pointer' }}
+          />
 
           {error && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
@@ -270,23 +267,25 @@ export function LoginScreen() {
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={!password || isSubmitting}>
-            {isSubmitting ? 'Logging in...' : 'Login'}
-          </Button>
+          <Stack gap="xs">
+            <Button type="submit" fullWidth size="md" disabled={!password || isSubmitting}>
+              {isSubmitting ? 'Logging in...' : 'Login'}
+            </Button>
 
-          <Button
-            type="button"
-            variant="subtle"
-            color="gray"
-            onClick={() => {
-              setShowRecovery(true);
-              setError(null);
-            }}
-            className="w-full text-sm text-muted-foreground hover:text-foreground"
-          >
-            Forgot password?
-          </Button>
-        </form>
+            <Button
+              type="button"
+              variant="subtle"
+              color="gray"
+              fullWidth
+              onClick={() => {
+                setShowRecovery(true);
+                setError(null);
+              }}
+            >
+              Forgot password?
+            </Button>
+          </Stack>
+        </Stack>
       </div>
     </div>
   );
