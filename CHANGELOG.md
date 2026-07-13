@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.4] - 2026-07-13
+
+### Fixed
+
+- Restored the native macOS Edit menu so Cut, Copy, Paste, Select All, and
+  their standard keyboard shortcuts work in desktop text and password fields
+  (#842).
+- Rebuilt the password-recovery actions as one full-width vertical stack with
+  consistent spacing, and added password-manager autocomplete metadata to the
+  login and recovery password fields (#842).
+
 ## [5.2.3] - 2026-07-13
 
 ### Changed
