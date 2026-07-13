@@ -126,6 +126,18 @@ describe('auth screens Mantine migration', () => {
     expect(container.querySelector('[data-slot="button"]')).toBeNull();
     expect(container.querySelector('[data-slot="input"]')).toBeNull();
 
+    const resetPasswordButton = screen.getByRole('button', { name: 'Reset Password' });
+    const backToLoginButton = screen.getByRole('button', { name: 'Back to login' });
+
+    expect(resetPasswordButton.getAttribute('data-block')).toBe('true');
+    expect(backToLoginButton.getAttribute('data-block')).toBe('true');
+    expect(resetPasswordButton.parentElement).toBe(backToLoginButton.parentElement);
+    expect(resetPasswordButton.parentElement?.classList.contains('mantine-Stack-root')).toBe(true);
+    expect(screen.getByLabelText('New Password').getAttribute('autocomplete')).toBe('new-password');
+    expect(screen.getByLabelText('Confirm New Password').getAttribute('autocomplete')).toBe(
+      'new-password'
+    );
+
     fireEvent.change(screen.getByLabelText('Recovery Key'), {
       target: { value: 'abcd-efgh-1234-5678' },
     });

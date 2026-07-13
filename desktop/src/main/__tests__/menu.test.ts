@@ -65,6 +65,12 @@ describe('desktop native menu', () => {
     expect(dispatch).toHaveBeenCalledWith('new-task');
   });
 
+  it('exposes the native edit menu so macOS text fields receive standard shortcuts', () => {
+    const template = createDesktopMenuTemplate({ status: status(), dispatch: vi.fn() });
+
+    expect(template.some((item) => item.role === 'editMenu')).toBe(true);
+  });
+
   it('keeps external delivery test status-aware', () => {
     const desktopMenu = createDesktopMenuTemplate({
       status: status('failed'),
