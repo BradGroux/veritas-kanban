@@ -5,9 +5,10 @@ These notes describe the Veritas Kanban v5 stable release line.
 - Current source version: `v5.2.2`
 - Latest published GitHub release:
   [Veritas Kanban v5.2.2](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
-- macOS install status: **pending**. The v5.2.2 source release is published,
-  but Apple notarization is blocked by a missing or expired team agreement.
-  Do not install the Homebrew cask or v5.2.1 desktop app while #809 is open.
+- Supported packaged install:
+  `brew tap BradGroux/tap && brew install --cask veritas-kanban`
+- Manual macOS install:
+  [Veritas-Kanban-5.2.2-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.2/Veritas-Kanban-5.2.2-mac-arm64.zip)
 
 ## v5.2.2 Patch
 
@@ -25,9 +26,8 @@ data model or requiring an operator migration.
 - The patched native app was exercised through fresh setup, readiness and
   Keychain status, native menus, keyboard onboarding, window chrome, and local
   notification wiring before release.
-- The release workflow successfully applies the Developer ID signature. The
-  signed/notarized DMG and ZIP, update metadata, blockmaps, and SHA-256
-  sidecars remain pending until Apple accepts the notarization submission.
+- Signed/notarized DMG and ZIP assets, update metadata, blockmaps, and SHA-256
+  sidecars replace the broken v5.2.1 desktop artifact set.
 
 ### Interface, accessibility, and motion
 
@@ -189,16 +189,14 @@ desktop, security, and migration posture unchanged from v5.0.0.
 
 ## Fresh Install
 
-The v5.2.2 macOS installer is not available while #809 remains open. After the
-signed/notarized assets and Homebrew cask are published, install the app with:
+Install the signed/notarized desktop app with Homebrew:
 
 ```bash
 brew tap BradGroux/tap
 brew install --cask veritas-kanban
 ```
 
-Manual installation will also be supported from the stable GitHub release ZIP.
-Until then, source installs remain available for development and evaluation.
+Manual installation is also supported from the stable GitHub release ZIP.
 
 1. Launch Veritas Kanban and choose Board Only unless you already need agent or
    remote setup.
@@ -220,11 +218,9 @@ Until then, source installs remain available for development and evaluation.
 
 The
 [v5.2.2 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
-currently contains source only. Signed/notarized macOS ZIP and DMG assets,
-`latest-mac.yml`, blockmaps, and SHA-256 sidecars are pending because Apple
-notarization returns HTTP 403 for a missing or expired team agreement. Use the
-release-attached `.sha256` files as the checksum source of truth only after
-those assets are published and #809 closes.
+publishes signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`,
+blockmaps, and SHA-256 sidecars. Use the release-attached `.sha256` files as the
+checksum source of truth.
 
 The v5.2.1 desktop assets remain available for provenance, but the application
 bundle is not a supported rollback target because its emitted Electron main

@@ -16,11 +16,12 @@ Board Chat, responsive Scoring Profiles, preference-aware overlays, and
 compositor-safe dashboard motion.
 
 The source release is published from `4b84eccd1bf827c842e93a82afd0240e6855b3df`.
-The production signing workflow successfully applies the Developer ID
-Application signature, but Apple notarization returns HTTP 403 because the team
-has a missing or expired agreement. The GitHub release therefore has no macOS
-assets and explicitly warns users not to install it yet. Signed installation,
-update, checksum, Homebrew, and final Gatekeeper evidence remain pending #809.
+After the team accepted the updated Apple agreement, Desktop Release attempt 4
+signed, notarized, stapled, and published the macOS artifacts. Independent
+downloads matched GitHub digests and attached sidecars. The signed ZIP app
+launched with an isolated profile, reported version 5.2.2, completed a current
+version update check, reopened cleanly, and quit without remaining processes.
+The Homebrew cask update passed its registered-tap gates and merged in #23.
 
 | Field               | Value                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------- |
@@ -29,24 +30,24 @@ update, checksum, Homebrew, and final Gatekeeper evidence remain pending #809.
 | Release commit      | `4b84eccd1bf827c842e93a82afd0240e6855b3df`                                                  |
 | GitHub release      | <https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2>                           |
 | Desktop Release run | <https://github.com/BradGroux/veritas-kanban/actions/runs/29213420721>                      |
-| Release state       | Source published; signed/notarized macOS assets blocked by Apple team agreement             |
+| Release state       | Published, signed/notarized, independently verified, and available through Homebrew         |
 | Evidence date       | 2026-07-12                                                                                  |
 | Toolchain           | macOS 26.5.1; Node 26.5.0; pnpm 11.1.1; Playwright Chromium and WebKit; Docker legacy build |
 
 ### Issue And Pull Request Traceability
 
-| Issue | Priority     | Outcome                                                                                               | Pull request    | State                                                  |
-| ----- | ------------ | ----------------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------ |
-| #809  | Critical     | Externalize Electron runtime APIs, reject emitted installer shims, and restore a single native window | #817            | Code merged; signed installed-build acceptance pending |
-| #810  | High         | Make compact Settings navigation visible and stack dense controls                                     | #820            | Closed                                                 |
-| #811  | High         | Prevent mobile navigation collisions and restore Board Chat                                           | #821            | Closed                                                 |
-| #812  | High         | Restore keyboard movement, ordering, announcements, rollback, and focus                               | #818            | Closed                                                 |
-| #813  | Medium       | Add a deliberate compact Scoring Profiles master-detail flow                                          | #826            | Closed                                                 |
-| #814  | Medium       | Remove layout-driven dashboard animation and honor reduced motion                                     | #822            | Closed                                                 |
-| #815  | Medium       | Honor transparency/contrast preferences and dismiss stale tooltips                                    | #819            | Closed                                                 |
-| #816  | Tracker      | Apple-design audit coverage and final native follow-up                                                | #817-#822, #826 | Open until #809 signed acceptance completes            |
-| #828  | Release QA   | Repair stale release E2E selectors without changing product behavior                                  | #829            | Closed                                                 |
-| #830  | Release docs | Preserve this evidence and the v5.2.2 freshness sweep                                                 | pending         | In progress                                            |
+| Issue | Priority     | Outcome                                                                                               | Pull request    | State               |
+| ----- | ------------ | ----------------------------------------------------------------------------------------------------- | --------------- | ------------------- |
+| #809  | Critical     | Externalize Electron runtime APIs, reject emitted installer shims, and restore a single native window | #817            | Acceptance complete |
+| #810  | High         | Make compact Settings navigation visible and stack dense controls                                     | #820            | Closed              |
+| #811  | High         | Prevent mobile navigation collisions and restore Board Chat                                           | #821            | Closed              |
+| #812  | High         | Restore keyboard movement, ordering, announcements, rollback, and focus                               | #818            | Closed              |
+| #813  | Medium       | Add a deliberate compact Scoring Profiles master-detail flow                                          | #826            | Closed              |
+| #814  | Medium       | Remove layout-driven dashboard animation and honor reduced motion                                     | #822            | Closed              |
+| #815  | Medium       | Honor transparency/contrast preferences and dismiss stale tooltips                                    | #819            | Closed              |
+| #816  | Tracker      | Apple-design audit coverage and final native follow-up                                                | #817-#822, #826 | Acceptance complete |
+| #828  | Release QA   | Repair stale release E2E selectors without changing product behavior                                  | #829            | Closed              |
+| #830  | Release docs | Preserve this evidence and the v5.2.2 freshness sweep                                                 | this PR         | Acceptance complete |
 
 PR #824 additionally stabilized storage mutation ordering and asynchronous
 startup/teardown behavior discovered while exercising the release candidate.
@@ -63,13 +64,12 @@ development build and signed v5.2.1 application never rendered a window.
 
 PR #817 keeps `electron` and `electron/*` imports external in main and preload
 output, adds artifact assertions for forbidden shim markers and required API
-bindings, and adds packaged-launch coverage. The patched development build and
-local unsigned v5.2.2 package each launched one native application window with
-no installer recursion. Native setup, server/renderer readiness, Keychain
-status, menus, keyboard onboarding, window chrome, and notification command
-wiring were exercised. Close/reopen, updater, VoiceOver, and the rest of the
-signed installed-build matrix cannot be completed until Apple notarization
-succeeds.
+bindings, and adds packaged-launch coverage. Development, unsigned, and
+downloaded signed v5.2.2 builds each launched one native application window
+with no installer recursion. Signed runtime acceptance covered setup,
+server/renderer readiness, Keychain status, keyboard focus, native menus,
+window chrome, current-version update check, clean quit, reopen, and a second
+clean quit with no remaining process or listening port.
 
 ### Interface Outcomes
 
@@ -123,19 +123,31 @@ succeeds.
 
 ### macOS Artifact And Distribution Inventory
 
-| Evidence                            | State   | Notes                                                                                  |
-| ----------------------------------- | ------- | -------------------------------------------------------------------------------------- |
-| Developer ID signing                | PASS    | Desktop Release run signs with Digital Meld's Developer ID Application identity        |
-| Apple notarization                  | BLOCKED | `notarytool` returns HTTP 403 for a missing or expired team agreement on two attempts  |
-| Signed DMG and ZIP                  | PENDING | No assets are attached to the v5.2.2 release                                           |
-| SHA-256 sidecars and blockmaps      | PENDING | Publish and independently verify after notarization                                    |
-| Gatekeeper, stapler, and `codesign` | PENDING | Run against downloaded release assets                                                  |
-| Clean signed install and launch     | PENDING | Verify one process/window, onboarding, close/reopen, quit, update check, and VoiceOver |
-| Homebrew cask                       | PENDING | Update only after the signed ZIP exists and its SHA-256 is verified                    |
+| Asset                                         |              Size | SHA-256                                                            | Verification                                                                    |
+| --------------------------------------------- | ----------------: | ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `Veritas-Kanban-5.2.2-mac-arm64.dmg`          | 266,283,327 bytes | `358acaa501827fca7e59d67a98b261b07fa9d5e01e3acae9755e8f7c010b86eb` | GitHub digest, sidecar, stapler, Gatekeeper, mounted bundle 5.2.2               |
+| `Veritas-Kanban-5.2.2-mac-arm64.zip`          | 269,456,458 bytes | `3f85d864a78251c8e1bb94f9914dcab0ce9795cf5a45f64fffdf33337cfb3d4a` | GitHub digest, sidecar, extracted signature, stapler, Gatekeeper, signed launch |
+| `Veritas-Kanban-5.2.2-mac-arm64.dmg.blockmap` |     276,119 bytes | `c145880aef635f2d6f5153a484db9aa901040abb552545d5890abf391be19085` | GitHub digest and independent hash                                              |
+| `Veritas-Kanban-5.2.2-mac-arm64.zip.blockmap` |     284,294 bytes | `f33dd971199454962d32d3b7bf737b5b19bb828302433e1d41e77847aef8443f` | GitHub digest and independent hash                                              |
+| `latest-mac.yml`                              |         530 bytes | `d2dc95378935835d2ceaa2ff4d298edf41adf2bb73a58b1b4a83eac72c7ab641` | Points to the 5.2.2 ZIP and DMG with matching sizes and SHA-512 values          |
 
-The release body accurately states that macOS installation is not yet ready.
-Do not substitute the locally generated unsigned artifacts for public release
-assets or the Homebrew cask.
+The app signature identifies Developer ID Application: Digital Meld, Inc.
+(`RLBHD62MPW`), includes hardened runtime and a timestamp, and satisfies its
+designated requirement. Stapler and Gatekeeper accept both the DMG and the
+extracted ZIP app as `Notarized Developer ID`.
+
+The signed app launched directly from the downloaded ZIP using an isolated
+profile and ports. `/api/health` returned 5.2.2; setup showed server, renderer,
+Keychain, and SQLite readiness; keyboard focus and native menus were operable;
+the updater reported 5.2.2 as current; quit, reopen, and quit completed cleanly.
+With VoiceOver active, keyboard navigation moved through the AX hierarchy to
+the correctly named `Copy Diagnostics` control; VoiceOver was then disabled and
+the isolated app quit with no remaining process or port.
+
+Homebrew tap PR <https://github.com/BradGroux/homebrew-tap/pull/23> merged at
+`292f340a894ea86079abba9b54cf71f1034ae06c`. Registered token
+`bradgroux/tap/veritas-kanban` passed style, strict online audit, dry-run
+install, and livecheck (`5.2.2 ==> 5.2.2`).
 
 ### Documentation Freshness And Known Limits
 
@@ -148,19 +160,17 @@ the workflow and required no behavioral edit.
 
 Open follow-ups:
 
-- #809: publish, verify, install, and exercise the signed/notarized assets.
-- #816: complete the post-fix native audit and close the Apple-design tracker.
-- #830: replace pending artifact rows with sizes, SHA-256 values, workflow
-  evidence, installed-launch results, updater evidence, and Homebrew validation.
 - #796: retain the non-sensitive external follow-up without exposing private
   advisory content.
+- The published `v5.2.2` ref is lightweight. Converting it to an annotated tag
+  at the same release commit requires an explicit force-update decision.
 
 ### Release Decision
 
-The v5.2.2 source and web/server/CLI/MCP changes pass the required release
-gates. The macOS distribution is not approved for installation until #809 is
-complete. The public release warning, open issues, and this packet all reflect
-that limitation.
+v5.2.2 passes the required source, web, server, CLI, MCP, desktop, signing,
+notarization, artifact, signed-runtime, update, and Homebrew gates. The macOS
+distribution is approved for installation. The remaining tag-object decision
+does not change the release commit or published artifact contents.
 
 ## v5.0.0 Retained Release Evidence
 

@@ -24,11 +24,6 @@ candidate, belongs in the reusable
 
 ## Fresh Mac Desktop Install
 
-> **Current v5.2.2 status:** signed/notarized assets and the matching Homebrew
-> cask are pending because Apple notarization is blocked by a team agreement.
-> Do not install the v5.2.1 desktop app; track the corrected installer in #809.
-> Use the source path until the release assets are published.
-
 1. Install the signed/notarized desktop app with Homebrew:
 
    ```bash
@@ -37,8 +32,8 @@ candidate, belongs in the reusable
    ```
 
    Manual install is also supported from the
-   [stable GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.0.0)
-   by downloading `Veritas-Kanban-5.0.0-mac-arm64.zip`, unzipping it, and
+   [stable GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
+   by downloading `Veritas-Kanban-5.2.2-mac-arm64.zip`, unzipping it, and
    moving `Veritas Kanban.app` into `/Applications`.
 
 2. Launch normally. A stable release should not show a Gatekeeper warning.
