@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.3] - 2026-07-13
+
+### Changed
+
+- Enforced the tracked runtime security artifact guard in pre-commit and CI
+  security gates, with documented rotation and private-evidence handling
+  requirements (#836).
+
+### Fixed
+
+- Rebuilt the desktop login actions as a stable vertical Mantine stack with a
+  full-width primary action, centered recovery action, consistent spacing, and
+  regression coverage for the packaged layout (#839).
+
 ## [5.2.2] - 2026-07-12
 
 ### Added

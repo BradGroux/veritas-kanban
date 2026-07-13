@@ -2,13 +2,44 @@
 
 These notes describe the Veritas Kanban v5 stable release line.
 
-- Current source version: `v5.2.2`
+- Current source version: `v5.2.3`
 - Latest published GitHub release:
-  [Veritas Kanban v5.2.2](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
+  [Veritas Kanban v5.2.3](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.3)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
-  [Veritas-Kanban-5.2.2-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.2/Veritas-Kanban-5.2.2-mac-arm64.zip)
+  [Veritas-Kanban-5.2.3-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.3/Veritas-Kanban-5.2.3-mac-arm64.zip)
+
+## v5.2.3 Patch
+
+v5.2.3 publishes the signed desktop follow-through for the login-layout fix
+that landed after v5.2.2, and promotes the runtime security artifact guard into
+the standard local and CI gates.
+
+### Desktop login polish
+
+- Login and password-recovery actions now render in an explicit vertical
+  Mantine stack instead of collapsing to intrinsic-width inline buttons.
+- The primary login action fills the 384 px form column at a 42 px control
+  height; the recovery action is centered beneath it with a full-width hit
+  target and subordinate visual treatment.
+- The packaged Electron layout is covered by a regression test that asserts
+  both actions use Mantine's native block behavior.
+
+### Security gate
+
+- The existing runtime security artifact guard is now a stable package command
+  enforced by pre-commit and the CI security job.
+- Security-response guidance now covers rotation, history remediation, and
+  private evidence handling without changing runtime data or credentials.
+
+### Compatibility and upgrade notes
+
+- No schema or configuration migration is required from v5.2.2.
+- Server, web, CLI, MCP, shared, and desktop package versions move together to
+  5.2.3.
+- macOS Apple Silicon remains the supported signed desktop target. Linux and
+  Windows artifacts remain unsigned previews.
 
 ## v5.2.2 Patch
 
@@ -217,10 +248,12 @@ Manual installation is also supported from the stable GitHub release ZIP.
 ## Release Artifacts
 
 The
-[v5.2.2 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2)
+[v5.2.3 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.3)
 publishes signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`,
 blockmaps, and SHA-256 sidecars. Use the release-attached `.sha256` files as the
 checksum source of truth.
+
+The v5.2.2 desktop assets remain available for provenance and rollback.
 
 The v5.2.1 desktop assets remain available for provenance, but the application
 bundle is not a supported rollback target because its emitted Electron main

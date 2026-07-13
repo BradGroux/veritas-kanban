@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/desktop",
-  "version": "5.2.2",
+  "version": "5.2.3",
   "private": true,
   "homepage": "https://github.com/BradGroux/veritas-kanban",
   "description": "Veritas Kanban native desktop shell",
