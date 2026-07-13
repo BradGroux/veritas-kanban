@@ -33,6 +33,7 @@
     "lint:report": "node scripts/lint-warning-budget.mjs --all-rules",
     "lint:fix": "eslint . --fix",
     "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
+    "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "vitest run",
     "test:unit": "pnpm -r --workspace-concurrency=1 test",

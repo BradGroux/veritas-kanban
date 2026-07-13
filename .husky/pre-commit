@@ -1,1 +1,2 @@
+pnpm check:security-artifacts
 npx lint-staged
