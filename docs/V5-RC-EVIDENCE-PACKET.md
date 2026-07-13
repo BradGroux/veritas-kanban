@@ -26,7 +26,7 @@ The Homebrew cask update passed its registered-tap gates and merged in #23.
 | Field               | Value                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | Release version     | 5.2.2                                                                                       |
-| Git tag             | `v5.2.2`                                                                                    |
+| Git tag             | Annotated `v5.2.2`; object `81ce4928e457c91a16a20827ddac1a94fb8f4170`                       |
 | Release commit      | `4b84eccd1bf827c842e93a82afd0240e6855b3df`                                                  |
 | GitHub release      | <https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.2>                           |
 | Desktop Release run | <https://github.com/BradGroux/veritas-kanban/actions/runs/29213420721>                      |
@@ -162,15 +162,14 @@ Open follow-ups:
 
 - #796: retain the non-sensitive external follow-up without exposing private
   advisory content.
-- The published `v5.2.2` ref is lightweight. Converting it to an annotated tag
-  at the same release commit requires an explicit force-update decision.
 
 ### Release Decision
 
 v5.2.2 passes the required source, web, server, CLI, MCP, desktop, signing,
 notarization, artifact, signed-runtime, update, and Homebrew gates. The macOS
-distribution is approved for installation. The remaining tag-object decision
-does not change the release commit or published artifact contents.
+distribution is approved for installation. The annotated tag peels to release
+commit `4b84eccd1bf827c842e93a82afd0240e6855b3df`; converting the tag object did
+not change source contents or published assets.
 
 ## v5.0.0 Retained Release Evidence
 
