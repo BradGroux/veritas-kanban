@@ -1,4 +1,5 @@
 import type { WorkProductMaintenancePreview } from './work-product.types.js';
+import type { SqliteStorageDiagnostics } from './sqlite-storage.types.js';
 
 export type DataLifecycleClassId =
   | 'workspaceIdentity'
@@ -77,6 +78,7 @@ export interface MaintenanceSummary {
   generatedAt: string;
   mode: 'local' | 'remote';
   storageMode: string;
+  sqlite?: SqliteStorageDiagnostics;
   health: MaintenanceHealthCheck[];
   storage: {
     totalBytes: number;

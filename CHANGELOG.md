@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Classified the authoritative SQLite filesystem before database open, limited
+  WAL to recognized durable local filesystems, refused known-unsafe and unknown
+  storage before creating database sidecars, and exposed redacted filesystem,
+  journal, and integrity posture through deep health and Maintenance diagnostics
+  (#881).
+
 ### Fixed
 
 - Kept mobile notifications above the safe-area-aware bottom navigation so

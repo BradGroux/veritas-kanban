@@ -1,9 +1,11 @@
 import { createHash } from 'crypto';
-import { mkdirSync } from 'fs';
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, statSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { DatabaseSync } from 'node:sqlite';
+import type { SqliteStorageDiagnostics } from '@veritas-kanban/shared';
 import { getRuntimeDir } from '../../utils/paths.js';
 import { SQLITE_BASE_MIGRATIONS, sortedMigrations, type SqliteMigration } from './migrations.js';
+import { detectSqliteFilesystem, type SqliteFilesystemDecision } from './filesystem-posture.js';
 
 export const DEFAULT_SQLITE_FILENAME = 'veritas.db';
 
@@ -11,6 +13,7 @@ export interface SqliteConnectionOptions {
   databasePath?: string;
   migrations?: readonly SqliteMigration[];
   applyMigrations?: boolean;
+  filesystemClassifier?: (directoryPath: string) => SqliteFilesystemDecision;
 }
 
 interface AppliedMigrationRow {
@@ -21,6 +24,31 @@ interface AppliedMigrationRow {
 
 interface UserVersionRow {
   user_version: number;
+}
+
+interface JournalModeRow {
+  journal_mode?: string;
+}
+
+type ExistingSqliteJournalPosture = 'new' | 'wal' | 'rollback' | 'unrecognized';
+
+const SQLITE_HEADER = 'SQLite format 3\u0000';
+const sqliteDiagnostics = new Map<string, SqliteStorageDiagnostics>();
+
+function cloneDiagnostics(
+  diagnostics: SqliteStorageDiagnostics | undefined
+): SqliteStorageDiagnostics | undefined {
+  return diagnostics ? structuredClone(diagnostics) : undefined;
+}
+
+export function getSqliteStorageDiagnostics(
+  databasePath?: string
+): SqliteStorageDiagnostics | undefined {
+  return cloneDiagnostics(sqliteDiagnostics.get(resolveSqliteDatabasePath(databasePath)));
+}
+
+export function resetSqliteStorageDiagnosticsForTests(): void {
+  sqliteDiagnostics.clear();
 }
 
 export class UnsupportedSqliteSchemaError extends Error {
@@ -42,6 +70,32 @@ export class UnsupportedSqliteSchemaError extends Error {
     this.appliedVersion = input.appliedVersion;
     this.maxSupportedVersion = input.maxSupportedVersion;
     this.migrationName = input.migrationName;
+  }
+}
+
+export class SqliteFilesystemSafetyError extends Error {
+  readonly code = 'SQLITE_FILESYSTEM_UNSAFE';
+  readonly diagnostics: SqliteStorageDiagnostics;
+
+  constructor(diagnostics: SqliteStorageDiagnostics) {
+    const posture =
+      diagnostics.filesystemPosture === 'known-unsafe' ? 'known unsafe' : 'unverified';
+    super(
+      `Refusing to open the authoritative SQLite database on ${posture} filesystem type "${diagnostics.filesystemType}" because WAL locking and shared-memory safety cannot be established without risking corruption. Move VERITAS_SQLITE_PATH to local durable storage and use governed backup/export for remote storage.`
+    );
+    this.name = 'SqliteFilesystemSafetyError';
+    this.diagnostics = structuredClone(diagnostics);
+  }
+}
+
+export class SqliteJournalModeMaintenanceError extends Error {
+  readonly code = 'SQLITE_JOURNAL_MODE_MAINTENANCE_REQUIRED';
+
+  constructor(posture: ExistingSqliteJournalPosture) {
+    super(
+      `Refusing to change journal mode automatically for the authoritative SQLite database (${posture}). Use the governed offline journal-mode maintenance workflow before startup.`
+    );
+    this.name = 'SqliteJournalModeMaintenanceError';
   }
 }
 
@@ -69,11 +123,20 @@ export class SqliteDatabase {
   private db: DatabaseSync | null = null;
   private readonly migrations: readonly SqliteMigration[];
   private readonly applyMigrations: boolean;
+  private readonly filesystemClassifier: (directoryPath: string) => SqliteFilesystemDecision;
+  private readonly databaseLocation: SqliteStorageDiagnostics['databaseLocation'];
 
   constructor(options: SqliteConnectionOptions = {}) {
     this.databasePath = resolveSqliteDatabasePath(options.databasePath);
     this.migrations = options.migrations ?? SQLITE_BASE_MIGRATIONS;
     this.applyMigrations = options.applyMigrations ?? true;
+    this.filesystemClassifier = options.filesystemClassifier ?? detectSqliteFilesystem;
+    this.databaseLocation =
+      this.databasePath === ':memory:'
+        ? 'memory'
+        : options.databasePath || process.env.VERITAS_SQLITE_PATH
+          ? 'configured'
+          : 'runtime-default';
   }
 
   open(): DatabaseSync {
@@ -81,18 +144,74 @@ export class SqliteDatabase {
       return this.db;
     }
 
-    if (!this.isMemoryDatabase()) {
-      mkdirSync(dirname(this.databasePath), { recursive: true });
+    let existingJournalPosture: ExistingSqliteJournalPosture = 'new';
+
+    if (this.isMemoryDatabase()) {
+      sqliteDiagnostics.set(this.databasePath, {
+        schemaVersion: 'sqlite-storage/v1',
+        databaseLocation: 'memory',
+        platform: process.platform,
+        filesystemType: 'memory',
+        filesystemPosture: 'not-applicable',
+        detectionSource: 'memory',
+        reasonCode: 'memory-database',
+        journalMode: 'memory',
+        decisionSource: 'memory',
+        overrideSource: null,
+      });
+    } else {
+      const databaseDirectory = dirname(this.databasePath);
+      mkdirSync(databaseDirectory, { recursive: true });
+      const filesystem =
+        inspectDatabaseFilePath(this.databasePath) ?? this.filesystemClassifier(databaseDirectory);
+      const priorIntegrity = sqliteDiagnostics.get(this.databasePath)?.lastIntegrityCheck;
+      const diagnostics: SqliteStorageDiagnostics = {
+        schemaVersion: 'sqlite-storage/v1',
+        databaseLocation: this.databaseLocation,
+        platform: filesystem.platform,
+        filesystemType: filesystem.filesystemType,
+        filesystemPosture: filesystem.posture,
+        detectionSource: filesystem.detectionSource,
+        reasonCode: filesystem.reasonCode,
+        journalMode: filesystem.posture === 'supported-local' ? 'unknown' : 'refused',
+        decisionSource: 'automatic',
+        overrideSource: null,
+        lastIntegrityCheck: priorIntegrity,
+      };
+      sqliteDiagnostics.set(this.databasePath, diagnostics);
+
+      if (filesystem.posture !== 'supported-local') {
+        throw new SqliteFilesystemSafetyError(diagnostics);
+      }
+
+      existingJournalPosture = inspectExistingSqliteJournalPosture(this.databasePath);
+      if (existingJournalPosture === 'rollback' || existingJournalPosture === 'unrecognized') {
+        throw new SqliteJournalModeMaintenanceError(existingJournalPosture);
+      }
     }
 
-    this.db = new DatabaseSync(this.databasePath);
-    this.applyPragmas();
+    try {
+      this.db = new DatabaseSync(this.databasePath);
+      this.applyPragmas(existingJournalPosture);
+    } catch (error) {
+      this.closeAfterStartupFailure();
+      throw error;
+    }
 
+    // Preserve the established migration-failure contract: callers may inspect
+    // the still-open connection to verify that the migration transaction rolled
+    // back cleanly before deciding whether to close or retry.
     if (this.applyMigrations) {
       this.runMigrations();
     }
 
-    return this.db;
+    try {
+      this.verifyIntegrityOnce();
+      return this.db;
+    } catch (error) {
+      this.closeAfterStartupFailure();
+      throw error;
+    }
   }
 
   getConnection(): DatabaseSync {
@@ -151,14 +270,66 @@ export class SqliteDatabase {
     this.db = null;
   }
 
-  private applyPragmas(): void {
+  private applyPragmas(existingJournalPosture: ExistingSqliteJournalPosture): void {
     const db = this.getConnection();
     db.exec('PRAGMA foreign_keys = ON;');
     db.exec('PRAGMA busy_timeout = 5000;');
 
     if (!this.isMemoryDatabase()) {
-      db.exec('PRAGMA journal_mode = WAL;');
+      const row =
+        existingJournalPosture === 'new'
+          ? (db.prepare('PRAGMA journal_mode = WAL;').get() as JournalModeRow | undefined)
+          : (db.prepare('PRAGMA journal_mode;').get() as JournalModeRow | undefined);
+      const journalMode = row?.journal_mode?.toLowerCase();
+      if (journalMode !== 'wal') {
+        throw new Error(
+          `SQLite refused required WAL journal mode (reported ${journalMode ?? 'unknown'})`
+        );
+      }
+
+      const diagnostics = sqliteDiagnostics.get(this.databasePath);
+      if (diagnostics) {
+        sqliteDiagnostics.set(this.databasePath, { ...diagnostics, journalMode: 'wal' });
+      }
     }
+  }
+
+  private verifyIntegrityOnce(): void {
+    if (this.isMemoryDatabase()) return;
+
+    const diagnostics = sqliteDiagnostics.get(this.databasePath);
+    if (diagnostics?.lastIntegrityCheck?.status === 'ok') return;
+
+    const checkedAt = new Date().toISOString();
+    const rows = this.getConnection().prepare('PRAGMA quick_check;').all() as Array<
+      Record<string, unknown>
+    >;
+    const messages = rows
+      .flatMap((row) => Object.values(row))
+      .map(String)
+      .filter(Boolean);
+    const ok = messages.length === 1 && messages[0].toLowerCase() === 'ok';
+    const result = (messages.join('; ') || 'no result').slice(0, 240);
+
+    if (diagnostics) {
+      sqliteDiagnostics.set(this.databasePath, {
+        ...diagnostics,
+        lastIntegrityCheck: { checkedAt, status: ok ? 'ok' : 'failed', result },
+      });
+    }
+
+    if (!ok) {
+      throw new Error(`SQLite quick_check failed: ${result}`);
+    }
+  }
+
+  private closeAfterStartupFailure(): void {
+    try {
+      this.db?.close();
+    } catch {
+      // Preserve the actionable startup error.
+    }
+    this.db = null;
   }
 
   private ensureSchemaMigrationsTable(): void {
@@ -191,8 +362,7 @@ export class SqliteDatabase {
 
   private assertSupportedUserVersion(maxSupportedVersion: number): void {
     const row = this.getConnection().prepare('PRAGMA user_version;').get() as unknown as
-      | UserVersionRow
-      | undefined;
+      UserVersionRow | undefined;
     const rawUserVersion = row?.user_version;
     const userVersion =
       typeof rawUserVersion === 'number' && Number.isInteger(rawUserVersion) ? rawUserVersion : 0;
@@ -266,5 +436,50 @@ export class SqliteDatabase {
 
   private isMemoryDatabase(): boolean {
     return this.databasePath === ':memory:';
+  }
+}
+
+function inspectExistingSqliteJournalPosture(databasePath: string): ExistingSqliteJournalPosture {
+  if (!existsSync(databasePath) || statSync(databasePath).size === 0) {
+    return 'new';
+  }
+
+  const header = Buffer.alloc(20);
+  const file = openSync(databasePath, 'r');
+  try {
+    const bytesRead = readSync(file, header, 0, header.length, 0);
+    if (bytesRead < header.length || header.subarray(0, 16).toString('utf8') !== SQLITE_HEADER) {
+      return 'unrecognized';
+    }
+
+    const writeVersion = header[18];
+    const readVersion = header[19];
+    if (writeVersion === 2 && readVersion === 2) return 'wal';
+    if (writeVersion === 1 && readVersion === 1) return 'rollback';
+    return 'unrecognized';
+  } finally {
+    closeSync(file);
+  }
+}
+
+function inspectDatabaseFilePath(databasePath: string): SqliteFilesystemDecision | undefined {
+  try {
+    if (!lstatSync(databasePath).isSymbolicLink()) return undefined;
+    return {
+      platform: process.platform,
+      filesystemType: 'symlink',
+      posture: 'unknown',
+      detectionSource: 'database-path',
+      reasonCode: 'database-file-symlink',
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    return {
+      platform: process.platform,
+      filesystemType: 'unknown',
+      posture: 'unknown',
+      detectionSource: 'database-path',
+      reasonCode: 'database-path-inspection-failed',
+    };
   }
 }

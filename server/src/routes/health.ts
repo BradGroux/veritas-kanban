@@ -12,6 +12,7 @@ import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
+import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import type { WebSocketServer } from 'ws';
 
 const log = createLogger('health');
@@ -275,6 +276,7 @@ async function buildDeepHealthPayload() {
     },
     wsConnections,
     circuitBreakers,
+    sqlite: getSqliteStorageDiagnostics(),
     node: {
       version: process.version,
       platform: process.platform,

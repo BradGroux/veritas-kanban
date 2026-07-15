@@ -52,6 +52,13 @@ Desktop data lives under:
 ~/Library/Application Support/@veritas-kanban/desktop/profiles/default/workspaces/local/
 ```
 
+Keep the workspace `data/` directory on the normal local Application Support
+filesystem. Do not relocate or symlink the authoritative SQLite database into a
+NAS, NFS, SMB, FUSE, iCloud, Dropbox, OneDrive, or other synchronized/remote
+folder. The desktop supervisor refuses unsafe or unverified storage before the
+local server binds. Use Maintenance to create a completed export/backup, then
+copy that artifact to remote storage.
+
 Desktop secrets use the native safe-storage/keychain path documented in the
 desktop architecture and release docs. Do not copy raw keychain payloads between
 machines.
@@ -157,11 +164,18 @@ Use Settings -> Maintenance for:
 - redacted log tails
 - redacted debug bundles
 - SQLite export/import reporting
+- redacted SQLite filesystem posture, effective journal mode, decision source,
+  and last integrity check
 - cleanup previews
 - skill security scans
 
 For backup/import API details, see the SQLite portability and Maintenance
-Center sections in `docs/API-REFERENCE.md`.
+Center sections in `docs/API-REFERENCE.md`. Diagnostics omit the raw database
+path, mount point, and mount source. Windows accepts only fixed NTFS/ReFS
+volumes; remote, RAM-disk, removable, unsupported, and unresolved volumes fail
+closed. Other unvalidated platforms refuse local SQLite startup rather than
+assuming filesystem safety. macOS remains the GA desktop target for this
+release.
 
 ## Assistant-Safe Setup Prompts
 

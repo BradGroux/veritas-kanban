@@ -31,6 +31,7 @@ export * from './feedback.types.js';
 export * from './workflow.js';
 export * from './work-product.types.js';
 export * from './maintenance.types.js';
+export * from './sqlite-storage.types.js';
 export * from './governance-trace.types.js';
 export * from './skill-capability.types.js';
 export * from './skill-security.types.js';

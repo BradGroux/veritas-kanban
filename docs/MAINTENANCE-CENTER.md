@@ -17,6 +17,9 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
   safe to paste into support handoffs by default.
 - SQLite export/import actions that report bundle path, database path, table
   counts, warnings, and failure messages.
+- Redacted authoritative SQLite filesystem type/posture, detection and decision
+  source, effective journal mode, override source, and last one-time integrity
+  check when SQLite storage is active.
 - Admin-only skill security scans through
   `/api/v1/maintenance/skill-security/scan`, with redacted JSON and Markdown
   reports persisted for audit review.
@@ -31,6 +34,9 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
   lifecycle policy metadata, and work-product preview metadata.
 - Maintenance summaries and log-tail responses redact local log paths before
   returning data to the UI.
+- SQLite posture diagnostics omit the database path, mount point, and mount
+  source. Known-unsafe or unknown filesystems refuse startup before Maintenance
+  becomes reachable.
 - Debug bundles exclude raw tokens, token hashes, cookies, private keys, raw
   prompts, raw chat content, and generated sensitive text.
 - Local home, project, storage, runtime, and log paths are redacted in bundle

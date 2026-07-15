@@ -137,6 +137,15 @@ mkdir -p ./data
 chown 1001:1001 ./data
 ```
 
+When `VERITAS_STORAGE=sqlite`, the bind mount must resolve to durable local
+storage on the Docker host. Do not place the authoritative database on NFS,
+SMB/CIFS, FUSE, WebDAV, a NAS mount, a synchronized cloud folder, or an
+ephemeral container overlay. Detected unsafe or unverified filesystem posture
+refuses startup before SQLite opens the file. Cloud-sync folders may still look
+like ordinary local storage to the operating system, so the operator must keep
+them out of the authoritative path. See
+[SQLite Filesystem Safety Posture](SQLITE-SCHEMA.md#filesystem-safety-posture).
+
 ---
 
 ## NODE_ENV & Docker
@@ -548,6 +557,8 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 | -------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
 | `VERITAS_DATA_DIR`         | `.veritas-kanban` (relative to project root) | Directory for config, logs, and internal data                              |
 | `DATA_DIR`                 | `/app/data` (Docker only)                    | Mapped data directory inside the Docker container                          |
+| `VERITAS_STORAGE`          | `file`                                       | Selects `file` or `sqlite` storage                                         |
+| `VERITAS_SQLITE_PATH`      | Runtime `veritas.db`                         | SQLite database override; must resolve to verified durable local storage   |
 | `TELEMETRY_RETENTION_DAYS` | `30`                                         | Days to keep telemetry event files before deletion                         |
 | `TELEMETRY_COMPRESS_DAYS`  | `7`                                          | Days after which NDJSON telemetry files are gzip-compressed (0 = disabled) |
 
@@ -641,15 +652,20 @@ tar czf veritas-tasks-$(date +%Y%m%d).tar.gz tasks/
 
 #### Docker
 
+For a live SQLite deployment, create a completed SQLite export from Settings ->
+Maintenance or `POST /api/v1/maintenance/sqlite/export`, then copy the completed
+bundle to remote backup storage. A raw filesystem archive is safe only after the
+Veritas container is stopped; copying a live database without its coordinated
+WAL state can produce an incomplete backup.
+
 ```bash
-# Backup the named volume
+# Stop before making a raw named-volume archive
+docker compose down
 docker run --rm \
   -v kanban-data:/data \
   -v $(pwd):/backup \
   alpine tar czf /backup/veritas-backup-$(date +%Y%m%d).tar.gz -C /data .
-
-# Or copy from the running container
-docker cp veritas-kanban:/app/data ./backup-data
+docker compose up -d
 ```
 
 ### Restore
@@ -780,6 +796,13 @@ Remote clients and desktop onboarding should also validate:
 - `GET /health/ready` for storage, memory, and disk readiness.
 - `GET /api/auth/status` for setup/auth/session state.
 - `/ws` upgrade from the same origin used by the web app.
+
+When SQLite is active, authenticated admin calls to `/health/deep` and
+`/api/health/deep` include redacted filesystem posture, journal mode, and
+integrity evidence. If the filesystem is unsafe or unverified, the server
+refuses startup before binding the HTTP port; inspect container or desktop
+supervisor logs for the reason and move `VERITAS_SQLITE_PATH` to supported local
+storage.
 
 The Docker image includes a built-in health check:
 

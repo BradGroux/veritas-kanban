@@ -6,7 +6,7 @@
  *   /health/ready — Readiness probe
  *   /health/deep  — Full diagnostics (admin only)
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import fs from 'fs/promises';
@@ -14,11 +14,16 @@ import path from 'path';
 import os from 'os';
 import { healthRouter } from '../../routes/health.js';
 import { errorHandler } from '../../middleware/error-handler.js';
+import {
+  resetSqliteStorageDiagnosticsForTests,
+  SqliteDatabase,
+} from '../../storage/sqlite/database.js';
 
 describe('Health Routes', () => {
   let app: express.Express;
   let testDataDir: string;
   let originalDataDir: string | undefined;
+  let originalSqlitePath: string | undefined;
 
   beforeEach(async () => {
     // Create a temp data directory for testing
@@ -31,6 +36,7 @@ describe('Health Routes', () => {
 
     // Set DATA_DIR env var
     originalDataDir = process.env.DATA_DIR;
+    originalSqlitePath = process.env.VERITAS_SQLITE_PATH;
     process.env.DATA_DIR = testDataDir;
 
     // Create test app
@@ -47,6 +53,12 @@ describe('Health Routes', () => {
     } else {
       delete process.env.DATA_DIR;
     }
+    if (originalSqlitePath !== undefined) {
+      process.env.VERITAS_SQLITE_PATH = originalSqlitePath;
+    } else {
+      delete process.env.VERITAS_SQLITE_PATH;
+    }
+    resetSqliteStorageDiagnosticsForTests();
 
     // Clean up test directory
     try {
@@ -140,6 +152,20 @@ describe('Health Routes', () => {
       process.env.VERITAS_ADMIN_KEY = adminKey;
       process.env.VERITAS_AUTH_ENABLED = 'true';
       process.env.NODE_ENV = 'development';
+      const databasePath = path.join(testDataDir, 'health-diagnostics.db');
+      process.env.VERITAS_SQLITE_PATH = databasePath;
+      const database = new SqliteDatabase({
+        databasePath,
+        applyMigrations: false,
+        filesystemClassifier: () => ({
+          platform: 'darwin',
+          filesystemType: 'apfs',
+          posture: 'supported-local',
+          detectionSource: 'health-test',
+          reasonCode: 'supported-local-filesystem',
+        }),
+      });
+      database.open();
 
       try {
         const res = await request(app).get('/health/deep').set('X-API-Key', adminKey);
@@ -160,8 +186,18 @@ describe('Health Routes', () => {
         expect(res.body.dataDirectory).toBeDefined();
         expect(res.body.dataDirectory.path).toBe(testDataDir);
         expect(res.body.dataDirectory.sizeBytes).toBeTypeOf('number');
+        expect(res.body.sqlite).toMatchObject({
+          databaseLocation: 'configured',
+          filesystemType: 'apfs',
+          filesystemPosture: 'supported-local',
+          journalMode: 'wal',
+          detectionSource: 'health-test',
+          decisionSource: 'automatic',
+        });
+        expect(JSON.stringify(res.body.sqlite)).not.toContain(databasePath);
         expect(res.body.timestamp).toBeDefined();
       } finally {
+        database.close();
         // Restore
         if (origAdminKey !== undefined) process.env.VERITAS_ADMIN_KEY = origAdminKey;
         else delete process.env.VERITAS_ADMIN_KEY;

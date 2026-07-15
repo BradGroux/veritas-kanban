@@ -25,6 +25,7 @@ import {
   getWorktreesDir,
 } from '../utils/paths.js';
 import { redactString } from '../lib/redact.js';
+import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 
 interface DirectoryStats {
   bytes: number;
@@ -62,6 +63,7 @@ const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
 export class MaintenanceService {
   async buildSummary(): Promise<MaintenanceSummary> {
     const generatedAt = new Date().toISOString();
+    const sqlite = getSqliteStorageDiagnostics();
     const workProducts = await getWorkProductService().maintenancePreview();
     const [
       storageRoot,
@@ -182,6 +184,7 @@ export class MaintenanceService {
       generatedAt,
       mode: process.env.VERITAS_REMOTE_MODE === 'true' ? 'remote' : 'local',
       storageMode: process.env.VERITAS_STORAGE ?? 'file',
+      ...(sqlite ? { sqlite } : {}),
       health: await this.buildHealthChecks(generatedAt),
       storage: {
         totalBytes: storageRoot.bytes,
@@ -322,6 +325,8 @@ export class MaintenanceService {
       .catch(() => null);
     const agentState = this.signalState(systemHealth?.signals.agents.status);
     const operationsState = this.signalState(systemHealth?.signals.operations.status);
+    const sqlite = getSqliteStorageDiagnostics();
+    const sqliteEnabled = process.env.VERITAS_STORAGE === 'sqlite';
 
     return [
       {
@@ -384,6 +389,26 @@ export class MaintenanceService {
         detail: 'Data lifecycle policy is loaded for cleanup previews.',
         checkedAt,
       },
+      ...(sqliteEnabled
+        ? [
+            {
+              id: 'sqlite-posture',
+              label: 'SQLite storage posture',
+              state:
+                sqlite?.filesystemPosture === 'supported-local' &&
+                sqlite.journalMode === 'wal' &&
+                sqlite.lastIntegrityCheck?.status === 'ok'
+                  ? ('ok' as const)
+                  : sqlite
+                    ? ('fail' as const)
+                    : ('unknown' as const),
+              detail: sqlite
+                ? `${sqlite.filesystemType} is ${sqlite.filesystemPosture}; journal mode is ${sqlite.journalMode}; last quick check is ${sqlite.lastIntegrityCheck?.status ?? 'unavailable'}.`
+                : 'SQLite filesystem posture is unavailable.',
+              checkedAt,
+            },
+          ]
+        : []),
     ];
   }
 

@@ -4,6 +4,10 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MaintenanceService } from '../services/maintenance-service.js';
 import { resetWorkProductServiceForTests } from '../services/work-product-service.js';
+import {
+  resetSqliteStorageDiagnosticsForTests,
+  SqliteDatabase,
+} from '../storage/sqlite/database.js';
 
 const seededSensitiveValues = [
   'vk_seededNegativeFixture1234567890',
@@ -20,9 +24,11 @@ const seededSensitiveValues = [
 describe('MaintenanceService', () => {
   let root: string;
   let originalDataDir: string | undefined;
+  let originalSqlitePath: string | undefined;
 
   beforeEach(async () => {
     originalDataDir = process.env.DATA_DIR;
+    originalSqlitePath = process.env.VERITAS_SQLITE_PATH;
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-maintenance-'));
     process.env.DATA_DIR = root;
     resetWorkProductServiceForTests();
@@ -53,6 +59,12 @@ describe('MaintenanceService', () => {
     } else {
       process.env.DATA_DIR = originalDataDir;
     }
+    if (originalSqlitePath === undefined) {
+      delete process.env.VERITAS_SQLITE_PATH;
+    } else {
+      process.env.VERITAS_SQLITE_PATH = originalSqlitePath;
+    }
+    resetSqliteStorageDiagnosticsForTests();
     resetWorkProductServiceForTests();
     await fs.rm(root, { recursive: true, force: true });
   });
@@ -82,6 +94,39 @@ describe('MaintenanceService', () => {
         'lifecycle-policy',
       ])
     );
+  });
+
+  it('includes redacted SQLite posture in support diagnostics', async () => {
+    const databasePath = path.join(root, '.veritas-kanban', 'support-diagnostics.db');
+    process.env.VERITAS_SQLITE_PATH = databasePath;
+    const database = new SqliteDatabase({
+      databasePath,
+      applyMigrations: false,
+      filesystemClassifier: () => ({
+        platform: 'linux',
+        filesystemType: 'ext4',
+        posture: 'supported-local',
+        detectionSource: 'maintenance-test',
+        reasonCode: 'supported-local-filesystem',
+      }),
+    });
+    database.open();
+
+    try {
+      const summary = await new MaintenanceService().buildSummary();
+
+      expect(summary.sqlite).toMatchObject({
+        databaseLocation: 'configured',
+        filesystemType: 'ext4',
+        filesystemPosture: 'supported-local',
+        journalMode: 'wal',
+        detectionSource: 'maintenance-test',
+        decisionSource: 'automatic',
+      });
+      expect(JSON.stringify(summary.sqlite)).not.toContain(databasePath);
+    } finally {
+      database.close();
+    }
   });
 
   it('tails allowlisted logs with secrets and local paths redacted', async () => {

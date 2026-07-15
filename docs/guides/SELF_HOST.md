@@ -470,6 +470,15 @@ The `DATA_DIR=/app/data` volume holds all persistent data:
 
 **Without a named volume, data is lost on every `docker compose down`.** Always use a volume or bind mount.
 
+For `VERITAS_STORAGE=sqlite`, persistence is not enough: the authoritative
+database must resolve to a verified durable local filesystem. Detected NFS,
+SMB/CIFS, FUSE, WebDAV, NAS, volatile filesystems, container overlay, unknown
+probes, and database-file symlinks refuse startup. Synchronized cloud folders
+remain unsupported but may look local to the operating system, so keep them out
+of the authoritative path. Copy only completed Maintenance exports/backups to
+remote storage.
+See [SQLite Filesystem Safety Posture](../SQLITE-SCHEMA.md#filesystem-safety-posture).
+
 ---
 
 ## Security

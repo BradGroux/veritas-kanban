@@ -75,6 +75,7 @@ import {
   type WebSocketEventChannel,
 } from './services/websocket-permissions.js';
 import { closeWebSocketSafely } from './utils/websocket-close.js';
+import { startAfterInitialization } from './utils/startup-gate.js';
 
 const log = createLogger('server');
 
@@ -521,65 +522,60 @@ app.use(errorHandler);
 let configService: ConfigService | null = null;
 let storageInitialized = false;
 
-// Initialize services on startup
-(async () => {
+// Initialize services before binding the HTTP port. Storage safety failures must
+// prevent the process from briefly accepting requests against partial state.
+async function initializeServices(): Promise<void> {
+  // 1. Backup + integrity checks on the data directory
+  const dataDir = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+  let backupPath = '';
   try {
-    // 1. Backup + integrity checks on the data directory
-    const dataDir =
-      process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
-    let backupPath = '';
-    try {
-      backupPath = await createBackup(dataDir);
-    } catch (backupErr) {
-      log.warn({ err: backupErr }, 'Startup backup failed — continuing without backup');
-    }
-
-    const integrityReport = await runIntegrityChecks(dataDir);
-    log.info(
-      {
-        backup: backupPath || '(skipped)',
-        filesChecked: integrityReport.filesChecked,
-        issues: integrityReport.issuesFound,
-        recovered: integrityReport.recoveredCount,
-      },
-      `Startup: backup ${backupPath ? 'created' : 'skipped'}, integrity: ${integrityReport.filesChecked} files checked, ${integrityReport.issuesFound} issues found`
-    );
-
-    // 2. Run data migrations (idempotent)
-    await runStartupMigrations();
-
-    // 3. Initialize telemetry service and sync with feature settings
-    configService = new ConfigService();
-    // Wire the singleton into the agent-status route so delegation-violation
-    // requests never allocate a per-request ConfigService (issue #779).
-    // This must happen after configService is assigned (the IIFE is async so
-    // initAgentStatus at module eval time receives null).
-    setAgentStatusConfigService(configService);
-    const featureSettings = await configService.getFeatureSettings();
-    syncSettingsToServices(featureSettings);
-    await getTelemetryService().init();
-    await getPolicyService().waitForInit();
-
-    const storageType = getStorageTypeFromEnv();
-    if (storageType === 'sqlite') {
-      await initStorage('sqlite');
-      storageInitialized = true;
-      log.info('SQLite storage initialized');
-    }
-
-    // 4. Reconcile any agent attempts that were left in `running` state from
-    //    a previous server crash/restart (issue #781).
-    try {
-      await agentService.reconcileRunningAttempts();
-    } catch (reconcileErr) {
-      // Non-fatal: log and continue — the server can still serve requests.
-      log.warn({ err: reconcileErr }, 'Startup: agent attempt reconciliation failed');
-    }
-  } catch (err) {
-    log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
-    process.exit(1);
+    backupPath = await createBackup(dataDir);
+  } catch (backupErr) {
+    log.warn({ err: backupErr }, 'Startup backup failed — continuing without backup');
   }
-})();
+
+  const integrityReport = await runIntegrityChecks(dataDir);
+  log.info(
+    {
+      backup: backupPath || '(skipped)',
+      filesChecked: integrityReport.filesChecked,
+      issues: integrityReport.issuesFound,
+      recovered: integrityReport.recoveredCount,
+    },
+    `Startup: backup ${backupPath ? 'created' : 'skipped'}, integrity: ${integrityReport.filesChecked} files checked, ${integrityReport.issuesFound} issues found`
+  );
+
+  // 2. Run data migrations (idempotent)
+  await runStartupMigrations();
+
+  // 3. Initialize telemetry service and sync with feature settings
+  configService = new ConfigService();
+  // Wire the singleton into the agent-status route so delegation-violation
+  // requests never allocate a per-request ConfigService (issue #779).
+  // This must happen after configService is assigned (the IIFE is async so
+  // initAgentStatus at module eval time receives null).
+  setAgentStatusConfigService(configService);
+  const featureSettings = await configService.getFeatureSettings();
+  syncSettingsToServices(featureSettings);
+  await getTelemetryService().init();
+  await getPolicyService().waitForInit();
+
+  const storageType = getStorageTypeFromEnv();
+  if (storageType === 'sqlite') {
+    await initStorage('sqlite');
+    storageInitialized = true;
+    log.info('SQLite storage initialized');
+  }
+
+  // 4. Reconcile any agent attempts that were left in `running` state from
+  //    a previous server crash/restart (issue #781).
+  try {
+    await agentService.reconcileRunningAttempts();
+  } catch (reconcileErr) {
+    // Non-fatal: log and continue — the server can still serve requests.
+    log.warn({ err: reconcileErr }, 'Startup: agent attempt reconciliation failed');
+  }
+}
 
 // Create HTTP server
 const server = createServer(app);
@@ -754,8 +750,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   let currentEmitter: import('events').EventEmitter | null = null;
   let currentOutputHandler: ((output: AgentOutput) => void) | null = null;
   let currentCompleteHandler:
-    | ((result: { code: number; signal: string | null; status: string }) => void)
-    | null = null;
+    ((result: { code: number; signal: string | null; status: string }) => void) | null = null;
   let currentErrorHandler: ((error: Error) => void) | null = null;
 
   const cleanupEmitterListeners = () => {
@@ -1153,69 +1148,75 @@ async function gracefulShutdown(signal: string) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Start server
-server.listen(Number(PORT), HOST, () => {
-  const authStatus = getAuthStatus();
-  const localhostInfo = authStatus.localhostBypass
-    ? `, localhost bypass [${authStatus.localhostRole}]`
-    : '';
-  const authLine = authStatus.enabled
-    ? `Auth: ON (${authStatus.configuredKeys} keys${localhostInfo})`
-    : 'Auth: OFF (dev mode)';
-  const corsLine = `CORS: ${ALLOWED_ORIGINS.length} origins`;
+function startServer(): void {
+  server.listen(Number(PORT), HOST, () => {
+    const authStatus = getAuthStatus();
+    const localhostInfo = authStatus.localhostBypass
+      ? `, localhost bypass [${authStatus.localhostRole}]`
+      : '';
+    const authLine = authStatus.enabled
+      ? `Auth: ON (${authStatus.configuredKeys} keys${localhostInfo})`
+      : 'Auth: OFF (dev mode)';
+    const corsLine = `CORS: ${ALLOWED_ORIGINS.length} origins`;
 
-  log.info(
-    {
-      port: PORT,
-      host: HOST || 'default',
-      api: `http://${HOST || 'localhost'}:${PORT}`,
-      ws: `ws://${HOST || 'localhost'}:${PORT}/ws`,
-      auth: authLine,
-      cors: corsLine,
-      helmet: true,
-      compression: true,
-      rateLimit: `${process.env.RATE_LIMIT_MAX || 300} req/min (localhost exempt)`,
-      bodyLimit: '1MB',
-    },
-    'Veritas Kanban Server started'
-  );
+    log.info(
+      {
+        port: PORT,
+        host: HOST || 'default',
+        api: `http://${HOST || 'localhost'}:${PORT}`,
+        ws: `ws://${HOST || 'localhost'}:${PORT}/ws`,
+        auth: authLine,
+        cors: corsLine,
+        helmet: true,
+        compression: true,
+        rateLimit: `${process.env.RATE_LIMIT_MAX || 300} req/min (localhost exempt)`,
+        bodyLimit: '1MB',
+      },
+      'Veritas Kanban Server started'
+    );
 
-  // Security warnings for localhost bypass
-  if (authStatus.localhostBypass) {
-    if (authStatus.localhostRole === 'admin') {
-      log.warn(
-        { localhostRole: 'admin' },
-        'Localhost bypass is active with ADMIN role — any local process has full access without authentication'
-      );
-    } else {
-      log.info(
-        { localhostRole: authStatus.localhostRole },
-        'Localhost bypass active — local connections can read data without authentication'
-      );
+    // Security warnings for localhost bypass
+    if (authStatus.localhostBypass) {
+      if (authStatus.localhostRole === 'admin') {
+        log.warn(
+          { localhostRole: 'admin' },
+          'Localhost bypass is active with ADMIN role — any local process has full access without authentication'
+        );
+      } else {
+        log.info(
+          { localhostRole: authStatus.localhostRole },
+          'Localhost bypass active — local connections can read data without authentication'
+        );
+      }
     }
-  }
 
-  // Security warnings for weak admin keys
-  const keyWarnings = checkAdminKeyStrength();
-  for (const warning of keyWarnings) {
-    if (warning.level === 'critical') {
-      log.warn({ security: 'admin-key' }, `⚠️  SECURITY: ${warning.message}`);
-    } else {
-      log.warn({ security: 'admin-key' }, warning.message);
+    // Security warnings for weak admin keys
+    const keyWarnings = checkAdminKeyStrength();
+    for (const warning of keyWarnings) {
+      if (warning.level === 'critical') {
+        log.warn({ security: 'admin-key' }, `⚠️  SECURITY: ${warning.message}`);
+      } else {
+        log.warn({ security: 'admin-key' }, warning.message);
+      }
     }
-  }
 
-  // Security warnings for JWT secret configuration
-  const jwtWarnings = checkJwtSecretConfig();
-  for (const warning of jwtWarnings) {
-    if (warning.level === 'critical') {
-      log.warn({ security: 'jwt-secret' }, `⚠️  SECURITY: ${warning.message}`);
-    } else if (warning.level === 'warning') {
-      log.warn({ security: 'jwt-secret' }, warning.message);
-    } else {
-      log.info({ security: 'jwt-secret' }, warning.message);
+    // Security warnings for JWT secret configuration
+    const jwtWarnings = checkJwtSecretConfig();
+    for (const warning of jwtWarnings) {
+      if (warning.level === 'critical') {
+        log.warn({ security: 'jwt-secret' }, `⚠️  SECURITY: ${warning.message}`);
+      } else if (warning.level === 'warning') {
+        log.warn({ security: 'jwt-secret' }, warning.message);
+      } else {
+        log.info({ security: 'jwt-secret' }, warning.message);
+      }
     }
-  }
 
-  startScheduledDeliverablesRunner();
+    startScheduledDeliverablesRunner();
+  });
+}
+
+void startAfterInitialization(initializeServices, startServer).catch((err) => {
+  log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
+  process.exit(1);
 });

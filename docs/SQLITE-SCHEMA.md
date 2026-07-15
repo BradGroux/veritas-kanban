@@ -23,9 +23,46 @@ The default v5 database file is:
 ```
 
 The existing `DATA_DIR` and `VERITAS_DATA_DIR` rules remain authoritative. When
-either environment variable is set, the database lives on that configured volume.
-Fresh v5 installs use SQLite by default. Upgraded v4 projects keep their original
+either environment variable is set, the default database path follows that
+configured local volume. SQLite is selected with `VERITAS_STORAGE=sqlite`; file
+storage remains the runtime default. Upgraded v4 projects keep their original
 files as a migration backup until the migration is verified.
+
+### Filesystem Safety Posture
+
+The authoritative database must live on durable local storage. Before
+`DatabaseSync` opens the database or can create `-wal`/`-shm` sidecars, startup
+classifies the database parent filesystem and records a redacted
+`sqlite-storage/v1` decision. WAL is enabled only when the current platform
+provides affirmative supported-local evidence:
+
+- Linux: `btrfs`, `ext2`, `ext3`, `ext4`, `f2fs`, `jfs`, `xfs`, or `zfs` from
+  `/proc/self/mountinfo`.
+- macOS: `apfs` or `hfs` from `/sbin/mount`, and only when the mount also reports
+  the `local` flag.
+- Windows: a volume/access-path probe accepts only fixed NTFS or ReFS volumes.
+  UNC/mapped remote and RAM-disk volumes are unsafe; removable, unsupported, or
+  unresolved volumes remain unknown and refuse startup.
+- Other platforms: local paths are currently unverified and refuse startup.
+
+NFS, SMB/CIFS, FUSE, WebDAV, distributed/remote filesystems, volatile
+`ramfs`/`tmpfs`, unrecognized filesystems (including container `overlay`), probe
+failures, and database-file symlinks fail closed. The startup error explains the
+locking/shared-memory corruption risk and remediation without exposing the raw
+database path, mount point, or mount source. Existing rollback-journal databases
+also refuse automatic conversion; use the governed offline maintenance workflow
+when it becomes available rather than changing journal mode during startup.
+
+Do not share one SQLite file between Veritas servers, relocate it into a synced
+cloud folder, or create independent per-host authoritative copies. Cloud-sync
+folders can still report an ordinary local filesystem and therefore cannot be
+detected reliably; they remain unsupported even when the classifier sees APFS,
+ext4, NTFS, or another accepted local type. Keep the live database local, create
+a completed export/backup, and then copy that artifact to remote or NAS storage.
+
+After successful startup, admin deep-health and Maintenance diagnostics expose
+the redacted filesystem type/posture, detection reason/source, effective journal
+mode, decision/override source, and last one-time `PRAGMA quick_check` result.
 
 ## Global Column Conventions
 

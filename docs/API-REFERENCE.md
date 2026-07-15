@@ -979,6 +979,26 @@ Three-tier health check system for container orchestration.
 }
 ```
 
+Authenticated deep-health responses include an optional top-level `sqlite`
+object after SQLite initializes successfully. The same redacted
+`sqlite-storage/v1` contract is returned by the Maintenance summary:
+
+| Field                               | Meaning                                                                                |
+| ----------------------------------- | -------------------------------------------------------------------------------------- |
+| `schemaVersion`                     | Always `sqlite-storage/v1`                                                             |
+| `databaseLocation`                  | `memory`, `configured`, or `runtime-default`; never a raw path                         |
+| `platform`                          | Runtime platform used for classification                                               |
+| `filesystemType`                    | Normalized filesystem type or conservative sentinel                                    |
+| `filesystemPosture`                 | `supported-local`, `known-unsafe`, `unknown`, or `not-applicable`                      |
+| `detectionSource` / `reasonCode`    | Redacted evidence and decision reason                                                  |
+| `journalMode`                       | `wal`, `memory`, `refused`, or `unknown`                                               |
+| `decisionSource` / `overrideSource` | Automatic/memory decision and override provenance (`null` in this release)             |
+| `lastIntegrityCheck`                | Optional timestamp, `ok`/`failed` status, and bounded result from `PRAGMA quick_check` |
+
+Raw database paths, mount points, and mount sources are intentionally omitted.
+Unsafe or unknown startup posture cannot be queried through health because the
+server refuses to bind; use the redacted startup/supervisor log instead.
+
 ---
 
 ## WebSocket
@@ -4134,7 +4154,8 @@ GET /api/v1/maintenance/summary
 Returns health checks, storage categories, lifecycle policy metadata, work
 product maintenance preview data, safe cleanup preview items, and allowlisted
 log sources with redacted local paths. Cleanup is preview-only; the endpoint
-does not delete data.
+does not delete data. When SQLite is active, the response also includes the
+optional `sqlite` posture object documented under [Health](#health).
 
 #### Redacted Log Tail
 
