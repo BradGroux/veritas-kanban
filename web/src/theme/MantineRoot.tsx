@@ -75,7 +75,12 @@ export function MantineRoot({ children, env = 'default' }: MantineRootProps) {
       {env === 'test' ? <VeritasTestColorSchemeSync /> : <VeritasColorSchemeSync />}
       <ModalsProvider>
         {children}
-        <Notifications position="bottom-right" limit={5} zIndex={5000} />
+        <Notifications
+          className="veritas-notifications"
+          position="bottom-right"
+          limit={5}
+          zIndex={5000}
+        />
       </ModalsProvider>
     </MantineProvider>
   );
