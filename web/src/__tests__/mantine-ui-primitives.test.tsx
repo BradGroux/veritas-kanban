@@ -316,6 +316,13 @@ describe('Mantine-backed shared UI primitives', () => {
       expect(screen.getByText('Saved')).toBeDefined();
       expect(screen.getByText('Mantine notification bridge is active.')).toBeDefined();
     });
+
+    expect(
+      document.querySelector(".veritas-notifications[data-position='bottom-right']")
+    ).not.toBeNull();
+    expect(globalStyles).toMatch(
+      /\.veritas-notifications\[data-position\^='bottom-'\]\s*\{[^}]*bottom:\s*calc\(5\.5rem \+ env\(safe-area-inset-bottom\)\);/s
+    );
   });
 
   it('preserves tabs value changes through the legacy onValueChange contract', () => {

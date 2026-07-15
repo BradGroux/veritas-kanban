@@ -155,4 +155,73 @@ test.describe('mobile responsive flows', () => {
     await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Forgot password?' })).toBeVisible();
   });
+
+  test('keeps mobile notifications operable above a conflict toast after task detail closes', async ({
+    page,
+  }) => {
+    const taskTitle = `E2E Mobile Notification Conflict ${Date.now()}`;
+    const task = await seedTestTask(page, {
+      title: taskTitle,
+      description: 'Verify notifications remain touchable while a conflict toast is visible.',
+      status: 'todo',
+      priority: 'high',
+      type: 'code',
+    });
+    testTaskId = (task as { id: string }).id;
+
+    let returnedConflict = false;
+    await page.route(`**/api/tasks/${testTaskId}`, async (route) => {
+      if (!returnedConflict && route.request().method() === 'PATCH') {
+        returnedConflict = true;
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: {
+              code: 'CONFLICT',
+              message: 'Task revision conflict',
+              details: { current: task },
+            },
+            meta: { timestamp: new Date().toISOString() },
+          }),
+        });
+        return;
+      }
+
+      await route.fallback();
+    });
+
+    await page.goto('/');
+
+    const statusSelect = page.getByRole('combobox', {
+      name: `Change status for ${taskTitle}`,
+    });
+    await statusSelect.click();
+    await page.getByRole('option', { name: 'Blocked' }).click();
+    await expect(page.getByText('Task changed elsewhere')).toBeVisible();
+
+    await page.getByText(taskTitle).first().click();
+    const detail = page.getByTestId('task-detail-panel');
+    await expect(detail).toBeVisible();
+    await detail.getByRole('button', { name: 'Close task details' }).click();
+    await expect(detail).not.toBeVisible();
+
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+    const notificationViewport = page.locator(
+      ".veritas-notifications[data-position='bottom-right']"
+    );
+    const mobileNotificationsButton = page.getByRole('button', { name: 'Mobile notifications' });
+    const [navigationBox, notificationBox] = await Promise.all([
+      mobileNavigation.boundingBox(),
+      notificationViewport.boundingBox(),
+    ]);
+
+    expect(navigationBox).not.toBeNull();
+    expect(notificationBox).not.toBeNull();
+    expect(notificationBox!.y + notificationBox!.height).toBeLessThanOrEqual(navigationBox!.y);
+
+    await tapLocatorCenter(page, mobileNotificationsButton);
+    await expect(page.getByLabel('Notifications', { exact: true })).toBeVisible();
+  });
 });

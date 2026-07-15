@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept mobile notifications above the safe-area-aware bottom navigation so
+  long-lived toasts cannot intercept touch input after Task Detail closes
+  (#869).
+
 ## [5.2.4] - 2026-07-13
 
 ### Fixed

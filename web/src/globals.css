@@ -139,6 +139,11 @@
     right: max(1rem, env(safe-area-inset-right));
     bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
+
+  /* Keep high-z-index toasts from intercepting the fixed mobile navigation. */
+  .veritas-notifications[data-position^='bottom-'] {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
