@@ -224,6 +224,8 @@ export interface StepRun {
   retries: number;
   output?: string; // Path to output file
   error?: string;
+  providerRuntimeManifest?: import('@veritas-kanban/shared').ProviderRuntimeManifest;
+  runtimeControls?: import('@veritas-kanban/shared').ProviderRuntimeControlSet;
 
   // Loop-specific state
   loopState?: {
@@ -259,6 +261,7 @@ export interface StepExecutionResult {
   output: unknown; // Parsed output (for context passing)
   outputPath: string; // Path to output file
   budgetUsage?: Partial<import('@veritas-kanban/shared').AgentBudgetUsage>;
+  providerRuntimeManifest?: import('@veritas-kanban/shared').ProviderRuntimeManifest;
 }
 
 // ==================== RBAC & Audit Types ====================

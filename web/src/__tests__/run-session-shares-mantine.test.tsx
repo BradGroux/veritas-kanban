@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   sendMessageMutateAsync: vi.fn(),
   approvalMutateAsync: vi.fn(),
   forkMutateAsync: vi.fn(),
+  useAgentStatus: vi.fn(),
   useAgentStream: vi.fn(),
   toast: vi.fn(),
   identity: {
@@ -59,6 +60,7 @@ vi.mock('@/hooks/useRunSessions', () => ({
 }));
 
 vi.mock('@/hooks/useAgent', () => ({
+  useAgentStatus: mocks.useAgentStatus,
   useAgentStream: mocks.useAgentStream,
 }));
 
@@ -113,6 +115,33 @@ describe('run session share Mantine surfaces', () => {
     mocks.useRunSessions.mockReturnValue({ data: [baseShare], isLoading: false });
     mocks.useRunSession.mockReturnValue({ data: baseShare, isLoading: false, error: null });
     mocks.useRunSessionEvents.mockReturnValue({ data: [event], isLoading: false });
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-721',
+        controls: {
+          controls: [
+            {
+              action: 'message',
+              capabilityId: 'run.steer',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Steering is supported.',
+            },
+            {
+              action: 'approvals',
+              capabilityId: 'run.approvals',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Provider approvals are supported.',
+            },
+          ],
+        },
+      },
+      error: null,
+    });
     mocks.useAgentStream.mockReturnValue({
       outputs: [
         {
@@ -240,5 +269,96 @@ describe('run session share Mantine surfaces', () => {
         reason: 'Forked from shared live run session.',
       },
     });
+  });
+
+  it('disables co-drive messaging when the persisted runtime manifest cannot steer', () => {
+    mocks.useRunSession.mockReturnValue({
+      data: { ...baseShare, permission: 'edit' },
+      isLoading: false,
+      error: null,
+    });
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-721',
+        controls: {
+          controls: [
+            {
+              action: 'message',
+              capabilityId: 'run.steer',
+              state: 'unsupported',
+              available: false,
+              advisory: false,
+              reason: 'This provider cannot steer the active run.',
+            },
+          ],
+        },
+      },
+      error: null,
+    });
+
+    renderWithProviders(<RunSessionShareView shareId="run_share_721" />);
+
+    expect(
+      screen.getByText('Message unavailable: This provider cannot steer the active run.')
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Send Message unavailable: This provider cannot steer the active run.',
+        })
+        .getAttribute('disabled')
+    ).not.toBeNull();
+    expect(
+      screen.getByText(
+        'Approval unavailable: Validated provider approval evidence is not available for this run.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve' }).getAttribute('disabled')).not.toBeNull();
+  });
+
+  it('fails shared controls closed for a replacement attempt', () => {
+    mocks.useRunSession.mockReturnValue({
+      data: { ...baseShare, permission: 'edit' },
+      isLoading: false,
+      error: null,
+    });
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-replacement',
+        controls: {
+          controls: [
+            {
+              action: 'message',
+              capabilityId: 'run.steer',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Steering is supported.',
+            },
+            {
+              action: 'approvals',
+              capabilityId: 'run.approvals',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Provider approvals are supported.',
+            },
+          ],
+        },
+      },
+      error: null,
+    });
+
+    renderWithProviders(<RunSessionShareView shareId="run_share_721" />);
+
+    const replacementReason =
+      'This link is pinned to an earlier attempt and cannot control its replacement.';
+    expect(screen.getByText(`Message unavailable: ${replacementReason}`)).toBeTruthy();
+    expect(screen.getByText(`Approval unavailable: ${replacementReason}`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve' }).getAttribute('disabled')).not.toBeNull();
+    expect(mocks.useAgentStream).toHaveBeenCalledWith(undefined);
+    expect(screen.queryByText('agent streamed output')).toBeNull();
   });
 });

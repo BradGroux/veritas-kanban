@@ -84,7 +84,7 @@ export class RunSessionShareService {
       actorLabel: input.actorLabel,
       stablePath: `/runs/shared/${id}`,
       mobileSafeApprovalClasses: this.normalizeApprovalClasses(input.mobileSafeApprovalClasses),
-      snapshot: this.snapshotTask(task),
+      snapshot: await this.snapshotTask(task),
       forkedTaskIds: [],
     };
 
@@ -209,9 +209,11 @@ export class RunSessionShareService {
     actor: RunSessionActor
   ): Promise<RunSessionEvent> {
     const share = await this.get(id, { actor, permission: 'edit' });
+    await this.agentService.assertActiveRunControl(share.taskId, 'message', share.sourceId);
     const delivery = await this.agentService.sendMessage(share.taskId, input.message, {
       actor: actor.label || actor.id,
       source: `run-session:${share.id}`,
+      expectedAttemptId: share.sourceId,
     });
     const event = this.createEvent(share, 'message.sent', actor, {
       delivered: delivery.delivered,
@@ -232,6 +234,7 @@ export class RunSessionShareService {
     actor: RunSessionActor
   ): Promise<RunSessionEvent> {
     const share = await this.get(id, { actor, permission: 'edit' });
+    await this.agentService.assertActiveRunControl(share.taskId, 'approvals', share.sourceId);
     const mobileClient = actor.clientMode === 'mobile-pwa';
     if (mobileClient && !share.mobileSafeApprovalClasses.includes(input.actionClass)) {
       throw new ForbiddenError('Approval class is not mobile-safe for this share', {
@@ -326,8 +329,8 @@ export class RunSessionShareService {
     return task;
   }
 
-  private snapshotTask(task: Task): RunSessionSnapshot {
-    const status = this.agentService.getAgentStatus(task.id);
+  private async snapshotTask(task: Task): Promise<RunSessionSnapshot> {
+    const status = await this.agentService.getAgentStatus(task.id);
     return {
       running: Boolean(status),
       taskTitle: task.title,

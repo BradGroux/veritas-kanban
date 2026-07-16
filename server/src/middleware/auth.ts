@@ -147,6 +147,23 @@ function buildAuthContext(input: {
   };
 }
 
+function buildLocalOwnerPasswordSessionContext(
+  isLocalhost: boolean
+): NonNullable<AuthenticatedRequest['auth']> {
+  return {
+    ...buildAuthContext({
+      role: 'admin',
+      keyName: 'session',
+      isLocalhost,
+      authMethod: 'session',
+    }),
+    // Production deliberately keeps isLocalhost=false so loopback never enables
+    // passwordless bypass. A verified local-owner password session still needs
+    // the narrow capability required by the packaged desktop agent controls.
+    capabilities: ['local-agent:run'],
+  };
+}
+
 function permissionListFor(auth: Pick<AuthContext, 'role' | 'permissions'>): AuthPermission[] {
   return auth.permissions ?? permissionsForRole(auth.role);
 }
@@ -521,12 +538,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
         blockedPasswordSession = true;
       } else {
-        req.auth = buildAuthContext({
-          role: 'admin',
-          keyName: 'session',
-          isLocalhost,
-          authMethod: 'session',
-        });
+        req.auth = buildLocalOwnerPasswordSessionContext(isLocalhost);
         return next();
       }
     }
@@ -818,12 +830,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
         } else {
           return {
             authenticated: true,
-            ...buildAuthContext({
-              role: 'admin',
-              keyName: 'session',
-              isLocalhost,
-              authMethod: 'session',
-            }),
+            ...buildLocalOwnerPasswordSessionContext(isLocalhost),
           };
         }
       }

@@ -609,7 +609,7 @@ vk github mappings               # List issue↔task mappings
 ```bash
 vk agents:pending                # List pending agent requests
 vk agents:status <id>            # Check if agent running
-vk agents:complete <id> -s       # Mark agent complete
+vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>
 vk profiles list                 # List reusable agent profile packages
 vk profiles validate ./agent.yml # Validate a package before import
 vk profiles import ./agent.yml   # Import or replace a package

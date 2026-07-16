@@ -1233,8 +1233,10 @@ step before execution and write a `sandbox-policy` governance trace; advisory
 unsupported controls continue with warnings.
 
 Use `/api/sandbox-policies/validate` to preflight a workflow agent's preset in
-the authoring UI or custom automation. Presets can also be assigned visually in
-the workflow authoring panel.
+the authoring UI or custom automation. Public preflights must include a
+`providerRuntimeManifestDigest` currently registered by a connected agent host;
+the API rejects stale, disconnected, unknown, or provider-mismatched manifests.
+Presets can also be assigned visually in the workflow authoring panel.
 
 Sandbox policies are complementary to tool policies:
 

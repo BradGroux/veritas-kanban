@@ -1,6 +1,6 @@
 import type {
   CreateGovernanceTraceInput,
-  SandboxPolicyDryRunRequest,
+  SandboxPolicyEvaluationInput,
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
   SandboxPolicyRuleEvaluation,
@@ -10,6 +10,7 @@ import type {
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sandboxPolicyPresetSchema } from '../schemas/sandbox-policy-schemas.js';
 import { ConfigService, getConfigService } from './config-service.js';
+import { sandboxCapabilitiesFromManifest } from './provider-runtime-control-service.js';
 
 const BUILT_IN_TIMESTAMP = '2026-06-18T00:00:00.000Z';
 
@@ -179,26 +180,6 @@ export const BUILT_IN_SANDBOX_PRESETS: SandboxPolicyPreset[] = [
   },
 ];
 
-const PROVIDER_CAPABILITIES: Record<string, SandboxProviderCapabilities> = {
-  'codex-cli': {
-    provider: 'codex-cli',
-    supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
-  },
-  'hermes-cli': {
-    provider: 'hermes-cli',
-    supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
-  },
-  'codex-sdk': {
-    provider: 'codex-sdk',
-    supported: ['filesystem.read', 'filesystem.write', 'network.disable', 'environment.allowlist'],
-  },
-  openclaw: {
-    provider: 'openclaw',
-    supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
-    advisory: ['network.allowlist', 'credential.broker'],
-  },
-};
-
 export class SandboxPolicyService {
   constructor(private readonly configService: ConfigService = getConfigService()) {}
 
@@ -276,7 +257,7 @@ export class SandboxPolicyService {
     await this.configService.saveConfig(config);
   }
 
-  async dryRun(input: SandboxPolicyDryRunRequest = {}): Promise<SandboxPolicyDryRunResult> {
+  async dryRun(input: SandboxPolicyEvaluationInput = {}): Promise<SandboxPolicyDryRunResult> {
     const preset = input.preset
       ? this.normalizePreset(input.preset)
       : await this.resolvePreset(input.presetId);
@@ -284,17 +265,22 @@ export class SandboxPolicyService {
       return this.resultForDisabledPreset(preset, input);
     }
 
-    const capabilities = input.providerCapabilities ?? this.capabilitiesForProvider(input.provider);
+    const capabilities = sandboxCapabilitiesFromManifest(input.providerRuntimeManifest);
     const evaluations = this.evaluateRules(preset, capabilities);
     const unsupportedRules = evaluations.filter((rule) => rule.status === 'unsupported');
     const advisoryRules = evaluations.filter((rule) => rule.status === 'advisory');
+    const advisoryUnsupportedRules = preset.enforcement === 'advisory' ? unsupportedRules : [];
     const shouldBlock = preset.enforcement === 'required' && unsupportedRules.length > 0;
-    const decision = shouldBlock ? 'block' : advisoryRules.length > 0 ? 'warn' : 'allow';
+    const decision = shouldBlock
+      ? 'block'
+      : advisoryRules.length > 0 || advisoryUnsupportedRules.length > 0
+        ? 'warn'
+        : 'allow';
     const networkAccessEnabled = preset.network.defaultEgress === 'allow';
     return {
       decision,
       preset: this.redactPresetForResult(preset),
-      provider: input.provider ?? capabilities.provider,
+      provider: input.providerRuntimeManifest?.provider ?? input.provider ?? capabilities.provider,
       effective: {
         sandboxMode: this.effectiveSandboxMode(preset),
         networkAccessEnabled,
@@ -305,6 +291,7 @@ export class SandboxPolicyService {
       unsupportedRules,
       warnings: [
         ...advisoryRules.map((rule) => rule.detail),
+        ...advisoryUnsupportedRules.map((rule) => rule.detail),
         ...(networkAccessEnabled ? ['Network egress remains enabled by this preset.'] : []),
       ],
       remediation: shouldBlock
@@ -313,7 +300,7 @@ export class SandboxPolicyService {
     };
   }
 
-  async dryRunWithTrace(input: SandboxPolicyDryRunRequest = {}): Promise<{
+  async dryRunWithTrace(input: SandboxPolicyEvaluationInput = {}): Promise<{
     result: SandboxPolicyDryRunResult;
     trace: CreateGovernanceTraceInput;
   }> {
@@ -325,7 +312,7 @@ export class SandboxPolicyService {
   }
 
   async assertLaunchAllowed(
-    input: SandboxPolicyDryRunRequest = {}
+    input: SandboxPolicyEvaluationInput = {}
   ): Promise<SandboxPolicyDryRunResult> {
     const result = await this.dryRun(input);
     if (result.decision === 'block') {
@@ -343,17 +330,6 @@ export class SandboxPolicyService {
       );
     }
     return result;
-  }
-
-  capabilitiesForProvider(provider?: string): SandboxProviderCapabilities {
-    const key = (provider || 'codex-cli').toLowerCase();
-    return (
-      PROVIDER_CAPABILITIES[key] ?? {
-        provider,
-        supported: [],
-        advisory: [],
-      }
-    );
   }
 
   private async resolvePreset(id?: string): Promise<SandboxPolicyPreset> {
@@ -512,7 +488,7 @@ export class SandboxPolicyService {
 
   private resultForDisabledPreset(
     preset: SandboxPolicyPreset,
-    input: SandboxPolicyDryRunRequest
+    input: SandboxPolicyEvaluationInput
   ): SandboxPolicyDryRunResult {
     return {
       decision: preset.enforcement === 'required' ? 'block' : 'warn',
@@ -545,7 +521,7 @@ export class SandboxPolicyService {
 
   private buildTrace(
     result: SandboxPolicyDryRunResult,
-    input: SandboxPolicyDryRunRequest
+    input: SandboxPolicyEvaluationInput
   ): CreateGovernanceTraceInput {
     const outcome =
       result.decision === 'block' ? 'blocked' : result.decision === 'warn' ? 'warned' : 'allowed';

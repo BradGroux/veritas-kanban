@@ -15,7 +15,7 @@ const identifierSchema = z
   .max(120)
   .regex(/^[a-zA-Z][a-zA-Z0-9._:/-]*$/, 'Invalid runtime identifier');
 
-const capabilityIdSchema = z
+export const ProviderRuntimeCapabilityIdSchema = z
   .string()
   .trim()
   .min(2)
@@ -24,7 +24,7 @@ const capabilityIdSchema = z
 
 export const ProviderRuntimeCapabilityEvidenceSchema = z
   .object({
-    id: capabilityIdSchema,
+    id: ProviderRuntimeCapabilityIdSchema,
     state: z.enum(['supported', 'advisory', 'unsupported', 'unknown']),
     source: z.enum(['runtime-probe', 'contract-test', 'host-enforced']),
     reason: z.string().trim().min(1).max(1000),

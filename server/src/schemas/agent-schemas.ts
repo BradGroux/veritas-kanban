@@ -31,7 +31,7 @@ export type CompleteAgentBody = z.infer<typeof CompleteAgentBodySchema>;
  * POST /api/agents/:taskId/tokens - Report token usage
  */
 export const ReportTokensBodySchema = z.object({
-  attemptId: z.string().optional(),
+  attemptId: z.string().trim().min(1).max(120),
   inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
   outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),

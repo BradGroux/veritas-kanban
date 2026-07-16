@@ -21,6 +21,7 @@ import type {
   QueueMonitorSnapshot,
   QueueMonitorState,
   QueueMonitorUpdateInput,
+  ProviderRuntimeManifest,
   RunTelemetryEvent,
   WatcherContinuationEvaluationResult,
 } from '@veritas-kanban/shared';
@@ -78,6 +79,7 @@ export interface QueueIntakeMonitorServiceOptions {
   workflowRunService?: WorkflowRunService;
   workflowAuthoringService?: WorkflowAuthoringService;
   telemetryService?: TelemetryService;
+  runtimeManifestResolver?: () => Promise<ProviderRuntimeManifest | undefined>;
 }
 
 interface GhUser {
@@ -129,6 +131,7 @@ export class QueueIntakeMonitorService {
   private readonly workflowRunService: WorkflowRunService;
   private readonly workflowAuthoringService: WorkflowAuthoringService;
   private readonly telemetryService: TelemetryService;
+  private readonly runtimeManifestResolver: () => Promise<ProviderRuntimeManifest | undefined>;
   private store: QueueMonitorStore | null = null;
   private readonly runningMonitors = new Set<string>();
 
@@ -144,6 +147,8 @@ export class QueueIntakeMonitorService {
     this.workflowAuthoringService =
       options.workflowAuthoringService ?? getWorkflowAuthoringService();
     this.telemetryService = options.telemetryService ?? getTelemetryService();
+    this.runtimeManifestResolver =
+      options.runtimeManifestResolver ?? defaultQueueRuntimeManifestResolver;
   }
 
   async list(now = new Date()): Promise<QueueMonitorListResponse> {
@@ -638,26 +643,47 @@ export class QueueIntakeMonitorService {
     });
 
     let sandbox: QueueMonitorActionRecord['sandbox'];
-    const sandboxResult = await this.sandboxPolicyService.dryRun({
-      presetId: definition.sandboxPresetId ?? DEFAULT_SANDBOX_PRESET_ID,
-      provider: 'codex-cli',
-    });
-    sandbox = {
-      presetId: sandboxResult.preset.id,
-      decision: sandboxResult.decision,
-      provider: sandboxResult.provider,
-      warnings: sandboxResult.warnings,
-      remediation: sandboxResult.remediation,
-    };
-    checks.push({
-      name: 'sandbox',
-      status: sandboxResult.decision === 'block' ? 'block' : 'pass',
-      summary:
-        sandboxResult.decision === 'block'
-          ? `Sandbox preset ${sandboxResult.preset.id} cannot be enforced.`
-          : `Sandbox preset ${sandboxResult.preset.id} is usable.`,
-      evidence: sandboxResult.warnings,
-    });
+    const providerRuntimeManifest = await this.runtimeManifestResolver();
+    const sandboxPresetId = definition.sandboxPresetId ?? DEFAULT_SANDBOX_PRESET_ID;
+    if (!providerRuntimeManifest) {
+      const warning = 'A validated provider runtime manifest is required before queue dispatch.';
+      sandbox = {
+        presetId: sandboxPresetId,
+        decision: 'block',
+        provider: 'codex-cli',
+        warnings: [warning],
+        remediation:
+          'Enable and authenticate a supported provider, then rerun the runtime manifest probe.',
+      };
+      checks.push({
+        name: 'sandbox',
+        status: 'block',
+        summary: `Sandbox preset ${sandboxPresetId} cannot be evaluated without a validated runtime manifest.`,
+        evidence: [warning],
+      });
+    } else {
+      const sandboxResult = await this.sandboxPolicyService.dryRun({
+        presetId: sandboxPresetId,
+        provider: providerRuntimeManifest.provider,
+        providerRuntimeManifest,
+      });
+      sandbox = {
+        presetId: sandboxResult.preset.id,
+        decision: sandboxResult.decision,
+        provider: sandboxResult.provider,
+        warnings: sandboxResult.warnings,
+        remediation: sandboxResult.remediation,
+      };
+      checks.push({
+        name: 'sandbox',
+        status: sandboxResult.decision === 'block' ? 'block' : 'pass',
+        summary:
+          sandboxResult.decision === 'block'
+            ? `Sandbox preset ${sandboxResult.preset.id} cannot be enforced.`
+            : `Sandbox preset ${sandboxResult.preset.id} is usable.`,
+        evidence: sandboxResult.warnings,
+      });
+    }
 
     const budgetDecision = await this.evaluateBudget(definition, selected);
     checks.push({
@@ -1347,6 +1373,27 @@ function isBlockingBudgetDecision(decision: string): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function defaultQueueRuntimeManifestResolver(): Promise<ProviderRuntimeManifest | undefined> {
+  try {
+    const [{ getConfigService }, { clawdbotAgentService }] = await Promise.all([
+      import('./config-service.js'),
+      import('./clawdbot-agent-service.js'),
+    ]);
+    const config = await getConfigService().getConfig();
+    const agent = config.agents.find(
+      (candidate) => candidate.provider === 'codex-cli' || candidate.type === 'codex'
+    );
+    if (!agent) return undefined;
+    return await clawdbotAgentService.probeProviderRuntime(agent, agent.type, 'task');
+  } catch (error) {
+    log.warn(
+      { err: error },
+      'Queue monitor could not resolve a validated Codex runtime manifest for sandbox preflight'
+    );
+    return undefined;
+  }
 }
 
 let queueIntakeMonitorServiceInstance: QueueIntakeMonitorService | null = null;

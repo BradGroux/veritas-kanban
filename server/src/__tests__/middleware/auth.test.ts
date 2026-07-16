@@ -495,6 +495,7 @@ describe('Auth Middleware', () => {
       expect(req.auth?.role).toBe('admin');
       expect(req.auth?.authMethod).toBe('session');
       expect(req.auth?.isLocalhost).toBe(false);
+      expect(req.auth?.capabilities).toEqual(['local-agent:run']);
     });
 
     it('should reject JWT cookie from remote hosts because password sessions are local-owner only', () => {
@@ -1133,6 +1134,7 @@ describe('Auth Middleware', () => {
       expect(result.role).toBe('admin');
       expect(result.authMethod).toBe('session');
       expect(result.isLocalhost).toBe(false);
+      expect(result.capabilities).toEqual(['local-agent:run']);
     });
 
     it('should reject WebSocket JWT cookie from remote hosts', () => {

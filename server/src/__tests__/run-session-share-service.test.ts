@@ -5,7 +5,7 @@ import path from 'path';
 import type { Task } from '@veritas-kanban/shared';
 import { RunSessionShareService } from '../services/run-session-share-service.js';
 import type { TaskService } from '../services/task-service.js';
-import { ForbiddenError } from '../middleware/error-handler.js';
+import { ConflictError, ForbiddenError } from '../middleware/error-handler.js';
 
 const mockTask: Task = {
   id: 'task-721',
@@ -55,6 +55,7 @@ describe('RunSessionShareService', () => {
     getAgentStatus: ReturnType<typeof vi.fn>;
     getAttemptLog: ReturnType<typeof vi.fn>;
     sendMessage: ReturnType<typeof vi.fn>;
+    assertActiveRunControl: ReturnType<typeof vi.fn>;
   };
   let service: RunSessionShareService;
 
@@ -90,6 +91,7 @@ describe('RunSessionShareService', () => {
         .fn()
         .mockResolvedValue('running in /Users/bradgroux/Projects/veritas-kanban\nready'),
       sendMessage: vi.fn().mockResolvedValue({ delivered: true }),
+      assertActiveRunControl: vi.fn().mockResolvedValue(undefined),
     };
     service = new RunSessionShareService({
       filePath: path.join(tmpDir, 'run-session-shares.json'),
@@ -150,7 +152,16 @@ describe('RunSessionShareService', () => {
     expect(agentService.sendMessage).toHaveBeenCalledWith(
       mockTask.id,
       'Run the focused test gate',
-      expect.objectContaining({ actor: 'Pair Editor', source: `run-session:${share.id}` })
+      expect.objectContaining({
+        actor: 'Pair Editor',
+        source: `run-session:${share.id}`,
+        expectedAttemptId: 'attempt-721',
+      })
+    );
+    expect(agentService.assertActiveRunControl).toHaveBeenCalledWith(
+      mockTask.id,
+      'message',
+      'attempt-721'
     );
 
     await service.revoke(share.id, owner, 'Rotated reviewer access');
@@ -195,6 +206,11 @@ describe('RunSessionShareService', () => {
       actionClass: 'human-review',
       approvalResponse: 'approved',
     });
+    expect(agentService.assertActiveRunControl).toHaveBeenCalledWith(
+      mockTask.id,
+      'approvals',
+      'attempt-721'
+    );
 
     await expect(
       service.respondToApproval(
@@ -203,6 +219,18 @@ describe('RunSessionShareService', () => {
         mobileActor
       )
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('blocks stale shared controls from targeting a replacement attempt', async () => {
+    const share = await service.create({ taskId: mockTask.id, permission: 'edit' }, owner);
+    agentService.assertActiveRunControl.mockRejectedValueOnce(
+      new ConflictError('Run control does not match the active attempt')
+    );
+
+    await expect(
+      service.sendMessage(share.id, { message: 'Do not steer the replacement' }, owner)
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(agentService.sendMessage).not.toHaveBeenCalled();
   });
 
   it('forks into a new task without inheriting local handles or mutating parent state', async () => {

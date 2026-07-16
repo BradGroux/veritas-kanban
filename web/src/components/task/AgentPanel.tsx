@@ -66,8 +66,15 @@ const attemptStatusIcons: Record<AttemptStatus, React.ReactNode> = {
 
 export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const { data: config } = useConfig();
-  const { data: agentStatus } = useAgentStatus(task.id);
-  const { outputs, isConnected, isRunning, clearOutputs } = useAgentStream(task.id);
+  const {
+    data: agentStatus,
+    error: agentStatusError,
+    isFetching: isAgentStatusFetching,
+  } = useAgentStatus(task.id);
+  const { outputs, isConnected, isRunning, clearOutputs } = useAgentStream(
+    task.id,
+    agentStatus?.attemptId
+  );
   const { data: attempts, refetch: refetchAttempts } = useAgentAttempts(task.id);
   const { data: routingResult } = useResolveAgent(task.id);
   const { authContext, hasPermission } = useIdentity();
@@ -167,16 +174,18 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   };
 
   const handleStop = () => {
-    stopAgent.mutate(task.id);
+    if (!canStop || !agentStatus?.attemptId) return;
+    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
     setStopDialogOpen(false);
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() || !canSendMessage || !agentStatus?.attemptId) return;
 
     sendMessage.mutate({
       taskId: task.id,
+      attemptId: agentStatus.attemptId,
       message: message.trim(),
     });
     setMessage('');
@@ -185,8 +194,32 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   // Check if we can start an agent
   const canControlAgent =
     clientAllowsLocalAgentControls(authContext) && hasPermission('agent:write');
-  const canStart = canControlAgent && task.git?.worktreePath && !isRunning && !agentStatus?.running;
-  const isAgentRunning = isRunning || agentStatus?.running;
+  // The polled status is authoritative once it settles. While a realtime start
+  // signal refreshes a stale idle snapshot, preserve the stream's running state.
+  const isAgentRunning = agentStatus?.running === true || (isAgentStatusFetching && isRunning);
+  const canStart = canControlAgent && task.git?.worktreePath && !isAgentRunning;
+  const stopControl = agentStatus?.controls?.controls.find((control) => control.action === 'stop');
+  const messageControl = agentStatus?.controls?.controls.find(
+    (control) => control.action === 'message'
+  );
+  const statusErrorReason =
+    agentStatusError instanceof Error
+      ? agentStatusError.message
+      : agentStatusError
+        ? 'Provider runtime status could not be validated.'
+        : undefined;
+  const stopReason =
+    statusErrorReason ??
+    stopControl?.reason ??
+    'Validated stop capability evidence is not available for this run.';
+  const messageReason =
+    statusErrorReason ??
+    messageControl?.reason ??
+    'Validated steer capability evidence is not available for this run.';
+  const hasActiveAttempt = Boolean(agentStatus?.attemptId);
+  const canStop = !agentStatusError && hasActiveAttempt && stopControl?.available === true;
+  const canSendMessage =
+    !agentStatusError && hasActiveAttempt && messageControl?.available === true;
 
   if (!task.git?.worktreePath) {
     return (
@@ -326,11 +359,28 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                   color="red"
                   leftSection={<Square className="h-4 w-4" />}
                   onClick={() => setStopDialogOpen(true)}
+                  disabled={!canStop}
+                  aria-label={canStop ? 'Stop agent' : `Stop agent unavailable: ${stopReason}`}
+                  title={canStop ? 'Stop agent' : stopReason}
                 >
                   Stop
                 </Button>
               )}
             </Group>
+          )}
+
+          {isAgentRunning && canControlAgent && (!canStop || !canSendMessage) && (
+            <Alert
+              color="yellow"
+              icon={<ShieldAlert className="h-4 w-4" />}
+              title="Provider runtime controls are limited"
+              className="m-2"
+            >
+              <Stack gap={4}>
+                {!canStop && <Text size="xs">Stop: {stopReason}</Text>}
+                {!canSendMessage && <Text size="xs">Message: {messageReason}</Text>}
+              </Stack>
+            </Alert>
           )}
 
           {/* Output */}
@@ -371,8 +421,23 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                 onChange={(e) => setMessage(e.currentTarget.value)}
                 placeholder="Send a message to the agent..."
                 className="flex-1 h-8 text-sm"
+                disabled={!canSendMessage}
+                aria-label={
+                  canSendMessage
+                    ? 'Send a message to the agent'
+                    : `Message unavailable: ${messageReason}`
+                }
+                title={canSendMessage ? undefined : messageReason}
               />
-              <Button type="submit" size="sm" disabled={!message.trim() || sendMessage.isPending}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!canSendMessage || !message.trim() || sendMessage.isPending}
+                aria-label={
+                  canSendMessage ? 'Send message' : `Send message unavailable: ${messageReason}`
+                }
+                title={canSendMessage ? 'Send message' : messageReason}
+              >
                 <Send className="h-4 w-4" />
               </Button>
             </form>
@@ -537,11 +602,21 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
             <Text size="sm" c="dimmed">
               This will terminate the running agent. The attempt will be marked as failed.
             </Text>
+            {!canStop && (
+              <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+                Stop unavailable: {stopReason}
+              </Alert>
+            )}
             <Group justify="flex-end" gap="xs">
               <Button variant="default" onClick={() => setStopDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button color="red" onClick={handleStop}>
+              <Button
+                color="red"
+                disabled={!canStop || stopAgent.isPending}
+                title={canStop ? 'Stop Agent' : stopReason}
+                onClick={handleStop}
+              >
                 Stop Agent
               </Button>
             </Group>

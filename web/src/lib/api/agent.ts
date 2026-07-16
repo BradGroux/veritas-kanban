@@ -11,6 +11,7 @@ import type {
   AgentBudgetPolicy,
   ProviderRuntimeManifest,
   ProviderRuntimeCapabilityId,
+  ProviderRuntimeControlSet,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -20,6 +21,7 @@ export interface StartAgentRequest {
   overrideReason?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
 }
 
 export const worktreeApi = {
@@ -75,17 +77,19 @@ export const agentApi = {
     });
   },
 
-  sendMessage: async (taskId: string, message: string): Promise<void> => {
+  sendMessage: async (taskId: string, attemptId: string, message: string): Promise<void> => {
     return apiFetch<void>(`${API_BASE}/agents/${taskId}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ attemptId, message }),
     });
   },
 
-  stop: async (taskId: string): Promise<void> => {
+  stop: async (taskId: string, attemptId: string): Promise<void> => {
     return apiFetch<void>(`${API_BASE}/agents/${taskId}/stop`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attemptId }),
     });
   },
 
@@ -243,6 +247,10 @@ export interface AgentStatus {
   status: string;
   pid?: number;
   startedAt?: string;
+  provider?: string;
+  model?: string;
+  providerRuntimeManifest: ProviderRuntimeManifest;
+  controls: ProviderRuntimeControlSet;
 }
 
 export interface AgentStatusResponse {
@@ -252,6 +260,10 @@ export interface AgentStatusResponse {
   agent?: AgentType;
   status?: string;
   pid?: number;
+  provider?: string;
+  model?: string;
+  providerRuntimeManifest?: ProviderRuntimeManifest;
+  controls?: ProviderRuntimeControlSet;
 }
 
 export interface AgentOutput {

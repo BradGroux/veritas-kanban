@@ -128,7 +128,24 @@ describe('task work view Mantine surface', () => {
     const user = userEvent.setup();
     mocks.useTaskWorkProducts.mockReturnValue({ data: [product], isLoading: false });
     mocks.useAgentStatus.mockReturnValue({
-      data: { running: true, attemptId: 'attempt-1', agent: 'veritas', status: 'running' },
+      data: {
+        running: true,
+        attemptId: 'attempt-1',
+        agent: 'veritas',
+        status: 'running',
+        controls: {
+          controls: [
+            {
+              action: 'stop',
+              capabilityId: 'run.stop',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Stop is supported.',
+            },
+          ],
+        },
+      },
     });
     mocks.useAgentStream.mockReturnValue({
       outputs: [
@@ -256,13 +273,134 @@ describe('task work view Mantine surface', () => {
     await user.click(screen.getByRole('button', { name: 'Open Workflow' }));
     await user.click(screen.getByRole('button', { name: 'Work Products' }));
     await user.click(screen.getByRole('button', { name: 'Workflow' }));
-    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await user.click(screen.getByRole('button', { name: 'Stop active run' }));
     await user.click(screen.getByRole('button', { name: 'Stop Agent' }));
 
     expect(mocks.onOpenTab).toHaveBeenCalledWith('agent');
     expect(mocks.onOpenTab).toHaveBeenCalledWith('work-products');
     expect(mocks.onOpenWorkflow).toHaveBeenCalled();
-    expect(mocks.stopAgentMutate).toHaveBeenCalledWith('task-work');
+    expect(mocks.stopAgentMutate).toHaveBeenCalledWith({
+      taskId: 'task-work',
+      attemptId: 'attempt-1',
+    });
+  });
+
+  it('does not show a stopped run from stale task and WebSocket state', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: { running: false },
+      error: null,
+      isFetching: false,
+    });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: true,
+    });
+
+    renderWorkView(
+      createMockTask({
+        id: 'task-work-stopped',
+        status: 'in-progress',
+        git: {
+          repo: 'veritas',
+          branch: 'stopped',
+          baseBranch: 'main',
+          worktreePath: '/tmp',
+        },
+        attempt: {
+          id: 'attempt-stopped',
+          agent: 'codex',
+          status: 'running',
+        },
+      })
+    );
+
+    expect(screen.getAllByText('Failed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Live')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop active run' })).toBeNull();
+  });
+
+  it('disables the Work view stop control when the persisted manifest cannot stop', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        controls: {
+          controls: [
+            {
+              action: 'stop',
+              capabilityId: 'run.stop',
+              state: 'unsupported',
+              available: false,
+              advisory: false,
+              reason: 'This provider cannot stop the active run.',
+            },
+          ],
+        },
+      },
+    });
+    const task = createMockTask({
+      id: 'task-stop-unsupported',
+      type: 'code',
+      status: 'in-progress',
+      attempt: {
+        id: 'attempt-stop-unsupported',
+        agent: 'openclaw',
+        status: 'running',
+        started: '2026-06-01T11:00:00.000Z',
+      },
+    });
+
+    renderWorkView(task);
+
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Stop active run unavailable: This provider cannot stop the active run.',
+        })
+        .getAttribute('disabled')
+    ).not.toBeNull();
+  });
+
+  it('does not reuse cached enabled controls after a stale status refetch error', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        controls: {
+          controls: [
+            {
+              action: 'stop',
+              capabilityId: 'run.stop',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Cached stop evidence was supported.',
+            },
+          ],
+        },
+      },
+      error: new Error('Provider runtime manifest is stale or invalid: digest mismatch'),
+    });
+    const task = createMockTask({
+      id: 'task-stop-stale',
+      type: 'code',
+      status: 'in-progress',
+      attempt: {
+        id: 'attempt-stop-stale',
+        agent: 'codex',
+        status: 'running',
+        started: '2026-06-01T11:00:00.000Z',
+      },
+    });
+
+    renderWorkView(task);
+
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Stop active run unavailable: Provider runtime manifest is stale or invalid: digest mismatch',
+        })
+        .getAttribute('disabled')
+    ).not.toBeNull();
   });
 
   it('skips unsafe work product source links in the Work view', () => {

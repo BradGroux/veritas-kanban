@@ -27,6 +27,10 @@ export function registerAgentCommands(program: Command): void {
       'claude-code'
     )
     .option('-p, --profile <profileId>', 'Agent profile package to launch')
+    .option(
+      '--require-capability <capabilities...>',
+      'Require provider runtime capabilities before launch'
+    )
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
@@ -52,6 +56,7 @@ export function registerAgentCommands(program: Command): void {
           body: JSON.stringify({
             agent: options.profile ? undefined : options.agent,
             profileId: options.profile,
+            requiredRuntimeCapabilities: options.requireCapability,
           }),
         });
 
@@ -201,7 +206,16 @@ export function registerAgentCommands(program: Command): void {
           process.exit(1);
         }
 
-        await api(`/api/agents/${task.id}/stop`, { method: 'POST' });
+        const status = await api<{ running: boolean; attemptId?: string }>(
+          `/api/agents/${task.id}/status`
+        );
+        if (!status.running || !status.attemptId) {
+          throw new Error('No active agent attempt is available to stop');
+        }
+        await api(`/api/agents/${task.id}/stop`, {
+          method: 'POST',
+          body: JSON.stringify({ attemptId: status.attemptId }),
+        });
 
         if (options.json) {
           console.log(JSON.stringify({ stopped: true }));
@@ -278,10 +292,17 @@ export function registerAgentCommands(program: Command): void {
     .option('-f, --failed', 'Mark as failed')
     .option('-m, --summary <text>', 'Summary of what was done')
     .option('-e, --error <text>', 'Error message (if failed)')
+    .requiredOption('--attempt-id <id>', 'Attempt ID that produced this completion')
+    .requiredOption(
+      '--manifest-digest <digest>',
+      'Provider runtime manifest digest bound to the attempt'
+    )
     .action(async (taskId, options) => {
       try {
         const success = !options.failed;
         const body = {
+          attemptId: options.attemptId,
+          providerRuntimeManifestDigest: options.manifestDigest,
           success,
           summary: options.summary,
           error: options.error,

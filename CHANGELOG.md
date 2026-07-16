@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider discovery, manifest-authoritative host posture, and provider-neutral
   required-capability routing with structured evidence for every attempted
   primary, fallback, or rejected candidate (#886).
+- Added one provider-runtime control evaluator for launch requirements and
+  status, logs, completion, stop, steer, resume, reattach, tool, MCP, structured
+  output, token-usage, and artifact controls. Agent status now returns concrete
+  capability-derived availability, reasons, and remediation, and REST, CLI, and
+  MCP starts can declare additional required capabilities. Completion callbacks,
+  token budgets, and shared co-drive controls are attempt-bound; provider-native
+  approvals fail closed; OpenClaw task and workflow evidence are separated; and
+  workflow requirements account for standard MCP names and metric-specific
+  budgets (#887).
 - Added an admin-governed SQLite journal maintenance workflow with non-mutating
   previews, restart-time exclusive conversion, verified backups, durable stage
   journals, forward-only crash recovery, integrity verification, in-place mode
@@ -36,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   heartbeat liveness, and invalidate when provider identity changes. Unresolved
   sandbox presets fail closed instead of borrowing aggregate host signals
   (#886).
+- Made active agent and workflow controls consume the exact persisted launch
+  manifest, reject invalid or mismatched snapshots, and fail closed before
+  unsupported work. Sandbox dry-runs now resolve live registered manifest
+  digests server-side, workflow manifests persist before provider execution,
+  and task, Work view, and shared co-drive controls expose accessible disabled
+  reasons when a runtime cannot stop or steer (#887).
 - Classified the authoritative SQLite filesystem before database open, limited
   WAL to recognized durable local filesystems, refused known-unsafe and unknown
   storage before creating database sidecars, and exposed redacted filesystem,
@@ -44,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Serialized agent launch and terminalization ownership per task and attempt so
+  concurrent starts, stop requests, provider exits, and callbacks cannot launch
+  or finalize the same run twice (#887).
+- Restored packaged desktop agent controls after password login by granting the
+  verified loopback owner session the narrow `local-agent:run` capability while
+  keeping production localhost bypass disabled (#887).
+- Made packaged desktop port selection detect listeners on both IPv4 and IPv6
+  loopback and kept dev server/web fallback ports distinct, preventing Electron
+  from attaching to an unrelated local server or colliding with itself.
 - Kept mobile notifications above the safe-area-aware bottom navigation so
   long-lived toasts cannot intercept touch input after Task Detail closes
   (#869).

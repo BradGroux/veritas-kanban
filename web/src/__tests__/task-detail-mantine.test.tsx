@@ -21,6 +21,18 @@ vi.mock('@/hooks/useDebouncedSave', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useWebSocket', () => ({
+  useWebSocket: () => ({
+    isConnected: false,
+    connectionState: 'disconnected',
+    reconnectAttempt: 0,
+    send: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    lastMessage: null,
+  }),
+}));
+
 vi.mock('@/hooks/useTaskTypes', () => ({
   useTaskTypes: () => ({
     data: [

@@ -37,7 +37,7 @@ import {
   useSendRunSessionMessage,
   useUpdateRunSessionShare,
 } from '@/hooks/useRunSessions';
-import { useAgentStream } from '@/hooks/useAgent';
+import { useAgentStatus, useAgentStream } from '@/hooks/useAgent';
 import { useToast } from '@/hooks/useToast';
 import { sanitizeText } from '@/lib/sanitize';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -206,8 +206,12 @@ export function RunSessionSharesSection({ task, isAgentRunning }: RunSessionShar
 export function RunSessionShareView({ shareId }: { shareId: string }) {
   const { authContext } = useIdentity();
   const { data: share, isLoading, error } = useRunSession(shareId);
+  const { data: agentStatus, error: agentStatusError } = useAgentStatus(share?.taskId);
   const { data: events = [] } = useRunSessionEvents(shareId);
-  const { outputs, isConnected } = useAgentStream(share?.taskId);
+  const pinnedAttemptActive = Boolean(
+    share && !agentStatusError && agentStatus?.running && agentStatus.attemptId === share.sourceId
+  );
+  const { outputs, isConnected } = useAgentStream(pinnedAttemptActive ? share?.taskId : undefined);
   const sendMessage = useSendRunSessionMessage();
   const respondToApproval = useRunSessionApprovalResponse();
   const forkSession = useForkRunSession();
@@ -239,7 +243,7 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
 
   const handleSendMessage = async () => {
     const trimmed = message.trim();
-    if (!trimmed) return;
+    if (!trimmed || !messageControlAvailable) return;
     try {
       await sendMessage.mutateAsync({ shareId: share.id, input: { message: trimmed } });
       setMessage('');
@@ -251,7 +255,41 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
     }
   };
 
+  const messageControl = agentStatus?.controls?.controls.find(
+    (control) => control.action === 'message'
+  );
+  const approvalControl = agentStatus?.controls?.controls.find(
+    (control) => control.action === 'approvals'
+  );
+  const attemptReason =
+    share && agentStatus?.attemptId && agentStatus.attemptId !== share.sourceId
+      ? 'This link is pinned to an earlier attempt and cannot control its replacement.'
+      : !agentStatus?.running
+        ? 'The shared attempt is no longer active.'
+        : undefined;
+  const messageControlAvailable = pinnedAttemptActive && messageControl?.available === true;
+  const messageControlReason =
+    (agentStatusError instanceof Error
+      ? agentStatusError.message
+      : agentStatusError
+        ? 'Provider runtime status could not be validated.'
+        : undefined) ??
+    attemptReason ??
+    messageControl?.reason ??
+    'Validated steer capability evidence is not available for this run.';
+  const approvalControlAvailable = pinnedAttemptActive && approvalControl?.available === true;
+  const approvalControlReason =
+    (agentStatusError instanceof Error
+      ? agentStatusError.message
+      : agentStatusError
+        ? 'Provider runtime status could not be validated.'
+        : undefined) ??
+    attemptReason ??
+    approvalControl?.reason ??
+    'Validated provider approval evidence is not available for this run.';
+
   const handleApproval = async (response: 'approved' | 'rejected') => {
+    if (!approvalControlAvailable) return;
     try {
       await respondToApproval.mutateAsync({
         shareId: share.id,
@@ -307,7 +345,9 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
             <Badge variant="outline" color={share.status === 'active' ? 'green' : 'red'}>
               {share.status}
             </Badge>
-            <Badge variant="outline">{isConnected ? 'Connected' : 'Disconnected'}</Badge>
+            <Badge variant="outline">
+              {pinnedAttemptActive && isConnected ? 'Connected' : 'Disconnected'}
+            </Badge>
           </Group>
         </div>
         <CopyButton value={shareUrl}>
@@ -347,12 +387,12 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
           <Text size="sm" fw={600}>
             Live Output
           </Text>
-          <Badge variant="dot" color={share.snapshot.running ? 'green' : 'gray'}>
-            {share.snapshot.running ? 'running' : 'not running'}
+          <Badge variant="dot" color={pinnedAttemptActive ? 'green' : 'gray'}>
+            {pinnedAttemptActive ? 'running' : 'not running'}
           </Badge>
         </Group>
         <div className="h-[320px] overflow-y-auto bg-zinc-950 p-3 font-mono text-xs text-zinc-200">
-          {outputs.length === 0 ? (
+          {!pinnedAttemptActive || outputs.length === 0 ? (
             <Text size="xs" c="dimmed">
               No live output received in this viewer.
             </Text>
@@ -380,8 +420,30 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
               value={message}
               onChange={(event) => setMessage(event.currentTarget.value)}
               placeholder="Send an attributed message into the run..."
+              disabled={!messageControlAvailable}
+              aria-label={
+                messageControlAvailable
+                  ? 'Co-drive message'
+                  : `Co-drive message unavailable: ${messageControlReason}`
+              }
             />
-            <Button size="xs" loading={sendMessage.isPending} onClick={handleSendMessage}>
+            {!messageControlAvailable && (
+              <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+                Message unavailable: {messageControlReason}
+              </Alert>
+            )}
+            <Button
+              size="xs"
+              loading={sendMessage.isPending}
+              disabled={!messageControlAvailable || !message.trim()}
+              aria-label={
+                messageControlAvailable
+                  ? 'Send Message'
+                  : `Send Message unavailable: ${messageControlReason}`
+              }
+              title={messageControlAvailable ? 'Send Message' : messageControlReason}
+              onClick={handleSendMessage}
+            >
               Send Message
             </Button>
           </Stack>
@@ -404,6 +466,7 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
               onChange={(value) => setApprovalClass(value || 'human-review')}
               data={share.mobileSafeApprovalClasses.map((item) => ({ value: item, label: item }))}
               checkIconPosition="right"
+              disabled={!approvalControlAvailable}
             />
             {mobileClient && (
               <Text size="xs" c="dimmed">
@@ -415,15 +478,28 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
               size="xs"
               value={approvalNote}
               onChange={(event) => setApprovalNote(event.currentTarget.value)}
+              disabled={!approvalControlAvailable}
             />
+            {!approvalControlAvailable && (
+              <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+                Approval unavailable: {approvalControlReason}
+              </Alert>
+            )}
             <Group gap="xs">
-              <Button size="xs" onClick={() => handleApproval('approved')}>
+              <Button
+                size="xs"
+                disabled={!approvalControlAvailable}
+                title={approvalControlAvailable ? 'Approve' : approvalControlReason}
+                onClick={() => handleApproval('approved')}
+              >
                 Approve
               </Button>
               <Button
                 size="xs"
                 color="red"
                 variant="light"
+                disabled={!approvalControlAvailable}
+                title={approvalControlAvailable ? 'Reject' : approvalControlReason}
                 onClick={() => handleApproval('rejected')}
               >
                 Reject

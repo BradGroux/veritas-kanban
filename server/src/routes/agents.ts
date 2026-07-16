@@ -3,12 +3,17 @@ import { z } from 'zod';
 import { AgentReadinessError, clawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getTaskService } from '../services/task-service.js';
-import type { AgentType, TokenTelemetryEvent } from '@veritas-kanban/shared';
+import type {
+  AgentType,
+  ProviderRuntimeCapabilityId,
+  TokenTelemetryEvent,
+} from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 
 const router: RouterType = Router();
 
@@ -21,21 +26,29 @@ const startAgentSchema = z.object({
   overrideReason: z.string().trim().min(8).max(1000).optional(),
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),
+  requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
 });
 
 const completeAgentSchema = z.object({
+  attemptId: z.string().trim().min(1).max(120),
+  providerRuntimeManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   success: z.boolean(),
   summary: z.string().optional(),
   error: z.string().optional(),
 });
 
 const sendAgentMessageSchema = z.object({
+  attemptId: z.string().trim().min(1).max(120),
   message: z.string().trim().min(1).max(4000),
   actor: z.string().trim().min(1).max(120).optional(),
 });
 
+const runControlSchema = z.object({
+  attemptId: z.string().trim().min(1).max(120),
+});
+
 const reportTokensSchema = z.object({
-  attemptId: z.string().optional(),
+  attemptId: z.string().trim().min(1).max(120),
   inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
   outputTokens: z.number({ message: 'outputTokens is required' }).int().nonnegative(),
   totalTokens: z.number().int().nonnegative().optional(),
@@ -54,16 +67,17 @@ router.post(
     let overrideReason: string | undefined;
     let sandboxPresetId: string | undefined;
     let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
+    let requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] | undefined;
     try {
-      ({ agent, profileId, overrideReason, sandboxPresetId, budget } = startAgentSchema.parse(
-        req.body
-      ) as {
-        agent?: AgentType;
-        profileId?: string;
-        overrideReason?: string;
-        sandboxPresetId?: string;
-        budget?: z.infer<typeof AgentBudgetPolicySchema>;
-      });
+      ({ agent, profileId, overrideReason, sandboxPresetId, budget, requiredRuntimeCapabilities } =
+        startAgentSchema.parse(req.body) as {
+          agent?: AgentType;
+          profileId?: string;
+          overrideReason?: string;
+          sandboxPresetId?: string;
+          budget?: z.infer<typeof AgentBudgetPolicySchema>;
+          requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+        });
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);
@@ -77,6 +91,7 @@ router.post(
         overrideReason,
         sandboxPresetId,
         budget,
+        requiredRuntimeCapabilities,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {
@@ -94,11 +109,14 @@ router.post(
 router.post(
   '/:taskId/complete',
   asyncHandler(async (req, res) => {
+    let attemptId: string;
+    let providerRuntimeManifestDigest: string;
     let success: boolean;
     let summary: string | undefined;
     let error: string | undefined;
     try {
-      ({ success, summary, error } = completeAgentSchema.parse(req.body));
+      ({ attemptId, providerRuntimeManifestDigest, success, summary, error } =
+        completeAgentSchema.parse(req.body));
     } catch (err) {
       if (err instanceof z.ZodError) {
         throw new ValidationError('Validation failed', err.issues);
@@ -106,11 +124,15 @@ router.post(
       throw err;
     }
 
-    await clawdbotAgentService.completeAgent(req.params.taskId as string, {
-      success,
-      summary,
-      error,
-    });
+    await clawdbotAgentService.completeAgent(
+      req.params.taskId as string,
+      {
+        success,
+        summary,
+        error,
+      },
+      { attemptId, providerRuntimeManifestDigest }
+    );
     res.json({ received: true });
   })
 );
@@ -120,7 +142,16 @@ router.post(
   '/:taskId/stop',
   requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
-    await clawdbotAgentService.stopAgent(req.params.taskId as string);
+    let attemptId: string;
+    try {
+      ({ attemptId } = runControlSchema.parse(req.body));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    await clawdbotAgentService.stopAgent(req.params.taskId as string, attemptId);
     res.json({ stopped: true });
   })
 );
@@ -130,10 +161,12 @@ router.post(
   '/:taskId/message',
   asyncHandler(async (req, res) => {
     let message: string;
+    let attemptId: string;
     let actorOverride: string | undefined;
     try {
       const parsed = sendAgentMessageSchema.parse(req.body);
       message = parsed.message;
+      attemptId = parsed.attemptId;
       actorOverride = parsed.actor;
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -154,6 +187,7 @@ router.post(
     const delivery = await clawdbotAgentService.sendMessage(req.params.taskId as string, message, {
       actor,
       source: 'agent-route',
+      expectedAttemptId: attemptId,
     });
     res.json(delivery);
   })
@@ -163,7 +197,7 @@ router.post(
 router.get(
   '/:taskId/status',
   asyncHandler(async (req, res) => {
-    const status = clawdbotAgentService.getAgentStatus(req.params.taskId as string);
+    const status = await clawdbotAgentService.getAgentStatus(req.params.taskId as string);
     if (!status) {
       return res.json({ running: false });
     }
@@ -205,7 +239,7 @@ router.get(
 router.post(
   '/:taskId/tokens',
   asyncHandler(async (req, res) => {
-    let attemptId: string | undefined;
+    let attemptId: string;
     let inputTokens: number;
     let outputTokens: number;
     let totalTokens: number | undefined;
@@ -238,16 +272,22 @@ router.post(
       throw new NotFoundError('Task not found');
     }
 
-    // Use provided attemptId or current attempt
-    const resolvedAttemptId = attemptId || task.attempt?.id || 'unknown';
+    await clawdbotAgentService.assertActiveRunControl(taskId, 'token-usage', attemptId);
     const resolvedAgent = agent || task.attempt?.agent || 'codex';
+
+    await clawdbotAgentService.recordBudgetUsage(taskId, attemptId, {
+      inputTokens,
+      outputTokens,
+      totalTokens: totalTokens ?? inputTokens + outputTokens,
+      costUsd: cost,
+    });
 
     // Emit telemetry event
     const telemetry = getTelemetryService();
     const event = await telemetry.emit<TokenTelemetryEvent>({
       type: 'run.tokens',
       taskId,
-      attemptId: resolvedAttemptId,
+      attemptId,
       agent: resolvedAgent,
       project: task.project,
       inputTokens,
@@ -255,13 +295,6 @@ router.post(
       totalTokens: totalTokens ?? inputTokens + outputTokens,
       cost,
       model,
-    });
-
-    await clawdbotAgentService.recordBudgetUsage(taskId, {
-      inputTokens,
-      outputTokens,
-      totalTokens: totalTokens ?? inputTokens + outputTokens,
-      costUsd: cost,
     });
 
     res.status(201).json({

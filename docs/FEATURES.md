@@ -1614,13 +1614,14 @@ Added in v3.3.2.
 
 ### Agent Commands
 
-| Command                   | Description                                              |
-| ------------------------- | -------------------------------------------------------- |
-| `vk start <id>`           | Start an agent on a code task (`--agent` to choose)      |
-| `vk stop <id>`            | Stop a running agent                                     |
-| `vk agents:pending`       | List pending agent requests                              |
-| `vk agents:status <id>`   | Check agent running status                               |
-| `vk agents:complete <id>` | Mark agent complete (`-s` for success, `-f` for failure) |
+| Command                                                                       | Description                                         |
+| ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| `vk start <id>`                                                               | Start an agent on a code task (`--agent` to choose) |
+| `vk stop <id>`                                                                | Stop a running agent                                |
+| `vk agents:pending`                                                           | List pending agent requests                         |
+| `vk agents:status <id>`                                                       | Check agent running status                          |
+| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)  |
+| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (failure)  |
 
 ### Automation Commands
 

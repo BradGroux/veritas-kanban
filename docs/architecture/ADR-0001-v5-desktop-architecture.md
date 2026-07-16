@@ -263,10 +263,14 @@ and must not be inferred from client-provided labels.
 ### Port Conflicts
 
 The desktop shell must not require users to diagnose port conflicts manually. If
-the preferred port is unavailable, main process records the conflict in desktop
-logs, chooses another loopback port, and passes the actual origin to the renderer
-through the bridge. The UI may show the selected local origin in diagnostics, but
-the happy path should proceed without a terminal.
+the preferred port is unavailable on either IPv4 or IPv6 loopback, the main
+process records the conflict in desktop logs, chooses another loopback port, and
+passes the actual origin to the renderer through the bridge. The dual-stack
+probe must reject an accepting wildcard listener even when the operating system
+would allow a second address-specific bind on the same port. The UI may show the
+selected local origin in diagnostics, but the happy path should proceed without
+a terminal. In development mode, the web fallback scan excludes the server port
+selected earlier in startup so the two managed processes remain distinct.
 
 ### Restart
 

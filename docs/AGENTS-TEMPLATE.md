@@ -113,8 +113,9 @@ When picking up a task:
 
 1. Send heartbeat with `status: "busy"` and `currentTaskId`
 2. Use existing task APIs: `POST /api/agents/:taskId/start`
-3. Report tokens: `POST /api/agents/:taskId/tokens`
-4. Complete: `POST /api/agents/:taskId/complete`
+3. Report tokens: `POST /api/agents/:taskId/tokens` with the active `attemptId`
+4. Complete: `POST /api/agents/:taskId/complete` with the active `attemptId` and
+   `providerRuntimeManifestDigest` returned by the start/status response
 5. Send heartbeat with `status: "idle"` and clear task
 
 ## OpenAI Codex Notes

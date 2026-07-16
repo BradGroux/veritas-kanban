@@ -15,11 +15,14 @@ const {
   mockPatchTaskAttempt,
   mockCheckAgent,
   mockTelemetryEmit,
+  mockGovernanceRecord,
   mockLogActivity,
   mockStartTrace,
   mockStartStep,
   mockEndStep,
   mockCompleteTrace,
+  mockSdkStartThread,
+  mockSdkRunStreamed,
 } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockGetConfig: vi.fn(),
@@ -29,15 +32,24 @@ const {
   mockPatchTaskAttempt: vi.fn(),
   mockCheckAgent: vi.fn(),
   mockTelemetryEmit: vi.fn(),
+  mockGovernanceRecord: vi.fn(),
   mockLogActivity: vi.fn(),
   mockStartTrace: vi.fn(),
   mockStartStep: vi.fn(),
   mockEndStep: vi.fn(),
   mockCompleteTrace: vi.fn(),
+  mockSdkStartThread: vi.fn(),
+  mockSdkRunStreamed: vi.fn(),
 }));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
+}));
+
+vi.mock('@openai/codex-sdk', () => ({
+  Codex: class {
+    startThread = mockSdkStartThread;
+  },
 }));
 
 vi.mock('../services/config-service.js', () => ({
@@ -59,6 +71,10 @@ vi.mock('../services/task-service.js', () => ({
 
 vi.mock('../services/telemetry-service.js', () => ({
   getTelemetryService: () => ({ emit: mockTelemetryEmit, getConfig: () => ({ traces: true }) }),
+}));
+
+vi.mock('../services/governance-trace-service.js', () => ({
+  getGovernanceTraceService: () => ({ record: mockGovernanceRecord }),
 }));
 
 vi.mock('../services/activity-service.js', () => ({
@@ -93,6 +109,7 @@ vi.mock('../services/circuit-registry.js', () => ({
 import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type { AgentConfig, Task } from '@veritas-kanban/shared';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -104,10 +121,10 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
     task?: Task,
     attemptId?: string,
     agentConfig?: Partial<AgentConfig>
-  ): {
+  ): Promise<{
     summary?: string;
     usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
-  };
+  }>;
   recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void>;
 };
 
@@ -164,12 +181,12 @@ function createControllableChild() {
   return child;
 }
 
-async function waitFor(assertion: () => void): Promise<void> {
+async function waitFor(assertion: () => void | Promise<void>): Promise<void> {
   const started = Date.now();
   let lastError: unknown;
   while (Date.now() - started < 10_000) {
     try {
-      assertion();
+      await assertion();
       return;
     } catch (error) {
       lastError = error;
@@ -218,7 +235,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       ],
     } as Task;
 
-    mockGetTask.mockResolvedValue(task);
+    mockGetTask.mockImplementation(async () => task);
     mockUpdateTask.mockImplementation(async (_id, update) => {
       task = { ...task, ...update } as Task;
       return task;
@@ -255,6 +272,8 @@ describe('ClawdbotAgentService Codex providers', () => {
         },
       ],
     });
+    mockSdkStartThread.mockReturnValue({ runStreamed: mockSdkRunStreamed });
+    mockGovernanceRecord.mockResolvedValue({ id: 'governance_trace_fixture' });
   });
 
   afterEach(async () => {
@@ -302,8 +321,8 @@ describe('ClawdbotAgentService Codex providers', () => {
           'codex'
         );
       });
-      await waitFor(() => {
-        expect(service.getAgentStatus(task.id)).toBeNull();
+      await waitFor(async () => {
+        expect(await service.getAgentStatus(task.id)).toBeNull();
       });
       expect(task.attempt?.providerRuntimeManifest).toMatchObject({
         schemaVersion: 'provider-runtime-manifest/v1',
@@ -319,6 +338,15 @@ describe('ClawdbotAgentService Codex providers', () => {
           }),
         }),
       ]);
+      expect(task.deliverables).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'server/src/services/example.ts',
+            type: 'code',
+            agent: 'codex',
+          }),
+        ])
+      );
       const log = await service.getAttemptLog(task.id, task.attempt?.id ?? 'missing');
       expect(log).toContain(
         `Provider manifest:** ${task.attempt?.providerRuntimeManifest?.digest}`
@@ -367,60 +395,46 @@ describe('ClawdbotAgentService Codex providers', () => {
     }
   );
 
-  it('maps Codex file events to task deliverables linked to the attempt', async () => {
+  it('does not trust Codex file events without a persisted runtime snapshot', async () => {
     const service = testableService(tmpDir);
     const logPath = path.join(tmpDir, 'codex.md');
     await fs.writeFile(logPath, '# log\n');
 
-    service.handleCodexEvent(
-      {
-        type: 'item.completed',
-        item: {
-          type: 'file_change',
-          file_path: 'server/src/services/codex-provider.ts',
+    await expect(
+      service.handleCodexEvent(
+        {
+          type: 'item.completed',
+          item: {
+            type: 'file_change',
+            file_path: 'server/src/services/codex-provider.ts',
+          },
         },
-      },
-      logPath,
-      task,
-      'attempt_fixture',
-      { type: 'codex', provider: 'codex-cli' }
-    );
+        logPath,
+        task,
+        'attempt_fixture',
+        { type: 'codex', provider: 'codex-cli' }
+      )
+    ).rejects.toThrow('provider event does not match the active attempt');
 
-    await waitFor(() => {
-      expect(mockUpdateTask).toHaveBeenCalledWith(
-        task.id,
-        expect.objectContaining({
-          deliverables: [
-            expect.objectContaining({
-              path: 'server/src/services/codex-provider.ts',
-              type: 'code',
-              agent: 'codex',
-              description: expect.stringContaining('attempt_fixture'),
-            }),
-          ],
-        })
-      );
-    });
-
-    expect(mockStartStep).toHaveBeenCalledWith(
-      'attempt_fixture',
-      'execute',
-      expect.objectContaining({
-        eventType: 'item.completed',
-        tool: 'file_change',
-        files: ['server/src/services/codex-provider.ts'],
-      })
-    );
-    expect(mockLogActivity).toHaveBeenCalledWith(
-      'deliverable_added',
+    expect(mockUpdateTask).not.toHaveBeenCalledWith(
       task.id,
-      task.title,
-      expect.objectContaining({ attemptId: 'attempt_fixture', deliverableCount: 1 }),
-      'codex'
+      expect.objectContaining({ deliverables: expect.any(Array) })
+    );
+    expect(mockStartStep).not.toHaveBeenCalledWith(
+      'attempt_fixture',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(mockLogActivity).not.toHaveBeenCalledWith(
+      'deliverable_added',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
     );
   });
 
-  it('accepts every Codex SDK 0.144 event contract consumed by the stream adapter', () => {
+  it('accepts every Codex SDK 0.144 event contract consumed by the stream adapter', async () => {
     const service = testableService(tmpDir);
     const logPath = path.join(tmpDir, 'codex.md');
     const events = [
@@ -451,7 +465,9 @@ describe('ClawdbotAgentService Codex providers', () => {
       { type: 'error', message: 'fixture stream error' },
     ] satisfies ThreadEvent[];
 
-    const parsed = events.map((event) => service.handleCodexEvent(event, logPath));
+    const parsed = await Promise.all(
+      events.map((event) => service.handleCodexEvent(event, logPath))
+    );
 
     expect(parsed[2]?.usage).toEqual({
       inputTokens: 10,
@@ -465,8 +481,13 @@ describe('ClawdbotAgentService Codex providers', () => {
     const service = testableService(tmpDir);
     const logPath = path.join(tmpDir, 'codex.md');
     await fs.writeFile(logPath, '# log\n');
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    await service.startAgent(task.id, 'codex');
+    const attemptId = task.attempt?.id;
+    if (!attemptId) throw new Error('Expected active attempt');
 
-    service.handleCodexEvent(
+    await service.handleCodexEvent(
       {
         type: 'response.output_text.delta',
         delta: 'partial output OPENAI_API_KEY=sk-supersecret123456',
@@ -474,10 +495,10 @@ describe('ClawdbotAgentService Codex providers', () => {
       },
       logPath,
       task,
-      'attempt_fixture',
+      attemptId,
       { type: 'codex', provider: 'codex-cli', model: 'gpt-5.5' }
     );
-    service.handleCodexEvent(
+    await service.handleCodexEvent(
       {
         type: 'turn.retrying',
         message: 'Retrying after rate limit',
@@ -486,12 +507,12 @@ describe('ClawdbotAgentService Codex providers', () => {
       },
       logPath,
       task,
-      'attempt_fixture',
+      attemptId,
       { type: 'codex', provider: 'codex-cli', model: 'gpt-5.5' }
     );
 
     expect(mockStartStep).toHaveBeenCalledWith(
-      'attempt_fixture',
+      attemptId,
       'stream',
       expect.objectContaining({
         eventType: 'response.output_text.delta',
@@ -500,7 +521,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       })
     );
     expect(mockStartStep).toHaveBeenCalledWith(
-      'attempt_fixture',
+      attemptId,
       'retry',
       expect.objectContaining({
         eventType: 'turn.retrying',
@@ -509,6 +530,451 @@ describe('ClawdbotAgentService Codex providers', () => {
         retryDelayMs: 1250,
       })
     );
+    await service.stopAgent(task.id, attemptId);
+  });
+
+  it('fails status and provider event ingestion when the persisted snapshot changes', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+
+    await service.startAgent(task.id, 'codex');
+    const activeAttempt = task.attempt;
+    const attemptId = activeAttempt?.id;
+    if (!activeAttempt || !attemptId) throw new Error('Expected active attempt');
+    const originalManifest = activeAttempt.providerRuntimeManifest;
+    if (!originalManifest) throw new Error('Expected persisted runtime manifest');
+    task = {
+      ...task,
+      attempt: {
+        ...activeAttempt,
+        providerRuntimeManifest: providerRuntimeManifestFixture({ provider: 'codex-cli' }),
+      },
+    } as Task;
+
+    await expect(service.getAgentStatus(task.id)).rejects.toThrow('digest mismatch');
+
+    child.stdout.write(
+      `${JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'stale' } })}\n`
+    );
+    await waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGTERM'));
+    expect(mockStartStep).not.toHaveBeenCalledWith(
+      attemptId,
+      expect.anything(),
+      expect.objectContaining({ eventType: 'item.completed' })
+    );
+    task = {
+      ...task,
+      attempt: { ...activeAttempt, providerRuntimeManifest: originalManifest },
+    } as Task;
+    await service.stopAgent(task.id, attemptId);
+  });
+
+  it('aborts and removes a Codex SDK run when stale evidence also blocks finalization', async () => {
+    let releaseEvents: (() => void) | undefined;
+    const eventGate = new Promise<void>((resolve) => {
+      releaseEvents = resolve;
+    });
+    let sdkSignal: AbortSignal | undefined;
+    mockSdkRunStreamed.mockImplementation(
+      async (_prompt: string, options: { signal?: AbortSignal }) => {
+        sdkSignal = options.signal;
+        return {
+          events: {
+            async *[Symbol.asyncIterator]() {
+              await eventGate;
+              yield {
+                type: 'item.completed',
+                item: { type: 'agent_message', text: 'stale SDK event' },
+              };
+            },
+          },
+        };
+      }
+    );
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+
+    await service.startAgent(task.id, 'codex-sdk');
+    await waitFor(() => expect(mockSdkRunStreamed).toHaveBeenCalled());
+    const activeAttempt = task.attempt;
+    if (!activeAttempt?.providerRuntimeManifest) throw new Error('Expected SDK runtime manifest');
+    task = {
+      ...task,
+      attempt: {
+        ...activeAttempt,
+        providerRuntimeManifest: providerRuntimeManifestFixture({ provider: 'codex-sdk' }),
+      },
+    } as Task;
+
+    releaseEvents?.();
+
+    await waitFor(async () => expect(await service.getAgentStatus(task.id)).toBeNull());
+    expect(sdkSignal?.aborted).toBe(true);
+  });
+
+  it('does not let a stopped SDK rejection remove its replacement run', async () => {
+    let releaseFirst: (() => void) | undefined;
+    let releaseSecond: (() => void) | undefined;
+    let firstRejected = false;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    let invocation = 0;
+    mockSdkRunStreamed.mockImplementation(async () => {
+      invocation += 1;
+      const currentInvocation = invocation;
+      return {
+        events: {
+          async *[Symbol.asyncIterator]() {
+            if (currentInvocation === 1) {
+              await firstGate;
+              firstRejected = true;
+              throw new Error('stopped run rejected late');
+            }
+            await secondGate;
+            yield { type: 'thread.started', thread_id: 'replacement-thread' };
+          },
+        },
+      };
+    });
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+
+    const first = await service.startAgent(task.id, 'codex-sdk');
+    await waitFor(() => expect(mockSdkRunStreamed).toHaveBeenCalledTimes(1));
+    await service.stopAgent(task.id, first.attemptId);
+    const replacement = await service.startAgent(task.id, 'codex-sdk');
+    expect(replacement.attemptId).not.toBe(first.attemptId);
+    await waitFor(() => expect(mockSdkRunStreamed).toHaveBeenCalledTimes(2));
+
+    releaseFirst?.();
+    await waitFor(() => expect(firstRejected).toBe(true));
+    await Promise.resolve();
+
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: replacement.attemptId,
+      status: 'running',
+    });
+    await service.stopAgent(task.id, replacement.attemptId);
+    releaseSecond?.();
+  });
+
+  it('serializes concurrent starts before asynchronous launch checks complete', async () => {
+    let releaseConfig: (() => void) | undefined;
+    const configGate = new Promise<void>((resolve) => {
+      releaseConfig = resolve;
+    });
+    const config = {
+      agents: [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.5',
+        },
+      ],
+    };
+    mockGetConfig
+      .mockImplementationOnce(async () => {
+        await configGate;
+        return config;
+      })
+      .mockResolvedValue(config);
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+
+    const firstStart = service.startAgent(task.id, 'codex');
+    await waitFor(() => expect(mockGetConfig).toHaveBeenCalledTimes(1));
+
+    await expect(service.startAgent(task.id, 'codex')).rejects.toThrow(
+      'An agent is already running or starting for this task'
+    );
+
+    releaseConfig?.();
+    const first = await firstStart;
+    expect(first.status).toBe('running');
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    await service.stopAgent(task.id, first.attemptId);
+  });
+
+  it('coalesces concurrent completion claims for the same active attempt', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    const provenance = {
+      attemptId: active.attemptId,
+      providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+    };
+
+    const naturalCompletion = service.completeAgent(
+      task.id,
+      { success: true, summary: 'natural completion won' },
+      provenance
+    );
+    const competingStopCompletion = service.completeAgent(
+      task.id,
+      { success: false, error: 'competing stop completion' },
+      provenance
+    );
+
+    await Promise.all([naturalCompletion, competingStopCompletion]);
+
+    expect(task.attempt).toMatchObject({
+      id: active.attemptId,
+      status: 'complete',
+    });
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(1);
+    expect(
+      mockTelemetryEmit.mock.calls.filter(([event]) => event.type === 'run.completed')
+    ).toHaveLength(1);
+    expect(mockLogActivity.mock.calls.filter(([type]) => type === 'agent_completed')).toHaveLength(
+      1
+    );
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('coalesces concurrent stops with the provider close terminalizer', async () => {
+    const child = createControllableChild();
+    child.kill.mockImplementation(() => {
+      child.killed = true;
+      child.emit('close', 143, 'SIGTERM');
+      return true;
+    });
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+
+    const firstStop = service.stopAgent(task.id, active.attemptId);
+    const concurrentStop = service.stopAgent(task.id, active.attemptId);
+    await Promise.all([firstStop, concurrentStop]);
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(
+      mockStartStep.mock.calls.filter(
+        ([attemptId, stepType]) => attemptId === active.attemptId && stepType === 'abort'
+      )
+    ).toHaveLength(1);
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(1);
+    expect(
+      mockTelemetryEmit.mock.calls.filter(([event]) => event.type === 'run.completed')
+    ).toHaveLength(1);
+    const log = await fs.readFile(path.join(tmpDir, `${task.id}_${active.attemptId}.md`), 'utf-8');
+    expect(log).not.toContain('## Codex Exit');
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('retries only the authoritative commit after a persistence failure', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    mockUpdateTask.mockRejectedValueOnce(new Error('persistence unavailable'));
+
+    await expect(service.stopAgent(task.id, active.attemptId)).rejects.toThrow(
+      'persistence unavailable'
+    );
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: active.attemptId,
+      status: 'running',
+    });
+
+    await service.stopAgent(task.id, active.attemptId);
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(
+      mockStartStep.mock.calls.filter(
+        ([attemptId, stepType]) => attemptId === active.attemptId && stepType === 'abort'
+      )
+    ).toHaveLength(1);
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(2);
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('does not enforce a budget evaluation that outlives its active run', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex', {
+      budget: {
+        enabled: true,
+        limits: { runtimeSeconds: 10_000 },
+        hardAction: 'cancel',
+      },
+    });
+    let releaseBudgetLookup: (() => void) | undefined;
+    const budgetLookupGate = new Promise<void>((resolve) => {
+      releaseBudgetLookup = resolve;
+    });
+    mockGetTask.mockClear();
+    mockGetTask
+      .mockImplementationOnce(async () => {
+        await budgetLookupGate;
+        return task;
+      })
+      .mockImplementation(async () => task);
+
+    const staleBudgetEvaluation = service.recordBudgetUsage(task.id, active.attemptId, {
+      runtimeSeconds: 20_000,
+    });
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledTimes(1));
+    await service.stopAgent(task.id, active.attemptId);
+    releaseBudgetLookup?.();
+
+    await expect(staleBudgetEvaluation).rejects.toMatchObject({ statusCode: 409 });
+    const log = await fs.readFile(path.join(tmpDir, `${task.id}_${active.attemptId}.md`), 'utf-8');
+    expect(log).not.toContain('## Budget Enforcement');
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reapply budget usage when governance trace persistence retries', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex', {
+      budget: {
+        enabled: true,
+        limits: { toolCalls: 2 },
+        hardAction: 'cancel',
+      },
+    });
+    mockGovernanceRecord.mockRejectedValueOnce(new Error('governance trace unavailable'));
+
+    await expect(
+      service.recordBudgetUsage(task.id, active.attemptId, { toolCalls: 2 })
+    ).rejects.toThrow('governance trace unavailable');
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: active.attemptId,
+      status: 'running',
+    });
+
+    await service.recordBudgetUsage(task.id, active.attemptId, { toolCalls: 2 });
+
+    expect(task.attempt?.budget?.usage.toolCalls).toBe(2);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('does not replay a committed completion when post-commit telemetry fails', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    const provenance = {
+      attemptId: active.attemptId,
+      providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+    };
+    mockTelemetryEmit.mockRejectedValueOnce(new Error('telemetry unavailable'));
+
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: true, summary: 'committed before telemetry' },
+        provenance
+      )
+    ).resolves.toBeUndefined();
+
+    expect(task.attempt).toMatchObject({ id: active.attemptId, status: 'complete' });
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+    await expect(
+      service.completeAgent(task.id, { success: true, summary: 'must not replay' }, provenance)
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(1);
+    expect(mockCompleteTrace).toHaveBeenCalledWith(active.attemptId, 'completed');
+    expect(mockLogActivity).toHaveBeenCalledWith(
+      'agent_completed',
+      task.id,
+      task.title,
+      expect.objectContaining({ attemptId: active.attemptId, success: true }),
+      'codex'
+    );
+  });
+
+  it('rejects stale completion and budget provenance after a replacement starts', async () => {
+    const firstChild = createControllableChild();
+    const replacementChild = createControllableChild();
+    mockSpawn.mockReturnValueOnce(firstChild).mockReturnValueOnce(replacementChild);
+    const service = testableService(tmpDir);
+
+    const first = await service.startAgent(task.id, 'codex');
+    await service.stopAgent(task.id, first.attemptId);
+    const replacement = await service.startAgent(task.id, 'codex');
+
+    await expect(service.stopAgent(task.id, first.attemptId)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await expect(
+      service.sendMessage(task.id, 'late steering command', {
+        expectedAttemptId: first.attemptId,
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: true, summary: 'late completion' },
+        {
+          attemptId: first.attemptId,
+          providerRuntimeManifestDigest: first.providerRuntimeManifest.digest,
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await expect(
+      service.recordBudgetUsage(task.id, first.attemptId, { totalTokens: 99 })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: replacement.attemptId,
+      status: 'running',
+    });
+
+    await service.stopAgent(task.id, replacement.attemptId);
   });
 
   it('blocks explicit dispatch when the selected agent is unhealthy', async () => {
@@ -542,8 +1008,8 @@ describe('ClawdbotAgentService Codex providers', () => {
     mockSpawn.mockReturnValue(child);
     const service = testableService(tmpDir);
 
-    await service.startAgent(task.id, 'codex');
-    await service.stopAgent(task.id);
+    const active = await service.startAgent(task.id, 'codex');
+    await service.stopAgent(task.id, active.attemptId);
 
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     expect(mockStartStep).toHaveBeenCalledWith(
@@ -576,7 +1042,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       threadId: 'thread_fixture_123',
       providerRuntimeManifest: { digest: manifestDigest },
     });
-    await service.stopAgent(task.id);
+    await service.stopAgent(task.id, attemptId);
   });
 
   it('preserves the previous attempt when a new provider process fails to start', async () => {
@@ -587,7 +1053,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       provider: 'codex-cli',
     };
     task = { ...task, attempt: previousAttempt, attempts: [] } as Task;
-    mockGetTask.mockResolvedValue(task);
+    mockGetTask.mockImplementation(async () => task);
     mockSpawn.mockImplementation(() => {
       throw new Error('fixture spawn failure');
     });
@@ -613,7 +1079,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       subtasks: [],
       verificationSteps: [],
     } as Task;
-    mockGetTask.mockResolvedValue(task);
+    mockGetTask.mockImplementation(async () => task);
 
     const service = testableService(tmpDir);
 
@@ -647,8 +1113,8 @@ describe('ClawdbotAgentService Codex providers', () => {
         expect.objectContaining({ status: 'done' })
       );
     });
-    await waitFor(() => {
-      expect(service.getAgentStatus(task.id)).toBeNull();
+    await waitFor(async () => {
+      expect(await service.getAgentStatus(task.id)).toBeNull();
     });
   });
 });

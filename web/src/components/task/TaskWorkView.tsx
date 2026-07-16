@@ -365,8 +365,12 @@ export function TaskWorkView({
 }: TaskWorkViewProps) {
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
-  const { data: agentStatus } = useAgentStatus(task.id);
-  const { outputs, isConnected, isRunning } = useAgentStream(task.id);
+  const {
+    data: agentStatus,
+    error: agentStatusError,
+    isFetching: isAgentStatusFetching,
+  } = useAgentStatus(task.id);
+  const { outputs, isConnected, isRunning } = useAgentStream(task.id, agentStatus?.attemptId);
   const { data: activeWorkflowRuns = [], isLoading: activeWorkflowRunsLoading } = useActiveRuns();
   const { data: recentWorkflowRuns = [], isLoading: recentWorkflowRunsLoading } = useRecentRuns();
   const stopAgent = useStopAgent();
@@ -384,12 +388,25 @@ export function TaskWorkView({
   const verification = getVerificationSummary(task);
   const latestWorkProducts = workProducts.slice(0, 3);
   const latestOutputs = outputs.slice(-6);
+  const taskAttemptActive =
+    task.attempt?.status === 'running' || task.attempt?.status === 'pending';
   const activeRun =
-    isRunning ||
-    agentStatus?.running ||
-    task.attempt?.status === 'running' ||
-    task.attempt?.status === 'pending';
-  const retryableRun = task.attempt?.status === 'failed' || task.attempt?.status === 'complete';
+    agentStatus?.running === true ||
+    ((agentStatus === undefined || isAgentStatusFetching) && (isRunning || taskAttemptActive));
+  const effectiveAttemptStatus =
+    !activeRun && taskAttemptActive ? ('failed' as const) : task.attempt?.status;
+  const retryableRun = effectiveAttemptStatus === 'failed' || effectiveAttemptStatus === 'complete';
+  const stopControl = agentStatus?.controls?.controls.find((control) => control.action === 'stop');
+  const canStop =
+    !agentStatusError && Boolean(agentStatus?.attemptId) && stopControl?.available === true;
+  const stopReason =
+    (agentStatusError instanceof Error
+      ? agentStatusError.message
+      : agentStatusError
+        ? 'Provider runtime status could not be validated.'
+        : undefined) ??
+    stopControl?.reason ??
+    'Validated stop capability evidence is not available for this run.';
   const attemptDuration = getAttemptDurationMs(task.attempt);
   const trackedTime = formatTrackedSeconds(task.timeTracking?.totalSeconds);
   const runCost = formatCost(task.actualCost);
@@ -437,7 +454,8 @@ export function TaskWorkView({
   };
 
   const handleStopAgent = () => {
-    stopAgent.mutate(task.id);
+    if (!canStop || !agentStatus?.attemptId) return;
+    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
     setStopConfirmOpen(false);
   };
 
@@ -488,8 +506,8 @@ export function TaskWorkView({
                     Live Session
                   </Text>
                 </Group>
-                <Badge color={getAttemptColor(task.attempt?.status)} variant="light">
-                  {formatAttemptStatus(task.attempt?.status)}
+                <Badge color={getAttemptColor(effectiveAttemptStatus)} variant="light">
+                  {formatAttemptStatus(effectiveAttemptStatus)}
                 </Badge>
               </Group>
               {task.attempt ? (
@@ -620,10 +638,10 @@ export function TaskWorkView({
                   <Terminal className="h-4 w-4 text-muted-foreground" />
                   <Text fw={600}>Activity Console</Text>
                   <Badge
-                    color={activeRun ? 'blue' : getAttemptColor(task.attempt?.status)}
+                    color={activeRun ? 'blue' : getAttemptColor(effectiveAttemptStatus)}
                     variant="light"
                   >
-                    {activeRun ? 'Live' : formatAttemptStatus(task.attempt?.status)}
+                    {activeRun ? 'Live' : formatAttemptStatus(effectiveAttemptStatus)}
                   </Badge>
                   {isConnected ? (
                     <Wifi className="h-3 w-3 text-green-500" />
@@ -647,6 +665,11 @@ export function TaskWorkView({
                     leftSection={<Square className="h-3 w-3" />}
                     loading={stopAgent.isPending}
                     onClick={() => setStopConfirmOpen(true)}
+                    disabled={!canStop}
+                    aria-label={
+                      canStop ? 'Stop active run' : `Stop active run unavailable: ${stopReason}`
+                    }
+                    title={canStop ? 'Stop active run' : stopReason}
                   >
                     Stop
                   </Button>
@@ -1008,7 +1031,13 @@ export function TaskWorkView({
             <Button variant="default" onClick={() => setStopConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button color="red" loading={stopAgent.isPending} onClick={handleStopAgent}>
+            <Button
+              color="red"
+              loading={stopAgent.isPending}
+              onClick={handleStopAgent}
+              disabled={!canStop}
+              title={canStop ? 'Stop agent' : stopReason}
+            >
               Stop Agent
             </Button>
           </Group>

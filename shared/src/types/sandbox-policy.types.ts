@@ -67,13 +67,22 @@ export interface SandboxProviderCapabilities {
   advisory?: SandboxProviderCapabilityId[];
 }
 
-export interface SandboxPolicyDryRunRequest {
+export interface SandboxPolicyEvaluationInput {
   presetId?: string;
   preset?: SandboxPolicyPreset;
   provider?: string;
   workspacePath?: string;
   requiredCapabilities?: SkillCapabilityId[];
-  providerCapabilities?: SandboxProviderCapabilities;
+  providerRuntimeManifestDigest?: string;
+  /** Internal launch-time snapshot. Never accepted from public dry-run callers. */
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
+}
+
+export interface SandboxPolicyDryRunRequest extends Omit<
+  SandboxPolicyEvaluationInput,
+  'providerRuntimeManifestDigest' | 'providerRuntimeManifest'
+> {
+  providerRuntimeManifestDigest: string;
 }
 
 export interface SandboxPolicyRuleEvaluation {

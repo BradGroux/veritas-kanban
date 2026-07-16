@@ -17,19 +17,6 @@ export const sandboxPolicyEnforcementSchema = z.enum(['required', 'advisory']);
 export const sandboxNetworkDefaultSchema = z.enum(['allow', 'deny']);
 export const sandboxCredentialModeSchema = z.enum(['none', 'brokered', 'env-passthrough']);
 
-export const sandboxProviderCapabilityIdSchema = z.enum([
-  'filesystem.read',
-  'filesystem.write',
-  'filesystem.deny-paths',
-  'filesystem.dotfile-masking',
-  'network.disable',
-  'network.allowlist',
-  'network.block-private',
-  'network.block-metadata',
-  'environment.allowlist',
-  'credential.broker',
-]);
-
 export const skillCapabilityIdSchema = z.enum([
   'filesystem.read',
   'filesystem.write',
@@ -93,20 +80,16 @@ export const sandboxPolicyParamsSchema = z.object({
   id: sandboxPresetIdSchema,
 });
 
-export const sandboxProviderCapabilitiesSchema = z.object({
-  provider: z.string().max(80).optional(),
-  supported: z.array(sandboxProviderCapabilityIdSchema).max(50).default([]),
-  advisory: z.array(sandboxProviderCapabilityIdSchema).max(50).optional().default([]),
-});
-
-export const sandboxPolicyDryRunSchema = z.object({
-  presetId: sandboxPresetIdSchema.optional(),
-  preset: sandboxPolicyPresetSchema.optional(),
-  provider: z.string().max(80).optional(),
-  workspacePath: z.string().max(1000).optional(),
-  requiredCapabilities: z.array(skillCapabilityIdSchema).max(50).optional(),
-  providerCapabilities: sandboxProviderCapabilitiesSchema.optional(),
-});
+export const sandboxPolicyDryRunSchema = z
+  .object({
+    presetId: sandboxPresetIdSchema.optional(),
+    preset: sandboxPolicyPresetSchema.optional(),
+    provider: z.string().max(80).optional(),
+    workspacePath: z.string().max(1000).optional(),
+    requiredCapabilities: z.array(skillCapabilityIdSchema).max(50).optional(),
+    providerRuntimeManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
 
 export type SandboxPolicyPresetInput = z.infer<typeof sandboxPolicyPresetSchema>;
 export type SandboxPolicyDryRunInput = z.infer<typeof sandboxPolicyDryRunSchema>;

@@ -2,7 +2,7 @@ import type { SandboxProviderCapabilityId } from './sandbox-policy.types.js';
 
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
-export const PROVIDER_RUNTIME_PROBE_REVISION = 1 as const;
+export const PROVIDER_RUNTIME_PROBE_REVISION = 3 as const;
 
 export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.start',
@@ -124,6 +124,45 @@ export interface ProviderRuntimeRouteCandidate {
   selected: boolean;
   reason: string;
   selection: ProviderRuntimeSelection;
+}
+
+export const PROVIDER_RUNTIME_CONTROL_ACTIONS = [
+  'start',
+  'status',
+  'logs',
+  'complete',
+  'stop',
+  'interrupt',
+  'message',
+  'resume',
+  'reattach',
+  'approvals',
+  'tool-calls',
+  'mcp',
+  'structured-output',
+  'token-usage',
+  'artifacts',
+] as const;
+
+export type ProviderRuntimeControlAction = (typeof PROVIDER_RUNTIME_CONTROL_ACTIONS)[number];
+
+export interface ProviderRuntimeControlAssessment {
+  action: ProviderRuntimeControlAction;
+  label: string;
+  capabilityId: ProviderRuntimeCapabilityId;
+  state: ProviderRuntimeCapabilityState;
+  available: boolean;
+  advisory: boolean;
+  reason: string;
+  remediation?: string;
+}
+
+export interface ProviderRuntimeControlSet {
+  manifestDigest?: string;
+  provider?: string;
+  providerVersion?: string;
+  probeState?: ProviderRuntimeProbeState;
+  controls: ProviderRuntimeControlAssessment[];
 }
 
 export function findProviderRuntimeCapability(

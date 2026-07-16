@@ -29,6 +29,10 @@ vi.mock('../services/governance-trace-service.js', () => ({
 
 import { WorkflowStepExecutor } from '../services/workflow-step-executor.js';
 import type { WorkflowRun, WorkflowStep } from '../types/workflow.js';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
+import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
+
+const runtimeManifestResolver = vi.fn();
 
 type MockOpenClawAdapter = OpenClawWorkflowAdapter & {
   spawn: ReturnType<
@@ -115,6 +119,15 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       allowed: ['Read', 'sessions_spawn', 'sessions_send'],
       denied: ['Write'],
     });
+    const openClawDefinition = getProviderRuntimeAdapterDefinition('openclaw', 'workflow');
+    runtimeManifestResolver.mockResolvedValue(
+      providerRuntimeManifestFixture({
+        provider: 'openclaw',
+        capabilityStates: Object.fromEntries(
+          openClawDefinition.capabilities.map((capability) => [capability.id, capability.state])
+        ),
+      })
+    );
   });
 
   afterEach(async () => {
@@ -134,7 +147,10 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       output: 'STATUS: done\nOUTPUT: Completed via OpenClaw',
     });
 
-    const executor = new WorkflowStepExecutor(tmpDir, { openClawAdapter: adapter });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
     const step = createStep();
     const run = createRun();
 
@@ -184,6 +200,122 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
     expect(output).not.toContain('Implement OpenClaw adapter');
   });
 
+  it('does not require token telemetry for runtime-only workflow budgets', async () => {
+    adapter.spawn.mockResolvedValue({
+      sessionKey: 'oc_session_runtime_budget',
+      runId: 'oc_run_runtime_budget',
+      status: 'completed',
+      output: 'STATUS: done\nOUTPUT: Runtime budget completed',
+    });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
+    const run = createRun({
+      budget: {
+        enabled: true,
+        policy: { enabled: true, limits: { runtimeSeconds: 300 } },
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          costUsd: 0,
+          toolCalls: 0,
+          runtimeSeconds: 0,
+          idleRuntimeSeconds: 0,
+          retries: 0,
+          fanOut: 0,
+        },
+        decision: 'allow',
+        thresholdEvents: [],
+        traceIds: [],
+      },
+    });
+
+    await expect(executor.executeStep(createStep(), run)).resolves.toMatchObject({
+      output: expect.stringContaining('Runtime budget completed'),
+    });
+    expect(adapter.spawn).toHaveBeenCalled();
+  });
+
+  it('dispatches by the explicit provider instead of a Codex-like agent id', async () => {
+    adapter.spawn.mockResolvedValue({
+      sessionKey: 'oc_session_codex_name',
+      runId: 'oc_run_codex_name',
+      status: 'completed',
+      output: 'STATUS: done\nOUTPUT: Executed by OpenClaw',
+    });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
+    const step = createStep({ agent: 'codex' });
+    const run = createRun({
+      context: {
+        task: { id: 'task_1', title: 'Explicit provider dispatch' },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex-named OpenClaw agent',
+              role: 'developer',
+              provider: 'openclaw',
+              description: 'Explicit provider wins over the agent id.',
+            },
+          ],
+        },
+        _sessions: {},
+      },
+    });
+
+    await executor.executeStep(step, run);
+
+    expect(adapter.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'codex', agentName: 'Codex-named OpenClaw agent' })
+    );
+  });
+
+  it('uses OpenClaw reattach requirements for an explicitly OpenClaw Codex-like agent', async () => {
+    adapter.send.mockResolvedValue({
+      sessionKey: 'oc_existing',
+      runId: 'oc_run_existing',
+      status: 'completed',
+      output: 'STATUS: done\nOUTPUT: Continued through OpenClaw',
+    });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
+    const step = createStep({
+      agent: 'codex',
+      session: { mode: 'reuse', context: 'minimal', cleanup: 'keep', timeout: 60 },
+    });
+    const run = createRun({
+      context: {
+        task: { id: 'task_1', title: 'Explicit provider reuse' },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex-named OpenClaw agent',
+              role: 'developer',
+              provider: 'openclaw',
+              description: 'Explicit provider controls reuse requirements.',
+            },
+          ],
+        },
+        _sessions: { codex: 'oc_existing' },
+      },
+    });
+
+    await executor.executeStep(step, run);
+
+    expect(adapter.send).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'codex', sessionKey: 'oc_existing' })
+    );
+    expect(adapter.spawn).not.toHaveBeenCalled();
+  });
+
   it('reuses an existing OpenClaw session when requested', async () => {
     adapter.send.mockResolvedValue({
       sessionKey: 'oc_existing_1',
@@ -192,7 +324,10 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       output: 'STATUS: done\nOUTPUT: Reused existing session',
     });
 
-    const executor = new WorkflowStepExecutor(tmpDir, { openClawAdapter: adapter });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
     const step = createStep({
       session: {
         mode: 'reuse',
@@ -237,7 +372,10 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       )
     );
 
-    const executor = new WorkflowStepExecutor(tmpDir, { openClawAdapter: adapter });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
     const step = createStep({
       input: 'Implement {{task.title}} token=sk-test-secret-value-123456',
     });
@@ -280,7 +418,10 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       error: 'Timed out waiting for completion',
     });
 
-    const executor = new WorkflowStepExecutor(tmpDir, { openClawAdapter: adapter });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
 
     await expect(executor.executeStep(createStep(), createRun())).rejects.toThrow(
       'OpenClaw session oc_session_timeout timed out'
@@ -303,7 +444,10 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
       output: 'STATUS: done\nOUTPUT: Kept for debugging',
     });
 
-    const executor = new WorkflowStepExecutor(tmpDir, { openClawAdapter: adapter });
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+    });
     const step = createStep({
       session: {
         mode: 'fresh',

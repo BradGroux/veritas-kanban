@@ -94,6 +94,11 @@ endpoints still accept the compatibility roles above, but new v5 route work
 should declare the specific permission it requires, such as `task:read`,
 `task:write`, `workflow:execute`, or `admin:manage`.
 
+Production keeps unauthenticated localhost bypass disabled. A password session
+that passes the local-owner loopback `Host`/`Origin`/`Referer` checks receives
+only the explicit `local-agent:run` client capability needed by packaged desktop
+agent controls. Remote password-session cookies remain invalid.
+
 Password sessions are intentionally local-owner only for v5 GA. Remote,
 server-mode, PWA, CLI, MCP, and multi-user clients must use device sessions or
 scoped API tokens; those credentials are revalidated against workspace
@@ -1554,6 +1559,11 @@ Mounted at `/api/queue-monitors`.
 
 `runner: "local"` is executable in this version. `runner: "github-actions"` is persisted for monitor definitions but launch is blocked until a workflow-dispatch adapter is configured.
 
+Local queue sandbox preflight probes the configured Codex runtime and evaluates
+the preset against that exact manifest. If no valid manifest can be resolved,
+capability-dependent presets fail closed instead of using provider-name
+assumptions.
+
 ### Candidate Packet
 
 Each run stores a bounded packet with:
@@ -1904,21 +1914,89 @@ PUT /api/agents/routing
 }
 ```
 
-### Start Agent With Profile Package
+### Start Agent And Require Runtime Capabilities
 
 ```
 POST /api/agents/:taskId/start
 ```
 
-In addition to `agent`, `sandboxPresetId`, and `budget`, callers can pass a portable profile package ID:
+Callers can select an agent or portable profile package and require additional
+runtime capabilities:
 
 ```json
 {
-  "profileId": "docs-reviewer"
+  "profileId": "docs-reviewer",
+  "sandboxPresetId": "codex-repo-contained",
+  "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"]
 }
 ```
 
-The launch path resolves the package runtime against configured provider profiles, applies package model/sandbox/budget posture, injects package instructions into the run prompt, and records the profile ID and version on the task attempt plus activity audit history.
+The launch path resolves the package runtime against configured provider
+profiles, applies package model/sandbox/budget posture, injects package
+instructions, and records the profile ID and version. Baseline launch
+capabilities plus caller, profile, sandbox, and budget requirements must be
+`supported` or `advisory` in one valid manifest before attempt state is
+mutated. Failure returns `409 Conflict` with `requiredCapabilities`, reasons,
+manifest identity, and remediation.
+
+`GET /api/agents/:taskId/status` returns the active manifest and its derived
+controls:
+
+```json
+{
+  "running": true,
+  "attemptId": "attempt_123",
+  "provider": "codex-cli",
+  "providerRuntimeManifest": { "digest": "sha256:..." },
+  "controls": {
+    "manifestDigest": "sha256:...",
+    "probeState": "ready",
+    "controls": [
+      {
+        "action": "stop",
+        "label": "Stop run",
+        "capabilityId": "run.stop",
+        "state": "supported",
+        "available": true,
+        "advisory": false,
+        "reason": "The adapter terminates the supervised provider process."
+      }
+    ]
+  }
+}
+```
+
+Stop, message, completion, token-reporting, and attempt-log endpoints re-check
+the persisted snapshot. Invalid or active/persisted digest mismatches return
+`409 Conflict`; unsupported capability states return the same structured
+control evidence.
+
+Stop and message requests must carry the `attemptId` returned by status so a
+delayed control cannot affect a replacement run:
+
+```json
+{ "attemptId": "attempt_123" }
+```
+
+`POST /api/agents/:taskId/message` adds the attributed `message` (and optional
+`actor`) to that body. `POST /api/agents/:taskId/tokens` also requires the exact
+`attemptId`; the server never falls back to the task's current attempt.
+
+Completion callbacks must identify the exact run that produced them:
+
+```json
+{
+  "attemptId": "attempt_123",
+  "providerRuntimeManifestDigest": "sha256:<64 lowercase hex characters>",
+  "success": true,
+  "summary": "Implemented and verified the requested change"
+}
+```
+
+`POST /api/agents/:taskId/complete` rejects callbacks whose attempt or manifest
+digest does not match the active run. Token reports likewise bind telemetry and
+budget mutation to their required `attemptId`, so a late event from a prior
+attempt cannot charge or stop a replacement run.
 
 ### Provider Runtime Manifest On Attempts
 
@@ -1929,7 +2007,7 @@ Task and trace responses can therefore include the immutable
 ```json
 {
   "schemaVersion": "provider-runtime-manifest/v1",
-  "probeRevision": 1,
+  "probeRevision": 3,
   "provider": "codex-cli",
   "adapter": "codex-cli",
   "protocolVersion": "codex-exec-json/v1",
@@ -1994,15 +2072,11 @@ execution adapter is still required before launch.
 
 Only live registrations with a heartbeat no older than five minutes contribute
 runtime evidence. `requiredTools` values using `tool.*` are evaluated through
-the same single-manifest path; legacy named tools cannot qualify a host. Probe
-timestamp freshness and action-level enforcement are completed by #887, so
-agents must refresh evidence when their provider runtime changes. A bare
-`sandboxPresetId` does not qualify a host in this intermediate contract because
-the preset's individual controls have not yet been resolved into manifest
-requirements. For a capability-only preview, omit the preset ID and supply the
-relevant filesystem, network, environment, and credential IDs in
-`requiredRuntimeCapabilities`; #887 wires actual preset resolution into the
-same evaluator.
+the same single-manifest path; legacy named tools cannot qualify a host.
+Launch-time sandbox preset rules and active run controls use the exact manifest
+persisted on the attempt. Provider events, status, logs, completion, stop,
+steer, token usage, and artifacts reject missing, invalid, failed-probe, or
+active/persisted digest-mismatched snapshots.
 
 ---
 
@@ -2239,10 +2313,16 @@ POST /api/sandbox-policies/validate
 {
   "presetId": "repo-contained-no-network",
   "provider": "codex-sdk",
+  "providerRuntimeManifestDigest": "sha256:<64 lowercase hex characters>",
   "workspacePath": "/workspace/veritas-kanban",
   "requiredCapabilities": ["filesystem.write"]
 }
 ```
+
+The digest must belong to a manifest currently registered by a live agent host
+and must match `provider`. The API rejects caller-supplied manifest objects,
+unknown or expired digests, and provider mismatches. Internal launch checks use
+the immutable manifest already selected and persisted for the attempt.
 
 **Response** `200`:
 

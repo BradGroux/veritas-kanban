@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AgentsTab } from '@/components/settings/tabs/AgentsTab';
 import { renderWithProviders } from './test-utils';
 import type { AgentConfig, AgentRoutingConfig, AgentType } from '@veritas-kanban/shared';
@@ -57,6 +58,9 @@ const mocks = vi.hoisted(() => ({
   exportProfile: vi.fn(),
   deleteProfile: vi.fn(),
   startAgent: vi.fn(),
+  validateSandboxPolicy: vi.fn(),
+  providerRuntimeManifests: [] as Array<Record<string, unknown>>,
+  additionalAgentHosts: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -282,7 +286,7 @@ vi.mock('@/hooks/useAgent', () => ({
           supportedModels: ['gpt-5'],
           supportedTools: ['tool.calls'],
           sandboxCapabilities: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
-          providerRuntimeManifests: [],
+          providerRuntimeManifests: mocks.providerRuntimeManifests,
           legacyRuntimePosture: {
             providers: ['codex-cli'],
             models: ['gpt-5'],
@@ -298,6 +302,7 @@ vi.mock('@/hooks/useAgent', () => ({
           diagnostics: [],
           registeredAgentIds: ['codex'],
         },
+        ...mocks.additionalAgentHosts,
       ],
     },
     isFetching: false,
@@ -418,12 +423,26 @@ vi.mock('@/hooks/useSandboxPolicies', () => ({
   useCreateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false }),
-  useValidateSandboxPolicy: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
+  useValidateSandboxPolicy: () => ({
+    mutate: mocks.validateSandboxPolicy,
+    mutateAsync: mocks.validateSandboxPolicy,
+    isPending: false,
+    data: undefined,
+    error: null,
+  }),
 }));
 
 describe('Agents settings Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    mocks.providerRuntimeManifests.length = 0;
+    mocks.additionalAgentHosts.length = 0;
+    mocks.validateSandboxPolicy.mockResolvedValue({
+      decision: 'allow',
+      effective: { sandboxMode: 'workspace-write', networkAccessEnabled: false },
+      unsupportedRules: [],
+    });
   });
 
   afterEach(() => {
@@ -484,6 +503,138 @@ describe('Agents settings Mantine migration', () => {
       agents[0],
       expect.objectContaining({ type: 'claude-code', enabled: true }),
     ]);
+  });
+
+  it('dry-runs sandbox policy against the newest live registered manifest', async () => {
+    const olderReadyDigest = `sha256:${'a'.repeat(64)}`;
+    const newerFailedDigest = `sha256:${'b'.repeat(64)}`;
+    const newestDisconnectedDigest = `sha256:${'c'.repeat(64)}`;
+    mocks.providerRuntimeManifests.push(
+      {
+        provider: 'codex-sdk',
+        adapter: 'codex-sdk',
+        digest: olderReadyDigest,
+        probe: { state: 'ready', probedAt: '2026-06-01T12:00:00.000Z' },
+      },
+      {
+        provider: 'codex-sdk',
+        adapter: 'codex-sdk',
+        digest: newerFailedDigest,
+        probe: { state: 'failed', probedAt: '2026-06-01T12:05:00.000Z' },
+      }
+    );
+    mocks.additionalAgentHosts.push({
+      id: 'host-disconnected',
+      name: 'Disconnected Supervisor',
+      supervisorType: 'remote-agent',
+      os: 'linux',
+      posture: 'disconnected',
+      authState: 'unknown',
+      supportedAgents: ['codex'],
+      supportedProviders: ['codex-sdk'],
+      supportedModels: ['gpt-5'],
+      supportedTools: ['tool.calls'],
+      sandboxCapabilities: ['filesystem.read'],
+      providerRuntimeManifests: [
+        {
+          provider: 'codex-sdk',
+          adapter: 'codex-sdk',
+          digest: newestDisconnectedDigest,
+          probe: { state: 'ready', probedAt: '2026-06-01T12:10:00.000Z' },
+        },
+      ],
+      legacyRuntimePosture: {
+        providers: ['codex-sdk'],
+        models: ['gpt-5'],
+        tools: ['code'],
+        sandboxCapabilities: [],
+      },
+      workspaceLabels: ['workspace:veritas-kanban'],
+      activeSessions: 0,
+      queueDepth: 0,
+      maxQueueDepth: 2,
+      overloaded: false,
+      lastHeartbeat: '2026-06-01T11:50:00.000Z',
+      diagnostics: ['Heartbeat expired.'],
+      registeredAgentIds: ['codex'],
+    });
+
+    renderWithProviders(<AgentsTab />);
+
+    const runCheck = screen.getByRole('button', { name: 'Run Dry Check' });
+    await waitFor(() => expect(runCheck.getAttribute('disabled')).toBeNull());
+    fireEvent.click(runCheck);
+
+    expect(mocks.validateSandboxPolicy).toHaveBeenCalledWith({
+      presetId: 'legacy-permissive',
+      provider: 'codex-sdk',
+      providerRuntimeManifestDigest: newerFailedDigest,
+    });
+  });
+
+  it('ignores stale dry-run responses after the provider selection changes away and back', async () => {
+    const user = userEvent.setup();
+    const digest = `sha256:${'d'.repeat(64)}`;
+    mocks.providerRuntimeManifests.push({
+      provider: 'codex-sdk',
+      adapter: 'codex-sdk',
+      digest,
+      probe: { state: 'ready', probedAt: '2026-06-01T12:00:00.000Z' },
+    });
+    let resolveOld: ((value: unknown) => void) | undefined;
+    mocks.validateSandboxPolicy.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        })
+    );
+
+    renderWithProviders(<AgentsTab />);
+    await user.click(screen.getByRole('button', { name: 'Run Dry Check' }));
+    const provider = screen.getByRole('combobox', { name: 'Provider' });
+    await user.click(provider);
+    await user.click(await screen.findByRole('option', { name: 'OpenClaw' }));
+    await user.click(provider);
+    await user.click(await screen.findByRole('option', { name: 'Codex SDK' }));
+
+    resolveOld?.({
+      decision: 'allow',
+      effective: { sandboxMode: 'workspace-write', networkAccessEnabled: false },
+      unsupportedRules: [],
+      traceId: 'trace-stale',
+    });
+    await waitFor(() => expect(screen.queryByText('Trace trace-stale')).toBeNull());
+
+    mocks.validateSandboxPolicy.mockResolvedValueOnce({
+      decision: 'allow',
+      effective: { sandboxMode: 'workspace-write', networkAccessEnabled: false },
+      unsupportedRules: [],
+      traceId: 'trace-current',
+    });
+    await user.click(screen.getByRole('button', { name: 'Run Dry Check' }));
+    expect(await screen.findByText('Trace trace-current')).toBeDefined();
+  });
+
+  it('shows live-manifest validation conflicts to the operator', async () => {
+    const user = userEvent.setup();
+    mocks.providerRuntimeManifests.push({
+      provider: 'codex-sdk',
+      adapter: 'codex-sdk',
+      digest: `sha256:${'e'.repeat(64)}`,
+      probe: { state: 'ready', probedAt: '2026-06-01T12:00:00.000Z' },
+    });
+    mocks.validateSandboxPolicy.mockRejectedValueOnce(
+      new Error('The requested provider runtime manifest is not registered on a live agent host')
+    );
+
+    renderWithProviders(<AgentsTab />);
+    await user.click(screen.getByRole('button', { name: 'Run Dry Check' }));
+
+    expect(
+      await screen.findByText(
+        'The requested provider runtime manifest is not registered on a live agent host'
+      )
+    ).toBeDefined();
   });
 
   it('adds custom agents through Mantine text inputs and buttons', () => {

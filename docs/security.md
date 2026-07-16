@@ -114,9 +114,12 @@ checks. Legacy role guards remain supported while route coverage is migrated.
 
 Browser password sessions are local-owner only in v5 GA. The server accepts the
 session cookie only on loopback requests with loopback `Host`/`Origin`/`Referer`
-metadata. Remote, server, PWA, and multi-user clients must authenticate with a
-trusted device session or scoped API token so active workspace membership, role,
-revocation, and downgraded scopes are revalidated.
+metadata. A verified loopback owner session receives the narrow
+`local-agent:run` capability so the packaged desktop can start and control local
+agents; this does not enable unauthenticated localhost bypass, which remains
+disabled in production. Remote, server, PWA, and multi-user clients must
+authenticate with a trusted device session or scoped API token so active
+workspace membership, role, revocation, and downgraded scopes are revalidated.
 
 The v5 authority surface is tracked in
 [`docs/security/permission-coverage.json`](security/permission-coverage.json).
@@ -136,6 +139,32 @@ limits are tracked in
 Compatibility errors and debug bundles must redact tokens, cookies, private
 keys, local private paths, raw chat content, and task body text.
 
+## Provider Runtime Capability Enforcement
+
+Provider runtime manifests are authorization evidence, not display metadata.
+The server validates their complete capability inventory, canonical SHA-256
+digest, probe state, and secret redaction before use. Launch requirements and
+run controls qualify only with `supported` or `advisory` evidence;
+`unsupported`, `unknown`, missing, failed-probe, malformed, or invalid-digest
+evidence fails closed.
+
+The selected manifest is persisted on the attempt before provider execution.
+Status, logs, completion, stop, message/steer, token reporting, tool events, and
+artifact ingestion compare the active snapshot with the persisted digest before
+acting. A mismatch stops provider event ingestion and requires the operator to
+terminate the detached provider through its host supervisor, reconcile attempt
+state, and launch a fresh run. Veritas does not offer a UI force-stop that
+bypasses runtime evidence.
+
+Public sandbox dry-runs accept a live registered manifest digest, not a
+caller-supplied manifest body. The server resolves the digest from current host
+registrations and rejects unknown, expired, or provider-mismatched evidence.
+Human Veritas approval gates remain separate from provider-native
+`run.approvals`; one does not imply the other. Shared co-drive links are pinned
+to their source attempt. Message and approval actions require that exact attempt
+to remain active and require current `run.steer` or `run.approvals` evidence, so
+an old link cannot control a replacement run on the same task.
+
 ## Agent Sandbox Policies
 
 Agent sandbox policy presets live in the shared app config and are managed from
@@ -148,12 +177,12 @@ Use them to constrain:
 - Environment variable passthrough.
 - Credential access mode: none, brokered references, or explicit environment passthrough.
 
-Launch-time validation compares the preset with the selected provider's
-capabilities. Required unsupported controls block the agent or workflow step
-before execution. Advisory unsupported controls continue with warnings. Every
-dry-run and launch-time decision writes a governance trace with raw detail
-redacted; credential references and environment-style `name=value` strings are
-shown as `[redacted]`.
+Launch-time validation resolves every preset rule from the persisted provider
+runtime manifest. Required unsupported controls block the agent or workflow
+step before execution. Advisory unsupported controls continue with warnings.
+Every dry-run and launch-time decision writes a governance trace with raw
+detail redacted; credential references and environment-style `name=value`
+strings are shown as `[redacted]`.
 
 Agent budget policies are enforced through the same governance path. Workspace,
 agent, workflow, workflow-agent, and per-run budgets can cap tokens,

@@ -8,6 +8,7 @@ import {
   DEFAULT_SANDBOX_PRESET_ID,
   SandboxPolicyService,
 } from '../services/sandbox-policy-service.js';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 function preset(overrides: Partial<SandboxPolicyPreset> = {}): SandboxPolicyPreset {
   const now = '2026-06-18T00:00:00.000Z';
@@ -84,10 +85,20 @@ describe('SandboxPolicyService', () => {
     );
   });
 
-  it('allows repo-contained Codex SDK launches and blocks unsupported Codex CLI launches', async () => {
+  it('uses manifest evidence instead of provider names for sandbox enforcement', async () => {
+    const sdkManifest = providerRuntimeManifestFixture({
+      provider: 'codex-sdk',
+      capabilityStates: {
+        'filesystem.read': 'supported',
+        'filesystem.write': 'supported',
+        'network.disable': 'supported',
+        'environment.allowlist': 'supported',
+      },
+    });
     const sdkResult = await service.dryRun({
       presetId: 'codex-repo-contained',
       provider: 'codex-sdk',
+      providerRuntimeManifest: sdkManifest,
     });
 
     expect(sdkResult.decision).toBe('allow');
@@ -99,10 +110,40 @@ describe('SandboxPolicyService', () => {
     const cliResult = await service.dryRun({
       presetId: 'codex-repo-contained',
       provider: 'codex-cli',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'codex-cli',
+        capabilityStates: {
+          'filesystem.read': 'supported',
+          'filesystem.write': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
     });
 
     expect(cliResult.decision).toBe('block');
     expect(cliResult.unsupportedRules.map((rule) => rule.capability)).toContain('network.disable');
+  });
+
+  it('fails closed when only a provider name is supplied', async () => {
+    const result = await service.dryRun({
+      presetId: 'codex-repo-contained',
+      provider: 'codex-sdk',
+    });
+
+    expect(result.decision).toBe('block');
+    expect(result.unsupportedRules.length).toBeGreaterThan(0);
+  });
+
+  it('warns instead of silently allowing unsupported advisory controls', async () => {
+    const result = await service.dryRun({
+      preset: preset({ enforcement: 'advisory' }),
+      provider: 'codex-sdk',
+    });
+
+    expect(result.decision).toBe('warn');
+    expect(result.warnings).toEqual(
+      expect.arrayContaining(result.unsupportedRules.map((rule) => rule.detail))
+    );
   });
 
   it('creates, updates, and deletes custom presets without allowing built-in mutation', async () => {
@@ -154,18 +195,18 @@ describe('SandboxPolicyService', () => {
         },
       }),
       provider: 'hosted-agent',
-      providerCapabilities: {
+      providerRuntimeManifest: providerRuntimeManifestFixture({
         provider: 'hosted-agent',
-        supported: [
-          'filesystem.read',
-          'filesystem.write',
-          'network.allowlist',
-          'network.block-private',
-          'network.block-metadata',
-          'environment.allowlist',
-          'credential.broker',
-        ],
-      },
+        capabilityStates: {
+          'filesystem.read': 'supported',
+          'filesystem.write': 'supported',
+          'network.allowlist': 'supported',
+          'network.block-private': 'supported',
+          'network.block-metadata': 'supported',
+          'environment.allowlist': 'supported',
+          'credential.broker': 'supported',
+        },
+      }),
       workspacePath: '/Users/bradgroux/Projects/veritas-kanban',
     });
 

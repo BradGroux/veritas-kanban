@@ -14,6 +14,8 @@ export interface ProviderRuntimeAdapterDefinition {
   capabilities: ProviderRuntimeCapabilityEvidence[];
 }
 
+export type ProviderRuntimeSurface = 'task' | 'workflow';
+
 const COMMON_SUPPORTED: ProviderRuntimeCapabilityOverrides = {
   'run.start': supported('The adapter has a contract-tested launch path.'),
   'run.status': supported('Veritas tracks adapter run status.'),
@@ -113,7 +115,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ),
     'output.structured': unknown('Structured output has not been conformance tested.'),
     'usage.tokens': unknown('Token usage is not returned by the current task adapter.'),
-    'artifact.write': unknown('Artifact events are not returned by the current task adapter.'),
+    'artifact.write': unknown('OpenClaw task-session artifact persistence is not implemented.'),
     'workspace.worktrees': advisory('The worktree is delegated in the prompt, not host-enforced.'),
     'filesystem.read': advisory('Filesystem scope is delegated to the OpenClaw runtime.'),
     'filesystem.write': advisory('Workspace write scope is delegated to the OpenClaw runtime.'),
@@ -124,9 +126,33 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
 };
 
 export function getProviderRuntimeAdapterDefinition(
-  provider: ExecutableAgentProvider
+  provider: ExecutableAgentProvider,
+  surface: ProviderRuntimeSurface = 'task'
 ): ProviderRuntimeAdapterDefinition {
-  return DEFINITIONS[provider];
+  const base = DEFINITIONS[provider];
+  if (provider !== 'openclaw' || surface !== 'workflow') return base;
+
+  const overrides: ProviderRuntimeCapabilityOverrides = {
+    'run.follow-up': supported(
+      'The workflow adapter sends follow-up prompts to an existing OpenClaw session.'
+    ),
+    'run.reattach': advisory(
+      'The workflow adapter reuses a persisted session key, subject to external session retention.'
+    ),
+    'artifact.write': {
+      state: 'supported',
+      source: 'host-enforced',
+      reason: 'Veritas persists the adapter final response as a workflow output artifact.',
+    },
+  };
+  return {
+    ...base,
+    protocolVersion: 'openclaw-workflow-session/v1',
+    capabilities: base.capabilities.map((capability) => {
+      const override = overrides[capability.id as keyof ProviderRuntimeCapabilityOverrides];
+      return override ? { ...capability, ...override } : capability;
+    }),
+  };
 }
 
 function definition(

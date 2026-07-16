@@ -774,6 +774,7 @@ describe('Agent Schemas', () => {
   describe('ReportTokensBodySchema', () => {
     it('should accept valid token report', () => {
       const result = ReportTokensBodySchema.parse({
+        attemptId: 'attempt_1',
         inputTokens: 1000,
         outputTokens: 500,
         model: 'claude-opus',
@@ -783,21 +784,39 @@ describe('Agent Schemas', () => {
       expect(result.outputTokens).toBe(500);
     });
 
-    it('should accept minimal token report', () => {
-      const result = ReportTokensBodySchema.parse({ inputTokens: 100, outputTokens: 50 });
+    it('should accept minimal token report with attempt provenance', () => {
+      const result = ReportTokensBodySchema.parse({
+        attemptId: 'attempt_1',
+        inputTokens: 100,
+        outputTokens: 50,
+      });
       expect(result.inputTokens).toBe(100);
     });
 
+    it('should reject missing attempt provenance', () => {
+      expect(() => ReportTokensBodySchema.parse({ inputTokens: 100, outputTokens: 50 })).toThrow();
+    });
+
     it('should reject missing inputTokens', () => {
-      expect(() => ReportTokensBodySchema.parse({ outputTokens: 50 })).toThrow();
+      expect(() =>
+        ReportTokensBodySchema.parse({ attemptId: 'attempt_1', outputTokens: 50 })
+      ).toThrow();
     });
 
     it('should reject missing outputTokens', () => {
-      expect(() => ReportTokensBodySchema.parse({ inputTokens: 100 })).toThrow();
+      expect(() =>
+        ReportTokensBodySchema.parse({ attemptId: 'attempt_1', inputTokens: 100 })
+      ).toThrow();
     });
 
     it('should reject negative tokens', () => {
-      expect(() => ReportTokensBodySchema.parse({ inputTokens: -1, outputTokens: 50 })).toThrow();
+      expect(() =>
+        ReportTokensBodySchema.parse({
+          attemptId: 'attempt_1',
+          inputTokens: -1,
+          outputTokens: 50,
+        })
+      ).toThrow();
     });
   });
 });

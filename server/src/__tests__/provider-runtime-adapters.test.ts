@@ -81,4 +81,32 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
       });
     }
   );
+
+  it('separates OpenClaw task evidence from workflow-only controls and artifacts', async () => {
+    process.env.OPENCLAW_GATEWAY_VERSION = 'openclaw 2026.6.11';
+    const service = new ClawdbotAgentService(health);
+
+    const taskManifest = await service.probeProviderRuntime(config('openclaw'));
+    const workflowManifest = await service.probeProviderRuntime(
+      config('openclaw'),
+      'openclaw',
+      'workflow'
+    );
+
+    expect(taskManifest.protocolVersion).toBe('openclaw-tools/v1');
+    expect(
+      taskManifest.capabilities.find((capability) => capability.id === 'run.follow-up')?.state
+    ).toBe('unsupported');
+    expect(
+      taskManifest.capabilities.find((capability) => capability.id === 'artifact.write')?.state
+    ).toBe('unknown');
+    expect(workflowManifest.protocolVersion).toBe('openclaw-workflow-session/v1');
+    expect(
+      workflowManifest.capabilities.find((capability) => capability.id === 'run.follow-up')?.state
+    ).toBe('supported');
+    expect(
+      workflowManifest.capabilities.find((capability) => capability.id === 'artifact.write')?.state
+    ).toBe('supported');
+    expect(workflowManifest.digest).not.toBe(taskManifest.digest);
+  });
 });

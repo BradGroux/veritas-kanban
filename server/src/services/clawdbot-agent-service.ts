@@ -55,8 +55,12 @@ import type {
   AgentBudgetState,
   AgentBudgetUsage,
   AgentBudgetDecision,
+  AgentBudgetEvaluation,
   AgentProfileLaunchMetadata,
   ExecutableAgentProvider,
+  ProviderRuntimeCapabilityId,
+  ProviderRuntimeControlAction,
+  ProviderRuntimeControlSet,
   ProviderRuntimeManifest,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
@@ -67,8 +71,18 @@ import {
   ProviderRuntimeManifestService,
   type ProviderRuntimeProbeRequest,
 } from './provider-runtime-manifest-service.js';
-import { getProviderRuntimeAdapterDefinition } from './provider-runtime-adapter-registry.js';
+import {
+  getProviderRuntimeAdapterDefinition,
+  type ProviderRuntimeSurface,
+} from './provider-runtime-adapter-registry.js';
 import { getInstalledPackageVersion } from '../utils/package-version.js';
+import {
+  assertProviderRuntimeCapabilities,
+  assertProviderRuntimeControl,
+  assertProviderRuntimeManifestSnapshot,
+  BASELINE_LAUNCH_CAPABILITIES,
+  providerRuntimeControls,
+} from './provider-runtime-control-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -120,6 +134,10 @@ export interface AgentStatus {
   status: AttemptStatus;
   startedAt?: string;
   endedAt?: string;
+  provider?: ExecutableAgentProvider;
+  model?: string;
+  providerRuntimeManifest: ProviderRuntimeManifest;
+  controls: ProviderRuntimeControlSet;
 }
 
 export interface AgentOutput {
@@ -133,11 +151,18 @@ export interface AgentStartOptions {
   overrideReason?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
 }
 
 export interface AgentMessageOptions {
   actor?: string;
   source?: string;
+  expectedAttemptId: string;
+}
+
+export interface AgentCompletionProvenance {
+  attemptId: string;
+  providerRuntimeManifestDigest: string;
 }
 
 export interface AgentMessageDelivery {
@@ -175,9 +200,34 @@ interface PendingAgent {
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
   hermesSessionId?: string;
+  /**
+   * The first terminal result prepared for this run. Keep it across a failed
+   * authoritative task update so retries only repeat persistence, never
+   * provider-stop, abort-trace, or budget-enforcement side effects.
+   */
+  preparedFinalizationResult?: AgentTerminalResult;
+  completionTiming?: {
+    endedAt: string;
+    durationMs: number;
+  };
+  completionBudgetEvaluated?: boolean;
+  preparedCompletion?: {
+    status: AttemptStatus;
+    taskBeforeCompletion?: Task;
+    completedAttempt: TaskAttempt;
+  };
+}
+
+interface AgentTerminalResult {
+  success: boolean;
+  summary?: string;
+  error?: string;
 }
 
 const pendingAgents = new Map<string, PendingAgent>();
+const startingAgents = new Set<string>();
+const finalizingAgents = new Map<PendingAgent, Promise<void>>();
+const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
 
 export class ClawdbotAgentService {
   private configService: ConfigService;
@@ -280,6 +330,23 @@ export class ClawdbotAgentService {
     agentType?: AgentType,
     options: AgentStartOptions = {}
   ): Promise<AgentStatus> {
+    if (startingAgents.has(taskId) || pendingAgents.has(taskId)) {
+      throw new ConflictError('An agent is already running or starting for this task');
+    }
+
+    startingAgents.add(taskId);
+    try {
+      return await this.startReservedAgent(taskId, agentType, options);
+    } finally {
+      startingAgents.delete(taskId);
+    }
+  }
+
+  private async startReservedAgent(
+    taskId: string,
+    agentType?: AgentType,
+    options: AgentStartOptions = {}
+  ): Promise<AgentStatus> {
     // Get task
     const task = await this.taskService.getTask(taskId);
     if (!task) {
@@ -296,7 +363,7 @@ export class ClawdbotAgentService {
 
     // Check if agent already running for this task
     if (pendingAgents.has(taskId)) {
-      throw new Error('An agent is already running for this task');
+      throw new ConflictError('An agent is already running for this task');
     }
 
     // Get agent config — use routing engine when agent is "auto" or not specified
@@ -373,6 +440,32 @@ export class ClawdbotAgentService {
       agentConfig: launchAgentConfig,
       health: agentHealth,
     });
+    const launchRuntimeCapabilities = new Set<ProviderRuntimeCapabilityId>([
+      ...BASELINE_LAUNCH_CAPABILITIES,
+      ...(options.requiredRuntimeCapabilities ?? []),
+    ]);
+    if ((profileLaunch?.profile.tools?.allowed?.length ?? 0) > 0) {
+      launchRuntimeCapabilities.add('tool.calls');
+    }
+    if ((profileLaunch?.profile.tools?.mcpServers?.length ?? 0) > 0) {
+      launchRuntimeCapabilities.add('tool.calls');
+      launchRuntimeCapabilities.add('tool.mcp');
+    }
+    const budgetLimits = budgetPolicy?.enabled ? budgetPolicy.limits : undefined;
+    if (
+      budgetLimits?.inputTokens !== undefined ||
+      budgetLimits?.outputTokens !== undefined ||
+      budgetLimits?.totalTokens !== undefined ||
+      budgetLimits?.costUsd !== undefined
+    ) {
+      launchRuntimeCapabilities.add('usage.tokens');
+    }
+    if (budgetLimits?.toolCalls !== undefined) launchRuntimeCapabilities.add('tool.calls');
+    assertProviderRuntimeCapabilities(
+      providerRuntimeManifest,
+      [...launchRuntimeCapabilities],
+      'agent launch'
+    );
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
@@ -380,6 +473,7 @@ export class ClawdbotAgentService {
         launchAgentConfig?.sandboxPresetId,
       provider,
       workspacePath: task.git.worktreePath,
+      providerRuntimeManifest,
     });
     const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
     if (sandboxPolicy.result.decision === 'block') {
@@ -469,6 +563,7 @@ export class ClawdbotAgentService {
       task,
       worktreePath,
       attemptId,
+      providerRuntimeManifest.digest,
       profileLaunch?.instructions
     );
 
@@ -579,6 +674,10 @@ export class ClawdbotAgentService {
       agent,
       status: 'running',
       startedAt,
+      provider,
+      model: launchAgentConfig?.model,
+      providerRuntimeManifest,
+      controls: providerRuntimeControls(providerRuntimeManifest),
     };
   }
 
@@ -625,41 +724,120 @@ export class ClawdbotAgentService {
    */
   async completeAgent(
     taskId: string,
-    result: { success: boolean; summary?: string; error?: string }
+    result: AgentTerminalResult,
+    provenance: AgentCompletionProvenance
   ): Promise<void> {
     const pending = pendingAgents.get(taskId);
-    if (!pending) {
-      log.warn(`[ClawdbotAgent] Received completion for unknown task ${taskId}`);
+    if (
+      !pending ||
+      pending.attemptId !== provenance.attemptId ||
+      pending.providerRuntimeManifest.digest !== provenance.providerRuntimeManifestDigest
+    ) {
+      throw new ConflictError('Provider completion does not match the active run', {
+        activeAttemptId: pending?.attemptId,
+        completionAttemptId: provenance.attemptId,
+        activeManifestDigest: pending?.providerRuntimeManifest.digest,
+        completionManifestDigest: provenance.providerRuntimeManifestDigest,
+        remediation:
+          'Discard the stale callback and retry only from the provider process bound to the active attempt manifest.',
+      });
+    }
+
+    await this.finalizePendingAgent(taskId, pending, async () => result);
+  }
+
+  private async finalizePendingAgent(
+    taskId: string,
+    pending: PendingAgent,
+    prepareResult: () => Promise<AgentTerminalResult>
+  ): Promise<void> {
+    if (pendingAgents.get(taskId) !== pending) {
+      throw new ConflictError('Provider finalization does not match the active run', {
+        activeAttemptId: pendingAgents.get(taskId)?.attemptId,
+        finalizationAttemptId: pending.attemptId,
+      });
+    }
+
+    const inFlight = finalizingAgents.get(pending);
+    if (inFlight) {
+      await inFlight;
       return;
     }
 
+    // Defer preparation to the next microtask so the ownership claim is
+    // registered before a synchronous provider stop can emit `close`.
+    const finalization = Promise.resolve().then(async () => {
+      const result = pending.preparedFinalizationResult ?? (await prepareResult());
+      pending.preparedFinalizationResult = result;
+      await this.completePendingAgent(taskId, result, pending);
+    });
+    finalizingAgents.set(pending, finalization);
+    try {
+      await finalization;
+    } finally {
+      if (finalizingAgents.get(pending) === finalization) {
+        finalizingAgents.delete(pending);
+      }
+    }
+  }
+
+  private async completePendingAgent(
+    taskId: string,
+    result: AgentTerminalResult,
+    pending: PendingAgent
+  ): Promise<void> {
+    await this.assertPendingRunControl(taskId, pending, 'complete');
+
     const { attemptId, emitter } = pending;
-    const endedAt = new Date().toISOString();
     const status: AttemptStatus = result.success ? 'complete' : 'failed';
-    const durationMs = new Date(endedAt).getTime() - new Date(pending.startedAt).getTime();
-    if (pending.budget?.enabled) {
-      await this.evaluatePendingBudget(
-        taskId,
-        { runtimeSeconds: Math.ceil(durationMs / 1000) },
-        'agent.complete',
-        false
-      );
+    const timing =
+      pending.completionTiming ??
+      (pending.completionTiming = (() => {
+        const endedAt = new Date().toISOString();
+        return {
+          endedAt,
+          durationMs: new Date(endedAt).getTime() - new Date(pending.startedAt).getTime(),
+        };
+      })());
+    if (pending.budget?.enabled && !pending.completionBudgetEvaluated) {
+      // Terminal ownership wins over an older usage report. Waiting behind that
+      // report can deadlock when it is itself waiting for this finalization.
+      if (!budgetEvaluations.has(pending)) {
+        await this.evaluatePendingBudget(
+          taskId,
+          attemptId,
+          { runtimeSeconds: Math.ceil(timing.durationMs / 1000) },
+          'agent.complete',
+          false
+        );
+      }
+      pending.completionBudgetEvaluated = true;
     }
 
-    const taskBeforeCompletion = await this.taskService.getTask(taskId);
-    const completedAttempt: TaskAttempt = {
-      id: attemptId,
-      agent: pending.agent,
-      status,
-      started: pending.startedAt,
-      ended: endedAt,
-      provider: pending.provider,
-      model: pending.model,
-      threadId: pending.threadId,
-      budget: pending.budget,
-      agentProfile: pending.agentProfile,
-      providerRuntimeManifest: pending.providerRuntimeManifest,
-    };
+    const preparedCompletion =
+      pending.preparedCompletion ??
+      (await (async () => {
+        const taskBeforeCompletion = (await this.taskService.getTask(taskId)) ?? undefined;
+        const completedAttempt: TaskAttempt = {
+          id: attemptId,
+          agent: pending.agent,
+          status,
+          started: pending.startedAt,
+          ended: timing.endedAt,
+          provider: pending.provider,
+          model: pending.model,
+          threadId: pending.threadId,
+          budget: pending.budget,
+          agentProfile: pending.agentProfile,
+          providerRuntimeManifest: pending.providerRuntimeManifest,
+        };
+        return (pending.preparedCompletion = {
+          status,
+          taskBeforeCompletion,
+          completedAttempt,
+        });
+      })());
+    const { taskBeforeCompletion, completedAttempt } = preparedCompletion;
 
     // Update task and preserve the exact launch manifest in attempt history.
     await this.taskService.updateTask(taskId, {
@@ -667,62 +845,92 @@ export class ClawdbotAgentService {
       attempt: completedAttempt,
       attempts: upsertAttemptHistory(taskBeforeCompletion?.attempts, completedAttempt),
     });
+    if (pendingAgents.get(taskId) === pending) {
+      pendingAgents.delete(taskId);
+    }
 
-    // Append to log
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const summary = result.summary || result.error || 'No summary provided';
-    await fs.appendFile(logPath, `\n\n---\n\n## Result\n\n**Status:** ${status}\n\n${summary}\n`);
-
-    // Emit completion
-    emitter.emit('complete', { status, summary });
-
-    const task = await this.taskService.getTask(taskId);
+    const { durationMs } = timing;
     const completionStepType = result.success ? 'complete' : 'error';
-    this.recordTraceStep(attemptId, completionStepType, {
-      eventType: result.success ? 'run.completed' : 'run.failed',
-      summary: this.redactTraceText(summary),
-      success: result.success,
-      status,
-      error: result.error ? this.redactTraceText(result.error) : undefined,
-      durationMs,
-      agent: pending.agent,
-      provider: pending.provider,
-      model: pending.model,
-    });
-    await getTelemetryService().emit<RunCompletedEvent>({
-      type: 'run.completed',
-      taskId,
-      attemptId,
-      agent: pending.agent,
-      project: task?.project,
-      durationMs,
-      success: result.success,
-      error: result.error,
-    });
-    await getTraceService().completeTrace(attemptId, result.success ? 'completed' : 'failed');
-    await activityService.logActivity(
-      'agent_completed',
-      taskId,
-      task?.title || taskId,
-      {
-        attemptId,
-        provider: pending.provider,
-        model: pending.model,
-        success: result.success,
-        summary,
-      },
-      pending.agent
-    );
-
-    // Clean up
-    pendingAgents.delete(taskId);
-
-    // Remove request file
     const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
-    try {
-      await fs.unlink(requestFile);
-    } catch {
-      // Ignore if already deleted
+    const postCommitEffects: Array<[string, () => void | Promise<void>]> = [
+      [
+        'append result log',
+        () =>
+          fs.appendFile(logPath, `\n\n---\n\n## Result\n\n**Status:** ${status}\n\n${summary}\n`),
+      ],
+      ['emit completion event', () => emitter.emit('complete', { status, summary })],
+      [
+        'record terminal trace step',
+        () =>
+          this.recordTraceStep(attemptId, completionStepType, {
+            eventType: result.success ? 'run.completed' : 'run.failed',
+            summary: this.redactTraceText(summary),
+            success: result.success,
+            status,
+            error: result.error ? this.redactTraceText(result.error) : undefined,
+            durationMs,
+            agent: pending.agent,
+            provider: pending.provider,
+            model: pending.model,
+          }),
+      ],
+      [
+        'emit completion telemetry',
+        () =>
+          getTelemetryService().emit<RunCompletedEvent>({
+            type: 'run.completed',
+            taskId,
+            attemptId,
+            agent: pending.agent,
+            project: taskBeforeCompletion?.project,
+            durationMs,
+            success: result.success,
+            error: result.error,
+          }),
+      ],
+      [
+        'complete trace',
+        () => getTraceService().completeTrace(attemptId, result.success ? 'completed' : 'failed'),
+      ],
+      [
+        'record completion activity',
+        () =>
+          activityService.logActivity(
+            'agent_completed',
+            taskId,
+            taskBeforeCompletion?.title || taskId,
+            {
+              attemptId,
+              provider: pending.provider,
+              model: pending.model,
+              success: result.success,
+              summary,
+            },
+            pending.agent
+          ),
+      ],
+      [
+        'remove request file',
+        async () => {
+          try {
+            await fs.unlink(requestFile);
+          } catch {
+            // Ignore if already deleted.
+          }
+        },
+      ],
+    ];
+    for (const [effect, run] of postCommitEffects) {
+      try {
+        await run();
+      } catch (error) {
+        log.error(
+          { err: error, taskId, attemptId, effect },
+          '[ClawdbotAgent] Post-commit completion effect failed'
+        );
+      }
     }
 
     log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
@@ -731,38 +939,44 @@ export class ClawdbotAgentService {
   /**
    * Stop a running agent
    */
-  async stopAgent(taskId: string): Promise<void> {
+  async stopAgent(taskId: string, expectedAttemptId: string): Promise<void> {
     const pending = pendingAgents.get(taskId);
-    if (!pending) {
-      throw new Error('No agent running for this task');
+    if (!pending || pending.attemptId !== expectedAttemptId) {
+      throw new ConflictError('Stop request does not match the active run', {
+        activeAttemptId: pending?.attemptId,
+        requestedAttemptId: expectedAttemptId,
+      });
     }
 
-    await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
-    this.recordTraceStep(pending.attemptId, 'abort', {
-      eventType: 'run.aborted',
-      summary: 'Stopped by user',
-      reason: 'Stopped by user',
-      agent: pending.agent,
-      provider: pending.provider,
-      model: pending.model,
-    });
-
-    // Mark as failed/stopped
-    await this.completeAgent(taskId, {
-      success: false,
-      error: 'Stopped by user',
+    await this.finalizePendingAgent(taskId, pending, async () => {
+      await this.assertPendingRunControl(taskId, pending, 'stop');
+      await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+      this.recordTraceStep(pending.attemptId, 'abort', {
+        eventType: 'run.aborted',
+        summary: 'Stopped by user',
+        reason: 'Stopped by user',
+        agent: pending.agent,
+        provider: pending.provider,
+        model: pending.model,
+      });
+      return {
+        success: false,
+        error: 'Stopped by user',
+      };
     });
   }
 
   async sendMessage(
     taskId: string,
     message: string,
-    options: AgentMessageOptions = {}
+    options: AgentMessageOptions
   ): Promise<AgentMessageDelivery> {
     const pending = pendingAgents.get(taskId);
     if (!pending) {
       throw new Error('No agent running for this task');
     }
+
+    await this.assertActiveRunControl(taskId, 'message', options.expectedAttemptId);
 
     const content = message.trim();
     if (!content) {
@@ -806,63 +1020,118 @@ export class ClawdbotAgentService {
     };
   }
 
-  async recordBudgetUsage(taskId: string, delta: Partial<AgentBudgetUsage>): Promise<void> {
-    await this.evaluatePendingBudget(taskId, delta, 'agent.usage', true);
+  async recordBudgetUsage(
+    taskId: string,
+    attemptId: string,
+    delta: Partial<AgentBudgetUsage>
+  ): Promise<void> {
+    await this.evaluatePendingBudget(taskId, attemptId, delta, 'agent.usage', true);
   }
 
   private isBlockingBudgetDecision(decision: AgentBudgetDecision): boolean {
     return decision === 'pause' || decision === 'require-approval' || decision === 'cancel';
   }
 
+  private async serializeBudgetEvaluation<T>(
+    pending: PendingAgent,
+    evaluate: () => Promise<T>
+  ): Promise<T> {
+    const previous = budgetEvaluations.get(pending) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(evaluate);
+    const tail = current.then(
+      () => undefined,
+      () => undefined
+    );
+    budgetEvaluations.set(pending, tail);
+    try {
+      return await current;
+    } finally {
+      if (budgetEvaluations.get(pending) === tail) {
+        budgetEvaluations.delete(pending);
+      }
+    }
+  }
+
   private async evaluatePendingBudget(
     taskId: string,
+    attemptId: string,
     delta: Partial<AgentBudgetUsage>,
     actionType: string,
     enforce: boolean
   ): Promise<void> {
     const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Budget usage does not match the active run', {
+        activeAttemptId: pending?.attemptId,
+        usageAttemptId: attemptId,
+      });
+    }
     if (!pending?.budget?.enabled || !pending.budget.policy) return;
 
-    const task = await this.taskService.getTask(taskId);
-    const budgetService = getAgentBudgetService();
-    pending.budget.usage = budgetService.mergeUsage(pending.budget.usage, delta);
-    const evaluation = budgetService.evaluate(pending.budget.policy, pending.budget.usage, {
-      taskId,
-      agentId: pending.agent,
-      actionType,
-      project: task?.project,
-    });
+    const evaluation = await this.serializeBudgetEvaluation(
+      pending,
+      async (): Promise<AgentBudgetEvaluation> => {
+        const task = await this.taskService.getTask(taskId);
+        if (pendingAgents.get(taskId) !== pending || !pending.budget?.policy) {
+          throw new ConflictError('Budget usage does not match the active run', {
+            activeAttemptId: pendingAgents.get(taskId)?.attemptId,
+            usageAttemptId: attemptId,
+          });
+        }
+        const budgetService = getAgentBudgetService();
+        const usage = budgetService.mergeUsage(pending.budget.usage, delta);
+        const nextEvaluation = budgetService.evaluate(pending.budget.policy, usage, {
+          taskId,
+          agentId: pending.agent,
+          actionType,
+          project: task?.project,
+        });
 
-    pending.budget.decision = evaluation.decision;
-    pending.budget.modelOverride ??= evaluation.modelOverride;
-    pending.budget.thresholdEvents = mergeThresholdEvents(
-      pending.budget.thresholdEvents,
-      evaluation.thresholdEvents
+        let traceId: string | undefined;
+        if (nextEvaluation.trace) {
+          traceId = (await getGovernanceTraceService().record(nextEvaluation.trace)).id;
+        }
+        if (pendingAgents.get(taskId) !== pending || !pending.budget) {
+          throw new ConflictError('Budget usage does not match the active run', {
+            activeAttemptId: pendingAgents.get(taskId)?.attemptId,
+            usageAttemptId: attemptId,
+          });
+        }
+
+        pending.budget.usage = usage;
+        pending.budget.decision = nextEvaluation.decision;
+        pending.budget.modelOverride ??= nextEvaluation.modelOverride;
+        pending.budget.thresholdEvents = mergeThresholdEvents(
+          pending.budget.thresholdEvents,
+          nextEvaluation.thresholdEvents
+        );
+        if (traceId) {
+          pending.budget.traceIds = [...new Set([...pending.budget.traceIds, traceId])];
+        }
+        return nextEvaluation;
+      }
     );
-
-    if (evaluation.trace) {
-      const trace = await getGovernanceTraceService().record(evaluation.trace);
-      pending.budget.traceIds = [...new Set([...pending.budget.traceIds, trace.id])];
-    }
 
     if (!enforce || pending.budgetStopped || !this.isBlockingBudgetDecision(evaluation.decision)) {
       return;
     }
 
     pending.budgetStopped = true;
-    const logPath = path.join(this.logsDir, `${taskId}_${pending.attemptId}.md`);
-    await this.appendLog(
-      logPath,
-      `\n## Budget Enforcement\n\nDecision: ${evaluation.decision}\n\n${evaluation.thresholdEvents
-        .map((event) => `- ${event.message}`)
-        .join('\n')}\n`
-    );
-    await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
-    await this.completeAgent(taskId, {
-      success: false,
-      error: `Budget ${evaluation.decision}: ${evaluation.thresholdEvents
-        .map((event) => event.message)
-        .join(' ')}`,
+    await this.finalizePendingAgent(taskId, pending, async () => {
+      const logPath = path.join(this.logsDir, `${taskId}_${pending.attemptId}.md`);
+      await this.appendLog(
+        logPath,
+        `\n## Budget Enforcement\n\nDecision: ${evaluation.decision}\n\n${evaluation.thresholdEvents
+          .map((event) => `- ${event.message}`)
+          .join('\n')}\n`
+      );
+      await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+      return {
+        success: false,
+        error: `Budget ${evaluation.decision}: ${evaluation.thresholdEvents
+          .map((event) => event.message)
+          .join(' ')}`,
+      };
     });
   }
 
@@ -872,11 +1141,12 @@ export class ClawdbotAgentService {
 
   async probeProviderRuntime(
     agentConfig: AgentConfig,
-    agent: AgentType = agentConfig.type
+    agent: AgentType = agentConfig.type,
+    surface: ProviderRuntimeSurface = 'task'
   ): Promise<ProviderRuntimeManifest> {
     const health = await this.assertAgentAvailable(agent, agentConfig);
     const provider = this.resolveAgentProvider(agentConfig, agent);
-    return this.resolveProviderAdapter(provider).probe({ agentConfig, health });
+    return this.resolveProviderAdapter(provider, surface).probe({ agentConfig, health });
   }
 
   private async assertAgentAvailable(
@@ -940,8 +1210,11 @@ export class ClawdbotAgentService {
     return 'openclaw';
   }
 
-  private resolveProviderAdapter(provider: ExecutableAgentProvider): AgentProviderAdapter {
-    const definition = getProviderRuntimeAdapterDefinition(provider);
+  private resolveProviderAdapter(
+    provider: ExecutableAgentProvider,
+    surface: ProviderRuntimeSurface = 'task'
+  ): AgentProviderAdapter {
+    const definition = getProviderRuntimeAdapterDefinition(provider, surface);
     const probe = (context: AgentProviderProbeContext) =>
       this.providerRuntimeManifests.probe(
         this.buildProviderRuntimeProbeRequest(provider, context, definition)
@@ -1007,16 +1280,37 @@ export class ClawdbotAgentService {
             emitter,
             abortController,
             sandboxPolicy
-          ).catch(async (error: any) => {
-            if (!pendingAgents.has(task.id)) return;
-            await this.appendLog(
-              logPath,
-              `\n## Codex SDK Error\n\n${error.message || 'Codex SDK attempt failed'}\n`
-            );
-            await this.completeAgent(task.id, {
-              success: false,
-              error: error.message || 'Codex SDK attempt failed',
-            });
+          ).catch(async (error: unknown) => {
+            const current = pendingAgents.get(task.id);
+            if (!current || current.attemptId !== attemptId) return;
+            abortController.abort();
+            const message = error instanceof Error ? error.message : 'Codex SDK attempt failed';
+            try {
+              await this.appendLog(logPath, `\n## Codex SDK Error\n\n${message}\n`);
+            } catch (logError) {
+              log.error({ err: logError, taskId: task.id }, 'Failed to append Codex SDK error');
+            }
+            try {
+              await this.completeAgent(
+                task.id,
+                { success: false, error: message },
+                {
+                  attemptId,
+                  providerRuntimeManifestDigest: current.providerRuntimeManifest.digest,
+                }
+              );
+            } catch (finalizationError) {
+              if (pendingAgents.get(task.id)?.attemptId === attemptId) {
+                pendingAgents.delete(task.id);
+              }
+              if (emitter.listenerCount('error') > 0) {
+                emitter.emit('error', finalizationError);
+              }
+              log.error(
+                { err: finalizationError, taskId: task.id, attemptId },
+                'Codex SDK failure could not update stale persisted attempt state'
+              );
+            }
           });
         },
         stop: ({ pending }) => {
@@ -1265,7 +1559,10 @@ export class ClawdbotAgentService {
     });
 
     child.on('close', (code, signal) => {
-      void (async () => {
+      if (!pending || pendingAgents.get(task.id) !== pending || pending.attemptId !== attemptId) {
+        return;
+      }
+      void this.finalizePendingAgent(task.id, pending, async () => {
         const finalOutput = stdoutBuffer.trim() || stderrBuffer.trim();
         const success = code === 0;
 
@@ -1284,12 +1581,13 @@ export class ClawdbotAgentService {
           model: agentConfig?.model,
         });
 
-        await this.completeAgent(task.id, {
+        return {
           success,
           summary: finalOutput || (success ? 'Hermes completed.' : undefined),
           error: success ? undefined : finalOutput || `Hermes exited with code ${code}`,
-        });
-      })().catch((error) => {
+        };
+      }).catch((error) => {
+        if (pendingAgents.get(task.id) !== pending) return;
         log.error({ err: error, taskId: task.id }, 'Failed to finalize Hermes attempt');
       });
     });
@@ -1347,25 +1645,51 @@ export class ClawdbotAgentService {
           model?: string;
         }
       | undefined;
+    let eventProcessing = Promise.resolve();
+    let eventProcessingError: Error | undefined;
+    const enqueueEventProcessing = (work: () => Promise<void>) => {
+      eventProcessing = eventProcessing.then(async () => {
+        if (eventProcessingError) return;
+        try {
+          await work();
+        } catch (error) {
+          eventProcessingError =
+            error instanceof Error ? error : new Error('Provider event ingestion failed closed.');
+          child.kill('SIGTERM');
+        }
+      });
+    };
 
     child.stdout.setEncoding('utf-8');
     child.stdout.on('data', (chunk: string) => {
-      this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stdout', chunk);
-      stdoutBuffer += chunk;
-      const lines = stdoutBuffer.split(/\r?\n/);
-      stdoutBuffer = lines.pop() || '';
-      for (const line of lines) {
-        const parsed = this.handleCodexJsonLine(line, logPath, task, attemptId, agentConfig);
-        if (parsed.summary) finalSummary = parsed.summary;
-        if (parsed.usage) tokenUsage = parsed.usage;
-      }
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stdout', chunk);
+        stdoutBuffer += chunk;
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() || '';
+        for (const line of lines) {
+          const parsed = await this.handleCodexJsonLine(
+            line,
+            logPath,
+            task,
+            attemptId,
+            agentConfig
+          );
+          if (parsed.summary) finalSummary = parsed.summary;
+          if (parsed.usage) tokenUsage = parsed.usage;
+        }
+      });
     });
 
     child.stderr.setEncoding('utf-8');
     child.stderr.on('data', (chunk: string) => {
-      stderrBuffer += chunk;
-      this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stderr', chunk);
-      void this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        stderrBuffer += chunk;
+        this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stderr', chunk);
+        await this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+      });
     });
 
     child.on('error', (error) => {
@@ -1381,9 +1705,13 @@ export class ClawdbotAgentService {
     });
 
     child.on('close', (code, signal) => {
-      void (async () => {
-        if (stdoutBuffer.trim()) {
-          const parsed = this.handleCodexJsonLine(
+      if (!pending || pendingAgents.get(task.id) !== pending || pending.attemptId !== attemptId) {
+        return;
+      }
+      void this.finalizePendingAgent(task.id, pending, async () => {
+        await eventProcessing;
+        if (stdoutBuffer.trim() && !eventProcessingError) {
+          const parsed = await this.handleCodexJsonLine(
             stdoutBuffer,
             logPath,
             task,
@@ -1396,10 +1724,13 @@ export class ClawdbotAgentService {
 
         const finalPath = this.getCodexFinalPath(logPath, attemptId);
         finalSummary ||= await this.readOptionalFile(finalPath);
+        finalSummary ||= eventProcessingError?.message || '';
         finalSummary ||=
           code === 0 ? 'Codex completed without a final summary.' : stderrBuffer.trim();
+        const succeeded = code === 0 && !eventProcessingError;
 
-        if (tokenUsage) {
+        if (tokenUsage && !eventProcessingError) {
+          await this.assertRunControl(task.id, 'token-usage', attemptId);
           await getTelemetryService().emit<TokenTelemetryEvent>({
             type: 'run.tokens',
             taskId: task.id,
@@ -1414,6 +1745,7 @@ export class ClawdbotAgentService {
           });
           await this.evaluatePendingBudget(
             task.id,
+            attemptId,
             {
               inputTokens: tokenUsage.inputTokens,
               outputTokens: tokenUsage.outputTokens,
@@ -1433,19 +1765,20 @@ export class ClawdbotAgentService {
           eventType: 'run.finalizing',
           exitCode: code,
           signal,
-          success: code === 0,
+          success: succeeded,
           durationMs: Date.now() - new Date(startedAt).getTime(),
           provider: 'codex-cli',
           agent: agentConfig?.type || 'codex',
           model: agentConfig?.model,
         });
 
-        await this.completeAgent(task.id, {
-          success: code === 0,
+        return {
+          success: succeeded,
           summary: finalSummary,
-          error: code === 0 ? undefined : finalSummary || `Codex exited with code ${code}`,
-        });
-      })().catch((error) => {
+          error: succeeded ? undefined : finalSummary || `Codex exited with code ${code}`,
+        };
+      }).catch((error) => {
+        if (pendingAgents.get(task.id) !== pending) return;
         log.error({ err: error, taskId: task.id }, 'Failed to finalize Codex attempt');
       });
     });
@@ -1537,7 +1870,7 @@ export class ClawdbotAgentService {
       | undefined;
 
     for await (const event of streamed.events) {
-      const parsed = this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
+      const parsed = await this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
       if (parsed.summary) finalSummary = parsed.summary;
       if (parsed.usage) tokenUsage = parsed.usage;
 
@@ -1553,6 +1886,7 @@ export class ClawdbotAgentService {
     }
 
     if (tokenUsage) {
+      await this.assertRunControl(task.id, 'token-usage', attemptId);
       await getTelemetryService().emit<TokenTelemetryEvent>({
         type: 'run.tokens',
         taskId: task.id,
@@ -1567,6 +1901,7 @@ export class ClawdbotAgentService {
       });
       await this.evaluatePendingBudget(
         task.id,
+        attemptId,
         {
           inputTokens: tokenUsage.inputTokens,
           outputTokens: tokenUsage.outputTokens,
@@ -1583,21 +1918,29 @@ export class ClawdbotAgentService {
       `\n## Codex SDK Complete\n\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n`
     );
 
-    await this.completeAgent(task.id, {
-      success: !failureMessage,
-      summary: finalSummary || failureMessage || 'Codex SDK completed without a final summary.',
-      error: failureMessage || undefined,
-    });
+    await this.completeAgent(
+      task.id,
+      {
+        success: !failureMessage,
+        summary: finalSummary || failureMessage || 'Codex SDK completed without a final summary.',
+        error: failureMessage || undefined,
+      },
+      {
+        attemptId,
+        providerRuntimeManifestDigest:
+          pendingAgents.get(task.id)?.providerRuntimeManifest.digest ?? '',
+      }
+    );
     emitter.emit('sdk.complete', { taskId: task.id, attemptId });
   }
 
-  private handleCodexJsonLine(
+  private async handleCodexJsonLine(
     line: string,
     logPath: string,
     task?: Task,
     attemptId?: string,
     agentConfig?: AgentConfig
-  ): {
+  ): Promise<{
     summary?: string;
     usage?: {
       inputTokens: number;
@@ -1606,26 +1949,27 @@ export class ClawdbotAgentService {
       cost?: number;
       model?: string;
     };
-  } {
+  }> {
     const trimmed = line.trim();
     if (!trimmed) return {};
 
+    let event: Record<string, unknown>;
     try {
-      const event = JSON.parse(trimmed) as Record<string, unknown>;
-      return this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
+      event = JSON.parse(trimmed) as Record<string, unknown>;
     } catch {
-      void this.appendLog(logPath, `\n### stdout\n\n\`\`\`\n${trimmed}\n\`\`\`\n`);
+      await this.appendLog(logPath, `\n### stdout\n\n\`\`\`\n${trimmed}\n\`\`\`\n`);
       return { summary: trimmed };
     }
+    return this.handleCodexEvent(event, logPath, task, attemptId, agentConfig);
   }
 
-  private handleCodexEvent(
+  private async handleCodexEvent(
     event: ThreadEvent | Record<string, unknown>,
     logPath: string,
     task?: Task,
     attemptId?: string,
     agentConfig?: AgentConfig
-  ): {
+  ): Promise<{
     summary?: string;
     usage?: {
       inputTokens: number;
@@ -1634,28 +1978,26 @@ export class ClawdbotAgentService {
       cost?: number;
       model?: string;
     };
-  } {
+  }> {
+    if (task && attemptId) {
+      await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+    }
     const record = event as Record<string, unknown>;
     const type = String(record.type || record.event || 'codex.event');
     const summary = this.extractCodexSummary(record);
     const usage = this.extractCodexUsage(record);
-    void this.appendLog(
+    if (usage && task) {
+      assertProviderRuntimeControl(
+        pendingAgents.get(task.id)?.providerRuntimeManifest,
+        'token-usage'
+      );
+    }
+    await this.appendLog(
       logPath,
       `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n\n</details>\n`
     );
     if (task && attemptId) {
-      void this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary).catch(
-        (error) => {
-          log.warn(
-            {
-              error: error instanceof Error ? error.message : String(error),
-              taskId: task.id,
-              attemptId,
-            },
-            'Failed to record Codex event'
-          );
-        }
-      );
+      await this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary);
     }
     return { summary, usage };
   }
@@ -1812,10 +2154,12 @@ export class ClawdbotAgentService {
     }
 
     if (tool) {
-      await this.evaluatePendingBudget(task.id, { toolCalls: 1 }, 'agent.tool', true);
+      await this.assertRunControl(task.id, 'tool-calls', attemptId);
+      await this.evaluatePendingBudget(task.id, attemptId, { toolCalls: 1 }, 'agent.tool', true);
     }
 
     if (files.length > 0) {
+      await this.assertRunControl(task.id, 'artifacts', attemptId);
       await this.attachCodexDeliverables(task, attemptId, agent, files);
     }
   }
@@ -2057,6 +2401,7 @@ export class ClawdbotAgentService {
     agent: string,
     files: string[]
   ): Promise<void> {
+    await this.assertRunControl(task.id, 'artifacts', attemptId);
     const freshTask = await this.taskService.getTask(task.id);
     if (!freshTask) return;
 
@@ -2088,6 +2433,7 @@ export class ClawdbotAgentService {
 
     if (additions.length === 0) return;
 
+    await this.assertRunControl(task.id, 'artifacts', attemptId);
     await this.taskService.updateTask(task.id, {
       deliverables: [...existing, ...additions],
     });
@@ -2219,11 +2565,12 @@ export class ClawdbotAgentService {
   /**
    * Get agent status
    */
-  getAgentStatus(taskId: string): AgentStatus | null {
+  async getAgentStatus(taskId: string): Promise<AgentStatus | null> {
     const pending = pendingAgents.get(taskId);
     if (!pending) {
       return null;
     }
+    await this.assertPendingRunControl(taskId, pending, 'status');
 
     return {
       taskId,
@@ -2231,7 +2578,112 @@ export class ClawdbotAgentService {
       agent: pending.agent,
       status: 'running',
       startedAt: pending.startedAt,
+      provider: pending.provider,
+      model: pending.model,
+      providerRuntimeManifest: pending.providerRuntimeManifest,
+      controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
+  }
+
+  async assertRunControl(
+    taskId: string,
+    action: ProviderRuntimeControlAction,
+    attemptId?: string
+  ): Promise<void> {
+    const pending = pendingAgents.get(taskId);
+    if (pending && (!attemptId || attemptId === pending.attemptId)) {
+      await this.assertPendingRunControl(taskId, pending, action);
+      return;
+    }
+
+    const task = await this.taskService.getTask(taskId);
+    const attempts = [task?.attempt, ...(task?.attempts ?? [])].filter(
+      (attempt): attempt is TaskAttempt => Boolean(attempt)
+    );
+    const attempt = attemptId
+      ? attempts.find((candidate) => candidate.id === attemptId)
+      : task?.attempt;
+    assertProviderRuntimeControl(attempt?.providerRuntimeManifest, action);
+  }
+
+  async assertActiveRunControl(
+    taskId: string,
+    action: ProviderRuntimeControlAction,
+    attemptId: string,
+    expectedManifestDigest?: string
+  ): Promise<void> {
+    const pending = pendingAgents.get(taskId);
+    if (
+      !pending ||
+      pending.attemptId !== attemptId ||
+      (expectedManifestDigest && pending.providerRuntimeManifest.digest !== expectedManifestDigest)
+    ) {
+      throw new ConflictError('Run control does not match the active attempt', {
+        action,
+        activeAttemptId: pending?.attemptId,
+        requestedAttemptId: attemptId,
+        activeManifestDigest: pending?.providerRuntimeManifest.digest,
+        expectedManifestDigest,
+      });
+    }
+    await this.assertPendingRunControl(taskId, pending, action);
+  }
+
+  private async assertPendingRunControl(
+    taskId: string,
+    pending: PendingAgent,
+    action: ProviderRuntimeControlAction
+  ): Promise<void> {
+    await this.assertPendingManifestSnapshot(taskId, pending, action);
+    assertProviderRuntimeControl(pending.providerRuntimeManifest, action);
+  }
+
+  private async assertPendingManifestSnapshotForAttempt(
+    taskId: string,
+    attemptId: string
+  ): Promise<void> {
+    const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError(
+        'Provider runtime manifest is stale or invalid: provider event does not match the active attempt',
+        {
+          activeAttemptId: pending?.attemptId,
+          eventAttemptId: attemptId,
+          remediation:
+            'Terminate the detached provider through its host supervisor, reconcile persisted attempt state, and launch again.',
+        }
+      );
+    }
+    await this.assertPendingManifestSnapshot(taskId, pending, 'status');
+  }
+
+  private async assertPendingManifestSnapshot(
+    taskId: string,
+    pending: PendingAgent,
+    action: ProviderRuntimeControlAction
+  ): Promise<void> {
+    const task = await this.taskService.getTask(taskId);
+    const persistedAttempt = task?.attempt;
+    if (!persistedAttempt || persistedAttempt.id !== pending.attemptId) {
+      throw new ConflictError(
+        'Provider runtime manifest is stale or invalid: active attempt does not match persisted state',
+        {
+          action,
+          activeAttemptId: pending.attemptId,
+          persistedAttemptId: persistedAttempt?.id,
+          remediation:
+            'Terminate the detached provider through its host supervisor, reconcile persisted attempt state, and launch again.',
+        }
+      );
+    }
+    assertProviderRuntimeManifestSnapshot(
+      persistedAttempt.providerRuntimeManifest,
+      pending.providerRuntimeManifest.digest
+    );
+    assertProviderRuntimeManifestSnapshot(
+      pending.providerRuntimeManifest,
+      persistedAttempt.providerRuntimeManifest?.digest
+    );
   }
 
   /**
@@ -2273,6 +2725,7 @@ export class ClawdbotAgentService {
   }
 
   async getAttemptLog(taskId: string, attemptId: string): Promise<string> {
+    await this.assertRunControl(taskId, 'logs', attemptId);
     validatePathSegment(taskId);
     validatePathSegment(attemptId);
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
@@ -2295,6 +2748,7 @@ export class ClawdbotAgentService {
     task: Task,
     worktreePath: string,
     attemptId: string,
+    providerRuntimeManifestDigest: string,
     profileInstructions?: string
   ): string {
     // Build checkpoint context if available
@@ -2341,7 +2795,7 @@ ${profileInstructions ? `${profileInstructions}\n` : ''}
    \`\`\`bash
    curl -X POST http://localhost:3001/api/agents/${task.id}/complete \\
      -H "Content-Type: application/json" \\
-     -d '{"success": true, "summary": "Brief description of what was done"}'
+     -d '{"attemptId": "${attemptId}", "providerRuntimeManifestDigest": "${providerRuntimeManifestDigest}", "success": true, "summary": "Brief description of what was done"}'
    \`\`\`
 
 If you encounter errors, call with \`success: false\` and include the error message.

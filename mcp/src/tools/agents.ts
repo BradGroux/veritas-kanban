@@ -5,6 +5,15 @@ import { findTask } from '../utils/find.js';
 const StartAgentSchema = z.object({
   id: z.string().min(1),
   agent: z.enum(['claude-code', 'amp', 'copilot', 'gemini', 'veritas']).default('claude-code'),
+  requiredRuntimeCapabilities: z
+    .array(
+      z
+        .string()
+        .regex(/^[a-z][a-z0-9.-]*$/)
+        .max(80)
+    )
+    .max(64)
+    .optional(),
 });
 
 const TaskIdSchema = z.object({
@@ -26,6 +35,11 @@ export const agentTools = [
           type: 'string',
           enum: ['claude-code', 'amp', 'copilot', 'gemini'],
           description: 'Agent to use (default: claude-code)',
+        },
+        requiredRuntimeCapabilities: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Provider runtime capabilities that must be evidenced before launch',
         },
       },
       required: ['id'],
@@ -50,7 +64,7 @@ export const agentTools = [
 export async function handleAgentTool(name: string, args: any): Promise<any> {
   switch (name) {
     case 'start_agent': {
-      const { id, agent } = StartAgentSchema.parse(args);
+      const { id, agent, requiredRuntimeCapabilities } = StartAgentSchema.parse(args);
       const task = await findTask(id);
 
       if (!task) {
@@ -76,7 +90,7 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
 
       const result = await api<{ attemptId: string }>(`/api/agents/${task.id}/start`, {
         method: 'POST',
-        body: JSON.stringify({ agent }),
+        body: JSON.stringify({ agent, requiredRuntimeCapabilities }),
       });
 
       return {
@@ -100,7 +114,20 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
         };
       }
 
-      await api(`/api/agents/${task.id}/stop`, { method: 'POST' });
+      const status = await api<{ running: boolean; attemptId?: string }>(
+        `/api/agents/${task.id}/status`
+      );
+      if (!status.running || !status.attemptId) {
+        return {
+          content: [{ type: 'text', text: 'No active agent attempt is available to stop' }],
+          isError: true,
+        };
+      }
+
+      await api(`/api/agents/${task.id}/stop`, {
+        method: 'POST',
+        body: JSON.stringify({ attemptId: status.attemptId }),
+      });
 
       return {
         content: [{ type: 'text', text: 'Agent stopped' }],

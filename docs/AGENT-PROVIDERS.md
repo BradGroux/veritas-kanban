@@ -42,6 +42,21 @@ They do not imply that adjacent roadmap work already exists. For example,
 provider-neutral approvals, reattachment, follow-up/fork/steer controls, and MCP
 governance remain unsupported or unknown until their dedicated issues land.
 
+One evaluator maps those capabilities to launch and run controls. Agent starts
+always require `run.start`, `run.status`, `run.logs`, `run.complete`, and
+`workspace.worktrees`; callers can add `requiredRuntimeCapabilities`. Profile
+tools, MCP servers, token/cost/tool budgets, workflow sessions, structured
+output, and saved artifacts add their own requirements before provider work
+starts. `supported` and `advisory` evidence qualify; `unsupported`, `unknown`,
+missing, failed-probe, invalid-digest, or mismatched active/persisted evidence
+fails closed with concrete remediation.
+
+The task status API returns a `controls` set derived from the persisted launch
+snapshot. Stop, message/steer, completion, token reporting, logs, tool events,
+and artifact ingestion compare the active and persisted manifest digests before
+acting. Task Detail, Work view, and shared co-drive messaging disable actions
+that the manifest does not support and show the evaluator's reason.
+
 Agents and supervisors can register the same validated manifest with
 `POST /api/agents/register` and refresh it through the heartbeat endpoint. Host
 provider, model, `tool.*`, and sandbox posture is derived only from those
@@ -55,15 +70,28 @@ Self-registration requires an authenticated agent key/token whose identity
 matches the registry agent ID; operators with `agent:write` can register on an
 agent's behalf. Unknown request fields and unredacted secret-like evidence are
 rejected. Only registrations with a current five-minute heartbeat qualify for
-routing. Probe-evidence age enforcement is completed by #887; until then,
-operators must refresh the manifest whenever provider identity or evidence
-changes.
+routing. Provider version/build changes invalidate the readiness cache and
+force a new conformance probe; active controls continue to use the immutable
+snapshot persisted for that attempt.
 
-Host previews fail closed on a bare `sandboxPresetId` until #887 resolves each
-preset control through the same manifest evaluator. For a capability-only
-preview during this intermediate contract, omit the preset ID and provide the
-required filesystem, network, environment, and credential capability IDs
-directly.
+Sandbox launch checks resolve every preset rule through the same manifest.
+Settings dry-runs send the digest of the newest matching manifest registered by
+a live host; the server resolves that digest rather than trusting a
+caller-supplied capability object. A missing, expired, unknown, or
+provider-mismatched digest fails closed. Required presets block on unsupported
+rules, while advisory presets record warnings and governance evidence.
+
+Workflow agent steps currently execute through the `codex-sdk` and `openclaw`
+workflow adapters. A workflow configured with `codex-cli`, `hermes-cli`, or
+another provider is rejected before probing or launch instead of validating one
+runtime and executing another. The workflow run persists the manifest and
+derived controls before provider execution, then gates resume/reattach, tools,
+MCP, structured output, token usage, and saved output artifacts from that same
+snapshot. Capability evidence is surface-specific: OpenClaw task manifests do
+not claim workflow-only follow-up, reattach, or output-artifact behavior, while
+workflow manifests use the `openclaw-workflow-session/v1` protocol evidence.
+Token telemetry is required only when the effective step budget includes token
+or cost limits; runtime-, retry-, or fan-out-only budgets do not require it.
 
 ## Sandbox Policy Presets
 
@@ -254,11 +282,15 @@ install at the operator-level endpoint. You must explicitly allow them:
 
 ### Dispatch flow
 
-1. Veritas calls `sessions_spawn` with the full task prompt (including the
-   callback URL: `http://localhost:3001/api/agents/<taskId>/complete`).
+1. Veritas calls `sessions_spawn` with the full task prompt, including the
+   callback URL and required `attemptId` plus `providerRuntimeManifestDigest`
+   completion provenance.
 2. A policy or connection failure rolls the task attempt back to `todo` with an error message.
 3. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
 4. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.
+
+Late or replayed callbacks are rejected when either provenance value differs
+from the active attempt.
 
 ### Limitations
 

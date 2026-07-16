@@ -35,6 +35,32 @@ vi.mock('../services/governance-trace-service.js', () => ({
 
 import { WorkflowStepExecutor } from '../services/workflow-step-executor.js';
 import type { WorkflowRun, WorkflowStep } from '../types/workflow.js';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
+
+const runtimeManifestResolver = vi.fn();
+
+function codexRuntimeManifest(capabilityStates = {}) {
+  return providerRuntimeManifestFixture({
+    provider: 'codex-sdk',
+    capabilityStates: {
+      'run.start': 'supported',
+      'run.status': 'supported',
+      'run.logs': 'supported',
+      'run.complete': 'supported',
+      'run.resume': 'advisory',
+      'tool.calls': 'supported',
+      'output.structured': 'supported',
+      'usage.tokens': 'supported',
+      'artifact.write': 'supported',
+      'workspace.worktrees': 'supported',
+      'filesystem.read': 'supported',
+      'filesystem.write': 'supported',
+      'network.disable': 'supported',
+      'environment.allowlist': 'supported',
+      ...capabilityStates,
+    },
+  });
+}
 
 async function* codexEvents() {
   yield { type: 'thread.started', thread_id: 'thread_test_123' };
@@ -83,6 +109,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
     mockResumeThread.mockReturnValue({ runStreamed: mockRunStreamed });
     mockRecordGovernanceTrace.mockResolvedValue({ id: 'govtrace_1' });
     mockGetToolFilterForRole.mockResolvedValue({});
+    runtimeManifestResolver.mockResolvedValue(codexRuntimeManifest());
   });
 
   afterEach(async () => {
@@ -90,7 +117,8 @@ describe('WorkflowStepExecutor Codex integration', () => {
   });
 
   it('executes Codex workflow agent steps and records the thread session', async () => {
-    const executor = new WorkflowStepExecutor(tmpDir);
+    const persistRun = vi.fn().mockResolvedValue(undefined);
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver, persistRun });
     const step: WorkflowStep = {
       id: 'implement',
       name: 'Implement',
@@ -142,6 +170,178 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(run.context._sessions).toMatchObject({ codex: 'thread_test_123' });
     expect(result.output).toContain('Implemented workflow Codex step.');
     expect(result.outputPath).toContain('implement.md');
+    expect(result.providerRuntimeManifest?.digest).toBe(
+      run.steps[0].providerRuntimeManifest?.digest
+    );
+    expect(persistRun).toHaveBeenCalledWith(run);
+    expect(persistRun.mock.invocationCallOrder[0]).toBeLessThan(
+      mockStartThread.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('rejects providers that have no workflow execution adapter before probing or launch', async () => {
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+    const step: WorkflowStep = {
+      id: 'hermes-step',
+      type: 'agent',
+      agent: 'hermes',
+      input: 'Run Hermes',
+    };
+    const run = {
+      id: 'run_1234567890_hermes',
+      workflowId: 'wf-hermes',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: { id: 'task_1', title: 'Hermes', git: { worktreePath: tmpDir } },
+        workflow: {
+          agents: [
+            {
+              id: 'hermes',
+              name: 'Hermes',
+              role: 'implementer',
+              provider: 'hermes-cli',
+              description: 'Hermes workflow agent',
+            },
+          ],
+        },
+      },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'hermes-step', status: 'running', retries: 0 }],
+    } as WorkflowRun;
+
+    await expect(executor.executeStep(step, run)).rejects.toThrow(
+      'hermes-cli, which has no workflow execution adapter'
+    );
+    expect(runtimeManifestResolver).not.toHaveBeenCalled();
+    expect(mockStartThread).not.toHaveBeenCalled();
+  });
+
+  it('requires artifact evidence because every agent step persists an output artifact', async () => {
+    runtimeManifestResolver.mockResolvedValueOnce(
+      codexRuntimeManifest({ 'artifact.write': 'unsupported' })
+    );
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+    const step: WorkflowStep = {
+      id: 'artifact-step',
+      type: 'agent',
+      agent: 'codex',
+      input: 'Produce output',
+    };
+    const run = {
+      id: 'run_1234567890_artifact',
+      workflowId: 'wf-artifact',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: { id: 'task_1', title: 'Artifact', git: { worktreePath: tmpDir } },
+      },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'artifact-step', status: 'running', retries: 0 }],
+    } as WorkflowRun;
+
+    await expect(executor.executeStep(step, run)).rejects.toThrow('artifact.write');
+    expect(mockStartThread).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on tool, MCP, structured-output, usage, and artifact requirements', async () => {
+    runtimeManifestResolver.mockResolvedValueOnce(
+      codexRuntimeManifest({
+        'tool.mcp': 'unknown',
+        'output.structured': 'unsupported',
+        'usage.tokens': 'unknown',
+        'artifact.write': 'unsupported',
+      })
+    );
+    mockGetToolFilterForRole.mockResolvedValue({ allowed: ['mcp__github__search'] });
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+    const step: WorkflowStep = {
+      id: 'governed',
+      name: 'Governed',
+      type: 'agent',
+      agent: 'codex',
+      input: 'Run governed work',
+      output: { file: 'governed.json', schema: 'result/v1' },
+    };
+    const run = {
+      id: 'run_1234567890_governed',
+      workflowId: 'wf-codex',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: { id: 'task_1', title: 'Governed', git: { worktreePath: tmpDir } },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'implementer',
+              provider: 'codex-sdk',
+              description: 'Codex implementer',
+              tools: ['mcp__github__search'],
+            },
+          ],
+        },
+      },
+      budget: { enabled: true, policy: { limits: { totalTokens: 100 } } },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'governed', status: 'running', retries: 0 }],
+    } as unknown as WorkflowRun;
+
+    await expect(executor.executeStep(step, run)).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        requiredCapabilities: expect.arrayContaining([
+          'tool.calls',
+          'tool.mcp',
+          'output.structured',
+          'usage.tokens',
+          'artifact.write',
+        ]),
+      },
+    });
+    expect(mockStartThread).not.toHaveBeenCalled();
+  });
+
+  it('requires resume evidence before reusing a persisted Codex thread', async () => {
+    runtimeManifestResolver.mockResolvedValueOnce(
+      codexRuntimeManifest({ 'run.resume': 'unsupported' })
+    );
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+    const step: WorkflowStep = {
+      id: 'resume',
+      name: 'Resume',
+      type: 'agent',
+      agent: 'codex',
+      input: 'Continue',
+      session: { mode: 'reuse', context: 'minimal', cleanup: 'keep', timeout: 60 },
+    };
+    const run = {
+      id: 'run_1234567890_resume',
+      workflowId: 'wf-codex',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: { id: 'task_1', title: 'Resume', git: { worktreePath: tmpDir } },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'implementer',
+              provider: 'codex-sdk',
+              description: 'Codex implementer',
+            },
+          ],
+        },
+        _sessions: { codex: 'thread_existing' },
+      },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'resume', status: 'running', retries: 0 }],
+    } as WorkflowRun;
+
+    await expect(executor.executeStep(step, run)).rejects.toThrow('run.resume');
+    expect(mockResumeThread).not.toHaveBeenCalled();
   });
 
   it('passes only a minimal environment to Codex workflow sessions', async () => {
@@ -159,7 +359,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
     process.env.VK_API_URL = 'http://127.0.0.1:3001';
 
     try {
-      const executor = new WorkflowStepExecutor(tmpDir);
+      const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
       const step: WorkflowStep = {
         id: 'implement',
         name: 'Implement',
@@ -227,7 +427,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
     delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
 
     try {
-      const executor = new WorkflowStepExecutor(tmpDir);
+      const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
       const step: WorkflowStep = {
         id: 'implement',
         name: 'Implement',
@@ -283,7 +483,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
     delete process.env.VERITAS_ALLOW_UNSAFE_CODEX_COMMAND_OVERRIDES;
 
     try {
-      const executor = new WorkflowStepExecutor(tmpDir);
+      const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
       const step: WorkflowStep = {
         id: 'implement',
         name: 'Implement',
@@ -338,7 +538,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
       denied: ['Write', 'exec'],
     });
 
-    const executor = new WorkflowStepExecutor(tmpDir);
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
     const step: WorkflowStep = {
       id: 'plan',
       name: 'Plan',
@@ -384,7 +584,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
   });
 
   it('records governance traces for workflow gate decisions', async () => {
-    const executor = new WorkflowStepExecutor(tmpDir);
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
     const step: WorkflowStep = {
       id: 'approval-gate',
       name: 'Approval Gate',

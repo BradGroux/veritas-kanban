@@ -3,7 +3,9 @@ import type { SandboxPolicyDryRunRequest, SandboxPolicyPreset } from '@veritas-k
 import { asyncHandler } from '../middleware/async-handler.js';
 import { authorize } from '../middleware/auth.js';
 import { getGovernanceTraceService } from '../services/governance-trace-service.js';
+import { getAgentHostService } from '../services/agent-host-service.js';
 import { getSandboxPolicyService } from '../services/sandbox-policy-service.js';
+import { ConflictError } from '../middleware/error-handler.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
 import {
   sandboxPolicyDryRunSchema,
@@ -77,9 +79,41 @@ router.post(
   '/validate',
   validate({ body: sandboxPolicyDryRunSchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, SandboxPolicyDryRunRequest>, res) => {
-    const evaluation = await sandboxPolicyService.dryRunWithTrace(
-      req.validated.body as SandboxPolicyDryRunRequest
-    );
+    const request = req.validated.body as SandboxPolicyDryRunRequest;
+    const manifest = request.providerRuntimeManifestDigest
+      ? getAgentHostService()
+          .getHealth()
+          .hosts.filter((host) => host.posture === 'connected')
+          .flatMap((host) => host.providerRuntimeManifests)
+          .find((candidate) => candidate.digest === request.providerRuntimeManifestDigest)
+      : undefined;
+    if (request.providerRuntimeManifestDigest && !manifest) {
+      throw new ConflictError(
+        'The requested provider runtime manifest is not registered on a live agent host',
+        {
+          manifestDigest: request.providerRuntimeManifestDigest,
+          remediation:
+            'Refresh provider readiness and host registration, then run the check again.',
+        }
+      );
+    }
+    if (
+      manifest &&
+      request.provider &&
+      manifest.provider.toLowerCase() !== request.provider.toLowerCase() &&
+      manifest.adapter.toLowerCase() !== request.provider.toLowerCase()
+    ) {
+      throw new ConflictError('The requested provider does not match the registered manifest', {
+        provider: request.provider,
+        manifestProvider: manifest.provider,
+        manifestAdapter: manifest.adapter,
+        manifestDigest: manifest.digest,
+      });
+    }
+    const evaluation = await sandboxPolicyService.dryRunWithTrace({
+      ...request,
+      providerRuntimeManifest: manifest,
+    });
     const trace = await getGovernanceTraceService().record(evaluation.trace);
     res.json({ ...evaluation.result, traceId: trace.id });
   })

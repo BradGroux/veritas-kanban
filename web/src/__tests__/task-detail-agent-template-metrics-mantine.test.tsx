@@ -48,6 +48,7 @@ vi.mock('@/hooks/useAgent', () => ({
   }),
   useStopAgent: () => ({
     mutate: mocks.stopAgentMutate,
+    isPending: false,
   }),
   useSendMessage: () => ({
     mutate: mocks.sendMessageMutate,
@@ -90,6 +91,10 @@ vi.mock('@/components/dashboard/ExportDialog', () => ({
         Export task metrics
       </div>
     ) : null,
+}));
+
+vi.mock('@/components/task/RunSessionSharesSection', () => ({
+  RunSessionSharesSection: () => <div>Run session shares</div>,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -225,7 +230,7 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
 
     const { baseElement, container } = renderWithProviders(<AgentPanel task={task} />);
 
-    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(3);
+    expect(container.querySelectorAll('.mantine-Select-root')).toHaveLength(2);
     expect(container.querySelector('.mantine-Button-root')).toBeDefined();
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
@@ -306,7 +311,32 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
 
   it('keeps running-agent message send and stop confirmation wired through Mantine modal', async () => {
     const user = userEvent.setup();
-    mocks.useAgentStatus.mockReturnValue({ data: { running: true } });
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-1',
+        controls: {
+          controls: [
+            {
+              action: 'stop',
+              capabilityId: 'run.stop',
+              state: 'supported',
+              available: true,
+              advisory: false,
+              reason: 'Stop is supported.',
+            },
+            {
+              action: 'message',
+              capabilityId: 'run.steer',
+              state: 'advisory',
+              available: true,
+              advisory: true,
+              reason: 'Steering is advisory.',
+            },
+          ],
+        },
+      },
+    });
     mocks.useAgentStream.mockReturnValue({
       outputs: [{ type: 'stdout', content: 'working' }],
       isConnected: true,
@@ -330,7 +360,7 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     expect(messageForm).not.toBeNull();
     fireEvent.submit(messageForm as HTMLFormElement);
 
-    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await user.click(screen.getByRole('button', { name: 'Stop agent' }));
     const dialog = await screen.findByRole('dialog', { name: 'Stop the agent?' });
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
@@ -338,10 +368,164 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
 
     expect(mocks.sendMessageMutate).toHaveBeenCalledWith({
       taskId: 'task-agent-running',
+      attemptId: 'attempt-1',
       message: 'continue with tests',
     });
-    expect(mocks.stopAgentMutate).toHaveBeenCalledWith('task-agent-running');
+    expect(mocks.stopAgentMutate).toHaveBeenCalledWith({
+      taskId: 'task-agent-running',
+      attemptId: 'attempt-1',
+    });
     expect(dialog).toBeDefined();
+  });
+
+  it('disables unsupported run controls with accessible capability reasons', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        controls: {
+          controls: [
+            {
+              action: 'stop',
+              capabilityId: 'run.stop',
+              state: 'unsupported',
+              available: false,
+              advisory: false,
+              reason: 'This provider cannot stop task sessions.',
+            },
+            {
+              action: 'message',
+              capabilityId: 'run.steer',
+              state: 'unknown',
+              available: false,
+              advisory: false,
+              reason: 'Steering has not been verified.',
+            },
+          ],
+        },
+      },
+    });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: true,
+      clearOutputs: mocks.clearOutputs,
+    });
+
+    renderWithProviders(
+      <AgentPanel
+        task={createMockTask({
+          id: 'task-agent-limited',
+          git: { repo: 'veritas', branch: 'limited', baseBranch: 'main', worktreePath: '/tmp' },
+        })}
+      />
+    );
+
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Stop agent unavailable: This provider cannot stop task sessions.',
+        })
+        .getAttribute('disabled')
+    ).not.toBeNull();
+    expect(screen.getByText('Message: Steering has not been verified.')).toBeDefined();
+  });
+
+  it('uses terminal status over a stale running WebSocket flag', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: { running: false },
+      error: null,
+      isFetching: false,
+    });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: true,
+      clearOutputs: mocks.clearOutputs,
+    });
+
+    renderWithProviders(
+      <AgentPanel
+        task={createMockTask({
+          id: 'task-agent-stopped',
+          git: { repo: 'veritas', branch: 'stopped', baseBranch: 'main', worktreePath: '/tmp' },
+        })}
+      />
+    );
+
+    expect(screen.queryByText('Running')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop agent' })).toBeNull();
+    expect(screen.getByText('Agent output will appear here')).toBeDefined();
+  });
+
+  it('preserves a realtime start signal while idle status is refreshing', () => {
+    mocks.useAgentStatus.mockReturnValue({
+      data: { running: false },
+      error: null,
+      isFetching: true,
+    });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: true,
+      clearOutputs: mocks.clearOutputs,
+    });
+
+    renderWithProviders(
+      <AgentPanel
+        task={createMockTask({
+          id: 'task-agent-starting-externally',
+          git: { repo: 'veritas', branch: 'external', baseBranch: 'main', worktreePath: '/tmp' },
+        })}
+      />
+    );
+
+    expect(screen.getByText('Running')).toBeDefined();
+  });
+
+  it('disables an open stop confirmation when refreshed capability evidence fails', async () => {
+    const user = userEvent.setup();
+    const supportedStatus = {
+      running: true,
+      attemptId: 'attempt-1',
+      controls: {
+        controls: [
+          {
+            action: 'stop',
+            capabilityId: 'run.stop',
+            state: 'supported',
+            available: true,
+            advisory: false,
+            reason: 'Stop is supported.',
+          },
+        ],
+      },
+    };
+    mocks.useAgentStatus.mockReturnValue({ data: supportedStatus, error: null });
+    mocks.useAgentStream.mockReturnValue({
+      outputs: [],
+      isConnected: true,
+      isRunning: true,
+      clearOutputs: mocks.clearOutputs,
+    });
+    const task = createMockTask({
+      id: 'task-agent-stop-race',
+      git: { repo: 'veritas', branch: 'stop-race', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+    const { rerender } = renderWithProviders(<AgentPanel task={task} />);
+
+    await user.click(screen.getByRole('button', { name: 'Stop agent' }));
+    mocks.useAgentStatus.mockReturnValue({
+      data: supportedStatus,
+      error: new Error('Runtime manifest status refresh failed.'),
+    });
+    rerender(<AgentPanel task={task} />);
+
+    const confirm = screen.getByRole('button', { name: 'Stop Agent' });
+    expect(confirm.getAttribute('disabled')).not.toBeNull();
+    expect(
+      screen.getByText('Stop unavailable: Runtime manifest status refresh failed.')
+    ).toBeDefined();
+    expect(mocks.stopAgentMutate).not.toHaveBeenCalled();
   });
 
   it('applies a template through direct Mantine modal, tabs, select, switch, and inputs', async () => {

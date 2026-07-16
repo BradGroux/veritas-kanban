@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ActionIcon,
+  Alert,
   Badge,
   Button,
   Modal,
@@ -35,6 +36,7 @@ import {
 } from '@/hooks/useSandboxPolicies';
 import {
   Bot,
+  AlertCircle,
   Plus,
   Pencil,
   Trash2,
@@ -68,6 +70,7 @@ import type {
   AgentProfilePackageSummary,
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
+  ProviderRuntimeManifest,
 } from '@veritas-kanban/shared';
 import type {
   CodexHealthStatus,
@@ -1151,10 +1154,23 @@ function SandboxPoliciesSection({
   const updatePreset = useUpdateSandboxPolicy();
   const deletePreset = useDeleteSandboxPolicy();
   const validatePreset = useValidateSandboxPolicy();
+  const { data: hostHealth } = useAgentHosts();
   const [editingPreset, setEditingPreset] = useState<SandboxPolicyPreset | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [previewPresetId, setPreviewPresetId] = useState<string>('');
   const [previewProvider, setPreviewProvider] = useState<AgentProvider>('codex-sdk');
+  const [previewState, setPreviewState] = useState<
+    | { status: 'idle' }
+    | { status: 'pending'; key: string; epoch: number }
+    | {
+        status: 'success';
+        key: string;
+        epoch: number;
+        data: SandboxPolicyDryRunResult & { traceId?: string };
+      }
+    | { status: 'error'; key: string; epoch: number; message: string }
+  >({ status: 'idle' });
+  const previewSelectionRef = useRef({ key: '', epoch: 0 });
 
   useEffect(() => {
     if (!previewPresetId && presets.length > 0) {
@@ -1174,15 +1190,66 @@ function SandboxPoliciesSection({
   }, [agents]);
 
   const selectedPreset = presets.find((preset) => preset.id === previewPresetId);
-  const validation = validatePreset.data as
-    (SandboxPolicyDryRunResult & { traceId?: string }) | undefined;
+  const previewManifest = useMemo<ProviderRuntimeManifest | undefined>(() => {
+    const provider = previewProvider.toLowerCase();
+    return hostHealth?.hosts
+      .filter((host) => host.posture === 'connected')
+      .flatMap((host) => host.providerRuntimeManifests)
+      .filter(
+        (manifest) =>
+          manifest.provider.toLowerCase() === provider ||
+          manifest.adapter.toLowerCase() === provider
+      )
+      .sort((left, right) => right.probe.probedAt.localeCompare(left.probe.probedAt))[0];
+  }, [hostHealth?.hosts, previewProvider]);
+  const previewSelectionKey = `${selectedPreset?.id ?? ''}\u0000${previewProvider.toLowerCase()}\u0000${previewManifest?.digest ?? ''}`;
+  if (previewSelectionRef.current.key !== previewSelectionKey) {
+    previewSelectionRef.current = {
+      key: previewSelectionKey,
+      epoch: previewSelectionRef.current.epoch + 1,
+    };
+  }
+  const previewStateIsCurrent =
+    previewState.status !== 'idle' &&
+    previewState.key === previewSelectionRef.current.key &&
+    previewState.epoch === previewSelectionRef.current.epoch;
+  const validation =
+    previewStateIsCurrent && previewState.status === 'success' ? previewState.data : undefined;
+  const validationError =
+    previewStateIsCurrent && previewState.status === 'error' ? previewState.message : undefined;
+  const validationPending = previewStateIsCurrent && previewState.status === 'pending';
 
-  const handlePreview = () => {
-    if (!selectedPreset) return;
-    validatePreset.mutate({
-      presetId: selectedPreset.id,
-      provider: previewProvider,
-    });
+  const handlePreview = async () => {
+    if (!selectedPreset || !previewManifest) return;
+    const selection = { ...previewSelectionRef.current };
+    setPreviewState({ status: 'pending', ...selection });
+    try {
+      const data = await validatePreset.mutateAsync({
+        presetId: selectedPreset.id,
+        provider: previewProvider,
+        providerRuntimeManifestDigest: previewManifest.digest,
+      });
+      if (
+        previewSelectionRef.current.key === selection.key &&
+        previewSelectionRef.current.epoch === selection.epoch
+      ) {
+        setPreviewState({ status: 'success', ...selection, data });
+      }
+    } catch (error) {
+      if (
+        previewSelectionRef.current.key === selection.key &&
+        previewSelectionRef.current.epoch === selection.epoch
+      ) {
+        setPreviewState({
+          status: 'error',
+          ...selection,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Sandbox validation failed. Refresh host readiness and try again.',
+        });
+      }
+    }
   };
 
   const handleSavePreset = (preset: SandboxPolicyPreset) => {
@@ -1351,14 +1418,31 @@ function SandboxPoliciesSection({
               allowDeselect={false}
             />
           </div>
+          {!previewManifest && (
+            <p className="text-xs text-yellow-600 dark:text-yellow-400">
+              No validated live manifest is registered for this provider. The check will fail
+              closed.
+            </p>
+          )}
           <Button
             size="xs"
             variant="light"
             onClick={handlePreview}
-            disabled={!selectedPreset || validatePreset.isPending}
+            disabled={!selectedPreset || !previewManifest || validationPending}
+            title={
+              previewManifest
+                ? 'Run dry sandbox check'
+                : 'A live registered provider manifest is required'
+            }
           >
-            {validatePreset.isPending ? 'Checking...' : 'Run Dry Check'}
+            {validationPending ? 'Checking...' : 'Run Dry Check'}
           </Button>
+
+          {validationError && (
+            <Alert color="red" icon={<AlertCircle className="h-4 w-4" />}>
+              {validationError}
+            </Alert>
+          )}
 
           {validation && (
             <div className="space-y-2">

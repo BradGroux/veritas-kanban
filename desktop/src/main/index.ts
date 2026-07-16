@@ -215,7 +215,12 @@ async function boot(): Promise<void> {
   const serverPort = await findAvailablePort(
     Number(process.env.VERITAS_DESKTOP_SERVER_PORT || 3001)
   );
-  const webPort = await findAvailablePort(Number(process.env.VERITAS_DESKTOP_WEB_PORT || 3000));
+  const webPort = await findAvailablePort(
+    Number(process.env.VERITAS_DESKTOP_WEB_PORT || 3000),
+    '127.0.0.1',
+    50,
+    new Set([serverPort])
+  );
 
   mainWindow = createMainWindow(await readDesktopWindowState(paths));
   await mainWindow.loadURL(statusPageUrl('Starting Veritas Kanban', 'Preparing the local app.'));

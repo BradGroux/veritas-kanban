@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSafeHermesEnv, isSensitiveHermesEnvKey } from '../utils/hermes-env.js';
 import { AgentHealthService } from '../services/agent-health-service.js';
-import { SandboxPolicyService } from '../services/sandbox-policy-service.js';
+import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
 import type { AgentConfig } from '@veritas-kanban/shared';
 
 // ── buildSafeHermesEnv ────────────────────────────────────────────────────────
@@ -136,13 +136,23 @@ describe('AgentHealthService hermes-cli auth probe', () => {
   });
 });
 
-describe('SandboxPolicyService hermes-cli capabilities', () => {
-  it('reports the same local capability set as codex-cli', () => {
-    const service = new SandboxPolicyService();
-    expect(service.capabilitiesForProvider('hermes-cli')).toMatchObject({
-      provider: 'hermes-cli',
-      supported: ['filesystem.read', 'filesystem.write', 'environment.allowlist'],
-    });
+describe('Hermes provider runtime sandbox capabilities', () => {
+  it('reports the same evidence-backed local capability set as codex-cli', () => {
+    const supported = (provider: 'hermes-cli' | 'codex-cli') =>
+      getProviderRuntimeAdapterDefinition(provider)
+        .capabilities.filter((capability) => capability.state === 'supported')
+        .map((capability) => capability.id);
+    expect(supported('hermes-cli')).toContain('environment.allowlist');
+    const hermes = getProviderRuntimeAdapterDefinition('hermes-cli').capabilities;
+    expect(hermes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'filesystem.read', state: 'advisory' }),
+        expect.objectContaining({ id: 'filesystem.write', state: 'advisory' }),
+      ])
+    );
+    expect(supported('codex-cli')).toEqual(
+      expect.arrayContaining(['filesystem.read', 'filesystem.write', 'environment.allowlist'])
+    );
   });
 });
 

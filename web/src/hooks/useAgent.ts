@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, AgentOutput } from '@/lib/api';
 import { apiFetch, API_BASE } from '@/lib/api/helpers';
@@ -8,6 +8,7 @@ import type {
   AgentHealthClassificationResponse,
   AgentHostPreviewRequest,
   AgentType,
+  ProviderRuntimeCapabilityId,
 } from '@veritas-kanban/shared';
 
 export interface StartAgentInput {
@@ -17,6 +18,7 @@ export interface StartAgentInput {
   overrideReason?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
 }
 
 export interface AgentApprovalRequest {
@@ -31,6 +33,13 @@ export interface AgentApprovalRequest {
   createdAt: string;
 }
 
+export const AGENT_STATUS_ACTIVE_REFETCH_MS = 2_000;
+export const AGENT_STATUS_IDLE_REFETCH_MS = 10_000;
+
+export function agentStatusRefetchInterval(running: boolean | undefined): number {
+  return running ? AGENT_STATUS_ACTIVE_REFETCH_MS : AGENT_STATUS_IDLE_REFETCH_MS;
+}
+
 function requiredQueryParam(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(`${name} is required`);
@@ -43,7 +52,8 @@ export function useAgentStatus(taskId: string | undefined) {
     queryKey: ['agent', 'status', taskId],
     queryFn: () => api.agent.status(requiredQueryParam(taskId, 'taskId')),
     enabled: !!taskId,
-    refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
+    refetchInterval: (query) => agentStatusRefetchInterval(query.state.data?.running),
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -58,8 +68,16 @@ export function useStartAgent() {
       overrideReason,
       sandboxPresetId,
       budget,
+      requiredRuntimeCapabilities,
     }: StartAgentInput) =>
-      api.agent.start(taskId, { agent, profileId, overrideReason, sandboxPresetId, budget }),
+      api.agent.start(taskId, {
+        agent,
+        profileId,
+        overrideReason,
+        sandboxPresetId,
+        budget,
+        requiredRuntimeCapabilities,
+      }),
     onSuccess: (_, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -69,8 +87,15 @@ export function useStartAgent() {
 
 export function useSendMessage() {
   return useMutation({
-    mutationFn: ({ taskId, message }: { taskId: string; message: string }) =>
-      api.agent.sendMessage(taskId, message),
+    mutationFn: ({
+      taskId,
+      attemptId,
+      message,
+    }: {
+      taskId: string;
+      attemptId: string;
+      message: string;
+    }) => api.agent.sendMessage(taskId, attemptId, message),
   });
 }
 
@@ -78,8 +103,9 @@ export function useStopAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (taskId: string) => api.agent.stop(taskId),
-    onSuccess: (_, taskId) => {
+    mutationFn: ({ taskId, attemptId }: { taskId: string; attemptId: string }) =>
+      api.agent.stop(taskId, attemptId),
+    onSuccess: (_, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
@@ -150,15 +176,20 @@ export function useAgentHostPreview(request: AgentHostPreviewRequest, enabled = 
 }
 
 // WebSocket hook for real-time agent output
-export function useAgentStream(taskId: string | undefined) {
+export function useAgentStream(taskId: string | undefined, attemptId?: string) {
   const [outputs, setOutputs] = useState<AgentOutput[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const activeAttemptRef = useRef<string | undefined>(undefined);
   const queryClient = useQueryClient();
 
   const handleMessage = useCallback(
     (message: WebSocketMessage) => {
       if (message.type === 'subscribed') {
-        setIsRunning(message.running as boolean);
+        const running = message.running as boolean;
+        setIsRunning(running);
+        if (running) {
+          queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
+        }
       } else if (message.type === 'agent:output') {
         setOutputs((prev) => [
           ...prev,
@@ -183,14 +214,32 @@ export function useAgentStream(taskId: string | undefined) {
   // Clear outputs when taskId changes
   useEffect(() => {
     setOutputs([]);
+    activeAttemptRef.current = undefined;
   }, [taskId]);
 
-  const { isConnected } = useWebSocket({
+  useEffect(() => {
+    if (!attemptId) return;
+    if (activeAttemptRef.current && activeAttemptRef.current !== attemptId) {
+      setOutputs([]);
+    }
+    activeAttemptRef.current = attemptId;
+  }, [attemptId]);
+
+  const { isConnected, send } = useWebSocket({
     autoConnect: !!taskId,
     onOpen: taskId ? { type: 'subscribe', taskId } : undefined,
     onMessage: handleMessage,
     autoReconnect: false, // Don't auto-reconnect for agent streams
   });
+
+  // A client can subscribe while the task is idle and then observe a run that
+  // was started by CLI/MCP. Once idle discovery returns the new attempt, renew
+  // the task subscription so the server attaches to that attempt's emitter.
+  useEffect(() => {
+    if (isConnected && taskId && attemptId) {
+      send({ type: 'subscribe', taskId });
+    }
+  }, [attemptId, isConnected, send, taskId]);
 
   const clearOutputs = useCallback(() => {
     setOutputs([]);

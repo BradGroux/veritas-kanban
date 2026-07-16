@@ -441,14 +441,34 @@ vk project create "rubicon" --color "#7c3aed" --description "Main product"
 
 Manage AI agents on code tasks.
 
-| Command                      | Description                                         |
-| ---------------------------- | --------------------------------------------------- |
-| `vk start <id>`              | Start an agent on a code task (`--agent` to choose) |
-| `vk stop <id>`               | Stop a running agent                                |
-| `vk agents:pending`          | List pending agent requests                         |
-| `vk agents:status <id>`      | Check agent running status                          |
-| `vk agents:complete <id> -s` | Mark agent complete (success)                       |
-| `vk agents:complete <id> -f` | Mark agent complete (failure)                       |
+| Command                                                                       | Description                                               |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `vk start <id>`                                                               | Start an agent; optionally require runtime capabilities   |
+| `vk stop <id>`                                                                | Stop a run only when its persisted manifest supports stop |
+| `vk agents:pending`                                                           | List pending agent requests                               |
+| `vk agents:status <id>`                                                       | Check agent running status                                |
+| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)        |
+| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (failure)        |
+
+Require one or more capabilities before launch:
+
+```bash
+vk start TASK-001 --agent codex \
+  --require-capability tool.mcp output.structured \
+  --json
+```
+
+`--require-capability <capabilities...>` is additive to the baseline launch,
+profile, sandbox, and budget requirements. The server returns a structured
+conflict and the CLI exits non-zero when any capability is unsupported,
+unknown, missing, or backed by an invalid/failed manifest.
+
+Use `vk agents:status TASK-001 --json` to inspect the persisted manifest and
+capability-derived `controls` set. `vk stop` does not infer support from the
+agent name. It resolves the current `attemptId` from status and includes it in
+the stop request, so a replacement run fails a delayed stop closed. The CLI
+preserves the server's reason when `run.stop` is unavailable or the active and
+persisted manifest digests do not match.
 
 ---
 

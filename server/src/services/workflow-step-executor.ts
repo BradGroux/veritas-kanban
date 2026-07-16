@@ -7,7 +7,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import yaml from 'yaml';
-import type { AgentHostRoutingDecision, SandboxPolicyDryRunResult } from '@veritas-kanban/shared';
+import type {
+  AgentConfig,
+  AgentHostRoutingDecision,
+  ExecutableAgentProvider,
+  ProviderRuntimeCapabilityId,
+  ProviderRuntimeManifest,
+  SandboxPolicyDryRunResult,
+} from '@veritas-kanban/shared';
 import type {
   WorkflowStep,
   WorkflowRun,
@@ -33,6 +40,12 @@ import {
 import { getToolPolicyService } from './tool-policy-service.js';
 import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
+import {
+  assertProviderRuntimeCapabilities,
+  assertProviderRuntimeControl,
+  BASELINE_LAUNCH_CAPABILITIES,
+  providerRuntimeControls,
+} from './provider-runtime-control-service.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -58,16 +71,29 @@ export class HumanGateBlockError extends Error {
 
 interface WorkflowStepExecutorOptions {
   openClawAdapter?: OpenClawWorkflowAdapter;
+  runtimeManifestResolver?: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
+  persistRun?: (run: WorkflowRun) => Promise<void>;
 }
+
+type WorkflowExecutableProvider = Extract<ExecutableAgentProvider, 'codex-sdk' | 'openclaw'>;
 
 export class WorkflowStepExecutor {
   private runsDir: string;
   private openClawAdapter: OpenClawWorkflowAdapter;
+  private runtimeManifestResolver: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
+  private persistRun: (run: WorkflowRun) => Promise<void>;
   private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
 
   constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
     this.runsDir = runsDir || getWorkflowRunsDir();
     this.openClawAdapter = options.openClawAdapter || new HttpOpenClawWorkflowAdapter();
+    this.runtimeManifestResolver =
+      options.runtimeManifestResolver ??
+      (async (agent) => {
+        const { clawdbotAgentService } = await import('./clawdbot-agent-service.js');
+        return clawdbotAgentService.probeProviderRuntime(agent, agent.type, 'workflow');
+      });
+    this.persistRun = options.persistRun ?? (async () => undefined);
   }
 
   /**
@@ -124,10 +150,27 @@ export class WorkflowStepExecutor {
     // Get tool policy filter for this agent role (#110)
     const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
     const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
+    const runtimeProvider = this.resolveWorkflowProvider(step, agentDef);
+    const runtimeManifest = await this.resolveRuntimeManifest(step, agentDef, runtimeProvider);
+    const requiredRuntimeCapabilities = this.requiredRuntimeCapabilities(
+      step,
+      run,
+      agentDef,
+      runtimeProvider,
+      sessionConfig,
+      toolPolicyFilter
+    );
+    assertProviderRuntimeCapabilities(
+      runtimeManifest,
+      requiredRuntimeCapabilities,
+      `workflow step ${step.id} launch`
+    );
+    await this.recordRuntimeManifest(run, step, runtimeManifest);
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId: agentDef?.sandboxPresetId,
-      provider: agentDef?.provider,
+      provider: runtimeManifest.provider,
       workspacePath: workingDirectory,
+      providerRuntimeManifest: runtimeManifest,
     });
     const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
     if (sandboxPolicy.result.decision === 'block') {
@@ -137,10 +180,11 @@ export class WorkflowStepExecutor {
     }
     const hostPreview = getAgentHostService().preview({
       agent: step.agent,
-      provider: agentDef?.provider,
+      provider: runtimeManifest.provider,
       model: agentDef?.model,
       workspacePath: workingDirectory,
       requiredTools: this.routingTools(agentDef, toolPolicyFilter),
+      requiredRuntimeCapabilities,
       verificationGates: step.acceptance_criteria,
       sandboxPresetId: sandboxPolicy.result.preset.id,
     });
@@ -156,12 +200,13 @@ export class WorkflowStepExecutor {
         sessionContext: sessionConfig.context,
         sessionCleanup: sessionConfig.cleanup,
         toolPolicy: toolPolicyFilter,
+        runtimeProvider,
         hostRouting: hostPreview.decision,
       },
       'Agent step execution configured'
     );
 
-    if (this.isCodexAgent(agentDef, step.agent)) {
+    if (runtimeProvider === 'codex-sdk') {
       return this.executeCodexAgentStep(
         step,
         run,
@@ -170,7 +215,8 @@ export class WorkflowStepExecutor {
         sessionConfig,
         toolPolicyFilter,
         hostPreview.decision,
-        sandboxPolicy.result
+        sandboxPolicy.result,
+        runtimeManifest
       );
     }
 
@@ -182,7 +228,8 @@ export class WorkflowStepExecutor {
       sessionConfig,
       sessionContext,
       toolPolicyFilter,
-      hostPreview.decision
+      hostPreview.decision,
+      runtimeManifest
     );
   }
 
@@ -194,7 +241,8 @@ export class WorkflowStepExecutor {
     sessionConfig: StepSessionConfig,
     sessionContext: Record<string, unknown>,
     toolPolicyFilter: { allowed?: string[]; denied?: string[] },
-    hostRouting: AgentHostRoutingDecision
+    hostRouting: AgentHostRoutingDecision,
+    runtimeManifest: ProviderRuntimeManifest
   ): Promise<StepExecutionResult> {
     const agentId = step.agent || agentDef?.id || step.id;
     const sessionMap = (run.context._sessions as Record<string, string> | undefined) || {};
@@ -264,6 +312,7 @@ export class WorkflowStepExecutor {
       return {
         output: parsed,
         outputPath,
+        providerRuntimeManifest: runtimeManifest,
       };
     } catch (err) {
       const message = this.sanitizeProviderError(err, prompt);
@@ -347,6 +396,105 @@ export class WorkflowStepExecutor {
       if (tool !== '*') tools.add(tool);
     }
     return Array.from(tools).sort((a, b) => a.localeCompare(b));
+  }
+
+  private async resolveRuntimeManifest(
+    step: WorkflowStep,
+    agentDef: WorkflowAgent | null,
+    provider: WorkflowExecutableProvider
+  ): Promise<ProviderRuntimeManifest> {
+    const type = agentDef?.id || step.agent || step.id;
+    const command = agentDef?.command || (provider === 'openclaw' ? 'openclaw' : 'codex');
+    return this.runtimeManifestResolver({
+      type,
+      name: agentDef?.name || type,
+      command,
+      args: [],
+      enabled: true,
+      provider,
+      model: agentDef?.model,
+      sandboxPresetId: agentDef?.sandboxPresetId,
+      budget: agentDef?.budget,
+    });
+  }
+
+  private resolveWorkflowProvider(
+    step: WorkflowStep,
+    agentDef: WorkflowAgent | null
+  ): WorkflowExecutableProvider {
+    const provider = agentDef?.provider;
+    if (provider === 'openclaw' || provider === 'codex-sdk') {
+      return provider;
+    }
+    if (provider) {
+      throw new Error(
+        `Workflow agent ${agentDef?.id || step.agent || step.id} uses provider ${provider}, which has no workflow execution adapter.`
+      );
+    }
+    return this.isCodexAgent(agentDef, step.agent) ? 'codex-sdk' : 'openclaw';
+  }
+
+  private requiredRuntimeCapabilities(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    agentDef: WorkflowAgent | null,
+    runtimeProvider: WorkflowExecutableProvider,
+    sessionConfig: StepSessionConfig,
+    toolPolicyFilter: { allowed?: string[]; denied?: string[] }
+  ): ProviderRuntimeCapabilityId[] {
+    const required = new Set<ProviderRuntimeCapabilityId>(BASELINE_LAUNCH_CAPABILITIES);
+    const tools = this.routingTools(agentDef, toolPolicyFilter);
+    const hasToolPolicy = tools.length > 0 || (toolPolicyFilter.denied?.length ?? 0) > 0;
+    if (hasToolPolicy) required.add('tool.calls');
+    if (tools.some((tool) => /(^|[_.:/-])mcp([_.:/-]|$)/i.test(tool))) {
+      required.add('tool.mcp');
+    }
+    if (step.output?.schema) required.add('output.structured');
+    required.add('artifact.write');
+    const tokenUsageLimits = [
+      run.budget?.policy?.limits,
+      agentDef?.budget?.enabled ? agentDef.budget.limits : undefined,
+    ];
+    if (
+      tokenUsageLimits.some(
+        (limits) =>
+          limits?.inputTokens !== undefined ||
+          limits?.outputTokens !== undefined ||
+          limits?.totalTokens !== undefined ||
+          limits?.costUsd !== undefined
+      )
+    ) {
+      required.add('usage.tokens');
+    }
+
+    const sessionKey = step.agent || agentDef?.id || step.id;
+    const hasExistingSession = Boolean(
+      sessionConfig.mode === 'reuse' &&
+      (run.context._sessions as Record<string, string> | undefined)?.[sessionKey]
+    );
+    if (hasExistingSession) {
+      if (runtimeProvider === 'codex-sdk') {
+        required.add('run.resume');
+      } else {
+        required.add('run.reattach');
+        required.add('run.follow-up');
+      }
+    }
+
+    return [...required].sort((left, right) => left.localeCompare(right));
+  }
+
+  private async recordRuntimeManifest(
+    run: WorkflowRun,
+    step: WorkflowStep,
+    manifest: ProviderRuntimeManifest
+  ): Promise<void> {
+    const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
+    if (stepRun) {
+      stepRun.providerRuntimeManifest = manifest;
+      stepRun.runtimeControls = providerRuntimeControls(manifest);
+    }
+    await this.persistRun(run);
   }
 
   private assertOpenClawResult(
@@ -447,7 +595,8 @@ export class WorkflowStepExecutor {
     sessionConfig: StepSessionConfig,
     toolPolicyFilter: { allowed?: string[]; denied?: string[] },
     hostRouting: AgentHostRoutingDecision,
-    sandboxPolicy: SandboxPolicyDryRunResult
+    sandboxPolicy: SandboxPolicyDryRunResult,
+    runtimeManifest: ProviderRuntimeManifest
   ): Promise<StepExecutionResult> {
     this.assertCodexToolPolicySupported(step, agentDef, toolPolicyFilter);
 
@@ -501,8 +650,15 @@ export class WorkflowStepExecutor {
 
     for await (const event of streamed.events) {
       events.push(event);
-      if (this.isCodexToolEvent(event)) toolCalls++;
-      tokenUsage = this.extractCodexBudgetUsage(event) ?? tokenUsage;
+      if (this.isCodexToolEvent(event)) {
+        assertProviderRuntimeControl(runtimeManifest, 'tool-calls');
+        toolCalls++;
+      }
+      const eventUsage = this.extractCodexBudgetUsage(event);
+      if (eventUsage) {
+        assertProviderRuntimeControl(runtimeManifest, 'token-usage');
+        tokenUsage = eventUsage;
+      }
       if (event.type === 'thread.started') {
         threadId = event.thread_id;
         run.context._sessions = {
@@ -568,6 +724,7 @@ export class WorkflowStepExecutor {
         costUsd: tokenUsage?.cost,
         toolCalls,
       },
+      providerRuntimeManifest: runtimeManifest,
     };
   }
 

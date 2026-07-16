@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { QueueIntakeMonitorService } from '../services/queue-intake-monitor-service.js';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 describe('QueueIntakeMonitorService', () => {
   let testRoot: string;
@@ -15,6 +16,7 @@ describe('QueueIntakeMonitorService', () => {
   let workflowRunService: { startRun: ReturnType<typeof vi.fn> };
   let workflowAuthoringService: { dryRun: ReturnType<typeof vi.fn> };
   let telemetryService: { emit: ReturnType<typeof vi.fn> };
+  let runtimeManifestResolver: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-queue-monitor-'));
@@ -69,6 +71,7 @@ describe('QueueIntakeMonitorService', () => {
       dryRun: vi.fn(async () => ({ messages: [], status: 'ready', canRun: true, checks: [] })),
     };
     telemetryService = { emit: vi.fn(async (event) => event) };
+    runtimeManifestResolver = vi.fn(async () => providerRuntimeManifestFixture());
   });
 
   afterEach(async () => {
@@ -170,6 +173,44 @@ describe('QueueIntakeMonitorService', () => {
       }),
       undefined
     );
+    expect(sandboxPolicyService.dryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'codex-cli',
+        providerRuntimeManifest: expect.objectContaining({
+          digest: expect.stringMatching(/^sha256:/),
+        }),
+      })
+    );
+  });
+
+  it('fails queue dispatch closed when runtime manifest resolution fails', async () => {
+    runtimeManifestResolver.mockResolvedValue(undefined);
+    const service = queueService();
+    await service.updateMonitor('veritas-backlog-high-priority', {
+      mode: 'execute',
+      workflowId: 'queue-intake-workflow',
+    });
+
+    const result = await service.runOnce('veritas-backlog-high-priority');
+
+    expect(result.action).toMatchObject({
+      action: 'blocked',
+      status: 'blocked',
+      sandbox: {
+        decision: 'block',
+        provider: 'codex-cli',
+      },
+    });
+    expect(result.action.gateChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'sandbox',
+          status: 'block',
+        }),
+      ])
+    );
+    expect(sandboxPolicyService.dryRun).not.toHaveBeenCalled();
+    expect(workflowRunService.startRun).not.toHaveBeenCalled();
   });
 
   function queueService(): QueueIntakeMonitorService {
@@ -184,6 +225,7 @@ describe('QueueIntakeMonitorService', () => {
       workflowRunService: workflowRunService as never,
       workflowAuthoringService: workflowAuthoringService as never,
       telemetryService: telemetryService as never,
+      runtimeManifestResolver,
     });
   }
 });

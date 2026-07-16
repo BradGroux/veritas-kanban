@@ -62,7 +62,9 @@ export class WorkflowRunService {
     const resolvedOptions = typeof options === 'string' ? { runsDir: options } : options;
     this.runsDir = resolvedOptions.runsDir || getWorkflowRunsDir();
     this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
-    this.stepExecutor = new WorkflowStepExecutor(resolvedOptions.runsDir);
+    this.stepExecutor = new WorkflowStepExecutor(resolvedOptions.runsDir, {
+      persistRun: (run) => this.saveRun(run),
+    });
     const storageType =
       resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

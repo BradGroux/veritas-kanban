@@ -356,10 +356,10 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 
 ### Agent Control (2 tools)
 
-| Tool          | Description                    | Required Inputs | Key Options                                         |
-| ------------- | ------------------------------ | --------------- | --------------------------------------------------- |
-| `start_agent` | Start a coding agent on a task | `id`            | `agent` (`claude-code`, `amp`, `copilot`, `gemini`) |
-| `stop_agent`  | Stop a running agent           | `id`            | —                                                   |
+| Tool          | Description                    | Required Inputs | Key Options                                                           |
+| ------------- | ------------------------------ | --------------- | --------------------------------------------------------------------- |
+| `start_agent` | Start a coding agent on a task | `id`            | `agent`; `requiredRuntimeCapabilities`                                |
+| `stop_agent`  | Stop a running agent           | `id`            | Resolves status and binds the stop to that exact attempt and manifest |
 
 > **Constraints:** Only works on tasks with `type: "code"` that already have a git worktree attached.
 
@@ -371,11 +371,19 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 ```json
 {
   "name": "start_agent",
-  "arguments": { "id": "abc123", "agent": "claude-code" }
+  "arguments": {
+    "id": "abc123",
+    "agent": "claude-code",
+    "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"]
+  }
 }
 ```
 
 → Returns attempt ID and worktree path.
+
+The required capability list is forwarded unchanged to the authoritative
+launch API. Unsupported, unknown, missing, failed-probe, or invalid manifest
+evidence fails closed before provider work starts.
 
 **Stop a running agent:**
 
@@ -385,6 +393,10 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
   "arguments": { "id": "abc123" }
 }
 ```
+
+The tool reads the active `attemptId` from status immediately before sending
+the stop. If the run is replaced between those calls, the server returns a
+conflict instead of stopping the replacement.
 
 </details>
 
@@ -755,14 +767,16 @@ All tool errors return:
 
 ### Common Errors
 
-| Error                                 | Cause                                        | Fix                                                                      |
-| ------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
-| `Task not found: abc123`              | ID doesn't match any task                    | Check the ID — partial match needs ≥ 6 characters                        |
-| `Can only start agents on code tasks` | Tried `start_agent` on a non-code task       | Change task type to `code` first                                         |
-| `Task needs a worktree first`         | `start_agent` on a task without git worktree | Create a worktree via the VK UI or API before starting an agent          |
-| `fetch failed` / `ECONNREFUSED`       | VK server not running                        | Start the server: `pnpm dev`                                             |
-| `401 Unauthorized`                    | Invalid or missing API key                   | Check `VK_API_KEY` in MCP config and `VERITAS_API_KEYS` in server `.env` |
-| `Unknown tool: <name>`                | Typo in tool name                            | Check the [Tool Catalog](#tool-catalog) for exact names                  |
+| Error                                 | Cause                                             | Fix                                                                        |
+| ------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
+| `Task not found: abc123`              | ID doesn't match any task                         | Check the ID — partial match needs ≥ 6 characters                          |
+| `Can only start agents on code tasks` | Tried `start_agent` on a non-code task            | Change task type to `code` first                                           |
+| `Task needs a worktree first`         | `start_agent` on a task without git worktree      | Create a worktree via the VK UI or API before starting an agent            |
+| `Provider runtime does not support…`  | Required launch or stop capability is unavailable | Select a capable provider or refresh its validated manifest                |
+| `Provider runtime manifest is stale…` | Active and persisted run snapshots do not match   | Terminate through the host supervisor, reconcile the attempt, and relaunch |
+| `fetch failed` / `ECONNREFUSED`       | VK server not running                             | Start the server: `pnpm dev`                                               |
+| `401 Unauthorized`                    | Invalid or missing API key                        | Check `VK_API_KEY` in MCP config and `VERITAS_API_KEYS` in server `.env`   |
+| `Unknown tool: <name>`                | Typo in tool name                                 | Check the [Tool Catalog](#tool-catalog) for exact names                    |
 
 ### Debugging
 

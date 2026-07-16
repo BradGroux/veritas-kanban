@@ -250,6 +250,9 @@ export interface StepRun {
   retries: number;
   output?: string; // Path to output file
   error?: string;
+  /** Exact provider evidence snapshot used for this step's launch and controls. */
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
+  runtimeControls?: import('./provider-runtime.types.js').ProviderRuntimeControlSet;
 
   // Loop-specific state
   loopState?: {
@@ -285,6 +288,7 @@ export interface StepExecutionResult {
   output: unknown; // Parsed output (for context passing)
   outputPath: string; // Path to output file
   budgetUsage?: Partial<import('./agent-budget.types.js').AgentBudgetUsage>;
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
 }
 
 // ==================== RBAC & Audit Types ====================
