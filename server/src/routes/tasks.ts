@@ -23,6 +23,7 @@ import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
+import { TaskExecutionPolicySchema } from '../schemas/task-envelope-schemas.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -63,6 +64,7 @@ const createTaskSchema = z.object({
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(), // "auto" | agent type slug
+  executionPolicy: TaskExecutionPolicySchema.optional(),
   reviewScores: reviewScoresSchema.optional(),
   reviewComments: z.array(reviewCommentSchema).optional(),
 });
@@ -89,6 +91,9 @@ const attemptSchema = z
     cloudUrl: z.string().max(500).optional(),
     cloudTarget: z.string().max(240).optional(),
     orchestration: z.unknown().optional(),
+    // Authoritative run contracts are written only by launch/finalization services.
+    taskEnvelope: z.never().optional(),
+    completionResult: z.never().optional(),
   })
   .optional();
 
@@ -164,6 +169,7 @@ const updateTaskSchema = z.object({
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(),
+  executionPolicy: TaskExecutionPolicySchema.optional(),
   git: gitSchema,
   github: githubSchema,
   attempt: attemptSchema,
@@ -680,6 +686,27 @@ router.patch(
     const oldTask = await taskService.getTask(req.params.id as string);
     if (!oldTask) {
       throw new NotFoundError('Task not found');
+    }
+    const authoritativeAttempt = oldTask.attempt;
+    if (
+      input.attempt &&
+      authoritativeAttempt &&
+      (authoritativeAttempt.taskEnvelope || authoritativeAttempt.completionResult)
+    ) {
+      if (input.attempt.id !== authoritativeAttempt.id) {
+        throw new ValidationError(
+          'Generic task updates cannot replace an attempt with an authoritative run contract'
+        );
+      }
+      input.attempt = {
+        ...input.attempt,
+        ...(authoritativeAttempt.taskEnvelope
+          ? { taskEnvelope: authoritativeAttempt.taskEnvelope }
+          : {}),
+        ...(authoritativeAttempt.completionResult
+          ? { completionResult: authoritativeAttempt.completionResult }
+          : {}),
+      };
     }
     assertFreshRevision(req, 'task', oldTask.id, oldTask);
 

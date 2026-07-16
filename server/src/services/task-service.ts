@@ -656,6 +656,7 @@ export class TaskService {
         sprint: data.sprint,
         agent: data.agent,
         agents: data.agents,
+        executionPolicy: data.executionPolicy,
         created: data.created || new Date().toISOString(),
         updated: data.updated || new Date().toISOString(),
         git: data.git,
@@ -837,6 +838,7 @@ export class TaskService {
       project: input.project,
       sprint: input.sprint,
       agent: input.agent, // Pre-assigned agent (or "auto" for routing)
+      executionPolicy: input.executionPolicy,
       subtasks: input.subtasks, // Include subtasks from template
       blockedBy: input.blockedBy, // Include dependencies from blueprint
       created: now,

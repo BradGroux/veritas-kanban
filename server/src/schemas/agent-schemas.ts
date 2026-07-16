@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
+import { TaskCommitPolicySchema } from './task-envelope-schemas.js';
 
 const AgentTypeSchema = z.string().min(1).max(50);
 
@@ -12,6 +13,7 @@ export const StartAgentBodySchema = z.object({
   overrideReason: z.string().trim().min(8).max(1000).optional(),
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),
+  commitPolicy: TaskCommitPolicySchema.optional(),
 });
 
 export type StartAgentBody = z.infer<typeof StartAgentBodySchema>;

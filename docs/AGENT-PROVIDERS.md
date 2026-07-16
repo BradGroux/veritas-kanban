@@ -74,6 +74,37 @@ routing. Provider version/build changes invalidate the readiness cache and
 force a new conformance probe; active controls continue to use the immutable
 snapshot persisted for that attempt.
 
+## Task Envelopes And Commit Policy
+
+Every launch also persists a provider-neutral `task-envelope/v1` snapshot. It
+binds the task and attempt identity, objective, background, constraints,
+acceptance criteria, worktree identity, launch manifest, expected outputs,
+verification gates, evidence requirements, and allowed side effects to one
+canonical `sha256:` digest. The worktree baseline records `HEAD` plus every
+dirty file that existed before launch, including its staged index blob and
+worktree-content SHA-256. Capture retries when HEAD, status, or fingerprints
+move and fails closed after three unstable attempts, so later completion
+evidence cannot claim pre-existing changes.
+
+Commit behavior is explicit instead of implied by a shared prompt:
+
+- `forbidden` does not authorize a commit.
+- `allowed` authorizes a commit but does not require one. This is the compatible
+  default for existing tasks.
+- `required` requires completion evidence for a commit created after the launch
+  baseline.
+
+A one-off `commitPolicy` start value overrides `task.executionPolicy`, which
+overrides the legacy `features.agents.autoCommitOnComplete` setting. Legacy
+`true` maps to `required`; `false` or an absent value maps to `allowed`.
+Requested filesystem, process, commit, and artifact scopes are intersected
+with the effective worktree sandbox; ancestor requests such as `/` are clamped
+to the assigned worktree and disjoint paths are rejected.
+The start response, active status response, task attempt/history, and Markdown
+run log expose the same immutable envelope. Provider-owned rendering and
+normalized completion enforcement land in the ordered follow-up work for
+parent issue #860.
+
 Sandbox launch checks resolve every preset rule through the same manifest.
 Settings dry-runs send the digest of the newest matching manifest registered by
 a live host; the server resolves that digest rather than trusting a

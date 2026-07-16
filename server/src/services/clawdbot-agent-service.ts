@@ -62,6 +62,8 @@ import type {
   ProviderRuntimeControlAction,
   ProviderRuntimeControlSet,
   ProviderRuntimeManifest,
+  TaskCommitPolicy,
+  TaskEnvelope,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -83,6 +85,7 @@ import {
   BASELINE_LAUNCH_CAPABILITIES,
   providerRuntimeControls,
 } from './provider-runtime-control-service.js';
+import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -137,6 +140,7 @@ export interface AgentStatus {
   provider?: ExecutableAgentProvider;
   model?: string;
   providerRuntimeManifest: ProviderRuntimeManifest;
+  taskEnvelope: TaskEnvelope;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -152,6 +156,7 @@ export interface AgentStartOptions {
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+  commitPolicy?: TaskCommitPolicy;
 }
 
 export interface AgentMessageOptions {
@@ -193,6 +198,7 @@ interface PendingAgent {
   budgetStopped?: boolean;
   agentProfile?: AgentProfileLaunchMetadata;
   providerRuntimeManifest: ProviderRuntimeManifest;
+  taskEnvelope: TaskEnvelope;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -234,16 +240,19 @@ export class ClawdbotAgentService {
   private taskService: TaskService;
   private agentHealth: AgentHealthChecker;
   private providerRuntimeManifests: ProviderRuntimeManifestService;
+  private taskEnvelopes: TaskEnvelopeService;
   private logsDir: string;
 
   constructor(
     agentHealth?: AgentHealthChecker,
-    providerRuntimeManifests = new ProviderRuntimeManifestService()
+    providerRuntimeManifests = new ProviderRuntimeManifestService(),
+    taskEnvelopes = new TaskEnvelopeService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
     this.agentHealth = agentHealth || new AgentHealthService();
     this.providerRuntimeManifests = providerRuntimeManifests;
+    this.taskEnvelopes = taskEnvelopes;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -525,6 +534,23 @@ export class ClawdbotAgentService {
     const attemptId = `attempt_${nanoid(8)}`;
     const startedAt = new Date().toISOString();
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
+    const worktreePath = this.expandPath(task.git.worktreePath);
+    const commitPolicy = resolveTaskCommitPolicy({
+      runPolicy: options.commitPolicy,
+      taskPolicy: task.executionPolicy,
+      legacyAutoCommitOnComplete: config.features?.agents.autoCommitOnComplete,
+    });
+    const taskEnvelope = await this.taskEnvelopes.build({
+      task,
+      attemptId,
+      createdAt: startedAt,
+      worktreePath,
+      providerRuntimeManifest,
+      commitPolicy,
+      profileInstructions: profileLaunch?.instructions,
+      networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
+      executionPolicy: task.executionPolicy,
+    });
 
     // Create event emitter for status updates
     const emitter = new EventEmitter();
@@ -540,6 +566,7 @@ export class ClawdbotAgentService {
       model: launchAgentConfig?.model,
       agentProfile: profileLaunch?.metadata,
       providerRuntimeManifest,
+      taskEnvelope,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -558,7 +585,6 @@ export class ClawdbotAgentService {
     validatePathSegment(attemptId);
 
     // Build the task prompt for Clawdbot
-    const worktreePath = this.expandPath(task.git.worktreePath);
     const taskPrompt = this.buildTaskPrompt(
       task,
       worktreePath,
@@ -569,7 +595,7 @@ export class ClawdbotAgentService {
 
     // Initialize log file (ensure it stays within logs dir)
     ensureWithinBase(this.logsDir, logPath);
-    await this.initLogFile(logPath, task, agent, taskPrompt, providerRuntimeManifest);
+    await this.initLogFile(logPath, task, agent, taskPrompt, providerRuntimeManifest, taskEnvelope);
 
     // Update task with attempt info
     const attempt: TaskAttempt = {
@@ -582,6 +608,7 @@ export class ClawdbotAgentService {
       budget: pendingAgents.get(taskId)?.budget,
       agentProfile: profileLaunch?.metadata,
       providerRuntimeManifest,
+      taskEnvelope,
     };
 
     await this.taskService.updateTask(taskId, {
@@ -677,6 +704,7 @@ export class ClawdbotAgentService {
       provider,
       model: launchAgentConfig?.model,
       providerRuntimeManifest,
+      taskEnvelope,
       controls: providerRuntimeControls(providerRuntimeManifest),
     };
   }
@@ -830,6 +858,7 @@ export class ClawdbotAgentService {
           budget: pending.budget,
           agentProfile: pending.agentProfile,
           providerRuntimeManifest: pending.providerRuntimeManifest,
+          taskEnvelope: pending.taskEnvelope,
         };
         return (pending.preparedCompletion = {
           status,
@@ -2581,6 +2610,7 @@ export class ClawdbotAgentService {
       provider: pending.provider,
       model: pending.model,
       providerRuntimeManifest: pending.providerRuntimeManifest,
+      taskEnvelope: pending.taskEnvelope,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
   }
@@ -2807,7 +2837,8 @@ If you encounter errors, call with \`success: false\` and include the error mess
     task: Task,
     agent: AgentType,
     prompt: string,
-    providerRuntimeManifest: ProviderRuntimeManifest
+    providerRuntimeManifest: ProviderRuntimeManifest,
+    taskEnvelope: TaskEnvelope
   ): Promise<void> {
     const header = `# Agent Log: ${task.title}
 
@@ -2816,11 +2847,20 @@ If you encounter errors, call with \`success: false\` and include the error mess
 **Started:** ${new Date().toISOString()}
 **Worktree:** ${task.git?.worktreePath}
 **Provider manifest:** ${providerRuntimeManifest.digest}
+**Task envelope:** ${taskEnvelope.digest}
 
 <details><summary>Provider runtime manifest</summary>
 
 \`\`\`json
 ${JSON.stringify(providerRuntimeManifest, null, 2)}
+\`\`\`
+
+</details>
+
+<details><summary>Task envelope</summary>
+
+\`\`\`json
+${JSON.stringify(taskEnvelope, null, 2)}
 \`\`\`
 
 </details>

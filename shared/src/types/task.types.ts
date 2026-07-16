@@ -62,6 +62,8 @@ export interface TaskAttempt {
   budget?: import('./agent-budget.types.js').AgentBudgetState;
   agentProfile?: import('./agent-profile-package.types.js').AgentProfileLaunchMetadata;
   providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
+  taskEnvelope?: import('./task-envelope.types.js').TaskEnvelope;
+  completionResult?: import('./task-envelope.types.js').CompletionResult;
 }
 
 export interface Subtask {
@@ -234,6 +236,8 @@ export interface Task {
   agent?: AgentType | 'auto';
   // Multi-agent assignment — multiple agents collaborating on a task
   agents?: AgentType[];
+  // Provider-neutral run policy defaults. Launch-time overrides take precedence.
+  executionPolicy?: import('./task-envelope.types.js').TaskExecutionPolicy;
 
   // Code task specific
   git?: TaskGit;
@@ -377,6 +381,7 @@ export interface CreateTaskInput {
   updatedBy?: string;
   agent?: AgentType | 'auto'; // Pre-assign an agent (or "auto" for routing engine)
   agents?: AgentType[]; // Multi-agent assignment
+  executionPolicy?: import('./task-envelope.types.js').TaskExecutionPolicy;
   subtasks?: Subtask[]; // Can be provided when creating from a template
   blockedBy?: string[]; // Can be provided when creating from a blueprint
   reviewScores?: [number, number, number, number]; // Optional 4x10 scores
@@ -395,6 +400,7 @@ export interface UpdateTaskInput {
   updatedBy?: string;
   agent?: AgentType | 'auto';
   agents?: AgentType[];
+  executionPolicy?: import('./task-envelope.types.js').TaskExecutionPolicy;
   git?: Partial<TaskGit>;
   github?: TaskGitHub;
   delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];

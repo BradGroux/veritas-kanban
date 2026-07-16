@@ -124,7 +124,27 @@ describe('agent local capability enforcement', () => {
       sandboxPresetId: undefined,
       budget: undefined,
       requiredRuntimeCapabilities: undefined,
+      commitPolicy: undefined,
     });
+  });
+
+  it('validates and forwards an explicit run commit policy', async () => {
+    const app = createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }));
+    const response = await request(app)
+      .post('/api/agents/task_1/start')
+      .send({ agent: 'codex', commitPolicy: 'forbidden' });
+
+    expect(response.status).toBe(201);
+    expect(mockStartAgent).toHaveBeenCalledWith(
+      'task_1',
+      'codex',
+      expect.objectContaining({ commitPolicy: 'forbidden' })
+    );
+
+    const invalid = await request(app)
+      .post('/api/agents/task_1/start')
+      .send({ agent: 'codex', commitPolicy: 'sometimes' });
+    expect(invalid.status).toBe(400);
   });
 
   it('validates and forwards required runtime capabilities', async () => {

@@ -30,6 +30,26 @@ describe('MCP agent runtime capability controls', () => {
     expect(start?.inputSchema.properties.requiredRuntimeCapabilities).toMatchObject({
       type: 'array',
     });
+    expect(start?.inputSchema.properties.commitPolicy).toMatchObject({
+      enum: ['forbidden', 'allowed', 'required'],
+    });
+  });
+
+  it('forwards an explicit run commit policy', async () => {
+    await handleAgentTool('start_agent', {
+      id: 'task_1',
+      agent: 'claude-code',
+      commitPolicy: 'required',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent: 'claude-code',
+        requiredRuntimeCapabilities: undefined,
+        commitPolicy: 'required',
+      }),
+    });
   });
 
   it('forwards required capabilities to the authoritative launch API', async () => {

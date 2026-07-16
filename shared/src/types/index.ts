@@ -47,3 +47,4 @@ export * from './queue-monitor.types.js';
 export * from './watcher-policy.types.js';
 export * from './evidence.types.js';
 export * from './time-breakdown.types.js';
+export * from './task-envelope.types.js';

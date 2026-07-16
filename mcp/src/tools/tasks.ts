@@ -18,6 +18,7 @@ const CreateTaskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
   project: z.string().optional(),
   sprint: z.string().optional(),
+  commitPolicy: z.enum(['forbidden', 'allowed', 'required']).optional(),
 });
 
 const UpdateTaskSchema = z.object({
@@ -29,6 +30,7 @@ const UpdateTaskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
+  commitPolicy: z.enum(['forbidden', 'allowed', 'required']).optional(),
 });
 
 const TaskIdSchema = z.object({
@@ -120,6 +122,11 @@ export const taskTools = [
           type: 'string',
           description: 'Sprint ID',
         },
+        commitPolicy: {
+          type: 'string',
+          enum: ['forbidden', 'allowed', 'required'],
+          description: 'Task-level commit policy used for future agent runs',
+        },
       },
       required: ['title'],
     },
@@ -163,6 +170,11 @@ export const taskTools = [
         sprint: {
           type: 'string',
           description: 'New sprint ID',
+        },
+        commitPolicy: {
+          type: 'string',
+          enum: ['forbidden', 'allowed', 'required'],
+          description: 'Task-level commit policy used for future agent runs',
         },
       },
       required: ['id'],
@@ -244,10 +256,13 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
     }
 
     case 'create_task': {
-      const params = CreateTaskSchema.parse(args);
+      const { commitPolicy, ...params } = CreateTaskSchema.parse(args);
       const task = await api<Task>('/api/tasks', {
         method: 'POST',
-        body: JSON.stringify(params),
+        body: JSON.stringify({
+          ...params,
+          executionPolicy: commitPolicy ? { commitPolicy } : undefined,
+        }),
       });
 
       return {
@@ -266,7 +281,7 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
     }
 
     case 'update_task': {
-      const { id, ...updates } = UpdateTaskSchema.parse(args);
+      const { id, commitPolicy, ...updates } = UpdateTaskSchema.parse(args);
       const task = await findTask(id);
 
       if (!task) {
@@ -278,14 +293,17 @@ export async function handleTaskTool(name: string, args: any): Promise<any> {
 
       const updated = await api<Task>(`/api/tasks/${task.id}`, {
         method: 'PATCH',
-        body: JSON.stringify(updates),
+        body: JSON.stringify({
+          ...updates,
+          executionPolicy: commitPolicy ? { commitPolicy } : undefined,
+        }),
       });
 
       return {
         content: [
           {
             type: 'text',
-            text: `Task updated: ${updated.id}; fields: ${changedFieldList(updates)}; comments: ${commentCount(updated)}`,
+            text: `Task updated: ${updated.id}; fields: ${changedFieldList({ ...updates, commitPolicy })}; comments: ${commentCount(updated)}`,
           },
         ],
       };

@@ -241,16 +241,18 @@ Create a new task.
 ```bash
 vk create "Implement OAuth login"
 vk create "Fix button alignment" --type code --priority high --project my-app
+vk create "Audit without commits" --commit-policy forbidden
 ```
 
 **Flags:**
 
-| Flag         | Description                               |
-| ------------ | ----------------------------------------- |
-| `--type`     | Task type (code, research, content, etc.) |
-| `--priority` | Priority level (low, medium, high)        |
-| `--project`  | Project name                              |
-| `--json`     | Output as JSON                            |
+| Flag              | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `--type`          | Task type (code, research, content, etc.)               |
+| `--priority`      | Priority level (low, medium, high)                      |
+| `--project`       | Project name                                            |
+| `--commit-policy` | Task commit policy (`forbidden`, `allowed`, `required`) |
+| `--json`          | Output as JSON                                          |
 
 ---
 
@@ -261,18 +263,20 @@ Update task fields.
 ```bash
 vk update abc123 --status review
 vk update abc123 --title "New title" --priority high
+vk update abc123 --commit-policy required
 ```
 
 **Flags:**
 
-| Flag         | Description    |
-| ------------ | -------------- |
-| `--status`   | New status     |
-| `--title`    | New title      |
-| `--priority` | New priority   |
-| `--type`     | New type       |
-| `--project`  | New project    |
-| `--json`     | Output as JSON |
+| Flag              | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `--status`        | New status                                              |
+| `--title`         | New title                                               |
+| `--priority`      | New priority                                            |
+| `--type`          | New type                                                |
+| `--project`       | New project                                             |
+| `--commit-policy` | Task commit policy (`forbidden`, `allowed`, `required`) |
+| `--json`          | Output as JSON                                          |
 
 ---
 
@@ -455,6 +459,7 @@ Require one or more capabilities before launch:
 ```bash
 vk start TASK-001 --agent codex \
   --require-capability tool.mcp output.structured \
+  --commit-policy allowed \
   --json
 ```
 
@@ -462,6 +467,11 @@ vk start TASK-001 --agent codex \
 profile, sandbox, and budget requirements. The server returns a structured
 conflict and the CLI exits non-zero when any capability is unsupported,
 unknown, missing, or backed by an invalid/failed manifest.
+
+`--commit-policy <forbidden|allowed|required>` sets the policy for this run.
+It overrides a task default and the legacy auto-commit setting. Omitting the
+flag keeps existing tasks compatible: commits are allowed but not required
+unless a task or legacy setting explicitly requires one.
 
 Use `vk agents:status TASK-001 --json` to inspect the persisted manifest and
 capability-derived `controls` set. `vk stop` does not infer support from the

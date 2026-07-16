@@ -291,14 +291,14 @@ These are set in `server/.env`, not in the MCP client config:
 
 ### Task Management (6 tools)
 
-| Tool           | Description                             | Required Inputs | Key Options                                                               |
-| -------------- | --------------------------------------- | --------------- | ------------------------------------------------------------------------- |
-| `list_tasks`   | List all tasks, optionally filtered     | _(none)_        | `status`, `type`, `project`, `sprint`                                     |
-| `get_task`     | Get task by ID (supports partial match) | `id`            | —                                                                         |
-| `create_task`  | Create a new task                       | `title`         | `type`, `priority`, `project`, `sprint`                                   |
-| `update_task`  | Update task fields                      | `id`            | `title`, `description`, `status`, `type`, `priority`, `project`, `sprint` |
-| `archive_task` | Archive a completed task                | `id`            | —                                                                         |
-| `delete_task`  | Permanently delete a task               | `id`            | —                                                                         |
+| Tool           | Description                             | Required Inputs | Key Options                                                                               |
+| -------------- | --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------- |
+| `list_tasks`   | List all tasks, optionally filtered     | _(none)_        | `status`, `type`, `project`, `sprint`                                                     |
+| `get_task`     | Get task by ID (supports partial match) | `id`            | —                                                                                         |
+| `create_task`  | Create a new task                       | `title`         | `type`, `priority`, `project`, `sprint`, `commitPolicy`                                   |
+| `update_task`  | Update task fields                      | `id`            | `title`, `description`, `status`, `type`, `priority`, `project`, `sprint`, `commitPolicy` |
+| `archive_task` | Archive a completed task                | `id`            | —                                                                                         |
+| `delete_task`  | Permanently delete a task               | `id`            | —                                                                                         |
 
 Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or `list_comments` when an assistant needs the full task or comment payload.
 
@@ -326,7 +326,8 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
     "type": "code",
     "priority": "high",
     "project": "rubicon",
-    "sprint": "sprint-1"
+    "sprint": "sprint-1",
+    "commitPolicy": "required"
   }
 }
 ```
@@ -351,6 +352,7 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 - **status:** `todo` · `in-progress` · `blocked` · `done`
 - **type:** `code` · `research` · `content` · `automation`
 - **priority:** `low` · `medium` · `high`
+- **commitPolicy:** `forbidden` · `allowed` · `required`
 
 ---
 
@@ -358,7 +360,7 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 
 | Tool          | Description                    | Required Inputs | Key Options                                                           |
 | ------------- | ------------------------------ | --------------- | --------------------------------------------------------------------- |
-| `start_agent` | Start a coding agent on a task | `id`            | `agent`; `requiredRuntimeCapabilities`                                |
+| `start_agent` | Start a coding agent on a task | `id`            | `agent`; `requiredRuntimeCapabilities`; `commitPolicy`                |
 | `stop_agent`  | Stop a running agent           | `id`            | Resolves status and binds the stop to that exact attempt and manifest |
 
 > **Constraints:** Only works on tasks with `type: "code"` that already have a git worktree attached.
@@ -374,7 +376,8 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
   "arguments": {
     "id": "abc123",
     "agent": "claude-code",
-    "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"]
+    "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"],
+    "commitPolicy": "allowed"
   }
 }
 ```
@@ -384,6 +387,9 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 The required capability list is forwarded unchanged to the authoritative
 launch API. Unsupported, unknown, missing, failed-probe, or invalid manifest
 evidence fails closed before provider work starts.
+`commitPolicy` accepts `forbidden`, `allowed`, or `required` and overrides the
+task and legacy setting for that run. The launch result is bound to the exact
+persisted `task-envelope/v1` snapshot and pre-launch worktree baseline.
 
 **Stop a running agent:**
 

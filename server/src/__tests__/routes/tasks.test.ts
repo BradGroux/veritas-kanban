@@ -142,14 +142,17 @@ describe('Tasks Routes', () => {
     });
 
     it('should create a task with all fields', async () => {
-      const res = await request(app).post('/api/tasks').send({
-        title: 'Full Task',
-        description: 'Detailed description',
-        type: 'research',
-        priority: 'high',
-        project: 'test-project',
-        sprint: 'US-100',
-      });
+      const res = await request(app)
+        .post('/api/tasks')
+        .send({
+          title: 'Full Task',
+          description: 'Detailed description',
+          type: 'research',
+          priority: 'high',
+          project: 'test-project',
+          sprint: 'US-100',
+          executionPolicy: { commitPolicy: 'forbidden' },
+        });
 
       expect(res.status).toBe(201);
       expect(res.body.title).toBe('Full Task');
@@ -158,6 +161,7 @@ describe('Tasks Routes', () => {
       expect(res.body.priority).toBe('high');
       expect(res.body.project).toBe('test-project');
       expect(res.body.sprint).toBe('US-100');
+      expect(res.body.executionPolicy).toEqual({ commitPolicy: 'forbidden' });
     });
   });
 
@@ -193,6 +197,16 @@ describe('Tasks Routes', () => {
       expect(res.body.title).toBe('Updated');
       expect(res.body.status).toBe('in-progress');
       expect(res.body.priority).toBe('high');
+    });
+
+    it('persists task execution policy updates', async () => {
+      const task = await taskService.createTask({ title: 'Policy Task' });
+      const updated = await request(app)
+        .patch(`/api/tasks/${task.id}`)
+        .send({ executionPolicy: { commitPolicy: 'required' } });
+
+      expect(updated.status).toBe(200);
+      expect(updated.body.executionPolicy).toEqual({ commitPolicy: 'required' });
     });
 
     it('should return 404 for non-existent task', async () => {

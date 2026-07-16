@@ -14,7 +14,7 @@ vi.mock('../utils/find.js', () => ({
 }));
 
 import { handleCommentTool } from '../tools/comments.js';
-import { handleTaskTool } from '../tools/tasks.js';
+import { handleTaskTool, taskTools } from '../tools/tasks.js';
 
 function task(overrides: Record<string, unknown> = {}) {
   return {
@@ -59,6 +59,28 @@ describe('MCP write response contract', () => {
     expect(text).not.toContain('Full task details');
   });
 
+  it('exposes and forwards task-level commit policy on create_task', async () => {
+    mocks.api.mockResolvedValueOnce(task());
+
+    await handleTaskTool('create_task', {
+      title: 'Policy task',
+      commitPolicy: 'forbidden',
+    });
+
+    expect(
+      taskTools.find((tool) => tool.name === 'create_task')?.inputSchema.properties
+    ).toHaveProperty('commitPolicy');
+    expect(mocks.api).toHaveBeenCalledWith('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Policy task',
+        type: 'code',
+        priority: 'medium',
+        executionPolicy: { commitPolicy: 'forbidden' },
+      }),
+    });
+  });
+
   it('returns changed fields for update_task without echoing comments', async () => {
     mocks.findTask.mockResolvedValueOnce(task());
     mocks.api.mockResolvedValueOnce(
@@ -82,6 +104,25 @@ describe('MCP write response contract', () => {
     expect(text).toBe('Task updated: task_20260612_abc123; fields: status, priority; comments: 2');
     expect(text).not.toContain('First long comment');
     expect(text).not.toContain('{');
+  });
+
+  it('exposes and forwards task-level commit policy on update_task', async () => {
+    mocks.findTask.mockResolvedValueOnce(task());
+    mocks.api.mockResolvedValueOnce(task());
+
+    const result = await handleTaskTool('update_task', {
+      id: 'abc123',
+      commitPolicy: 'required',
+    });
+
+    expect(
+      taskTools.find((tool) => tool.name === 'update_task')?.inputSchema.properties
+    ).toHaveProperty('commitPolicy');
+    expect(mocks.api).toHaveBeenCalledWith('/api/tasks/task_20260612_abc123', {
+      method: 'PATCH',
+      body: JSON.stringify({ executionPolicy: { commitPolicy: 'required' } }),
+    });
+    expect(result.content[0].text).toContain('fields: commitPolicy');
   });
 
   it('returns the added comment id and count for add_comment', async () => {
