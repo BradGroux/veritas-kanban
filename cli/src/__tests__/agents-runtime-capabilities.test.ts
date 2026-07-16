@@ -56,6 +56,27 @@ describe('vk agent runtime capability controls', () => {
     });
   });
 
+  it('forwards an explicit run commit policy', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      ['start', 'task_1', '--agent', 'codex', '--commit-policy', 'forbidden', '--json'],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent: 'codex',
+        profileId: undefined,
+        requiredRuntimeCapabilities: undefined,
+        commitPolicy: 'forbidden',
+      }),
+    });
+  });
+
   it('surfaces authoritative fail-closed stop errors from the API', async () => {
     mockApi
       .mockResolvedValueOnce({ running: true, attemptId: 'attempt_1' })

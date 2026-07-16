@@ -31,6 +31,10 @@ export function registerAgentCommands(program: Command): void {
       '--require-capability <capabilities...>',
       'Require provider runtime capabilities before launch'
     )
+    .option(
+      '--commit-policy <policy>',
+      'Commit policy for this run (forbidden, allowed, or required)'
+    )
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
@@ -57,6 +61,7 @@ export function registerAgentCommands(program: Command): void {
             agent: options.profile ? undefined : options.agent,
             profileId: options.profile,
             requiredRuntimeCapabilities: options.requireCapability,
+            commitPolicy: options.commitPolicy,
           }),
         });
 

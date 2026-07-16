@@ -6,6 +6,7 @@ import { getTaskService } from '../services/task-service.js';
 import type {
   AgentType,
   ProviderRuntimeCapabilityId,
+  TaskCommitPolicy,
   TokenTelemetryEvent,
 } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -14,6 +15,7 @@ import { requireLocalAgentCapability } from '../middleware/local-agent-capabilit
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
+import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
 
 const router: RouterType = Router();
 
@@ -27,6 +29,7 @@ const startAgentSchema = z.object({
   sandboxPresetId: z.string().trim().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),
   requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
+  commitPolicy: TaskCommitPolicySchema.optional(),
 });
 
 const completeAgentSchema = z.object({
@@ -68,16 +71,25 @@ router.post(
     let sandboxPresetId: string | undefined;
     let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
     let requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] | undefined;
+    let commitPolicy: TaskCommitPolicy | undefined;
     try {
-      ({ agent, profileId, overrideReason, sandboxPresetId, budget, requiredRuntimeCapabilities } =
-        startAgentSchema.parse(req.body) as {
-          agent?: AgentType;
-          profileId?: string;
-          overrideReason?: string;
-          sandboxPresetId?: string;
-          budget?: z.infer<typeof AgentBudgetPolicySchema>;
-          requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
-        });
+      ({
+        agent,
+        profileId,
+        overrideReason,
+        sandboxPresetId,
+        budget,
+        requiredRuntimeCapabilities,
+        commitPolicy,
+      } = startAgentSchema.parse(req.body) as {
+        agent?: AgentType;
+        profileId?: string;
+        overrideReason?: string;
+        sandboxPresetId?: string;
+        budget?: z.infer<typeof AgentBudgetPolicySchema>;
+        requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+        commitPolicy?: TaskCommitPolicy;
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);
@@ -92,6 +104,7 @@ router.post(
         sandboxPresetId,
         budget,
         requiredRuntimeCapabilities,
+        commitPolicy,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {

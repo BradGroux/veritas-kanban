@@ -317,6 +317,75 @@ describe('Tasks Routes (actual module)', () => {
       expect(mockTaskService.updateTask).not.toHaveBeenCalled();
     });
 
+    it('rejects generic PATCH attempts that mutate authoritative run contracts', async () => {
+      for (const field of ['taskEnvelope', 'completionResult']) {
+        const res = await request(app)
+          .patch('/api/tasks/t1')
+          .send({
+            attempt: {
+              id: 'attempt_forged',
+              agent: 'codex',
+              status: 'running',
+              [field]: {},
+            },
+          });
+
+        expect(res.status).toBe(400);
+      }
+      expect(mockTaskService.updateTask).not.toHaveBeenCalled();
+    });
+
+    it('preserves authoritative run contracts when patching the same attempt', async () => {
+      const taskEnvelope = { digest: 'immutable-envelope' };
+      const completionResult = { status: 'success' };
+      mockTaskService.getTask.mockResolvedValue({
+        id: 't1',
+        title: 'Old',
+        status: 'in-progress',
+        attempt: {
+          id: 'attempt_1',
+          agent: 'codex',
+          status: 'running',
+          taskEnvelope,
+          completionResult,
+        },
+      });
+      mockTaskService.updateTask.mockImplementation(async (_id, input) => input);
+
+      const res = await request(app)
+        .patch('/api/tasks/t1')
+        .send({ attempt: { id: 'attempt_1', agent: 'codex', status: 'complete' } });
+
+      expect(res.status).toBe(200);
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          attempt: expect.objectContaining({ taskEnvelope, completionResult }),
+        })
+      );
+    });
+
+    it('rejects replacing an attempt that owns authoritative run contracts', async () => {
+      mockTaskService.getTask.mockResolvedValue({
+        id: 't1',
+        title: 'Old',
+        status: 'in-progress',
+        attempt: {
+          id: 'attempt_1',
+          agent: 'codex',
+          status: 'running',
+          taskEnvelope: { digest: 'immutable-envelope' },
+        },
+      });
+
+      const res = await request(app)
+        .patch('/api/tasks/t1')
+        .send({ attempt: { id: 'attempt_2', agent: 'codex', status: 'running' } });
+
+      expect(res.status).toBe(400);
+      expect(mockTaskService.updateTask).not.toHaveBeenCalled();
+    });
+
     it('should return 404 for missing task on getTask', async () => {
       mockTaskService.getTask.mockResolvedValue(null);
       const res = await request(app).patch('/api/tasks/nonexistent').send({ title: 'Updated' });

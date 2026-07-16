@@ -1927,7 +1927,8 @@ runtime capabilities:
 {
   "profileId": "docs-reviewer",
   "sandboxPresetId": "codex-repo-contained",
-  "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"]
+  "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"],
+  "commitPolicy": "allowed"
 }
 ```
 
@@ -1939,6 +1940,12 @@ capabilities plus caller, profile, sandbox, and budget requirements must be
 mutated. Failure returns `409 Conflict` with `requiredCapabilities`, reasons,
 manifest identity, and remediation.
 
+`commitPolicy` accepts `forbidden`, `allowed`, or `required`. A run value
+overrides `task.executionPolicy.commitPolicy`, then the legacy
+`features.agents.autoCommitOnComplete` setting. Legacy `true` maps to
+`required`; `false` or an absent value maps to the compatible `allowed`
+default. Unknown policy fields or values return `400 Validation failed`.
+
 `GET /api/agents/:taskId/status` returns the active manifest and its derived
 controls:
 
@@ -1948,6 +1955,18 @@ controls:
   "attemptId": "attempt_123",
   "provider": "codex-cli",
   "providerRuntimeManifest": { "digest": "sha256:..." },
+  "taskEnvelope": {
+    "schemaVersion": "task-envelope/v1",
+    "digest": "sha256:...",
+    "commitPolicy": "allowed",
+    "workspace": {
+      "baseline": {
+        "headSha": "0123456789abcdef0123456789abcdef01234567",
+        "dirty": false,
+        "files": []
+      }
+    }
+  },
   "controls": {
     "manifestDigest": "sha256:...",
     "probeState": "ready",
@@ -2030,6 +2049,39 @@ Task and trace responses can therefore include the immutable
   "digest": "sha256:<64 lowercase hex characters>"
 }
 ```
+
+### Task Envelope On Attempts
+
+The start API builds the immutable envelope only after readiness, runtime
+manifest, and sandbox decisions succeed, but before provider execution. The
+same `taskEnvelope` is returned by start/status and persisted on the current
+attempt and attempt history. Its digest covers the provider-neutral task,
+workspace baseline, policy, expected outputs, gates, and launch-manifest
+reference. Dirty baseline entries include `indexBlobHash` and
+`worktreeSha256`, allowing completion attribution to distinguish staged and
+unstaged pre-launch content. Baseline capture is sequential, retries up to
+three times when HEAD, status, or fingerprints move, and fails closed if the
+worktree never stabilizes. Existing attempt records without an envelope remain
+readable.
+
+Task create/update payloads may set reusable defaults under
+`executionPolicy`:
+
+```json
+{
+  "executionPolicy": {
+    "commitPolicy": "forbidden",
+    "allowedSideEffects": [{ "kind": "filesystem-write", "scope": "." }]
+  }
+}
+```
+
+Run-time allowed side effects are intersected with the effective sandbox and
+manifest posture; a task policy cannot grant a capability that launch policy
+does not authorize. Path scopes wider than the assigned worktree are clamped to
+the worktree, while disjoint path scopes are dropped. Generic task PATCH calls
+cannot set `attempt.taskEnvelope` or `attempt.completionResult`; only the
+launch and finalization services may persist those authoritative contracts.
 
 The full manifest contains one entry for every known runtime and sandbox
 capability. A provider version/build change invalidates cached conformance

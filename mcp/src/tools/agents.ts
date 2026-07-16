@@ -14,6 +14,7 @@ const StartAgentSchema = z.object({
     )
     .max(64)
     .optional(),
+  commitPolicy: z.enum(['forbidden', 'allowed', 'required']).optional(),
 });
 
 const TaskIdSchema = z.object({
@@ -41,6 +42,11 @@ export const agentTools = [
           items: { type: 'string' },
           description: 'Provider runtime capabilities that must be evidenced before launch',
         },
+        commitPolicy: {
+          type: 'string',
+          enum: ['forbidden', 'allowed', 'required'],
+          description: 'Commit policy override for this run',
+        },
       },
       required: ['id'],
     },
@@ -64,7 +70,7 @@ export const agentTools = [
 export async function handleAgentTool(name: string, args: any): Promise<any> {
   switch (name) {
     case 'start_agent': {
-      const { id, agent, requiredRuntimeCapabilities } = StartAgentSchema.parse(args);
+      const { id, agent, requiredRuntimeCapabilities, commitPolicy } = StartAgentSchema.parse(args);
       const task = await findTask(id);
 
       if (!task) {
@@ -90,7 +96,7 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
 
       const result = await api<{ attemptId: string }>(`/api/agents/${task.id}/start`, {
         method: 'POST',
-        body: JSON.stringify({ agent, requiredRuntimeCapabilities }),
+        body: JSON.stringify({ agent, requiredRuntimeCapabilities, commitPolicy }),
       });
 
       return {

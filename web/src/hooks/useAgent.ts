@@ -9,6 +9,7 @@ import type {
   AgentHostPreviewRequest,
   AgentType,
   ProviderRuntimeCapabilityId,
+  TaskCommitPolicy,
 } from '@veritas-kanban/shared';
 
 export interface StartAgentInput {
@@ -19,6 +20,7 @@ export interface StartAgentInput {
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+  commitPolicy?: TaskCommitPolicy;
 }
 
 export interface AgentApprovalRequest {
@@ -69,6 +71,7 @@ export function useStartAgent() {
       sandboxPresetId,
       budget,
       requiredRuntimeCapabilities,
+      commitPolicy,
     }: StartAgentInput) =>
       api.agent.start(taskId, {
         agent,
@@ -77,6 +80,7 @@ export function useStartAgent() {
         sandboxPresetId,
         budget,
         requiredRuntimeCapabilities,
+        commitPolicy,
       }),
     onSuccess: (_, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });

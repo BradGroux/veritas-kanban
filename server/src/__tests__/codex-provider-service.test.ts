@@ -110,6 +110,7 @@ import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type { AgentConfig, Task } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
+import { TaskEnvelopeService } from '../services/task-envelope-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -129,7 +130,19 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
 };
 
 function testableService(tmpDir: string): TestableClawdbotAgentService {
-  const service = new ClawdbotAgentService() as unknown as TestableClawdbotAgentService;
+  const taskEnvelopes = new TaskEnvelopeService({
+    captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
+      capturedAt,
+      headSha: 'a'.repeat(40),
+      dirty: false,
+      files: [],
+    }),
+  });
+  const service = new ClawdbotAgentService(
+    undefined,
+    undefined,
+    taskEnvelopes
+  ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
 }
@@ -330,6 +343,17 @@ describe('ClawdbotAgentService Codex providers', () => {
         providerVersion: 'codex-cli 0.144.0',
       });
       expect(task.attempt?.providerRuntimeManifest?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(task.attempt?.taskEnvelope).toMatchObject({
+        schemaVersion: 'task-envelope/v1',
+        commitPolicy: 'allowed',
+        workspace: {
+          baseline: { headSha: 'a'.repeat(40), dirty: false, files: [] },
+        },
+        launchManifest: {
+          digest: task.attempt?.providerRuntimeManifest?.digest,
+        },
+      });
+      expect(task.attempt?.taskEnvelope?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(task.attempts).toEqual([
         expect.objectContaining({
           id: task.attempt?.id,
@@ -351,6 +375,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       expect(log).toContain(
         `Provider manifest:** ${task.attempt?.providerRuntimeManifest?.digest}`
       );
+      expect(log).toContain(`Task envelope:** ${task.attempt?.taskEnvelope?.digest}`);
       expect(mockStartStep).toHaveBeenCalledWith(
         expect.any(String),
         'stream',
@@ -394,6 +419,23 @@ describe('ClawdbotAgentService Codex providers', () => {
       );
     }
   );
+
+  it('persists a run-level commit policy override in the immutable task envelope', async () => {
+    const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
+    mockSpawn.mockReturnValue(createFakeChild(fixture));
+    const service = testableService(tmpDir);
+
+    const status = await service.startAgent(task.id, 'codex', { commitPolicy: 'forbidden' });
+
+    expect(status.taskEnvelope.commitPolicy).toBe('forbidden');
+    expect(status.taskEnvelope.allowedSideEffects).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'git-commit' })])
+    );
+    expect(task.attempt?.taskEnvelope?.digest).toBe(status.taskEnvelope.digest);
+    await waitFor(async () => {
+      expect(await service.getAgentStatus(task.id)).toBeNull();
+    });
+  });
 
   it('does not trust Codex file events without a persisted runtime snapshot', async () => {
     const service = testableService(tmpDir);

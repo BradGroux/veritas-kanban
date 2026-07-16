@@ -94,6 +94,7 @@ export function registerTaskCommands(program: Command): void {
     .option('-d, --description <desc>', 'Task description')
     .option('--priority <priority>', 'Priority (low, medium, high)', 'medium')
     .option('-s, --status <status>', 'Initial status')
+    .option('--commit-policy <policy>', 'Task commit policy (forbidden, allowed, or required)')
     .option('--json', 'Output as JSON')
     .action(async (title, options) => {
       try {
@@ -107,6 +108,9 @@ export function registerTaskCommands(program: Command): void {
             description: options.description || '',
             priority: options.priority,
             status: options.status,
+            executionPolicy: options.commitPolicy
+              ? { commitPolicy: options.commitPolicy }
+              : undefined,
           }),
         });
 
@@ -132,6 +136,7 @@ export function registerTaskCommands(program: Command): void {
     .option('-S, --sprint <sprint>', 'Sprint name or ID')
     .option('--priority <priority>', 'New priority')
     .option('--title <title>', 'New title')
+    .option('--commit-policy <policy>', 'Task commit policy (forbidden, allowed, or required)')
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
@@ -149,6 +154,9 @@ export function registerTaskCommands(program: Command): void {
         if (options.sprint) updates.sprint = options.sprint;
         if (options.priority) updates.priority = options.priority;
         if (options.title) updates.title = options.title;
+        if (options.commitPolicy) {
+          updates.executionPolicy = { commitPolicy: options.commitPolicy };
+        }
 
         if (Object.keys(updates).length === 0) {
           console.error(chalk.yellow('No updates specified'));

@@ -12,6 +12,8 @@ import type {
   ProviderRuntimeManifest,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeControlSet,
+  TaskCommitPolicy,
+  TaskEnvelope,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -22,6 +24,7 @@ export interface StartAgentRequest {
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+  commitPolicy?: TaskCommitPolicy;
 }
 
 export const worktreeApi = {
@@ -250,6 +253,7 @@ export interface AgentStatus {
   provider?: string;
   model?: string;
   providerRuntimeManifest: ProviderRuntimeManifest;
+  taskEnvelope: TaskEnvelope;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -263,6 +267,7 @@ export interface AgentStatusResponse {
   provider?: string;
   model?: string;
   providerRuntimeManifest?: ProviderRuntimeManifest;
+  taskEnvelope?: TaskEnvelope;
   controls?: ProviderRuntimeControlSet;
 }
 

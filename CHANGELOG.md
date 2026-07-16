@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the versioned `task-envelope/v1` and `completion-result/v1` contracts,
+  canonical envelope digests, immutable per-attempt persistence, launch HEAD and
+  dirty-file attribution with staged-blob and worktree SHA-256 fingerprints,
+  bounded evidence/output/verification/side-effect schemas, and explicit
+  `forbidden`, `allowed`, or `required` commit policy with run, task, and
+  legacy-setting precedence. Baseline capture retries unstable repositories,
+  path side effects are clamped to the effective sandbox, authoritative run
+  contracts reject generic task PATCH mutation, oversized legacy workspace IDs
+  normalize deterministically, and task create/update policy is available over
+  REST, CLI, and MCP. Agent start and status APIs, task storage, attempt history,
+  and logs now carry the exact envelope used for the run (#891).
 - Added versioned, evidence-backed provider runtime manifests for Codex CLI,
   Codex SDK, Hermes, and OpenClaw with bounded identity and conformance probes,
   race-safe version-skew cache invalidation, canonical immutable run snapshots
