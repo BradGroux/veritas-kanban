@@ -11,6 +11,7 @@ import {
 } from '@veritas-kanban/shared';
 import { parseProviderRuntimeManifest } from '../schemas/provider-runtime-manifest-schemas.js';
 import { calculateProviderRuntimeManifestDigest } from '../utils/provider-runtime-manifest-digest.js';
+import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
 
 export {
   calculateProviderRuntimeManifestDigest,
@@ -21,12 +22,6 @@ export type { ProviderRuntimeManifestPayload } from '../utils/provider-runtime-m
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_CONFORMANCE_PROBE_TIMEOUT_MS = 5_000;
 const MAX_DIAGNOSTIC_BYTES = 8 * 1024;
-
-const SECRET_PATTERNS: Array<[RegExp, string]> = [
-  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
-  [/\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]{12,}/gi, '[REDACTED]'],
-  [/\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi, '$1=[REDACTED]'],
-];
 
 export interface ProviderRuntimeIdentityEvidence {
   providerVersion?: string;
@@ -239,7 +234,7 @@ export class ProviderRuntimeManifestService {
       probe: {
         state: probeState,
         probedAt,
-        source: request.identity.source,
+        source: sanitizeProviderRuntimeDiagnostic(request.identity.source),
         diagnostics: sanitizeDiagnostics(diagnostics),
       },
     };
@@ -305,11 +300,7 @@ function sanitizeDiagnostics(values: string[]): string[] {
 }
 
 function sanitizeDiagnostic(value: string): string {
-  let sanitized = value.trim().replace(/\s+/g, ' ');
-  for (const [pattern, replacement] of SECRET_PATTERNS) {
-    sanitized = sanitized.replace(pattern, replacement);
-  }
-  return sanitized.slice(0, 1000);
+  return sanitizeProviderRuntimeDiagnostic(value);
 }
 
 function immutableClone<T>(value: T): T {

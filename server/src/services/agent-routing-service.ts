@@ -19,6 +19,9 @@ import {
   type RoutingRule,
   type RoutingResult,
   type RoutingMatchCriteria,
+  type ProviderRuntimeCapabilityId,
+  type ProviderRuntimeRouteCandidate,
+  type ProviderRuntimeSelection,
 } from '@veritas-kanban/shared';
 import type { Task, AgentType } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
@@ -29,6 +32,12 @@ import {
   type AgentHealthStatus,
 } from './agent-health-service.js';
 import { TeamRosterService } from './team-roster-service.js';
+import {
+  getAgentRegistryService,
+  registeredAgentIsLive,
+  type RegisteredAgent,
+} from './agent-registry-service.js';
+import { selectProviderRuntimeManifest } from './provider-runtime-capability-service.js';
 
 const log = createLogger('agent-routing');
 
@@ -36,6 +45,16 @@ type RoutableTask = Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'>;
 
 interface RoutingTraceContext {
   taskId?: string;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+}
+
+interface RuntimeManifestRegistryReader {
+  list(): RegisteredAgent[];
+}
+
+interface RuntimeIdentityResolution {
+  registrations: RegisteredAgent[];
+  rejectionReason?: string;
 }
 
 interface AgentAvailability {
@@ -43,17 +62,24 @@ interface AgentAvailability {
   health?: AgentHealthStatus;
   available: boolean;
   reason: string;
+  runtimeSelection?: ProviderRuntimeSelection;
 }
 
 export class AgentRoutingService {
   private configService: ConfigService;
   private agentHealth: AgentHealthChecker;
   private teamRoster: TeamRosterService;
+  private runtimeRegistry?: RuntimeManifestRegistryReader;
 
-  constructor(configService?: ConfigService, agentHealth?: AgentHealthChecker) {
+  constructor(
+    configService?: ConfigService,
+    agentHealth?: AgentHealthChecker,
+    runtimeRegistry?: RuntimeManifestRegistryReader
+  ) {
     this.configService = configService || new ConfigService();
     this.agentHealth = agentHealth || new AgentHealthService();
     this.teamRoster = new TeamRosterService(this.configService);
+    this.runtimeRegistry = runtimeRegistry;
   }
 
   /**
@@ -72,6 +98,10 @@ export class AgentRoutingService {
   ): Promise<{ result: RoutingResult; trace: CreateGovernanceTraceInput }> {
     const config = await this.configService.getConfig();
     const routing: AgentRoutingConfig = config.agentRouting || DEFAULT_ROUTING_CONFIG;
+    const requiredRuntimeCapabilities = uniqueRuntimeCapabilities(
+      context.requiredRuntimeCapabilities ?? []
+    );
+    const runtimeCandidates: ProviderRuntimeRouteCandidate[] = [];
     const evaluatedRules: GovernanceTraceRule[] = [];
     const steps: GovernanceTraceStep[] = [];
     const rosterPreview = this.teamRoster.resolveRoute(
@@ -85,7 +115,21 @@ export class AgentRoutingService {
     );
 
     if (rosterPreview.matched && rosterPreview.agent) {
-      const availability = await this.getAgentAvailability(config.agents, rosterPreview.agent);
+      const profile = config.agentProfiles?.find(
+        (candidate) => candidate.id === rosterPreview.profileId
+      );
+      const availability = await this.getAgentAvailability(
+        config.agents,
+        rosterPreview.agent,
+        requiredRuntimeCapabilities,
+        profile?.runtime.model
+      );
+      recordRuntimeCandidate(
+        runtimeCandidates,
+        rosterPreview.agent,
+        profile?.runtime.model,
+        availability
+      );
       const ruleId = rosterPreview.ruleId ?? rosterPreview.member?.id ?? 'default';
       const traceRule: GovernanceTraceRule = {
         id: `team-roster:${ruleId}`,
@@ -111,14 +155,14 @@ export class AgentRoutingService {
       });
 
       if (availability.available) {
-        const profile = config.agentProfiles?.find(
-          (candidate) => candidate.id === rosterPreview.profileId
-        );
+        markLastRuntimeCandidateSelected(runtimeCandidates);
         const result: RoutingResult = {
           agent: rosterPreview.agent,
           model: profile?.runtime.model ?? availability.agentConfig?.model,
           rule: traceRule.id,
-          reason: rosterPreview.reason,
+          reason: withRuntimeReason(rosterPreview.reason, availability.runtimeSelection),
+          runtimeSelection: availability.runtimeSelection,
+          runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
         };
         return {
           result,
@@ -143,11 +187,24 @@ export class AgentRoutingService {
     // If routing is disabled, return the global default
     if (!routing.enabled) {
       const defaultAgent = routing.defaultAgent || config.defaultAgent;
-      const defaultAvailability = await this.getAgentAvailability(config.agents, defaultAgent);
+      const defaultAvailability = await this.getAgentAvailability(
+        config.agents,
+        defaultAgent,
+        requiredRuntimeCapabilities,
+        routing.defaultModel
+      );
+      recordRuntimeCandidate(
+        runtimeCandidates,
+        defaultAgent,
+        routing.defaultModel,
+        defaultAvailability
+      );
       if (!defaultAvailability.available) {
         throw new ConflictError('No healthy agent available for routing', {
           agent: defaultAgent,
           reason: defaultAvailability.reason,
+          runtimeSelection: defaultAvailability.runtimeSelection,
+          runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
           routingEnabled: routing.enabled,
         });
       }
@@ -155,8 +212,14 @@ export class AgentRoutingService {
       const result: RoutingResult = {
         agent: defaultAgent,
         model: routing.defaultModel,
-        reason: 'Routing disabled, using default agent',
+        reason: withRuntimeReason(
+          'Routing disabled, using default agent',
+          defaultAvailability.runtimeSelection
+        ),
+        runtimeSelection: defaultAvailability.runtimeSelection,
+        runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
       };
+      markLastRuntimeCandidateSelected(runtimeCandidates);
       return {
         result,
         trace: this.buildRoutingTrace(task, context, result, {
@@ -184,7 +247,13 @@ export class AgentRoutingService {
       }
 
       if (this.matchesRule(task, rule.match)) {
-        const availability = await this.getAgentAvailability(config.agents, rule.agent);
+        const availability = await this.getAgentAvailability(
+          config.agents,
+          rule.agent,
+          requiredRuntimeCapabilities,
+          rule.model
+        );
+        recordRuntimeCandidate(runtimeCandidates, rule.agent, rule.model, availability);
         if (!availability.available) {
           const message = `Rule "${rule.name}" matched but agent "${rule.agent}" is unavailable: ${availability.reason}.`;
           log.warn(message);
@@ -200,14 +269,24 @@ export class AgentRoutingService {
           if (routing.fallbackOnFailure && rule.fallback) {
             const fallbackAvailability = await this.getAgentAvailability(
               config.agents,
-              rule.fallback
+              rule.fallback,
+              requiredRuntimeCapabilities
+            );
+            recordRuntimeCandidate(
+              runtimeCandidates,
+              rule.fallback,
+              fallbackAvailability.agentConfig?.model,
+              fallbackAvailability
             );
             if (fallbackAvailability.available) {
+              markLastRuntimeCandidateSelected(runtimeCandidates);
               const reason = `${message} Using fallback agent "${rule.fallback}".`;
               const result: RoutingResult = {
                 agent: rule.fallback,
                 rule: rule.id,
-                reason,
+                reason: withRuntimeReason(reason, fallbackAvailability.runtimeSelection),
+                runtimeSelection: fallbackAvailability.runtimeSelection,
+                runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
               };
               return {
                 result,
@@ -257,8 +336,11 @@ export class AgentRoutingService {
           model: rule.model,
           fallback: rule.fallback,
           rule: rule.id,
-          reason: `Matched rule: ${rule.name}`,
+          reason: withRuntimeReason(`Matched rule: ${rule.name}`, availability.runtimeSelection),
+          runtimeSelection: availability.runtimeSelection,
+          runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
         };
+        markLastRuntimeCandidateSelected(runtimeCandidates);
         return {
           result,
           trace: this.buildRoutingTrace(task, context, result, {
@@ -293,7 +375,13 @@ export class AgentRoutingService {
       model: routing.defaultModel,
       reason: 'No routing rules matched, using default agent',
     };
-    const defaultAvailability = await this.getAgentAvailability(config.agents, result.agent);
+    const defaultAvailability = await this.getAgentAvailability(
+      config.agents,
+      result.agent,
+      requiredRuntimeCapabilities,
+      result.model
+    );
+    recordRuntimeCandidate(runtimeCandidates, result.agent, result.model, defaultAvailability);
     if (!defaultAvailability.available) {
       const message = `Default agent "${result.agent}" is unavailable: ${defaultAvailability.reason}.`;
       steps.push({
@@ -305,9 +393,15 @@ export class AgentRoutingService {
       throw new ConflictError('No healthy agent available for routing', {
         agent: result.agent,
         reason: defaultAvailability.reason,
+        runtimeSelection: defaultAvailability.runtimeSelection,
+        runtimeCandidates: optionalRuntimeCandidates(runtimeCandidates),
         routingEnabled: routing.enabled,
       });
     }
+    result.reason = withRuntimeReason(result.reason, defaultAvailability.runtimeSelection);
+    result.runtimeSelection = defaultAvailability.runtimeSelection;
+    markLastRuntimeCandidateSelected(runtimeCandidates);
+    result.runtimeCandidates = optionalRuntimeCandidates(runtimeCandidates);
 
     return {
       result,
@@ -418,7 +512,9 @@ export class AgentRoutingService {
 
   private async getAgentAvailability(
     agents: AgentConfig[],
-    agent: AgentType
+    agent: AgentType,
+    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] = [],
+    model?: string
   ): Promise<AgentAvailability> {
     const agentConfig = agents.find((candidate) => candidate.type === agent);
     if (!agentConfig) {
@@ -436,6 +532,19 @@ export class AgentRoutingService {
       };
     }
 
+    const runtimeSelection =
+      requiredRuntimeCapabilities.length > 0
+        ? this.selectAgentRuntimeManifest(agentConfig, requiredRuntimeCapabilities, model)
+        : undefined;
+    if (runtimeSelection && !runtimeSelection.compatible) {
+      return {
+        agentConfig,
+        available: false,
+        reason: runtimeSelection.reason,
+        runtimeSelection,
+      };
+    }
+
     const health = await this.agentHealth.checkAgent(agentConfig);
     if (!health.healthy) {
       return {
@@ -443,6 +552,7 @@ export class AgentRoutingService {
         health,
         available: false,
         reason: health.reason || 'Agent health check failed',
+        runtimeSelection,
       };
     }
 
@@ -450,8 +560,34 @@ export class AgentRoutingService {
       agentConfig,
       health,
       available: true,
-      reason: 'Agent is healthy',
+      reason: withRuntimeReason('Agent is healthy', runtimeSelection),
+      runtimeSelection,
     };
+  }
+
+  private selectAgentRuntimeManifest(
+    agentConfig: AgentConfig,
+    requiredCapabilities: ProviderRuntimeCapabilityId[],
+    model?: string
+  ): ProviderRuntimeSelection {
+    const registeredAgents = (this.runtimeRegistry ?? getAgentRegistryService()).list();
+    const identity = resolveRegisteredRuntimeIdentity(registeredAgents, agentConfig);
+    const selection = selectProviderRuntimeManifest({
+      manifests: identity.registrations
+        .map((registered) => registered.providerRuntimeManifest)
+        .filter((manifest) => manifest !== undefined),
+      provider: agentConfig.provider === 'custom' ? undefined : agentConfig.provider,
+      model: model ?? agentConfig.model,
+      requiredCapabilities,
+    });
+    return identity.rejectionReason
+      ? {
+          ...selection,
+          compatible: false,
+          selectedManifest: undefined,
+          reason: identity.rejectionReason,
+        }
+      : selection;
   }
 
   /**
@@ -556,6 +692,92 @@ export class AgentRoutingService {
       raw: { task, routing: input.routing, result },
     };
   }
+}
+
+function resolveRegisteredRuntimeIdentity(
+  registeredAgents: RegisteredAgent[],
+  agentConfig: AgentConfig
+): RuntimeIdentityResolution {
+  const exactId = registeredAgents.find((registered) => registered.id === agentConfig.type);
+  if (exactId) {
+    return registeredAgentIsLive(exactId)
+      ? { registrations: [exactId] }
+      : {
+          registrations: [],
+          rejectionReason: `Registered agent "${exactId.id}" is offline or outside the five-minute heartbeat window.`,
+        };
+  }
+
+  const nameMatches = registeredAgents.filter(
+    (registered) =>
+      normalizeRuntimeValue(registered.name) === normalizeRuntimeValue(agentConfig.name)
+  );
+  if (nameMatches.length === 0) {
+    return {
+      registrations: [],
+      rejectionReason: `No registry identity matches configured agent "${agentConfig.type}".`,
+    };
+  }
+  if (nameMatches.length > 1) {
+    return {
+      registrations: [],
+      rejectionReason: `Multiple registry identities match configured agent name "${agentConfig.name}".`,
+    };
+  }
+  const nameMatch = nameMatches[0] as RegisteredAgent;
+  return registeredAgentIsLive(nameMatch)
+    ? { registrations: [nameMatch] }
+    : {
+        registrations: [],
+        rejectionReason: `Registered agent "${nameMatch.id}" is offline or outside the five-minute heartbeat window.`,
+      };
+}
+
+function recordRuntimeCandidate(
+  candidates: ProviderRuntimeRouteCandidate[],
+  agent: AgentType,
+  model: string | undefined,
+  availability: AgentAvailability
+): void {
+  if (!availability.runtimeSelection) return;
+  candidates.push({
+    agent,
+    ...(model ? { model } : {}),
+    available: availability.available,
+    selected: false,
+    reason: availability.reason,
+    selection: availability.runtimeSelection,
+  });
+}
+
+function markLastRuntimeCandidateSelected(candidates: ProviderRuntimeRouteCandidate[]): void {
+  const candidate = candidates.at(-1);
+  if (candidate) candidate.selected = true;
+}
+
+function optionalRuntimeCandidates(
+  candidates: ProviderRuntimeRouteCandidate[]
+): ProviderRuntimeRouteCandidate[] | undefined {
+  return candidates.length > 0 ? candidates : undefined;
+}
+
+function uniqueRuntimeCapabilities(
+  capabilities: ProviderRuntimeCapabilityId[]
+): ProviderRuntimeCapabilityId[] {
+  return Array.from(
+    new Set(capabilities.map((capability) => capability.trim()).filter(Boolean))
+  ).sort((left, right) => left.localeCompare(right));
+}
+
+function withRuntimeReason(
+  reason: string,
+  runtimeSelection: ProviderRuntimeSelection | undefined
+): string {
+  return runtimeSelection ? `${reason}. ${runtimeSelection.reason}` : reason;
+}
+
+function normalizeRuntimeValue(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 // Singleton

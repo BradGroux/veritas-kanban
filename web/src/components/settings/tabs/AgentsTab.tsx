@@ -1017,6 +1017,10 @@ function AgentHostItem({ host }: { host: AgentHostRecord }) {
       </div>
 
       <div className="flex flex-wrap gap-1">
+        <Badge size="xs" variant="light" color="blue">
+          {host.providerRuntimeManifests.length} validated manifest
+          {host.providerRuntimeManifests.length === 1 ? '' : 's'}
+        </Badge>
         {host.supportedAgents.slice(0, 4).map((agent) => (
           <Badge key={agent} size="xs" variant="outline" color="gray">
             {agent}

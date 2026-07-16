@@ -226,12 +226,14 @@ describe('ProviderRuntimeManifestService', () => {
   });
 
   it('redacts provider identity output before it enters the immutable snapshot', async () => {
-    const manifest = await new ProviderRuntimeManifestService().probe(
-      request('fixture 1.0.0 token=private-value sk-proj-abcdefghijklmnopqrstuvwxyz')
-    );
+    const unsafe = request('fixture 1.0.0 token=private-value sk-proj-abcdefghijklmnopqrstuvwxyz');
+    unsafe.identity.source = 'fixture --version authorization=private-source-value';
+    const manifest = await new ProviderRuntimeManifestService().probe(unsafe);
 
     expect(manifest.providerVersion).toBe('fixture 1.0.0 token=[REDACTED] [REDACTED]');
+    expect(manifest.probe.source).toBe('fixture --version authorization=[REDACTED]');
     expect(JSON.stringify(manifest)).not.toContain('private-value');
+    expect(JSON.stringify(manifest)).not.toContain('private-source-value');
     expect(JSON.stringify(manifest)).not.toContain('sk-proj-');
   });
 

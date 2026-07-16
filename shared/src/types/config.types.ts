@@ -96,6 +96,8 @@ export interface RoutingResult {
   fallback?: AgentType;
   rule?: string; // ID of matched rule (undefined = default)
   reason: string; // Human-readable explanation
+  runtimeSelection?: import('./provider-runtime.types.js').ProviderRuntimeSelection;
+  runtimeCandidates?: import('./provider-runtime.types.js').ProviderRuntimeRouteCandidate[];
 }
 
 /** Default routing config */

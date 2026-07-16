@@ -9,11 +9,20 @@ import type {
   AgentHostPreviewRequest,
   AgentHostRecord,
   AgentHostRoutingDecision,
+  ProviderRuntimeCapabilityId,
+  ProviderRuntimeManifest,
+  ProviderRuntimeSelection,
   SandboxProviderCapabilityId,
 } from '@veritas-kanban/shared';
-import { getAgentRegistryService, type RegisteredAgent } from './agent-registry-service.js';
+import {
+  AGENT_HEARTBEAT_TIMEOUT_MS,
+  getAgentRegistryService,
+  registeredAgentIsLive,
+  type RegisteredAgent,
+} from './agent-registry-service.js';
+import { selectProviderRuntimeManifest } from './provider-runtime-capability-service.js';
 
-const STALE_HEARTBEAT_MS = 10 * 60 * 1000;
+const STALE_HEARTBEAT_MS = AGENT_HEARTBEAT_TIMEOUT_MS;
 const DISCONNECTED_HEARTBEAT_MS = 30 * 60 * 1000;
 
 interface AgentHostRegistryReader {
@@ -31,6 +40,11 @@ interface HostAccumulator {
   supportedModels: Set<string>;
   supportedTools: Set<string>;
   sandboxCapabilities: Set<SandboxProviderCapabilityId>;
+  manifestRegistrations: HostManifestRegistration[];
+  legacyProviders: Set<string>;
+  legacyModels: Set<string>;
+  legacyTools: Set<string>;
+  legacySandboxCapabilities: Set<SandboxProviderCapabilityId>;
   workspaceLabels: Set<string>;
   workspaceRoots: string[];
   activeSessions: number;
@@ -43,8 +57,15 @@ interface HostAccumulator {
   diagnostics: Set<string>;
 }
 
+interface HostManifestRegistration {
+  agentId: string;
+  agentName: string;
+  manifest: ProviderRuntimeManifest;
+}
+
 interface ResolvedAgentHost extends AgentHostRecord {
   workspaceRoots: string[];
+  manifestRegistrations: HostManifestRegistration[];
 }
 
 export class AgentHostService {
@@ -61,12 +82,13 @@ export class AgentHostService {
 
   preview(request: AgentHostPreviewRequest, now = new Date()): AgentHostCompatibilityResponse {
     const hosts = this.buildHosts(now);
-    const previews = hosts.map((host) => this.previewHost(host, request));
+    const normalizedRequest = normalizeRequest(request);
+    const previews = hosts.map((host) => this.previewHost(host, normalizedRequest));
     return {
       generatedAt: now.toISOString(),
-      request: normalizeRequest(request),
+      request: normalizedRequest,
       previews,
-      decision: this.resolveDecision(previews, request),
+      decision: this.resolveDecision(previews, normalizedRequest),
     };
   }
 
@@ -86,28 +108,53 @@ export class AgentHostService {
       host.supportedAgents.add(agent.name);
       for (const item of stringArray(metadata.supportedAgents)) host.supportedAgents.add(item);
       for (const capability of agent.capabilities) {
-        host.supportedTools.add(capability.name);
+        host.legacyTools.add(capability.name);
       }
 
-      if (agent.provider) host.supportedProviders.add(agent.provider);
-      for (const item of stringArray(metadata.providers)) host.supportedProviders.add(item);
+      if (agent.provider) host.legacyProviders.add(agent.provider);
+      for (const item of stringArray(metadata.providers)) host.legacyProviders.add(item);
       for (const capability of sandboxCapabilityArray(metadata.sandboxCapabilities)) {
-        host.sandboxCapabilities.add(capability);
+        host.legacySandboxCapabilities.add(capability);
       }
       for (const capability of inferredSandboxCapabilities(agent.provider)) {
-        host.sandboxCapabilities.add(capability);
+        host.legacySandboxCapabilities.add(capability);
       }
       for (const provider of stringArray(metadata.providers)) {
         for (const capability of inferredSandboxCapabilities(provider)) {
-          host.sandboxCapabilities.add(capability);
+          host.legacySandboxCapabilities.add(capability);
         }
       }
 
-      if (agent.model) host.supportedModels.add(agent.model);
-      for (const item of stringArray(metadata.models)) host.supportedModels.add(item);
+      if (agent.model) host.legacyModels.add(agent.model);
+      for (const item of stringArray(metadata.models)) host.legacyModels.add(item);
 
-      for (const item of stringArray(metadata.tools)) host.supportedTools.add(item);
-      for (const item of stringArray(metadata.requiredTools)) host.supportedTools.add(item);
+      for (const item of stringArray(metadata.tools)) host.legacyTools.add(item);
+      for (const item of stringArray(metadata.requiredTools)) host.legacyTools.add(item);
+
+      const manifest = agent.providerRuntimeManifest;
+      if (manifest && registrationManifestIsCurrent(agent, now)) {
+        host.manifestRegistrations.push({ agentId: agent.id, agentName: agent.name, manifest });
+        if (manifest.probe.state === 'failed') {
+          host.diagnostics.add(
+            `Provider manifest ${manifest.digest} failed its readiness probe and is display-only.`
+          );
+        } else {
+          host.supportedProviders.add(manifest.provider);
+          host.supportedProviders.add(manifest.adapter);
+          for (const model of manifest.models) host.supportedModels.add(model);
+          for (const capability of manifest.capabilities) {
+            if (capability.state !== 'supported') continue;
+            if (capability.id.startsWith('tool.')) host.supportedTools.add(capability.id);
+            if (isSandboxCapability(capability.id)) {
+              host.sandboxCapabilities.add(capability.id);
+            }
+          }
+        }
+      } else if (manifest) {
+        host.diagnostics.add(
+          `Runtime manifest from agent ${agent.id} was excluded because its registration is offline or outside the five-minute heartbeat window.`
+        );
+      }
 
       const rawRoots = stringArray(metadata.workspaceRoots);
       for (const root of rawRoots) {
@@ -148,6 +195,7 @@ export class AgentHostService {
     host: ResolvedAgentHost,
     request: AgentHostPreviewRequest
   ): AgentHostCompatibilityPreview {
+    const runtimeSelection = this.selectRuntimeManifest(host, request);
     const checks: AgentHostCompatibilityCheck[] = [
       {
         id: 'heartbeat',
@@ -181,8 +229,9 @@ export class AgentHostService {
         host.supportedModels,
         'No model requirement supplied.'
       ),
-      this.requiredToolsCheck(host, request.requiredTools),
-      this.sandboxPolicyCheck(host, request.sandboxPresetId),
+      this.runtimeCapabilitiesCheck(runtimeSelection, request),
+      this.requiredToolsCheck(runtimeSelection, request.requiredTools),
+      this.sandboxPolicyCheck(request.sandboxPresetId),
       {
         id: 'verification-gates',
         label: 'Verification gates',
@@ -210,7 +259,9 @@ export class AgentHostService {
       ...host.diagnostics,
       ...checks
         .filter(
-          (check) => check.passed && /unknown|not supplied|will be recorded/i.test(check.detail)
+          (check) =>
+            check.passed &&
+            /unknown|not supplied|will be recorded|advisory|legacy/i.test(check.detail)
         )
         .map((check) => check.detail),
     ];
@@ -221,6 +272,7 @@ export class AgentHostService {
       posture: host.posture,
       compatible: reasons.length === 0,
       checks,
+      runtimeSelection,
       reasons,
       warnings: uniqueSorted(warnings),
     };
@@ -274,8 +326,8 @@ export class AgentHostService {
       return {
         id,
         label,
-        passed: true,
-        detail: `${label} support is unknown for this host.`,
+        passed: false,
+        detail: `${label} support is unavailable because no validated runtime manifest reports it.`,
       };
     }
     const matched = supported.some((candidate) => normalize(candidate) === normalize(value));
@@ -289,8 +341,60 @@ export class AgentHostService {
     };
   }
 
+  private selectRuntimeManifest(
+    host: ResolvedAgentHost,
+    request: AgentHostPreviewRequest
+  ): ProviderRuntimeSelection {
+    const registrations = host.manifestRegistrations.filter(
+      (registration) =>
+        !request.agent ||
+        normalize(request.agent) === normalize(registration.agentId) ||
+        normalize(request.agent) === normalize(registration.agentName)
+    );
+    return selectProviderRuntimeManifest({
+      manifests: registrations.map((registration) => registration.manifest),
+      provider: request.provider,
+      model: request.model,
+      requiredCapabilities: [
+        ...(request.requiredRuntimeCapabilities ?? []),
+        ...(request.requiredTools ?? []).filter((tool) => tool.startsWith('tool.')),
+      ],
+    });
+  }
+
+  private runtimeCapabilitiesCheck(
+    selection: ProviderRuntimeSelection,
+    request: AgentHostPreviewRequest
+  ): AgentHostCompatibilityCheck {
+    const required = selection.requiredCapabilities;
+    const hasManifestRequirement = Boolean(
+      request.provider || request.model || required.length > 0
+    );
+    if (!hasManifestRequirement) {
+      return {
+        id: 'runtime-capabilities',
+        label: 'Runtime manifest',
+        passed: true,
+        detail: 'No provider, model, or runtime capability requirement supplied.',
+      };
+    }
+
+    return {
+      id: 'runtime-capabilities',
+      label: 'Runtime manifest',
+      passed: selection.compatible,
+      detail: selection.compatible
+        ? required.length > 0
+          ? selection.selectedManifest?.advisory
+            ? `Required runtime capabilities have advisory evidence: ${required.join(', ')}.`
+            : `Required runtime capabilities are supported: ${required.join(', ')}.`
+          : 'Provider and model requirements are satisfied by one validated runtime manifest.'
+        : selection.reason,
+    };
+  }
+
   private requiredToolsCheck(
-    host: AgentHostRecord,
+    selection: ProviderRuntimeSelection,
     requiredTools: string[] | undefined
   ): AgentHostCompatibilityCheck {
     const tools = (requiredTools ?? []).map((tool) => tool.trim()).filter(Boolean);
@@ -302,23 +406,23 @@ export class AgentHostService {
         detail: 'No required tools supplied.',
       };
     }
-    const supported = new Set(host.supportedTools.map(normalize));
-    const missing = tools.filter((tool) => !supported.has(normalize(tool)));
+    const runtimeTools = tools.filter((tool) => tool.startsWith('tool.'));
+    const legacyNamedTools = tools.filter((tool) => !tool.startsWith('tool.'));
+    const runtimePassed = runtimeTools.length === 0 || selection.compatible;
+    const legacyNamesPassed = legacyNamedTools.length === 0;
     return {
       id: 'required-tools',
       label: 'Required tools',
-      passed: missing.length === 0,
-      detail:
-        missing.length === 0
-          ? 'Required tools are registered on this host.'
-          : `Missing required tools: ${missing.join(', ')}.`,
+      passed: runtimePassed && legacyNamesPassed,
+      detail: !legacyNamesPassed
+        ? `Legacy named tool requirements cannot qualify host runtime posture: ${legacyNamedTools.join(', ')}. Use requiredRuntimeCapabilities with a tool.* identifier.`
+        : runtimePassed
+          ? 'Required tool capabilities qualify through one validated runtime manifest.'
+          : selection.reason,
     };
   }
 
-  private sandboxPolicyCheck(
-    host: AgentHostRecord,
-    sandboxPresetId: string | undefined
-  ): AgentHostCompatibilityCheck {
+  private sandboxPolicyCheck(sandboxPresetId: string | undefined): AgentHostCompatibilityCheck {
     if (!sandboxPresetId) {
       return {
         id: 'sandbox-policy',
@@ -331,11 +435,8 @@ export class AgentHostService {
     return {
       id: 'sandbox-policy',
       label: 'Sandbox policy',
-      passed: host.sandboxCapabilities.length > 0,
-      detail:
-        host.sandboxCapabilities.length > 0
-          ? `Host reports ${host.sandboxCapabilities.length} sandbox capability signal(s) for preset ${sandboxPresetId}.`
-          : `Host does not report sandbox capability support for preset ${sandboxPresetId}.`,
+      passed: false,
+      detail: `Sandbox preset ${sandboxPresetId} cannot qualify a host until its required controls are resolved into requiredRuntimeCapabilities.`,
     };
   }
 
@@ -444,6 +545,11 @@ function getOrCreateHost(
     supportedModels: new Set(),
     supportedTools: new Set(),
     sandboxCapabilities: new Set(),
+    manifestRegistrations: [],
+    legacyProviders: new Set(),
+    legacyModels: new Set(),
+    legacyTools: new Set(),
+    legacySandboxCapabilities: new Set(),
     workspaceLabels: new Set(),
     workspaceRoots: [],
     activeSessions: 0,
@@ -475,6 +581,16 @@ function finalizeHost(host: HostAccumulator, now: Date): ResolvedAgentHost {
   if (host.lastFailure) {
     host.diagnostics.add('Supervisor reported a recent failure.');
   }
+  if (
+    host.legacyProviders.size > 0 ||
+    host.legacyModels.size > 0 ||
+    host.legacyTools.size > 0 ||
+    host.legacySandboxCapabilities.size > 0
+  ) {
+    host.diagnostics.add(
+      'Legacy provider, model, tool, and sandbox metadata is display-only and cannot satisfy runtime capability requirements.'
+    );
+  }
 
   return {
     id: host.id,
@@ -490,6 +606,17 @@ function finalizeHost(host: HostAccumulator, now: Date): ResolvedAgentHost {
     sandboxCapabilities: uniqueSorted(
       Array.from(host.sandboxCapabilities)
     ) as SandboxProviderCapabilityId[],
+    providerRuntimeManifests: uniqueManifests(
+      host.manifestRegistrations.map((registration) => registration.manifest)
+    ),
+    legacyRuntimePosture: {
+      providers: uniqueSorted(Array.from(host.legacyProviders)),
+      models: uniqueSorted(Array.from(host.legacyModels)),
+      tools: uniqueSorted(Array.from(host.legacyTools)),
+      sandboxCapabilities: uniqueSorted(
+        Array.from(host.legacySandboxCapabilities)
+      ) as SandboxProviderCapabilityId[],
+    },
     workspaceLabels: uniqueSorted(Array.from(host.workspaceLabels)),
     activeSessions: host.activeSessions,
     queueDepth: host.queueDepth,
@@ -500,6 +627,7 @@ function finalizeHost(host: HostAccumulator, now: Date): ResolvedAgentHost {
     diagnostics: uniqueSorted(Array.from(host.diagnostics)),
     registeredAgentIds: uniqueSorted(host.registeredAgentIds),
     workspaceRoots: uniqueSorted(host.workspaceRoots),
+    manifestRegistrations: host.manifestRegistrations,
   };
 }
 
@@ -514,6 +642,10 @@ function resolvePosture(host: HostAccumulator, overloaded: boolean, now: Date): 
   if (age > STALE_HEARTBEAT_MS) return 'stale';
   if (overloaded || host.statuses.includes('busy') || host.lastFailure) return 'degraded';
   return 'connected';
+}
+
+function registrationManifestIsCurrent(agent: RegisteredAgent, now: Date): boolean {
+  return registeredAgentIsLive(agent, now.getTime());
 }
 
 function summarizeHosts(
@@ -537,7 +669,11 @@ function summarizeHosts(
 }
 
 function stripInternalHostFields(host: ResolvedAgentHost): AgentHostRecord {
-  const { workspaceRoots: _workspaceRoots, ...publicHost } = host;
+  const {
+    workspaceRoots: _workspaceRoots,
+    manifestRegistrations: _manifestRegistrations,
+    ...publicHost
+  } = host;
   return publicHost;
 }
 
@@ -548,6 +684,7 @@ function normalizeRequest(request: AgentHostPreviewRequest): AgentHostPreviewReq
     model: trimOptional(request.model),
     workspacePath: trimOptional(request.workspacePath),
     requiredTools: uniqueSorted(request.requiredTools ?? []),
+    requiredRuntimeCapabilities: uniqueSorted(request.requiredRuntimeCapabilities ?? []),
     verificationGates: uniqueSorted(request.verificationGates ?? []),
     sandboxPresetId: trimOptional(request.sandboxPresetId),
     manualHostId: trimOptional(request.manualHostId),
@@ -600,6 +737,12 @@ const SANDBOX_CAPABILITY_IDS = new Set<SandboxProviderCapabilityId>([
   'environment.allowlist',
   'credential.broker',
 ]);
+
+function isSandboxCapability(
+  value: ProviderRuntimeCapabilityId
+): value is SandboxProviderCapabilityId {
+  return SANDBOX_CAPABILITY_IDS.has(value as SandboxProviderCapabilityId);
+}
 
 function sandboxCapabilityArray(value: unknown): SandboxProviderCapabilityId[] {
   return stringArray(value).filter((item): item is SandboxProviderCapabilityId =>
@@ -680,6 +823,15 @@ function pathContains(root: string, workspacePath: string): boolean {
 function uniqueSorted(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) =>
     a.localeCompare(b)
+  );
+}
+
+function uniqueManifests(manifests: ProviderRuntimeManifest[]): ProviderRuntimeManifest[] {
+  const byDigest = new Map<string, ProviderRuntimeManifest>();
+  for (const manifest of manifests) byDigest.set(manifest.digest, manifest);
+  return Array.from(byDigest.values()).sort(
+    (left, right) =>
+      left.provider.localeCompare(right.provider) || left.digest.localeCompare(right.digest)
   );
 }
 

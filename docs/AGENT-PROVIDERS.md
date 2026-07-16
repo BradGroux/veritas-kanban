@@ -42,6 +42,29 @@ They do not imply that adjacent roadmap work already exists. For example,
 provider-neutral approvals, reattachment, follow-up/fork/steer controls, and MCP
 governance remain unsupported or unknown until their dedicated issues land.
 
+Agents and supervisors can register the same validated manifest with
+`POST /api/agents/register` and refresh it through the heartbeat endpoint. Host
+provider, model, `tool.*`, and sandbox posture is derived only from those
+manifests. Legacy free-form registration fields remain visible but are not
+trusted for runtime requirements. Route and host-preview requests can declare
+`requiredRuntimeCapabilities`; `supported` evidence qualifies, `advisory`
+evidence qualifies with a warning, and `unsupported`, `unknown`, missing, or
+failed-probe evidence rejects the candidate. All requirements must be satisfied
+by one manifest, so capabilities are never composed across providers.
+Self-registration requires an authenticated agent key/token whose identity
+matches the registry agent ID; operators with `agent:write` can register on an
+agent's behalf. Unknown request fields and unredacted secret-like evidence are
+rejected. Only registrations with a current five-minute heartbeat qualify for
+routing. Probe-evidence age enforcement is completed by #887; until then,
+operators must refresh the manifest whenever provider identity or evidence
+changes.
+
+Host previews fail closed on a bare `sandboxPresetId` until #887 resolves each
+preset control through the same manifest evaluator. For a capability-only
+preview during this intermediate contract, omit the preset ID and provide the
+required filesystem, network, environment, and credential capability IDs
+directly.
+
 ## Sandbox Policy Presets
 
 Use **Settings -> Agents -> Sandbox Policies** to manage reusable filesystem, network, environment, and credential controls for agent execution. Built-in presets are immutable; custom presets can be created, edited, disabled, or deleted.

@@ -11,12 +11,17 @@ vi.mock('../../storage/fs-helpers.js', () => ({
   readFileSync: vi.fn().mockReturnValue('{}'),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  rename: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Must import after mock
 const { getAgentRegistryService, disposeAgentRegistryService, createTaskSyncToken } =
   await import('../../services/agent-registry-service.js');
 import type { RegisteredAgent, TaskSyncContext } from '../../services/agent-registry-service.js';
+import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
+import { existsSync, readFileSync } from '../../storage/fs-helpers.js';
 
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
 const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
@@ -25,6 +30,8 @@ describe('AgentRegistryService', () => {
   beforeEach(() => {
     // Ensure fresh instance for each test
     disposeAgentRegistryService();
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(readFileSync).mockReturnValue('{}');
   });
 
   afterEach(() => {
@@ -114,6 +121,77 @@ describe('AgentRegistryService', () => {
         session: 'def',
         newField: true,
       });
+    });
+
+    it('validates, freezes, and preserves the runtime manifest on re-register', () => {
+      const service = getAgentRegistryService();
+      const providerRuntimeManifest = providerRuntimeManifestFixture();
+      const first = service.register({
+        id: 'manifest-agent',
+        name: 'Manifest Agent',
+        providerRuntimeManifest,
+      });
+      const second = service.register({
+        id: 'manifest-agent',
+        name: 'Manifest Agent Updated',
+      });
+
+      expect(first.providerRuntimeManifest?.digest).toBe(providerRuntimeManifest.digest);
+      expect(Object.isFrozen(first.providerRuntimeManifest)).toBe(true);
+      expect(Object.isFrozen(first.providerRuntimeManifest?.capabilities)).toBe(true);
+      expect(second.providerRuntimeManifest?.digest).toBe(providerRuntimeManifest.digest);
+    });
+
+    it.each([{ provider: 'openclaw' }, { model: 'different-model' }, { version: '2.0.0' }])(
+      'invalidates preserved runtime evidence when identity changes: %o',
+      (identityChange) => {
+        const service = getAgentRegistryService();
+        service.register({
+          id: 'manifest-agent',
+          name: 'Manifest Agent',
+          provider: 'codex-cli',
+          model: 'gpt-5',
+          version: '1.0.0',
+          providerRuntimeManifest: providerRuntimeManifestFixture(),
+        });
+
+        const updated = service.register({
+          id: 'manifest-agent',
+          name: 'Manifest Agent',
+          ...identityChange,
+        });
+
+        expect(updated.providerRuntimeManifest).toBeUndefined();
+      }
+    );
+  });
+
+  describe('load()', () => {
+    it('ignores invalid persisted runtime evidence', () => {
+      const invalid = {
+        ...providerRuntimeManifestFixture(),
+        providerVersion: 'tampered-after-digest',
+      };
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          agents: {
+            persisted: {
+              id: 'persisted',
+              name: 'Persisted Agent',
+              capabilities: [],
+              status: 'idle',
+              registeredAt: '2026-07-15T12:00:00.000Z',
+              lastHeartbeat: '2026-07-15T12:00:00.000Z',
+              providerRuntimeManifest: invalid,
+            },
+          },
+        })
+      );
+
+      const service = getAgentRegistryService();
+
+      expect(service.get('persisted')?.providerRuntimeManifest).toBeUndefined();
     });
   });
 
@@ -232,6 +310,24 @@ describe('AgentRegistryService', () => {
         session: 'abc',
         ping: expect.any(Number),
       });
+    });
+
+    it('replaces the runtime manifest on heartbeat', () => {
+      const service = getAgentRegistryService();
+      const first = providerRuntimeManifestFixture({ providerVersion: 'fixture 1.0.0' });
+      const upgraded = providerRuntimeManifestFixture({ providerVersion: 'fixture 2.0.0' });
+      service.register({
+        id: 'manifest-agent',
+        name: 'Manifest Agent',
+        providerRuntimeManifest: first,
+      });
+
+      const updated = service.heartbeat('manifest-agent', {
+        providerRuntimeManifest: upgraded,
+      });
+
+      expect(updated?.providerRuntimeManifest?.digest).toBe(upgraded.digest);
+      expect(updated?.providerRuntimeManifest?.providerVersion).toBe('fixture 2.0.0');
     });
   });
 

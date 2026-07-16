@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   race-safe version-skew cache invalidation, canonical immutable run snapshots
   and digests, complete capability posture, and attempt/history/trace/log
   persistence (#885).
+- Added validated runtime-manifest registration and heartbeat refresh, custom
+  provider discovery, manifest-authoritative host posture, and provider-neutral
+  required-capability routing with structured evidence for every attempted
+  primary, fallback, or rejected candidate (#886).
 - Added an admin-governed SQLite journal maintenance workflow with non-mutating
   previews, restart-time exclusive conversion, verified backups, durable stage
   journals, forward-only crash recovery, integrity verification, in-place mode
@@ -25,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Hermes to normalized provider profiles and Settings selectors, and made
   explicitly configured providers without an executable task adapter fail
   closed instead of silently dispatching through OpenClaw (#885).
+- Made host provider, model, tool, and sandbox capability decisions consume
+  validated manifests. Legacy free-form registration posture remains visible
+  but cannot satisfy required runtime capabilities. Runtime evidence writes are
+  identity-bound, reject unredacted secrets and misspelled fields, expire with
+  heartbeat liveness, and invalidate when provider identity changes. Unresolved
+  sandbox presets fail closed instead of borrowing aggregate host signals
+  (#886).
 - Classified the authoritative SQLite filesystem before database open, limited
   WAL to recognized durable local filesystems, refused known-unsafe and unknown
   storage before creating database sidecars, and exposed redacted filesystem,

@@ -7,6 +7,8 @@ import {
   type AppConfig,
 } from '@veritas-kanban/shared';
 import type { AgentHealthStatus } from '../services/agent-health-service';
+import type { RegisteredAgent } from '../services/agent-registry-service.js';
+import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 // Mock ConfigService
 const mockGetConfig = vi.fn();
@@ -120,6 +122,21 @@ function requireFallbackResult(
   return result;
 }
 
+function registeredAgent(
+  id: string,
+  providerRuntimeManifest = providerRuntimeManifestFixture()
+): RegisteredAgent {
+  return {
+    id,
+    name: id,
+    capabilities: [],
+    providerRuntimeManifest,
+    status: 'idle',
+    registeredAt: '2026-07-15T12:00:00.000Z',
+    lastHeartbeat: new Date().toISOString(),
+  };
+}
+
 describe('AgentRoutingService', () => {
   let service: AgentRoutingService;
 
@@ -165,6 +182,234 @@ describe('AgentRoutingService', () => {
       expect(result.fallback).toBe('amp');
       expect(result.rule).toBe('code-high');
       expect(result.reason).toContain('High-priority code');
+    });
+
+    it('routes to a manifest that supports every required runtime capability', async () => {
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            registeredAgent(
+              'claude-code',
+              providerRuntimeManifestFixture({
+                models: ['opus'],
+                capabilityStates: { 'run.resume': 'supported' },
+              })
+            ),
+          ],
+        }
+      );
+
+      const result = await service.resolveAgentWithTrace(
+        { type: 'code', priority: 'high' },
+        { requiredRuntimeCapabilities: ['run.start', 'run.resume'] }
+      );
+
+      expect(result.result.agent).toBe('claude-code');
+      expect(result.result.runtimeSelection).toMatchObject({
+        compatible: true,
+        selectedManifest: { advisory: false },
+      });
+    });
+
+    it('routes with a warning when the only matching evidence is advisory', async () => {
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            registeredAgent(
+              'claude-code',
+              providerRuntimeManifestFixture({
+                models: ['opus'],
+                capabilityStates: { 'run.resume': 'advisory' },
+              })
+            ),
+          ],
+        }
+      );
+
+      const result = await service.resolveAgentWithTrace(
+        { type: 'code', priority: 'high' },
+        { requiredRuntimeCapabilities: ['run.resume'] }
+      );
+
+      expect(result.result.agent).toBe('claude-code');
+      expect(result.result.runtimeSelection?.selectedManifest?.advisory).toBe(true);
+      expect(result.result.reason).toContain('advisory capability evidence');
+    });
+
+    it('rejects an unsupported primary and selects a capable fallback', async () => {
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            registeredAgent(
+              'claude-code',
+              providerRuntimeManifestFixture({
+                models: ['opus'],
+                capabilityStates: { 'run.resume': 'unsupported' },
+              })
+            ),
+            registeredAgent(
+              'amp',
+              providerRuntimeManifestFixture({
+                provider: 'custom-amp',
+                capabilityStates: { 'run.resume': 'supported' },
+              })
+            ),
+          ],
+        }
+      );
+
+      const result = await service.resolveAgentWithTrace(
+        { type: 'code', priority: 'high' },
+        { requiredRuntimeCapabilities: ['run.resume'] }
+      );
+
+      expect(result.result.agent).toBe('amp');
+      expect(result.result.reason).toContain('unavailable');
+      expect(result.result.runtimeSelection?.compatible).toBe(true);
+      expect(result.result.runtimeCandidates).toHaveLength(2);
+      expect(result.result.runtimeCandidates).toEqual([
+        expect.objectContaining({ agent: 'claude-code', available: false, selected: false }),
+        expect.objectContaining({ agent: 'amp', available: true, selected: true }),
+      ]);
+    });
+
+    it('routes a directly registered concrete custom manifest for a custom provider category', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      const claude = requireAgent(config, 'claude-code');
+      claude.provider = 'custom';
+      mockGetConfig.mockResolvedValue(config);
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            registeredAgent(
+              'claude-code',
+              providerRuntimeManifestFixture({
+                provider: 'custom-runtime',
+                models: ['opus'],
+                capabilityStates: { 'run.resume': 'supported' },
+              })
+            ),
+          ],
+        }
+      );
+
+      const result = await service.resolveAgentWithTrace(
+        { type: 'code', priority: 'high' },
+        { requiredRuntimeCapabilities: ['run.resume'] }
+      );
+
+      expect(result.result.agent).toBe('claude-code');
+      expect(result.result.runtimeSelection?.selectedManifest?.provider).toBe('custom-runtime');
+    });
+
+    it('does not borrow runtime evidence from another agent sharing a provider', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      requireAgent(config, 'claude-code').provider = 'codex-cli';
+      mockGetConfig.mockResolvedValue(config);
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            registeredAgent(
+              'unrelated-agent',
+              providerRuntimeManifestFixture({
+                provider: 'codex-cli',
+                models: ['opus'],
+                capabilityStates: { 'run.resume': 'supported' },
+              })
+            ),
+          ],
+        }
+      );
+
+      const error = (await service
+        .resolveAgentWithTrace(
+          { type: 'code', priority: 'high' },
+          { requiredRuntimeCapabilities: ['run.resume'] }
+        )
+        .catch((caught: unknown) => caught)) as {
+        statusCode: number;
+        details: {
+          runtimeCandidates: Array<{ selected: boolean; selection: { compatible: boolean } }>;
+        };
+      };
+
+      expect(error.statusCode).toBe(409);
+      expect(error.details.runtimeCandidates.length).toBeGreaterThan(0);
+      expect(error.details.runtimeCandidates.every((candidate) => !candidate.selected)).toBe(true);
+      expect(
+        error.details.runtimeCandidates.every((candidate) => !candidate.selection.compatible)
+      ).toBe(true);
+    });
+
+    it('fails closed on ambiguous name matches and stale registrations', async () => {
+      const duplicateName = 'Claude Code';
+      const stale = registeredAgent('claude-code');
+      stale.lastHeartbeat = '2026-01-01T00:00:00.000Z';
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        {
+          list: () => [
+            stale,
+            { ...registeredAgent('duplicate-a'), name: duplicateName },
+            { ...registeredAgent('duplicate-b'), name: duplicateName },
+          ],
+        }
+      );
+
+      await expect(
+        service.resolveAgentWithTrace(
+          { type: 'code', priority: 'high' },
+          { requiredRuntimeCapabilities: ['run.start'] }
+        )
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        details: expect.objectContaining({
+          runtimeCandidates: expect.arrayContaining([
+            expect.objectContaining({
+              reason:
+                'Registered agent "claude-code" is offline or outside the five-minute heartbeat window.',
+            }),
+          ]),
+        }),
+      });
+    });
+
+    it('fails closed when no candidate has a registered runtime manifest', async () => {
+      service = new AgentRoutingService(
+        undefined,
+        { checkAgent: mockCheckAgent },
+        { list: () => [] }
+      );
+
+      const error = (await service
+        .resolveAgentWithTrace(
+          { type: 'code', priority: 'high' },
+          { requiredRuntimeCapabilities: ['run.resume'] }
+        )
+        .catch((caught: unknown) => caught)) as {
+        statusCode: number;
+        details: {
+          reason: string;
+          runtimeCandidates: Array<{ selected: boolean }>;
+        };
+      };
+
+      expect(error.statusCode).toBe(409);
+      expect(error.details.reason).toBe(
+        'No registry identity matches configured agent "claude-code".'
+      );
+      expect(error.details.runtimeCandidates.every((candidate) => !candidate.selected)).toBe(true);
     });
 
     it('returns a governance trace with evaluated and matched routing rules', async () => {

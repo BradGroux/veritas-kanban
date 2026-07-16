@@ -7,6 +7,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { errorHandler } from '../../middleware/error-handler.js';
+import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
+import { calculateProviderRuntimeManifestDigest } from '../../utils/provider-runtime-manifest-digest.js';
+import type { AuthContext, AuthenticatedRequest } from '../../middleware/auth.js';
 
 const routeMocks = vi.hoisted(() => ({
   getAgentStatus: vi.fn(() => ({
@@ -24,6 +27,9 @@ vi.mock('../../storage/fs-helpers.js', () => ({
   readFileSync: vi.fn().mockReturnValue('{}'),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  rename: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../services/task-service.js', () => ({
@@ -43,6 +49,7 @@ const { agentRegistryRoutes } = await import('../../routes/agent-registry.js');
 
 describe('Agent Registry Routes', () => {
   let app: express.Express;
+  let authContext: AuthContext;
 
   beforeEach(() => {
     disposeAgentRegistryService();
@@ -53,9 +60,18 @@ describe('Agent Registry Routes', () => {
     });
     routeMocks.getEvents.mockResolvedValue([]);
     routeMocks.listTasks.mockResolvedValue([]);
+    authContext = {
+      role: 'admin',
+      isLocalhost: true,
+      authMethod: 'disabled',
+    };
 
     app = express();
     app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as AuthenticatedRequest).auth = authContext;
+      next();
+    });
     app.use('/api/agents/register', agentRegistryRoutes);
     app.use(errorHandler);
   });
@@ -124,6 +140,144 @@ describe('Agent Registry Routes', () => {
       expect(res.body.id).toBe('minimal-agent');
       expect(res.body.capabilities).toEqual([]);
     });
+
+    it('registers a validated custom provider runtime manifest', async () => {
+      const providerRuntimeManifest = providerRuntimeManifestFixture({
+        provider: 'custom-runtime',
+        adapter: 'custom-adapter',
+        models: ['custom-model'],
+      });
+
+      const res = await request(app).post('/api/agents/register').send({
+        id: 'custom-agent',
+        name: 'Custom Agent',
+        providerRuntimeManifest,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.providerRuntimeManifest).toMatchObject({
+        provider: 'custom-runtime',
+        adapter: 'custom-adapter',
+        digest: providerRuntimeManifest.digest,
+      });
+    });
+
+    it('rejects forged or incomplete provider runtime manifests', async () => {
+      const valid = providerRuntimeManifestFixture();
+      const forged = { ...valid, providerVersion: 'tampered' };
+      const incompletePayload = {
+        ...valid,
+        capabilities: valid.capabilities.slice(0, 1),
+      };
+      const incomplete = {
+        ...incompletePayload,
+        digest: calculateProviderRuntimeManifestDigest(incompletePayload),
+      };
+
+      const forgedResponse = await request(app).post('/api/agents/register').send({
+        id: 'forged-agent',
+        name: 'Forged Agent',
+        providerRuntimeManifest: forged,
+      });
+      const incompleteResponse = await request(app).post('/api/agents/register').send({
+        id: 'incomplete-agent',
+        name: 'Incomplete Agent',
+        providerRuntimeManifest: incomplete,
+      });
+
+      expect(forgedResponse.status).toBe(400);
+      expect(incompleteResponse.status).toBe(400);
+    });
+
+    it('rejects unredacted secrets in external runtime evidence', async () => {
+      const valid = providerRuntimeManifestFixture();
+      const unsafePayload = {
+        ...valid,
+        capabilities: valid.capabilities.map((capability, index) =>
+          index === 0 ? { ...capability, reason: 'token=secret-value' } : capability
+        ),
+      };
+      const unsafe = {
+        ...unsafePayload,
+        digest: calculateProviderRuntimeManifestDigest(unsafePayload),
+      };
+
+      const response = await request(app).post('/api/agents/register').send({
+        id: 'unsafe-agent',
+        name: 'Unsafe Agent',
+        providerRuntimeManifest: unsafe,
+      });
+
+      expect(response.status).toBe(400);
+      expect(JSON.stringify(response.body)).not.toContain('secret-value');
+    });
+
+    it('rejects misspelled manifest fields instead of silently dropping evidence', async () => {
+      const response = await request(app).post('/api/agents/register').send({
+        id: 'typo-agent',
+        name: 'Typo Agent',
+        providerRuntimeManfiest: providerRuntimeManifestFixture(),
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('binds manifest writes to the authenticated agent identity', async () => {
+      authContext = {
+        role: 'agent',
+        keyName: 'other-agent',
+        isLocalhost: false,
+        authMethod: 'api-key',
+      };
+      const denied = await request(app).post('/api/agents/register').send({
+        id: 'custom-agent',
+        name: 'Custom Agent',
+        providerRuntimeManifest: providerRuntimeManifestFixture(),
+      });
+      expect(denied.status).toBe(403);
+
+      authContext.keyName = 'custom-agent';
+      const allowed = await request(app).post('/api/agents/register').send({
+        id: 'custom-agent',
+        name: 'Custom Agent',
+        providerRuntimeManifest: providerRuntimeManifestFixture(),
+      });
+      expect(allowed.status).toBe(201);
+    });
+
+    it('prevents another telemetry agent from replacing or clearing authoritative evidence', async () => {
+      const manifest = providerRuntimeManifestFixture();
+      await request(app).post('/api/agents/register').send({
+        id: 'protected-agent',
+        name: 'Protected Agent',
+        provider: 'codex-cli',
+        providerRuntimeManifest: manifest,
+      });
+      authContext = {
+        role: 'agent',
+        keyName: 'other-agent',
+        isLocalhost: false,
+        authMethod: 'api-key',
+      };
+
+      await request(app)
+        .post('/api/agents/register')
+        .send({
+          id: 'protected-agent',
+          name: 'Protected Agent',
+          provider: 'openclaw',
+        })
+        .expect(403);
+      await request(app)
+        .post('/api/agents/register/protected-agent/heartbeat')
+        .send({ status: 'online' })
+        .expect(403);
+      await request(app).delete('/api/agents/register/protected-agent').expect(403);
+
+      const record = await request(app).get('/api/agents/register/protected-agent').expect(200);
+      expect(record.body.provider).toBe('codex-cli');
+      expect(record.body.providerRuntimeManifest.digest).toBe(manifest.digest);
+    });
   });
 
   // ── Heartbeat ────────────────────────────────────────────────
@@ -163,6 +317,39 @@ describe('Agent Registry Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.metadata).toEqual({ ping: 12345 });
+    });
+
+    it('replaces the validated runtime manifest via heartbeat', async () => {
+      const first = providerRuntimeManifestFixture({ providerVersion: 'fixture 1.0.0' });
+      const upgraded = providerRuntimeManifestFixture({ providerVersion: 'fixture 2.0.0' });
+      await request(app).post('/api/agents/register').send({
+        id: 'manifest-agent',
+        name: 'Manifest Agent',
+        providerRuntimeManifest: first,
+      });
+
+      const res = await request(app)
+        .post('/api/agents/register/manifest-agent/heartbeat')
+        .send({ providerRuntimeManifest: upgraded });
+
+      expect(res.status).toBe(200);
+      expect(res.body.providerRuntimeManifest).toMatchObject({
+        providerVersion: 'fixture 2.0.0',
+        digest: upgraded.digest,
+      });
+    });
+
+    it('rejects a misspelled heartbeat manifest field', async () => {
+      await request(app).post('/api/agents/register').send({
+        id: 'manifest-agent',
+        name: 'Manifest Agent',
+      });
+
+      const response = await request(app)
+        .post('/api/agents/register/manifest-agent/heartbeat')
+        .send({ providerRuntimeManfiest: providerRuntimeManifestFixture() });
+
+      expect(response.status).toBe(400);
     });
 
     it('should clear task when status is idle', async () => {

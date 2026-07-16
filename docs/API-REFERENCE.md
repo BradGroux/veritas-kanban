@@ -244,7 +244,7 @@ GET /api/tasks
 
 Returns all active tasks. Supports query filters.
 
-**Response** `200`:
+**Response** `200` (abridged manifest assessments):
 
 ```json
 {
@@ -1799,7 +1799,8 @@ Accepts either a task ID or ad-hoc metadata:
 
 ```json
 {
-  "taskId": "TASK-001"
+  "taskId": "TASK-001",
+  "requiredRuntimeCapabilities": ["run.resume", "tool.mcp"]
 }
 ```
 
@@ -1810,7 +1811,8 @@ Accepts either a task ID or ad-hoc metadata:
   "type": "bug",
   "priority": "high",
   "project": "rubicon",
-  "subtaskCount": 3
+  "subtaskCount": 3,
+  "requiredRuntimeCapabilities": ["run.resume", "tool.mcp"]
 }
 ```
 
@@ -1819,9 +1821,49 @@ Accepts either a task ID or ad-hoc metadata:
 ```json
 {
   "agent": "codex-1",
-  "model": "claude-sonnet-4.5",
+  "model": "gpt-5.5",
   "rule": "high-priority-bugs",
-  "confidence": 0.95,
+  "reason": "Matched rule: High priority bugs. Selected manifest sha256:... with supported capability evidence.",
+  "runtimeSelection": {
+    "requiredCapabilities": ["run.resume", "tool.mcp"],
+    "compatible": true,
+    "selectedManifest": {
+      "manifestDigest": "sha256:...",
+      "provider": "codex-cli",
+      "compatible": true
+    },
+    "candidates": [
+      {
+        "manifestDigest": "sha256:...",
+        "provider": "codex-cli",
+        "compatible": true
+      }
+    ]
+  },
+  "runtimeCandidates": [
+    {
+      "agent": "codex-1",
+      "available": true,
+      "selected": true,
+      "reason": "Agent is healthy",
+      "selection": {
+        "requiredCapabilities": ["run.resume", "tool.mcp"],
+        "compatible": true,
+        "selectedManifest": {
+          "manifestDigest": "sha256:...",
+          "provider": "codex-cli",
+          "compatible": true
+        },
+        "candidates": [
+          {
+            "manifestDigest": "sha256:...",
+            "provider": "codex-cli",
+            "compatible": true
+          }
+        ]
+      }
+    }
+  ],
   "traceId": "govtrace_1760000000000_ab12cd"
 }
 ```
@@ -1829,6 +1871,10 @@ Accepts either a task ID or ad-hoc metadata:
 When an enabled team roster exists, `/api/agents/route` evaluates the roster
 before legacy routing rules. Roster-selected responses use a `team-roster:`
 rule prefix.
+When runtime requirements are present, `runtimeCandidates` preserves every
+agent manifest evaluation attempted by the rule/fallback chain. Exactly one
+entry is marked `selected` on success; terminal `409 Conflict` details preserve
+all rejected entries and their structured manifest assessments.
 
 ### Get/Update Routing Configuration
 
@@ -1912,6 +1958,51 @@ capability. A provider version/build change invalidates cached conformance
 evidence. Failed probes and unknown versions are not positively cached.
 Explicitly configured providers without a task execution adapter fail with
 `409 Conflict` instead of falling back to OpenClaw.
+
+### Runtime Manifest Registration And Routing
+
+`POST /api/agents/register` and
+`POST /api/agents/register/:id/heartbeat` accept an optional
+`providerRuntimeManifest` object using the contract above. The server validates
+the complete capability inventory and recomputes the canonical digest before
+storing it. Secret-like evidence and unknown request fields are rejected rather
+than silently stored or stripped. Invalid persisted manifests are ignored on
+restart so capability routing fails closed. An agent may write its own manifest
+when its authenticated key/token identity matches the registry ID; otherwise
+`agent:write` is required in addition to registry write access. Every later
+mutation of that authoritative record remains identity-bound. Changing the
+registered provider, model, or version without replacement evidence invalidates
+the prior manifest.
+
+`POST /api/agents/route` and `POST /api/agents/hosts/preview` accept:
+
+```json
+{
+  "requiredRuntimeCapabilities": ["run.resume", "tool.mcp"]
+}
+```
+
+Host provider, model, `tool.*`, and sandbox posture is aggregated from validated
+manifests. Legacy registry fields are returned as display-only posture and
+cannot satisfy these requirements. A single manifest must match the requested
+provider and model and satisfy every required capability. `supported` evidence
+qualifies; `advisory` qualifies with a warning; `unsupported`, `unknown`,
+missing, or failed-probe evidence rejects the candidate with structured reasons.
+Custom provider identifiers use the same schema and selection path without a
+central provider branch. Registration enables discovery and routing only; an
+execution adapter is still required before launch.
+
+Only live registrations with a heartbeat no older than five minutes contribute
+runtime evidence. `requiredTools` values using `tool.*` are evaluated through
+the same single-manifest path; legacy named tools cannot qualify a host. Probe
+timestamp freshness and action-level enforcement are completed by #887, so
+agents must refresh evidence when their provider runtime changes. A bare
+`sandboxPresetId` does not qualify a host in this intermediate contract because
+the preset's individual controls have not yet been resolved into manifest
+requirements. For a capability-only preview, omit the preset ID and supply the
+relevant filesystem, network, environment, and credential IDs in
+`requiredRuntimeCapabilities`; #887 wires actual preset resolution into the
+same evaluator.
 
 ---
 

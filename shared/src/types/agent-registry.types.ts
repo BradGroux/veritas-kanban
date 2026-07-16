@@ -50,6 +50,8 @@ export interface AgentRegistrationInput {
   version?: string;
   /** Optional metadata (environment, host, session label, etc.). */
   metadata?: Record<string, unknown>;
+  /** Validated provider runtime evidence used for routing and enforcement. */
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
 }
 
 /** A registered agent record (stored in the registry). */
@@ -82,6 +84,8 @@ export interface AgentHeartbeatInput {
   capabilities?: AgentCapability[];
   /** Arbitrary metadata update (merged with existing). */
   metadata?: Record<string, unknown>;
+  /** Refreshed provider runtime evidence, if the provider identity changed. */
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
 }
 
 // ─── Sessions ────────────────────────────────────────────────────

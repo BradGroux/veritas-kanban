@@ -20,16 +20,31 @@ const router: RouterType = Router();
 
 // ─── Validation Schemas ──────────────────────────────────────────
 
-const routeByTaskIdSchema = z.object({
-  taskId: z.string().min(1),
-});
+const runtimeCapabilityIdSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[a-z][a-z0-9.-]*$/);
 
-const routeByMetadataSchema = z.object({
-  type: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
-  project: z.string().optional(),
-  subtaskCount: z.number().int().nonnegative().optional(),
-});
+const requiredRuntimeCapabilitiesSchema = z.array(runtimeCapabilityIdSchema).max(64).optional();
+
+const routeByTaskIdSchema = z
+  .object({
+    taskId: z.string().min(1),
+    requiredRuntimeCapabilities: requiredRuntimeCapabilitiesSchema,
+  })
+  .strict();
+
+const routeByMetadataSchema = z
+  .object({
+    type: z.string().optional(),
+    priority: z.enum(['low', 'medium', 'high']).optional(),
+    project: z.string().optional(),
+    subtaskCount: z.number().int().nonnegative().optional(),
+    requiredRuntimeCapabilities: requiredRuntimeCapabilitiesSchema,
+  })
+  .strict();
 
 const routingMatchSchema = z.object({
   type: z.union([z.string(), z.array(z.string())]).optional(),
@@ -59,18 +74,21 @@ const routingConfigSchema = z.object({
   maxRetries: z.number().int().min(0).max(3),
 });
 
-const hostPreviewSchema = z.object({
-  agent: z.string().max(100).optional(),
-  provider: z.string().max(80).optional(),
-  model: z.string().max(100).optional(),
-  workspacePath: z.string().max(1000).optional(),
-  requiredTools: z.array(z.string().max(80)).max(50).optional(),
-  verificationGates: z.array(z.string().max(200)).max(50).optional(),
-  sandboxPresetId: z.string().max(80).optional(),
-  manualHostId: z.string().max(120).optional(),
-  projectDefaultHostId: z.string().max(120).optional(),
-  autoRouting: z.boolean().optional(),
-});
+const hostPreviewSchema = z
+  .object({
+    agent: z.string().max(100).optional(),
+    provider: z.string().max(80).optional(),
+    model: z.string().max(100).optional(),
+    workspacePath: z.string().max(1000).optional(),
+    requiredTools: z.array(z.string().max(80)).max(50).optional(),
+    requiredRuntimeCapabilities: requiredRuntimeCapabilitiesSchema,
+    verificationGates: z.array(z.string().max(200)).max(50).optional(),
+    sandboxPresetId: z.string().max(80).optional(),
+    manualHostId: z.string().max(120).optional(),
+    projectDefaultHostId: z.string().max(120).optional(),
+    autoRouting: z.boolean().optional(),
+  })
+  .strict();
 
 // ─── Routes ──────────────────────────────────────────────────────
 
@@ -94,7 +112,10 @@ router.post(
       if (!task) {
         throw new NotFoundError('Task not found');
       }
-      const result = await routing.resolveAgentWithTrace(task, { taskId: taskIdParse.data.taskId });
+      const result = await routing.resolveAgentWithTrace(task, {
+        taskId: taskIdParse.data.taskId,
+        requiredRuntimeCapabilities: taskIdParse.data.requiredRuntimeCapabilities,
+      });
       const trace = await getGovernanceTraceService().record(result.trace);
       return res.json({ ...result.result, traceId: trace.id });
     }
@@ -102,20 +123,23 @@ router.post(
     // Fall back to metadata
     const metaParse = routeByMetadataSchema.safeParse(req.body);
     if (metaParse.success) {
-      const { type, priority, project, subtaskCount } = metaParse.data;
-      const result = await routing.resolveAgentWithTrace({
-        type: type || 'feature',
-        priority: priority || 'medium',
-        project,
-        subtasks: subtaskCount
-          ? Array.from({ length: subtaskCount }, (_, i) => ({
-              id: `stub_${i}`,
-              title: '',
-              completed: false,
-              created: new Date().toISOString(),
-            }))
-          : undefined,
-      });
+      const { type, priority, project, subtaskCount, requiredRuntimeCapabilities } = metaParse.data;
+      const result = await routing.resolveAgentWithTrace(
+        {
+          type: type || 'feature',
+          priority: priority || 'medium',
+          project,
+          subtasks: subtaskCount
+            ? Array.from({ length: subtaskCount }, (_, i) => ({
+                id: `stub_${i}`,
+                title: '',
+                completed: false,
+                created: new Date().toISOString(),
+              }))
+            : undefined,
+        },
+        { requiredRuntimeCapabilities }
+      );
       const trace = await getGovernanceTraceService().record(result.trace);
       return res.json({ ...result.result, traceId: trace.id });
     }

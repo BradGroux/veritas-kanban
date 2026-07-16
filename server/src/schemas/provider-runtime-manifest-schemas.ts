@@ -6,6 +6,7 @@ import {
   type ProviderRuntimeManifest,
 } from '@veritas-kanban/shared';
 import { calculateProviderRuntimeManifestDigest } from '../utils/provider-runtime-manifest-digest.js';
+import { containsUnredactedProviderRuntimeSecret } from '../utils/provider-runtime-manifest-sanitize.js';
 
 const identifierSchema = z
   .string()
@@ -79,6 +80,30 @@ export const ProviderRuntimeManifestSchema = z
         path: ['digest'],
         message: 'Provider runtime manifest digest does not match its canonical payload',
       });
+    }
+    const sensitiveFields: Array<{ path: (string | number)[]; value: string }> = [
+      { path: ['providerVersion'], value: manifest.providerVersion },
+      ...(manifest.providerBuild
+        ? [{ path: ['providerBuild'], value: manifest.providerBuild }]
+        : []),
+      { path: ['probe', 'source'], value: manifest.probe.source },
+      ...manifest.probe.diagnostics.map((value, index) => ({
+        path: ['probe', 'diagnostics', index],
+        value,
+      })),
+      ...manifest.capabilities.map((capability, index) => ({
+        path: ['capabilities', index, 'reason'],
+        value: capability.reason,
+      })),
+    ];
+    for (const field of sensitiveFields) {
+      if (containsUnredactedProviderRuntimeSecret(field.value)) {
+        context.addIssue({
+          code: 'custom',
+          path: field.path,
+          message: 'Provider runtime evidence must redact credentials and secrets before ingestion',
+        });
+      }
     }
   });
 

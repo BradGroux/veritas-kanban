@@ -3,7 +3,11 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { routingApi } from '@/lib/api/agent';
-import type { AgentRoutingConfig, RoutingResult } from '@veritas-kanban/shared';
+import type {
+  AgentRoutingConfig,
+  ProviderRuntimeCapabilityId,
+  RoutingResult,
+} from '@veritas-kanban/shared';
 
 /** Fetch the current routing config */
 export function useRoutingConfig() {
@@ -26,10 +30,13 @@ export function useUpdateRoutingConfig() {
 }
 
 /** Resolve agent for an existing task */
-export function useResolveAgent(taskId: string | undefined) {
+export function useResolveAgent(
+  taskId: string | undefined,
+  requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] = []
+) {
   return useQuery<RoutingResult>({
-    queryKey: ['routing-resolve', taskId],
-    queryFn: () => routingApi.resolveForTask(taskId!),
+    queryKey: ['routing-resolve', taskId, requiredRuntimeCapabilities],
+    queryFn: () => routingApi.resolveForTask(taskId!, requiredRuntimeCapabilities),
     enabled: !!taskId,
     staleTime: 30_000,
   });
@@ -42,6 +49,7 @@ export function useResolveAgentForMetadata(
     priority?: string;
     project?: string;
     subtaskCount?: number;
+    requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   } | null
 ) {
   return useQuery<RoutingResult>({

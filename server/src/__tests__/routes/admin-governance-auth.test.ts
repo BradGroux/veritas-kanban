@@ -90,6 +90,7 @@ import policyRoutes from '../../routes/policies.js';
 import toolPolicyRoutes from '../../routes/tool-policies.js';
 import { agentPermissionRoutes } from '../../routes/agent-permissions.js';
 import { agentRoutingRoutes } from '../../routes/agent-routing.js';
+import { errorHandler } from '../../middleware/error-handler.js';
 
 const policyBody = {
   id: 'agent-created-policy',
@@ -124,6 +125,7 @@ function createApp() {
   app.use('/api/tool-policies', toolPolicyRoutes);
   app.use('/api/agents/permissions', agentPermissionRoutes);
   app.use('/api/agents', agentRoutingRoutes);
+  app.use(errorHandler);
   return app;
 }
 
@@ -376,11 +378,72 @@ describe('admin-only governance routes', () => {
       .send({ type: 'feature', priority: 'medium' })
       .expect(200);
 
-    expect(mockAgentRoutingService.resolveAgentWithTrace).toHaveBeenCalledWith({
-      type: 'feature',
-      priority: 'medium',
-      project: undefined,
-      subtasks: undefined,
+    expect(mockAgentRoutingService.resolveAgentWithTrace).toHaveBeenCalledWith(
+      {
+        type: 'feature',
+        priority: 'medium',
+        project: undefined,
+        subtasks: undefined,
+      },
+      { requiredRuntimeCapabilities: undefined }
+    );
+  });
+
+  it('passes required runtime capabilities through ad-hoc routing requests', async () => {
+    const app = createApp();
+
+    await request(app)
+      .post('/api/agents/route')
+      .set('X-API-Key', 'agent-key')
+      .send({
+        type: 'feature',
+        priority: 'medium',
+        requiredRuntimeCapabilities: ['run.resume', 'tool.mcp'],
+      })
+      .expect(200);
+
+    expect(mockAgentRoutingService.resolveAgentWithTrace).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'feature', priority: 'medium' }),
+      { requiredRuntimeCapabilities: ['run.resume', 'tool.mcp'] }
+    );
+  });
+
+  it('passes required runtime capabilities through task routing requests', async () => {
+    const app = createApp();
+    const task = { id: 'task-1', type: 'feature', priority: 'medium' };
+    mockTaskService.getTask.mockResolvedValue(task);
+
+    await request(app)
+      .post('/api/agents/route')
+      .set('X-API-Key', 'agent-key')
+      .send({ taskId: 'task-1', requiredRuntimeCapabilities: ['run.resume'] })
+      .expect(200);
+
+    expect(mockAgentRoutingService.resolveAgentWithTrace).toHaveBeenCalledWith(task, {
+      taskId: 'task-1',
+      requiredRuntimeCapabilities: ['run.resume'],
     });
+  });
+
+  it('rejects misspelled capability fields and malformed task routing bodies', async () => {
+    const app = createApp();
+
+    await request(app)
+      .post('/api/agents/route')
+      .set('X-API-Key', 'agent-key')
+      .send({ type: 'feature', requiredRuntimeCapabilites: ['run.resume'] })
+      .expect(400);
+    await request(app)
+      .post('/api/agents/route')
+      .set('X-API-Key', 'agent-key')
+      .send({ taskId: '', type: 'feature' })
+      .expect(400);
+    await request(app)
+      .post('/api/agents/hosts/preview')
+      .set('X-API-Key', 'agent-key')
+      .send({ requiredRuntimeCapabilites: ['run.resume'] })
+      .expect(400);
+
+    expect(mockAgentRoutingService.resolveAgentWithTrace).not.toHaveBeenCalled();
   });
 });

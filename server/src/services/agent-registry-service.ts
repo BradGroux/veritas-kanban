@@ -20,6 +20,8 @@ import {
 } from '../storage/fs-helpers.js';
 import { createLogger } from '../lib/logger.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import type { ProviderRuntimeManifest } from '@veritas-kanban/shared';
+import { parseProviderRuntimeManifest } from '../schemas/provider-runtime-manifest-schemas.js';
 
 const log = createLogger('agent-registry');
 
@@ -47,6 +49,8 @@ export interface RegisteredAgent {
   version?: string;
   /** Freeform metadata */
   metadata?: Record<string, unknown>;
+  /** Validated provider runtime evidence used for capability decisions. */
+  providerRuntimeManifest?: ProviderRuntimeManifest;
   /** Current status */
   status: 'online' | 'busy' | 'idle' | 'offline';
   /** ISO timestamp of registration */
@@ -69,6 +73,7 @@ export interface AgentRegistration {
   capabilities?: AgentCapability[];
   version?: string;
   metadata?: Record<string, unknown>;
+  providerRuntimeManifest?: ProviderRuntimeManifest;
   sessionKey?: string;
 }
 
@@ -77,6 +82,7 @@ export interface AgentHeartbeat {
   currentTaskId?: string;
   currentTaskTitle?: string;
   metadata?: Record<string, unknown>;
+  providerRuntimeManifest?: ProviderRuntimeManifest;
 }
 
 export interface AgentRegistryData {
@@ -128,7 +134,13 @@ export interface TaskSyncSnapshot {
 // ─── Configuration ───────────────────────────────────────────────
 
 /** How long before an agent is considered offline (no heartbeat) */
-const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const AGENT_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+export function registeredAgentIsLive(agent: RegisteredAgent, now = Date.now()): boolean {
+  if (agent.status === 'offline') return false;
+  const lastHeartbeat = Date.parse(agent.lastHeartbeat);
+  return Number.isFinite(lastHeartbeat) && now - lastHeartbeat <= AGENT_HEARTBEAT_TIMEOUT_MS;
+}
 
 /** How often to check for stale agents */
 const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -200,6 +212,9 @@ class AgentRegistryService {
   register(registration: AgentRegistration): RegisteredAgent {
     const existing = this.agents.get(registration.id);
     const now = new Date().toISOString();
+    const runtimeIdentityChanged = existing
+      ? registrationChangesRuntimeIdentity(registration, existing)
+      : false;
 
     const agent: RegisteredAgent = {
       id: registration.id,
@@ -209,6 +224,12 @@ class AgentRegistryService {
       capabilities: registration.capabilities ?? existing?.capabilities ?? [],
       version: registration.version ?? existing?.version,
       metadata: registration.metadata ?? existing?.metadata,
+      providerRuntimeManifest:
+        registration.providerRuntimeManifest !== undefined
+          ? immutableManifest(parseProviderRuntimeManifest(registration.providerRuntimeManifest))
+          : runtimeIdentityChanged
+            ? undefined
+            : existing?.providerRuntimeManifest,
       sessionKey: registration.sessionKey ?? existing?.sessionKey,
       status: 'online',
       registeredAt: existing?.registeredAt ?? now,
@@ -244,6 +265,11 @@ class AgentRegistryService {
     if (update?.currentTaskTitle !== undefined)
       agent.currentTaskTitle = update.currentTaskTitle || undefined;
     if (update?.metadata) agent.metadata = { ...agent.metadata, ...update.metadata };
+    if (update?.providerRuntimeManifest !== undefined) {
+      agent.providerRuntimeManifest = immutableManifest(
+        parseProviderRuntimeManifest(update.providerRuntimeManifest)
+      );
+    }
 
     this.agents.set(agentId, agent);
     this.persist();
@@ -527,8 +553,7 @@ class AgentRegistryService {
     for (const agent of this.agents.values()) {
       if (agent.status === 'offline') continue;
 
-      const lastBeat = new Date(agent.lastHeartbeat).getTime();
-      if (now - lastBeat > HEARTBEAT_TIMEOUT_MS) {
+      if (!registeredAgentIsLive(agent, now)) {
         agent.status = 'offline';
         changed = true;
         log.info(
@@ -579,7 +604,13 @@ class AgentRegistryService {
         const data = JSON.parse(raw) as AgentRegistryData;
         if (data.agents) {
           for (const [id, agent] of Object.entries(data.agents)) {
-            this.agents.set(id, agent);
+            const parsedManifest = agent.providerRuntimeManifest
+              ? safePersistedManifest(agent.providerRuntimeManifest, id)
+              : undefined;
+            this.agents.set(id, {
+              ...agent,
+              providerRuntimeManifest: parsedManifest,
+            });
           }
           log.info({ count: this.agents.size }, 'Agent registry loaded from disk');
         }
@@ -661,6 +692,56 @@ class AgentRegistryService {
     }
     await this.flushPersist();
   }
+}
+
+function safePersistedManifest(
+  manifest: unknown,
+  agentId: string
+): ProviderRuntimeManifest | undefined {
+  try {
+    return immutableManifest(parseProviderRuntimeManifest(manifest));
+  } catch (error) {
+    log.warn(
+      { agentId, error },
+      'Ignored invalid persisted provider runtime manifest; capability routing will fail closed'
+    );
+    return undefined;
+  }
+}
+
+function registrationChangesRuntimeIdentity(
+  registration: AgentRegistration,
+  existing: RegisteredAgent
+): boolean {
+  return (
+    suppliedValueChanged(registration.provider, existing.provider, true) ||
+    suppliedValueChanged(registration.model, existing.model, true) ||
+    suppliedValueChanged(registration.version, existing.version, false)
+  );
+}
+
+function suppliedValueChanged(
+  next: string | undefined,
+  current: string | undefined,
+  caseInsensitive: boolean
+): boolean {
+  if (next === undefined) return false;
+  const normalizedNext = next.trim();
+  const normalizedCurrent = current?.trim() ?? '';
+  return caseInsensitive
+    ? normalizedNext.toLowerCase() !== normalizedCurrent.toLowerCase()
+    : normalizedNext !== normalizedCurrent;
+}
+
+function immutableManifest(manifest: ProviderRuntimeManifest): ProviderRuntimeManifest {
+  return deepFreeze(structuredClone(manifest));
+}
+
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  return value;
 }
 
 // Singleton

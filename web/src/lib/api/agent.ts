@@ -9,6 +9,8 @@ import type {
   AgentRoutingConfig,
   RoutingResult,
   AgentBudgetPolicy,
+  ProviderRuntimeManifest,
+  ProviderRuntimeCapabilityId,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -116,6 +118,7 @@ export interface RegisteredAgent {
   provider?: string;
   capabilities?: Array<{ name: string; description?: string }>;
   version?: string;
+  providerRuntimeManifest?: ProviderRuntimeManifest;
   status: 'online' | 'offline' | 'busy' | 'idle';
   currentTask?: string;
   currentTaskTitle?: string;
@@ -169,11 +172,14 @@ export const routingApi = {
   },
 
   /** Resolve the best agent for a task */
-  resolveForTask: async (taskId: string): Promise<RoutingResult> => {
+  resolveForTask: async (
+    taskId: string,
+    requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[]
+  ): Promise<RoutingResult> => {
     return apiFetch<RoutingResult>(`${API_BASE}/agents/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId }),
+      body: JSON.stringify({ taskId, requiredRuntimeCapabilities }),
     });
   },
 
@@ -183,6 +189,7 @@ export const routingApi = {
     priority?: string;
     project?: string;
     subtaskCount?: number;
+    requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   }): Promise<RoutingResult> => {
     return apiFetch<RoutingResult>(`${API_BASE}/agents/route`, {
       method: 'POST',

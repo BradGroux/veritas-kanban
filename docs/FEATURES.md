@@ -372,6 +372,9 @@ Service discovery and liveness tracking for AI agents.
 - **Heartbeat tracking** — Agents send periodic heartbeats; marked offline after configurable timeout (default 5 min)
 - **Status lifecycle** — Online → Busy → Idle → Offline with automatic transitions
 - **Capabilities declaration** — Agents declare what they can do (code-review, research, testing, etc.)
+- **Validated runtime registration** — Registration and heartbeat payloads can carry a digest-verified provider runtime manifest for provider-neutral capability decisions
+- **Capability-aware host routing** — Route and host-preview requests can require runtime capabilities; one matching manifest must satisfy the full set, with advisory warnings and fail-closed unsupported or unknown evidence
+- **Authenticated runtime evidence** — Manifest writes are bound to the registering agent identity (or `agent:write`), reject unredacted diagnostics and request typos, expire with registry heartbeat liveness, and preserve structured evidence for every attempted route candidate
 - **Stats endpoint** — `GET /api/agents/register/stats` returns total, online, busy, idle, offline counts
 - **File-based persistence** — Registry stored in `.veritas-kanban/agent-registry.json`
 

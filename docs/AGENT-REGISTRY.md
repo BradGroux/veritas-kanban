@@ -84,20 +84,36 @@ Registers a new agent or updates an existing one. Sets status to `online` automa
   ],
   "version": "2.0.0",
   "metadata": { "role": "lead", "reference": "Interstellar" },
+  "providerRuntimeManifest": { "schemaVersion": "provider-runtime-manifest/v1", "...": "..." },
   "sessionKey": "optional-openclaw-session-key"
 }
 ```
 
-| Field          | Type   | Required | Description                              |
-| -------------- | ------ | -------- | ---------------------------------------- |
-| `id`           | string | ✅       | Unique identifier (1-50 chars)           |
-| `name`         | string | ✅       | Display name (1-100 chars)               |
-| `model`        | string |          | Model identifier                         |
-| `provider`     | string |          | Provider name                            |
-| `capabilities` | array  |          | List of `{ name, description? }` objects |
-| `version`      | string |          | Agent version or build info              |
-| `metadata`     | object |          | Freeform key-value data                  |
-| `sessionKey`   | string |          | OpenClaw session key for routing         |
+| Field                     | Type   | Required | Description                                                                            |
+| ------------------------- | ------ | -------- | -------------------------------------------------------------------------------------- |
+| `id`                      | string | ✅       | Unique identifier (1-50 chars)                                                         |
+| `name`                    | string | ✅       | Display name (1-100 chars)                                                             |
+| `model`                   | string |          | Model identifier                                                                       |
+| `provider`                | string |          | Provider name                                                                          |
+| `capabilities`            | array  |          | List of `{ name, description? }` objects                                               |
+| `version`                 | string |          | Agent version or build info                                                            |
+| `metadata`                | object |          | Freeform key-value data                                                                |
+| `providerRuntimeManifest` | object |          | Validated runtime capability evidence; see the Provider Runtime Manifest API reference |
+| `sessionKey`              | string |          | OpenClaw session key for routing                                                       |
+
+The manifest digest is recomputed on registration. Forged, incomplete, or
+forward-incompatible manifests, secret-like diagnostic fields, and unknown or
+misspelled request fields are rejected with `400`. Legacy `provider`,
+`model`, `capabilities`, and metadata fields remain available for compatibility
+and display, but they cannot satisfy required runtime capability routing.
+Authoritative manifest writes require `telemetry:write` plus either a key/token
+identity matching the target agent ID or `agent:write`. Use a distinct named API
+key for each self-registering agent; do not share a generic telemetry key for
+runtime evidence. Once a record contains authoritative evidence, re-registration,
+heartbeat, replacement, and deregistration remain identity-bound so another
+telemetry writer cannot refresh, invalidate, or delete it. Re-registering with a
+changed provider, model, or version and without replacement evidence invalidates
+the previous manifest.
 
 **Response:** `201 Created`
 
@@ -133,16 +149,21 @@ Updates the agent's last-seen timestamp and optionally changes status or task as
   "status": "busy",
   "currentTaskId": "task_20260206_abc123",
   "currentTaskTitle": "Implement authentication flow",
-  "metadata": { "progress": 0.65 }
+  "metadata": { "progress": 0.65 },
+  "providerRuntimeManifest": { "schemaVersion": "provider-runtime-manifest/v1", "...": "..." }
 }
 ```
 
-| Field              | Type           | Values                   | Description                             |
-| ------------------ | -------------- | ------------------------ | --------------------------------------- |
-| `status`           | string         | `online`, `busy`, `idle` | Agent's current state                   |
-| `currentTaskId`    | string \| null |                          | Task ID being worked on (null to clear) |
-| `currentTaskTitle` | string \| null |                          | Task title (null to clear)              |
-| `metadata`         | object         |                          | Merge additional metadata               |
+| Field                     | Type           | Values                   | Description                                                            |
+| ------------------------- | -------------- | ------------------------ | ---------------------------------------------------------------------- |
+| `status`                  | string         | `online`, `busy`, `idle` | Agent's current state                                                  |
+| `currentTaskId`           | string \| null |                          | Task ID being worked on (null to clear)                                |
+| `currentTaskTitle`        | string \| null |                          | Task title (null to clear)                                             |
+| `metadata`                | object         |                          | Merge additional metadata                                              |
+| `providerRuntimeManifest` | object         |                          | Replace the validated runtime manifest after a provider/version change |
+
+Heartbeat manifest replacement uses the same authenticated identity binding as
+registration. Ordinary telemetry-only heartbeats remain backward compatible.
 
 **Response:** `200 OK` — Returns updated agent object.
 

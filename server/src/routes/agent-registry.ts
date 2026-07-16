@@ -18,8 +18,10 @@ import { getAgentHealthClassifierService } from '../services/agent-health-classi
 import { getTaskService } from '../services/task-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { ForbiddenError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { getAgentStatus } from './agent-status.js';
+import { ProviderRuntimeManifestSchema } from '../schemas/provider-runtime-manifest-schemas.js';
+import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router: RouterType = Router();
 
@@ -30,23 +32,29 @@ const capabilitySchema = z.object({
   description: z.string().max(200).optional(),
 });
 
-const registerSchema = z.object({
-  id: z.string().min(1).max(50),
-  name: z.string().min(1).max(100),
-  model: z.string().max(100).optional(),
-  provider: z.string().max(50).optional(),
-  capabilities: z.array(capabilitySchema).optional(),
-  version: z.string().max(50).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  sessionKey: z.string().max(200).optional(),
-});
+const registerSchema = z
+  .object({
+    id: z.string().min(1).max(50),
+    name: z.string().min(1).max(100),
+    model: z.string().max(100).optional(),
+    provider: z.string().max(50).optional(),
+    capabilities: z.array(capabilitySchema).optional(),
+    version: z.string().max(50).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    providerRuntimeManifest: ProviderRuntimeManifestSchema.optional(),
+    sessionKey: z.string().max(200).optional(),
+  })
+  .strict();
 
-const heartbeatSchema = z.object({
-  status: z.enum(['online', 'busy', 'idle']).optional(),
-  currentTaskId: z.string().max(100).optional().nullable(),
-  currentTaskTitle: z.string().max(200).optional().nullable(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
+const heartbeatSchema = z
+  .object({
+    status: z.enum(['online', 'busy', 'idle']).optional(),
+    currentTaskId: z.string().max(100).optional().nullable(),
+    currentTaskTitle: z.string().max(200).optional().nullable(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    providerRuntimeManifest: ProviderRuntimeManifestSchema.optional(),
+  })
+  .strict();
 
 // ─── Routes ──────────────────────────────────────────────────────
 
@@ -116,8 +124,13 @@ router.post(
     if (!parsed.success) {
       throw new ValidationError('Invalid registration', parsed.error.issues);
     }
-
     const registry = getAgentRegistryService();
+    assertTrustedRuntimeEvidenceMutation(
+      req as AuthenticatedRequest,
+      parsed.data.providerRuntimeManifest !== undefined ||
+        registry.get(parsed.data.id)?.providerRuntimeManifest !== undefined,
+      parsed.data.id
+    );
     const agent = registry.register(parsed.data);
     res.status(201).json(agent);
   })
@@ -166,8 +179,13 @@ router.post(
     if (!parsed.success) {
       throw new ValidationError('Invalid heartbeat', parsed.error.issues);
     }
-
     const registry = getAgentRegistryService();
+    assertTrustedRuntimeEvidenceMutation(
+      req as AuthenticatedRequest,
+      parsed.data.providerRuntimeManifest !== undefined ||
+        registry.get(req.params.id as string)?.providerRuntimeManifest !== undefined,
+      req.params.id as string
+    );
     const agent = registry.heartbeat(req.params.id as string, {
       ...parsed.data,
       currentTaskId: parsed.data.currentTaskId ?? undefined,
@@ -190,6 +208,11 @@ router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const registry = getAgentRegistryService();
+    assertTrustedRuntimeEvidenceMutation(
+      req as AuthenticatedRequest,
+      registry.get(req.params.id as string)?.providerRuntimeManifest !== undefined,
+      req.params.id as string
+    );
     const removed = registry.deregister(req.params.id as string);
     if (!removed) {
       throw new NotFoundError('Agent not found');
@@ -197,5 +220,26 @@ router.delete(
     res.json({ removed: true });
   })
 );
+
+function assertTrustedRuntimeEvidenceMutation(
+  req: AuthenticatedRequest,
+  requiresIdentityBinding: boolean,
+  agentId: string
+): void {
+  if (!requiresIdentityBinding) return;
+  if (hasPermission(req.auth, 'agent:write')) return;
+
+  const principalIds = [req.auth?.keyName, req.auth?.tokenName, req.auth?.clientId]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim().toLowerCase());
+  const selfRegistration =
+    req.auth?.role === 'agent' && principalIds.includes(agentId.trim().toLowerCase());
+  if (selfRegistration) return;
+
+  throw new ForbiddenError(
+    'Modifying authoritative provider runtime evidence requires a matching agent identity or agent:write permission',
+    { required: ['telemetry:write', 'matching-agent-identity-or-agent:write'] }
+  );
+}
 
 export { router as agentRegistryRoutes };

@@ -87,6 +87,45 @@ export interface ProviderRuntimeManifest {
   digest: string;
 }
 
+export interface ProviderRuntimeCapabilityAssessment {
+  id: ProviderRuntimeCapabilityId;
+  state: ProviderRuntimeCapabilityState;
+  satisfied: boolean;
+  advisory: boolean;
+  reason: string;
+}
+
+export interface ProviderRuntimeManifestAssessment {
+  manifestDigest: string;
+  provider: string;
+  adapter: string;
+  providerVersion: string;
+  models: string[];
+  probeState: ProviderRuntimeProbeState;
+  compatible: boolean;
+  advisory: boolean;
+  capabilities: ProviderRuntimeCapabilityAssessment[];
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface ProviderRuntimeSelection {
+  requiredCapabilities: ProviderRuntimeCapabilityId[];
+  compatible: boolean;
+  selectedManifest?: ProviderRuntimeManifestAssessment;
+  candidates: ProviderRuntimeManifestAssessment[];
+  reason: string;
+}
+
+export interface ProviderRuntimeRouteCandidate {
+  agent: string;
+  model?: string;
+  available: boolean;
+  selected: boolean;
+  reason: string;
+  selection: ProviderRuntimeSelection;
+}
+
 export function findProviderRuntimeCapability(
   manifest: ProviderRuntimeManifest,
   capabilityId: ProviderRuntimeCapabilityId
