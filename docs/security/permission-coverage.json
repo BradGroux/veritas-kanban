@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastReviewed": "2026-06-18",
+  "lastReviewed": "2026-07-15",
   "notes": "Authority surface manifest for v5. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
   "surfaces": [
     {
@@ -88,7 +88,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Task channel subscription confirmations are only sent after task read authorization."
     },
     {
@@ -96,7 +96,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["workflow:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Workflow subscription confirmations are only sent after workflow read authorization."
     },
     {
@@ -104,7 +104,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Shared run session subscription confirmations are only sent after task read authorization."
     },
     {
@@ -120,7 +120,7 @@
       "kind": "websocket",
       "classification": "agent-scoped",
       "permissions": ["agent:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Agent status subscription confirmations are only sent after agent read authorization."
     },
     {
@@ -128,7 +128,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Agent output subscriptions require task read access."
     },
     {
@@ -136,7 +136,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Agent completion subscriptions require task read access."
     },
     {
@@ -144,7 +144,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Agent error subscriptions require task read access."
     },
     {
@@ -152,7 +152,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Chat subscription confirmations are only sent after task read authorization."
     },
     {
@@ -160,7 +160,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Task output subscription confirmations are only sent after task read authorization."
     },
     {
@@ -168,7 +168,7 @@
       "kind": "websocket",
       "classification": "authenticated-read",
       "permissions": ["workspace:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "WebSocket denial errors are only sent on an authenticated connection."
     },
     {
@@ -176,7 +176,7 @@
       "kind": "websocket-inbound",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Chat subscriptions require task read access in the requested workspace."
     },
     {
@@ -184,7 +184,7 @@
       "kind": "websocket-inbound",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Task event channel subscriptions require task read access in the requested workspace."
     },
     {
@@ -192,7 +192,7 @@
       "kind": "websocket-inbound",
       "classification": "authenticated-read",
       "permissions": ["workflow:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Workflow event channel subscriptions require workflow read access in the requested workspace."
     },
     {
@@ -200,7 +200,7 @@
       "kind": "websocket-inbound",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Shared run session subscriptions require task read access in the requested workspace."
     },
     {
@@ -208,7 +208,7 @@
       "kind": "websocket-inbound",
       "classification": "authenticated-read",
       "permissions": ["task:read"],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "denialReason": "Agent output subscriptions require task read access in the requested workspace."
     },
     {
@@ -568,7 +568,7 @@
       "kind": "background-job",
       "classification": "internal-only",
       "permissions": [],
-      "source": "server/src/index.ts",
+      "source": "server/src/server.ts",
       "justification": "WebSocket heartbeats maintain authenticated connections and do not expose data."
     },
     {
@@ -898,6 +898,62 @@
       "permissions": ["task:read", "task:write"],
       "source": "cli/src/commands/setup.ts",
       "denialReason": "Setup can create a sample task and requires task write access unless skipped."
+    },
+    {
+      "id": "cli:sqlite:sqlite",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/sqlite.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:sqlite:journal",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/sqlite.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:sqlite:preview",
+      "kind": "cli",
+      "classification": "authenticated-write",
+      "permissions": ["backup:write"],
+      "source": "cli/src/commands/sqlite.ts",
+      "denialReason": "Journal maintenance previews require backup write access because the API uses an authenticated POST."
+    },
+    {
+      "id": "cli:sqlite:apply",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/sqlite.ts",
+      "denialReason": "Scheduling restart-time journal maintenance requires admin management access."
+    },
+    {
+      "id": "cli:sqlite:status",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["backup:read"],
+      "source": "cli/src/commands/sqlite.ts",
+      "denialReason": "Reading journal maintenance status requires backup read access."
+    },
+    {
+      "id": "cli:sqlite:override",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/sqlite.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:sqlite:revoke",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/sqlite.ts",
+      "denialReason": "Revoking a journal compatibility or override policy requires admin management access."
     },
     {
       "id": "cli:sprints:sprint",

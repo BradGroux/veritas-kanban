@@ -62,6 +62,7 @@ async function discoverCliCommands() {
     'notifications',
     'projects',
     'setup',
+    'sqlite',
     'sprints',
     'summary',
     'tasks',
@@ -108,7 +109,7 @@ async function discoverWebSocketSurfaces() {
   const sources = [
     await readText('server/src/services/broadcast-service.ts'),
     await readText('server/src/routes/agent-status.ts'),
-    await readText('server/src/index.ts'),
+    await readText('server/src/server.ts'),
   ].join('\n');
 
   const outbound = matches(sources, /type:\s*'([^']+)'/g)
@@ -172,7 +173,7 @@ async function discoverBackgroundJobs() {
     },
     {
       id: 'background-job:websocket-heartbeat',
-      source: 'server/src/index.ts',
+      source: 'server/src/server.ts',
       marker: 'const heartbeatInterval = setInterval(() =>',
     },
   ];
