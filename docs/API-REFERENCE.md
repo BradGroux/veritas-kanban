@@ -1874,6 +1874,45 @@ In addition to `agent`, `sandboxPresetId`, and `budget`, callers can pass a port
 
 The launch path resolves the package runtime against configured provider profiles, applies package model/sandbox/budget posture, injects package instructions into the run prompt, and records the profile ID and version on the task attempt plus activity audit history.
 
+### Provider Runtime Manifest On Attempts
+
+Every executable task adapter is probed before the attempt mutates task state.
+Task and trace responses can therefore include the immutable
+`providerRuntimeManifest` used at launch:
+
+```json
+{
+  "schemaVersion": "provider-runtime-manifest/v1",
+  "probeRevision": 1,
+  "provider": "codex-cli",
+  "adapter": "codex-cli",
+  "protocolVersion": "codex-exec-json/v1",
+  "providerVersion": "codex-cli 0.144.0",
+  "models": ["gpt-5.5"],
+  "capabilities": [
+    {
+      "id": "run.streaming",
+      "state": "supported",
+      "source": "contract-test",
+      "reason": "Codex JSONL output is streamed into run events."
+    }
+  ],
+  "probe": {
+    "state": "ready",
+    "probedAt": "2026-07-16T01:30:00.000Z",
+    "source": "codex --version",
+    "diagnostics": []
+  },
+  "digest": "sha256:<64 lowercase hex characters>"
+}
+```
+
+The full manifest contains one entry for every known runtime and sandbox
+capability. A provider version/build change invalidates cached conformance
+evidence. Failed probes and unknown versions are not positively cached.
+Explicitly configured providers without a task execution adapter fail with
+`409 Conflict` instead of falling back to OpenClaw.
+
 ---
 
 ## Team Roster Manifests

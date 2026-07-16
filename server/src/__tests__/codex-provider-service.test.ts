@@ -12,6 +12,7 @@ const {
   mockSaveConfig,
   mockGetTask,
   mockUpdateTask,
+  mockPatchTaskAttempt,
   mockCheckAgent,
   mockTelemetryEmit,
   mockLogActivity,
@@ -25,6 +26,7 @@ const {
   mockSaveConfig: vi.fn(),
   mockGetTask: vi.fn(),
   mockUpdateTask: vi.fn(),
+  mockPatchTaskAttempt: vi.fn(),
   mockCheckAgent: vi.fn(),
   mockTelemetryEmit: vi.fn(),
   mockLogActivity: vi.fn(),
@@ -47,7 +49,11 @@ vi.mock('../services/config-service.js', () => ({
 
 vi.mock('../services/task-service.js', () => ({
   TaskService: function () {
-    return { getTask: mockGetTask, updateTask: mockUpdateTask };
+    return {
+      getTask: mockGetTask,
+      updateTask: mockUpdateTask,
+      patchTaskAttempt: mockPatchTaskAttempt,
+    };
   },
 }));
 
@@ -102,6 +108,7 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
     summary?: string;
     usage?: { inputTokens: number; outputTokens: number; totalTokens?: number; model?: string };
   };
+  recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void>;
 };
 
 function testableService(tmpDir: string): TestableClawdbotAgentService {
@@ -216,6 +223,11 @@ describe('ClawdbotAgentService Codex providers', () => {
       task = { ...task, ...update } as Task;
       return task;
     });
+    mockPatchTaskAttempt.mockImplementation(async (_id, attemptId, patch) => {
+      if (task.attempt?.id !== attemptId) return null;
+      task = { ...task, attempt: { ...task.attempt, ...patch } } as Task;
+      return task;
+    });
     mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
       type: agent.type,
       name: agent.name,
@@ -224,6 +236,8 @@ describe('ClawdbotAgentService Codex providers', () => {
       command: agent.command,
       executableFound: true,
       executablePath: `/usr/local/bin/${agent.command}`,
+      providerVersion: 'codex-cli 0.144.0',
+      providerVersionSource: 'codex --version',
       authenticated: true,
       healthy: true,
       checkedAt: '2026-06-03T00:00:00.000Z',
@@ -291,6 +305,24 @@ describe('ClawdbotAgentService Codex providers', () => {
       await waitFor(() => {
         expect(service.getAgentStatus(task.id)).toBeNull();
       });
+      expect(task.attempt?.providerRuntimeManifest).toMatchObject({
+        schemaVersion: 'provider-runtime-manifest/v1',
+        provider: 'codex-cli',
+        providerVersion: 'codex-cli 0.144.0',
+      });
+      expect(task.attempt?.providerRuntimeManifest?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(task.attempts).toEqual([
+        expect.objectContaining({
+          id: task.attempt?.id,
+          providerRuntimeManifest: expect.objectContaining({
+            digest: task.attempt?.providerRuntimeManifest?.digest,
+          }),
+        }),
+      ]);
+      const log = await service.getAttemptLog(task.id, task.attempt?.id ?? 'missing');
+      expect(log).toContain(
+        `Provider manifest:** ${task.attempt?.providerRuntimeManifest?.digest}`
+      );
       expect(mockStartStep).toHaveBeenCalledWith(
         expect.any(String),
         'stream',
@@ -522,6 +554,54 @@ describe('ClawdbotAgentService Codex providers', () => {
         reason: 'Stopped by user',
         provider: 'codex-cli',
       })
+    );
+  });
+
+  it('patches a provider thread without dropping the persisted runtime manifest', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+
+    await service.startAgent(task.id, 'codex');
+    const currentAttempt = task.attempt;
+    if (!currentAttempt?.providerRuntimeManifest) {
+      throw new Error('Expected the started attempt to persist a provider runtime manifest');
+    }
+    const attemptId = currentAttempt.id;
+    const manifestDigest = currentAttempt.providerRuntimeManifest.digest;
+    await service.recordCodexThread(task, attemptId, 'thread_fixture_123');
+
+    expect(task.attempt).toMatchObject({
+      id: attemptId,
+      threadId: 'thread_fixture_123',
+      providerRuntimeManifest: { digest: manifestDigest },
+    });
+    await service.stopAgent(task.id);
+  });
+
+  it('preserves the previous attempt when a new provider process fails to start', async () => {
+    const previousAttempt = {
+      id: 'attempt_previous',
+      agent: 'codex',
+      status: 'complete' as const,
+      provider: 'codex-cli',
+    };
+    task = { ...task, attempt: previousAttempt, attempts: [] } as Task;
+    mockGetTask.mockResolvedValue(task);
+    mockSpawn.mockImplementation(() => {
+      throw new Error('fixture spawn failure');
+    });
+    const service = testableService(tmpDir);
+
+    await expect(service.startAgent(task.id, 'codex')).rejects.toThrow(
+      'Failed to start agent via Codex CLI: fixture spawn failure'
+    );
+
+    expect(task.attempts).toEqual(
+      expect.arrayContaining([
+        previousAttempt,
+        expect.objectContaining({ status: 'failed', providerRuntimeManifest: expect.any(Object) }),
+      ])
     );
   });
 

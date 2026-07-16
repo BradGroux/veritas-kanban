@@ -100,6 +100,24 @@ describe('TaskService SQLite mode', () => {
     });
   });
 
+  it('round-trips provider runtime manifests in current and historical attempts', async () => {
+    const task = await service.createTask({ title: 'SQLite manifest-backed attempt' });
+    const manifest = providerRuntimeManifestFixture();
+    const attempt = {
+      id: 'attempt_manifest',
+      agent: 'codex',
+      status: 'complete' as const,
+      provider: 'codex-cli',
+      providerRuntimeManifest: manifest,
+    };
+
+    await service.updateTask(task.id, { attempt, attempts: [attempt] });
+    const reloaded = await service.getTask(task.id);
+
+    expect(reloaded?.attempt?.providerRuntimeManifest).toEqual(manifest);
+    expect(reloaded?.attempts?.[0]?.providerRuntimeManifest?.digest).toBe(manifest.digest);
+  });
+
   it('archives, lists archived tasks, restores, and deletes without task files', async () => {
     const task = await service.createTask({ title: 'Archive SQLite task' });
     const deletedAt = new Date().toISOString();
@@ -153,3 +171,30 @@ describe('TaskService SQLite mode', () => {
     expect(await service.restoreTask(invalid.id)).toBeNull();
   });
 });
+
+function providerRuntimeManifestFixture() {
+  return {
+    schemaVersion: 'provider-runtime-manifest/v1' as const,
+    probeRevision: 1 as const,
+    provider: 'codex-cli',
+    adapter: 'codex-cli',
+    protocolVersion: 'codex-exec-json/v1',
+    providerVersion: 'codex-cli 0.144.0',
+    models: ['gpt-5.5'],
+    capabilities: [
+      {
+        id: 'run.start',
+        state: 'supported' as const,
+        source: 'contract-test' as const,
+        reason: 'Fixture launch support.',
+      },
+    ],
+    probe: {
+      state: 'ready' as const,
+      probedAt: '2026-07-16T00:00:00.000Z',
+      source: 'codex --version',
+      diagnostics: [],
+    },
+    digest: `sha256:${'a'.repeat(64)}`,
+  };
+}

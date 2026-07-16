@@ -108,14 +108,7 @@ export interface TelemetryConfig {
 
 /** Low-level trace step types captured during an agent attempt. */
 export type AgentRunTraceStepType =
-  | 'init'
-  | 'execute'
-  | 'stream'
-  | 'retry'
-  | 'abort'
-  | 'finalize'
-  | 'complete'
-  | 'error';
+  'init' | 'execute' | 'stream' | 'retry' | 'abort' | 'finalize' | 'complete' | 'error';
 
 /** Additional run context persisted with each trace for replay/audit surfaces. */
 export interface AgentRunTraceMetadata {
@@ -133,6 +126,7 @@ export interface AgentRunTraceMetadata {
   branch?: string;
   baseBranch?: string;
   worktreePath?: string;
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
 }
 
 /** A single sequenced step inside an agent run trace. */
@@ -161,15 +155,7 @@ export interface AgentRunTrace {
 
 /** Timeline event categories exposed to the task run replay UI. */
 export type AgentRunTimelineEventType =
-  | 'prompt'
-  | 'command'
-  | 'file'
-  | 'policy'
-  | 'approval'
-  | 'error'
-  | 'usage'
-  | 'tool'
-  | 'result';
+  'prompt' | 'command' | 'file' | 'policy' | 'approval' | 'error' | 'usage' | 'tool' | 'result';
 
 export type AgentRunTimelineEventSource = 'live' | 'stored' | 'derived';
 

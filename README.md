@@ -88,7 +88,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 36 tools, architecture, tool catalog, security model, and read/write smoke checks.
-- [Agent Providers](docs/AGENT-PROVIDERS.md) — Codex defaults, Ollama local/cloud, LM Studio local, routing, and web vs macOS behavior.
+- [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed runtime manifests, Codex and Hermes execution, optional model profiles, routing, and host behavior.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.

@@ -48,6 +48,15 @@ export type AgentProvider =
   | 'lm-studio-local'
   | 'custom';
 
+export const EXECUTABLE_AGENT_PROVIDERS = [
+  'openclaw',
+  'codex-cli',
+  'codex-sdk',
+  'hermes-cli',
+] as const satisfies readonly AgentProvider[];
+
+export type ExecutableAgentProvider = (typeof EXECUTABLE_AGENT_PROVIDERS)[number];
+
 // ============ Agent Routing Types ============
 
 /** Criteria for matching a task to a routing rule */

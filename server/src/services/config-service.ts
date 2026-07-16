@@ -79,6 +79,14 @@ const DEFAULT_CONFIG: AppConfig = {
       provider: 'codex-cloud',
     },
     {
+      type: 'hermes',
+      name: 'Hermes Agent',
+      command: 'hermes',
+      args: [],
+      enabled: false,
+      provider: 'hermes-cli',
+    },
+    {
       type: 'ollama-local',
       name: 'Ollama Local',
       command: 'ollama',

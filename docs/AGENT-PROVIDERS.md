@@ -9,10 +9,38 @@ Veritas works as a board without any agent runner. When you do enable agents, pr
 Fresh v5 installs use OpenAI Codex as the default agent:
 
 - `codex` is enabled by default and uses `codex exec --sandbox workspace-write --json`.
-- `claude-code`, `amp`, `copilot`, `gemini`, `codex-sdk`, `codex-cloud`, `ollama-local`, `ollama-cloud`, and `lm-studio-local` are available as profiles you can enable or route to.
+- `claude-code`, `amp`, `copilot`, `gemini`, `codex-sdk`, `codex-cloud`, `hermes`, `ollama-local`, `ollama-cloud`, and `lm-studio-local` are available as profiles you can enable or route to.
 - Built-in routing sends code, bug, documentation, and review work to `codex` first, with conservative fallbacks for higher-risk code paths.
 
 Existing configs keep the user's chosen default agent. Missing built-in profiles are added during config normalization without overwriting customized commands, arguments, or enabled states.
+
+## Provider Runtime Manifests
+
+Before a task attempt mutates task state, the selected execution adapter emits a
+`provider-runtime-manifest/v1` snapshot. The snapshot records the adapter and
+protocol version, provider build/version evidence, configured models, probe
+timestamp and diagnostics, and every known runtime or sandbox capability as
+`supported`, `advisory`, `unsupported`, or `unknown`.
+
+Veritas currently has executable task adapters for `codex-cli`, `codex-sdk`,
+`hermes-cli`, and `openclaw`. An explicitly configured Codex Cloud, Ollama, LM
+Studio, or custom profile is not silently sent through OpenClaw; task dispatch
+fails with an actionable `409` until that provider has an execution adapter.
+
+The exact manifest and its `sha256:` digest are stored on the current attempt,
+attempt history, optional run trace, and Markdown run log. Provider identity
+evidence is collected on each launch. CLI/SDK identities come from bounded
+runtime or installed-package probes, and conformance probes are bounded before
+launch. An OpenClaw version supplied through the environment remains degraded
+operator evidence until host registration can verify it. A matching
+version/build can reuse conformance evidence for up to five minutes; a version
+change invalidates it and reruns the probe. Failed probes and unknown versions
+are not positively cached.
+
+Capability states describe behavior that the current adapter actually proves.
+They do not imply that adjacent roadmap work already exists. For example,
+provider-neutral approvals, reattachment, follow-up/fork/steer controls, and MCP
+governance remain unsupported or unknown until their dedicated issues land.
 
 ## Sandbox Policy Presets
 
@@ -193,12 +221,13 @@ install at the operator-level endpoint. You must explicitly allow them:
 
 ### Environment variables
 
-| Variable                         | Default                  | Purpose                       |
-| -------------------------------- | ------------------------ | ----------------------------- |
-| `OPENCLAW_GATEWAY_URL`           | `http://127.0.0.1:18789` | Gateway base URL              |
-| `OPENCLAW_GATEWAY_TOKEN`         | _(none)_                 | Bearer token for the gateway  |
-| `OPENCLAW_GATEWAY_SESSION_KEY`   | `main`                   | Parent session key            |
-| `OPENCLAW_GATEWAY_ALLOW_PRIVATE` | `false`                  | Allow private IP gateway URLs |
+| Variable                         | Default                  | Purpose                                                                                  |
+| -------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| `OPENCLAW_GATEWAY_URL`           | `http://127.0.0.1:18789` | Gateway base URL                                                                         |
+| `OPENCLAW_GATEWAY_TOKEN`         | _(none)_                 | Bearer token for the gateway                                                             |
+| `OPENCLAW_GATEWAY_SESSION_KEY`   | `main`                   | Parent session key                                                                       |
+| `OPENCLAW_GATEWAY_ALLOW_PRIVATE` | `false`                  | Allow private IP gateway URLs                                                            |
+| `OPENCLAW_GATEWAY_VERSION`       | _(none)_                 | Operator-declared version hint; the manifest remains degraded until runtime verification |
 
 ### Dispatch flow
 

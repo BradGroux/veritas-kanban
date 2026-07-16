@@ -22,7 +22,11 @@ import { getAgentRoutingService } from './agent-routing-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
-import { AgentHealthService, type AgentHealthChecker } from './agent-health-service.js';
+import {
+  AgentHealthService,
+  type AgentHealthChecker,
+  type AgentHealthStatus,
+} from './agent-health-service.js';
 import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
@@ -52,14 +56,20 @@ import type {
   AgentBudgetUsage,
   AgentBudgetDecision,
   AgentProfileLaunchMetadata,
+  ExecutableAgentProvider,
+  ProviderRuntimeManifest,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
 import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
+import {
+  ProviderRuntimeManifestService,
+  type ProviderRuntimeProbeRequest,
+} from './provider-runtime-manifest-service.js';
+import { getProviderRuntimeAdapterDefinition } from './provider-runtime-adapter-registry.js';
+import { getInstalledPackageVersion } from '../utils/package-version.js';
 const log = createLogger('clawdbot-agent-service');
-
-export type AgentProvider = 'openclaw' | 'codex-cli' | 'codex-sdk' | 'hermes-cli';
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
@@ -90,17 +100,15 @@ export interface AgentProviderStopContext {
   pending: PendingAgent;
 }
 
+export interface AgentProviderProbeContext {
+  agentConfig?: AgentConfig;
+  health: AgentHealthStatus;
+}
+
 export interface AgentProviderAdapter {
-  id: AgentProvider;
+  id: ExecutableAgentProvider;
   label: string;
-  capabilities: {
-    start: true;
-    stop: boolean;
-    status: true;
-    logs: boolean;
-    complete: true;
-    resume: boolean;
-  };
+  probe(context: AgentProviderProbeContext): Promise<ProviderRuntimeManifest>;
   start(context: AgentProviderStartContext): Promise<void> | void;
   stop(context: AgentProviderStopContext): Promise<void> | void;
 }
@@ -154,11 +162,12 @@ interface PendingAgent {
   agent: AgentType;
   startedAt: string;
   emitter: EventEmitter;
-  provider: AgentProvider;
+  provider: ExecutableAgentProvider;
   model?: string;
   budget?: AgentBudgetState;
   budgetStopped?: boolean;
   agentProfile?: AgentProfileLaunchMetadata;
+  providerRuntimeManifest: ProviderRuntimeManifest;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -174,12 +183,17 @@ export class ClawdbotAgentService {
   private configService: ConfigService;
   private taskService: TaskService;
   private agentHealth: AgentHealthChecker;
+  private providerRuntimeManifests: ProviderRuntimeManifestService;
   private logsDir: string;
 
-  constructor(agentHealth?: AgentHealthChecker) {
+  constructor(
+    agentHealth?: AgentHealthChecker,
+    providerRuntimeManifests = new ProviderRuntimeManifestService()
+  ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
     this.agentHealth = agentHealth || new AgentHealthService();
+    this.providerRuntimeManifests = providerRuntimeManifests;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -220,16 +234,18 @@ export class ClawdbotAgentService {
       if (pendingAgents.has(task.id)) continue;
 
       try {
+        const failedAttempt: TaskAttempt = {
+          ...task.attempt,
+          status: 'failed',
+          ended: now,
+        };
         await this.taskService.updateTask(task.id, {
           // Only revert task status if it is still 'in-progress' from this run.
           // Tasks in other states (blocked, done, todo, etc.) keep their status;
           // we only fix the orphaned attempt record.
           ...(task.status === 'in-progress' ? { status: 'todo' } : {}),
-          attempt: {
-            ...task.attempt,
-            status: 'failed',
-            ended: now,
-          },
+          attempt: failedAttempt,
+          attempts: upsertAttemptHistory(task.attempts, failedAttempt),
         });
         log.info(
           { taskId: task.id, attemptId: task.attempt.id },
@@ -316,8 +332,9 @@ export class ClawdbotAgentService {
             model: profileLaunch.model ?? agentConfig.model,
           }
         : agentConfig;
-    await this.assertAgentAvailable(agent, profileAgentConfig);
+    const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const provider = this.resolveAgentProvider(profileAgentConfig, agent);
+    const adapter = this.resolveProviderAdapter(provider);
     const budgetService = getAgentBudgetService();
     const budgetPolicy = budgetService.resolve({
       workspaceBudget: config.features?.budget?.enabled
@@ -352,6 +369,10 @@ export class ClawdbotAgentService {
       budgetEvaluation.modelOverride && profileAgentConfig
         ? { ...profileAgentConfig, model: budgetEvaluation.modelOverride }
         : profileAgentConfig;
+    const providerRuntimeManifest = await adapter.probe({
+      agentConfig: launchAgentConfig,
+      health: agentHealth,
+    });
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
@@ -424,6 +445,7 @@ export class ClawdbotAgentService {
       provider,
       model: launchAgentConfig?.model,
       agentProfile: profileLaunch?.metadata,
+      providerRuntimeManifest,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -452,7 +474,7 @@ export class ClawdbotAgentService {
 
     // Initialize log file (ensure it stays within logs dir)
     ensureWithinBase(this.logsDir, logPath);
-    await this.initLogFile(logPath, task, agent, taskPrompt);
+    await this.initLogFile(logPath, task, agent, taskPrompt, providerRuntimeManifest);
 
     // Update task with attempt info
     const attempt: TaskAttempt = {
@@ -464,11 +486,13 @@ export class ClawdbotAgentService {
       model: launchAgentConfig?.model,
       budget: pendingAgents.get(taskId)?.budget,
       agentProfile: profileLaunch?.metadata,
+      providerRuntimeManifest,
     };
 
     await this.taskService.updateTask(taskId, {
       status: 'in-progress',
       attempt,
+      attempts: task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
     });
 
     if (profileLaunch) {
@@ -500,7 +524,6 @@ export class ClawdbotAgentService {
       project: task.project,
     });
 
-    const adapter = this.resolveProviderAdapter(provider);
     try {
       await adapter.start({
         task,
@@ -523,9 +546,18 @@ export class ClawdbotAgentService {
         model: agentConfig?.model,
       });
       await getTraceService().completeTrace(attemptId, 'error');
+      const failedAttempt: TaskAttempt = {
+        ...attempt,
+        status: 'failed',
+        ended: new Date().toISOString(),
+      };
       await this.taskService.updateTask(taskId, {
         status: 'todo',
-        attempt: { ...attempt, status: 'failed', ended: new Date().toISOString() },
+        attempt: failedAttempt,
+        attempts: upsertAttemptHistory(
+          task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
+          failedAttempt
+        ),
       });
       await telemetry.emit<RunErrorEvent>({
         type: 'run.error',
@@ -614,21 +646,26 @@ export class ClawdbotAgentService {
       );
     }
 
-    // Update task
+    const taskBeforeCompletion = await this.taskService.getTask(taskId);
+    const completedAttempt: TaskAttempt = {
+      id: attemptId,
+      agent: pending.agent,
+      status,
+      started: pending.startedAt,
+      ended: endedAt,
+      provider: pending.provider,
+      model: pending.model,
+      threadId: pending.threadId,
+      budget: pending.budget,
+      agentProfile: pending.agentProfile,
+      providerRuntimeManifest: pending.providerRuntimeManifest,
+    };
+
+    // Update task and preserve the exact launch manifest in attempt history.
     await this.taskService.updateTask(taskId, {
       status: result.success ? 'done' : 'in-progress',
-      attempt: {
-        id: attemptId,
-        agent: pending.agent,
-        status,
-        started: pending.startedAt,
-        ended: endedAt,
-        provider: pending.provider,
-        model: pending.model,
-        threadId: pending.threadId,
-        budget: pending.budget,
-        agentProfile: pending.agentProfile,
-      },
+      attempt: completedAttempt,
+      attempts: upsertAttemptHistory(taskBeforeCompletion?.attempts, completedAttempt),
     });
 
     // Append to log
@@ -833,10 +870,19 @@ export class ClawdbotAgentService {
     return agents.find((a) => a.type === agent);
   }
 
+  async probeProviderRuntime(
+    agentConfig: AgentConfig,
+    agent: AgentType = agentConfig.type
+  ): Promise<ProviderRuntimeManifest> {
+    const health = await this.assertAgentAvailable(agent, agentConfig);
+    const provider = this.resolveAgentProvider(agentConfig, agent);
+    return this.resolveProviderAdapter(provider).probe({ agentConfig, health });
+  }
+
   private async assertAgentAvailable(
     agent: AgentType,
     agentConfig: AgentConfig | undefined
-  ): Promise<void> {
+  ): Promise<AgentHealthStatus> {
     if (!agentConfig) {
       throw new ConflictError(`Agent "${agent}" is not configured`, {
         agent,
@@ -863,34 +909,49 @@ export class ClawdbotAgentService {
         }
       );
     }
+    return health;
   }
 
   private resolveAgentProvider(
     agentConfig: AgentConfig | undefined,
     agent: AgentType
-  ): AgentProvider {
-    if (agentConfig?.provider === 'codex-sdk') return 'codex-sdk';
-    if (agentConfig?.provider === 'codex-cli') return 'codex-cli';
-    if (agentConfig?.provider === 'hermes-cli') return 'hermes-cli';
+  ): ExecutableAgentProvider {
+    if (agentConfig?.provider) {
+      if (
+        agentConfig.provider === 'openclaw' ||
+        agentConfig.provider === 'codex-sdk' ||
+        agentConfig.provider === 'codex-cli' ||
+        agentConfig.provider === 'hermes-cli'
+      ) {
+        return agentConfig.provider;
+      }
+      throw new ConflictError(
+        `Provider "${agentConfig.provider}" is configured but has no execution adapter`,
+        {
+          agent,
+          provider: agentConfig.provider,
+          reason: 'No executable provider adapter is registered',
+        }
+      );
+    }
     if (agent === 'codex') return 'codex-cli';
     if (agentConfig?.command === 'codex') return 'codex-cli';
     if (agentConfig?.command === 'hermes') return 'hermes-cli';
     return 'openclaw';
   }
 
-  private resolveProviderAdapter(provider: AgentProvider): AgentProviderAdapter {
-    const commonCapabilities = {
-      start: true as const,
-      status: true as const,
-      logs: true,
-      complete: true as const,
-    };
+  private resolveProviderAdapter(provider: ExecutableAgentProvider): AgentProviderAdapter {
+    const definition = getProviderRuntimeAdapterDefinition(provider);
+    const probe = (context: AgentProviderProbeContext) =>
+      this.providerRuntimeManifests.probe(
+        this.buildProviderRuntimeProbeRequest(provider, context, definition)
+      );
 
     if (provider === 'codex-cli') {
       return {
-        id: 'codex-cli',
-        label: 'Codex CLI',
-        capabilities: { ...commonCapabilities, stop: true, resume: false },
+        id: definition.id,
+        label: definition.label,
+        probe,
         start: ({
           task,
           agentConfig,
@@ -920,9 +981,9 @@ export class ClawdbotAgentService {
 
     if (provider === 'codex-sdk') {
       return {
-        id: 'codex-sdk',
-        label: 'Codex SDK',
-        capabilities: { ...commonCapabilities, stop: true, resume: true },
+        id: definition.id,
+        label: definition.label,
+        probe,
         start: ({
           task,
           agentConfig,
@@ -966,9 +1027,9 @@ export class ClawdbotAgentService {
 
     if (provider === 'hermes-cli') {
       return {
-        id: 'hermes-cli',
-        label: 'Hermes Agent',
-        capabilities: { ...commonCapabilities, stop: true, resume: false },
+        id: definition.id,
+        label: definition.label,
+        probe,
         start: ({
           task,
           agentConfig,
@@ -1010,9 +1071,9 @@ export class ClawdbotAgentService {
     }
 
     return {
-      id: 'openclaw',
-      label: 'OpenClaw',
-      capabilities: { ...commonCapabilities, stop: false, resume: false },
+      id: definition.id,
+      label: definition.label,
+      probe,
       start: async ({ prompt, task, attemptId, agentConfig }) => {
         // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
         // The real spawn acknowledgement surfaces policy denial or gateway
@@ -1054,6 +1115,63 @@ export class ClawdbotAgentService {
           '[ClawdbotAgent] OpenClaw stop requested; sub-session will complete via callback'
         );
       },
+    };
+  }
+
+  private buildProviderRuntimeProbeRequest(
+    provider: ExecutableAgentProvider,
+    context: AgentProviderProbeContext,
+    definition: ReturnType<typeof getProviderRuntimeAdapterDefinition>
+  ): ProviderRuntimeProbeRequest {
+    const sdkVersion =
+      provider === 'codex-sdk' ? getInstalledPackageVersion('@openai/codex-sdk') : undefined;
+    const configuredOpenClawVersion =
+      provider === 'openclaw' ? process.env.OPENCLAW_GATEWAY_VERSION?.trim() : undefined;
+    const providerVersion =
+      sdkVersion ||
+      configuredOpenClawVersion ||
+      (provider === 'openclaw' ? undefined : context.health.providerVersion);
+    const providerBuild =
+      provider === 'codex-sdk' && context.health.providerVersion
+        ? `codex-cli:${context.health.providerVersion}`
+        : undefined;
+    const diagnostics: string[] = [];
+
+    if (!providerVersion) {
+      diagnostics.push(
+        provider === 'openclaw'
+          ? 'OpenClaw runtime version was not registered; set OPENCLAW_GATEWAY_VERSION or register a host manifest.'
+          : 'The provider version command did not return verifiable output.'
+      );
+    }
+
+    return {
+      provider,
+      adapter: definition.id,
+      protocolVersion: definition.protocolVersion,
+      command:
+        provider === 'openclaw'
+          ? process.env.OPENCLAW_GATEWAY_URL ||
+            process.env.CLAWDBOT_GATEWAY ||
+            process.env.CLAWDBOT_GATEWAY_URL ||
+            'openclaw'
+          : context.agentConfig?.command,
+      models: context.agentConfig?.model ? [context.agentConfig.model] : [],
+      identity: {
+        providerVersion,
+        providerBuild,
+        verified: provider === 'openclaw' ? false : Boolean(providerVersion),
+        source:
+          provider === 'codex-sdk'
+            ? 'installed-package:@openai/codex-sdk'
+            : configuredOpenClawVersion
+              ? 'environment:OPENCLAW_GATEWAY_VERSION'
+              : context.health.providerVersionSource || 'agent-health',
+        authenticated: context.health.authenticated,
+        executableFingerprint: context.health.executablePath,
+        diagnostics,
+      },
+      capabilities: definition.capabilities,
     };
   }
 
@@ -1546,7 +1664,7 @@ export class ClawdbotAgentService {
     task: Task,
     attemptId: string,
     agent: string,
-    provider: AgentProvider,
+    provider: ExecutableAgentProvider,
     agentConfig?: AgentConfig
   ): Promise<void> {
     getTraceService().startTrace(
@@ -1588,7 +1706,7 @@ export class ClawdbotAgentService {
     task: Task,
     attemptId: string,
     agentConfig: AgentConfig | undefined,
-    provider: AgentProvider,
+    provider: ExecutableAgentProvider,
     stream: 'stdout' | 'stderr',
     chunk: string
   ): void {
@@ -1610,13 +1728,16 @@ export class ClawdbotAgentService {
   private buildTraceMetadata(
     task: Task,
     attemptId: string,
-    provider: AgentProvider,
+    provider: ExecutableAgentProvider,
     agentConfig?: AgentConfig
   ): AgentRunTraceMetadata {
+    const providerRuntimeManifest = pendingAgents.get(task.id)?.providerRuntimeManifest;
     return {
       clientSource: 'agent-service',
       mode: task.runMode ?? 'agent',
-      capabilitySet: this.traceCapabilitiesForProvider(provider),
+      capabilitySet: providerRuntimeManifest?.capabilities
+        .filter((capability) => capability.state === 'supported')
+        .map((capability) => capability.id),
       workspaceId: 'local',
       runKey: attemptId,
       policyProfile:
@@ -1634,15 +1755,8 @@ export class ClawdbotAgentService {
       branch: task.git?.branch,
       baseBranch: task.git?.baseBranch,
       worktreePath: task.git?.worktreePath,
+      providerRuntimeManifest,
     };
-  }
-
-  private traceCapabilitiesForProvider(provider: AgentProvider): string[] {
-    const base = ['start', 'status', 'logs', 'complete'];
-    if (provider === 'openclaw') return base;
-    if (provider === 'codex-cli') return [...base, 'stop'];
-    if (provider === 'hermes-cli') return [...base, 'stop'];
-    return [...base, 'stop', 'resume'];
   }
 
   private async recordCodexEvent(
@@ -2005,18 +2119,7 @@ export class ClawdbotAgentService {
       pending.threadId = threadId;
     }
 
-    await this.taskService.updateTask(task.id, {
-      status: 'in-progress',
-      attempt: {
-        id: attemptId,
-        agent: pending?.agent || 'codex-sdk',
-        status: 'running',
-        started: pending?.startedAt,
-        provider: pending?.provider || 'codex-sdk',
-        model: pending?.model,
-        threadId,
-      },
-    });
+    await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId });
   }
 
   private extractCodexSummary(event: unknown): string | undefined {
@@ -2249,7 +2352,8 @@ If you encounter errors, call with \`success: false\` and include the error mess
     logPath: string,
     task: Task,
     agent: AgentType,
-    prompt: string
+    prompt: string,
+    providerRuntimeManifest: ProviderRuntimeManifest
   ): Promise<void> {
     const header = `# Agent Log: ${task.title}
 
@@ -2257,6 +2361,15 @@ If you encounter errors, call with \`success: false\` and include the error mess
 **Agent:** ${agent}
 **Started:** ${new Date().toISOString()}
 **Worktree:** ${task.git?.worktreePath}
+**Provider manifest:** ${providerRuntimeManifest.digest}
+
+<details><summary>Provider runtime manifest</summary>
+
+\`\`\`json
+${JSON.stringify(providerRuntimeManifest, null, 2)}
+\`\`\`
+
+</details>
 
 ## Task Prompt
 
@@ -2275,6 +2388,13 @@ ${prompt}
 
 // Export singleton
 export const clawdbotAgentService = new ClawdbotAgentService();
+
+function upsertAttemptHistory(
+  history: TaskAttempt[] | undefined,
+  attempt: TaskAttempt
+): TaskAttempt[] {
+  return [...(history ?? []).filter((candidate) => candidate.id !== attempt.id), attempt];
+}
 
 function mergeThresholdEvents(
   existing: AgentBudgetThresholdEvent[],

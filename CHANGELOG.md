@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added versioned, evidence-backed provider runtime manifests for Codex CLI,
+  Codex SDK, Hermes, and OpenClaw with bounded identity and conformance probes,
+  race-safe version-skew cache invalidation, canonical immutable run snapshots
+  and digests, complete capability posture, and attempt/history/trace/log
+  persistence (#885).
 - Added an admin-governed SQLite journal maintenance workflow with non-mutating
   previews, restart-time exclusive conversion, verified backups, durable stage
   journals, forward-only crash recovery, integrity verification, in-place mode
@@ -17,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Added Hermes to normalized provider profiles and Settings selectors, and made
+  explicitly configured providers without an executable task adapter fail
+  closed instead of silently dispatching through OpenClaw (#885).
 - Classified the authoritative SQLite filesystem before database open, limited
   WAL to recognized durable local filesystems, refused known-unsafe and unknown
   storage before creating database sidecars, and exposed redacted filesystem,

@@ -246,6 +246,28 @@ updated: '2026-01-26T10:00:00.000Z'
   });
 
   describe('Task updates', () => {
+    it('round-trips provider runtime manifests in current and historical attempts', async () => {
+      const task = await service.createTask({ title: 'Manifest-backed attempt' });
+      const manifest = providerRuntimeManifestFixture();
+      const attempt = {
+        id: 'attempt_manifest',
+        agent: 'codex',
+        status: 'complete' as const,
+        provider: 'codex-cli',
+        providerRuntimeManifest: manifest,
+      };
+
+      const updated = await service.updateTask(task.id, { attempt, attempts: [attempt] });
+      const taskFile = (await fs.readdir(tasksDir)).find((file) => file.startsWith(`${task.id}-`));
+      if (!taskFile) throw new Error('Expected the task file to be persisted');
+      const persisted = await fs.readFile(path.join(tasksDir, taskFile), 'utf8');
+
+      expect(updated?.attempt?.providerRuntimeManifest).toEqual(manifest);
+      expect(updated?.attempts?.[0]?.providerRuntimeManifest?.digest).toBe(manifest.digest);
+      expect(persisted).toContain('schemaVersion: provider-runtime-manifest/v1');
+      expect(persisted).toContain(manifest.digest);
+    });
+
     it('should update task fields', async () => {
       const task = await service.createTask({ title: 'Original' });
 
@@ -492,3 +514,30 @@ updated: '2026-01-26T10:00:00.000Z'
     });
   });
 });
+
+function providerRuntimeManifestFixture() {
+  return {
+    schemaVersion: 'provider-runtime-manifest/v1' as const,
+    probeRevision: 1 as const,
+    provider: 'codex-cli',
+    adapter: 'codex-cli',
+    protocolVersion: 'codex-exec-json/v1',
+    providerVersion: 'codex-cli 0.144.0',
+    models: ['gpt-5.5'],
+    capabilities: [
+      {
+        id: 'run.start',
+        state: 'supported' as const,
+        source: 'contract-test' as const,
+        reason: 'Fixture launch support.',
+      },
+    ],
+    probe: {
+      state: 'ready' as const,
+      probedAt: '2026-07-16T00:00:00.000Z',
+      source: 'codex --version',
+      diagnostics: [],
+    },
+    digest: `sha256:${'a'.repeat(64)}`,
+  };
+}

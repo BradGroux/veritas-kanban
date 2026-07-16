@@ -406,6 +406,14 @@ runtime:
           model: 'gpt-5.5',
         },
         {
+          type: 'hermes',
+          name: 'Hermes Agent',
+          command: 'hermes',
+          args: [],
+          enabled: false,
+          provider: 'hermes-cli',
+        },
+        {
           type: 'ollama-local',
           name: 'Ollama Local',
           command: 'ollama',

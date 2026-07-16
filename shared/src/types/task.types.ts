@@ -61,6 +61,7 @@ export interface TaskAttempt {
   orchestration?: import('./workflow.js').WorkflowPipelineSummary;
   budget?: import('./agent-budget.types.js').AgentBudgetState;
   agentProfile?: import('./agent-profile-package.types.js').AgentProfileLaunchMetadata;
+  providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
 }
 
 export interface Subtask {
@@ -399,6 +400,7 @@ export interface UpdateTaskInput {
   delegatedWork?: import('./workspace-capability.types.js').TaskDelegatedWorkLink[];
   externalWorkItems?: import('./external-tracker.types.js').ExternalWorkItemLink[];
   attempt?: TaskAttempt;
+  attempts?: TaskAttempt[];
   reviewComments?: ReviewComment[];
   reviewScores?: [number, number, number, number];
   review?: ReviewState;

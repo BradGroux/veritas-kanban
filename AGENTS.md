@@ -115,6 +115,14 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   **Currently supported providers:**
   `openclaw` | `codex-cli` | `codex-sdk` | `codex-cloud` | `hermes-cli` |
   `ollama-local` | `ollama-cloud` | `lm-studio-local` | `custom`
+- Executable task adapters are currently `openclaw`, `codex-cli`, `codex-sdk`,
+  and `hermes-cli`. Explicitly configured providers outside that set must fail
+  closed; never route them through an implicit OpenClaw fallback.
+- Probe and persist `provider-runtime-manifest/v1` before mutating attempt state.
+  New runtime controls must use the persisted evidence instead of provider-name
+  checks, and provider version/build changes must invalidate cached conformance.
+  Increment `PROVIDER_RUNTIME_PROBE_REVISION` whenever probe semantics or the
+  built-in adapter capability evidence changes.
 
 ---
 

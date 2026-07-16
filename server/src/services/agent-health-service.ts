@@ -6,6 +6,40 @@ import { promisify } from 'util';
 import type { AgentConfig } from '@veritas-kanban/shared';
 
 const execFileAsync = promisify(execFile);
+const PROVIDER_VERSION_TIMEOUT_MS = 5_000;
+const PROVIDER_VERSION_MAX_BUFFER_BYTES = 8 * 1024;
+
+interface CommandOptions {
+  timeout?: number;
+  maxBuffer?: number;
+  shell?: boolean;
+}
+
+interface CommandResult {
+  stdout: string;
+  stderr: string;
+}
+
+export type AgentHealthCommandRunner = (
+  command: string,
+  args: string[],
+  options?: CommandOptions
+) => Promise<CommandResult>;
+
+interface ProviderVersionProbe {
+  attempted: boolean;
+  output?: string;
+  source?: string;
+  error?: string;
+}
+
+const defaultCommandRunner: AgentHealthCommandRunner = async (command, args, options) => {
+  const { stdout, stderr } = await execFileAsync(command, args, {
+    ...options,
+    encoding: 'utf8',
+  });
+  return { stdout: String(stdout), stderr: String(stderr) };
+};
 
 export interface AgentHealthStatus {
   type: string;
@@ -15,6 +49,8 @@ export interface AgentHealthStatus {
   command: string;
   executableFound: boolean;
   executablePath?: string;
+  providerVersion?: string;
+  providerVersionSource?: string;
   authenticated: boolean | null;
   healthy: boolean;
   checkedAt: string;
@@ -26,10 +62,15 @@ export interface AgentHealthChecker {
 }
 
 export class AgentHealthService implements AgentHealthChecker {
+  constructor(private readonly runCommand: AgentHealthCommandRunner = defaultCommandRunner) {}
+
   async checkAgent(agent: AgentConfig): Promise<AgentHealthStatus> {
     const checkedAt = new Date().toISOString();
     const executable = await this.findExecutable(agent.command);
-    const auth = executable.found ? await this.checkAuth(agent) : { authenticated: null };
+    const version = executable.found
+      ? await this.probeProviderVersion(agent.command)
+      : { attempted: false };
+    const auth = executable.found ? await this.checkAuth(agent, version) : { authenticated: null };
     const reason = this.buildReason(agent, executable.found, auth.authenticated, auth.error);
 
     return {
@@ -40,6 +81,8 @@ export class AgentHealthService implements AgentHealthChecker {
       command: agent.command,
       executableFound: executable.found,
       executablePath: executable.path,
+      providerVersion: version.output,
+      providerVersionSource: version.source,
       authenticated: auth.authenticated,
       healthy: agent.enabled && executable.found && auth.authenticated !== false,
       checkedAt,
@@ -60,7 +103,7 @@ export class AgentHealthService implements AgentHealthChecker {
     }
 
     try {
-      const { stdout } = await execFileAsync('which', [command]);
+      const { stdout } = await this.runCommand('which', [command]);
       return { found: true, path: stdout.trim() };
     } catch {
       return { found: false };
@@ -68,7 +111,8 @@ export class AgentHealthService implements AgentHealthChecker {
   }
 
   private async checkAuth(
-    agent: AgentConfig
+    agent: AgentConfig,
+    versionProbe: ProviderVersionProbe
   ): Promise<{ authenticated: boolean | null; error?: string }> {
     const command = path.basename(agent.command);
     const provider = agent.provider ?? '';
@@ -97,12 +141,8 @@ export class AgentHealthService implements AgentHealthChecker {
     if (provider === 'hermes-cli' || command === 'hermes') {
       // Hermes v2026.7.7.2: binary existence + version probe. API key is optional at
       // probe time; the actual run will fail if no key is configured.
-      const versionProbe = await this.runAuthProbe(
-        agent.command,
-        ['--version'],
-        /hermes|version|\d+\.\d+/i
-      );
-      if (!versionProbe.authenticated) return versionProbe;
+      const versionAuth = this.authResultFromVersionProbe(versionProbe, /hermes|version|\d+\.\d+/i);
+      if (!versionAuth.authenticated) return versionAuth;
       // Check for at least one supported API key in the environment
       const hasKey = Boolean(process.env.HERMES_API_KEY || process.env.ANTHROPIC_API_KEY);
       if (!hasKey) {
@@ -127,7 +167,7 @@ export class AgentHealthService implements AgentHealthChecker {
     successPattern: RegExp
   ): Promise<{ authenticated: boolean; error?: string }> {
     try {
-      const { stdout, stderr } = await execFileAsync(command, args);
+      const { stdout, stderr } = await this.runCommand(command, args);
       const output = `${stdout}${stderr}`.trim();
       return {
         authenticated: successPattern.test(output),
@@ -137,6 +177,43 @@ export class AgentHealthService implements AgentHealthChecker {
       const message = error instanceof Error ? error.message : 'Authentication probe failed';
       return { authenticated: false, error: message };
     }
+  }
+
+  private async probeProviderVersion(command: string): Promise<ProviderVersionProbe> {
+    const source = `${path.basename(command)} --version`;
+    try {
+      const { stdout, stderr } = await this.runCommand(command, ['--version'], {
+        timeout: PROVIDER_VERSION_TIMEOUT_MS,
+        maxBuffer: PROVIDER_VERSION_MAX_BUFFER_BYTES,
+        shell: false,
+      });
+      const output = boundUtf8(`${stdout}${stderr}`.trim(), PROVIDER_VERSION_MAX_BUFFER_BYTES);
+      return {
+        attempted: true,
+        output: output || undefined,
+        source: output ? source : undefined,
+        error: output ? undefined : 'Provider version output was empty',
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        error: error instanceof Error ? error.message : 'Provider version probe failed',
+      };
+    }
+  }
+
+  private authResultFromVersionProbe(
+    probe: ProviderVersionProbe,
+    successPattern: RegExp
+  ): { authenticated: boolean; error?: string } {
+    const output = probe.output ?? '';
+    const authenticated = successPattern.test(output);
+    return {
+      authenticated,
+      error: authenticated
+        ? undefined
+        : probe.error || output || (probe.attempted ? 'Authentication status unknown' : undefined),
+    };
   }
 
   private buildReason(
@@ -152,4 +229,13 @@ export class AgentHealthService implements AgentHealthChecker {
     }
     return undefined;
   }
+}
+
+function boundUtf8(value: string, maxBytes: number): string {
+  const bytes = Buffer.from(value, 'utf8');
+  if (bytes.byteLength <= maxBytes) return value;
+  return bytes
+    .subarray(0, maxBytes)
+    .toString('utf8')
+    .replace(/\uFFFD$/u, '');
 }

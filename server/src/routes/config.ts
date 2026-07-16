@@ -49,6 +49,7 @@ const agentSchema = z.object({
       'openclaw',
       'codex-cli',
       'codex-sdk',
+      'hermes-cli',
       'codex-cloud',
       'ollama-local',
       'ollama-cloud',

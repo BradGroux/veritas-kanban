@@ -85,6 +85,7 @@ const AGENT_PROVIDER_OPTIONS: Array<{ value: AgentProvider | '__none__'; label: 
   { value: '__none__', label: 'None / legacy' },
   { value: 'codex-cli', label: 'Codex CLI' },
   { value: 'codex-sdk', label: 'Codex SDK' },
+  { value: 'hermes-cli', label: 'Hermes Agent' },
   { value: 'codex-cloud', label: 'Codex Cloud' },
   { value: 'ollama-local', label: 'Ollama Local' },
   { value: 'ollama-cloud', label: 'Ollama Cloud' },
@@ -1170,8 +1171,7 @@ function SandboxPoliciesSection({
 
   const selectedPreset = presets.find((preset) => preset.id === previewPresetId);
   const validation = validatePreset.data as
-    | (SandboxPolicyDryRunResult & { traceId?: string })
-    | undefined;
+    (SandboxPolicyDryRunResult & { traceId?: string }) | undefined;
 
   const handlePreview = () => {
     if (!selectedPreset) return;

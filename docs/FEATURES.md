@@ -277,7 +277,7 @@ First-class support for autonomous coding agents.
 ![Agent provider settings](assets/v5/v5-agent-providers.png)
 
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
-- **Multi-agent support** — Ships with Codex, Codex SDK, Codex Cloud, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
+- **Multi-agent support** — Ships with Codex, Codex SDK, Codex Cloud, Hermes Agent, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
 - **Agent CRUD management** — Full Add/Edit/Remove for agents in Settings → Agents; add agent form with name, type slug (auto-generated), command, and args; inline edit via pencil icon; remove via trash icon with confirmation (blocked for the default agent); `AgentType` accepts any string slug, not just built-in names
 - **Agent request files** — Server writes structured requests to `.veritas-kanban/agent-requests/` for agent pickup
 - **Completion callbacks** — Agents call the completion endpoint with success/failure status and summary
@@ -296,6 +296,7 @@ First-class support for autonomous coding agents.
 - **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
+- **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
@@ -992,7 +993,7 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 - Required controls fail closed before agent or workflow launch when the selected provider cannot support them.
 - Advisory controls warn and record trace evidence without blocking the run.
 - Credential references and environment-style `name=value` values are redacted in dry-run output and governance traces.
-- Provider capability checks currently distinguish Codex CLI, Codex SDK, and OpenClaw execution behavior.
+- Provider capability checks currently distinguish Codex CLI, Codex SDK, Hermes, and OpenClaw execution behavior.
 
 ### Session Isolation
 

@@ -183,6 +183,7 @@ describe('ConfigService', () => {
       expect(config.agents.length).toBeGreaterThan(0);
       expect(config.agents.some((a) => a.type === 'claude-code')).toBe(true);
       expect(config.agents.some((a) => a.type === 'codex')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'hermes')).toBe(true);
       expect(config.agents.some((a) => a.type === 'ollama-local')).toBe(true);
       expect(config.agents.some((a) => a.type === 'ollama-cloud')).toBe(true);
       expect(config.agents.some((a) => a.type === 'lm-studio-local')).toBe(true);
