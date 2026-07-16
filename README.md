@@ -501,6 +501,7 @@ vk doctor                        # Redacted setup health report
 vk doctor --json                 # Support-safe JSON report
 vk snapshot --format markdown    # Redacted runtime support snapshot
 vk prompts import prompt-registry --dry-run
+vk sqlite journal status --json  # Journal maintenance and override posture
 ```
 
 Validates Node version, server health, API auth, and optionally creates a welcome task to get you started.
@@ -516,6 +517,11 @@ attaching it to a support handoff.
 `vk prompts import` syncs file-based prompt templates into the runtime registry.
 Run with `--dry-run` first; rerun with `--force` only when you want disk content
 to replace a differing runtime template.
+`vk sqlite journal preview` and `apply` stage governed journal conversion for
+the configured authoritative database. Conversion executes before server
+startup, with a verified backup, rollback, and single-host ownership policy;
+pre-close failures revert mode while SQLite exclusivity is still held, and the
+live API never flips journal mode in place.
 
 ### Workflow Commands
 

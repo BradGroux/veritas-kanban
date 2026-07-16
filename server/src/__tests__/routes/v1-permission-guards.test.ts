@@ -8,6 +8,7 @@ import {
   agentRoutingAccess,
   agentTaskAccess,
   diffAccess,
+  maintenanceAccess,
   policyAccess,
   previewAccess,
   scoringAccess,
@@ -121,6 +122,31 @@ describe('v1 REST permission guard presets', () => {
         }),
       })
     );
+  });
+
+  it('requires write permission for SQLite journal preview and admin for apply and revoke', () => {
+    const preview = runGuard(
+      maintenanceAccess,
+      mockRequest('POST', '/sqlite/journal/preview', 'read-only', ['backup:read'])
+    );
+    expect(preview.next).not.toHaveBeenCalled();
+    expect(preview.res.status).toHaveBeenCalledWith(403);
+    expect(preview.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['backup:write'] }),
+      })
+    );
+
+    for (const path of ['/sqlite/journal/apply', '/sqlite/journal/override/revoke']) {
+      const { res, next } = runGuard(maintenanceAccess, mockRequest('POST', path));
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({ required: ['admin:manage'] }),
+        })
+      );
+    }
   });
 
   it('keeps read-like search POSTs available while guarding index refresh', () => {

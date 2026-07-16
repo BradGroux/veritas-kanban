@@ -88,6 +88,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - Pagination: `sendPaginated(res, items, { page, limit, total })`.
 - Path traversal: always call `validatePathSegment()` on any user-supplied path component,
   then `ensureWithinBase(base, resolved)` before file I/O.
+- SQLite journal conversion runs from the bootstrap before `server.ts` imports routes. Normal
+  startup eagerly creates many independent SQLite handles, so a live API handler cannot prove
+  exclusive database ownership.
+- Governed SQLite `DELETE` or expert-override mode requires the signed external policy and the
+  reference-counted process/host ownership lock. Do not reuse the short-lived generic `FileLock`
+  for authoritative database ownership.
 
 ### Web (React + Vite)
 

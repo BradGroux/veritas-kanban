@@ -114,8 +114,9 @@ vk begin task_20260201_abc123
 3. Updates agent status to `working` (auto-fetches task title)
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description           |
+| -------- | --------------------- |
 | `--json` | Output result as JSON |
 
 ---
@@ -136,8 +137,9 @@ vk done task_20260201_abc123 "Added OAuth2 with Google and GitHub providers"
 4. Updates agent status to `idle`
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description           |
+| -------- | --------------------- |
 | `--json` | Output result as JSON |
 
 ---
@@ -156,8 +158,9 @@ vk block task_20260201_abc123 "Waiting on API credentials from client"
 2. Adds a comment with the block reason
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description           |
+| -------- | --------------------- |
 | `--json` | Output result as JSON |
 
 ---
@@ -176,8 +179,9 @@ vk unblock task_20260201_abc123
 2. Restarts the time tracker
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description           |
+| -------- | --------------------- |
 | `--json` | Output result as JSON |
 
 ---
@@ -202,12 +206,13 @@ vk list --json                    # JSON output
 **Aliases:** `ls`
 
 **Flags:**
-| Flag | Description |
-| ----------- | ---------------------------------------- |
-| `--status` | Filter by status (todo, in-progress, blocked, done) |
-| `--type` | Filter by task type |
-| `--project` | Filter by project name |
-| `--json` | Output as JSON |
+
+| Flag        | Description                                         |
+| ----------- | --------------------------------------------------- |
+| `--status`  | Filter by status (todo, in-progress, blocked, done) |
+| `--type`    | Filter by task type                                 |
+| `--project` | Filter by project name                              |
+| `--json`    | Output as JSON                                      |
 
 ---
 
@@ -222,8 +227,9 @@ vk show abc123 --json
 ```
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 ---
@@ -238,12 +244,13 @@ vk create "Fix button alignment" --type code --priority high --project my-app
 ```
 
 **Flags:**
-| Flag | Description |
-| ------------ | -------------------------------------------- |
-| `--type` | Task type (code, research, content, etc.) |
-| `--priority` | Priority level (low, medium, high) |
-| `--project` | Project name |
-| `--json` | Output as JSON |
+
+| Flag         | Description                               |
+| ------------ | ----------------------------------------- |
+| `--type`     | Task type (code, research, content, etc.) |
+| `--priority` | Priority level (low, medium, high)        |
+| `--project`  | Project name                              |
+| `--json`     | Output as JSON                            |
 
 ---
 
@@ -257,14 +264,15 @@ vk update abc123 --title "New title" --priority high
 ```
 
 **Flags:**
-| Flag | Description |
-| ------------ | ------------------------------ |
-| `--status` | New status |
-| `--title` | New title |
-| `--priority` | New priority |
-| `--type` | New type |
-| `--project` | New project |
-| `--json` | Output as JSON |
+
+| Flag         | Description    |
+| ------------ | -------------- |
+| `--status`   | New status     |
+| `--title`    | New title      |
+| `--priority` | New priority   |
+| `--type`     | New type       |
+| `--project`  | New project    |
+| `--json`     | Output as JSON |
 
 ---
 
@@ -302,11 +310,12 @@ vk time entry abc123 1800 "Code review"
 ```
 
 **Arguments:**
-| Argument | Description |
-| ------------- | ----------------------------------- |
-| `<id>` | Task ID (supports partial matching) |
-| `<seconds>` | Duration in seconds |
-| `"description"` | Description of the work done |
+
+| Argument        | Description                         |
+| --------------- | ----------------------------------- |
+| `<id>`          | Task ID (supports partial matching) |
+| `<seconds>`     | Duration in seconds                 |
+| `"description"` | Description of the work done        |
 
 ---
 
@@ -322,8 +331,9 @@ vk time show abc123 --json
 **Output includes:** total time, whether a timer is currently running, and individual time entries with descriptions.
 
 **Flags:**
-| Flag | Description |
-| -------- | ------------------------- |
+
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 ---
@@ -340,10 +350,11 @@ vk comment abc123 "Completed OAuth integration" --author Veritas
 ```
 
 **Flags:**
-| Flag | Description |
-| ---------- | --------------------------------------- |
+
+| Flag       | Description                     |
+| ---------- | ------------------------------- |
 | `--author` | Author name (default: CLI user) |
-| `--json` | Output as JSON |
+| `--json`   | Output as JSON                  |
 
 ---
 
@@ -417,11 +428,12 @@ vk project create "rubicon" --color "#7c3aed" --description "Main product"
 ```
 
 **Flags:**
-| Flag | Description |
-| --------------- | ------------------------ |
-| `--color` | Project color (hex) |
+
+| Flag            | Description         |
+| --------------- | ------------------- |
+| `--color`       | Project color (hex) |
 | `--description` | Project description |
-| `--json` | Output as JSON |
+| `--json`        | Output as JSON      |
 
 ---
 
@@ -501,6 +513,27 @@ Inspect and run policy-gated GitHub queue intake monitors.
 | `vk queue-monitors resume <id>`  | Resume one monitor                              |
 
 Every queue monitor command supports `--json`. `run` requires `workflow:execute`; list, health, and explain require `workflow:read`.
+
+---
+
+### SQLite Journal Maintenance
+
+Preview and schedule safe journal-mode conversion for the configured
+authoritative database.
+
+| Command                                      | Permission     | Description                                         |
+| -------------------------------------------- | -------------- | --------------------------------------------------- |
+| `vk sqlite journal preview --target <mode>`  | `backup:write` | Show filesystem, sidecars, ownership, backup, risks |
+| `vk sqlite journal apply ...`                | `admin:manage` | Schedule the confirmed preview for the next restart |
+| `vk sqlite journal status [operationId]`     | `backup:read`  | Show operation and policy state                     |
+| `vk sqlite journal override revoke --reason` | `admin:manage` | Revoke active compatibility/override policy         |
+
+`apply` requires `--preview-id`, the one-time `--preview-token`, a matching
+`--confirm`, and `--acknowledge-risks`. It does not convert the live database;
+restart the server once so bootstrap can run before any SQLite connection opens.
+All commands support `--json`. `delete` mode also requires explicit single-host
+environment posture and bounded override metadata; see
+[Maintenance Center](MAINTENANCE-CENTER.md).
 
 ---
 

@@ -187,6 +187,7 @@ healthRouter.get('/ready', async (_req, res) => {
       checkTasksFile(),
     ]);
     const memory = checkMemory();
+    const sqlite = getSqliteStorageDiagnostics();
 
     // Storage encompasses both the directory check and the tasks file check
     const storageStatus = storage === 'fail' || tasksFile === 'fail' ? 'fail' : 'ok';
@@ -195,9 +196,15 @@ healthRouter.get('/ready', async (_req, res) => {
       storage: storageStatus as 'ok' | 'fail',
       memory,
       disk,
+      ...(process.env.VERITAS_STORAGE === 'sqlite'
+        ? { sqlite: sqlite?.healthPosture === 'refused' ? ('fail' as const) : ('ok' as const) }
+        : {}),
     };
 
-    const hasCriticalFailure = checks.storage === 'fail' || checks.disk === 'fail';
+    const hasCriticalFailure =
+      checks.storage === 'fail' ||
+      checks.disk === 'fail' ||
+      ('sqlite' in checks && checks.sqlite === 'fail');
     const status = hasCriticalFailure ? 'degraded' : 'ok';
     const httpStatus = hasCriticalFailure ? 503 : 200;
 
@@ -234,6 +241,7 @@ async function buildDeepHealthPayload() {
   const memUsage = process.memoryUsage();
 
   const storageStatus = storage === 'fail' || tasksFile === 'fail' ? 'fail' : 'ok';
+  const sqlite = getSqliteStorageDiagnostics();
 
   const dataDir = getDataDir();
   let dataDirSize = 0;
@@ -260,7 +268,12 @@ async function buildDeepHealthPayload() {
   const circuitBreakers = getCircuitBreakerStatus();
 
   return {
-    status: storageStatus === 'fail' || disk === 'fail' ? 'degraded' : 'ok',
+    status:
+      storageStatus === 'fail' ||
+      disk === 'fail' ||
+      (process.env.VERITAS_STORAGE === 'sqlite' && sqlite?.healthPosture !== 'healthy')
+        ? 'degraded'
+        : 'ok',
     checks: {
       storage: storageStatus as 'ok' | 'fail',
       memory,
@@ -276,7 +289,7 @@ async function buildDeepHealthPayload() {
     },
     wsConnections,
     circuitBreakers,
-    sqlite: getSqliteStorageDiagnostics(),
+    sqlite,
     node: {
       version: process.version,
       platform: process.platform,

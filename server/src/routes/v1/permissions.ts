@@ -59,6 +59,15 @@ export const skillSecurityAccess = routeAccess('policy:read', 'admin:manage', [
 export const backupAccess = routeAccess('backup:read', 'backup:write', [
   { methods: ['POST'], path: /^\/skill-security\/scan\/?$/, permissions: 'admin:manage' },
 ]);
+export const maintenanceAccess = routeAccess('backup:read', 'backup:write', [
+  { methods: ['POST'], path: /^\/sqlite\/journal\/preview\/?$/, permissions: 'backup:write' },
+  {
+    methods: ['POST'],
+    path: /^\/sqlite\/journal\/(apply|override\/revoke)\/?$/,
+    permissions: 'admin:manage',
+  },
+  { methods: ['POST'], path: /^\/skill-security\/scan\/?$/, permissions: 'admin:manage' },
+]);
 export const previewAccess = routeAccess('task:read', 'admin:manage');
 export const workspaceAccess = routeAccess('workspace:read', 'admin:manage');
 export const workspaceCapabilityAccess = routeAccess('workspace:read', 'settings:write', [

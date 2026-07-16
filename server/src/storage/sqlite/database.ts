@@ -6,6 +6,12 @@ import type { SqliteStorageDiagnostics } from '@veritas-kanban/shared';
 import { getRuntimeDir } from '../../utils/paths.js';
 import { SQLITE_BASE_MIGRATIONS, sortedMigrations, type SqliteMigration } from './migrations.js';
 import { detectSqliteFilesystem, type SqliteFilesystemDecision } from './filesystem-posture.js';
+import {
+  loadSqliteJournalPolicy,
+  summarizeSqliteJournalPolicy,
+  type SqliteJournalPolicy,
+} from './sqlite-journal-policy.js';
+import { acquireSqliteOwnershipLease, type SqliteOwnershipLease } from './sqlite-ownership-lock.js';
 
 export const DEFAULT_SQLITE_FILENAME = 'veritas.db';
 
@@ -34,6 +40,7 @@ type ExistingSqliteJournalPosture = 'new' | 'wal' | 'rollback' | 'unrecognized';
 
 const SQLITE_HEADER = 'SQLite format 3\u0000';
 const sqliteDiagnostics = new Map<string, SqliteStorageDiagnostics>();
+const activeSqliteConnections = new Map<string, number>();
 
 function cloneDiagnostics(
   diagnostics: SqliteStorageDiagnostics | undefined
@@ -44,11 +51,36 @@ function cloneDiagnostics(
 export function getSqliteStorageDiagnostics(
   databasePath?: string
 ): SqliteStorageDiagnostics | undefined {
-  return cloneDiagnostics(sqliteDiagnostics.get(resolveSqliteDatabasePath(databasePath)));
+  const resolvedPath = resolveSqliteDatabasePath(databasePath);
+  const diagnostics = cloneDiagnostics(sqliteDiagnostics.get(resolvedPath));
+  if (!diagnostics || !diagnostics.overrideSource || resolvedPath === ':memory:')
+    return diagnostics;
+  try {
+    const policy = loadSqliteJournalPolicy(resolvedPath, { allowInactive: true });
+    if (!policy) return diagnostics;
+    const override = summarizeSqliteJournalPolicy(policy);
+    return {
+      ...diagnostics,
+      override,
+      healthPosture: override.status === 'active' ? 'degraded' : 'refused',
+    };
+  } catch {
+    return {
+      ...diagnostics,
+      healthPosture: 'refused',
+      lockingPosture: 'failed',
+      ownershipState: 'malformed',
+    };
+  }
+}
+
+export function getActiveSqliteConnectionCount(databasePath?: string): number {
+  return activeSqliteConnections.get(resolveSqliteDatabasePath(databasePath)) ?? 0;
 }
 
 export function resetSqliteStorageDiagnosticsForTests(): void {
   sqliteDiagnostics.clear();
+  activeSqliteConnections.clear();
 }
 
 export class UnsupportedSqliteSchemaError extends Error {
@@ -125,6 +157,8 @@ export class SqliteDatabase {
   private readonly applyMigrations: boolean;
   private readonly filesystemClassifier: (directoryPath: string) => SqliteFilesystemDecision;
   private readonly databaseLocation: SqliteStorageDiagnostics['databaseLocation'];
+  private ownershipLease: SqliteOwnershipLease | null = null;
+  private connectionRegistered = false;
 
   constructor(options: SqliteConnectionOptions = {}) {
     this.databasePath = resolveSqliteDatabasePath(options.databasePath);
@@ -145,6 +179,7 @@ export class SqliteDatabase {
     }
 
     let existingJournalPosture: ExistingSqliteJournalPosture = 'new';
+    let policy: SqliteJournalPolicy | undefined;
 
     if (this.isMemoryDatabase()) {
       sqliteDiagnostics.set(this.databasePath, {
@@ -158,13 +193,20 @@ export class SqliteDatabase {
         journalMode: 'memory',
         decisionSource: 'memory',
         overrideSource: null,
+        healthPosture: 'healthy',
+        lockingPosture: 'none',
       });
     } else {
       const databaseDirectory = dirname(this.databasePath);
       mkdirSync(databaseDirectory, { recursive: true });
       const filesystem =
         inspectDatabaseFilePath(this.databasePath) ?? this.filesystemClassifier(databaseDirectory);
+      if (existsSync(`${this.databasePath}.maintenance/scheduled.json`)) {
+        throw new SqliteJournalModeMaintenanceError('unrecognized');
+      }
+      policy = loadSqliteJournalPolicy(this.databasePath);
       const priorIntegrity = sqliteDiagnostics.get(this.databasePath)?.lastIntegrityCheck;
+      const governedOverride = policy ? summarizeSqliteJournalPolicy(policy) : undefined;
       const diagnostics: SqliteStorageDiagnostics = {
         schemaVersion: 'sqlite-storage/v1',
         databaseLocation: this.databaseLocation,
@@ -174,25 +216,55 @@ export class SqliteDatabase {
         detectionSource: filesystem.detectionSource,
         reasonCode: filesystem.reasonCode,
         journalMode: filesystem.posture === 'supported-local' ? 'unknown' : 'refused',
-        decisionSource: 'automatic',
-        overrideSource: null,
+        decisionSource: policy?.source ?? 'automatic',
+        overrideSource: policy ? 'operator-policy' : null,
+        healthPosture:
+          filesystem.posture === 'known-unsafe'
+            ? 'refused'
+            : policy
+              ? 'degraded'
+              : filesystem.posture === 'supported-local'
+                ? 'healthy'
+                : 'refused',
+        lockingPosture: policy ? 'single-host-owner-lock' : 'wal-coordinated',
+        ownershipState: policy ? 'available' : undefined,
+        override: governedOverride,
         lastIntegrityCheck: priorIntegrity,
       };
       sqliteDiagnostics.set(this.databasePath, diagnostics);
 
-      if (filesystem.posture !== 'supported-local') {
+      if (
+        filesystem.posture === 'known-unsafe' ||
+        (filesystem.posture !== 'supported-local' && !policy)
+      ) {
         throw new SqliteFilesystemSafetyError(diagnostics);
       }
 
       existingJournalPosture = inspectExistingSqliteJournalPosture(this.databasePath);
-      if (existingJournalPosture === 'rollback' || existingJournalPosture === 'unrecognized') {
+      if (policy && existingJournalPosture === 'new') {
         throw new SqliteJournalModeMaintenanceError(existingJournalPosture);
+      }
+      const expectedPolicyMode =
+        existingJournalPosture === 'rollback' ? 'delete' : existingJournalPosture;
+      if (policy && expectedPolicyMode !== 'new' && expectedPolicyMode !== policy.mode) {
+        throw new SqliteJournalModeMaintenanceError(existingJournalPosture);
+      }
+      if (
+        (existingJournalPosture === 'rollback' && !policy) ||
+        existingJournalPosture === 'unrecognized'
+      ) {
+        throw new SqliteJournalModeMaintenanceError(existingJournalPosture);
+      }
+      if (policy) {
+        this.ownershipLease = acquireSqliteOwnershipLease(this.databasePath, policy.mode);
+        sqliteDiagnostics.set(this.databasePath, { ...diagnostics, ownershipState: 'owned' });
       }
     }
 
     try {
       this.db = new DatabaseSync(this.databasePath);
       this.applyPragmas(existingJournalPosture);
+      this.registerConnection();
     } catch (error) {
       this.closeAfterStartupFailure();
       throw error;
@@ -268,6 +340,9 @@ export class SqliteDatabase {
 
     this.db.close();
     this.db = null;
+    this.unregisterConnection();
+    this.ownershipLease?.release();
+    this.ownershipLease = null;
   }
 
   private applyPragmas(existingJournalPosture: ExistingSqliteJournalPosture): void {
@@ -281,15 +356,20 @@ export class SqliteDatabase {
           ? (db.prepare('PRAGMA journal_mode = WAL;').get() as JournalModeRow | undefined)
           : (db.prepare('PRAGMA journal_mode;').get() as JournalModeRow | undefined);
       const journalMode = row?.journal_mode?.toLowerCase();
-      if (journalMode !== 'wal') {
+      const expectedMode = existingJournalPosture === 'rollback' ? 'delete' : 'wal';
+      if (journalMode !== expectedMode) {
         throw new Error(
-          `SQLite refused required WAL journal mode (reported ${journalMode ?? 'unknown'})`
+          `SQLite refused required ${expectedMode} journal mode (reported ${journalMode ?? 'unknown'})`
         );
       }
 
       const diagnostics = sqliteDiagnostics.get(this.databasePath);
       if (diagnostics) {
-        sqliteDiagnostics.set(this.databasePath, { ...diagnostics, journalMode: 'wal' });
+        sqliteDiagnostics.set(this.databasePath, {
+          ...diagnostics,
+          journalMode: expectedMode,
+          healthPosture: expectedMode === 'delete' ? 'degraded' : diagnostics.healthPosture,
+        });
       }
     }
   }
@@ -330,6 +410,26 @@ export class SqliteDatabase {
       // Preserve the actionable startup error.
     }
     this.db = null;
+    this.unregisterConnection();
+    this.ownershipLease?.release();
+    this.ownershipLease = null;
+  }
+
+  private registerConnection(): void {
+    if (this.connectionRegistered || this.isMemoryDatabase()) return;
+    activeSqliteConnections.set(
+      this.databasePath,
+      (activeSqliteConnections.get(this.databasePath) ?? 0) + 1
+    );
+    this.connectionRegistered = true;
+  }
+
+  private unregisterConnection(): void {
+    if (!this.connectionRegistered || this.isMemoryDatabase()) return;
+    const next = (activeSqliteConnections.get(this.databasePath) ?? 1) - 1;
+    if (next <= 0) activeSqliteConnections.delete(this.databasePath);
+    else activeSqliteConnections.set(this.databasePath, next);
+    this.connectionRegistered = false;
   }
 
   private ensureSchemaMigrationsTable(): void {

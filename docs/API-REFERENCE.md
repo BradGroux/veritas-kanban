@@ -991,13 +991,68 @@ object after SQLite initializes successfully. The same redacted
 | `filesystemType`                    | Normalized filesystem type or conservative sentinel                                    |
 | `filesystemPosture`                 | `supported-local`, `known-unsafe`, `unknown`, or `not-applicable`                      |
 | `detectionSource` / `reasonCode`    | Redacted evidence and decision reason                                                  |
-| `journalMode`                       | `wal`, `memory`, `refused`, or `unknown`                                               |
-| `decisionSource` / `overrideSource` | Automatic/memory decision and override provenance (`null` in this release)             |
+| `journalMode`                       | `wal`, `delete`, `memory`, `refused`, or `unknown`                                     |
+| `decisionSource` / `overrideSource` | Automatic, memory, compatibility, or expert-override decision provenance               |
+| `healthPosture` / `lockingPosture`  | Healthy/degraded/refused posture and WAL or single-host ownership-lock state           |
+| `override`                          | Optional redacted policy ID, source, status, expiry, host binding, and restart posture |
 | `lastIntegrityCheck`                | Optional timestamp, `ok`/`failed` status, and bounded result from `PRAGMA quick_check` |
 
 Raw database paths, mount points, and mount sources are intentionally omitted.
 Unsafe or unknown startup posture cannot be queried through health because the
 server refuses to bind; use the redacted startup/supervisor log instead.
+
+### SQLite Journal Maintenance
+
+Journal-mode changes are staged through the authenticated API and execute only
+during the next server bootstrap, before route modules or SQLite-backed services
+load. Requests always target the configured authoritative database; clients
+cannot submit an arbitrary filesystem path.
+
+| Endpoint                                               | Permission     | Purpose                                                        |
+| ------------------------------------------------------ | -------------- | -------------------------------------------------------------- |
+| `POST /api/maintenance/sqlite/journal/preview`         | `backup:write` | Preview posture, sidecars, ownership, backup class, and risks  |
+| `POST /api/maintenance/sqlite/journal/apply`           | `admin:manage` | Schedule a confirmed preview for the next restart              |
+| `GET /api/maintenance/sqlite/journal/status`           | `backup:read`  | Read the scheduled operation and active override summary       |
+| `GET /api/maintenance/sqlite/journal/operations/:id`   | `backup:read`  | Read one redacted operation result                             |
+| `POST /api/maintenance/sqlite/journal/override/revoke` | `admin:manage` | Revoke compatibility/override policy; restart remains required |
+
+Preview body:
+
+```json
+{
+  "targetMode": "delete",
+  "singleHost": true,
+  "overrideReason": "Temporary single-host compatibility",
+  "expiresAt": "2026-07-16T00:00:00.000Z"
+}
+```
+
+`delete` mode and any expert override require an explicit single-host
+acknowledgement, a reason, a bounded future expiry,
+`VERITAS_SQLITE_TOPOLOGY=single-host`, and a stable
+`VERITAS_SQLITE_HOST_ID`. Known-unsafe filesystems cannot be overridden.
+
+Apply body:
+
+```json
+{
+  "previewId": "98af3a58-1b8b-41b3-8162-dfdb1f257740",
+  "previewToken": "<one-time token from preview>",
+  "confirm": "98af3a58-1b8b-41b3-8162-dfdb1f257740",
+  "acknowledgeRisks": true
+}
+```
+
+Apply returns `202` with `state: "scheduled"`. Restart the server once; the
+bootstrap takes an ownership lock, creates and verifies a local backup,
+checkpoints WAL, closes and reopens the source across the mode change, verifies
+the effective mode and full integrity, then commits policy. A pre-close failure
+reverts journal mode in place while exclusivity is still held. After the first
+close, recovery only completes a verified current mode; it never replaces the
+database with an older backup. A `recovery-required` result fails startup
+closed. Auth-disabled and
+localhost-bypass requests cannot schedule or revoke maintenance even when their
+implicit role is admin.
 
 ---
 

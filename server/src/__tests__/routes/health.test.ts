@@ -12,18 +12,29 @@ import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { healthRouter } from '../../routes/health.js';
 import { errorHandler } from '../../middleware/error-handler.js';
 import {
   resetSqliteStorageDiagnosticsForTests,
   SqliteDatabase,
 } from '../../storage/sqlite/database.js';
+import {
+  createSqliteJournalPolicy,
+  revokeSqliteJournalPolicy,
+  writeSqliteJournalPolicy,
+} from '../../storage/sqlite/sqlite-journal-policy.js';
 
 describe('Health Routes', () => {
   let app: express.Express;
   let testDataDir: string;
   let originalDataDir: string | undefined;
   let originalSqlitePath: string | undefined;
+  let originalStorage: string | undefined;
+  let originalHostId: string | undefined;
+  let originalTopology: string | undefined;
+  let originalAdminKey: string | undefined;
 
   beforeEach(async () => {
     // Create a temp data directory for testing
@@ -37,6 +48,10 @@ describe('Health Routes', () => {
     // Set DATA_DIR env var
     originalDataDir = process.env.DATA_DIR;
     originalSqlitePath = process.env.VERITAS_SQLITE_PATH;
+    originalStorage = process.env.VERITAS_STORAGE;
+    originalHostId = process.env.VERITAS_SQLITE_HOST_ID;
+    originalTopology = process.env.VERITAS_SQLITE_TOPOLOGY;
+    originalAdminKey = process.env.VERITAS_ADMIN_KEY;
     process.env.DATA_DIR = testDataDir;
 
     // Create test app
@@ -58,6 +73,14 @@ describe('Health Routes', () => {
     } else {
       delete process.env.VERITAS_SQLITE_PATH;
     }
+    if (originalStorage !== undefined) process.env.VERITAS_STORAGE = originalStorage;
+    else delete process.env.VERITAS_STORAGE;
+    if (originalHostId !== undefined) process.env.VERITAS_SQLITE_HOST_ID = originalHostId;
+    else delete process.env.VERITAS_SQLITE_HOST_ID;
+    if (originalTopology !== undefined) process.env.VERITAS_SQLITE_TOPOLOGY = originalTopology;
+    else delete process.env.VERITAS_SQLITE_TOPOLOGY;
+    if (originalAdminKey !== undefined) process.env.VERITAS_ADMIN_KEY = originalAdminKey;
+    else delete process.env.VERITAS_ADMIN_KEY;
     resetSqliteStorageDiagnosticsForTests();
 
     // Clean up test directory
@@ -133,6 +156,53 @@ describe('Health Routes', () => {
       expect(res.body.status).toBe('degraded');
       expect(res.body.checks.storage).toBe('fail');
     });
+
+    it('fails readiness after an active compatibility policy is revoked', async () => {
+      const databasePath = path.join(testDataDir, 'revoked-policy.db');
+      process.env.VERITAS_STORAGE = 'sqlite';
+      process.env.VERITAS_SQLITE_PATH = databasePath;
+      process.env.VERITAS_ADMIN_KEY = 'test-admin-key-for-health-check-testing-32chars';
+      process.env.VERITAS_SQLITE_HOST_ID = 'health-test-host';
+      process.env.VERITAS_SQLITE_TOPOLOGY = 'single-host';
+      const raw = new DatabaseSync(databasePath);
+      raw.exec('PRAGMA journal_mode = DELETE; CREATE TABLE items (id INTEGER PRIMARY KEY);');
+      raw.close();
+      const policy = createSqliteJournalPolicy({
+        databasePath,
+        mode: 'delete',
+        actor: 'health-test',
+        reason: 'Health readiness revocation test',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        operationId: randomUUID(),
+        source: 'single-host-compatibility',
+      });
+      writeSqliteJournalPolicy(databasePath, policy);
+      const database = new SqliteDatabase({
+        databasePath,
+        applyMigrations: false,
+        filesystemClassifier: () => ({
+          platform: 'darwin',
+          filesystemType: 'apfs',
+          posture: 'supported-local',
+          detectionSource: 'health-test',
+          reasonCode: 'supported-local-filesystem',
+        }),
+      });
+      database.open();
+      revokeSqliteJournalPolicy({
+        databasePath,
+        actor: 'health-test',
+        reason: 'Revoke readiness policy',
+      });
+
+      try {
+        const res = await request(app).get('/health/ready');
+        expect(res.status).toBe(503);
+        expect(res.body.checks.sqlite).toBe('fail');
+      } finally {
+        database.close();
+      }
+    }, 15_000);
   });
 
   describe('GET /health/deep', () => {

@@ -88,6 +88,12 @@ export const envSchema = z.object({
   /** SQLite database file path when VERITAS_STORAGE=sqlite */
   VERITAS_SQLITE_PATH: z.string().optional(),
 
+  /** Explicit topology required before single-host compatibility or override mode */
+  VERITAS_SQLITE_TOPOLOGY: z.enum(['single-host', 'clustered']).optional(),
+
+  /** Stable operator-provided host identity used by SQLite ownership policy */
+  VERITAS_SQLITE_HOST_ID: z.string().min(8).optional(),
+
   // ── CORS ────────────────────────────────────────────────────────────
   /** Comma-separated list of allowed CORS origins */
   CORS_ORIGINS: z.string().optional(),

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an admin-governed SQLite journal maintenance workflow with non-mutating
+  previews, restart-time exclusive conversion, verified backups, durable stage
+  journals, forward-only crash recovery, integrity verification, in-place mode
+  rollback while exclusive, single-host ownership locks, expiring/revocable
+  overrides, CLI commands, and redacted diagnostics (#882).
+
 ### Changed
 
 - Classified the authoritative SQLite filesystem before database open, limited

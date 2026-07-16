@@ -22,6 +22,7 @@ import { registerPromptCommands } from './commands/prompts.js';
 import { registerWorkspaceCommands } from './commands/workspaces.js';
 import { registerSchedulerCommands } from './commands/scheduler.js';
 import { registerQueueMonitorCommands } from './commands/queue-monitors.js';
+import { registerSqliteCommands } from './commands/sqlite.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -55,5 +56,6 @@ registerPromptCommands(program);
 registerWorkspaceCommands(program);
 registerSchedulerCommands(program);
 registerQueueMonitorCommands(program);
+registerSqliteCommands(program);
 
 program.parse();

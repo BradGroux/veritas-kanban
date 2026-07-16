@@ -1,10 +1,6 @@
 export type ClientAuthRole = 'admin' | 'read-only' | 'agent';
 export type ClientAuthMethod =
-  | 'disabled'
-  | 'session'
-  | 'api-key'
-  | 'device-session'
-  | 'localhost-bypass';
+  'disabled' | 'session' | 'api-key' | 'device-session' | 'localhost-bypass';
 export type ClientAuthActorType = 'user' | 'agent' | 'service' | 'device' | 'localhost-bypass';
 export type ClientAuthPermission =
   | '*'
@@ -385,6 +381,16 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     read: 'backup:read',
     write: 'backup:write',
     overrides: [
+      {
+        methods: ['POST'],
+        path: /^\/sqlite\/journal\/preview\/?$/,
+        permissions: 'backup:write',
+      },
+      {
+        methods: ['POST'],
+        path: /^\/sqlite\/journal\/(apply|override\/revoke)\/?$/,
+        permissions: 'admin:manage',
+      },
       { methods: ['POST'], path: /^\/skill-security\/scan\/?$/, permissions: 'admin:manage' },
     ],
   },

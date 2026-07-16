@@ -20,6 +20,9 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
 - Redacted authoritative SQLite filesystem type/posture, detection and decision
   source, effective journal mode, override source, and last one-time integrity
   check when SQLite storage is active.
+- SQLite journal previews and restart-time conversion status, including
+  sidecars, ownership, backup class, risks, degraded single-host policy, expiry,
+  revocation, rollback, and recovery-required state without raw paths.
 - Admin-only skill security scans through
   `/api/v1/maintenance/skill-security/scan`, with redacted JSON and Markdown
   reports persisted for audit review.
@@ -37,6 +40,17 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
 - SQLite posture diagnostics omit the database path, mount point, and mount
   source. Known-unsafe or unknown filesystems refuse startup before Maintenance
   becomes reachable.
+- Journal conversion never runs inside a normal API request. An authenticated
+  admin schedules an exact, short-lived preview; the bootstrap executes it
+  before any SQLite consumer opens. A verified backup and fsynced external stage
+  journal remain available after failures.
+- `DELETE` compatibility mode is explicitly degraded and single-host. It
+  requires `VERITAS_SQLITE_TOPOLOGY=single-host`, a stable
+  `VERITAS_SQLITE_HOST_ID`, an expiring/revocable signed policy, and a
+  process/host ownership lock. Clustered or known-unsafe storage is rejected.
+- Schedule a return to supported-local WAL mode before a compatibility policy
+  expires. Expired or revoked policy fails readiness immediately and refuses
+  the next database open; it never silently widens or renews authority.
 - Debug bundles exclude raw tokens, token hashes, cookies, private keys, raw
   prompts, raw chat content, and generated sensitive text.
 - Local home, project, storage, runtime, and log paths are redacted in bundle
@@ -48,6 +62,7 @@ Focused regression coverage:
 
 ```bash
 pnpm --filter @veritas-kanban/server test -- maintenance-service.test.ts
+pnpm --filter @veritas-kanban/server exec vitest run src/__tests__/sqlite-journal-maintenance-service.test.ts src/__tests__/sqlite-journal-ownership-policy.test.ts
 pnpm --filter @veritas-kanban/server test -- skill-security-service.test.ts
 pnpm --filter @veritas-kanban/web test -- settings-maintenance-mantine.test.tsx
 ```

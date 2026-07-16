@@ -1844,6 +1844,13 @@ Modular settings system with focused, permission-aware sections.
 
 ![v5 Maintenance Center settings surface](assets/v5/v5-maintenance-center.png)
 
+The Maintenance API and CLI include governed SQLite journal conversion:
+non-mutating previews, admin scheduling, restart-time exclusive execution,
+verified backup and rollback, crash recovery, and visibly degraded single-host
+compatibility policy with expiry/revocation and ownership locking. Rollback is
+in-place while SQLite exclusivity is held; ambiguous post-close recovery fails
+closed instead of replacing newer data from an older backup.
+
 | Tab               | What It Controls                                                                                               |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
 | **General**       | Application-wide preferences, appearance (dark/light mode toggle with moon/sun icon)                           |

@@ -559,6 +559,8 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 | `DATA_DIR`                 | `/app/data` (Docker only)                    | Mapped data directory inside the Docker container                          |
 | `VERITAS_STORAGE`          | `file`                                       | Selects `file` or `sqlite` storage                                         |
 | `VERITAS_SQLITE_PATH`      | Runtime `veritas.db`                         | SQLite database override; must resolve to verified durable local storage   |
+| `VERITAS_SQLITE_TOPOLOGY`  | —                                            | Set explicitly to `single-host` before compatibility/override maintenance  |
+| `VERITAS_SQLITE_HOST_ID`   | —                                            | Stable unique host binding for SQLite compatibility ownership policy       |
 | `TELEMETRY_RETENTION_DAYS` | `30`                                         | Days to keep telemetry event files before deletion                         |
 | `TELEMETRY_COMPRESS_DAYS`  | `7`                                          | Days after which NDJSON telemetry files are gzip-compressed (0 = disabled) |
 
@@ -803,6 +805,48 @@ integrity evidence. If the filesystem is unsafe or unverified, the server
 refuses startup before binding the HTTP port; inspect container or desktop
 supervisor logs for the reason and move `VERITAS_SQLITE_PATH` to supported local
 storage.
+
+### Governed SQLite journal conversion
+
+Never edit journal pragmas against a running Veritas database. Configure an
+admin CLI key, preview the exact operation, schedule it, and restart once:
+
+```bash
+export VK_API_KEY="$VERITAS_ADMIN_KEY"
+export VERITAS_SQLITE_TOPOLOGY=single-host
+export VERITAS_SQLITE_HOST_ID=veritas-primary-01
+
+vk sqlite journal preview \
+  --target delete \
+  --single-host \
+  --override-reason "Temporary single-host compatibility" \
+  --expires-at 2026-07-16T00:00:00Z \
+  --json
+
+vk sqlite journal apply \
+  --preview-id <preview-id> \
+  --preview-token <preview-token> \
+  --confirm <preview-id> \
+  --acknowledge-risks
+
+# Restart the normal service once, then inspect the result.
+vk sqlite journal status --json
+```
+
+Use `--target wal` to return a supported-local database to ordinary WAL mode.
+If status reports `recovery-required`, keep the database, maintenance directory,
+and backup artifacts intact and do not start another writer. The next bootstrap
+completes forward only when the current journal mode and full integrity are
+verified, or reverts the mode in place when that remains safe. It never blindly
+restores an older backup; persistent or ambiguous failure requires operator
+recovery before normal startup. Conversion never makes SQLite a shared network
+database.
+
+The journal policy and owner lock are authenticated with `VERITAS_ADMIN_KEY`.
+Return the database to ordinary local WAL mode before rotating that key. If an
+unexpected shutdown leaves an owner lock during rotation, verify that the
+recorded host/process is dead before following the recovery procedure; never
+delete an active or foreign-host lock.
 
 The Docker image includes a built-in health check:
 

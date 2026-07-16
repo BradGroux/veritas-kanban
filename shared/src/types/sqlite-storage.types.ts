@@ -1,7 +1,7 @@
 export type SqliteFilesystemPosture =
   'supported-local' | 'known-unsafe' | 'unknown' | 'not-applicable';
 
-export type SqliteJournalModePosture = 'wal' | 'memory' | 'refused' | 'unknown';
+export type SqliteJournalModePosture = 'wal' | 'delete' | 'memory' | 'refused' | 'unknown';
 
 export interface SqliteIntegrityCheckPosture {
   checkedAt: string;
@@ -22,7 +22,15 @@ export interface SqliteStorageDiagnostics {
   detectionSource: string;
   reasonCode: string;
   journalMode: SqliteJournalModePosture;
-  decisionSource: 'automatic' | 'memory';
-  overrideSource: null;
+  decisionSource: 'automatic' | 'memory' | 'single-host-compatibility' | 'expert-override';
+  overrideSource: null | 'operator-policy';
+  healthPosture?: 'healthy' | 'degraded' | 'refused';
+  lockingPosture?: 'wal-coordinated' | 'single-host-owner-lock' | 'none' | 'failed';
+  ownershipState?: 'owned' | 'available' | 'foreign-host' | 'malformed';
+  override?: import('./sqlite-maintenance.types.js').SqliteJournalPolicySummary;
+  lastMaintenanceOperation?: Pick<
+    import('./sqlite-maintenance.types.js').SqliteJournalOperationStatus,
+    'id' | 'state' | 'updatedAt' | 'recoveryRequired'
+  >;
   lastIntegrityCheck?: SqliteIntegrityCheckPosture;
 }

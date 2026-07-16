@@ -168,4 +168,36 @@ describe('CLI API permission preflight', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
   });
+
+  it('requires write permission for SQLite journal preview and admin permission for apply', async () => {
+    const readOnlyContext = {
+      role: 'read-only',
+      isLocalhost: false,
+      permissions: ['backup:read'],
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(readOnlyContext));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'reader-key');
+    await expect(
+      api('/api/maintenance/sqlite/journal/preview', {
+        method: 'POST',
+        body: JSON.stringify({ targetMode: 'wal' }),
+      })
+    ).rejects.toMatchObject({
+      required: ['backup:write'],
+      path: '/api/maintenance/sqlite/journal/preview',
+    });
+
+    await expect(
+      api('/api/maintenance/sqlite/journal/apply', {
+        method: 'POST',
+        body: JSON.stringify({ previewId: 'blocked' }),
+      })
+    ).rejects.toMatchObject({
+      required: ['admin:manage'],
+      path: '/api/maintenance/sqlite/journal/apply',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

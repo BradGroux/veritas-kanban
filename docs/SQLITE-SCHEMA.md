@@ -50,8 +50,27 @@ NFS, SMB/CIFS, FUSE, WebDAV, distributed/remote filesystems, volatile
 failures, and database-file symlinks fail closed. The startup error explains the
 locking/shared-memory corruption risk and remediation without exposing the raw
 database path, mount point, or mount source. Existing rollback-journal databases
-also refuse automatic conversion; use the governed offline maintenance workflow
-when it becomes available rather than changing journal mode during startup.
+also refuse automatic conversion. Use `vk sqlite journal preview` and
+`vk sqlite journal apply`, then restart once; the bootstrap performs the
+governed operation before the server imports routes or opens any application
+connection.
+
+The restart-time conversion creates a verified SQLite backup, records every
+stage in an external fsynced operation journal, requires exclusive ownership,
+checks the WAL checkpoint result, closes and reopens across the mode change,
+validates sidecars, and verifies the target mode and full integrity. Failures
+before the first close revert journal mode in place while SQLite exclusivity is
+held. Interrupted stages complete only from a verified current mode; the
+bootstrap never overwrites potentially newer data with the older backup, and
+ambiguous or failed recovery prevents binding.
+
+Rollback-journal compatibility uses `DELETE` mode only. It is degraded,
+single-host, expiring/revocable, signed with the configured admin key, bound to
+`VERITAS_SQLITE_HOST_ID`, and protected by a reference-counted process/host lock
+for the lifetime of every application connection. It is rejected unless
+`VERITAS_SQLITE_TOPOLOGY=single-host`. Known-unsafe filesystems cannot be
+overridden; unknown posture requires an explicit expert override and remains
+degraded.
 
 Do not share one SQLite file between Veritas servers, relocate it into a synced
 cloud folder, or create independent per-host authoritative copies. Cloud-sync

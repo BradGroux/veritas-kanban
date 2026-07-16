@@ -395,15 +395,19 @@ export class MaintenanceService {
               id: 'sqlite-posture',
               label: 'SQLite storage posture',
               state:
-                sqlite?.filesystemPosture === 'supported-local' &&
-                sqlite.journalMode === 'wal' &&
-                sqlite.lastIntegrityCheck?.status === 'ok'
-                  ? ('ok' as const)
-                  : sqlite
-                    ? ('fail' as const)
-                    : ('unknown' as const),
+                sqlite?.healthPosture === 'degraded'
+                  ? ('warn' as const)
+                  : sqlite?.journalMode === 'memory' && sqlite.healthPosture === 'healthy'
+                    ? ('ok' as const)
+                    : sqlite?.filesystemPosture === 'supported-local' &&
+                        sqlite.journalMode === 'wal' &&
+                        sqlite.lastIntegrityCheck?.status === 'ok'
+                      ? ('ok' as const)
+                      : sqlite
+                        ? ('fail' as const)
+                        : ('unknown' as const),
               detail: sqlite
-                ? `${sqlite.filesystemType} is ${sqlite.filesystemPosture}; journal mode is ${sqlite.journalMode}; last quick check is ${sqlite.lastIntegrityCheck?.status ?? 'unavailable'}.`
+                ? `${sqlite.filesystemType} is ${sqlite.filesystemPosture}; journal mode is ${sqlite.journalMode}; locking is ${sqlite.lockingPosture ?? 'unavailable'}; override is ${sqlite.override?.status ?? 'none'}; last quick check is ${sqlite.lastIntegrityCheck?.status ?? 'unavailable'}.`
                 : 'SQLite filesystem posture is unavailable.',
               checkedAt,
             },

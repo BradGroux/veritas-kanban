@@ -32,6 +32,7 @@ import {
   diffAccess,
   feedbackAccess,
   integrationsAccess,
+  maintenanceAccess,
   notificationAccess,
   policyAccess,
   queueMonitorAccess,
@@ -255,7 +256,7 @@ v1Router.use('/governance/traces', policyAccess, governanceTraceRoutes);
 v1Router.use('/feedback', feedbackAccess, feedbackRoutes);
 v1Router.use('/prompt-registry', promptRegistryAccess, promptRegistryRoutes);
 v1Router.use('/sqlite', backupAccess, sqlitePortabilityRoutes);
-v1Router.use('/maintenance', backupAccess, maintenanceRoutes);
+v1Router.use('/maintenance', maintenanceAccess, maintenanceRoutes);
 v1Router.use('/identity', workspaceAccess, identityRoutes);
 
 export { v1Router };
