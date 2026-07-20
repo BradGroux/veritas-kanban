@@ -15,7 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@veritas-kanban/shared": "workspace:*",
-    "hono": "^4.12.30",
+    "hono": "^4.12.31",
     "zod": "^4.4.3"
   },
   "devDependencies": {
