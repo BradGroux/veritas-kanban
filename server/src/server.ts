@@ -36,6 +36,7 @@ import {
 import { initBroadcast, nextWebSocketEventSequence } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { getPolicyService } from './services/policy-service.js';
+import { getCredentialBrokerService } from './services/credential-broker-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
 import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -521,6 +522,16 @@ app.use(errorHandler);
 // Module-level config service instance (shared with shutdown handler)
 let configService: ConfigService | null = null;
 let storageInitialized = false;
+let credentialReconciliationInterval: ReturnType<typeof setInterval> | undefined;
+const CREDENTIAL_RECONCILIATION_INTERVAL_MS = 60_000;
+
+async function reconcileCredentialLeases(context: 'startup' | 'periodic'): Promise<void> {
+  try {
+    await getCredentialBrokerService().reconcile();
+  } catch (error) {
+    log.warn({ err: error, context }, 'Credential lease reconciliation failed');
+  }
+}
 
 // Initialize services before binding the HTTP port. Storage safety failures must
 // prevent the process from briefly accepting requests against partial state.
@@ -575,6 +586,12 @@ async function initializeServices(): Promise<void> {
     // Non-fatal: log and continue — the server can still serve requests.
     log.warn({ err: reconcileErr }, 'Startup: agent attempt reconciliation failed');
   }
+  await reconcileCredentialLeases('startup');
+  credentialReconciliationInterval ??= setInterval(
+    () => void reconcileCredentialLeases('periodic'),
+    CREDENTIAL_RECONCILIATION_INTERVAL_MS
+  );
+  credentialReconciliationInterval.unref();
 }
 
 // Create HTTP server
@@ -1060,6 +1077,10 @@ async function gracefulShutdown(signal: string) {
 
   // 1. Stop heartbeat interval and close WebSocket connections
   clearInterval(heartbeatInterval);
+  if (credentialReconciliationInterval) {
+    clearInterval(credentialReconciliationInterval);
+    credentialReconciliationInterval = undefined;
+  }
   log.info({ clients: wss.clients.size }, 'Closing WebSocket connections');
   wss.clients.forEach((client) => {
     const hbClient = client as HeartbeatWebSocket;

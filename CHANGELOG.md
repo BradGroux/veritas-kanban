@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the versioned credential-definition and run-bound lease core with
+  metadata-only admin APIs, canonical definition/scope/action fingerprints,
+  opaque hashed handles, exact launch-manifest and action binding, atomic TTL
+  and use-count enforcement, operation-level replay rejection,
+  refresh/revoke/expiry/reconciliation state, callback-only secret resolution,
+  terminal-run invalidation with revocation retry, live-owner file locking, and
+  bounded metadata audit records. Required brokered presets now reject advisory
+  or externally delegated credential handling until a controlled provider
+  boundary proves end-to-end support (#931).
 - Added the immutable `run-launch-manifest/v1` contract, a preflight preview API
   and CLI command, per-field configuration provenance, fail-closed profile
   tool/MCP/permission/health enforcement, parent-attempt material drift,

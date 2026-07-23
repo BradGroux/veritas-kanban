@@ -161,9 +161,11 @@ describe('SandboxPolicyService', () => {
     expect(updated.name).toBe('Custom repo contained updated');
     expect(updated.environment.passthrough).toEqual(['HOME', 'PATH']);
 
+    const builtIn = await service.getPreset('codex-repo-contained');
+    if (!builtIn) throw new Error('Expected the built-in sandbox preset');
     await expect(
       service.updatePreset('codex-repo-contained', {
-        ...(await service.getPreset('codex-repo-contained'))!,
+        ...builtIn,
         name: 'Edited built in',
       })
     ).rejects.toThrow('Built-in sandbox presets cannot be edited');
@@ -175,53 +177,68 @@ describe('SandboxPolicyService', () => {
     expect(await service.getPreset(created.id)).toBeNull();
   });
 
-  it('redacts broker reference values from dry-run results and governance trace payloads', async () => {
-    const evaluation = await service.dryRunWithTrace({
+  it('rejects credential values disguised as broker references', async () => {
+    let caught: unknown;
+    try {
+      await service.dryRunWithTrace({
+        preset: preset({
+          id: 'brokered-custom',
+          name: 'Brokered custom',
+          credentials: {
+            mode: 'brokered',
+            brokerRefs: ['github-token=raw-secret'],
+          },
+        }),
+        provider: 'hosted-agent',
+        providerRuntimeManifest: providerRuntimeManifestFixture({
+          provider: 'hosted-agent',
+          capabilityStates: {
+            'credential.broker': 'supported',
+          },
+        }),
+        workspacePath: '/Users/bradgroux/Projects/veritas-kanban',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/broker references/i);
+    expect((caught as Error).message).not.toContain('raw-secret');
+  });
+
+  it('blocks required brokered credentials when runtime evidence is only advisory', async () => {
+    const result = await service.dryRun({
       preset: preset({
-        id: 'brokered-custom',
-        name: 'Brokered custom',
-        network: {
-          defaultEgress: 'deny',
-          allowedHosts: ['api.github.com'],
-          allowedMethods: ['post', 'GET'],
-          allowedPathPrefixes: ['/repos'],
-          blockPrivateNetwork: true,
-          blockMetadataEndpoints: true,
-          blockLoopback: true,
-        },
+        id: 'required-broker',
+        name: 'Required broker',
         credentials: {
           mode: 'brokered',
-          brokerRefs: ['github-token=raw-secret'],
+          brokerRefs: ['github-token'],
         },
       }),
-      provider: 'hosted-agent',
       providerRuntimeManifest: providerRuntimeManifestFixture({
-        provider: 'hosted-agent',
+        provider: 'openclaw',
         capabilityStates: {
           'filesystem.read': 'supported',
           'filesystem.write': 'supported',
-          'network.allowlist': 'supported',
+          'network.disable': 'supported',
           'network.block-private': 'supported',
           'network.block-metadata': 'supported',
           'environment.allowlist': 'supported',
-          'credential.broker': 'supported',
+          'credential.broker': 'advisory',
         },
       }),
-      workspacePath: '/Users/bradgroux/Projects/veritas-kanban',
     });
 
-    const serialized = JSON.stringify(evaluation);
-    expect(evaluation.result.decision).toBe('allow');
-    expect(evaluation.result.effective.credentialRefs).toEqual(['github-token=[redacted]']);
-    expect(evaluation.trace).toMatchObject({
-      kind: 'sandbox-policy',
-      outcome: 'allowed',
-      subject: {
-        project: '[redacted-local-path]',
-      },
-    });
-    expect(serialized).toContain('github-token=[redacted]');
-    expect(serialized).not.toContain('raw-secret');
-    expect(serialized).not.toContain('/Users/bradgroux');
+    expect(result.decision).toBe('block');
+    expect(result.unsupportedRules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          capability: 'credential.broker',
+          status: 'unsupported',
+        }),
+      ])
+    );
   });
 });

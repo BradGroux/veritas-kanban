@@ -2491,6 +2491,90 @@ responses and governance traces.
 
 ---
 
+## Credential Broker Definitions
+
+Admin-only registry for metadata-only credential definitions. The API never
+accepts or returns a raw credential value.
+
+Mounted at `/api/credential-broker`.
+
+| Method   | Path                         | Description                                  | Permissions    |
+| -------- | ---------------------------- | -------------------------------------------- | -------------- |
+| `GET`    | `/api/credential-broker`     | List credential definition metadata          | `admin:manage` |
+| `GET`    | `/api/credential-broker/:id` | Get one credential definition                | `admin:manage` |
+| `POST`   | `/api/credential-broker`     | Create a metadata-only credential definition | `admin:manage` |
+| `PUT`    | `/api/credential-broker/:id` | Replace a credential definition              | `admin:manage` |
+| `DELETE` | `/api/credential-broker/:id` | Delete a definition with no active leases    | `admin:manage` |
+
+### Create Definition
+
+```http
+POST /api/credential-broker
+Content-Type: application/json
+```
+
+```json
+{
+  "id": "github-token",
+  "name": "GitHub token",
+  "description": "Read-only repository metadata",
+  "enabled": true,
+  "source": {
+    "kind": "environment",
+    "reference": "VK_GITHUB_TOKEN"
+  },
+  "scope": {
+    "dispatchTypes": ["http"],
+    "hosts": ["api.github.com"],
+    "tools": [],
+    "destinations": ["https://api.github.com"],
+    "methods": ["GET"],
+    "actions": ["issues.read"],
+    "pathPrefixes": ["/repos/"]
+  },
+  "lease": {
+    "ttlSeconds": 60,
+    "maxUses": 1,
+    "renewable": false
+  },
+  "approval": "not-required"
+}
+```
+
+**Response** `201`: the definition plus
+`schemaVersion: "credential-definition/v1"`, a canonical SHA-256 digest, and
+creation/update timestamps. Environment key names and external manager paths
+are references, not values. Metadata containing credential-looking values is
+rejected.
+
+The server exposes no public lease-issue, lease-use, or secret-resolution
+endpoint. Internal controlled boundaries use `credential-lease/v1` records
+whose persisted form contains a handle hash, definition and scope digests,
+task/attempt/launch-manifest binding, exact action fingerprint, expiry, use
+count, SHA-256 fingerprints of unique caller operation IDs, approval reference,
+and terminal state. Raw operation IDs are not persisted. Duplicate operation
+IDs fail closed instead of replaying use or refresh. Raw values exist only
+inside the controlled callback; the server returns a constrained structured
+clone and rejects results that cannot be safely cloned or that contain
+credential material. Binary views and buffers are not valid callback results.
+
+The initial local source resolves an environment key at use time. This is a
+compatibility source, not a replacement for a production secret manager.
+Definitions using an unavailable external source remain metadata-only and
+leases fail closed. Required brokered sandbox presets remain blocked until a
+provider and controlled network or tool boundary report supported,
+non-bypassable evidence.
+
+Run completion retries revocation on duplicate terminal delivery. Startup and
+one-minute periodic reconciliation expire, block, or revoke invalid leases.
+Manifest declarations and sandbox `brokerRefs` must be exact definition IDs;
+credential-like `name=value` strings are rejected.
+
+See [Credential Broker](CREDENTIAL-BROKER.md) for lifecycle, limitations, and
+rollback behavior.
+
+---
+
 ## Shared Resources
 
 Registry for shared resources (credentials, config files, API keys, docs) that can be mounted to projects.

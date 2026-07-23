@@ -184,6 +184,34 @@ Every dry-run and launch-time decision writes a governance trace with raw
 detail redacted; credential references and environment-style `name=value`
 strings are shown as `[redacted]`.
 
+### Credential broker core
+
+Credential definitions are stored separately from secret values. An admin can
+register a source reference and bounded host/tool/destination/action policy at
+`/api/credential-broker`; the stored `credential-definition/v1` record contains
+only metadata and a canonical digest.
+
+Internal consumers can issue an opaque `credential-lease/v1` handle only when
+the referenced definition appears in the active attempt's immutable launch
+manifest. The lease is bound to that task, attempt, manifest digest, definition
+digest, scope digest, and exact action fingerprint. Handles are persisted only
+as SHA-256 hashes. Uses are claimed atomically before source resolution and
+enforce TTL, maximum uses, approval posture, and current run binding.
+
+The resolved value is passed only to a controlled in-process callback. The
+broker rejects callbacks that return the value and replaces callback/source
+errors with credential-free failures. Definitions, leases, audit events, logs,
+manifests, completion packets, and API responses never contain the resolved
+value. Terminal run paths revoke matching leases, and startup reconciliation
+expires stale leases or blocks leases whose source is unavailable.
+
+This is a foundation, not a claim that provider traffic is controlled.
+Required brokered presets fail closed when runtime evidence is advisory,
+external, missing, or bypassable. Provider handle migration requires the
+controlled network or tool boundaries documented in
+[Credential Broker](CREDENTIAL-BROKER.md). Raw `env-passthrough` remains an
+explicit compatibility mode and is not brokered.
+
 Agent budget policies are enforced through the same governance path. Workspace,
 agent, workflow, workflow-agent, and per-run budgets can cap tokens,
 provider-reported cost, tool-call counts, runtime, retry count, and workflow

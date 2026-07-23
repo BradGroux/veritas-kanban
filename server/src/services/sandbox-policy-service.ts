@@ -266,7 +266,19 @@ export class SandboxPolicyService {
     }
 
     const capabilities = sandboxCapabilitiesFromManifest(input.providerRuntimeManifest);
-    const evaluations = this.evaluateRules(preset, capabilities);
+    const evaluations = this.evaluateRules(preset, capabilities).map((rule) =>
+      preset.enforcement === 'required' &&
+      rule.capability === 'credential.broker' &&
+      rule.status === 'advisory'
+        ? {
+            ...rule,
+            status: 'unsupported' as const,
+            detail:
+              `${rule.detail} Advisory or externally delegated credential handling does not ` +
+              'satisfy required brokered mode.',
+          }
+        : rule
+    );
     const unsupportedRules = evaluations.filter((rule) => rule.status === 'unsupported');
     const advisoryRules = evaluations.filter((rule) => rule.status === 'advisory');
     const advisoryUnsupportedRules = preset.enforcement === 'advisory' ? unsupportedRules : [];

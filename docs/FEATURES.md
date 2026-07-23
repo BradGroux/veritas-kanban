@@ -998,6 +998,13 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 - Required controls fail closed before agent or workflow launch when the selected provider cannot support them.
 - Advisory controls warn and record trace evidence without blocking the run.
 - Credential references and environment-style `name=value` values are redacted in dry-run output and governance traces.
+- Credential definitions and run-bound leases use metadata-only versioned
+  records, opaque hashed handles, exact action/manifest binding, atomic
+  TTL/use-count enforcement, and terminal-run reconciliation. Required
+  brokered mode rejects advisory or externally delegated capability evidence.
+- Broker leases are internal until an accepted network or tool boundary can
+  consume them without provider bypass. Existing provider authentication and
+  explicit environment passthrough are not mislabeled as brokered.
 - Provider capability checks currently distinguish Codex CLI, Codex SDK, Hermes, and OpenClaw execution behavior.
 
 ### Session Isolation

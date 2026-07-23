@@ -286,6 +286,27 @@ The launch path dry-runs the selected preset before starting Codex CLI, Codex SD
 
 Credential references and environment-style `name=value` values are redacted from dry-run output and governance traces. Prefer brokered credential presets for workflows that need scoped secrets instead of exposing broad environment passthrough.
 
+Credential definitions are admin-managed at `/api/credential-broker`. Records
+contain only source references, public scope, TTL/use policy, approval posture,
+and canonical digests. The broker issues opaque, hashed run leases bound to the
+active attempt, immutable launch manifest, and one exact action fingerprint.
+Secret values are resolved only inside an internal controlled-dispatch callback;
+there is no public API that returns a value or issues a lease to a provider.
+Each use or refresh requires a unique operation ID. Only its SHA-256 fingerprint
+is persisted, and duplicate operations fail closed rather than replaying
+credential-bearing work. Completion, failure, interruption, cancellation, duplicate terminal delivery, startup
+reconciliation, and one-minute periodic reconciliation revoke, expire, or
+block outstanding leases. Manifest declarations and sandbox broker references
+must match definition IDs exactly.
+
+This core does not make an uncontrolled provider process broker-capable.
+Required brokered presets treat advisory or externally delegated
+`credential.broker` evidence as unsupported and block launch. Provider-facing
+handles remain disabled until the provider migration and a controlled egress or
+tool boundary are complete. Model-provider boot authentication and explicit
+`env-passthrough` compatibility remain separate, high-risk paths and are never
+labeled as brokered. See [Credential Broker](CREDENTIAL-BROKER.md).
+
 ## Agent Profile Packages
 
 Use **Settings -> Agents -> Agent Profile Packages** or `vk profiles` to import reusable YAML/JSON packages that sit above provider profiles. Provider profiles still own low-level command, args, and availability. Profile packages add portable launch metadata:

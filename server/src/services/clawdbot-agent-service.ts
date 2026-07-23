@@ -89,6 +89,8 @@ import type {
   RunLaunchManifestOrigin,
   RunLaunchManifestPreview,
   RunLaunchRuntime,
+  CredentialRunRevocationRequest,
+  CredentialLeaseTerminalReason,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -126,6 +128,7 @@ import {
   type ProviderCompletionEvidenceClaim,
   type ProviderTerminalClaim,
 } from './provider-completion-service.js';
+import { getCredentialBrokerService } from './credential-broker-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -223,6 +226,10 @@ export interface AgentMessageDelivery {
   note: string;
 }
 
+export interface CredentialLeaseLifecycle {
+  revokeRun(request: CredentialRunRevocationRequest): Promise<number>;
+}
+
 export class AgentReadinessError extends Error {
   constructor(
     public readiness: TaskReadinessSummary,
@@ -297,6 +304,11 @@ const startingAgents = new Set<string>();
 const finalizingAgents = new Map<PendingAgent, Promise<void>>();
 const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
 const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
+const NOOP_CREDENTIAL_LEASE_LIFECYCLE: CredentialLeaseLifecycle = {
+  async revokeRun() {
+    return 0;
+  },
+};
 
 class CompletionPersistenceError extends Error {
   constructor(readonly persistenceCause: unknown) {
@@ -325,6 +337,7 @@ export class ClawdbotAgentService {
   private taskEnvelopes: TaskEnvelopeService;
   private runLaunchManifests: RunLaunchManifestService;
   private providerCompletions: ProviderCompletionService;
+  private credentialLeases: CredentialLeaseLifecycle;
   private workspaceFiles: WorkspaceFileRepository;
   private logsDir: string;
 
@@ -333,7 +346,8 @@ export class ClawdbotAgentService {
     providerRuntimeManifests = new ProviderRuntimeManifestService(),
     taskEnvelopes = new TaskEnvelopeService(),
     workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository(),
-    providerCompletions = new ProviderCompletionService()
+    providerCompletions = new ProviderCompletionService(),
+    credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -342,6 +356,7 @@ export class ClawdbotAgentService {
     this.taskEnvelopes = taskEnvelopes;
     this.runLaunchManifests = new RunLaunchManifestService();
     this.providerCompletions = providerCompletions;
+    this.credentialLeases = credentialLeases;
     this.workspaceFiles = workspaceFiles;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
@@ -1152,7 +1167,15 @@ export class ClawdbotAgentService {
         });
         if (persistedAttempt.completionResult) {
           const persistedCompletion = this.parsePersistedCompletion(persistedAttempt);
-          if (persistedCompletion.idempotencyKey === idempotencyKey) return;
+          if (persistedCompletion.idempotencyKey === idempotencyKey) {
+            await this.revokeRunCredentialLeases(
+              taskId,
+              persistedAttempt.id,
+              persistedCompletion.status,
+              persistedAttempt.runLaunchManifest?.digest
+            );
+            return;
+          }
           throw new ConflictError(
             'Provider completion conflicts with the persisted terminal result',
             {
@@ -1413,7 +1436,10 @@ export class ClawdbotAgentService {
         this.assertCompletionRetryBinding(task.id, completedAttempt, latestTask.attempt);
         if (latestTask.attempt.completionResult) {
           const latestCompletion = this.parsePersistedCompletion(latestTask.attempt);
-          if (latestCompletion.idempotencyKey === idempotencyKey) return;
+          if (latestCompletion.idempotencyKey === idempotencyKey) {
+            lastError = undefined;
+            break;
+          }
           throw new CompletionOwnershipError(
             'A different terminal result already owns this attempt',
             {
@@ -1428,6 +1454,13 @@ export class ClawdbotAgentService {
       }
     }
     if (lastError) throw lastError;
+
+    await this.revokeRunCredentialLeases(
+      task.id,
+      attempt.id,
+      completionResult.status,
+      attempt.runLaunchManifest?.digest
+    );
 
     log.info(
       { taskId: task.id, attemptId: attempt.id, terminalSource: claim.terminalSource },
@@ -1614,6 +1647,16 @@ export class ClawdbotAgentService {
     const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
     const postCommitEffects: Array<[string, () => void | Promise<void>]> = [
       [
+        'revoke run credential leases',
+        () =>
+          this.revokeRunCredentialLeases(
+            taskId,
+            pending.attemptId,
+            completionResult.status,
+            pending.runLaunchManifest?.digest
+          ),
+      ],
+      [
         'append result log',
         () =>
           fs.appendFile(logPath, `\n\n---\n\n## Result\n\n**Status:** ${status}\n\n${summary}\n`),
@@ -1698,6 +1741,26 @@ export class ClawdbotAgentService {
     }
 
     log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
+  }
+
+  private async revokeRunCredentialLeases(
+    taskId: string,
+    attemptId: string,
+    status: TaskCompletionStatus,
+    runLaunchManifestDigest?: string
+  ): Promise<void> {
+    const reason: CredentialLeaseTerminalReason =
+      status === 'success'
+        ? 'run-completed'
+        : status === 'interrupted'
+          ? 'run-interrupted'
+          : 'run-failed';
+    await this.credentialLeases.revokeRun({
+      taskId,
+      attemptId,
+      ...(runLaunchManifestDigest ? { runLaunchManifestDigest } : {}),
+      reason,
+    });
   }
 
   private async persistPendingCompletion(
@@ -4734,7 +4797,16 @@ ${prompt}
 }
 
 // Export singleton
-export const clawdbotAgentService = new ClawdbotAgentService();
+export const clawdbotAgentService = new ClawdbotAgentService(
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  {
+    revokeRun: (request) => getCredentialBrokerService().revokeRun(request),
+  }
+);
 
 function taskStatusForCompletion(status: TaskCompletionStatus): 'done' | 'blocked' | 'in-progress' {
   if (status === 'success') return 'done';

@@ -307,6 +307,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   {
+    prefix: '/api/credential-broker',
+    read: 'admin:manage',
+    write: 'admin:manage',
+  },
+  {
     prefix: '/api/skills/capabilities',
     read: 'policy:read',
     write: 'policy:write',

@@ -109,7 +109,11 @@ vi.mock('../services/circuit-registry.js', () => ({
   getBreaker: () => ({ execute: (fn: () => Promise<void>) => fn() }),
 }));
 
-import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import {
+  AgentReadinessError,
+  ClawdbotAgentService,
+  type CredentialLeaseLifecycle,
+} from '../services/clawdbot-agent-service.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type {
   AgentConfig,
@@ -161,7 +165,10 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
   recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void>;
 };
 
-function testableService(tmpDir: string): TestableClawdbotAgentService {
+function testableService(
+  tmpDir: string,
+  credentialLeases?: CredentialLeaseLifecycle
+): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
   const service = new ClawdbotAgentService(
@@ -169,7 +176,8 @@ function testableService(tmpDir: string): TestableClawdbotAgentService {
     undefined,
     taskEnvelopes,
     undefined,
-    new ProviderCompletionService(completionEvidence)
+    new ProviderCompletionService(completionEvidence),
+    credentialLeases
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -1529,7 +1537,8 @@ describe('ClawdbotAgentService Codex providers', () => {
   it('persists one process completion and rejects a conflicting terminal race', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
-    const service = testableService(tmpDir);
+    const revokeRun = vi.fn(async () => 1);
+    const service = testableService(tmpDir, { revokeRun });
     const active = await service.startAgent(task.id, 'codex');
     const provenance = {
       attemptId: active.attemptId,
@@ -1573,6 +1582,13 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockLogActivity.mock.calls.filter(([type]) => type === 'agent_completed')).toHaveLength(
       1
     );
+    expect(revokeRun).toHaveBeenCalledTimes(1);
+    expect(revokeRun).toHaveBeenCalledWith({
+      taskId: task.id,
+      attemptId: active.attemptId,
+      runLaunchManifestDigest: active.runLaunchManifest.digest,
+      reason: 'run-completed',
+    });
     await expect(
       service.completeAgent(
         task.id,
@@ -1580,13 +1596,15 @@ describe('ClawdbotAgentService Codex providers', () => {
         provenance
       )
     ).resolves.toBeUndefined();
+    expect(revokeRun).toHaveBeenCalledTimes(2);
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
   });
 
   it('does not let a competing terminal claim poison an in-flight finalizer', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
-    const service = testableService(tmpDir);
+    const revokeRun = vi.fn(async () => 1);
+    const service = testableService(tmpDir, { revokeRun });
     const active = await service.startAgent(task.id, 'codex');
     const provenance = {
       attemptId: active.attemptId,
@@ -1613,6 +1631,12 @@ describe('ClawdbotAgentService Codex providers', () => {
         ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
       )
     ).toHaveLength(1);
+    expect(revokeRun).toHaveBeenCalledWith({
+      taskId: task.id,
+      attemptId: active.attemptId,
+      runLaunchManifestDigest: active.runLaunchManifest.digest,
+      reason: 'run-interrupted',
+    });
   });
 
   it('rejects callback transport for a provider with harness-owned process completion', async () => {
@@ -1679,12 +1703,14 @@ describe('ClawdbotAgentService Codex providers', () => {
       } as Task;
       return task;
     });
+    const revokeRun = vi.fn(async () => 1);
     const service = new ClawdbotAgentService(
       undefined,
       undefined,
       taskEnvelopes,
       undefined,
-      new ProviderCompletionService(completionEvidence)
+      new ProviderCompletionService(completionEvidence),
+      { revokeRun }
     );
     const provenance = {
       attemptId,
@@ -1712,9 +1738,24 @@ describe('ClawdbotAgentService Codex providers', () => {
     ).toHaveLength(2);
     expect(task.revision).toBe(2);
     expect(task.attempts).toHaveLength(1);
+    expect(revokeRun).toHaveBeenCalledTimes(2);
+    expect(revokeRun).toHaveBeenCalledWith({
+      taskId: task.id,
+      attemptId,
+      reason: 'run-completed',
+    });
     await expect(
       service.completeAgent(task.id, terminalResult, provenance)
     ).resolves.toBeUndefined();
+    expect(revokeRun).toHaveBeenCalledTimes(3);
+    revokeRun.mockRejectedValueOnce(new Error('transient credential revocation failure'));
+    await expect(service.completeAgent(task.id, terminalResult, provenance)).rejects.toThrow(
+      'transient credential revocation failure'
+    );
+    await expect(
+      service.completeAgent(task.id, terminalResult, provenance)
+    ).resolves.toBeUndefined();
+    expect(revokeRun).toHaveBeenCalledTimes(5);
 
     const persistedAttempt = task.attempt;
     const persistedCompletion = persistedAttempt?.completionResult;
@@ -2048,29 +2089,34 @@ describe('ClawdbotAgentService Codex providers', () => {
           retryable: true,
         },
       ],
+      credentialReason: 'run-failed',
     },
     {
       status: 'failed' as const,
       taskStatus: 'in-progress',
       error: 'Provider failed.',
       blockers: undefined,
+      credentialReason: 'run-failed',
     },
     {
       status: 'interrupted' as const,
       taskStatus: 'in-progress',
       error: undefined,
       blockers: undefined,
+      credentialReason: 'run-interrupted',
     },
     {
       status: 'partial' as const,
       taskStatus: 'in-progress',
       error: undefined,
       blockers: undefined,
+      credentialReason: 'run-failed',
     },
   ])('maps $status completion into $taskStatus recovery state', async (fixture) => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
-    const service = testableService(tmpDir);
+    const revokeRun = vi.fn(async () => 1);
+    const service = testableService(tmpDir, { revokeRun });
     const active = await service.startAgent(task.id, 'codex');
 
     await service.completeAgent(
@@ -2096,6 +2142,12 @@ describe('ClawdbotAgentService Codex providers', () => {
         status: fixture.status,
         terminalSource: 'process',
       },
+    });
+    expect(revokeRun).toHaveBeenCalledWith({
+      taskId: task.id,
+      attemptId: active.attemptId,
+      runLaunchManifestDigest: active.runLaunchManifest.digest,
+      reason: fixture.credentialReason,
     });
   });
 

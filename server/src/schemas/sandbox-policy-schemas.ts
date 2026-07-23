@@ -70,7 +70,20 @@ export const sandboxPolicyPresetSchema = z.object({
   }),
   credentials: z.object({
     mode: sandboxCredentialModeSchema,
-    brokerRefs: z.array(z.string().min(1).max(160)).max(50).default([]),
+    brokerRefs: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(80)
+          .regex(
+            /^[a-z0-9][a-z0-9-_]*$/,
+            'Broker references must be exact credential definition IDs'
+          )
+      )
+      .max(50)
+      .default([]),
   }),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional(),

@@ -60,4 +60,15 @@ describe('shared API permission metadata', () => {
       getApiPermissionRequirement('/api/sandbox-policies', { method: 'POST' }).permissions
     ).toEqual(['policy:write']);
   });
+
+  it('keeps credential broker definitions admin-scoped', () => {
+    expect(getApiPermissionRequirement('/api/credential-broker').permissions).toEqual([
+      'admin:manage',
+    ]);
+    expect(
+      getApiPermissionRequirement('/api/v1/credential-broker/github-token', {
+        method: 'PUT',
+      }).permissions
+    ).toEqual(['admin:manage']);
+  });
 });
