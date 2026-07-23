@@ -2,6 +2,12 @@
 
 This document defines the v5 file-to-SQLite rollback and failed-upgrade drill.
 
+For a complete packaged Mac cutover, including the already-populated desktop
+case, use
+[`WEB-TO-MAC-DESKTOP-MIGRATION.md`](WEB-TO-MAC-DESKTOP-MIGRATION.md). Never run
+file-to-SQLite migration against the authoritative database while the desktop
+server has it open, and never copy a live WAL database as a backup.
+
 ## Recovery Contract
 
 The v5 migration must never leave a project in a state where neither file
@@ -38,6 +44,12 @@ If migration fails:
 Interrupted migrations that were writing a new SQLite database use a temporary
 database path and promote it only after writes and checkpointing complete. A
 failed temporary database is removed after journaling the failure.
+
+For desktop cutover, migrate into a fresh staging database with the desktop app
+stopped. After the migration process closes the database, checkpoint it, run
+`PRAGMA quick_check`, and install it only while no process owns the desktop
+target. If the desktop database already contains the expected records, do not
+rerun migration. Back it up and use the first-launch **Use Existing Data** path.
 
 ## Restore Drill
 

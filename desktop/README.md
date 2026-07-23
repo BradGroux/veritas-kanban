@@ -42,11 +42,15 @@ can be tested without reusing the default development home.
 - Fresh packaged installs store desktop data below the OS app data directory
   returned by Electron `app.getPath('userData')`, then under
   `profiles/<profile>/workspaces/<workspace>/`.
-- Packaged desktop installs do not automatically import an existing web/source
-  checkout. Use
+- Packaged desktop installs detect a populated desktop SQLite database and offer
+  **Use Existing Data** so setup can secure it without replacing board records
+  or imported owner metadata. Do not choose recovery import when the expected
+  records are already present. Packaged installs do not automatically import an
+  external web/source checkout. Use
   [`docs/WEB-TO-MAC-DESKTOP-MIGRATION.md`](../docs/WEB-TO-MAC-DESKTOP-MIGRATION.md)
-  when moving file-backed `tasks/` and `.veritas-kanban/` data from a repo
-  server into the Mac app's SQLite workspace.
+  for the already-populated case or when moving file-backed `tasks/` and
+  `.veritas-kanban/` data from a repo server into the Mac app's SQLite
+  workspace.
 - Desktop runtime secrets are created through Electron `safeStorage`, which uses
   the OS credential backend on macOS. The encrypted metadata file lives at
   `<appHome>/config/desktop-secrets.json`; plaintext admin/JWT secrets are only

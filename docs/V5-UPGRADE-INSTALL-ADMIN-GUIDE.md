@@ -39,10 +39,16 @@ candidate, belongs in the reusable
 
 2. Launch normally. A stable release should not show a Gatekeeper warning.
 3. Pick the first-run path:
-   - Board Only for a local board with no agents.
+   - Use Existing Data when the detected desktop SQLite database already
+     contains the expected board. Confirm the displayed counts before securing
+     it. Do not rerun migration or restore a backup over it.
+   - Board Only for a new, empty local board with no agents.
    - Agent Ready for local agent tooling.
    - Remote Server to pair with a trusted host.
-   - Restore to import a backup.
+   - Restore Backup is recovery preflight only in v5.2.5. The onboarding card
+     does not perform an import. For a governed SQLite export bundle, follow the
+     exact target, bundle directory, and destructive replacement steps in
+     `docs/WEB-TO-MAC-DESKTOP-MIGRATION.md`.
 4. Create the admin password and save the recovery key.
 5. Open Settings -> Maintenance and verify health checks, storage, logs, backup,
    and debug-bundle previews.
@@ -65,12 +71,12 @@ desktop architecture and release docs. Do not copy raw keychain payloads between
 machines.
 
 If an existing source checkout or web/dev install already owns
-`localhost:3001`, installing the Homebrew cask does not automatically migrate
-or take ownership of that board. Follow
-[`WEB-TO-MAC-DESKTOP-MIGRATION.md`](WEB-TO-MAC-DESKTOP-MIGRATION.md) to import
-file-backed `tasks/` and `.veritas-kanban/` data into the desktop SQLite
-workspace, stop old dev servers, disable stale watchdogs, and update local
-automation for packaged desktop auth.
+`localhost:3001`, installing the Homebrew cask does not automatically stop that
+server or update its automation. Follow
+[`WEB-TO-MAC-DESKTOP-MIGRATION.md`](WEB-TO-MAC-DESKTOP-MIGRATION.md). It covers
+both an already-populated desktop database and a file-backed
+`tasks/`/`.veritas-kanban/` source, including one-writer cutover, backups,
+watchdogs, record counts, first-launch selection, rollback, and packaged auth.
 
 ## v4 To v5 Upgrade
 
@@ -79,25 +85,34 @@ web/source install into the packaged Mac app, use
 [`WEB-TO-MAC-DESKTOP-MIGRATION.md`](WEB-TO-MAC-DESKTOP-MIGRATION.md). The
 summary below is the storage-level migration contract.
 
-1. Stop the app and preserve the current repo or app data directory.
-2. Run a dry-run migration:
+1. Determine whether the desktop SQLite database already contains the expected
+   records. If it does, preserve a backup and choose **Use Existing Data**. Do
+   not rerun migration.
+2. For an authoritative file-backed source, stop the desktop app and every
+   competing source server, then preserve the current repo data directory.
+3. Start a temporary file-storage server on a non-desktop port and run a dry-run
+   migration to a fresh staging database:
 
    ```text
    POST /api/v1/sqlite/migration/dry-run
    ```
 
-3. Review warnings for malformed tasks, duplicate IDs, missing attachments, and
+4. Review warnings for malformed tasks, duplicate IDs, missing attachments, and
    backup copy issues.
-4. Run the migration only after the dry run is clean enough to accept:
+5. Run the migration to that same fresh staging database only after the dry run
+   is clean enough to accept:
 
    ```text
    POST /api/v1/sqlite/migration/run
    ```
 
-5. Preserve the migration journal, backup directory, and report.
-6. Boot v5 with SQLite storage and verify board, task detail, search, workflow,
-   chat, settings, work products, Maintenance Center, and audit history.
-7. Accept the migration only after backup/export and restore drills pass.
+6. Stop the temporary server, checkpoint and validate the staging database, then
+   install it into the desktop workspace while no process has the target open.
+7. Launch v5, choose **Use Existing Data**, and secure the existing database.
+8. Preserve the migration journal, backup directory, and reports.
+9. Verify board, task detail, search, workflow, chat, settings, work products,
+   Maintenance Center, automation auth, and audit history.
+10. Accept the migration only after backup/export and restore drills pass.
 
 Rollback means restoring the pre-migration file-backed backup. Do not rely on
 destructive SQLite down migrations for GA users. Follow
