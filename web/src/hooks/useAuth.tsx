@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
+import type { AuthStatus } from '@veritas-kanban/shared';
 import { apiFetch } from '@/lib/api/helpers';
 
 // Types
-export interface AuthStatus {
-  needsSetup: boolean;
-  authenticated: boolean;
-  sessionExpiry: string | null;
-  authEnabled: boolean;
-}
+export type { AuthStatus } from '@veritas-kanban/shared';
 
 export interface AuthContextValue {
   /** Current auth status */

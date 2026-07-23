@@ -19,17 +19,21 @@ describe('desktop status pages CSP', () => {
   it('allows the generated status page style block by hash instead of unsafe-inline', () => {
     const html = statusPage('Starting', 'Preparing runtime');
     const csp = html.match(/content="([^"]+)"/)?.[1] || '';
+    const style = inlineStyle(html);
 
-    expect(csp).toContain(`style-src ${styleHash(inlineStyle(html))}`);
+    expect(csp).toContain(`style-src ${styleHash(style)}`);
     expect(csp).not.toContain("'unsafe-inline'");
+    expect(style).toContain('-webkit-app-region: drag');
   });
 
   it('allows the static renderer startup style block by hash instead of unsafe-inline', () => {
     const testDir = dirname(fileURLToPath(import.meta.url));
     const html = readFileSync(resolve(testDir, '../../renderer/index.html'), 'utf-8');
     const csp = html.match(/content="([^"]+)"/)?.[1] || '';
+    const style = inlineStyle(html);
 
-    expect(csp).toContain(`style-src ${styleHash(inlineStyle(html))}`);
+    expect(csp).toContain(`style-src ${styleHash(style)}`);
     expect(csp).not.toContain("'unsafe-inline'");
+    expect(style).toContain('-webkit-app-region: drag');
   });
 });

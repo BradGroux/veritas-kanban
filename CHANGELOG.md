@@ -70,6 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Made startup, setup, password, recovery, and login surfaces draggable in the
+  frameless desktop window, and made first-run setup detect populated desktop
+  SQLite data, default to a non-destructive **Use Existing Data** path, show
+  concise migrated-data counts, and reserve backup restore for recovery (#901).
 - Serialized agent launch and terminalization ownership per task and attempt so
   concurrent starts, stop requests, provider exits, and callbacks cannot launch
   or finalize the same run twice (#887).

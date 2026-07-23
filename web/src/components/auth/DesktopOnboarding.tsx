@@ -5,6 +5,7 @@ import {
   Bot,
   CheckCircle2,
   Clipboard,
+  Database,
   DatabaseBackup,
   KanbanSquare,
   Loader2,
@@ -13,15 +14,22 @@ import {
   ShieldCheck,
   Upload,
 } from 'lucide-react';
-import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
+import {
+  blockedRemoteConnectionDestinationReason,
+  type DesktopSetupContext,
+} from '@veritas-kanban/shared';
 
 import { cn } from '@/lib/utils';
-import { persistPendingProductMode, productModeForSetupMode } from '@/lib/product-modes';
+import {
+  clearPendingProductMode,
+  persistPendingProductMode,
+  productModeForSetupMode,
+} from '@/lib/product-modes';
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = 'veritas-desktop-onboarding-complete';
 
 type HealthState = 'ok' | 'warning' | 'failed' | 'unknown' | 'unsupported';
-type SetupMode = 'board' | 'agent' | 'remote' | 'restore';
+type SetupMode = 'existing' | 'board' | 'agent' | 'remote' | 'restore';
 
 interface DesktopDiagnosticCheck {
   name: string;
@@ -74,15 +82,26 @@ interface DesktopBridgeApi {
 interface DesktopOnboardingPanelProps {
   onContinue?: () => void;
   compact?: boolean;
+  setupContext?: DesktopSetupContext | null;
 }
 
-const setupModes: Array<{
+type SetupModeDefinition = {
   id: SetupMode;
   title: string;
   badge: string;
   description: string;
   icon: typeof KanbanSquare;
-}> = [
+};
+
+const existingDataMode: SetupModeDefinition = {
+  id: 'existing',
+  title: 'Use Existing Data',
+  badge: 'Detected',
+  description: 'Secure the populated desktop database already in use. No migration runs again.',
+  icon: Database,
+};
+
+const freshSetupModes: SetupModeDefinition[] = [
   {
     id: 'board',
     title: 'Board Only',
@@ -106,9 +125,9 @@ const setupModes: Array<{
   },
   {
     id: 'restore',
-    title: 'Restore or Migrate',
+    title: 'Restore Backup',
     badge: 'Recovery',
-    description: 'Check desktop paths and select a backup bundle before continuing setup.',
+    description: 'Roll back or recover from a backup bundle. This is not the normal upgrade path.',
     icon: DatabaseBackup,
   },
 ];
@@ -243,11 +262,37 @@ function remoteValidationTitle(result: DesktopConnectionValidationResult): strin
   return 'Remote target is reachable.';
 }
 
+function existingDataCountLabels(context: DesktopSetupContext): string[] {
+  const formatter = new Intl.NumberFormat();
+  const definitions: Array<[keyof DesktopSetupContext['counts'], string, string]> = [
+    ['tasks', 'task', 'tasks'],
+    ['squadMessages', 'squad message', 'squad messages'],
+    ['telemetryEvents', 'telemetry event', 'telemetry events'],
+    ['workflowDefinitions', 'workflow definition', 'workflow definitions'],
+    ['workflowRuns', 'workflow run', 'workflow runs'],
+  ];
+
+  return definitions.flatMap(([key, singular, plural]) => {
+    const count = context.counts[key];
+    return count > 0 ? [`${formatter.format(count)} ${count === 1 ? singular : plural}`] : [];
+  });
+}
+
 export function DesktopOnboardingPanel({
   onContinue,
   compact = false,
+  setupContext = null,
 }: DesktopOnboardingPanelProps) {
-  const [selectedMode, setSelectedMode] = useState<SetupMode>('board');
+  const hasExistingData = setupContext?.hasExistingData === true;
+  const recommendedMode: SetupMode = hasExistingData ? 'existing' : 'board';
+  const setupModes = useMemo(
+    () =>
+      hasExistingData
+        ? [existingDataMode, ...freshSetupModes.filter((mode) => mode.id !== 'board')]
+        : freshSetupModes,
+    [hasExistingData]
+  );
+  const [selectedMode, setSelectedMode] = useState<SetupMode>(recommendedMode);
   const [diagnostics, setDiagnostics] = useState<DesktopSetupDiagnostics | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
@@ -273,6 +318,12 @@ export function DesktopOnboardingPanel({
   useEffect(() => {
     void loadDiagnostics();
   }, [loadDiagnostics]);
+
+  useEffect(() => {
+    if (hasExistingData) {
+      setSelectedMode('existing');
+    }
+  }, [hasExistingData]);
 
   const validateRemote = async () => {
     setRemoteLoading(true);
@@ -336,14 +387,19 @@ export function DesktopOnboardingPanel({
               Choose setup path
             </h1>
             <p className="max-w-xl break-words text-sm leading-6 text-muted-foreground">
-              Start with the board, then layer in agents, remote access, and recovery paths when
-              they are needed.
+              {hasExistingData
+                ? 'Your desktop database is already populated. Secure it now, then continue with your existing board and history.'
+                : 'Start with the board, then layer in agents, remote access, and recovery paths when they are needed.'}
             </p>
           </div>
         </div>
 
         <div className="grid gap-2">
-          {['Select path', 'Check readiness', 'Secure board'].map((step, index) => (
+          {[
+            'Select path',
+            'Check readiness',
+            hasExistingData ? 'Secure existing data' : 'Secure board',
+          ].map((step, index) => (
             <div key={step} className="flex items-center gap-3 rounded-lg border bg-card/60 p-3">
               <span className="flex size-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
                 {index + 1}
@@ -418,6 +474,7 @@ export function DesktopOnboardingPanel({
                 key={mode.id}
                 type="button"
                 data-testid={`setup-mode-${mode.id}`}
+                aria-pressed={selected}
                 onClick={() => setSelectedMode(mode.id)}
                 className={cn(
                   'min-h-36 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
@@ -429,8 +486,8 @@ export function DesktopOnboardingPanel({
                     <Icon className="h-4 w-4" />
                   </span>
                   <Badge
-                    variant={mode.id === 'board' ? 'filled' : 'outline'}
-                    color={mode.id === 'board' ? 'violet' : 'gray'}
+                    variant={mode.id === recommendedMode ? 'filled' : 'outline'}
+                    color={mode.id === recommendedMode ? 'violet' : 'gray'}
                     tt="none"
                   >
                     {mode.badge}
@@ -446,6 +503,29 @@ export function DesktopOnboardingPanel({
         </div>
 
         <div className="rounded-lg border bg-card p-4">
+          {selectedMode === 'existing' && setupContext && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Database className="h-4 w-4 text-emerald-400" />
+                Existing desktop data detected
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The app is already using this SQLite database. Continuing only secures the existing
+                data; it does not import, overwrite, or migrate it again.
+              </p>
+              <div className="flex flex-wrap gap-2" aria-label="Existing desktop data summary">
+                {existingDataCountLabels(setupContext).map((label) => (
+                  <span
+                    key={label}
+                    className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedMode === 'board' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-semibold">
@@ -453,8 +533,9 @@ export function DesktopOnboardingPanel({
                 Local board setup
               </div>
               <p className="text-sm text-muted-foreground">
-                Veritas will create a local SQLite-backed workspace, store desktop secrets through
-                the native secret store when available, and keep optional integrations disabled.
+                Veritas will create a new local SQLite-backed workspace, store desktop secrets
+                through the native secret store when available, and keep optional integrations
+                disabled.
               </p>
             </div>
           )}
@@ -557,8 +638,9 @@ export function DesktopOnboardingPanel({
                 Restore preflight
               </div>
               <p className="text-sm text-muted-foreground">
-                Desktop startup already copies legacy profile data forward without deleting it.
-                Select a backup bundle now, then complete restore from Data settings after setup.
+                Choose this only to roll back or recover from a backup. A normal web-to-desktop
+                cutover should use the populated desktop database directly instead of importing it
+                again.
               </p>
               <Button type="button" variant="outline" onClick={pickRestoreFile}>
                 <Upload className="mr-1.5 h-4 w-4" />
@@ -581,15 +663,20 @@ export function DesktopOnboardingPanel({
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
-              className="sm:min-w-44"
+              className="desktop-no-drag sm:min-w-44"
               disabled={!canContinue}
               onClick={() => {
-                persistPendingProductMode(productModeForSetupMode(selectedMode));
+                const productMode = productModeForSetupMode(selectedMode);
+                if (productMode) {
+                  persistPendingProductMode(productMode);
+                } else {
+                  clearPendingProductMode();
+                }
                 markDesktopOnboardingComplete();
                 onContinue();
               }}
             >
-              Continue to Password
+              {selectedMode === 'existing' ? 'Secure Existing Data' : 'Continue to Password'}
             </Button>
           </div>
         )}
@@ -598,11 +685,17 @@ export function DesktopOnboardingPanel({
   );
 }
 
-export function DesktopOnboardingScreen({ onContinue }: { onContinue: () => void }) {
+export function DesktopOnboardingScreen({
+  onContinue,
+  setupContext,
+}: {
+  onContinue: () => void;
+  setupContext?: DesktopSetupContext | null;
+}) {
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="desktop-window-drag min-h-screen bg-background px-4 py-8">
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
-        <DesktopOnboardingPanel onContinue={onContinue} />
+        <DesktopOnboardingPanel onContinue={onContinue} setupContext={setupContext} />
       </div>
     </div>
   );

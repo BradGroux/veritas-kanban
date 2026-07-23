@@ -32,6 +32,7 @@ import {
   getDeviceSessionService,
   type ExchangeDevicePairingInput,
 } from '../services/device-session-service.js';
+import { getDesktopSetupContext } from '../services/desktop-setup-context-service.js';
 
 const router: IRouter = Router();
 
@@ -175,6 +176,20 @@ function clearAttempts(ip: string): void {
  *                 authenticated: { type: boolean, description: 'True if current session is valid' }
  *                 sessionExpiry: { type: string, format: date-time, nullable: true }
  *                 authEnabled: { type: boolean }
+ *                 setupContext:
+ *                   type: object
+ *                   description: Present only during password setup in the local desktop runtime.
+ *                   properties:
+ *                     storageMode: { type: string, enum: [sqlite] }
+ *                     hasExistingData: { type: boolean }
+ *                     counts:
+ *                       type: object
+ *                       properties:
+ *                         tasks: { type: integer }
+ *                         squadMessages: { type: integer }
+ *                         telemetryEvents: { type: integer }
+ *                         workflowDefinitions: { type: integer }
+ *                         workflowRuns: { type: integer }
  */
 router.get(
   '/status',
@@ -203,6 +218,7 @@ router.get(
       authenticated,
       sessionExpiry,
       authEnabled: config.authEnabled !== false,
+      ...(needsSetup ? { setupContext: getDesktopSetupContext() } : {}),
     });
   })
 );
@@ -394,9 +410,7 @@ router.post(
 
     let identity: unknown;
     if (process.env.VERITAS_STORAGE === 'sqlite') {
-      identity = getIdentityService().ensureOwnerSetup({
-        displayName: 'Local User',
-      });
+      identity = getIdentityService().ensureOwnerSetup();
     }
 
     // Return recovery key (only time it's shown in plaintext)

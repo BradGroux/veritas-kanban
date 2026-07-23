@@ -13,6 +13,7 @@ const STATUS_PAGE_CSS = `
         min-height: 100vh;
         display: grid;
         place-items: center;
+        -webkit-app-region: drag;
       }
       main {
         width: min(720px, calc(100vw - 48px));
@@ -37,6 +38,7 @@ const STATUS_PAGE_CSS = `
         padding: 16px;
         color: #d8deea;
         font-size: 12px;
+        -webkit-app-region: no-drag;
       }
     `;
 

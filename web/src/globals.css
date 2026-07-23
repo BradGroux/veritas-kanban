@@ -208,6 +208,8 @@ html[data-client='desktop'] .desktop-window-drag {
 }
 
 html[data-client='desktop'] .desktop-no-drag,
+html[data-client='desktop'] a,
+html[data-client='desktop'] label,
 html[data-client='desktop'] button,
 html[data-client='desktop'] input,
 html[data-client='desktop'] textarea,
@@ -216,6 +218,7 @@ html[data-client='desktop'] [role='button'],
 html[data-client='desktop'] [role='menu'],
 html[data-client='desktop'] [role='menuitem'],
 html[data-client='desktop'] [role='combobox'],
+html[data-client='desktop'] [contenteditable='true'],
 html[data-client='desktop'] .mantine-Input-input {
   -webkit-app-region: no-drag;
 }

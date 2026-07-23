@@ -17,6 +17,7 @@ import crypto from 'crypto';
 let testConfigDir: string;
 let testSecurityFile: string;
 let securityConfig: any = {};
+let desktopSetupContext: Record<string, unknown> | undefined;
 
 // Mock security module
 vi.mock('../../config/security.js', () => {
@@ -51,6 +52,10 @@ vi.mock('../../config/security.js', () => {
   };
 });
 
+vi.mock('../../services/desktop-setup-context-service.js', () => ({
+  getDesktopSetupContext: () => desktopSetupContext,
+}));
+
 // Import auth route after mocking
 import authRouter from '../../routes/auth.js';
 import { errorHandler } from '../../middleware/error-handler.js';
@@ -62,6 +67,7 @@ import {
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
 import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
+import { resetIdentityServiceForTests } from '../../services/identity-service.js';
 
 describe('Auth Routes', () => {
   let app: express.Express;
@@ -74,6 +80,7 @@ describe('Auth Routes', () => {
       jwtSecret: 'test-secret-key-for-jwt-signing-12345678',
       sessionVersion: 0,
     };
+    desktopSetupContext = undefined;
 
     app = express();
     app.use(express.json());
@@ -84,8 +91,10 @@ describe('Auth Routes', () => {
 
   afterEach(() => {
     resetDeviceSessionServiceForTests();
+    resetIdentityServiceForTests();
     delete process.env.VERITAS_JWT_SECRET;
     delete process.env.VERITAS_SQLITE_PATH;
+    delete process.env.VERITAS_STORAGE;
   });
 
   describe('GET /api/auth/status', () => {
@@ -96,6 +105,25 @@ describe('Auth Routes', () => {
       expect(res.body.authenticated).toBe(false);
     });
 
+    it('includes populated desktop data context while setup is needed', async () => {
+      desktopSetupContext = {
+        storageMode: 'sqlite',
+        hasExistingData: true,
+        counts: {
+          tasks: 2236,
+          squadMessages: 74196,
+          telemetryEvents: 98,
+          workflowDefinitions: 2,
+          workflowRuns: 3,
+        },
+      };
+
+      const res = await request(app).get('/api/auth/status');
+
+      expect(res.status).toBe(200);
+      expect(res.body.setupContext).toEqual(desktopSetupContext);
+    });
+
     it('should indicate setup complete when password exists', async () => {
       securityConfig.passwordHash = await bcrypt.hash('test-password', 4);
       securityConfig.authEnabled = true;
@@ -103,6 +131,7 @@ describe('Auth Routes', () => {
       const res = await request(app).get('/api/auth/status');
       expect(res.status).toBe(200);
       expect(res.body.needsSetup).toBe(false);
+      expect(res.body.setupContext).toBeUndefined();
     });
 
     it('should detect valid JWT cookie', async () => {
@@ -227,6 +256,33 @@ describe('Auth Routes', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.recoveryKey).toBe('RECOVERY-KEY-12345678');
       expect(res.body.message).toContain('Password set');
+    });
+
+    it('preserves migrated local identity metadata during password setup', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      const identities = new SqliteIdentityRepository(fixture.database);
+      identities.ensureLocalOwner({
+        displayName: 'Migrated Owner',
+        email: 'owner@example.test',
+      });
+      process.env.VERITAS_STORAGE = 'sqlite';
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+
+      try {
+        const res = await request(app)
+          .post('/api/auth/setup')
+          .send({ password: 'strongpassword123' });
+
+        expect(res.status).toBe(200);
+        expect(identities.getUser('local-user')).toMatchObject({
+          displayName: 'Migrated Owner',
+          email: 'owner@example.test',
+        });
+      } finally {
+        resetIdentityServiceForTests();
+        fixture.cleanup();
+      }
     });
 
     it('should reject setup when password already exists', async () => {

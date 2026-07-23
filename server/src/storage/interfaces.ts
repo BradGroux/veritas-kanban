@@ -27,6 +27,7 @@ import type {
   UpdatePromptTemplateInput,
   RenderPreviewRequest,
   RenderPreviewResponse,
+  DesktopSetupContext,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -280,6 +281,15 @@ export interface TelemetryRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Setup Context Repository
+// ---------------------------------------------------------------------------
+
+export interface SetupContextRepository {
+  /** Return a read-only summary of data already present in the active store. */
+  getSetupContext(): DesktopSetupContext;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 
@@ -292,6 +302,7 @@ export interface StorageProvider {
   readonly statusHistory: StatusHistoryRepository;
   readonly managedLists: ManagedListProvider;
   readonly telemetry: TelemetryRepository;
+  readonly setupContext?: SetupContextRepository;
 
   /** One-time startup hook (create dirs, open connections, etc.). */
   initialize(): Promise<void>;

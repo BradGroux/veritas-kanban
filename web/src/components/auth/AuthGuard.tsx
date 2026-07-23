@@ -21,7 +21,7 @@ interface AuthGuardProps {
 
 function AuthSurfaceFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-4">
         <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
         <p className="text-muted-foreground">Loading...</p>
@@ -68,7 +68,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Error state
   if (error && !status) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="desktop-window-drag flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-7 text-center shadow-lg">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-destructive/30 bg-destructive/10 text-destructive">
             <Scale className="h-7 w-7" aria-hidden="true" />

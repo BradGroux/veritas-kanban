@@ -21,8 +21,9 @@ function getPasswordStrength(password: string): { score: number; label: string; 
 }
 
 export function SetupScreen() {
-  const { setup } = useAuth();
+  const { setup, status } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowDesktopOnboarding());
+  const [existingDataAcknowledged, setExistingDataAcknowledged] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,8 +39,19 @@ export function SetupScreen() {
   const passwordsMatch = password === confirmPassword;
   const isValid = password.length >= 8 && passwordsMatch;
 
-  if (showOnboarding) {
-    return <DesktopOnboardingScreen onContinue={() => setShowOnboarding(false)} />;
+  const requiresExistingDataReview =
+    status?.setupContext?.hasExistingData === true && !existingDataAcknowledged;
+
+  if (showOnboarding || requiresExistingDataReview) {
+    return (
+      <DesktopOnboardingScreen
+        onContinue={() => {
+          setShowOnboarding(false);
+          setExistingDataAcknowledged(true);
+        }}
+        setupContext={status?.setupContext}
+      />
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,7 +100,7 @@ export function SetupScreen() {
   // Show recovery key screen after successful setup
   if (recoveryKey) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 mb-4">
@@ -147,7 +159,7 @@ export function SetupScreen() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { DESKTOP_ONBOARDING_STORAGE_KEY } from '@/components/auth/DesktopOnboarding';
@@ -55,10 +57,19 @@ describe('auth screens Mantine migration', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps links and labels clickable inside desktop drag surfaces', () => {
+    const globalStyles = readFileSync(resolve(process.cwd(), 'src/globals.css'), 'utf8');
+
+    expect(globalStyles).toContain("html[data-client='desktop'] a,");
+    expect(globalStyles).toContain("html[data-client='desktop'] label,");
+    expect(globalStyles).toContain("html[data-client='desktop'] [contenteditable='true'],");
+  });
+
   it('renders setup password and recovery controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<SetupScreen />);
 
     expect(screen.getByText('Secure Your Board')).toBeDefined();
+    expect(screen.getByText('Secure Your Board').closest('.desktop-window-drag')).not.toBeNull();
     expect(screen.getByLabelText('Password')).toBeDefined();
     expect(screen.getByLabelText('Confirm Password')).toBeDefined();
     expect(container.querySelectorAll('.mantine-PasswordInput-root')).toHaveLength(2);
@@ -76,6 +87,9 @@ describe('auth screens Mantine migration', () => {
 
     await waitFor(() => expect(mocks.setup).toHaveBeenCalledWith('StrongPass1!'));
     expect(await screen.findByText('Save Your Recovery Key')).toBeDefined();
+    expect(
+      screen.getByText('Save Your Recovery Key').closest('.desktop-window-drag')
+    ).not.toBeNull();
     expect(screen.getByText('AAAA-BBBB-CCCC-DDDD')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Checkbox-root')).toHaveLength(1);
     expect(container.querySelectorAll('.mantine-Button-root')).toHaveLength(3);
@@ -87,6 +101,7 @@ describe('auth screens Mantine migration', () => {
     const { container } = renderWithProviders(<LoginScreen />);
 
     expect(screen.getByText('Welcome Back')).toBeDefined();
+    expect(screen.getByText('Welcome Back').closest('.desktop-window-drag')).not.toBeNull();
     expect(screen.getByLabelText('Password')).toBeDefined();
     expect(screen.getByLabelText('Remember me for 30 days')).toBeDefined();
     expect(container.querySelectorAll('.mantine-PasswordInput-root')).toHaveLength(1);
@@ -117,6 +132,9 @@ describe('auth screens Mantine migration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
 
     expect(screen.getByRole('heading', { name: 'Reset Password' })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: 'Reset Password' }).closest('.desktop-window-drag')
+    ).not.toBeNull();
     expect(screen.getByLabelText('Recovery Key')).toBeDefined();
     expect(screen.getByLabelText('New Password')).toBeDefined();
     expect(screen.getByLabelText('Confirm New Password')).toBeDefined();

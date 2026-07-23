@@ -84,7 +84,7 @@ export function LoginScreen() {
   // Show new recovery key after successful password reset
   if (newRecoveryKey) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 mb-4">
@@ -150,7 +150,7 @@ export function LoginScreen() {
     const isValid = recoveryKey && newPassword.length >= 8 && passwordsMatch;
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 mb-4">
@@ -238,7 +238,7 @@ export function LoginScreen() {
 
   // Login form
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="desktop-window-drag min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">

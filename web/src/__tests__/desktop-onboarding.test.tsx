@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithProviders } from './test-utils';
 import {
@@ -37,7 +37,17 @@ describe('desktop onboarding', () => {
   it('shows the board-only first-run path before password setup', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ needsSetup: true })))
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              needsSetup: true,
+              authenticated: false,
+              sessionExpiry: null,
+              authEnabled: true,
+            })
+          )
+      )
     );
 
     renderWithProviders(
@@ -47,12 +57,94 @@ describe('desktop onboarding', () => {
     );
 
     expect(await screen.findByText('Choose setup path')).toBeDefined();
+    expect(screen.getByTestId('setup-mode-board').getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByTestId('setup-mode-board'));
     fireEvent.click(screen.getByRole('button', { name: 'Continue to Password' }));
 
-    expect(screen.getByText('Secure Your Board')).toBeDefined();
+    expect(screen.getByText('Secure Your Board').closest('.desktop-window-drag')).not.toBeNull();
     expect(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY)).toBe('true');
     expect(window.localStorage.getItem(PRODUCT_MODE_PENDING_STORAGE_KEY)).toBe('board-only');
+  });
+
+  it('keeps desktop setup draggable while its controls remain interactive', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              needsSetup: true,
+              authenticated: false,
+              sessionExpiry: null,
+              authEnabled: true,
+            })
+          )
+      )
+    );
+
+    renderWithProviders(
+      <AuthProvider>
+        <SetupScreen />
+      </AuthProvider>
+    );
+
+    const heading = await screen.findByText('Choose setup path');
+    const setupSurface = heading.closest('.desktop-window-drag');
+    const continueButton = screen.getByRole('button', { name: 'Continue to Password' });
+
+    expect(setupSurface).not.toBeNull();
+    expect(continueButton.classList.contains('desktop-no-drag')).toBe(true);
+  });
+
+  it('defaults a populated desktop database to using existing data without changing its mode', async () => {
+    window.localStorage.setItem(DESKTOP_ONBOARDING_STORAGE_KEY, 'true');
+    window.localStorage.setItem(PRODUCT_MODE_PENDING_STORAGE_KEY, 'agent-ready');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              needsSetup: true,
+              authenticated: false,
+              sessionExpiry: null,
+              authEnabled: true,
+              setupContext: {
+                storageMode: 'sqlite',
+                hasExistingData: true,
+                counts: {
+                  tasks: 2236,
+                  squadMessages: 74196,
+                  telemetryEvents: 98,
+                  workflowDefinitions: 2,
+                  workflowRuns: 3,
+                },
+              },
+            })
+          )
+      )
+    );
+
+    renderWithProviders(
+      <AuthProvider>
+        <SetupScreen />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText('Use Existing Data')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-mode-existing').getAttribute('aria-pressed')).toBe('true');
+    });
+    expect(screen.queryByTestId('setup-mode-board')).toBeNull();
+    expect(screen.getByText('2,236 tasks')).toBeDefined();
+    expect(screen.getByText('74,196 squad messages')).toBeDefined();
+    expect(screen.getByText(/does not import, overwrite, or migrate it again/i)).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Secure Existing Data' }));
+
+    expect(screen.getByText('Secure Your Board')).toBeDefined();
+    expect(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY)).toBe('true');
+    expect(window.localStorage.getItem(PRODUCT_MODE_PENDING_STORAGE_KEY)).toBeNull();
   });
 
   it('validates a remote URL through the desktop bridge', async () => {

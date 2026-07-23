@@ -110,8 +110,9 @@ export function productModeDefinition(id: ProductModeId): ProductModeDefinition 
 }
 
 export function productModeForSetupMode(
-  mode: 'board' | 'agent' | 'remote' | 'restore'
-): ProductModeId {
+  mode: 'existing' | 'board' | 'agent' | 'remote' | 'restore'
+): ProductModeId | null {
+  if (mode === 'existing') return null;
   if (mode === 'board') return 'board-only';
   if (mode === 'agent') return 'agent-ready';
   return 'operations';
