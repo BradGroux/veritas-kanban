@@ -173,8 +173,50 @@ completion endpoint. None of the renderers claims provider-native structured
 output; Veritas owns validation and completion normalization. The exact
 rendered request is fingerprinted as `instructions.effective-task-request` in
 the run launch manifest, and the provider and adapter must match the envelope
-before dispatch. Completion-result normalization and evidence enforcement are
-tracked separately in #893.
+before dispatch.
+
+### Authoritative Completion Results
+
+Every terminal transport is normalized into one immutable
+`completion-result/v1`: supervised process exit, SDK stream, OpenClaw callback,
+remote-session report, or operator interruption. The result persists on both
+the current attempt and attempt history with a canonical digest, a
+claim-derived idempotency key, completion timestamp, and terminal source.
+Exact duplicate callbacks are safe after persistence or restart. A callback
+with different content, attempt identity, or provider-runtime digest returns
+`409 Conflict` and cannot replace the first terminal owner.
+Callback and remote-session terminal sources are accepted only for OpenClaw.
+CLI process and SDK stream providers reject callback transport even when an
+attempt ID and manifest digest are known.
+
+Provider summaries, evidence, artifacts, and verification claims are bounded,
+redacted, and stored as unverified provider evidence. Veritas independently
+captures Git HEAD, post-launch files and commits, task verification state,
+local file artifacts, and observable side effects through the replaceable
+`CompletionEvidenceSource` port. Unchanged dirty files from the launch
+baseline are excluded. The launch baseline records commits already reachable
+from other refs, so switching or fast-forwarding to pre-existing history is
+not credited to the attempt. Required commits, forbidden commits, missing
+verification, missing required outputs, and unauthorized side effects
+downgrade a claimed success to recoverable `partial`.
+
+Completion status maps to task state as follows:
+
+- `success` marks the attempt complete and the task done.
+- `blocked` marks the attempt failed and the task blocked.
+- `failed`, `interrupted`, and `partial` mark the attempt failed and return the
+  task to in-progress recovery.
+
+The legacy bounded `{ success, summary, error }` OpenClaw callback remains
+accepted and is normalized into the same contract. New callbacks may report
+the explicit status, blockers, provider evidence, artifacts, verification
+claims, and a continuation handle. Codex CLI, Codex SDK, and Hermes still use
+their native harness-owned terminal paths rather than the callback endpoint.
+If the server restarts before a harness-owned process or stream attempt
+persists a terminal result, startup reconciliation records a digest-bound
+`interrupted` result instead of leaving a provider-specific running or failed
+record outside this contract. OpenClaw attempts remain recoverable through
+their authoritative callback path.
 
 ## Effective Run Launch Manifests
 

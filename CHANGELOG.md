@@ -31,6 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launched request. OpenClaw alone receives a completion callback; process and
   stream providers return terminal output through harness-owned capture, and
   mismatched provider/adapter identities fail closed (#892).
+- Added digest-bound, idempotent `completion-result/v1` persistence for process,
+  stream, callback, remote-session, and operator-interruption terminal paths.
+  Provider claims are bounded, redacted, and untrusted while harness evidence
+  attributes post-launch files, commits, artifacts, verification, and side
+  effects without crediting pre-existing off-HEAD history.
+  Commit/output/evidence violations downgrade success to recoverable
+  partial completion; exact duplicate callbacks survive retry or restart and
+  conflicting terminal owners fail closed. Provider-owned transports cannot be
+  replaced by callbacks, completion writes use compare-and-swap retries, and
+  harness-owned restart reconciliation remains inside the same result contract
+  while OpenClaw stays eligible for its callback (#893).
 
 ## [5.2.5] - 2026-07-23
 

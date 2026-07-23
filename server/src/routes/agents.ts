@@ -9,6 +9,13 @@ import type {
   TaskCommitPolicy,
   TokenTelemetryEvent,
 } from '@veritas-kanban/shared';
+import {
+  TASK_ARTIFACT_KINDS,
+  TASK_COMPLETION_STATUSES,
+  TASK_CONTINUATION_KINDS,
+  TASK_EVIDENCE_KINDS,
+  TASK_VERIFICATION_STATUSES,
+} from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
@@ -33,13 +40,97 @@ const startAgentSchema = z.object({
   parentAttemptId: z.string().trim().min(1).max(120).optional(),
 });
 
-const completeAgentSchema = z.object({
+const completionProvenanceSchema = {
   attemptId: z.string().trim().min(1).max(120),
   providerRuntimeManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  success: z.boolean(),
-  summary: z.string().optional(),
-  error: z.string().optional(),
-});
+};
+
+const completeAgentSchema = z.union([
+  z
+    .object({
+      ...completionProvenanceSchema,
+      success: z.boolean(),
+      summary: z.string().trim().min(1).max(20_000).optional(),
+      error: z.string().trim().min(1).max(20_000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...completionProvenanceSchema,
+      status: z.enum(TASK_COMPLETION_STATUSES),
+      summary: z.string().trim().min(1).max(20_000).optional(),
+      error: z.string().trim().min(1).max(20_000).optional(),
+      blockers: z
+        .array(
+          z
+            .object({
+              code: z.string().trim().min(1).max(160),
+              summary: z.string().trim().min(1).max(500),
+              detail: z.string().trim().min(1).max(20_000),
+              retryable: z.boolean(),
+            })
+            .strict()
+        )
+        .max(64)
+        .optional(),
+      evidence: z
+        .array(
+          z
+            .object({
+              id: z.string().trim().min(1).max(160),
+              kind: z.enum(TASK_EVIDENCE_KINDS),
+              summary: z.string().trim().min(1).max(20_000),
+              reference: z.string().trim().min(1).max(4096).nullable().optional(),
+              requirementIds: z.array(z.string().trim().min(1).max(160)).max(64).optional(),
+            })
+            .strict()
+        )
+        .max(128)
+        .optional(),
+      artifacts: z
+        .array(
+          z
+            .object({
+              id: z.string().trim().min(1).max(160),
+              kind: z.enum(TASK_ARTIFACT_KINDS),
+              name: z.string().trim().min(1).max(500),
+              reference: z.string().trim().min(1).max(4096),
+              mediaType: z.string().trim().min(1).max(200).nullable().optional(),
+              sha256: z
+                .string()
+                .regex(/^[a-f0-9]{64}$/)
+                .nullable()
+                .optional(),
+            })
+            .strict()
+        )
+        .max(64)
+        .optional(),
+      verification: z
+        .array(
+          z
+            .object({
+              gateId: z.string().trim().min(1).max(160),
+              status: z.enum(TASK_VERIFICATION_STATUSES),
+              summary: z.string().trim().min(1).max(20_000),
+              evidenceIds: z.array(z.string().trim().min(1).max(160)).max(128),
+            })
+            .strict()
+        )
+        .max(256)
+        .optional(),
+      continuation: z
+        .object({
+          provider: z.string().trim().min(1).max(160),
+          kind: z.enum(TASK_CONTINUATION_KINDS),
+          reference: z.string().trim().min(1).max(4096),
+        })
+        .strict()
+        .nullable()
+        .optional(),
+    })
+    .strict(),
+]);
 
 const sendAgentMessageSchema = z.object({
   attemptId: z.string().trim().min(1).max(120),
@@ -169,14 +260,9 @@ router.post(
 router.post(
   '/:taskId/complete',
   asyncHandler(async (req, res) => {
-    let attemptId: string;
-    let providerRuntimeManifestDigest: string;
-    let success: boolean;
-    let summary: string | undefined;
-    let error: string | undefined;
+    let parsed: z.infer<typeof completeAgentSchema>;
     try {
-      ({ attemptId, providerRuntimeManifestDigest, success, summary, error } =
-        completeAgentSchema.parse(req.body));
+      parsed = completeAgentSchema.parse(req.body);
     } catch (err) {
       if (err instanceof z.ZodError) {
         throw new ValidationError('Validation failed', err.issues);
@@ -186,12 +272,27 @@ router.post(
 
     await clawdbotAgentService.completeAgent(
       req.params.taskId as string,
+      'success' in parsed
+        ? {
+            success: parsed.success,
+            summary: parsed.summary,
+            error: parsed.error,
+          }
+        : {
+            status: parsed.status,
+            summary: parsed.summary,
+            error: parsed.error,
+            blockers: parsed.blockers,
+            evidence: parsed.evidence,
+            artifacts: parsed.artifacts,
+            verification: parsed.verification,
+            continuation: parsed.continuation,
+          },
       {
-        success,
-        summary,
-        error,
-      },
-      { attemptId, providerRuntimeManifestDigest }
+        attemptId: parsed.attemptId,
+        providerRuntimeManifestDigest: parsed.providerRuntimeManifestDigest,
+        terminalSource: 'callback',
+      }
     );
     res.json({ received: true });
   })

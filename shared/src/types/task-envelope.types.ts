@@ -20,6 +20,15 @@ export const TASK_COMPLETION_STATUSES = [
 ] as const;
 export type TaskCompletionStatus = (typeof TASK_COMPLETION_STATUSES)[number];
 
+export const TASK_TERMINAL_SOURCES = [
+  'process',
+  'stream',
+  'callback',
+  'remote-session',
+  'operator-interruption',
+] as const;
+export type TaskTerminalSource = (typeof TASK_TERMINAL_SOURCES)[number];
+
 export const TASK_SIDE_EFFECT_KINDS = [
   'filesystem-write',
   'process-execute',
@@ -82,6 +91,11 @@ export interface TaskLaunchBaseline {
   headSha: string;
   dirty: boolean;
   files: TaskLaunchBaselineFile[];
+  /**
+   * Commits reachable from another launch-time ref but not from `headSha`.
+   * Missing only on legacy v1 envelopes; completion then fails closed if HEAD moves.
+   */
+  preexistingCommitShas?: string[];
 }
 
 export interface TaskEnvelopeSubject {
@@ -220,6 +234,10 @@ export interface TaskContinuationHandle {
 /** Normalized terminal result returned by every provider transport. */
 export interface CompletionResult {
   schemaVersion: typeof COMPLETION_RESULT_SCHEMA_VERSION;
+  digest: string;
+  idempotencyKey: string;
+  completedAt: string;
+  terminalSource: TaskTerminalSource;
   taskEnvelopeSchemaVersion: typeof TASK_ENVELOPE_SCHEMA_VERSION;
   taskEnvelopeDigest: string;
   taskId: string;

@@ -8,6 +8,10 @@ import {
   type ProviderRuntimeManifest,
   type Task,
   type TaskAllowedSideEffect,
+  type TaskCompletionArtifact,
+  type TaskCompletionChangedFile,
+  type TaskCompletionSideEffect,
+  type TaskCompletionVerification,
   type TaskCommitPolicy,
   type TaskEnvelope,
   type TaskEvidenceRequirement,
@@ -26,6 +30,7 @@ import { sha256WorktreeEntry } from '../utils/worktree-fingerprint.js';
 const MAX_BASELINE_FILES = 1000;
 const BASELINE_GIT_TIMEOUT_MS = 10_000;
 const MAX_BASELINE_CAPTURE_ATTEMPTS = 3;
+const MAX_PREEXISTING_COMMITS = 4096;
 const INDEX_PATHSPEC_CHUNK_LENGTH = 48_000;
 const WORKTREE_HASH_CONCURRENCY = 8;
 
@@ -42,6 +47,31 @@ function createBaselineGit(worktreePath: string): BaselineGitClient {
 
 export interface CompletionEvidenceSource {
   captureLaunchBaseline(worktreePath: string, capturedAt: string): Promise<TaskLaunchBaseline>;
+  captureCompletionEvidence(
+    input: CaptureCompletionEvidenceInput
+  ): Promise<CompletionEvidenceSnapshot>;
+}
+
+export interface CaptureCompletionEvidenceInput {
+  task: Task;
+  taskEnvelope: TaskEnvelope;
+  capturedAt: string;
+  reportedArtifacts: TaskCompletionArtifact[];
+}
+
+export interface CompletionEvidenceCommit {
+  sha: string;
+  summary: string;
+}
+
+export interface CompletionEvidenceSnapshot {
+  capturedAt: string;
+  headSha: string;
+  changedFiles: TaskCompletionChangedFile[];
+  commits: CompletionEvidenceCommit[];
+  artifacts: TaskCompletionArtifact[];
+  verification: TaskCompletionVerification[];
+  sideEffects: TaskCompletionSideEffect[];
 }
 
 export class GitCompletionEvidenceSource implements CompletionEvidenceSource {
@@ -58,13 +88,16 @@ export class GitCompletionEvidenceSource implements CompletionEvidenceSource {
       const statusBefore = await git.status(['--untracked-files=all']);
       assertBaselineFileLimit(statusBefore);
       const filesBefore = await captureBaselineFiles(git, worktreePath, statusBefore);
+      const preexistingCommitsBefore = await capturePreexistingCommits(git, headBefore);
 
       const headAfter = (await git.revparse(['HEAD'])).trim();
       const statusAfter = await git.status(['--untracked-files=all']);
       assertBaselineFileLimit(statusAfter);
+      const preexistingCommitsAfter = await capturePreexistingCommits(git, headAfter);
       if (
         headBefore !== headAfter ||
-        statusSignature(statusBefore) !== statusSignature(statusAfter)
+        statusSignature(statusBefore) !== statusSignature(statusAfter) ||
+        JSON.stringify(preexistingCommitsBefore) !== JSON.stringify(preexistingCommitsAfter)
       ) {
         continue;
       }
@@ -73,10 +106,12 @@ export class GitCompletionEvidenceSource implements CompletionEvidenceSource {
       const headFinal = (await git.revparse(['HEAD'])).trim();
       const statusFinal = await git.status(['--untracked-files=all']);
       assertBaselineFileLimit(statusFinal);
+      const preexistingCommitsFinal = await capturePreexistingCommits(git, headFinal);
       if (
         headAfter !== headFinal ||
         statusSignature(statusAfter) !== statusSignature(statusFinal) ||
-        JSON.stringify(filesBefore) !== JSON.stringify(filesAfter)
+        JSON.stringify(filesBefore) !== JSON.stringify(filesAfter) ||
+        JSON.stringify(preexistingCommitsAfter) !== JSON.stringify(preexistingCommitsFinal)
       ) {
         continue;
       }
@@ -86,11 +121,105 @@ export class GitCompletionEvidenceSource implements CompletionEvidenceSource {
         headSha: headFinal,
         dirty: !statusFinal.isClean(),
         files: filesAfter,
+        preexistingCommitShas: preexistingCommitsFinal,
       };
     }
 
     throw new Error(
       `Task worktree changed while capturing the launch baseline after ${MAX_BASELINE_CAPTURE_ATTEMPTS} attempts`
+    );
+  }
+
+  async captureCompletionEvidence(
+    input: CaptureCompletionEvidenceInput
+  ): Promise<CompletionEvidenceSnapshot> {
+    const worktreePath = input.taskEnvelope.workspace.worktreePath;
+    const git = this.gitFactory(worktreePath);
+
+    for (let attempt = 1; attempt <= MAX_BASELINE_CAPTURE_ATTEMPTS; attempt++) {
+      const before = await captureCompletionGitState(
+        git,
+        worktreePath,
+        input.taskEnvelope.workspace.baseline,
+        input.taskEnvelope.workspace.branch
+      );
+      const after = await captureCompletionGitState(
+        git,
+        worktreePath,
+        input.taskEnvelope.workspace.baseline,
+        input.taskEnvelope.workspace.branch
+      );
+      if (JSON.stringify(before) !== JSON.stringify(after)) continue;
+
+      const artifacts = await verifyReportedArtifacts(
+        worktreePath,
+        input.reportedArtifacts,
+        before.changedFiles
+      );
+      const verification = input.taskEnvelope.verificationGates.map((gate) => {
+        const taskStep = input.task.verificationSteps?.find((step) => step.id === gate.id);
+        const checkedAt = taskStep?.checkedAt ? Date.parse(taskStep.checkedAt) : Number.NaN;
+        const verifiedAfterLaunch =
+          taskStep?.checked === true &&
+          Number.isFinite(checkedAt) &&
+          checkedAt >= Date.parse(input.taskEnvelope.attempt.createdAt);
+        return {
+          gateId: gate.id,
+          status: verifiedAfterLaunch ? ('passed' as const) : ('unknown' as const),
+          summary: verifiedAfterLaunch
+            ? 'Task verification state records this gate as passed.'
+            : taskStep?.checked
+              ? 'The verification gate predates this attempt or has no attributable timestamp.'
+              : 'No harness-verifiable completion evidence was recorded for this gate.',
+          evidenceIds: verifiedAfterLaunch ? [`verification-${gate.id}`] : [],
+        };
+      });
+      const allowedKinds = new Set(
+        input.taskEnvelope.allowedSideEffects.map((sideEffect) => sideEffect.kind)
+      );
+      const sideEffects: TaskCompletionSideEffect[] = [];
+      if (before.changedFiles.length > 0) {
+        sideEffects.push({
+          kind: 'filesystem-write',
+          description: `Changed ${before.changedFiles.length} file${before.changedFiles.length === 1 ? '' : 's'} after launch.`,
+          target: worktreePath,
+          authorized: allowedKinds.has('filesystem-write'),
+          verified: true,
+        });
+      }
+      if (before.commits.length > 0) {
+        sideEffects.push({
+          kind: 'git-commit',
+          description: `Created ${before.commits.length} commit${before.commits.length === 1 ? '' : 's'} after launch.`,
+          target: before.commits[0]?.sha ?? null,
+          authorized:
+            input.taskEnvelope.commitPolicy !== 'forbidden' && allowedKinds.has('git-commit'),
+          verified: true,
+        });
+      }
+      if (!before.historyAttributable) {
+        sideEffects.push({
+          kind: 'git-commit',
+          description:
+            'Completion HEAD is not attributable to commits created on the launch branch after the baseline.',
+          target: before.headSha,
+          authorized: false,
+          verified: true,
+        });
+      }
+      return {
+        capturedAt: input.capturedAt,
+        headSha: before.headSha,
+        changedFiles: before.changedFiles,
+        commits: before.commits,
+        artifacts,
+        verification,
+        sideEffects: sideEffects.slice(0, 256),
+      };
+    }
+
+    throw new Error(
+      `Task worktree changed while capturing completion evidence after ${MAX_BASELINE_CAPTURE_ATTEMPTS} attempts`
     );
   }
 }
@@ -375,6 +504,227 @@ async function captureBaselineFiles(
     );
   }
   return result;
+}
+
+interface CompletionGitState {
+  headSha: string;
+  historyAttributable: boolean;
+  changedFiles: TaskCompletionChangedFile[];
+  commits: CompletionEvidenceCommit[];
+}
+
+interface GitNameStatus {
+  path: string;
+  previousPath: string | null;
+  status: TaskCompletionChangedFile['status'];
+}
+
+async function captureCompletionGitState(
+  git: BaselineGitClient,
+  worktreePath: string,
+  baseline: TaskLaunchBaseline,
+  expectedBranch: string
+): Promise<CompletionGitState> {
+  const headSha = (await git.revparse(['HEAD'])).trim();
+  const status = await git.status(['--untracked-files=all']);
+  if (status.files.length > 2000) {
+    throw new Error(
+      `Task worktree completion has ${status.files.length} changed files; maximum is 2000`
+    );
+  }
+  const currentStatusFiles = await captureBaselineFiles(git, worktreePath, status);
+  const currentByPath = new Map(currentStatusFiles.map((file) => [file.path, file]));
+  const baselineByPath = new Map(baseline.files.map((file) => [file.path, file]));
+  const candidateCommits =
+    baseline.headSha === headSha
+      ? []
+      : parseCompletionCommits(
+          await git.raw([
+            'log',
+            '--format=%H%x00%s%x00',
+            '--max-count=256',
+            `${baseline.headSha}..${headSha}`,
+          ])
+        );
+  const containsPreexistingHistory =
+    baseline.preexistingCommitShas === undefined ||
+    candidateCommits.some((commit) => baseline.preexistingCommitShas?.includes(commit.sha));
+  const historyAttributable =
+    baseline.headSha === headSha ||
+    (status.current === expectedBranch &&
+      (await isAncestorCommit(git, baseline.headSha, headSha)) &&
+      !containsPreexistingHistory);
+  const committedChanges =
+    baseline.headSha === headSha || !historyAttributable
+      ? []
+      : parseGitNameStatus(
+          await git.raw([
+            'diff',
+            '--name-status',
+            '-z',
+            '--find-renames',
+            baseline.headSha,
+            headSha,
+            '--',
+          ])
+        );
+  const candidates = new Map<string, GitNameStatus>();
+  for (const change of committedChanges) candidates.set(change.path, change);
+  for (const file of status.files) {
+    candidates.set(file.path, {
+      path: file.path,
+      previousPath: file.from ?? null,
+      status: mapBaselineFile(file, null, null).status,
+    });
+  }
+  if (candidates.size > 2000) {
+    throw new Error(
+      `Task worktree completion has ${candidates.size} attributable file candidates; maximum is 2000`
+    );
+  }
+
+  const candidatePaths = [...candidates.keys()].sort((left, right) => left.localeCompare(right));
+  const indexBlobHashes = await readIndexBlobHashes(git, candidatePaths);
+  const changedFiles: TaskCompletionChangedFile[] = [];
+  for (let offset = 0; offset < candidatePaths.length; offset += WORKTREE_HASH_CONCURRENCY) {
+    const batch = candidatePaths.slice(offset, offset + WORKTREE_HASH_CONCURRENCY);
+    const entries = await Promise.all(
+      batch.map(async (filePath) => {
+        const change = candidates.get(filePath);
+        if (!change) return null;
+        const baselineFile =
+          baselineByPath.get(filePath) ??
+          (change.previousPath ? baselineByPath.get(change.previousPath) : undefined);
+        const currentFile = currentByPath.get(filePath);
+        const currentWorktreeSha256 = await sha256WorktreeEntry(worktreePath, filePath);
+        const currentIndexBlobHash = indexBlobHashes.get(filePath) ?? null;
+        if (
+          baselineFile &&
+          baselineFile.worktreeSha256 === currentWorktreeSha256 &&
+          baselineFile.indexBlobHash === currentIndexBlobHash
+        ) {
+          return null;
+        }
+        if (!currentFile && baselineFile && baselineFile.worktreeSha256 === currentWorktreeSha256) {
+          return null;
+        }
+        return {
+          path: filePath,
+          status: change.status,
+          previousPath: change.previousPath,
+          verified: true,
+        } satisfies TaskCompletionChangedFile;
+      })
+    );
+    for (const entry of entries) {
+      if (entry) changedFiles.push(entry);
+    }
+  }
+
+  const commits = baseline.headSha === headSha || !historyAttributable ? [] : candidateCommits;
+  return { headSha, historyAttributable, changedFiles, commits };
+}
+
+async function capturePreexistingCommits(
+  git: BaselineGitClient,
+  headSha: string
+): Promise<string[]> {
+  const commits = (await git.raw(['rev-list', '--all', '--not', headSha]))
+    .split(/\s+/)
+    .map((commit) => commit.trim())
+    .filter((commit) => /^[a-f0-9]{40,64}$/.test(commit));
+  const unique = [...new Set(commits)].sort((left, right) => left.localeCompare(right));
+  if (unique.length > MAX_PREEXISTING_COMMITS) {
+    throw new Error(
+      `Task repository has ${unique.length} pre-existing commits outside the launch HEAD; maximum is ${MAX_PREEXISTING_COMMITS}`
+    );
+  }
+  return unique;
+}
+
+async function isAncestorCommit(
+  git: BaselineGitClient,
+  possibleAncestor: string,
+  descendant: string
+): Promise<boolean> {
+  try {
+    await git.raw(['merge-base', '--is-ancestor', possibleAncestor, descendant]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseGitNameStatus(output: string): GitNameStatus[] {
+  const fields = output.split('\0');
+  const changes: GitNameStatus[] = [];
+  for (let index = 0; index < fields.length;) {
+    const code = fields[index++];
+    if (!code) continue;
+    const firstPath = fields[index++];
+    if (!firstPath) break;
+    if (code.startsWith('R') || code.startsWith('C')) {
+      const nextPath = fields[index++];
+      if (!nextPath) break;
+      changes.push({ path: nextPath, previousPath: firstPath, status: 'renamed' });
+      continue;
+    }
+    changes.push({
+      path: firstPath,
+      previousPath: null,
+      status: code.startsWith('A') ? 'added' : code.startsWith('D') ? 'deleted' : 'modified',
+    });
+  }
+  return changes;
+}
+
+function parseCompletionCommits(output: string): CompletionEvidenceCommit[] {
+  const fields = output.split('\0');
+  const commits: CompletionEvidenceCommit[] = [];
+  for (let index = 0; index + 1 < fields.length && commits.length < 256; index += 2) {
+    const sha = fields[index]?.trim();
+    const summary = fields[index + 1]?.trim();
+    if (sha && /^[a-f0-9]{40,64}$/.test(sha)) {
+      commits.push({
+        sha,
+        summary: summary ? summary.slice(0, 500) : '(no commit subject)',
+      });
+    }
+  }
+  return commits;
+}
+
+async function verifyReportedArtifacts(
+  worktreePath: string,
+  artifacts: TaskCompletionArtifact[],
+  changedFiles: TaskCompletionChangedFile[]
+): Promise<TaskCompletionArtifact[]> {
+  const verified: TaskCompletionArtifact[] = [];
+  const attributablePaths = new Set(changedFiles.map((file) => file.path));
+  for (const artifact of artifacts.slice(0, 256)) {
+    if (artifact.kind !== 'file') {
+      verified.push({ ...artifact, verified: false });
+      continue;
+    }
+    const absolutePath = path.resolve(worktreePath, artifact.reference);
+    if (!isPathWithin(path.resolve(worktreePath), absolutePath)) {
+      verified.push({ ...artifact, sha256: null, verified: false });
+      continue;
+    }
+    const relativePath = path.relative(worktreePath, absolutePath);
+    if (!attributablePaths.has(relativePath)) {
+      verified.push({ ...artifact, reference: relativePath, sha256: null, verified: false });
+      continue;
+    }
+    const sha256 = await sha256WorktreeEntry(worktreePath, relativePath);
+    verified.push({
+      ...artifact,
+      reference: relativePath,
+      sha256,
+      verified: sha256 !== null,
+    });
+  }
+  return verified;
 }
 
 async function readIndexBlobHashes(

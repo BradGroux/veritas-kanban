@@ -118,7 +118,11 @@ import type {
   Task,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
-import { TaskEnvelopeService } from '../services/task-envelope-service.js';
+import {
+  TaskEnvelopeService,
+  type CompletionEvidenceSource,
+} from '../services/task-envelope-service.js';
+import { ProviderCompletionService } from '../services/provider-completion-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -158,21 +162,42 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
 };
 
 function testableService(tmpDir: string): TestableClawdbotAgentService {
-  const taskEnvelopes = new TaskEnvelopeService({
+  const completionEvidence = testCompletionEvidence();
+  const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
+  const service = new ClawdbotAgentService(
+    undefined,
+    undefined,
+    taskEnvelopes,
+    undefined,
+    new ProviderCompletionService(completionEvidence)
+  ) as unknown as TestableClawdbotAgentService;
+  service.logsDir = tmpDir;
+  return service;
+}
+
+function testCompletionEvidence(): CompletionEvidenceSource {
+  return {
     captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
       capturedAt,
       headSha: 'a'.repeat(40),
       dirty: false,
       files: [],
     }),
-  });
-  const service = new ClawdbotAgentService(
-    undefined,
-    undefined,
-    taskEnvelopes
-  ) as unknown as TestableClawdbotAgentService;
-  service.logsDir = tmpDir;
-  return service;
+    captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+      capturedAt,
+      headSha: taskEnvelope.workspace.baseline.headSha,
+      changedFiles: [],
+      commits: [],
+      artifacts: [],
+      verification: taskEnvelope.verificationGates.map((gate) => ({
+        gateId: gate.id,
+        status: 'passed' as const,
+        summary: 'Mock harness verification passed.',
+        evidenceIds: [`verification-${gate.id}`],
+      })),
+      sideEffects: [],
+    }),
+  };
 }
 
 function createFakeChild(fixture: string, exitCode = 0) {
@@ -1272,6 +1297,131 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(sdkSignal?.aborted).toBe(true);
   });
 
+  it('retains an SDK terminal result when completion persistence exhausts automatic retries', async () => {
+    let releaseEvents: (() => void) | undefined;
+    const eventGate = new Promise<void>((resolve) => {
+      releaseEvents = resolve;
+    });
+    mockSdkRunStreamed.mockResolvedValue({
+      events: {
+        async *[Symbol.asyncIterator]() {
+          await eventGate;
+          yield {
+            type: 'item.completed',
+            item: { type: 'agent_message', text: 'SDK completed before persistence failed.' },
+          };
+        },
+      },
+    });
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex-sdk');
+    await waitFor(() => expect(mockSdkRunStreamed).toHaveBeenCalled());
+    let failedWrites = 0;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended && failedWrites < 3) {
+        failedWrites += 1;
+        throw new Error('persistent completion storage failure');
+      }
+      task = { ...task, ...update } as Task;
+      return task;
+    });
+
+    releaseEvents?.();
+
+    await waitFor(() => expect(failedWrites).toBe(3));
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: active.attemptId,
+      status: 'running',
+    });
+    await service.stopAgent(task.id, active.attemptId);
+
+    expect(task.attempt?.completionResult).toMatchObject({
+      status: 'success',
+      terminalSource: 'stream',
+      summary: 'SDK completed before persistence failed.',
+    });
+    const completionWrites = mockUpdateTask.mock.calls.filter(
+      ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+    );
+    expect(completionWrites).toHaveLength(4);
+    expect(
+      new Set(completionWrites.map(([, update]) => update.attempt?.completionResult?.digest))
+    ).toEqual(new Set([task.attempt?.completionResult?.digest]));
+  });
+
+  it('retains an SDK execution failure when its completion write exhausts retries', async () => {
+    let releaseEvents: (() => void) | undefined;
+    const eventGate = new Promise<void>((resolve) => {
+      releaseEvents = resolve;
+    });
+    mockSdkRunStreamed.mockResolvedValue({
+      events: {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              await eventGate;
+              throw new Error('SDK execution failed before completion');
+            },
+          };
+        },
+      },
+    });
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex-sdk');
+    await waitFor(() => expect(mockSdkRunStreamed).toHaveBeenCalled());
+    let failedWrites = 0;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended && failedWrites < 3) {
+        failedWrites += 1;
+        throw new Error('persistent completion storage failure');
+      }
+      task = { ...task, ...update } as Task;
+      return task;
+    });
+
+    releaseEvents?.();
+
+    await waitFor(() => expect(failedWrites).toBe(3));
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: active.attemptId,
+      status: 'running',
+    });
+    await service.stopAgent(task.id, active.attemptId);
+
+    expect(task.attempt?.completionResult).toMatchObject({
+      status: 'failed',
+      terminalSource: 'stream',
+      error: 'SDK execution failed before completion',
+    });
+    expect(task.attempt?.completionResult?.terminalSource).not.toBe('operator-interruption');
+  });
+
   it('does not let a stopped SDK rejection remove its replacement run', async () => {
     let releaseFirst: (() => void) | undefined;
     let releaseSecond: (() => void) | undefined;
@@ -1376,13 +1526,14 @@ describe('ClawdbotAgentService Codex providers', () => {
     await service.stopAgent(task.id, first.attemptId);
   });
 
-  it('coalesces concurrent completion claims for the same active attempt', async () => {
+  it('persists one process completion and rejects a conflicting terminal race', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
     const service = testableService(tmpDir);
     const active = await service.startAgent(task.id, 'codex');
     const provenance = {
       attemptId: active.attemptId,
+      terminalSource: 'process' as const,
       providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
     };
 
@@ -1391,18 +1542,26 @@ describe('ClawdbotAgentService Codex providers', () => {
       { success: true, summary: 'natural completion won' },
       provenance
     );
-    const competingStopCompletion = service.completeAgent(
-      task.id,
-      { success: false, error: 'competing stop completion' },
-      provenance
-    );
-
-    await Promise.all([naturalCompletion, competingStopCompletion]);
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: false, error: 'competing stop completion' },
+        provenance
+      )
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await naturalCompletion;
 
     expect(task.attempt).toMatchObject({
       id: active.attemptId,
       status: 'complete',
+      completionResult: {
+        status: 'success',
+        terminalSource: 'process',
+        summary: 'natural completion won',
+      },
     });
+    expect(task.attempt?.completionResult?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(task.attempt?.completionResult?.idempotencyKey).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(
       mockUpdateTask.mock.calls.filter(
         ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
@@ -1414,7 +1573,228 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockLogActivity.mock.calls.filter(([type]) => type === 'agent_completed')).toHaveLength(
       1
     );
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: true, summary: 'natural completion won' },
+        provenance
+      )
+    ).resolves.toBeUndefined();
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('does not let a competing terminal claim poison an in-flight finalizer', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    const provenance = {
+      attemptId: active.attemptId,
+      terminalSource: 'process' as const,
+      providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+    };
+
+    const interruption = service.stopAgent(task.id, active.attemptId);
+    const competitor = service.completeAgent(
+      task.id,
+      { success: true, summary: 'late process result' },
+      provenance
+    );
+
+    await interruption;
+    await expect(competitor).rejects.toMatchObject({ statusCode: 409 });
+    expect(task.attempt?.completionResult).toMatchObject({
+      status: 'interrupted',
+      terminalSource: 'operator-interruption',
+      error: 'Stopped by user',
+    });
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(1);
+  });
+
+  it('rejects callback transport for a provider with harness-owned process completion', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: true, summary: 'spoofed callback' },
+        {
+          attemptId: active.attemptId,
+          terminalSource: 'callback',
+          providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 });
+
+    await service.stopAgent(task.id, active.attemptId);
+  });
+
+  it('persists an idempotent OpenClaw callback after server restart', async () => {
+    const completionEvidence = testCompletionEvidence();
+    const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
+    const providerRuntimeManifest = providerRuntimeManifestFixture({
+      provider: 'openclaw',
+      adapter: 'openclaw',
+    });
+    const attemptId = 'attempt_restarted_openclaw';
+    const taskEnvelope = await taskEnvelopes.build({
+      task: { ...task, verificationSteps: [] },
+      attemptId,
+      createdAt: '2026-07-23T17:00:00.000Z',
+      worktreePath: tmpDir,
+      providerRuntimeManifest,
+      commitPolicy: 'allowed',
+    });
+    task = {
+      ...task,
+      status: 'in-progress',
+      revision: undefined,
+      verificationSteps: [],
+      attempt: {
+        id: attemptId,
+        agent: 'veritas',
+        status: 'running',
+        started: '2026-07-23T17:00:00.000Z',
+        provider: 'openclaw',
+        providerRuntimeManifest,
+        taskEnvelope,
+      },
+    };
+    task.attempts = [task.attempt];
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.expectedRevision !== (task.revision ?? 1)) {
+        throw Object.assign(new Error('stale revision'), { statusCode: 409 });
+      }
+      task = {
+        ...task,
+        ...update,
+        revision: (task.revision ?? 1) + 1,
+      } as Task;
+      return task;
+    });
+    const service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      taskEnvelopes,
+      undefined,
+      new ProviderCompletionService(completionEvidence)
+    );
+    const provenance = {
+      attemptId,
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+    };
+    const terminalResult = { success: true, summary: 'Recovered completion callback.' };
+
+    await Promise.all([
+      service.completeAgent(task.id, terminalResult, provenance),
+      service.completeAgent(task.id, terminalResult, provenance),
+    ]);
+
+    expect(task.status).toBe('done');
+    expect(task.attempt).toMatchObject({
+      id: attemptId,
+      status: 'complete',
+      completionResult: {
+        status: 'success',
+        terminalSource: 'callback',
+        summary: 'Recovered completion callback.',
+      },
+    });
+    expect(
+      mockUpdateTask.mock.calls.filter(([, update]) => update.attempt?.id === attemptId)
+    ).toHaveLength(2);
+    expect(task.revision).toBe(2);
+    expect(task.attempts).toHaveLength(1);
+    await expect(
+      service.completeAgent(task.id, terminalResult, provenance)
+    ).resolves.toBeUndefined();
+
+    const persistedAttempt = task.attempt;
+    const persistedCompletion = persistedAttempt?.completionResult;
+    if (!persistedAttempt || !persistedCompletion) {
+      throw new Error('Expected a persisted completion result');
+    }
+    task = {
+      ...task,
+      attempt: {
+        ...persistedAttempt,
+        completionResult: {
+          ...persistedCompletion,
+          summary: 'tampered persisted completion',
+        },
+      },
+    };
+    await expect(service.completeAgent(task.id, terminalResult, provenance)).rejects.toThrow(
+      /integrity|digest/i
+    );
+
+    const mismatchedRuntime = providerRuntimeManifestFixture({
+      provider: 'openclaw',
+      adapter: 'openclaw',
+      providerVersion: 'openclaw changed-after-restart',
+    });
+    const currentAttempt = task.attempt;
+    if (!currentAttempt) throw new Error('Expected the restarted attempt');
+    task = {
+      ...task,
+      status: 'in-progress',
+      attempt: {
+        ...currentAttempt,
+        status: 'running',
+        completionResult: undefined,
+        providerRuntimeManifest: mismatchedRuntime,
+      },
+    };
+    await expect(
+      service.completeAgent(task.id, terminalResult, {
+        attemptId,
+        providerRuntimeManifestDigest: mismatchedRuntime.digest,
+      })
+    ).rejects.toThrow(/bindings do not agree/);
+
+    const mislabeledAttemptId = 'attempt_mislabeled_provider';
+    const codexRuntime = providerRuntimeManifestFixture({
+      provider: 'codex-cli',
+      adapter: 'codex-cli',
+    });
+    const codexEnvelope = await taskEnvelopes.build({
+      task: { ...task, verificationSteps: [] },
+      attemptId: mislabeledAttemptId,
+      createdAt: '2026-07-23T17:30:00.000Z',
+      worktreePath: tmpDir,
+      providerRuntimeManifest: codexRuntime,
+      commitPolicy: 'allowed',
+    });
+    task = {
+      ...task,
+      attempt: {
+        id: mislabeledAttemptId,
+        agent: 'veritas',
+        status: 'running',
+        started: '2026-07-23T17:30:00.000Z',
+        provider: 'openclaw',
+        providerRuntimeManifest: codexRuntime,
+        taskEnvelope: codexEnvelope,
+      },
+    };
+    await expect(
+      service.completeAgent(task.id, terminalResult, {
+        attemptId: mislabeledAttemptId,
+        providerRuntimeManifestDigest: codexRuntime.digest,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        mismatches: expect.arrayContaining(['attempt runtime provider']),
+      },
+    });
   });
 
   it('coalesces concurrent stops with the provider close terminalizer', async () => {
@@ -1443,6 +1823,11 @@ describe('ClawdbotAgentService Codex providers', () => {
         ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
       )
     ).toHaveLength(1);
+    expect(task.attempt?.completionResult).toMatchObject({
+      status: 'interrupted',
+      terminalSource: 'operator-interruption',
+      error: 'Stopped by user',
+    });
     expect(
       mockTelemetryEmit.mock.calls.filter(([event]) => event.type === 'run.completed')
     ).toHaveLength(1);
@@ -1451,20 +1836,12 @@ describe('ClawdbotAgentService Codex providers', () => {
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
   });
 
-  it('retries only the authoritative commit after a persistence failure', async () => {
+  it('automatically retries only the authoritative commit after a persistence failure', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
     const service = testableService(tmpDir);
     const active = await service.startAgent(task.id, 'codex');
     mockUpdateTask.mockRejectedValueOnce(new Error('persistence unavailable'));
-
-    await expect(service.stopAgent(task.id, active.attemptId)).rejects.toThrow(
-      'persistence unavailable'
-    );
-    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
-      attemptId: active.attemptId,
-      status: 'running',
-    });
 
     await service.stopAgent(task.id, active.attemptId);
 
@@ -1479,7 +1856,247 @@ describe('ClawdbotAgentService Codex providers', () => {
         ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
       )
     ).toHaveLength(2);
+    const completionDigests = mockUpdateTask.mock.calls
+      .filter(([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended)
+      .map(([, update]) => update.attempt?.completionResult?.digest);
+    expect(new Set(completionDigests)).toEqual(new Set([task.attempt?.completionResult?.digest]));
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('runs local finalization effects when task persistence writes and then reports an error', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    let simulatedPostWriteError = false;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      task = { ...task, ...update } as Task;
+      if (update.attempt?.ended && !simulatedPostWriteError) {
+        simulatedPostWriteError = true;
+        throw new Error('task status telemetry failed after write');
+      }
+      return task;
+    });
+
+    await service.stopAgent(task.id, active.attemptId);
+
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(1);
+    expect(mockTelemetryEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'run.completed',
+        taskId: task.id,
+        attemptId: active.attemptId,
+      })
+    );
+    expect(mockCompleteTrace).toHaveBeenCalledWith(active.attemptId, 'failed');
+    expect(mockLogActivity).toHaveBeenCalledWith(
+      'agent_completed',
+      task.id,
+      task.title,
+      expect.objectContaining({ attemptId: active.attemptId }),
+      'codex'
+    );
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('retries a natural process completion after a transient persistence failure', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    let failedCompletionWrite = false;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended && !failedCompletionWrite) {
+        failedCompletionWrite = true;
+        throw new Error('transient persistence failure');
+      }
+      task = { ...task, ...update } as Task;
+      return task;
+    });
+
+    child.emit('close', 0, null);
+
+    await waitFor(() => expect(task.status).toBe('done'));
+    expect(
+      mockUpdateTask.mock.calls.filter(
+        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      )
+    ).toHaveLength(2);
+    expect(task.attempt?.completionResult).toMatchObject({
+      status: 'success',
+      terminalSource: 'process',
+    });
+  });
+
+  it('uses compare-and-swap and retries against the latest active attempt revision', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    task = { ...task, revision: 7 };
+    let raced = false;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended) {
+        if (update.expectedRevision !== task.revision) {
+          throw Object.assign(new Error('stale revision'), { statusCode: 409 });
+        }
+        if (!raced) {
+          raced = true;
+          task = { ...task, revision: 8, priority: 'high' };
+          throw Object.assign(new Error('concurrent task mutation'), { statusCode: 409 });
+        }
+      }
+      task = {
+        ...task,
+        ...update,
+        revision: (task.revision ?? 1) + 1,
+      } as Task;
+      return task;
+    });
+
+    await service.stopAgent(task.id, active.attemptId);
+
+    const completionWrites = mockUpdateTask.mock.calls.filter(
+      ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+    );
+    expect(completionWrites.map(([, update]) => update.expectedRevision)).toEqual([7, 8]);
+    expect(task.priority).toBe('high');
+    expect(task.revision).toBe(9);
+  });
+
+  it('rejects a completion retry when immutable attempt bindings change under the same ID', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    task = { ...task, revision: 7 };
+    const persistedAttempt = task.attempt;
+    if (!persistedAttempt) throw new Error('Expected an active attempt');
+    let raced = false;
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended && !raced) {
+        raced = true;
+        task = {
+          ...task,
+          revision: 8,
+          attempt: {
+            ...persistedAttempt,
+            providerRuntimeManifest: providerRuntimeManifestFixture({
+              provider: 'codex-cli',
+              providerVersion: 'codex-cli changed-under-cas',
+            }),
+          },
+        };
+        throw Object.assign(new Error('concurrent immutable mutation'), { statusCode: 409 });
+      }
+      task = { ...task, ...update } as Task;
+      return task;
+    });
+
+    await expect(service.stopAgent(task.id, active.attemptId)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+
+    expect(task.attempt?.completionResult).toBeUndefined();
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it('does not finalize locally when the task is archived during the completion write', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (update.attempt?.ended) return null;
+      task = { ...task, ...update } as Task;
+      return task;
+    });
+
+    await expect(service.stopAgent(task.id, active.attemptId)).rejects.toThrow(
+      /archived or deleted/
+    );
+
+    expect(task.attempt?.completionResult).toBeUndefined();
+    expect(
+      mockTelemetryEmit.mock.calls.filter(
+        ([event]) => event.type === 'run.completed' && event.attemptId === active.attemptId
+      )
+    ).toHaveLength(0);
+    expect(
+      mockLogActivity.mock.calls.filter(
+        ([type, , , metadata]) =>
+          type === 'agent_completed' && metadata.attemptId === active.attemptId
+      )
+    ).toHaveLength(0);
+    await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+  });
+
+  it.each([
+    {
+      status: 'blocked' as const,
+      taskStatus: 'blocked',
+      error: undefined,
+      blockers: [
+        {
+          code: 'operator-input',
+          summary: 'Operator input required',
+          detail: 'Choose the deployment target.',
+          retryable: true,
+        },
+      ],
+    },
+    {
+      status: 'failed' as const,
+      taskStatus: 'in-progress',
+      error: 'Provider failed.',
+      blockers: undefined,
+    },
+    {
+      status: 'interrupted' as const,
+      taskStatus: 'in-progress',
+      error: undefined,
+      blockers: undefined,
+    },
+    {
+      status: 'partial' as const,
+      taskStatus: 'in-progress',
+      error: undefined,
+      blockers: undefined,
+    },
+  ])('maps $status completion into $taskStatus recovery state', async (fixture) => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+
+    await service.completeAgent(
+      task.id,
+      {
+        status: fixture.status,
+        summary: `Provider reported ${fixture.status}.`,
+        error: fixture.error,
+        blockers: fixture.blockers,
+      },
+      {
+        attemptId: active.attemptId,
+        terminalSource: 'process',
+        providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+      }
+    );
+
+    expect(task.status).toBe(fixture.taskStatus);
+    expect(task.attempt).toMatchObject({
+      id: active.attemptId,
+      status: 'failed',
+      completionResult: {
+        status: fixture.status,
+        terminalSource: 'process',
+      },
+    });
   });
 
   it('does not enforce a budget evaluation that outlives its active run', async () => {
@@ -1546,13 +2163,14 @@ describe('ClawdbotAgentService Codex providers', () => {
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
   });
 
-  it('does not replay a committed completion when post-commit telemetry fails', async () => {
+  it('accepts an exact persisted duplicate but rejects a conflicting completion', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
     const service = testableService(tmpDir);
     const active = await service.startAgent(task.id, 'codex');
     const provenance = {
       attemptId: active.attemptId,
+      terminalSource: 'process' as const,
       providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
     };
     mockTelemetryEmit.mockRejectedValueOnce(new Error('telemetry unavailable'));
@@ -1567,6 +2185,13 @@ describe('ClawdbotAgentService Codex providers', () => {
 
     expect(task.attempt).toMatchObject({ id: active.attemptId, status: 'complete' });
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
+    await expect(
+      service.completeAgent(
+        task.id,
+        { success: true, summary: 'committed before telemetry' },
+        provenance
+      )
+    ).resolves.toBeUndefined();
     await expect(
       service.completeAgent(task.id, { success: true, summary: 'must not replay' }, provenance)
     ).rejects.toMatchObject({ statusCode: 409 });

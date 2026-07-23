@@ -20,6 +20,15 @@ const evidenceSource: CompletionEvidenceSource = {
     dirty: false,
     files: [],
   }),
+  captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+    capturedAt,
+    headSha: taskEnvelope.workspace.baseline.headSha,
+    changedFiles: [],
+    commits: [],
+    artifacts: [],
+    verification: [],
+    sideEffects: [],
+  }),
 };
 
 function task(provider: string): Task {

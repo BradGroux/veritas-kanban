@@ -11,11 +11,13 @@ import {
   TASK_EVIDENCE_SOURCES,
   TASK_EXPECTED_OUTPUT_KINDS,
   TASK_SIDE_EFFECT_KINDS,
+  TASK_TERMINAL_SOURCES,
   TASK_VERIFICATION_STATUSES,
   type CompletionResult,
   type TaskEnvelope,
 } from '@veritas-kanban/shared';
 import { verifyTaskEnvelopeDigest } from '../utils/task-envelope-digest.js';
+import { verifyCompletionResultDigest } from '../utils/completion-result-digest.js';
 
 const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const idSchema = z.string().trim().min(1).max(160);
@@ -101,6 +103,10 @@ export const TaskEnvelopeSchema = z
                   .strict()
               )
               .max(1000),
+            preexistingCommitShas: z
+              .array(z.string().regex(/^[a-f0-9]{40,64}$/))
+              .max(4096)
+              .optional(),
           })
           .strict(),
       })
@@ -161,6 +167,10 @@ export const TaskEnvelopeSchema = z
 export const CompletionResultSchema = z
   .object({
     schemaVersion: z.literal(COMPLETION_RESULT_SCHEMA_VERSION),
+    digest: digestSchema,
+    idempotencyKey: digestSchema,
+    completedAt: isoDateSchema,
+    terminalSource: z.enum(TASK_TERMINAL_SOURCES),
     taskEnvelopeSchemaVersion: z.literal(TASK_ENVELOPE_SCHEMA_VERSION),
     taskEnvelopeDigest: digestSchema,
     taskId: idSchema,
@@ -262,6 +272,13 @@ export const CompletionResultSchema = z
   })
   .strict()
   .superRefine((result, ctx) => {
+    if (!verifyCompletionResultDigest(result as CompletionResult)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['digest'],
+        message: 'Completion result digest does not match the canonical payload',
+      });
+    }
     if (result.status === 'success') {
       if (result.error !== null || result.blockers.length > 0) {
         ctx.addIssue({

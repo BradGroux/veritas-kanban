@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git';
@@ -18,6 +18,7 @@ import {
   TaskEnvelopeSchema,
   parseCompletionResultForEnvelope,
 } from '../schemas/task-envelope-schemas.js';
+import { calculateCompletionResultDigest } from '../utils/completion-result-digest.js';
 import {
   GitCompletionEvidenceSource,
   TaskEnvelopeService,
@@ -43,6 +44,15 @@ const baseline: TaskLaunchBaseline = {
 
 const evidenceSource: CompletionEvidenceSource = {
   captureLaunchBaseline: async () => structuredClone(baseline),
+  captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+    capturedAt,
+    headSha: taskEnvelope.workspace.baseline.headSha,
+    changedFiles: [],
+    commits: [],
+    artifacts: [],
+    verification: [],
+    sideEffects: [],
+  }),
 };
 
 function task(): Task {
@@ -102,8 +112,11 @@ function completionResult(
   taskEnvelope: Awaited<ReturnType<typeof envelope>>,
   status: CompletionResult['status']
 ): CompletionResult {
-  return {
+  const payload: Omit<CompletionResult, 'digest'> = {
     schemaVersion: COMPLETION_RESULT_SCHEMA_VERSION,
+    idempotencyKey: `sha256:${'d'.repeat(64)}`,
+    completedAt: createdAt,
+    terminalSource: 'process',
     taskEnvelopeSchemaVersion: TASK_ENVELOPE_SCHEMA_VERSION,
     taskEnvelopeDigest: taskEnvelope.digest,
     taskId: taskEnvelope.subject.id,
@@ -154,6 +167,10 @@ function completionResult(
         : [],
     sideEffects: [],
     continuation: null,
+  };
+  return {
+    ...payload,
+    digest: calculateCompletionResultDigest(payload),
   };
 }
 
@@ -304,24 +321,28 @@ describe('TaskEnvelopeService', () => {
 
     const missingVerification = completionResult(taskEnvelope, 'success');
     missingVerification.verification = [];
+    missingVerification.digest = calculateCompletionResultDigest(missingVerification);
     expect(() => parseCompletionResultForEnvelope(missingVerification, taskEnvelope)).toThrow(
       /Missing passed verification evidence/
     );
 
     const wrongEvidenceKind = completionResult(taskEnvelope, 'success');
     wrongEvidenceKind.evidence[0].kind = 'file-change';
+    wrongEvidenceKind.digest = calculateCompletionResultDigest(wrongEvidenceKind);
     expect(() => parseCompletionResultForEnvelope(wrongEvidenceKind, taskEnvelope)).toThrow(
       /Missing verified completion evidence/
     );
 
     const unboundVerification = completionResult(taskEnvelope, 'success');
     unboundVerification.verification[0].evidenceIds = ['missing-evidence'];
+    unboundVerification.digest = calculateCompletionResultDigest(unboundVerification);
     expect(() => parseCompletionResultForEnvelope(unboundVerification, taskEnvelope)).toThrow(
       /Missing passed verification evidence/
     );
 
     const wrongEnvelope = completionResult(taskEnvelope, 'success');
     wrongEnvelope.taskEnvelopeDigest = `sha256:${'f'.repeat(64)}`;
+    wrongEnvelope.digest = calculateCompletionResultDigest(wrongEnvelope);
     expect(() => parseCompletionResultForEnvelope(wrongEnvelope, taskEnvelope)).toThrow(
       /task envelope digest/
     );
@@ -365,6 +386,236 @@ describe('TaskEnvelopeService', () => {
           indexBlobHash: null,
           worktreeSha256: createHash('sha256').update('pre-existing\n').digest('hex'),
         },
+      ])
+    );
+  });
+
+  it('attributes only post-launch files, commits, verification, and side effects', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'veritas-completion-evidence-'));
+    const git = simpleGit(directory);
+    await git.init();
+    await git.addConfig('user.name', 'Veritas Test');
+    await git.addConfig('user.email', 'veritas@example.com');
+    await git.addConfig('commit.gpgsign', 'false');
+    await writeFile(path.join(directory, 'tracked.txt'), 'baseline\n');
+    await git.add('tracked.txt');
+    await git.commit('baseline');
+    await writeFile(path.join(directory, 'tracked.txt'), 'dirty before launch\n');
+    await writeFile(path.join(directory, 'pre-existing.txt'), 'unchanged after launch\n');
+
+    const source = new GitCompletionEvidenceSource();
+    const completionTask = {
+      ...task(),
+      git: {
+        repo: 'veritas-kanban',
+        branch: (await git.status()).current ?? 'master',
+        baseBranch: 'main',
+        worktreePath: directory,
+      },
+      verificationSteps: [
+        {
+          id: 'verify-1',
+          description: 'Run focused tests',
+          checked: true,
+          checkedAt: '2026-07-16T12:15:00.000Z',
+        },
+      ],
+    };
+    const taskEnvelope = await new TaskEnvelopeService(source).build({
+      task: completionTask,
+      attemptId: 'attempt_completion_evidence',
+      createdAt,
+      worktreePath: directory,
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'allowed',
+    });
+
+    await writeFile(path.join(directory, 'attempt.txt'), 'created after launch\n');
+    await git.add('attempt.txt');
+    await git.commit('attempt commit');
+    await writeFile(path.join(directory, 'tracked.txt'), 'changed again after launch\n');
+
+    const captured = await source.captureCompletionEvidence({
+      task: completionTask,
+      taskEnvelope,
+      capturedAt: '2026-07-16T12:30:00.000Z',
+      reportedArtifacts: [
+        {
+          id: 'attempt-artifact',
+          kind: 'file',
+          name: 'Attempt artifact',
+          reference: 'attempt.txt',
+          mediaType: 'text/plain',
+          sha256: null,
+          verified: false,
+        },
+        {
+          id: 'pre-existing-artifact',
+          kind: 'file',
+          name: 'Pre-existing artifact',
+          reference: 'pre-existing.txt',
+          mediaType: 'text/plain',
+          sha256: null,
+          verified: false,
+        },
+      ],
+    });
+
+    expect(captured.changedFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'attempt.txt', status: 'added', verified: true }),
+        expect.objectContaining({ path: 'tracked.txt', status: 'modified', verified: true }),
+      ])
+    );
+    expect(captured.changedFiles).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'pre-existing.txt' })])
+    );
+    expect(captured.commits).toEqual([expect.objectContaining({ summary: 'attempt commit' })]);
+    expect(captured.verification).toEqual([
+      expect.objectContaining({ gateId: 'verify-1', status: 'passed' }),
+    ]);
+    expect(captured.artifacts).toEqual([
+      expect.objectContaining({ id: 'attempt-artifact', verified: true }),
+      expect.objectContaining({ id: 'pre-existing-artifact', verified: false }),
+    ]);
+    expect(captured.sideEffects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'filesystem-write', authorized: true }),
+        expect.objectContaining({ kind: 'git-commit', authorized: true }),
+      ])
+    );
+
+    const preLaunchVerification = await source.captureCompletionEvidence({
+      task: {
+        ...completionTask,
+        verificationSteps: [
+          {
+            id: 'verify-1',
+            description: 'Run focused tests',
+            checked: true,
+            checkedAt: '2026-07-16T11:59:00.000Z',
+          },
+        ],
+      },
+      taskEnvelope,
+      capturedAt: '2026-07-16T12:31:00.000Z',
+      reportedArtifacts: [],
+    });
+    expect(preLaunchVerification.verification).toEqual([
+      expect.objectContaining({ gateId: 'verify-1', status: 'unknown', evidenceIds: [] }),
+    ]);
+  });
+
+  it('does not attribute an unchanged rename that already existed at launch', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'veritas-completion-rename-'));
+    const git = simpleGit(directory);
+    await git.init();
+    await git.addConfig('user.name', 'Veritas Test');
+    await git.addConfig('user.email', 'veritas@example.com');
+    await git.addConfig('commit.gpgsign', 'false');
+    await writeFile(path.join(directory, 'before.txt'), 'unchanged rename\n');
+    await git.add('before.txt');
+    await git.commit('baseline');
+    await rename(path.join(directory, 'before.txt'), path.join(directory, 'after.txt'));
+    await git.add(['before.txt', 'after.txt']);
+
+    const source = new GitCompletionEvidenceSource();
+    const completionTask = {
+      ...task(),
+      git: {
+        repo: 'veritas-kanban',
+        branch: (await git.status()).current ?? 'master',
+        baseBranch: 'main',
+        worktreePath: directory,
+      },
+      verificationSteps: [],
+    };
+    const taskEnvelope = await new TaskEnvelopeService(source).build({
+      task: completionTask,
+      attemptId: 'attempt_preexisting_rename',
+      createdAt,
+      worktreePath: directory,
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'allowed',
+    });
+
+    const captured = await source.captureCompletionEvidence({
+      task: completionTask,
+      taskEnvelope,
+      capturedAt: '2026-07-16T12:30:00.000Z',
+      reportedArtifacts: [
+        {
+          id: 'renamed-artifact',
+          kind: 'file',
+          name: 'Renamed artifact',
+          reference: 'after.txt',
+          mediaType: 'text/plain',
+          sha256: null,
+          verified: false,
+        },
+      ],
+    });
+
+    expect(captured.changedFiles).toEqual([]);
+    expect(captured.artifacts).toEqual([
+      expect.objectContaining({ id: 'renamed-artifact', verified: false }),
+    ]);
+  });
+
+  it('fails closed when completion fast-forwards to pre-existing history', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'veritas-completion-branch-'));
+    const git = simpleGit(directory);
+    await git.init();
+    await git.addConfig('user.name', 'Veritas Test');
+    await git.addConfig('user.email', 'veritas@example.com');
+    await git.addConfig('commit.gpgsign', 'false');
+    await writeFile(path.join(directory, 'baseline.txt'), 'baseline\n');
+    await git.add('baseline.txt');
+    await git.commit('baseline');
+    await git.raw(['branch', '-M', 'main']);
+    await git.checkoutLocalBranch('preexisting');
+    await writeFile(path.join(directory, 'preexisting.txt'), 'created before launch\n');
+    await git.add('preexisting.txt');
+    await git.raw(['commit', '--allow-empty-message', '-m', '']);
+    await git.checkout('main');
+
+    const source = new GitCompletionEvidenceSource();
+    const completionTask = {
+      ...task(),
+      git: {
+        repo: 'veritas-kanban',
+        branch: 'main',
+        baseBranch: 'main',
+        worktreePath: directory,
+      },
+      verificationSteps: [],
+    };
+    const taskEnvelope = await new TaskEnvelopeService(source).build({
+      task: completionTask,
+      attemptId: 'attempt_branch_switch',
+      createdAt,
+      worktreePath: directory,
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'required',
+    });
+
+    await git.reset(['--hard', 'preexisting']);
+    const captured = await source.captureCompletionEvidence({
+      task: completionTask,
+      taskEnvelope,
+      capturedAt: '2026-07-16T12:30:00.000Z',
+      reportedArtifacts: [],
+    });
+
+    expect(captured.commits).toEqual([]);
+    expect(captured.sideEffects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'git-commit',
+          authorized: false,
+          verified: true,
+          description: expect.stringContaining('not attributable'),
+        }),
       ])
     );
   });
