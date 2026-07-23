@@ -24,8 +24,10 @@ export type {
   ManagedListProvider,
   TelemetryRepository,
   SetupContextRepository,
+  WorkspaceFileRepository,
   StorageProvider,
 } from './interfaces.js';
+export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
 export {
   FileStorageProvider,
   FileTaskRepository,

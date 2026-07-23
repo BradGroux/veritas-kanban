@@ -14,6 +14,7 @@ import type {
   WorkProductRender,
   WorkProductVersion,
   Task,
+  TaskAttempt,
   WorkflowPipelineSummary,
 } from '@veritas-kanban/shared';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
@@ -415,6 +416,7 @@ export class WorkProductService {
 
   private buildCompletionPacketInput(task: Task, sourceRunId?: string): CreateWorkProductInput {
     const sourceLinks = this.buildCompletionPacketSourceLinks(task, sourceRunId);
+    const sourceAttempt = this.completionPacketAttempt(task, sourceRunId);
     const render: WorkProductRender = {
       schemaVersion: 1,
       kind: 'report',
@@ -437,8 +439,8 @@ export class WorkProductService {
       render,
       taskId: task.id,
       sourceRunId,
-      agent: task.attempt?.agent ?? (task.agent === 'auto' ? undefined : task.agent),
-      model: task.attempt?.model,
+      agent: sourceAttempt?.agent ?? (task.agent === 'auto' ? undefined : task.agent),
+      model: sourceAttempt?.model,
       redaction: {
         level: 'standard',
         containsSensitiveContent: false,
@@ -449,7 +451,7 @@ export class WorkProductService {
         exportDefault: 'redacted',
       },
       sourceLinks,
-      metadata: this.completionPacketMetadata(task, sourceRunId),
+      metadata: this.completionPacketMetadata(task, sourceRunId, sourceAttempt),
     };
   }
 
@@ -461,7 +463,8 @@ export class WorkProductService {
 
   private completionPacketMetadata(
     task: Task,
-    sourceRunId?: string
+    sourceRunId: string | undefined,
+    sourceAttempt: TaskAttempt | undefined
   ): Record<string, WorkProductPrimitive> {
     return {
       packetType: 'completion_packet',
@@ -475,12 +478,28 @@ export class WorkProductService {
       attachmentCount: task.attachments?.length ?? 0,
       reviewDecision: task.review?.decision ?? null,
       qaGatePassed: task.qaGate?.passed ?? null,
-      orchestrationRoles: task.attempt?.orchestration?.totals.roles ?? 0,
-      orchestrationBlocked: task.attempt?.orchestration?.totals.blocked ?? 0,
-      orchestrationFailed: task.attempt?.orchestration?.totals.failed ?? 0,
-      budgetDecision: task.attempt?.budget?.decision ?? null,
-      budgetTraceCount: task.attempt?.budget?.traceIds.length ?? 0,
+      orchestrationRoles: sourceAttempt?.orchestration?.totals.roles ?? 0,
+      orchestrationBlocked: sourceAttempt?.orchestration?.totals.blocked ?? 0,
+      orchestrationFailed: sourceAttempt?.orchestration?.totals.failed ?? 0,
+      budgetDecision: sourceAttempt?.budget?.decision ?? null,
+      budgetTraceCount: sourceAttempt?.budget?.traceIds.length ?? 0,
+      runLaunchManifestSchemaVersion: sourceAttempt?.runLaunchManifest?.schemaVersion ?? null,
+      runLaunchManifestDigest: sourceAttempt?.runLaunchManifest?.digest ?? null,
+      runLaunchManifestTraceId: sourceAttempt?.runLaunchManifestTraceId ?? null,
+      runLaunchParentAttemptId: sourceAttempt?.runLaunchParentAttemptId ?? null,
+      runLaunchMaterialDrift: sourceAttempt?.runLaunchManifestDrift?.material ?? null,
+      providerRuntimeManifestDigest: sourceAttempt?.providerRuntimeManifest?.digest ?? null,
+      providerRuntimeProbeRevision: sourceAttempt?.providerRuntimeManifest?.probeRevision ?? null,
+      providerRuntimeVersion: sourceAttempt?.providerRuntimeManifest?.providerVersion ?? null,
+      providerRuntimeBuild: sourceAttempt?.providerRuntimeManifest?.providerBuild ?? null,
     };
+  }
+
+  private completionPacketAttempt(task: Task, sourceRunId?: string): TaskAttempt | undefined {
+    if (!sourceRunId) return task.attempt;
+    return [task.attempt, ...(task.attempts ?? [])]
+      .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
+      .find((attempt) => attempt.id === sourceRunId);
   }
 
   private buildCompletionPacketSourceLinks(

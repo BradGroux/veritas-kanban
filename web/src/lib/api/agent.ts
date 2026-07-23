@@ -15,6 +15,9 @@ import type {
   TaskCommitPolicy,
   TaskEnvelope,
   HarnessSupportStatus,
+  RunLaunchManifest,
+  RunLaunchManifestDriftResult,
+  RunLaunchManifestPreview,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -26,6 +29,7 @@ export interface StartAgentRequest {
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
+  parentAttemptId?: string;
 }
 
 export const worktreeApi = {
@@ -78,6 +82,17 @@ export const agentApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+    });
+  },
+
+  previewLaunch: async (
+    taskId: string,
+    request: StartAgentRequest = {}
+  ): Promise<RunLaunchManifestPreview> => {
+    return apiFetch<RunLaunchManifestPreview>(`${API_BASE}/agents/${taskId}/launch-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
     });
   },
 
@@ -256,6 +271,9 @@ export interface AgentStatus {
   providerRuntimeManifest: ProviderRuntimeManifest;
   harnessSupport: HarnessSupportStatus;
   taskEnvelope: TaskEnvelope;
+  runLaunchManifest: RunLaunchManifest;
+  runLaunchParentAttemptId?: string;
+  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -271,6 +289,9 @@ export interface AgentStatusResponse {
   providerRuntimeManifest?: ProviderRuntimeManifest;
   harnessSupport?: HarnessSupportStatus;
   taskEnvelope?: TaskEnvelope;
+  runLaunchManifest?: RunLaunchManifest;
+  runLaunchParentAttemptId?: string;
+  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   controls?: ProviderRuntimeControlSet;
 }
 

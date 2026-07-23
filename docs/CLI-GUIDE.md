@@ -448,6 +448,7 @@ Manage AI agents on code tasks.
 | Command                                                                       | Description                                               |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `vk start <id>`                                                               | Start an agent; optionally require runtime capabilities   |
+| `vk launch-preview <id>`                                                      | Preview effective launch inputs, blockers, and drift      |
 | `vk stop <id>`                                                                | Stop a run only when its persisted manifest supports stop |
 | `vk agents:pending`                                                           | List pending agent requests                               |
 | `vk agents:status <id>`                                                       | Check agent running status                                |
@@ -462,6 +463,18 @@ vk start TASK-001 --agent codex \
   --commit-policy allowed \
   --json
 ```
+
+Preview without dispatching, or compare a new launch with a parent attempt:
+
+```bash
+vk launch-preview TASK-001 --agent codex --parent-attempt attempt_parent --json
+vk start TASK-001 --agent codex --parent-attempt attempt_parent
+```
+
+Preview output includes the immutable run-launch digest, redacted command and
+argument plan, per-field origins, enforcement blockers, and material drift.
+It applies the same readiness gate and override rules as start. Attempt IDs and
+probe timestamps do not count as material drift.
 
 `--require-capability <capabilities...>` is additive to the baseline launch,
 profile, sandbox, and budget requirements. The server returns a structured

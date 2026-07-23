@@ -33,6 +33,25 @@ describe('MCP agent runtime capability controls', () => {
     expect(start?.inputSchema.properties.commitPolicy).toMatchObject({
       enum: ['forbidden', 'allowed', 'required'],
     });
+    expect(start?.inputSchema.properties.parentAttemptId).toMatchObject({
+      type: 'string',
+    });
+  });
+
+  it('forwards a parent attempt for material launch drift', async () => {
+    await handleAgentTool('start_agent', {
+      id: 'task_1',
+      agent: 'claude-code',
+      parentAttemptId: 'attempt_parent',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent: 'claude-code',
+        parentAttemptId: 'attempt_parent',
+      }),
+    });
   });
 
   it('forwards an explicit run commit policy', async () => {

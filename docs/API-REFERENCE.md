@@ -1925,18 +1925,22 @@ PUT /api/agents/routing
 ### Start Agent And Require Runtime Capabilities
 
 ```
+POST /api/agents/:taskId/launch-preview
 POST /api/agents/:taskId/start
 ```
 
-Callers can select an agent or portable profile package and require additional
-runtime capabilities:
+The preview and start endpoints accept the same request. Preview compiles the
+effective `run-launch-manifest/v1` without creating an attempt or dispatching a
+provider. Callers can select an agent or portable profile package, require
+additional runtime capabilities, and compare against a parent attempt:
 
 ```json
 {
   "profileId": "docs-reviewer",
   "sandboxPresetId": "codex-repo-contained",
   "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"],
-  "commitPolicy": "allowed"
+  "commitPolicy": "allowed",
+  "parentAttemptId": "attempt_parent"
 }
 ```
 
@@ -1947,6 +1951,21 @@ capabilities plus caller, profile, sandbox, and budget requirements must be
 `supported` or `advisory` in one valid manifest before attempt state is
 mutated. Failure returns `409 Conflict` with `requiredCapabilities`, reasons,
 manifest identity, and remediation.
+
+The preview response contains `manifest`, plus optional `parentAttemptId` and
+`drift`. The manifest contains redacted effective runtime inputs, instruction
+fingerprints, per-field origins, and an `enforcement` object. Prompt content,
+readiness override text, credential values, and raw local output paths are
+excluded. Preview and start apply the same readiness gate; an accepted operator
+override is represented by its digest and run-level origin. Start records the
+same contract in the active attempt, history, run log, and a policy governance
+trace before provider dispatch. Named tool/MCP/permission restrictions and
+required profile health checks block launch when the adapter cannot enforce
+them explicitly.
+
+Current task adapters reject every non-empty named-tool or MCP catalog. The
+run-scoped tool-server control plane tracked in #857 owns positive catalog
+injection; prompt text is never accepted as equivalent enforcement.
 
 `commitPolicy` accepts `forbidden`, `allowed`, or `required`. A run value
 overrides `task.executionPolicy.commitPolicy`, then the legacy
@@ -1963,6 +1982,24 @@ controls:
   "attemptId": "attempt_123",
   "provider": "codex-cli",
   "providerRuntimeManifest": { "digest": "sha256:..." },
+  "runLaunchManifest": {
+    "schemaVersion": "run-launch-manifest/v1",
+    "digest": "sha256:...",
+    "providerRuntime": {
+      "digest": "sha256:...",
+      "provider": "codex-cli",
+      "probeRevision": 3
+    },
+    "runtime": {
+      "command": "codex",
+      "model": "gpt-5.5"
+    },
+    "enforcement": {
+      "enforceable": true,
+      "blockers": [],
+      "warnings": []
+    }
+  },
   "taskEnvelope": {
     "schemaVersion": "task-envelope/v1",
     "digest": "sha256:...",
@@ -1994,9 +2031,9 @@ controls:
 ```
 
 Stop, message, completion, token-reporting, and attempt-log endpoints re-check
-the persisted snapshot. Invalid or active/persisted digest mismatches return
-`409 Conflict`; unsupported capability states return the same structured
-control evidence.
+both persisted snapshots. Invalid or active/persisted provider or run-launch
+digest mismatches return `409 Conflict`; unsupported capability states return
+the same structured control evidence.
 
 Stop and message requests must carry the `attemptId` returned by status so a
 delayed control cannot affect a replacement run:

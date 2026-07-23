@@ -64,6 +64,10 @@ export interface TaskAttempt {
   providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
   harnessSupport?: import('./provider-runtime.types.js').HarnessSupportStatus;
   taskEnvelope?: import('./task-envelope.types.js').TaskEnvelope;
+  runLaunchManifest?: import('./run-launch-manifest.types.js').RunLaunchManifest;
+  runLaunchManifestTraceId?: string;
+  runLaunchParentAttemptId?: string;
+  runLaunchManifestDrift?: import('./run-launch-manifest.types.js').RunLaunchManifestDriftResult;
   completionResult?: import('./task-envelope.types.js').CompletionResult;
 }
 

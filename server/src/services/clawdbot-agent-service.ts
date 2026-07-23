@@ -33,9 +33,13 @@ import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
 import { buildSafeHermesEnv } from '../utils/hermes-env.js';
-import { HttpOpenClawTaskAdapter } from './openclaw-workflow-adapter.js';
+import {
+  buildOpenClawTaskSpawnArguments,
+  HttpOpenClawTaskAdapter,
+  isOpenClawGatewayPrivateIpAllowed,
+} from './openclaw-workflow-adapter.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
-import { evaluateTaskReadiness } from '@veritas-kanban/shared';
+import { evaluateTaskReadiness, RUN_LAUNCH_MANIFEST_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import type {
   Task,
   AgentType,
@@ -57,6 +61,7 @@ import type {
   AgentBudgetDecision,
   AgentBudgetEvaluation,
   AgentProfileLaunchMetadata,
+  AgentProfileResolvedLaunch,
   ExecutableAgentProvider,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeControlAction,
@@ -66,6 +71,11 @@ import type {
   TaskEnvelope,
   HarnessSupportStatus,
   HarnessSupportTelemetry,
+  RunLaunchManifest,
+  RunLaunchManifestDriftResult,
+  RunLaunchManifestOrigin,
+  RunLaunchManifestPreview,
+  RunLaunchRuntime,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -75,13 +85,14 @@ import {
   ProviderRuntimeManifestService,
   type ProviderRuntimeProbeRequest,
 } from './provider-runtime-manifest-service.js';
+import type { WorkspaceFileRepository } from '../storage/interfaces.js';
+import { LocalWorkspaceFileRepository } from '../storage/workspace-file-repository.js';
 import {
   getProviderRuntimeAdapterDefinition,
   type ProviderRuntimeSurface,
 } from './provider-runtime-adapter-registry.js';
 import { getInstalledPackageVersion } from '../utils/package-version.js';
 import {
-  assertProviderRuntimeCapabilities,
   assertProviderRuntimeControl,
   assertProviderRuntimeManifestSnapshot,
   BASELINE_LAUNCH_CAPABILITIES,
@@ -90,6 +101,7 @@ import {
 import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-service.js';
 import { evaluateHarnessSupportStatus } from './harness-support-service.js';
 import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
+import { RunLaunchManifestService, diffRunLaunchManifests } from './run-launch-manifest-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -114,6 +126,7 @@ export interface AgentProviderStartContext {
   emitter: EventEmitter;
   attempt: TaskAttempt;
   sandboxPolicy?: SandboxPolicyDryRunResult;
+  runLaunchManifest: RunLaunchManifest;
 }
 
 export interface AgentProviderStopContext {
@@ -146,6 +159,9 @@ export interface AgentStatus {
   providerRuntimeManifest: ProviderRuntimeManifest;
   harnessSupport: HarnessSupportStatus;
   taskEnvelope: TaskEnvelope;
+  runLaunchManifest: RunLaunchManifest;
+  runLaunchParentAttemptId?: string;
+  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -162,6 +178,7 @@ export interface AgentStartOptions {
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
+  parentAttemptId?: string;
 }
 
 export interface AgentMessageOptions {
@@ -205,6 +222,10 @@ interface PendingAgent {
   providerRuntimeManifest: ProviderRuntimeManifest;
   harnessSupport: HarnessSupportStatus;
   taskEnvelope: TaskEnvelope;
+  runLaunchManifest: RunLaunchManifest;
+  runLaunchManifestTraceId: string;
+  runLaunchParentAttemptId?: string;
+  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -247,18 +268,23 @@ export class ClawdbotAgentService {
   private agentHealth: AgentHealthChecker;
   private providerRuntimeManifests: ProviderRuntimeManifestService;
   private taskEnvelopes: TaskEnvelopeService;
+  private runLaunchManifests: RunLaunchManifestService;
+  private workspaceFiles: WorkspaceFileRepository;
   private logsDir: string;
 
   constructor(
     agentHealth?: AgentHealthChecker,
     providerRuntimeManifests = new ProviderRuntimeManifestService(),
-    taskEnvelopes = new TaskEnvelopeService()
+    taskEnvelopes = new TaskEnvelopeService(),
+    workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
     this.agentHealth = agentHealth || new AgentHealthService();
     this.providerRuntimeManifests = providerRuntimeManifests;
     this.taskEnvelopes = taskEnvelopes;
+    this.runLaunchManifests = new RunLaunchManifestService();
+    this.workspaceFiles = workspaceFiles;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -338,6 +364,178 @@ export class ClawdbotAgentService {
   }
 
   /**
+   * Compile the effective launch evidence without creating an attempt or
+   * dispatching a provider process.
+   */
+  async previewAgentLaunch(
+    taskId: string,
+    agentType?: AgentType,
+    options: AgentStartOptions = {}
+  ): Promise<RunLaunchManifestPreview> {
+    const task = await this.taskService.getTask(taskId);
+    if (!task) throw new Error(`Task "${taskId}" not found`);
+    if (task.type !== 'code') throw new Error('Agents can only be started on code tasks');
+    if (!task.git?.worktreePath) {
+      throw new Error('Task must have an active worktree to start an agent');
+    }
+
+    const config = await this.configService.getConfig();
+    const profileLaunch = options.profileId
+      ? await getAgentProfilePackageService().resolveLaunch(options.profileId)
+      : undefined;
+    let agent: AgentType;
+    let routingReason: string;
+    let routingFallback: AgentType | undefined;
+    const requestedAgent = profileLaunch ? profileLaunch.agent : (agentType ?? 'auto');
+    if (profileLaunch) {
+      agent = profileLaunch.agent;
+      routingReason = `Agent profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent}.`;
+      routingFallback = profileLaunch.profile.runtime.fallbackAgent;
+    } else if (!agentType || agentType === 'auto') {
+      const result = await getAgentRoutingService().resolveAgent(task);
+      agent = result.agent;
+      routingReason = result.reason;
+      routingFallback = result.fallback;
+    } else {
+      agent = agentType;
+      routingReason = `Operator explicitly selected ${agent}.`;
+    }
+    const readiness = this.assertLaunchReadiness(task, agent, options.overrideReason);
+    const overrideReason = options.overrideReason?.trim();
+
+    const agentConfig = profileLaunch?.agentConfig ?? this.resolveAgentConfig(config.agents, agent);
+    const profileAgentConfig =
+      profileLaunch && agentConfig
+        ? {
+            ...agentConfig,
+            provider: profileLaunch.profile.runtime.provider ?? agentConfig.provider,
+            model: profileLaunch.model ?? agentConfig.model,
+          }
+        : agentConfig;
+    const provider = this.resolveAgentProvider(profileAgentConfig, agent);
+    const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
+    const adapter = this.resolveProviderAdapter(provider);
+    const budgetService = getAgentBudgetService();
+    const budgetSources = {
+      workspaceBudget: config.features?.budget?.enabled
+        ? config.features.budget.defaultRunBudget
+        : undefined,
+      agentBudget: profileAgentConfig?.budget,
+      profileBudget: options.budget ? undefined : profileLaunch?.profile.policy?.budget,
+      runBudget: options.budget,
+    };
+    const budgetPolicy = budgetService.resolve({
+      workspaceBudget: budgetSources.workspaceBudget,
+      agentBudget: budgetSources.agentBudget,
+      runBudget: budgetSources.runBudget ?? profileLaunch?.budget,
+    });
+    const budgetEvaluation = budgetService.evaluate(
+      budgetPolicy,
+      { fanOut: 1 },
+      {
+        taskId,
+        agentId: agent,
+        actionType: 'agent.launch-preview',
+        project: task.project,
+      }
+    );
+    if (this.isBlockingBudgetDecision(budgetEvaluation.decision)) {
+      throw new ConflictError('Agent run budget requires operator action before launch', {
+        decision: budgetEvaluation.decision,
+        thresholdEvents: budgetEvaluation.thresholdEvents,
+      });
+    }
+    const launchAgentConfig =
+      budgetEvaluation.modelOverride && profileAgentConfig
+        ? { ...profileAgentConfig, model: budgetEvaluation.modelOverride }
+        : profileAgentConfig;
+    const providerRuntimeManifest = await adapter.probe({
+      agentConfig: launchAgentConfig,
+      health: agentHealth,
+    });
+    const harnessSupport = evaluateHarnessSupportStatus(
+      launchAgentConfig as AgentConfig,
+      agentHealth,
+      providerRuntimeManifest
+    );
+    const requiredRuntimeCapabilities = this.resolveLaunchRuntimeCapabilities(
+      profileLaunch,
+      budgetPolicy,
+      options.requiredRuntimeCapabilities
+    );
+    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+      presetId:
+        options.sandboxPresetId ??
+        profileLaunch?.sandboxPresetId ??
+        launchAgentConfig?.sandboxPresetId,
+      provider,
+      workspacePath: task.git.worktreePath,
+      providerRuntimeManifest,
+    });
+    const attemptId = `preview_${nanoid(8)}`;
+    const startedAt = new Date().toISOString();
+    const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
+    const worktreePath = this.expandPath(task.git.worktreePath);
+    const taskEnvelope = await this.taskEnvelopes.build({
+      task,
+      attemptId,
+      createdAt: startedAt,
+      worktreePath,
+      providerRuntimeManifest,
+      commitPolicy: resolveTaskCommitPolicy({
+        runPolicy: options.commitPolicy,
+        taskPolicy: task.executionPolicy,
+        legacyAutoCommitOnComplete: config.features?.agents.autoCommitOnComplete,
+      }),
+      profileInstructions: profileLaunch?.instructions,
+      networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
+      executionPolicy: task.executionPolicy,
+    });
+    const taskPrompt = this.buildTaskPrompt(
+      task,
+      worktreePath,
+      attemptId,
+      providerRuntimeManifest.digest,
+      profileLaunch?.instructions
+    );
+    const manifest = await this.compileRunLaunchManifest({
+      task,
+      taskEnvelope,
+      taskPrompt,
+      attemptId,
+      startedAt,
+      logPath,
+      requestedAgent,
+      routingReason,
+      routingFallback,
+      agent,
+      launchAgentConfig,
+      provider,
+      providerRuntimeManifest,
+      requiredRuntimeCapabilities,
+      harnessSupport,
+      profileLaunch,
+      readiness,
+      overrideReason,
+      sandboxPolicy: sandboxPolicy.result,
+      budgetPolicy,
+      budgetModelOverride: budgetEvaluation.modelOverride,
+      budgetSources,
+      options,
+    });
+    const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
+    return {
+      manifest,
+      ...(parentAttempt
+        ? {
+            parentAttemptId: parentAttempt.id,
+            drift: diffRunLaunchManifests(manifest, parentAttempt.runLaunchManifest),
+          }
+        : {}),
+    };
+  }
+
+  /**
    * Start an agent on a task by delegating to Clawdbot
    */
   async startAgent(
@@ -387,9 +585,14 @@ export class ClawdbotAgentService {
       ? await getAgentProfilePackageService().resolveLaunch(options.profileId)
       : undefined;
     let agent: AgentType;
+    let routingReason: string;
+    let routingFallback: AgentType | undefined;
+    const requestedAgent = profileLaunch ? profileLaunch.agent : (agentType ?? 'auto');
 
     if (profileLaunch) {
       agent = profileLaunch.agent;
+      routingReason = `Agent profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent}.`;
+      routingFallback = profileLaunch.profile.runtime.fallbackAgent;
       log.info(
         `[ClawdbotAgent] Profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent} for task ${taskId}`
       );
@@ -397,13 +600,17 @@ export class ClawdbotAgentService {
       const routing = getAgentRoutingService();
       const result = await routing.resolveAgent(task);
       agent = result.agent;
-      const routingReason = result.reason;
+      routingReason = result.reason;
+      routingFallback = result.fallback;
       log.info(
         `[ClawdbotAgent] Routing resolved agent for task ${taskId}: ${agent} (${routingReason})`
       );
     } else {
       agent = agentType;
+      routingReason = `Operator explicitly selected ${agent}.`;
     }
+    const readiness = this.assertLaunchReadiness(task, agent, options.overrideReason);
+    const overrideReason = options.overrideReason?.trim();
 
     const agentConfig = profileLaunch?.agentConfig ?? this.resolveAgentConfig(config.agents, agent);
     const profileAgentConfig =
@@ -418,12 +625,18 @@ export class ClawdbotAgentService {
     const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const adapter = this.resolveProviderAdapter(provider);
     const budgetService = getAgentBudgetService();
-    const budgetPolicy = budgetService.resolve({
+    const budgetSources = {
       workspaceBudget: config.features?.budget?.enabled
         ? config.features.budget.defaultRunBudget
         : undefined,
       agentBudget: profileAgentConfig?.budget,
-      runBudget: options.budget ?? profileLaunch?.budget,
+      profileBudget: options.budget ? undefined : profileLaunch?.profile.policy?.budget,
+      runBudget: options.budget,
+    };
+    const budgetPolicy = budgetService.resolve({
+      workspaceBudget: budgetSources.workspaceBudget,
+      agentBudget: budgetSources.agentBudget,
+      runBudget: budgetSources.runBudget ?? profileLaunch?.budget,
     });
     const budgetEvaluation = budgetService.evaluate(
       budgetPolicy,
@@ -460,31 +673,10 @@ export class ClawdbotAgentService {
       agentHealth,
       providerRuntimeManifest
     );
-    const launchRuntimeCapabilities = new Set<ProviderRuntimeCapabilityId>([
-      ...BASELINE_LAUNCH_CAPABILITIES,
-      ...(options.requiredRuntimeCapabilities ?? []),
-    ]);
-    if ((profileLaunch?.profile.tools?.allowed?.length ?? 0) > 0) {
-      launchRuntimeCapabilities.add('tool.calls');
-    }
-    if ((profileLaunch?.profile.tools?.mcpServers?.length ?? 0) > 0) {
-      launchRuntimeCapabilities.add('tool.calls');
-      launchRuntimeCapabilities.add('tool.mcp');
-    }
-    const budgetLimits = budgetPolicy?.enabled ? budgetPolicy.limits : undefined;
-    if (
-      budgetLimits?.inputTokens !== undefined ||
-      budgetLimits?.outputTokens !== undefined ||
-      budgetLimits?.totalTokens !== undefined ||
-      budgetLimits?.costUsd !== undefined
-    ) {
-      launchRuntimeCapabilities.add('usage.tokens');
-    }
-    if (budgetLimits?.toolCalls !== undefined) launchRuntimeCapabilities.add('tool.calls');
-    assertProviderRuntimeCapabilities(
-      providerRuntimeManifest,
-      [...launchRuntimeCapabilities],
-      'agent launch'
+    const requiredRuntimeCapabilities = this.resolveLaunchRuntimeCapabilities(
+      profileLaunch,
+      budgetPolicy,
+      options.requiredRuntimeCapabilities
     );
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId:
@@ -496,31 +688,6 @@ export class ClawdbotAgentService {
       providerRuntimeManifest,
     });
     const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
-    if (sandboxPolicy.result.decision === 'block') {
-      throw new ConflictError('Sandbox preset cannot be enforced by the selected provider', {
-        presetId: sandboxPolicy.result.preset.id,
-        provider,
-        traceId: sandboxTrace.id,
-        unsupportedRules: sandboxPolicy.result.unsupportedRules.map((rule) => ({
-          id: rule.id,
-          capability: rule.capability,
-          detail: rule.detail,
-        })),
-      });
-    }
-    const readiness = evaluateTaskReadiness(task, { isCodeTask: true, selectedAgent: agent });
-    const overrideReason = options.overrideReason?.trim();
-
-    if (!readiness.ready && !overrideReason) {
-      throw new AgentReadinessError(readiness);
-    }
-
-    if (!readiness.ready && overrideReason && overrideReason.length < 8) {
-      throw new AgentReadinessError(
-        readiness,
-        'Task readiness override reason must be at least 8 characters'
-      );
-    }
 
     if (!readiness.ready && overrideReason) {
       await activityService.logActivity(
@@ -563,10 +730,83 @@ export class ClawdbotAgentService {
       executionPolicy: task.executionPolicy,
     });
 
+    // Validate path segments for log file
+    validatePathSegment(taskId);
+    validatePathSegment(attemptId);
+
+    // Build the task prompt for Clawdbot
+    const taskPrompt = this.buildTaskPrompt(
+      task,
+      worktreePath,
+      attemptId,
+      providerRuntimeManifest.digest,
+      profileLaunch?.instructions
+    );
+    const runLaunchManifest = await this.compileRunLaunchManifest({
+      task,
+      taskEnvelope,
+      taskPrompt,
+      attemptId,
+      startedAt,
+      logPath,
+      requestedAgent,
+      routingReason,
+      routingFallback,
+      agent,
+      launchAgentConfig,
+      provider,
+      providerRuntimeManifest,
+      requiredRuntimeCapabilities,
+      harnessSupport,
+      profileLaunch,
+      readiness,
+      overrideReason,
+      sandboxPolicy: sandboxPolicy.result,
+      budgetPolicy,
+      budgetModelOverride: budgetEvaluation.modelOverride,
+      budgetSources,
+      options,
+    });
+    const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
+    const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
+      ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
+      : undefined;
+    const runLaunchTrace = await getGovernanceTraceService().record({
+      kind: 'policy',
+      outcome: runLaunchManifest.enforcement.enforceable ? 'allowed' : 'blocked',
+      title: 'Run launch manifest compiled',
+      summary: runLaunchManifest.enforcement.enforceable
+        ? 'The effective run launch manifest is enforceable.'
+        : 'The effective run launch manifest contains launch blockers.',
+      remediation:
+        runLaunchManifest.enforcement.blockers.map((blocker) => blocker.remediation).join(' ') ||
+        undefined,
+      subject: {
+        taskId,
+        agentId: agent,
+        actionType: 'agent.start',
+      },
+      evaluatedRules: runLaunchManifest.enforcement.blockers.map((blocker) => ({
+        id: blocker.code,
+        label: blocker.field,
+        type: 'policy',
+        status: 'matched',
+        outcome: 'blocked',
+        message: blocker.detail,
+      })),
+      raw: {
+        runLaunchManifest,
+        parentAttemptId: parentAttempt?.id,
+        drift: runLaunchManifestDrift,
+        sandboxTraceId: sandboxTrace.id,
+      },
+    });
+    this.runLaunchManifests.assertEnforceable(runLaunchManifest);
+
     // Create event emitter for status updates
     const emitter = new EventEmitter();
 
-    // Store pending agent
+    // Store the exact immutable launch evidence before provider dispatch.
     pendingAgents.set(taskId, {
       taskId,
       attemptId,
@@ -579,6 +819,10 @@ export class ClawdbotAgentService {
       providerRuntimeManifest,
       harnessSupport,
       taskEnvelope,
+      runLaunchManifest,
+      runLaunchManifestTraceId: runLaunchTrace.id,
+      runLaunchParentAttemptId: parentAttempt?.id,
+      runLaunchManifestDrift,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -592,22 +836,17 @@ export class ClawdbotAgentService {
         : undefined,
     });
 
-    // Validate path segments for log file
-    validatePathSegment(taskId);
-    validatePathSegment(attemptId);
-
-    // Build the task prompt for Clawdbot
-    const taskPrompt = this.buildTaskPrompt(
-      task,
-      worktreePath,
-      attemptId,
-      providerRuntimeManifest.digest,
-      profileLaunch?.instructions
-    );
-
     // Initialize log file (ensure it stays within logs dir)
     ensureWithinBase(this.logsDir, logPath);
-    await this.initLogFile(logPath, task, agent, taskPrompt, providerRuntimeManifest, taskEnvelope);
+    await this.initLogFile(
+      logPath,
+      task,
+      agent,
+      taskPrompt,
+      providerRuntimeManifest,
+      taskEnvelope,
+      runLaunchManifest
+    );
 
     // Update task with attempt info
     const attempt: TaskAttempt = {
@@ -622,6 +861,10 @@ export class ClawdbotAgentService {
       providerRuntimeManifest,
       harnessSupport,
       taskEnvelope,
+      runLaunchManifest,
+      runLaunchManifestTraceId: runLaunchTrace.id,
+      runLaunchParentAttemptId: parentAttempt?.id,
+      runLaunchManifestDrift,
     };
 
     await this.taskService.updateTask(taskId, {
@@ -671,6 +914,7 @@ export class ClawdbotAgentService {
         emitter,
         attempt,
         sandboxPolicy: sandboxPolicy.result,
+        runLaunchManifest,
       });
     } catch (error: any) {
       pendingAgents.delete(taskId);
@@ -721,6 +965,9 @@ export class ClawdbotAgentService {
       providerRuntimeManifest,
       harnessSupport,
       taskEnvelope,
+      runLaunchManifest,
+      runLaunchParentAttemptId: parentAttempt?.id,
+      runLaunchManifestDrift,
       controls: providerRuntimeControls(providerRuntimeManifest),
     };
   }
@@ -876,6 +1123,10 @@ export class ClawdbotAgentService {
           providerRuntimeManifest: pending.providerRuntimeManifest,
           harnessSupport: pending.harnessSupport,
           taskEnvelope: pending.taskEnvelope,
+          runLaunchManifest: pending.runLaunchManifest,
+          runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
+          runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
+          runLaunchManifestDrift: pending.runLaunchManifestDrift,
         };
         return (pending.preparedCompletion = {
           status,
@@ -1185,6 +1436,54 @@ export class ClawdbotAgentService {
     });
   }
 
+  private resolveLaunchRuntimeCapabilities(
+    profileLaunch: AgentProfileResolvedLaunch | undefined,
+    budgetPolicy: AgentBudgetPolicy | undefined,
+    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] | undefined
+  ): ProviderRuntimeCapabilityId[] {
+    const launchRuntimeCapabilities = new Set<ProviderRuntimeCapabilityId>([
+      ...BASELINE_LAUNCH_CAPABILITIES,
+      ...(requiredRuntimeCapabilities ?? []),
+    ]);
+    if ((profileLaunch?.profile.tools?.allowed?.length ?? 0) > 0) {
+      launchRuntimeCapabilities.add('tool.calls');
+    }
+    if ((profileLaunch?.profile.tools?.mcpServers?.length ?? 0) > 0) {
+      launchRuntimeCapabilities.add('tool.calls');
+      launchRuntimeCapabilities.add('tool.mcp');
+    }
+    const budgetLimits = budgetPolicy?.enabled ? budgetPolicy.limits : undefined;
+    if (
+      budgetLimits?.inputTokens !== undefined ||
+      budgetLimits?.outputTokens !== undefined ||
+      budgetLimits?.totalTokens !== undefined ||
+      budgetLimits?.costUsd !== undefined
+    ) {
+      launchRuntimeCapabilities.add('usage.tokens');
+    }
+    if (budgetLimits?.toolCalls !== undefined) launchRuntimeCapabilities.add('tool.calls');
+    return [...launchRuntimeCapabilities].sort((left, right) => left.localeCompare(right));
+  }
+
+  private assertLaunchReadiness(
+    task: Task,
+    agent: AgentType,
+    overrideReason: string | undefined
+  ): TaskReadinessSummary {
+    const readiness = evaluateTaskReadiness(task, { isCodeTask: true, selectedAgent: agent });
+    const normalizedOverrideReason = overrideReason?.trim();
+    if (!readiness.ready && !normalizedOverrideReason) {
+      throw new AgentReadinessError(readiness);
+    }
+    if (!readiness.ready && normalizedOverrideReason && normalizedOverrideReason.length < 8) {
+      throw new AgentReadinessError(
+        readiness,
+        'Task readiness override reason must be at least 8 characters'
+      );
+    }
+    return readiness;
+  }
+
   private resolveAgentConfig(agents: AgentConfig[], agent: AgentType): AgentConfig | undefined {
     return agents.find((a) => a.type === agent);
   }
@@ -1337,7 +1636,9 @@ export class ClawdbotAgentService {
           startedAt,
           emitter,
           sandboxPolicy,
+          runLaunchManifest,
         }) => {
+          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
           this.startCodexCli(
             task,
             agentConfig,
@@ -1369,7 +1670,9 @@ export class ClawdbotAgentService {
           startedAt,
           emitter,
           sandboxPolicy,
+          runLaunchManifest,
         }) => {
+          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
           const abortController = new AbortController();
           const pending = pendingAgents.get(task.id);
           if (pending) pending.abortController = abortController;
@@ -1436,7 +1739,9 @@ export class ClawdbotAgentService {
           startedAt,
           emitter,
           sandboxPolicy,
+          runLaunchManifest,
         }) => {
+          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
           this.startHermesCli(
             task,
             agentConfig,
@@ -1471,7 +1776,8 @@ export class ClawdbotAgentService {
       id: definition.id,
       label: definition.label,
       probe,
-      start: async ({ prompt, task, attemptId, agentConfig }) => {
+      start: async ({ prompt, task, attemptId, agentConfig, runLaunchManifest }) => {
+        this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
         // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
         // The real spawn acknowledgement surfaces policy denial or gateway
         // unreachability, which the caller's error handler rolls back to 'todo'.
@@ -1513,6 +1819,35 @@ export class ClawdbotAgentService {
         );
       },
     };
+  }
+
+  private assertProviderAdapterLaunchManifest(
+    provider: ExecutableAgentProvider,
+    manifest: RunLaunchManifest
+  ): void {
+    this.runLaunchManifests.assertEnforceable(manifest);
+    if (manifest.providerRuntime.provider !== provider) {
+      throw new ConflictError('Run launch manifest provider does not match the selected adapter.', {
+        manifestProvider: manifest.providerRuntime.provider,
+        adapterProvider: provider,
+      });
+    }
+    if (
+      manifest.tools.allowed.length > 0 ||
+      manifest.tools.denied.length > 0 ||
+      manifest.tools.policyIds.length > 0 ||
+      manifest.tools.mcpServers.length > 0
+    ) {
+      throw new ConflictError(
+        'The selected adapter cannot inject the manifest tool and MCP catalog.',
+        {
+          provider,
+          manifestDigest: manifest.digest,
+          remediation:
+            'Use a run-scoped tool-control adapter after the tool-server control plane is enabled.',
+        }
+      );
+    }
   }
 
   private buildProviderRuntimeProbeRequest(
@@ -1931,19 +2266,16 @@ export class ClawdbotAgentService {
       throw new Error('Task worktree path is required for Codex SDK');
     }
 
+    const sdkExecutable = this.resolveCodexSdkExecutable(agentConfig);
     const { Codex } = await import('@openai/codex-sdk');
     const codex = new Codex({
-      codexPathOverride:
-        agentConfig?.command && agentConfig.command !== 'codex' ? agentConfig.command : undefined,
+      codexPathOverride: sdkExecutable.codexPathOverride,
       env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
     });
 
     const thread = codex.startThread({
       workingDirectory: worktreePath,
-      skipGitRepoCheck: true,
-      sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
-      approvalPolicy: 'never',
-      networkAccessEnabled: sandboxPolicy?.effective.networkAccessEnabled ?? true,
+      ...this.buildCodexSdkThreadSettings(sandboxPolicy),
       model: agentConfig?.model,
     });
 
@@ -2701,6 +3033,9 @@ export class ClawdbotAgentService {
       providerRuntimeManifest: pending.providerRuntimeManifest,
       harnessSupport: pending.harnessSupport,
       taskEnvelope: pending.taskEnvelope,
+      runLaunchManifest: pending.runLaunchManifest,
+      runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
+      runLaunchManifestDrift: pending.runLaunchManifestDrift,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
   }
@@ -2804,6 +3139,23 @@ export class ClawdbotAgentService {
       pending.providerRuntimeManifest,
       persistedAttempt.providerRuntimeManifest?.digest
     );
+    if (
+      !persistedAttempt.runLaunchManifest ||
+      persistedAttempt.runLaunchManifest.digest !== pending.runLaunchManifest.digest
+    ) {
+      throw new ConflictError(
+        'Run launch manifest is stale or invalid: persisted launch evidence does not match the active run',
+        {
+          action,
+          activeRunLaunchManifestDigest: pending.runLaunchManifest.digest,
+          persistedRunLaunchManifestDigest: persistedAttempt.runLaunchManifest?.digest,
+          remediation:
+            'Terminate the detached provider, reconcile persisted attempt state, and launch again.',
+        }
+      );
+    }
+    this.runLaunchManifests.assertEnforceable(persistedAttempt.runLaunchManifest);
+    this.runLaunchManifests.assertEnforceable(pending.runLaunchManifest);
   }
 
   /**
@@ -2862,6 +3214,870 @@ export class ClawdbotAgentService {
     return files
       .filter((f) => f.startsWith(`${taskId}_`) && f.endsWith('.md'))
       .map((f) => f.replace(`${taskId}_`, '').replace('.md', ''));
+  }
+
+  private async compileRunLaunchManifest(input: {
+    task: Task;
+    taskEnvelope: TaskEnvelope;
+    taskPrompt: string;
+    attemptId: string;
+    startedAt: string;
+    logPath: string;
+    requestedAgent: AgentType;
+    routingReason: string;
+    routingFallback?: AgentType;
+    agent: AgentType;
+    launchAgentConfig?: AgentConfig;
+    provider: ExecutableAgentProvider;
+    providerRuntimeManifest: ProviderRuntimeManifest;
+    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[];
+    harnessSupport: HarnessSupportStatus;
+    profileLaunch?: AgentProfileResolvedLaunch;
+    readiness: TaskReadinessSummary;
+    overrideReason?: string;
+    sandboxPolicy: SandboxPolicyDryRunResult;
+    budgetPolicy?: AgentBudgetPolicy;
+    budgetModelOverride?: string;
+    budgetSources: {
+      workspaceBudget?: AgentBudgetPolicy;
+      agentBudget?: AgentBudgetPolicy;
+      profileBudget?: AgentBudgetPolicy;
+      runBudget?: AgentBudgetPolicy;
+    };
+    options: AgentStartOptions;
+  }): Promise<RunLaunchManifest> {
+    const profile = input.profileLaunch?.profile;
+    const hasToolRestrictions =
+      (profile?.tools?.allowed?.length ?? 0) > 0 ||
+      (profile?.policy?.toolPolicyIds?.length ?? 0) > 0;
+    const hasMcpRestrictions = (profile?.tools?.mcpServers?.length ?? 0) > 0;
+    const hasPermissionRequirements =
+      Boolean(profile?.permissions?.level) || (profile?.permissions?.required?.length ?? 0) > 0;
+    const requiredHealthChecks = (profile?.health?.checks ?? [])
+      .filter((check) => check.required)
+      .map((check) => check.id);
+    const selectedSkills = (profile?.tools?.allowed ?? []).filter((tool) =>
+      /^skill(?::|\/)/i.test(tool)
+    );
+    const selectedSharedResources = [
+      ...(profile?.instructions?.promptFile
+        ? [`instruction-file:${profile.instructions.promptFile}`]
+        : []),
+      ...(profile?.instructions?.files ?? []).map((file) => `instruction-file:${file}`),
+      ...(profile?.workflow?.id ? [`workflow:${profile.workflow.id}`] : []),
+      ...(profile?.workflow?.entrypoint
+        ? [`workflow-entrypoint:${profile.workflow.entrypoint}`]
+        : []),
+    ];
+    const runtime = this.buildRunLaunchRuntime(
+      input.provider,
+      input.launchAgentConfig,
+      input.task.id,
+      input.logPath,
+      input.attemptId,
+      input.sandboxPolicy
+    );
+    const worktreePath = input.task.git?.worktreePath
+      ? this.expandPath(input.task.git.worktreePath)
+      : undefined;
+    const repositoryInstructions = worktreePath
+      ? ((await this.workspaceFiles.readOptionalText(worktreePath, 'AGENTS.md')) ?? '')
+      : '';
+    const hasRepositoryInstructions = Boolean(repositoryInstructions.trim());
+    const instructions = [
+      {
+        id: 'effective-task-request',
+        kind: 'task' as const,
+        content: input.taskPrompt,
+        materialContent: this.normalizeRunLaunchTaskPrompt(
+          input.taskPrompt,
+          input.attemptId,
+          worktreePath,
+          input.providerRuntimeManifest.digest
+        ),
+        origin: `task-envelope:${input.taskEnvelope.schemaVersion}`,
+        precedence: 100,
+      },
+      ...(hasRepositoryInstructions
+        ? [
+            {
+              id: 'repository:AGENTS.md',
+              kind: 'repository' as const,
+              content: repositoryInstructions,
+              origin: 'repository:AGENTS.md',
+              precedence: 150,
+            },
+          ]
+        : []),
+      ...(input.profileLaunch?.instructions
+        ? [
+            {
+              id: `agent-profile:${profile?.id ?? 'unknown'}`,
+              kind: 'profile' as const,
+              content: input.profileLaunch.instructions,
+              origin: `agent-profile:${profile?.id ?? 'unknown'}@${profile?.version ?? 'unknown'}`,
+              precedence: 200,
+            },
+          ]
+        : []),
+    ];
+    const sandboxOrigin: Omit<RunLaunchManifestOrigin, 'field'> = {
+      scope: input.options.sandboxPresetId
+        ? 'run'
+        : profile?.policy?.sandboxPresetId
+          ? 'agent-profile'
+          : input.launchAgentConfig?.sandboxPresetId
+            ? 'provider'
+            : 'system-default',
+      source: input.options.sandboxPresetId
+        ? `operator-sandbox:${input.sandboxPolicy.preset.id}`
+        : profile?.policy?.sandboxPresetId
+          ? `agent-profile:${profile.id}@${profile.version}`
+          : input.launchAgentConfig?.sandboxPresetId
+            ? `agent-config:${input.agent}`
+            : `sandbox-default:${input.sandboxPolicy.preset.id}`,
+      precedence: input.options.sandboxPresetId
+        ? 300
+        : profile?.policy?.sandboxPresetId
+          ? 200
+          : input.launchAgentConfig?.sandboxPresetId
+            ? 100
+            : 0,
+    };
+    const sandboxAffectsRuntimeArgs =
+      input.provider === 'codex-cli' || input.provider === 'codex-sdk';
+    const sandboxAffectsEnvironment =
+      input.provider !== 'openclaw' && input.sandboxPolicy.effective.envPassthrough.length > 0;
+    const sandboxAffectsCredentials =
+      input.provider !== 'openclaw' && input.sandboxPolicy.effective.credentialRefs.length > 0;
+    const origins = [
+      {
+        field: 'taskEnvelope',
+        scope: 'task-envelope' as const,
+        source: `task-envelope:${input.taskEnvelope.schemaVersion}`,
+        precedence: 100,
+      },
+      {
+        field: 'providerRuntime',
+        scope: 'provider' as const,
+        source: `provider-runtime:${input.providerRuntimeManifest.provider}:${input.providerRuntimeManifest.probeRevision}`,
+        precedence: 100,
+      },
+      {
+        field: 'providerRequirements',
+        scope: 'provider',
+        source: `provider-capabilities:${input.providerRuntimeManifest.provider}:${input.providerRuntimeManifest.probeRevision}`,
+        precedence: 100,
+      },
+      {
+        field: 'providerRequirements',
+        scope: 'system-default',
+        source: 'baseline-launch-capabilities',
+        precedence: 0,
+      },
+      ...((profile?.tools?.allowed?.length ?? 0) > 0 ||
+      (profile?.tools?.mcpServers?.length ?? 0) > 0
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile?.id}@${profile?.version}`,
+              precedence: 200,
+            },
+          ]
+        : []),
+      ...(this.budgetRequiresRuntimeEvidence(input.budgetSources.workspaceBudget)
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'workspace' as const,
+              source: 'workspace-budget',
+              precedence: 50,
+            },
+          ]
+        : []),
+      ...(this.budgetRequiresRuntimeEvidence(input.budgetSources.agentBudget)
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}:budget`,
+              precedence: 100,
+            },
+          ]
+        : []),
+      ...(this.budgetRequiresRuntimeEvidence(input.budgetSources.profileBudget)
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile?.id}@${profile?.version}:budget`,
+              precedence: 200,
+            },
+          ]
+        : []),
+      ...(this.budgetRequiresRuntimeEvidence(input.budgetSources.runBudget)
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'run' as const,
+              source: 'operator-run-budget',
+              precedence: 300,
+            },
+          ]
+        : []),
+      ...(input.options.requiredRuntimeCapabilities?.length
+        ? [
+            {
+              field: 'providerRequirements',
+              scope: 'run' as const,
+              source: 'operator-required-capabilities',
+              precedence: 300,
+            },
+          ]
+        : []),
+      {
+        field: 'harnessSupport',
+        scope: 'provider',
+        source: `harness-support:${input.harnessSupport.profileId}`,
+        precedence: 100,
+      },
+      {
+        field: 'instructions.effective-task-request',
+        scope: 'task-envelope',
+        source: `task-envelope:${input.taskEnvelope.schemaVersion}`,
+        precedence: 100,
+      },
+      ...(hasRepositoryInstructions
+        ? [
+            {
+              field: 'instructions.repository:AGENTS.md',
+              scope: 'workspace' as const,
+              source: 'repository:AGENTS.md',
+              precedence: 150,
+            },
+          ]
+        : []),
+      ...(input.profileLaunch?.instructions
+        ? [
+            {
+              field: `instructions.agent-profile:${profile?.id ?? 'unknown'}`,
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile?.id}@${profile?.version}`,
+              precedence: 200,
+            },
+          ]
+        : []),
+      {
+        field: 'readiness',
+        scope: 'system-default',
+        source: 'task-readiness-policy',
+        precedence: 0,
+      },
+      ...(!input.readiness.ready && input.overrideReason
+        ? [
+            {
+              field: 'readiness',
+              scope: 'run' as const,
+              source: 'operator-readiness-override',
+              precedence: 300,
+            },
+          ]
+        : []),
+      {
+        field: 'routing',
+        scope: input.profileLaunch
+          ? ('agent-profile' as const)
+          : input.requestedAgent === 'auto'
+            ? ('workspace' as const)
+            : ('run' as const),
+        source: input.profileLaunch
+          ? `agent-profile:${profile?.id}@${profile?.version}`
+          : input.requestedAgent === 'auto'
+            ? 'agent-routing:auto'
+            : `operator-selection:${input.requestedAgent}`,
+        precedence: input.profileLaunch ? 200 : input.requestedAgent === 'auto' ? 100 : 300,
+      },
+      {
+        field: 'runtime.command',
+        scope: 'provider' as const,
+        source: `adapter:${input.provider}`,
+        precedence: 100,
+      },
+      ...(input.launchAgentConfig?.command
+        ? [
+            {
+              field: 'runtime.command',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}`,
+              precedence: 110,
+            },
+          ]
+        : []),
+      {
+        field: 'runtime.args',
+        scope: 'provider',
+        source: `adapter:${input.provider}`,
+        precedence: 100,
+      },
+      ...(input.launchAgentConfig?.args?.length
+        ? [
+            {
+              field: 'runtime.args',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}:args`,
+              precedence: 110,
+            },
+          ]
+        : []),
+      ...(sandboxAffectsRuntimeArgs
+        ? [
+            {
+              field: 'runtime.args',
+              ...sandboxOrigin,
+            },
+          ]
+        : []),
+      ...(input.provider === 'openclaw' && input.launchAgentConfig
+        ? [
+            {
+              field: 'runtime.args',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}`,
+              precedence: 110,
+            },
+          ]
+        : []),
+      {
+        field: 'runtime.workingDirectory',
+        scope: 'provider',
+        source: `adapter:${input.provider}`,
+        precedence: 100,
+      },
+      {
+        field: 'runtime.worktree',
+        scope: 'provider',
+        source: `adapter:${input.provider}`,
+        precedence: 100,
+      },
+      {
+        field: 'runtime.environmentKeys',
+        scope: 'provider',
+        source: `adapter-env:${input.provider}`,
+        precedence: 100,
+      },
+      {
+        field: 'runtime.environmentKeys',
+        scope: 'system-default',
+        source: 'host-environment:configured-key-presence',
+        precedence: 0,
+      },
+      ...(sandboxAffectsEnvironment
+        ? [
+            {
+              field: 'runtime.environmentKeys',
+              ...sandboxOrigin,
+            },
+          ]
+        : []),
+      {
+        field: 'runtime.credentialReferences',
+        scope: 'provider',
+        source: `adapter-credentials:${input.provider}`,
+        precedence: 100,
+      },
+      ...(sandboxAffectsCredentials
+        ? [
+            {
+              field: 'runtime.credentialReferences',
+              ...sandboxOrigin,
+            },
+          ]
+        : []),
+      ...(input.profileLaunch?.agentConfig?.model
+        ? [
+            {
+              field: 'runtime.model',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}`,
+              precedence: 100,
+            },
+          ]
+        : !input.profileLaunch && input.launchAgentConfig?.model
+          ? [
+              {
+                field: 'runtime.model',
+                scope: 'provider' as const,
+                source: `agent-config:${input.agent}`,
+                precedence: 100,
+              },
+            ]
+          : []),
+      ...(input.profileLaunch?.model
+        ? [
+            {
+              field: 'runtime.model',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile?.id}@${profile?.version}`,
+              precedence: 200,
+            },
+            ...(input.provider === 'openclaw'
+              ? [
+                  {
+                    field: 'runtime.args',
+                    scope: 'agent-profile' as const,
+                    source: `agent-profile:${profile?.id}@${profile?.version}:model`,
+                    precedence: 200,
+                  },
+                ]
+              : []),
+          ]
+        : []),
+      ...(input.budgetModelOverride
+        ? [
+            {
+              field: 'runtime.model',
+              scope: 'run' as const,
+              source: 'budget-policy:model-downgrade',
+              precedence: 300,
+            },
+            ...(input.provider === 'openclaw'
+              ? [
+                  {
+                    field: 'runtime.args',
+                    scope: 'run' as const,
+                    source: 'budget-policy:model-downgrade',
+                    precedence: 300,
+                  },
+                ]
+              : []),
+          ]
+        : []),
+      {
+        field: 'sandbox',
+        ...sandboxOrigin,
+      },
+      ...(input.budgetSources.workspaceBudget
+        ? [
+            {
+              field: 'budget',
+              scope: 'workspace' as const,
+              source: 'workspace-budget',
+              precedence: 50,
+            },
+          ]
+        : []),
+      ...(input.budgetSources.agentBudget
+        ? [
+            {
+              field: 'budget',
+              scope: 'provider' as const,
+              source: `agent-config:${input.agent}`,
+              precedence: 100,
+            },
+          ]
+        : []),
+      ...(input.budgetSources.profileBudget && profile
+        ? [
+            {
+              field: 'budget',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile.id}@${profile.version}`,
+              precedence: 200,
+            },
+          ]
+        : []),
+      ...(input.budgetSources.runBudget
+        ? [
+            {
+              field: 'budget',
+              scope: 'run' as const,
+              source: 'operator-run-budget',
+              precedence: 300,
+            },
+          ]
+        : []),
+      ...(!input.budgetSources.workspaceBudget &&
+      !input.budgetSources.agentBudget &&
+      !input.budgetSources.profileBudget &&
+      !input.budgetSources.runBudget
+        ? [
+            {
+              field: 'budget',
+              scope: 'system-default' as const,
+              source: 'budget:disabled',
+              precedence: 0,
+            },
+          ]
+        : []),
+      ...(profile
+        ? [
+            {
+              field: 'profile',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile.id}@${profile.version}`,
+              precedence: 200,
+            },
+            {
+              field: 'tools',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile.id}@${profile.version}`,
+              precedence: 200,
+            },
+            {
+              field: 'permissions',
+              scope: 'agent-profile' as const,
+              source: `agent-profile:${profile.id}@${profile.version}`,
+              precedence: 200,
+            },
+          ]
+        : [
+            {
+              field: 'tools',
+              scope: 'system-default',
+              source: 'tool-catalog:none',
+              precedence: 0,
+            },
+            {
+              field: 'permissions',
+              scope: 'system-default',
+              source: 'permission-requirements:none',
+              precedence: 0,
+            },
+          ]),
+      {
+        field: 'resources',
+        scope: profile ? 'agent-profile' : 'system-default',
+        source: profile
+          ? `agent-profile:${profile.id}@${profile.version}`
+          : 'resource-selection:none',
+        precedence: profile ? 200 : 0,
+      },
+      ...(profile?.workflow
+        ? [
+            {
+              field: 'resources',
+              scope: 'workflow' as const,
+              source: `workflow:${profile.workflow.id ?? profile.workflow.entrypoint ?? 'unknown'}`,
+              precedence: 250,
+            },
+          ]
+        : []),
+      {
+        field: 'requiredHealthChecks',
+        scope: profile ? 'agent-profile' : 'system-default',
+        source: profile ? `agent-profile:${profile.id}@${profile.version}` : 'health-checks:none',
+        precedence: profile ? 200 : 0,
+      },
+      {
+        field: 'workspaceTrust',
+        scope: 'system-default',
+        source:
+          selectedSharedResources.length > 0
+            ? 'workspace-trust:resources-blocked'
+            : 'workspace-trust:not-required',
+        precedence: 0,
+      },
+      {
+        field: 'enforcement',
+        scope: 'system-default',
+        source: `run-launch-compiler:${RUN_LAUNCH_MANIFEST_SCHEMA_VERSION}`,
+        precedence: 1_000,
+      },
+    ].map((origin): RunLaunchManifestOrigin => ({
+      ...origin,
+      scope: origin.scope as RunLaunchManifestOrigin['scope'],
+    }));
+
+    return this.runLaunchManifests.compile({
+      taskId: input.task.id,
+      attemptId: input.attemptId,
+      createdAt: input.startedAt,
+      taskEnvelope: input.taskEnvelope,
+      providerRuntimeManifest: input.providerRuntimeManifest,
+      requiredRuntimeCapabilities: input.requiredRuntimeCapabilities,
+      harnessSupport: input.harnessSupport,
+      routing: {
+        requestedAgent: input.requestedAgent,
+        selectedAgent: input.agent,
+        selectedHost: input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process',
+        reason: input.routingReason,
+        fallbackAgent: input.routingFallback ?? null,
+        fallbackAllowed: Boolean(input.routingFallback),
+      },
+      ...(profile
+        ? {
+            profile: {
+              id: profile.id,
+              version: profile.version,
+              role: profile.role,
+            },
+          }
+        : {}),
+      readiness: {
+        summary: input.readiness,
+        overrideReason: input.overrideReason,
+      },
+      instructions,
+      runtime,
+      tools: {
+        allowed: profile?.tools?.allowed ?? [],
+        denied: [],
+        policyIds: profile?.policy?.toolPolicyIds ?? [],
+        mcpServers: profile?.tools?.mcpServers ?? [],
+        enforcement: hasToolRestrictions || hasMcpRestrictions ? 'unavailable' : 'not-required',
+      },
+      permissions: {
+        level: profile?.permissions?.level ?? 'specialist',
+        required: profile?.permissions?.required ?? [],
+        enforcement: hasPermissionRequirements ? 'unavailable' : 'not-required',
+      },
+      resources: {
+        skills: selectedSkills,
+        shared: selectedSharedResources,
+        enforcement:
+          selectedSkills.length > 0 || selectedSharedResources.length > 0
+            ? 'unavailable'
+            : 'not-required',
+      },
+      requiredHealthChecks,
+      sandboxPolicy: input.sandboxPolicy,
+      budgetPolicy: input.budgetPolicy ?? {
+        enabled: false,
+        scope: 'run',
+      },
+      workspaceTrust: {
+        status: 'not-required',
+        source:
+          selectedSharedResources.length > 0
+            ? 'Referenced profile files and workflow entrypoints are not loaded by the current adapter and are blocked as unavailable resources.'
+            : 'No repository-controlled executable profile components were selected.',
+      },
+      origins,
+    });
+  }
+
+  private buildRunLaunchRuntime(
+    provider: ExecutableAgentProvider,
+    agentConfig: AgentConfig | undefined,
+    taskId: string,
+    logPath: string,
+    attemptId: string,
+    sandboxPolicy: SandboxPolicyDryRunResult
+  ): RunLaunchRuntime {
+    const environment = this.buildRunLaunchEnvironment(provider, sandboxPolicy);
+    const runtimeBase = {
+      ...(agentConfig?.model ? { model: agentConfig.model } : {}),
+      workingDirectory: 'task-worktree' as const,
+      worktree: 'required' as const,
+      ...environment,
+    };
+    if (provider === 'codex-cli') {
+      const finalPath = this.getCodexFinalPath(logPath, attemptId);
+      return {
+        ...runtimeBase,
+        command: agentConfig?.command || 'codex',
+        args: this.buildCodexArgs(agentConfig, '<prompt>', logPath, attemptId, sandboxPolicy).map(
+          (argument) => (argument === finalPath ? '<run-log>/final-message.md' : argument)
+        ),
+      };
+    }
+    if (provider === 'codex-sdk') {
+      const sdkExecutable = this.resolveCodexSdkExecutable(agentConfig);
+      const threadSettings = this.buildCodexSdkThreadSettings(sandboxPolicy);
+      return {
+        ...runtimeBase,
+        command: sdkExecutable.manifestCommand,
+        args: [
+          'startThread',
+          `skipGitRepoCheck=${threadSettings.skipGitRepoCheck}`,
+          `sandboxMode=${threadSettings.sandboxMode}`,
+          `approvalPolicy=${threadSettings.approvalPolicy}`,
+          `networkAccessEnabled=${threadSettings.networkAccessEnabled}`,
+          'runStreamed',
+          '<prompt>',
+        ],
+      };
+    }
+    if (provider === 'hermes-cli') {
+      return {
+        ...runtimeBase,
+        command: agentConfig?.command || 'hermes',
+        args: ['-z', ...(agentConfig?.args ?? []), '<prompt>'],
+      };
+    }
+    const spawnArguments = buildOpenClawTaskSpawnArguments({
+      taskId,
+      attemptId,
+      agentId: agentConfig?.type || 'openclaw',
+      agentName: agentConfig?.name,
+      model: agentConfig?.model,
+      prompt: '<prompt>',
+      timeoutSeconds: 900,
+    });
+    const sessionKeySource =
+      this.firstConfiguredEnvironmentKey(['OPENCLAW_GATEWAY_SESSION_KEY']) ?? 'default:main';
+    const gatewayUrlSource =
+      this.firstConfiguredEnvironmentKey([
+        'OPENCLAW_GATEWAY_URL',
+        'CLAWDBOT_GATEWAY',
+        'CLAWDBOT_GATEWAY_URL',
+      ]) ?? 'default:http://127.0.0.1:18789';
+    return {
+      ...runtimeBase,
+      command: 'openclaw.sessions_spawn',
+      args: [
+        'tool=sessions_spawn',
+        ...Object.entries(spawnArguments).map(([key, value]) => `${key}=${String(value)}`),
+        `sessionKey=${sessionKeySource.startsWith('default:') ? sessionKeySource : `env:${sessionKeySource}`}`,
+        `gatewayUrl=${gatewayUrlSource.startsWith('default:') ? gatewayUrlSource : `env:${gatewayUrlSource}`}`,
+        `allowPrivateIp=${isOpenClawGatewayPrivateIpAllowed()}`,
+        'requestTimeoutMs=60000',
+      ],
+      workingDirectory: 'provider-managed',
+      worktree: 'provider-managed',
+    };
+  }
+
+  private resolveCodexSdkExecutable(agentConfig: AgentConfig | undefined): {
+    manifestCommand: string;
+    codexPathOverride?: string;
+  } {
+    const codexPathOverride =
+      agentConfig?.command && agentConfig.command !== 'codex' ? agentConfig.command : undefined;
+    return {
+      manifestCommand: codexPathOverride ?? '@openai/codex-sdk:bundled-codex',
+      ...(codexPathOverride ? { codexPathOverride } : {}),
+    };
+  }
+
+  private buildCodexSdkThreadSettings(sandboxPolicy: SandboxPolicyDryRunResult | undefined): {
+    skipGitRepoCheck: true;
+    sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
+    approvalPolicy: 'never';
+    networkAccessEnabled: boolean;
+  } {
+    return {
+      skipGitRepoCheck: true,
+      sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+      approvalPolicy: 'never',
+      networkAccessEnabled: sandboxPolicy?.effective.networkAccessEnabled ?? true,
+    };
+  }
+
+  private buildRunLaunchEnvironment(
+    provider: ExecutableAgentProvider,
+    sandboxPolicy: SandboxPolicyDryRunResult
+  ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'> {
+    if (provider === 'codex-cli' || provider === 'codex-sdk') {
+      const environmentKeys = Object.keys(
+        buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
+      );
+      return {
+        environmentKeys,
+        credentialReferences: [
+          ...sandboxPolicy.effective.credentialRefs,
+          ...environmentKeys
+            .filter((key) => key === 'CODEX_API_KEY' || key === 'OPENAI_API_KEY')
+            .map((key) => `env:${key}`),
+        ],
+      };
+    }
+    if (provider === 'hermes-cli') {
+      const environmentKeys = Object.keys(
+        buildSafeHermesEnv(process.env, sandboxPolicy.effective.envPassthrough)
+      );
+      return {
+        environmentKeys,
+        credentialReferences: [
+          ...sandboxPolicy.effective.credentialRefs,
+          ...environmentKeys
+            .filter((key) => key === 'ANTHROPIC_API_KEY' || key === 'HERMES_API_KEY')
+            .map((key) => `env:${key}`),
+        ],
+      };
+    }
+
+    const gatewayUrlKey = this.firstConfiguredEnvironmentKey([
+      'OPENCLAW_GATEWAY_URL',
+      'CLAWDBOT_GATEWAY',
+      'CLAWDBOT_GATEWAY_URL',
+    ]);
+    const gatewayTokenKey = this.firstConfiguredEnvironmentKey([
+      'OPENCLAW_GATEWAY_TOKEN',
+      'CLAWDBOT_GATEWAY_TOKEN',
+    ]);
+    const gatewaySessionKey = this.firstConfiguredEnvironmentKey(['OPENCLAW_GATEWAY_SESSION_KEY']);
+    const environmentKeys = [
+      gatewayUrlKey,
+      gatewayTokenKey,
+      gatewaySessionKey,
+      this.firstConfiguredEnvironmentKey(['OPENCLAW_GATEWAY_ALLOW_PRIVATE']),
+    ].filter((key): key is string => Boolean(key));
+    return {
+      environmentKeys,
+      credentialReferences: gatewayTokenKey ? [`env:${gatewayTokenKey}`] : [],
+    };
+  }
+
+  private firstConfiguredEnvironmentKey(keys: string[]): string | undefined {
+    return keys.find((key) => Boolean(process.env[key]));
+  }
+
+  private normalizeRunLaunchTaskPrompt(
+    prompt: string,
+    attemptId: string,
+    worktreePath: string | undefined,
+    providerRuntimeDigest: string
+  ): string {
+    const normalizedIdentifiers = [
+      [attemptId, '<attempt-id>'],
+      [worktreePath, '<worktree>'],
+      [providerRuntimeDigest, '<provider-runtime-digest>'],
+    ].reduce(
+      (normalized, [value, replacement]) =>
+        value ? normalized.replaceAll(value, replacement ?? '') : normalized,
+      prompt
+    );
+    return normalizedIdentifiers.replace(/\(\d+ minutes ago\)/g, '(<elapsed-minutes> minutes ago)');
+  }
+
+  private budgetRequiresRuntimeEvidence(policy: AgentBudgetPolicy | undefined): boolean {
+    if (!policy || policy.enabled === false || !policy.limits) return false;
+    return (
+      policy.limits.inputTokens !== undefined ||
+      policy.limits.outputTokens !== undefined ||
+      policy.limits.totalTokens !== undefined ||
+      policy.limits.costUsd !== undefined ||
+      policy.limits.toolCalls !== undefined
+    );
+  }
+
+  private async resolveParentAttempt(
+    task: Task,
+    parentAttemptId?: string
+  ): Promise<(TaskAttempt & { runLaunchManifest: RunLaunchManifest }) | undefined> {
+    if (!parentAttemptId) return undefined;
+    const currentTaskParent = [task.attempt, ...(task.attempts ?? [])]
+      .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
+      .find((attempt) => attempt.id === parentAttemptId);
+    const parent =
+      currentTaskParent ??
+      (await this.taskService.listTasks())
+        .flatMap((candidate) => [candidate.attempt, ...(candidate.attempts ?? [])])
+        .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
+        .find((attempt) => attempt.id === parentAttemptId);
+    if (!parent) {
+      throw new ConflictError('Parent attempt was not found for launch-manifest comparison.', {
+        parentAttemptId,
+      });
+    }
+    if (!parent.runLaunchManifest) {
+      throw new ConflictError('Parent attempt has no run launch manifest to compare.', {
+        parentAttemptId,
+      });
+    }
+    return parent as TaskAttempt & { runLaunchManifest: RunLaunchManifest };
   }
 
   private buildTaskPrompt(
@@ -2928,7 +4144,8 @@ If you encounter errors, call with \`success: false\` and include the error mess
     agent: AgentType,
     prompt: string,
     providerRuntimeManifest: ProviderRuntimeManifest,
-    taskEnvelope: TaskEnvelope
+    taskEnvelope: TaskEnvelope,
+    runLaunchManifest: RunLaunchManifest
   ): Promise<void> {
     const header = `# Agent Log: ${task.title}
 
@@ -2938,6 +4155,7 @@ If you encounter errors, call with \`success: false\` and include the error mess
 **Worktree:** ${task.git?.worktreePath}
 **Provider manifest:** ${providerRuntimeManifest.digest}
 **Task envelope:** ${taskEnvelope.digest}
+**Run launch manifest:** ${runLaunchManifest.digest}
 
 <details><summary>Provider runtime manifest</summary>
 
@@ -2951,6 +4169,14 @@ ${JSON.stringify(providerRuntimeManifest, null, 2)}
 
 \`\`\`json
 ${JSON.stringify(taskEnvelope, null, 2)}
+\`\`\`
+
+</details>
+
+<details><summary>Run launch manifest</summary>
+
+\`\`\`json
+${JSON.stringify(runLaunchManifest, null, 2)}
 \`\`\`
 
 </details>

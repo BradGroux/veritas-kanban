@@ -12,6 +12,13 @@ describe('shared API permission metadata', () => {
     ).toEqual(['agent:write']);
   });
 
+  it('keeps launch-manifest preview read-scoped', () => {
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/launch-preview', { method: 'POST' })
+        .permissions
+    ).toEqual(['agent:read']);
+  });
+
   it('requires workflow execution for Codex review diff posts', () => {
     expect(
       getApiPermissionRequirement('/api/diff/task_1/codex-review', { method: 'POST' }).permissions

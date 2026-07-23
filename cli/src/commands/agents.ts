@@ -9,6 +9,7 @@ import type {
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
   AgentProfileValidationResult,
+  RunLaunchManifestPreview,
 } from '@veritas-kanban/shared';
 
 function inferProfileFormat(filePath: string): AgentProfilePackageFormat {
@@ -35,6 +36,7 @@ export function registerAgentCommands(program: Command): void {
       '--commit-policy <policy>',
       'Commit policy for this run (forbidden, allowed, or required)'
     )
+    .option('--parent-attempt <attemptId>', 'Compare launch inputs with a parent attempt')
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
@@ -62,6 +64,7 @@ export function registerAgentCommands(program: Command): void {
             profileId: options.profile,
             requiredRuntimeCapabilities: options.requireCapability,
             commitPolicy: options.commitPolicy,
+            parentAttemptId: options.parentAttempt,
           }),
         });
 
@@ -71,6 +74,63 @@ export function registerAgentCommands(program: Command): void {
           console.log(chalk.green(`✓ Agent started: ${options.profile || options.agent}`));
           console.log(chalk.dim(`Attempt ID: ${result.attemptId}`));
           console.log(chalk.dim(`Working in: ${task.git.worktreePath}`));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('launch-preview <id>')
+    .description('Preview the immutable effective launch manifest without starting an agent')
+    .option('-a, --agent <agent>', 'Agent to use', 'codex')
+    .option('-p, --profile <profileId>', 'Agent profile package to preview')
+    .option(
+      '--require-capability <capabilities...>',
+      'Require provider runtime capabilities before launch'
+    )
+    .option(
+      '--commit-policy <policy>',
+      'Commit policy for this run (forbidden, allowed, or required)'
+    )
+    .option('--parent-attempt <attemptId>', 'Compare launch inputs with a parent attempt')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const task = await findTask(id);
+        if (!task) throw new Error(`Task not found: ${id}`);
+        const preview = await api<RunLaunchManifestPreview>(
+          `/api/agents/${task.id}/launch-preview`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              agent: options.profile ? undefined : options.agent,
+              profileId: options.profile,
+              requiredRuntimeCapabilities: options.requireCapability,
+              commitPolicy: options.commitPolicy,
+              parentAttemptId: options.parentAttempt,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(preview, null, 2));
+          return;
+        }
+        console.log(chalk.bold('Run launch manifest'));
+        console.log(`  Digest: ${preview.manifest.digest}`);
+        console.log(`  Provider: ${preview.manifest.providerRuntime.provider}`);
+        console.log(`  Model: ${preview.manifest.runtime.model ?? 'provider default'}`);
+        console.log(
+          `  Enforceable: ${preview.manifest.enforcement.enforceable ? chalk.green('yes') : chalk.red('no')}`
+        );
+        for (const blocker of preview.manifest.enforcement.blockers) {
+          console.log(chalk.red(`  Blocker ${blocker.code}: ${blocker.detail}`));
+        }
+        if (preview.drift) {
+          console.log(
+            `  Parent drift: ${preview.drift.material ? chalk.yellow('material') : chalk.green('none')}`
+          );
         }
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));

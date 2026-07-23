@@ -11,6 +11,7 @@ const {
   mockGetConfig,
   mockSaveConfig,
   mockGetTask,
+  mockListTasks,
   mockUpdateTask,
   mockPatchTaskAttempt,
   mockCheckAgent,
@@ -28,6 +29,7 @@ const {
   mockGetConfig: vi.fn(),
   mockSaveConfig: vi.fn(),
   mockGetTask: vi.fn(),
+  mockListTasks: vi.fn(),
   mockUpdateTask: vi.fn(),
   mockPatchTaskAttempt: vi.fn(),
   mockCheckAgent: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('../services/task-service.js', () => ({
   TaskService: function () {
     return {
       getTask: mockGetTask,
+      listTasks: mockListTasks,
       updateTask: mockUpdateTask,
       patchTaskAttempt: mockPatchTaskAttempt,
     };
@@ -108,14 +111,38 @@ vi.mock('../services/circuit-registry.js', () => ({
 
 import { AgentReadinessError, ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
-import type { AgentConfig, Task } from '@veritas-kanban/shared';
+import type {
+  AgentConfig,
+  RunLaunchRuntime,
+  SandboxPolicyDryRunResult,
+  Task,
+} from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import { TaskEnvelopeService } from '../services/task-envelope-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
 type TestableClawdbotAgentService = ClawdbotAgentService & {
   logsDir: string;
+  buildRunLaunchEnvironment(
+    provider: 'openclaw' | 'codex-sdk',
+    sandboxPolicy: SandboxPolicyDryRunResult
+  ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'>;
+  buildRunLaunchRuntime(
+    provider: 'openclaw' | 'codex-sdk',
+    agentConfig: AgentConfig | undefined,
+    taskId: string,
+    logPath: string,
+    attemptId: string,
+    sandboxPolicy: SandboxPolicyDryRunResult
+  ): RunLaunchRuntime;
+  normalizeRunLaunchTaskPrompt(
+    prompt: string,
+    attemptId: string,
+    worktreePath: string | undefined,
+    providerRuntimeDigest: string
+  ): string;
   handleCodexEvent(
     event: Record<string, unknown>,
     logPath: string,
@@ -249,6 +276,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     } as Task;
 
     mockGetTask.mockImplementation(async () => task);
+    mockListTasks.mockImplementation(async () => [task]);
     mockUpdateTask.mockImplementation(async (_id, update) => {
       task = { ...task, ...update } as Task;
       return task;
@@ -290,6 +318,7 @@ describe('ClawdbotAgentService Codex providers', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -304,11 +333,34 @@ describe('ClawdbotAgentService Codex providers', () => {
       const status = await service.startAgent(task.id, 'codex');
 
       expect(status.status).toBe('running');
+      expect(status.runLaunchManifest).toMatchObject({
+        schemaVersion: 'run-launch-manifest/v1',
+        taskId: task.id,
+        providerRuntime: {
+          digest: status.providerRuntimeManifest.digest,
+          provider: 'codex-cli',
+        },
+        runtime: {
+          command: 'codex',
+          model: 'gpt-5.5',
+        },
+        enforcement: {
+          enforceable: true,
+          blockers: [],
+        },
+      });
+      expect(status.runLaunchManifest.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(mockSpawn).toHaveBeenCalledWith(
         'codex',
         expect.arrayContaining(['exec', '--json', '--sandbox', 'workspace-write']),
         expect.objectContaining({ cwd: tmpDir, shell: false })
       );
+      const spawnEnvironment = mockSpawn.mock.calls[0]?.[2]?.env as
+        Record<string, string> | undefined;
+      expect(status.runLaunchManifest.runtime.environmentKeys).toEqual(
+        Object.keys(spawnEnvironment ?? {}).sort((left, right) => left.localeCompare(right))
+      );
+      expect(status.runLaunchManifest.runtime.environmentKeys).toContain('VK_API_URL');
 
       await waitFor(() => {
         expect(mockUpdateTask).toHaveBeenCalledWith(
@@ -386,9 +438,14 @@ describe('ClawdbotAgentService Codex providers', () => {
         },
       });
       expect(task.attempt?.taskEnvelope?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(task.attempt?.runLaunchManifest?.digest).toBe(status.runLaunchManifest.digest);
+      expect(task.attempt?.runLaunchManifestTraceId).toBe('governance_trace_fixture');
       expect(task.attempts).toEqual([
         expect.objectContaining({
           id: task.attempt?.id,
+          runLaunchManifest: expect.objectContaining({
+            digest: status.runLaunchManifest.digest,
+          }),
           providerRuntimeManifest: expect.objectContaining({
             digest: task.attempt?.providerRuntimeManifest?.digest,
           }),
@@ -408,6 +465,18 @@ describe('ClawdbotAgentService Codex providers', () => {
         `Provider manifest:** ${task.attempt?.providerRuntimeManifest?.digest}`
       );
       expect(log).toContain(`Task envelope:** ${task.attempt?.taskEnvelope?.digest}`);
+      expect(log).toContain(`Run launch manifest:** ${status.runLaunchManifest.digest}`);
+      expect(mockGovernanceRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Run launch manifest compiled',
+          outcome: 'allowed',
+          raw: expect.objectContaining({
+            runLaunchManifest: expect.objectContaining({
+              digest: status.runLaunchManifest.digest,
+            }),
+          }),
+        })
+      );
       expect(mockStartStep).toHaveBeenCalledWith(
         expect.any(String),
         'stream',
@@ -504,6 +573,458 @@ describe('ClawdbotAgentService Codex providers', () => {
     await waitFor(async () => {
       expect(await service.getAgentStatus(task.id)).toBeNull();
     });
+  });
+
+  it('previews the effective launch manifest without mutating attempt state', async () => {
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex');
+
+    expect(preview.manifest).toMatchObject({
+      schemaVersion: 'run-launch-manifest/v1',
+      taskId: task.id,
+      attemptId: expect.stringMatching(/^preview_/),
+      providerRuntime: { provider: 'codex-cli' },
+      enforcement: { enforceable: true, blockers: [] },
+    });
+    expect(preview.manifest.origins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'providerRequirements',
+          scope: 'provider',
+          source: expect.stringMatching(/^provider-capabilities:codex-cli:\d+$/),
+        }),
+        expect.objectContaining({
+          field: 'runtime.workingDirectory',
+          source: 'adapter:codex-cli',
+        }),
+        expect.objectContaining({
+          field: 'runtime.worktree',
+          source: 'adapter:codex-cli',
+        }),
+      ])
+    );
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+    expect(mockGovernanceRecord).not.toHaveBeenCalled();
+    expect(task.attempt).toBeUndefined();
+  });
+
+  it('applies the same readiness gate to preview and fingerprints operator overrides', async () => {
+    task = {
+      ...task,
+      description: 'Too short',
+      subtasks: [],
+      verificationSteps: [],
+    } as Task;
+    const service = testableService(tmpDir);
+
+    await expect(service.previewAgentLaunch(task.id, 'codex')).rejects.toBeInstanceOf(
+      AgentReadinessError
+    );
+    const overrideReason = 'Operator accepts the incomplete task definition';
+    const preview = await service.previewAgentLaunch(task.id, 'codex', { overrideReason });
+
+    expect(preview.manifest.readiness).toMatchObject({
+      ready: false,
+      overridden: true,
+      overrideReasonDigest: expect.stringMatching(/^sha256:/),
+    });
+    expect(preview.manifest.readiness.missingRequired.length).toBeGreaterThan(0);
+    expect(preview.manifest.origins).toContainEqual(
+      expect.objectContaining({
+        field: 'readiness',
+        scope: 'run',
+        source: 'operator-readiness-override',
+      })
+    );
+    expect(JSON.stringify(preview.manifest)).not.toContain(overrideReason);
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('fingerprints repository instructions byte-for-byte through workspace storage', async () => {
+    const repositoryInstructions = '\n  # Indented repository instructions\n\n';
+    await fs.writeFile(path.join(tmpDir, 'AGENTS.md'), repositoryInstructions, 'utf8');
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex');
+    const evidence = preview.manifest.instructions.find(
+      (instruction) => instruction.id === 'repository:AGENTS.md'
+    );
+
+    expect(evidence).toMatchObject({
+      byteLength: Buffer.byteLength(repositoryInstructions, 'utf8'),
+      digest: digestRunLaunchValue(repositoryInstructions),
+    });
+    expect(evidence?.digest).not.toBe(
+      preview.manifest.instructions.find(
+        (instruction) => instruction.id === 'effective-task-request'
+      )?.digest
+    );
+  });
+
+  it('records every contributing budget source and runtime requirement origin', async () => {
+    mockGetConfig.mockResolvedValue({
+      features: {
+        agents: {
+          autoCommitOnComplete: false,
+        },
+        budget: {
+          enabled: true,
+          defaultRunBudget: {
+            enabled: true,
+            scope: 'workspace',
+            limits: { totalTokens: 100_000 },
+          },
+        },
+      },
+      agents: [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.5',
+          budget: {
+            enabled: true,
+            scope: 'agent',
+            limits: { totalTokens: 75_000 },
+          },
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex', {
+      budget: {
+        enabled: true,
+        scope: 'run',
+        limits: { totalTokens: 50_000 },
+      },
+    });
+
+    expect(preview.manifest.budget.limits?.totalTokens).toBe(50_000);
+    expect(preview.manifest.origins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'budget', scope: 'workspace' }),
+        expect.objectContaining({ field: 'budget', scope: 'provider' }),
+        expect.objectContaining({
+          field: 'budget',
+          scope: 'run',
+          source: 'operator-run-budget',
+        }),
+        expect.objectContaining({ field: 'providerRequirements', scope: 'system-default' }),
+        expect.objectContaining({ field: 'providerRequirements', scope: 'workspace' }),
+        expect.objectContaining({
+          field: 'providerRequirements',
+          scope: 'provider',
+          source: expect.stringContaining(':budget'),
+        }),
+        expect.objectContaining({
+          field: 'providerRequirements',
+          scope: 'run',
+          source: 'operator-run-budget',
+        }),
+      ])
+    );
+  });
+
+  it('normalizes checkpoint age out of material instruction evidence', () => {
+    const service = testableService(tmpDir);
+    const first = service.normalizeRunLaunchTaskPrompt(
+      'Last Checkpoint: 2026-07-23T20:00:00.000Z (5 minutes ago)',
+      'attempt-a',
+      tmpDir,
+      `sha256:${'a'.repeat(64)}`
+    );
+    const later = service.normalizeRunLaunchTaskPrompt(
+      'Last Checkpoint: 2026-07-23T20:00:00.000Z (125 minutes ago)',
+      'attempt-b',
+      tmpDir,
+      `sha256:${'b'.repeat(64)}`
+    );
+
+    expect(first).toBe(later);
+  });
+
+  it('records the same non-empty OpenClaw environment alias used by adapter precedence', () => {
+    vi.stubEnv('OPENCLAW_GATEWAY_URL', '');
+    vi.stubEnv('CLAWDBOT_GATEWAY', 'http://127.0.0.1:18789');
+    vi.stubEnv('CLAWDBOT_GATEWAY_URL', 'http://127.0.0.1:18790');
+    vi.stubEnv('OPENCLAW_GATEWAY_TOKEN', '');
+    vi.stubEnv('CLAWDBOT_GATEWAY_TOKEN', 'configured-token');
+    vi.stubEnv('OPENCLAW_GATEWAY_SESSION_KEY', '');
+    vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', '');
+    const service = testableService(tmpDir);
+
+    const environment = service.buildRunLaunchEnvironment(
+      'openclaw',
+      {} as SandboxPolicyDryRunResult
+    );
+
+    expect(environment.environmentKeys).toEqual(['CLAWDBOT_GATEWAY', 'CLAWDBOT_GATEWAY_TOKEN']);
+    expect(environment.credentialReferences).toEqual(['env:CLAWDBOT_GATEWAY_TOKEN']);
+  });
+
+  it('records the exact redacted OpenClaw sessions_spawn request plan', () => {
+    vi.stubEnv('OPENCLAW_GATEWAY_URL', '');
+    vi.stubEnv('CLAWDBOT_GATEWAY', '');
+    vi.stubEnv('CLAWDBOT_GATEWAY_URL', '');
+    vi.stubEnv('OPENCLAW_GATEWAY_TOKEN', '');
+    vi.stubEnv('CLAWDBOT_GATEWAY_TOKEN', '');
+    vi.stubEnv('OPENCLAW_GATEWAY_SESSION_KEY', '');
+    vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', '');
+    const service = testableService(tmpDir);
+
+    const runtime = service.buildRunLaunchRuntime(
+      'openclaw',
+      {
+        type: 'openclaw',
+        name: 'OpenClaw',
+        enabled: true,
+        model: 'provider-model',
+      },
+      task.id,
+      path.join(tmpDir, 'run.md'),
+      'attempt-openclaw',
+      {} as SandboxPolicyDryRunResult
+    );
+
+    expect(runtime.args).toEqual([
+      'tool=sessions_spawn',
+      'task=<prompt>',
+      'taskName=task_task_codex_fixture_attempt_openclaw',
+      'label=Veritas task task_codex_fixture / attempt attempt-openclaw / OpenClaw',
+      'runtime=subagent',
+      'agentId=openclaw',
+      'mode=run',
+      'cleanup=keep',
+      'context=isolated',
+      'model=provider-model',
+      'sessionKey=default:main',
+      'gatewayUrl=default:http://127.0.0.1:18789',
+      'allowPrivateIp=false',
+      'requestTimeoutMs=60000',
+    ]);
+    expect(runtime.args.join(' ')).not.toContain('timeoutSeconds');
+  });
+
+  it('records the effective OpenClaw private-network exception', () => {
+    vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', 'true');
+    const service = testableService(tmpDir);
+
+    const runtime = service.buildRunLaunchRuntime(
+      'openclaw',
+      {
+        type: 'openclaw',
+        name: 'OpenClaw',
+        enabled: true,
+      },
+      task.id,
+      path.join(tmpDir, 'run.md'),
+      'attempt-openclaw-private',
+      {} as SandboxPolicyDryRunResult
+    );
+
+    expect(runtime.args).toContain('allowPrivateIp=true');
+    expect(runtime.environmentKeys).toContain('OPENCLAW_GATEWAY_ALLOW_PRIVATE');
+  });
+
+  it('records the Codex SDK executable override and thread safety settings', () => {
+    const service = testableService(tmpDir);
+    const sandboxPolicy = {
+      effective: {
+        sandboxMode: 'workspace-write',
+        networkAccessEnabled: false,
+        envPassthrough: [],
+        credentialRefs: [],
+      },
+    } as SandboxPolicyDryRunResult;
+
+    const overridden = service.buildRunLaunchRuntime(
+      'codex-sdk',
+      {
+        type: 'codex-sdk',
+        name: 'Codex SDK',
+        command: '/opt/codex-custom',
+        enabled: true,
+      },
+      task.id,
+      path.join(tmpDir, 'run.md'),
+      'attempt-sdk',
+      sandboxPolicy
+    );
+    const bundled = service.buildRunLaunchRuntime(
+      'codex-sdk',
+      {
+        type: 'codex-sdk',
+        name: 'Codex SDK',
+        command: 'codex',
+        enabled: true,
+      },
+      task.id,
+      path.join(tmpDir, 'run.md'),
+      'attempt-sdk',
+      sandboxPolicy
+    );
+
+    expect(overridden.command).toBe('/opt/codex-custom');
+    expect(overridden.args).toEqual([
+      'startThread',
+      'skipGitRepoCheck=true',
+      'sandboxMode=workspace-write',
+      'approvalPolicy=never',
+      'networkAccessEnabled=false',
+      'runStreamed',
+      '<prompt>',
+    ]);
+    expect(bundled.command).toBe('@openai/codex-sdk:bundled-codex');
+  });
+
+  it('returns unsupported runtime capabilities as launch-preview blockers', async () => {
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex', {
+      requiredRuntimeCapabilities: ['run.resume'],
+    });
+
+    expect(preview.manifest.providerRequirements.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: 'run.resume',
+        satisfied: false,
+      })
+    );
+    expect(preview.manifest.enforcement.blockers).toContainEqual(
+      expect.objectContaining({
+        code: 'provider-capability-unavailable',
+        field: 'providerRequirements.run.resume',
+      })
+    );
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('compares replay and fork previews with compatible and incompatible parent manifests', async () => {
+    const service = testableService(tmpDir);
+    const parent = await service.previewAgentLaunch(task.id, 'codex');
+    const parentTask = {
+      ...task,
+      id: 'task_parent',
+      attempt: {
+        id: 'attempt_parent',
+        agent: 'codex',
+        status: 'complete',
+        runLaunchManifest: parent.manifest,
+      },
+    } as Task;
+    mockListTasks.mockImplementation(async () => [task, parentTask]);
+
+    const compatible = await service.previewAgentLaunch(task.id, 'codex', {
+      parentAttemptId: 'attempt_parent',
+    });
+    expect(compatible).toMatchObject({
+      parentAttemptId: 'attempt_parent',
+      drift: { material: false, changes: [] },
+    });
+
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.6',
+        },
+      ],
+    });
+    const incompatible = await service.previewAgentLaunch(task.id, 'codex', {
+      parentAttemptId: 'attempt_parent',
+    });
+    expect(incompatible.drift).toMatchObject({
+      material: true,
+      changes: expect.arrayContaining([expect.objectContaining({ field: 'runtime' })]),
+    });
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('fails before attempt mutation when profile tool restrictions cannot be enforced', async () => {
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.5',
+        },
+      ],
+      agentProfiles: [
+        {
+          id: 'restricted-reviewer',
+          schemaVersion: 'agent-profile-package/v1',
+          version: '1.0.0',
+          displayName: 'Restricted reviewer',
+          role: 'reviewer',
+          enabled: true,
+          capabilities: ['review'],
+          defaultTaskTypes: ['code'],
+          runtime: { agent: 'codex', provider: 'codex-cli' },
+          instructions: { promptFile: 'prompts/reviewer.md' },
+          tools: { allowed: ['Read'] },
+          workflow: { id: 'restricted-review' },
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, undefined, {
+      profileId: 'restricted-reviewer',
+    });
+    expect(preview.manifest.enforcement).toMatchObject({
+      enforceable: false,
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: 'tool-policy-unenforceable' }),
+        expect.objectContaining({ code: 'shared-resource-unavailable' }),
+      ]),
+    });
+    expect(preview.manifest.resources.shared).toEqual([
+      'instruction-file:prompts/reviewer.md',
+      'workflow:restricted-review',
+    ]);
+    expect(preview.manifest.origins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'providerRequirements',
+          scope: 'agent-profile',
+        }),
+        expect.objectContaining({
+          field: 'resources',
+          scope: 'workflow',
+          source: 'workflow:restricted-review',
+        }),
+      ])
+    );
+
+    await expect(
+      service.startAgent(task.id, undefined, { profileId: 'restricted-reviewer' })
+    ).rejects.toThrow(/cannot be enforced/i);
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+    expect(task.attempt).toBeUndefined();
+    expect(mockGovernanceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Run launch manifest compiled',
+        outcome: 'blocked',
+      })
+    );
   });
 
   it('does not trust Codex file events without a persisted runtime snapshot', async () => {

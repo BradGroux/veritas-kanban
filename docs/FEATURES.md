@@ -1617,6 +1617,7 @@ Added in v3.3.2.
 | Command                                                                       | Description                                         |
 | ----------------------------------------------------------------------------- | --------------------------------------------------- |
 | `vk start <id>`                                                               | Start an agent on a code task (`--agent` to choose) |
+| `vk launch-preview <id>`                                                      | Preview immutable launch evidence without dispatch  |
 | `vk stop <id>`                                                                | Stop a running agent                                |
 | `vk agents:pending`                                                           | List pending agent requests                         |
 | `vk agents:status <id>`                                                       | Check agent running status                          |

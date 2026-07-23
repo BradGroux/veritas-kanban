@@ -30,6 +30,7 @@ const startAgentSchema = z.object({
   budget: AgentBudgetPolicySchema.optional(),
   requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
   commitPolicy: TaskCommitPolicySchema.optional(),
+  parentAttemptId: z.string().trim().min(1).max(120).optional(),
 });
 
 const completeAgentSchema = z.object({
@@ -60,6 +61,48 @@ const reportTokensSchema = z.object({
   agent: AgentTypeSchema.optional(),
 });
 
+// POST /api/agents/:taskId/launch-preview - Compile effective launch evidence without dispatch.
+router.post(
+  '/:taskId/launch-preview',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    let parsed: z.infer<typeof startAgentSchema>;
+    try {
+      parsed = startAgentSchema.parse(req.body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    let preview;
+    try {
+      preview = await clawdbotAgentService.previewAgentLaunch(
+        req.params.taskId as string,
+        parsed.agent as AgentType | undefined,
+        {
+          profileId: parsed.profileId,
+          overrideReason: parsed.overrideReason,
+          sandboxPresetId: parsed.sandboxPresetId,
+          budget: parsed.budget,
+          requiredRuntimeCapabilities: parsed.requiredRuntimeCapabilities as
+            ProviderRuntimeCapabilityId[] | undefined,
+          commitPolicy: parsed.commitPolicy as TaskCommitPolicy | undefined,
+          parentAttemptId: parsed.parentAttemptId,
+        }
+      );
+    } catch (error) {
+      if (error instanceof AgentReadinessError) {
+        throw new ValidationError(error.message, {
+          readiness: error.readiness,
+        });
+      }
+      throw error;
+    }
+    res.json(preview);
+  })
+);
+
 // POST /api/agents/:taskId/start - Start agent on task (delegates to Clawdbot)
 router.post(
   '/:taskId/start',
@@ -72,6 +115,7 @@ router.post(
     let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
     let requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] | undefined;
     let commitPolicy: TaskCommitPolicy | undefined;
+    let parentAttemptId: string | undefined;
     try {
       ({
         agent,
@@ -81,6 +125,7 @@ router.post(
         budget,
         requiredRuntimeCapabilities,
         commitPolicy,
+        parentAttemptId,
       } = startAgentSchema.parse(req.body) as {
         agent?: AgentType;
         profileId?: string;
@@ -89,6 +134,7 @@ router.post(
         budget?: z.infer<typeof AgentBudgetPolicySchema>;
         requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
         commitPolicy?: TaskCommitPolicy;
+        parentAttemptId?: string;
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -105,6 +151,7 @@ router.post(
         budget,
         requiredRuntimeCapabilities,
         commitPolicy,
+        parentAttemptId,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {

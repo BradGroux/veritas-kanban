@@ -610,6 +610,7 @@ vk github mappings               # List issue↔task mappings
 vk agents:pending                # List pending agent requests
 vk agents:status <id>            # Check if agent running
 vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>
+vk launch-preview <id> --json    # Inspect effective launch evidence without dispatch
 vk profiles list                 # List reusable agent profile packages
 vk profiles validate ./agent.yml # Validate a package before import
 vk profiles import ./agent.yml   # Import or replace a package

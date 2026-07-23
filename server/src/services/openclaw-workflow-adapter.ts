@@ -87,6 +87,45 @@ export interface OpenClawTaskSpawnResult {
   raw?: unknown;
 }
 
+export function buildOpenClawTaskSpawnArguments(
+  input: OpenClawTaskSpawnInput
+): Record<string, unknown> {
+  const taskName = buildOpenClawTaskName(input);
+  const label =
+    `Veritas task ${input.taskId} / attempt ${input.attemptId} / ${input.agentName || input.agentId}`.slice(
+      0,
+      180
+    );
+  return {
+    task: input.prompt,
+    taskName,
+    label,
+    runtime: 'subagent',
+    agentId: input.agentId,
+    mode: 'run',
+    cleanup: input.cleanup ?? 'keep',
+    context: 'isolated',
+    ...(input.model ? { model: input.model } : {}),
+  };
+}
+
+export function isOpenClawGatewayPrivateIpAllowed(
+  environment: NodeJS.ProcessEnv = process.env
+): boolean {
+  return environment.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true';
+}
+
+function buildOpenClawTaskName(input: OpenClawTaskSpawnInput): string {
+  const raw = `task_${input.taskId}_${input.attemptId}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const candidate = raw || `task_${input.taskId}`;
+  const withLetter = /^[a-z]/.test(candidate) ? candidate : `t_${candidate}`;
+  return withLetter.slice(0, 64);
+}
+
 export interface HttpOpenClawWorkflowAdapterOptions {
   gatewayUrl?: string;
   token?: string;
@@ -135,7 +174,7 @@ export class HttpOpenClawWorkflowAdapter implements OpenClawWorkflowAdapter {
     this.validationOptions = {
       allowHttp: true,
       allowLocalhost: true,
-      allowPrivateIp: process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true',
+      allowPrivateIp: isOpenClawGatewayPrivateIpAllowed(),
       ...options.validationOptions,
     };
   }
@@ -437,32 +476,14 @@ export class HttpOpenClawTaskAdapter {
     this.validationOptions = {
       allowHttp: true,
       allowLocalhost: true,
-      allowPrivateIp: process.env.OPENCLAW_GATEWAY_ALLOW_PRIVATE === 'true',
+      allowPrivateIp: isOpenClawGatewayPrivateIpAllowed(),
       ...options.validationOptions,
     };
   }
 
   /** Spawn an OpenClaw sub-session for a Veritas task. */
   async spawnTask(input: OpenClawTaskSpawnInput): Promise<OpenClawTaskSpawnResult> {
-    const taskName = this.buildTaskName(input);
-    const label =
-      `Veritas task ${input.taskId} / attempt ${input.attemptId} / ${input.agentName || input.agentId}`.slice(
-        0,
-        180
-      );
-    const args: Record<string, unknown> = {
-      task: input.prompt,
-      taskName,
-      label,
-      runtime: 'subagent',
-      agentId: input.agentId,
-      mode: 'run',
-      cleanup: input.cleanup ?? 'keep',
-      context: 'isolated',
-    };
-    if (input.model) args.model = input.model;
-
-    const result = await this.invokeTool('sessions_spawn', args);
+    const result = await this.invokeTool('sessions_spawn', buildOpenClawTaskSpawnArguments(input));
     const sessionKey =
       this.readString(result, 'childSessionKey') || this.readString(result, 'sessionKey');
 
@@ -559,17 +580,6 @@ export class HttpOpenClawTaskAdapter {
     }
 
     return toolResult;
-  }
-
-  private buildTaskName(input: OpenClawTaskSpawnInput): string {
-    const raw = `task_${input.taskId}_${input.attemptId}`
-      .toLowerCase()
-      .replace(/[^a-z0-9_]+/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const candidate = raw || `task_${input.taskId}`;
-    const withLetter = /^[a-z]/.test(candidate) ? candidate : `t_${candidate}`;
-    return withLetter.slice(0, 64);
   }
 
   private parseJson(text: string | undefined): unknown {

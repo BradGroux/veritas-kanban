@@ -6,6 +6,7 @@ import { errorHandler } from '../../middleware/error-handler.js';
 
 const {
   mockStartAgent,
+  mockPreviewAgentLaunch,
   mockStopAgent,
   mockSendMessage,
   mockCompleteAgent,
@@ -16,6 +17,7 @@ const {
   mockTelemetryEmit,
 } = vi.hoisted(() => ({
   mockStartAgent: vi.fn(),
+  mockPreviewAgentLaunch: vi.fn(),
   mockStopAgent: vi.fn(),
   mockSendMessage: vi.fn(),
   mockCompleteAgent: vi.fn(),
@@ -28,10 +30,16 @@ const {
 
 vi.mock('../../services/clawdbot-agent-service.js', () => ({
   AgentReadinessError: class AgentReadinessError extends Error {
-    readiness: unknown;
+    constructor(
+      public readiness: unknown,
+      message = 'Task readiness override required'
+    ) {
+      super(message);
+    }
   },
   clawdbotAgentService: {
     startAgent: mockStartAgent,
+    previewAgentLaunch: mockPreviewAgentLaunch,
     stopAgent: mockStopAgent,
     sendMessage: mockSendMessage,
     completeAgent: mockCompleteAgent,
@@ -83,6 +91,12 @@ describe('agent local capability enforcement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockStartAgent.mockResolvedValue({ taskId: 'task_1', agent: 'codex', status: 'running' });
+    mockPreviewAgentLaunch.mockResolvedValue({
+      manifest: {
+        digest: `sha256:${'a'.repeat(64)}`,
+        enforcement: { enforceable: true, blockers: [] },
+      },
+    });
     mockStopAgent.mockResolvedValue(undefined);
     mockSendMessage.mockResolvedValue({ delivered: true, note: 'delivered' });
     mockCompleteAgent.mockResolvedValue(undefined);
@@ -125,6 +139,57 @@ describe('agent local capability enforcement', () => {
       budget: undefined,
       requiredRuntimeCapabilities: undefined,
       commitPolicy: undefined,
+      parentAttemptId: undefined,
+    });
+  });
+
+  it('previews launch evidence without dispatching an agent', async () => {
+    const app = createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }));
+    const response = await request(app)
+      .post('/api/agents/task_1/launch-preview')
+      .send({ agent: 'codex', parentAttemptId: 'attempt_parent' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.manifest.digest).toBe(`sha256:${'a'.repeat(64)}`);
+    expect(mockPreviewAgentLaunch).toHaveBeenCalledWith('task_1', 'codex', {
+      profileId: undefined,
+      overrideReason: undefined,
+      sandboxPresetId: undefined,
+      budget: undefined,
+      requiredRuntimeCapabilities: undefined,
+      commitPolicy: undefined,
+      parentAttemptId: 'attempt_parent',
+    });
+    expect(mockStartAgent).not.toHaveBeenCalled();
+  });
+
+  it('requires local agent capability for launch preview', async () => {
+    const response = await request(createApp(auth()))
+      .post('/api/agents/task_1/launch-preview')
+      .send({ agent: 'codex' });
+
+    expect(response.status).toBe(403);
+    expect(mockPreviewAgentLaunch).not.toHaveBeenCalled();
+  });
+
+  it('returns the same readiness validation evidence for preview as start', async () => {
+    const { AgentReadinessError } = await import('../../services/clawdbot-agent-service.js');
+    const readiness = {
+      ready: false,
+      missingRequired: [{ id: 'acceptance', label: 'Acceptance criteria' }],
+    };
+    mockPreviewAgentLaunch.mockRejectedValue(new AgentReadinessError(readiness));
+
+    const response = await request(
+      createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }))
+    )
+      .post('/api/agents/task_1/launch-preview')
+      .send({ agent: 'codex' });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { readiness },
     });
   });
 

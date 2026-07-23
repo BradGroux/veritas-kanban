@@ -150,6 +150,41 @@ run log expose the same immutable envelope. Provider-owned rendering and
 normalized completion enforcement land in the ordered follow-up work for
 parent issue #860.
 
+## Effective Run Launch Manifests
+
+Every executable task launch also compiles `run-launch-manifest/v1` before
+attempt state is mutated. It references the task envelope instead of copying
+its task contract, and records the selected provider/model/transport, redacted
+command and arguments, instruction fingerprints and precedence, environment
+key names and broker references, profile tools/MCP/permissions/health checks,
+sandbox/network posture, readiness and any hashed operator override, budget,
+routing/fallback, workspace trust, and the origin of each effective value.
+Prompt content, override text, and credential values are never stored in this
+manifest.
+
+`POST /api/agents/:taskId/launch-preview` returns the same compiled contract
+without creating an attempt or dispatching a process. The CLI equivalent is
+`vk launch-preview <task>`. Preview applies the same readiness gate as start.
+A profile restriction that the selected adapter
+cannot enforce is returned as a concrete blocker, and `start` rejects it before
+pending or task attempt state changes. Declaring `tool.calls` support is not
+treated as proof that an adapter can enforce a named allowlist.
+
+Current task adapters do not inject a positive named-tool or MCP catalog, so
+any non-empty declaration remains a launch blocker. Issue #857 owns the
+run-scoped tool-server lifecycle and positive catalog injection; until that
+lands, no profile can substitute tool names in prompt prose for enforcement.
+
+Launches can pass `parentAttemptId` to compare replay, resume, or fork inputs.
+The comparison ignores attempt IDs, capture/probe timestamps, and other
+ephemeral metadata while detecting changes to task policy, provider capability
+posture, model, instructions, sandbox, budget, routing, and profile controls.
+The manifest, optional parent drift, and governance trace ID are persisted on
+the attempt and copied into attempt history. Active run controls compare the
+stored launch digest as well as the provider-runtime digest. Completion packet
+metadata links both digests, the provider probe revision/version/build, the
+governance trace, and parent drift result.
+
 Sandbox launch checks resolve every preset rule through the same manifest.
 Settings dry-runs send the digest of the newest matching manifest registered by
 a live host; the server resolves that digest rather than trusting a

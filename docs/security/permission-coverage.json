@@ -620,6 +620,14 @@
       "denialReason": "Starting an agent requires task read and task write access."
     },
     {
+      "id": "cli:agents:launch-preview",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Previewing effective launch evidence requires task and agent read access."
+    },
+    {
       "id": "cli:agents:stop",
       "kind": "cli",
       "classification": "agent-scoped",

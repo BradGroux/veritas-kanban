@@ -290,6 +290,20 @@ export interface SetupContextRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Workspace File Repository
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceFileRepository {
+  /**
+   * Read an optional UTF-8 file beneath a workspace root.
+   *
+   * Implementations must reject traversal outside `workspaceRoot`. A missing
+   * file returns null; other I/O failures remain visible to the caller.
+   */
+  readOptionalText(workspaceRoot: string, relativePath: string): Promise<string | null>;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 

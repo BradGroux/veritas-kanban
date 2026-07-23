@@ -115,9 +115,20 @@ describe('HttpOpenClawTaskAdapter.spawnTask()', () => {
     const body = JSON.parse(String(request?.body)) as {
       tool: string;
       args: Record<string, unknown>;
+      sessionKey: string;
     };
     expect(body.tool).toBe('sessions_spawn');
-    expect(body.args).toMatchObject({ mode: 'run', runtime: 'subagent' });
+    expect(body.sessionKey).toBe('main');
+    expect(body.args).toEqual({
+      task: 'Complete the task',
+      taskName: 'task_task_abc_attempt_001',
+      label: 'Veritas task task-abc / attempt attempt-001 / ClaudeCode',
+      runtime: 'subagent',
+      agentId: 'claude-code',
+      mode: 'run',
+      cleanup: 'keep',
+      context: 'isolated',
+    });
     expect(body.args).not.toHaveProperty('runTimeoutSeconds');
     expect(body.args).not.toHaveProperty('dry_run');
   });

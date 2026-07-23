@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added the immutable `run-launch-manifest/v1` contract, a preflight preview API
+  and CLI command, per-field configuration provenance, fail-closed profile
+  tool/MCP/permission/health enforcement, parent-attempt material drift,
+  readiness/override evidence, governance traces, attempt/history/log
+  persistence, and completion-packet links to the exact launch and provider
+  capability evidence (#854).
+
 ## [5.2.5] - 2026-07-23
 
 ### Added

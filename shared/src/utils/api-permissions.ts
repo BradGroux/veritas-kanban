@@ -178,6 +178,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     overrides: [
       { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/hosts\/preview\/?$/, permissions: 'agent:read' },
+      { methods: ['POST'], path: /^\/[^/]+\/launch-preview\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
       { methods: ['POST'], path: /^\/[^/]+\/message\/?$/, permissions: 'task:write' },
     ],
