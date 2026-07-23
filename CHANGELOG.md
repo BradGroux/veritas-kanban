@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Added bounded macOS desktop startup verification that retries through the
+  LaunchServices readiness window, requires the installed app and health
+  endpoint versions to agree, and reports process, port, and log diagnostics on
+  a real timeout. Updated web-to-desktop migration, routine Homebrew upgrade,
+  automation, troubleshooting, and release guidance to use the readiness gate
+  instead of an immediate health request (#927).
+
 ### Added
 
 - Added the immutable `run-launch-manifest/v1` contract, a preflight preview API

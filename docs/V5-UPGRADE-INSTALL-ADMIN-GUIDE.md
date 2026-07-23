@@ -82,6 +82,71 @@ both an already-populated desktop database and a file-backed
 `tasks/`/`.veritas-kanban/` source, including one-writer cutover, backups,
 watchdogs, record counts, first-launch selection, rollback, and packaged auth.
 
+## Routine Mac Desktop Upgrade
+
+Homebrew replaces the app bundle, but it does not launch the app or wait for
+the bundled server. macOS also returns from `open -a` before that server is
+necessarily listening. Use this sequence for an existing desktop workspace:
+
+1. Create a governed backup in Settings -> Maintenance. Confirm the completed
+   report before quitting.
+2. Pause any heartbeat, LaunchAgent, or other automation that reopens Veritas
+   Kanban. Otherwise it can race the upgrade.
+3. Quit the app and confirm the preferred port no longer has a listener:
+
+   ```bash
+   osascript -e 'quit app "Veritas Kanban"' 2>/dev/null || true
+   APP_MAIN_PATTERN='^/Applications/Veritas Kanban[.]app/Contents/MacOS/veritas-kanban$'
+   DESKTOP_STOPPED=0
+
+   for ATTEMPT in {1..20}; do
+     if ! lsof -nP -iTCP:3001 -sTCP:LISTEN >/dev/null 2>&1 &&
+       ! pgrep -f "$APP_MAIN_PATTERN" >/dev/null 2>&1; then
+       DESKTOP_STOPPED=1
+       break
+     fi
+     sleep 0.5
+   done
+
+   if test "$DESKTOP_STOPPED" -ne 1; then
+     echo "Veritas Kanban did not finish quitting; inspect it before upgrading." >&2
+     lsof -nP -iTCP:3001 -sTCP:LISTEN
+     pgrep -ifl "$APP_MAIN_PATTERN" || true
+     exit 1
+   fi
+   ```
+
+4. Refresh the tap, upgrade, and read the installed bundle version:
+
+   ```bash
+   brew update
+   brew upgrade --cask bradgroux/tap/veritas-kanban
+   brew list --cask --versions veritas-kanban
+   EXPECTED_VERSION="$(defaults read "/Applications/Veritas Kanban.app/Contents/Info" CFBundleShortVersionString)"
+   printf 'Installed Veritas Kanban %s\n' "$EXPECTED_VERSION"
+   ```
+
+5. Launch and use the bounded exact-version readiness gate from
+   [Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md#wait-for-the-desktop-server).
+   From a current checkout:
+
+   ```bash
+   open -a "Veritas Kanban"
+   pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
+   ```
+
+   Operators without a checkout should use the Homebrew-only block in that
+   linked section. Do not use an immediate `curl` or a fixed `sleep`.
+
+6. Confirm the process listening on `3001` resolves through
+   `/Applications/Veritas Kanban.app`, then verify the board and Settings ->
+   Maintenance.
+7. Resume the heartbeat only after readiness and the app/health version match.
+
+If the app already contains the migrated data, this routine upgrade does not
+require an import, restore, or first-run path change. Preserve the same desktop
+profile and select **Use Existing Data** only if setup is shown.
+
 ## v4 To v5 Upgrade
 
 For a complete operator runbook that upgrades an existing file-backed

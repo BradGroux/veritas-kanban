@@ -7,6 +7,7 @@ Common issues and solutions for Veritas Kanban. Can't find your issue? [Open a D
 ## Table of Contents
 
 - [Installation & Build](#installation--build)
+- [macOS Desktop Upgrade](#macos-desktop-upgrade)
 - [Authentication & Rate Limiting](#authentication--rate-limiting)
 - [Networking & Proxies](#networking--proxies)
 - [WebSocket Issues](#websocket-issues)
@@ -16,6 +17,55 @@ Common issues and solutions for Veritas Kanban. Can't find your issue? [Open a D
 - [Data & Storage](#data--storage)
 - [Useful Commands](#useful-commands)
 - [Dev Reliability (ports, hangs, and restarts)](#dev-reliability-ports-hangs-and-restarts)
+
+---
+
+## macOS Desktop Upgrade
+
+### Homebrew upgraded the app but port 3001 refuses connections
+
+`brew upgrade --cask` replaces the app bundle but does not launch it. After
+`open -a "Veritas Kanban"`, LaunchServices can return several seconds before
+Electron starts the bundled server. One immediate failed health request is
+therefore not a startup verdict.
+
+From a Veritas Kanban checkout, require the server to report the version in the
+installed app bundle:
+
+```bash
+EXPECTED_VERSION="$(defaults read "/Applications/Veritas Kanban.app/Contents/Info" CFBundleShortVersionString)"
+open -a "Veritas Kanban"
+pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
+```
+
+For a Homebrew-only machine, use the bounded built-in-tools block in
+[Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md#wait-for-the-desktop-server).
+It waits up to 30 seconds and rejects a stale server with the wrong version.
+
+If the bounded wait times out:
+
+```bash
+lsof -nP -iTCP:3001 -sTCP:LISTEN
+ps -o pid,ppid,pgid,command -p "$(lsof -tiTCP:3001 -sTCP:LISTEN)"
+pgrep -ifl 'Veritas Kanban|veritas-kanban|server/dist/index.js'
+tail -n 80 "$HOME/Library/Application Support/@veritas-kanban/desktop/profiles/default/workspaces/local/logs/server.log"
+```
+
+- No desktop process means app launch failed; open the app and inspect macOS
+  Console plus the desktop log.
+- An old source `node`, `tsx`, `vite`, or `pnpm dev` process on `3001` is a
+  competing writer. Stop it and its watchdog before relaunching the app.
+- A desktop process on another loopback port means `3001` was occupied during
+  launch. The renderer may work, but migration and upgrade verification should
+  fail until the packaged server owns `3001`.
+- If a quit is immediately followed by a reopen, wait for both port `3001` and
+  the Electron main process to exit first. LaunchServices can ignore a reopen
+  request while the prior instance is still shutting down.
+- Pause reopen heartbeats before quitting or upgrading. Resume them only after
+  exact-version readiness succeeds.
+
+The complete data-preserving procedure is in
+[Routine Mac Desktop Upgrade](V5-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade).
 
 ---
 

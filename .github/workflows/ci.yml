@@ -72,6 +72,9 @@ jobs:
       - name: Run workspace unit tests
         run: pnpm test:unit
 
+      - name: Run desktop readiness regression tests
+        run: pnpm desktop:test:readiness
+
       - name: Run dual-storage parity tests
         run: pnpm --filter @veritas-kanban/server test -- src/__tests__/storage/dual-storage-parity.test.ts
 

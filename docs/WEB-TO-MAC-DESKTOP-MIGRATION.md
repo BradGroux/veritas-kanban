@@ -92,6 +92,72 @@ After cutover, the process tree should resolve through:
 
 Only one VK server should accept active writes during the cutover.
 
+## Wait For The Desktop Server
+
+`open -a` asks LaunchServices to open the app and returns before Electron and
+the bundled server are necessarily ready. An immediate failed `curl` is not
+proof that startup failed. Do not replace the readiness check with a fixed
+`sleep`; startup time varies by host.
+
+From a Veritas Kanban checkout, launch the app and wait up to 30 seconds for the
+exact installed version:
+
+```bash
+EXPECTED_VERSION="$(defaults read "/Applications/Veritas Kanban.app/Contents/Info" CFBundleShortVersionString)"
+open -a "Veritas Kanban"
+pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
+```
+
+Homebrew-only operators and agents can use the built-in macOS tools instead:
+
+```bash
+EXPECTED_VERSION="$(defaults read "/Applications/Veritas Kanban.app/Contents/Info" CFBundleShortVersionString)"
+HEALTH_URL="http://127.0.0.1:3001/api/health"
+HEALTH_JSON=""
+DESKTOP_READY=0
+DESKTOP_DEADLINE=$((SECONDS + 30))
+
+open -a "Veritas Kanban"
+
+while ((SECONDS < DESKTOP_DEADLINE)); do
+  REMAINING_SECONDS=$((DESKTOP_DEADLINE - SECONDS))
+
+  if HEALTH_JSON="$(curl -fsS --max-time "$REMAINING_SECONDS" "$HEALTH_URL" 2>/dev/null)"; then
+    HEALTH_OK="$(printf '%s' "$HEALTH_JSON" | plutil -extract ok raw -o - - 2>/dev/null || true)"
+    HEALTH_SERVICE="$(printf '%s' "$HEALTH_JSON" | plutil -extract service raw -o - - 2>/dev/null || true)"
+    HEALTH_VERSION="$(printf '%s' "$HEALTH_JSON" | plutil -extract version raw -o - - 2>/dev/null || true)"
+    PORT_PID="$(lsof -tiTCP:3001 -sTCP:LISTEN 2>/dev/null || true)"
+    PORT_COMMAND="$(ps -o command= -p "$PORT_PID" 2>/dev/null || true)"
+
+    if test "$HEALTH_OK" = "true" &&
+      test "$HEALTH_SERVICE" = "veritas-kanban" &&
+      test "$HEALTH_VERSION" = "$EXPECTED_VERSION" &&
+      printf '%s' "$PORT_COMMAND" | grep -Fq "/Applications/Veritas Kanban.app/Contents/"; then
+      printf '%s\n' "$HEALTH_JSON"
+      DESKTOP_READY=1
+      break
+    fi
+  fi
+
+  sleep 0.5
+done
+
+if test "$DESKTOP_READY" -ne 1; then
+  echo "Veritas Kanban $EXPECTED_VERSION did not become ready at $HEALTH_URL." >&2
+  lsof -nP -iTCP:3001 -sTCP:LISTEN || true
+  ps -o pid,ppid,pgid,command -p "$(lsof -tiTCP:3001 -sTCP:LISTEN)" 2>/dev/null || true
+  tail -n 80 "$HOME/Library/Application Support/@veritas-kanban/desktop/profiles/default/workspaces/local/logs/server.log" 2>/dev/null || true
+  exit 1
+fi
+```
+
+The version and listener-owner checks prevent a stale source server or an older
+desktop process from satisfying upgrade verification. If another process owns
+`3001`, the desktop app may select another loopback port for its renderer. That
+fallback can keep the UI usable, but it is not an accepted migration cutover:
+stop the competing writer, relaunch the desktop app, and prove that the packaged
+server owns `3001`.
+
 ## Already Migrated Desktop Data
 
 Use this path when a migration tool or operator has already populated
@@ -133,6 +199,9 @@ Use this path when a migration tool or operator has already populated
    brew upgrade --cask veritas-kanban || brew install --cask veritas-kanban
    open -a "Veritas Kanban"
    ```
+
+   Then run **Wait For The Desktop Server**. Do not issue one immediate health
+   request after `open -a`.
 
 4. On first launch, choose **Use Existing Data**. The setup screen displays
    representative record counts read from the active desktop SQLite database.
@@ -399,18 +468,20 @@ Preserve:
 open -a "Veritas Kanban"
 ```
 
+Run **Wait For The Desktop Server** before treating the new database as active.
+
 Choose **Use Existing Data**, then **Secure Existing Data**. Create the admin
 password and save the recovery key. Do not choose **Board Only** or **Restore
 Backup** for the staged database.
 
 ## Verify The Cutover
 
-Confirm the packaged app owns `3001`:
+After **Wait For The Desktop Server** succeeds, confirm the packaged app owns
+`3001`:
 
 ```bash
 lsof -nP -iTCP:3001 -sTCP:LISTEN
 ps -o pid,ppid,pgid,command -p "$(lsof -tiTCP:3001 -sTCP:LISTEN)"
-curl -fsS http://127.0.0.1:3001/api/health | jq .
 ```
 
 Verify counts only after closing the app or by using the app/API. Do not use
@@ -459,14 +530,20 @@ export VK_API_KEY="paste-scoped-token-here"
 Store long-lived tokens in the operator's normal secret manager. Do not
 hard-code owner/admin keys into repo scripts.
 
-Heartbeat or service recovery should reopen the desktop app:
+Heartbeat or service recovery should reopen the desktop app and wait for the
+readiness gate:
 
 ```bash
+EXPECTED_VERSION="$(defaults read "/Applications/Veritas Kanban.app/Contents/Info" CFBundleShortVersionString)"
 open -a "Veritas Kanban"
+pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
 ```
 
-It should not restart the old source checkout unless the operator explicitly
-wants development mode.
+Use the Homebrew-only readiness block above when the automation does not have a
+Veritas Kanban checkout. Pause any heartbeat or supervisor before quitting the
+app for migration or upgrade. Resume it only after exact-version readiness
+succeeds. It should not restart the old source checkout unless the operator
+explicitly wants development mode.
 
 ## Rollback
 
@@ -498,6 +575,13 @@ path and counts are understood.
 Check who owns `3001`. If it is `node`, `tsx`, `vite`, or `pnpm dev` from the
 source checkout, the desktop app is not authoritative. Stop that process and
 its watchdog, then relaunch the app.
+
+### `open -a` returns but port 3001 refuses connections
+
+Run **Wait For The Desktop Server**. A refusal during the first few seconds is a
+normal asynchronous launch window. If the bounded wait times out, inspect the
+reported port owner and desktop server log. Do not restart the old source server
+as a workaround.
 
 ### APIs return `AUTH_REQUIRED`
 

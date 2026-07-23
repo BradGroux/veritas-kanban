@@ -174,6 +174,8 @@ policy is tracked in
   npm install/download shim.
 - Run `pnpm desktop:smoke:mac:local` to verify local packaging does not prune
   root dev tooling.
+- Run `pnpm desktop:test:readiness` and confirm the bounded readiness helper
+  rejects a stale version and reports a useful timeout.
 - Run `pnpm desktop:package:mac:unsigned` and inspect artifact names.
 - Run `pnpm desktop:package:linux:unsigned` on Linux or the
   `Desktop Artifacts` Linux job and inspect preview artifact names. This is not
@@ -195,6 +197,9 @@ policy is tracked in
   matches the shipped onboarding labels and Maintenance import behavior.
 - Confirm update check, download, install, failed-download, and rollback paths
   on the selected channel.
+- For a Homebrew upgrade, confirm `open -a` followed by
+  `pnpm desktop:wait:ready -- --expected-version <version>` tolerates normal
+  startup delay and proves the packaged server owns `3001`.
 - Confirm `pnpm validate:release` passes and verifies root/shared/server/web,
   CLI, MCP, and desktop package versions plus required v5 release docs.
 

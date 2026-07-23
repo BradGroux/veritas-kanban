@@ -17,6 +17,8 @@
     "desktop:dev:fresh": "pnpm --filter @veritas-kanban/desktop dev:fresh",
     "desktop:build": "pnpm --filter @veritas-kanban/desktop build",
     "desktop:check:electron-artifacts": "node --test scripts/check-desktop-electron-artifacts.test.mjs && node scripts/check-desktop-electron-artifacts.mjs",
+    "desktop:test:readiness": "node --test scripts/wait-for-desktop-ready.test.mjs",
+    "desktop:wait:ready": "node scripts/wait-for-desktop-ready.mjs",
     "desktop:package:mac:dir": "pnpm build && pnpm --filter @veritas-kanban/desktop package:mac:dir",
     "desktop:package:mac:unsigned": "pnpm build && pnpm --filter @veritas-kanban/desktop package:mac:unsigned",
     "desktop:package:linux:unsigned": "pnpm build && pnpm --filter @veritas-kanban/desktop package:linux:unsigned",

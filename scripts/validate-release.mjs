@@ -29,6 +29,8 @@ const requiredFiles = [
 const requiredScripts = [
   'audit',
   'build',
+  'desktop:test:readiness',
+  'desktop:wait:ready',
   'lint',
   'lint:budget',
   'qa:mantine',

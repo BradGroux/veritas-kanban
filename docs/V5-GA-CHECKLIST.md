@@ -128,6 +128,7 @@ pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm lint:budget
 pnpm test:unit
+pnpm desktop:test:readiness
 pnpm build
 pnpm validate:release
 pnpm smoke:cli-mcp

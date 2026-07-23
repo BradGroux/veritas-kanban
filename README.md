@@ -49,6 +49,11 @@ brew tap BradGroux/tap
 brew install --cask veritas-kanban
 ```
 
+Existing desktop users should follow the
+[routine Mac upgrade](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade)
+path so backup, heartbeat pause, app replacement, launch, and exact-version
+server readiness happen in the right order.
+
 For local source development:
 
 ```bash
