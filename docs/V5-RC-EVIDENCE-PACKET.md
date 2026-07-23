@@ -3,23 +3,29 @@
 ## v5.2.5 Release Evidence Packet
 
 This section records the desktop existing-data upgrade fix, migration runbook,
-and release-candidate validation for v5.2.5. Signed artifacts and Homebrew
-publication are added only after those independent gates pass.
+release validation, signed artifacts, and Homebrew publication for v5.2.5.
 
-### Candidate scope
+### Release scope
 
-| Field                  | Value                                                    |
-| ---------------------- | -------------------------------------------------------- |
-| Release version        | 5.2.5                                                    |
-| Release issue          | <https://github.com/BradGroux/veritas-kanban/issues/914> |
-| Desktop setup issue    | <https://github.com/BradGroux/veritas-kanban/issues/901> |
-| Desktop setup PR       | <https://github.com/BradGroux/veritas-kanban/pull/902>   |
-| Migration docs issue   | <https://github.com/BradGroux/veritas-kanban/issues/899> |
-| Migration docs PR      | <https://github.com/BradGroux/veritas-kanban/pull/900>   |
-| Dependency audit issue | <https://github.com/BradGroux/veritas-kanban/issues/903> |
-| Dependency audit PR    | <https://github.com/BradGroux/veritas-kanban/pull/908>   |
-| Release branch         | `release/v5.2.5-914`                                     |
-| Evidence date          | 2026-07-23                                               |
+| Field                  | Value                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| Release version        | 5.2.5                                                                                                 |
+| Release issue          | <https://github.com/BradGroux/veritas-kanban/issues/914>                                              |
+| Desktop setup issue    | <https://github.com/BradGroux/veritas-kanban/issues/901>                                              |
+| Desktop setup PR       | <https://github.com/BradGroux/veritas-kanban/pull/902>                                                |
+| Migration docs issue   | <https://github.com/BradGroux/veritas-kanban/issues/899>                                              |
+| Migration docs PR      | <https://github.com/BradGroux/veritas-kanban/pull/900>                                                |
+| Dependency audit issue | <https://github.com/BradGroux/veritas-kanban/issues/903>                                              |
+| Dependency audit PR    | <https://github.com/BradGroux/veritas-kanban/pull/908>                                                |
+| Release PR             | <https://github.com/BradGroux/veritas-kanban/pull/922>                                                |
+| Release commit         | `55e621d14756799ee9b2d1ab4467013186776ae9`                                                            |
+| Annotated tag          | `v5.2.5`; object `c1390f24ad892a2149118645965d7ab3f7691f17`                                           |
+| GitHub release         | <https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5>                                     |
+| Desktop Release run    | <https://github.com/BradGroux/veritas-kanban/actions/runs/30019865167>                                |
+| Homebrew cask PR       | <https://github.com/BradGroux/homebrew-tap/pull/33>; merge `d05cb0ad567eb1df239a2e99d8095398a8d46c37` |
+| Release state          | Published, signed/notarized, independently verified, and available through Homebrew                   |
+| Release branch         | `release/v5.2.5-914`                                                                                  |
+| Evidence date          | 2026-07-23                                                                                            |
 
 ### Upgrade contract
 
@@ -73,11 +79,50 @@ Copilot reviewer supplied the available external review gate on PR #922.
 
 ### Publication evidence
 
-The release commit, tag object, Desktop Release run, signed artifact URLs and
-SHA-256 values, `latest-mac.yml` verification, notarization/stapling checks, and
-Homebrew tap PR are filled from the published v5.2.5 artifacts. Source merge,
-GitHub release publication, signed runtime verification, and Homebrew
-availability are separate gates; none substitutes for another.
+The annotated tag peels to release commit
+`55e621d14756799ee9b2d1ab4467013186776ae9`. Desktop Release run
+[#30019865167](https://github.com/BradGroux/veritas-kanban/actions/runs/30019865167)
+completed successfully in 10m38s and published all seven expected assets.
+Independent downloads matched both the release-attached checksum files and the
+GitHub asset digests:
+
+| Artifact                                      | Bytes       | SHA-256                                                            |
+| --------------------------------------------- | ----------- | ------------------------------------------------------------------ |
+| `Veritas-Kanban-5.2.5-mac-arm64.dmg`          | 268,133,388 | `056d448ad20adf03fe0a32ac0dc12bf3e4b384c1b7a6c8419edffc803322f688` |
+| `Veritas-Kanban-5.2.5-mac-arm64.dmg.blockmap` | 279,312     | `88ee282ac0980231c92097d00ac69c19423df889bf1a865bbb11803d401d75bf` |
+| `Veritas-Kanban-5.2.5-mac-arm64.dmg.sha256`   | 101         | `59892a48108017cf8d3c7217f908e0f4638e00e86ce457e0f876ef82f488dbe2` |
+| `Veritas-Kanban-5.2.5-mac-arm64.zip`          | 271,243,007 | `3f1816de7ae46d5e0541209f8acd65ffa32a47bd5caeedd9546358557e66fced` |
+| `Veritas-Kanban-5.2.5-mac-arm64.zip.blockmap` | 279,514     | `ecf30e86035a9b2e531f8632401bf28033019c82215b17cb32ee321dd44f456f` |
+| `Veritas-Kanban-5.2.5-mac-arm64.zip.sha256`   | 101         | `7399226b582c5e776d8ab5096dd94a20453309b053f8395bb2d9288ff1bbfb93` |
+| `latest-mac.yml`                              | 530         | `1a88552cc0887e03acd25db3d6af30bb764b05892a4a0d8fc2ba94acec73b94e` |
+
+`latest-mac.yml` reports version 5.2.5, names the published ZIP and DMG, and
+matches their byte sizes and SHA-512 values. The extracted ZIP app and DMG both
+pass strict code-signing verification, Gatekeeper acceptance as Notarized
+Developer ID, and stapled-ticket validation. The app is signed by Developer ID
+Application: Digital Meld, Inc. (`RLBHD62MPW`) with hardened runtime.
+
+The downloaded signed app launched under an isolated profile and returned
+version 5.2.5 from `/api/health`. The setup path rendered, **Agent Ready**
+remained clickable, and dragging the non-control setup header physically moved
+the window. It then quit cleanly through the native app menu.
+
+Homebrew issue
+[#32](https://github.com/BradGroux/homebrew-tap/issues/32) and PR
+[#33](https://github.com/BradGroux/homebrew-tap/pull/33) publish the ZIP checksum
+above. The registered tap passed `brew style --cask`,
+`brew audit --cask --strict --online`, `brew install --cask --dry-run`, and
+`brew livecheck`. A stopped-app laptop upgrade from 5.2.4 to 5.2.5 preserved a
+host-specific empty board with `PRAGMA quick_check` returning `ok` and matching
+0/0/0/0/0 task, Squad Chat, telemetry, workflow-definition, and workflow-run
+counts. The pre-upgrade snapshot is retained under the desktop workspace's
+`backups/pre-upgrade-20260723-103736` directory. After launch, port 3001 was
+owned by the packaged application and bundled `Resources/server/dist/index.js`,
+and `/api/health` returned 5.2.5.
+
+Source merge, GitHub release publication, signed runtime verification, Homebrew
+availability, and a host-specific data check are separate gates; none
+substitutes for another.
 
 ## v5.2.2 Release Evidence Packet
 

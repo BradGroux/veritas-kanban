@@ -4,18 +4,18 @@ These notes describe the Veritas Kanban v5 stable release line.
 
 - Current source version: `v5.2.5`
 - Latest published GitHub release:
-  [Veritas Kanban v5.2.4](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
+  [Veritas Kanban v5.2.5](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
-  [Veritas-Kanban-5.2.4-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.4/Veritas-Kanban-5.2.4-mac-arm64.zip)
+  [Veritas-Kanban-5.2.5-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.5/Veritas-Kanban-5.2.5-mac-arm64.zip)
 
-## v5.2.5 Patch Candidate
+## v5.2.5 Patch
 
-The v5.2.5 source candidate makes the signed desktop upgrade path unambiguous
+The v5.2.5 release makes the signed desktop upgrade path unambiguous
 for operators whose data is already in the desktop SQLite workspace. It also
-prepares the provider runtime contract and SQLite safety work merged since
-v5.2.4 for publication.
+publishes the provider runtime contract and SQLite safety work merged since
+v5.2.4.
 
 ### Desktop startup and existing data
 
@@ -361,15 +361,14 @@ Manual installation is also supported from the stable GitHub release ZIP.
 
 ## Release Artifacts
 
-When the v5.2.5 release is published, its GitHub release must contain the
-signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`, blockmaps, and
-SHA-256 sidecars. The release-attached `.sha256` files are the checksum source
-of truth after publication.
+The
+[v5.2.5 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5)
+contains the signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`,
+blockmaps, and SHA-256 sidecars. The release-attached `.sha256` files are the
+checksum source of truth.
 
-The current stable
-[v5.2.4 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
-and the v5.2.3 and v5.2.2 desktop assets remain available for installation,
-provenance, and rollback until v5.2.5 publication completes.
+The v5.2.4, v5.2.3, and v5.2.2 desktop assets remain available for provenance
+and rollback.
 
 The v5.2.1 desktop assets remain available for provenance, but the application
 bundle is not a supported rollback target because its emitted Electron main

@@ -9,6 +9,10 @@ development server, disable an old watchdog, or update automation credentials.
 
 ## Choose The Correct Path
 
+Run the inventory on the Mac that will own the desktop workspace. Record each
+host separately; counts reported by another Mac, server, or backup are context,
+not proof of the target Mac's active database.
+
 Check the desktop database before importing anything. Quit the app first so the
 direct inspection does not race the authoritative writer:
 
