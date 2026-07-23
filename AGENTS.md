@@ -123,6 +123,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   checks, and provider version/build changes must invalidate cached conformance.
   Increment `PROVIDER_RUNTIME_PROBE_REVISION` whenever probe semantics or the
   built-in adapter capability evidence changes.
+- Normalize every configured harness through `harness-support-profile/v1`.
+  Settings, API diagnostics, `vk doctor`, dispatch, and telemetry must use the
+  same support tier and redacted readiness evidence. Only known legacy records
+  whose built-in type and command both identify `codex` or `hermes` may infer a
+  provider during migration; provider-less or profile/adapter-mismatched records
+  fail closed before an attempt is created.
 
 ---
 

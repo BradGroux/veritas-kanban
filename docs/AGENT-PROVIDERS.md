@@ -9,10 +9,48 @@ Veritas works as a board without any agent runner. When you do enable agents, pr
 Fresh v5 installs use OpenAI Codex as the default agent:
 
 - `codex` is enabled by default and uses `codex exec --sandbox workspace-write --json`.
-- `claude-code`, `amp`, `copilot`, `gemini`, `codex-sdk`, `codex-cloud`, `hermes`, `ollama-local`, `ollama-cloud`, and `lm-studio-local` are available as profiles you can enable or route to.
+- `codex-sdk` and `hermes` have executable adapters but are disabled by default.
+- `claude-code`, `amp`, `copilot`, `gemini`, `codex-cloud`, `ollama-local`, `ollama-cloud`, and `lm-studio-local` remain visible for configuration and migration, but they cannot dispatch until a matching executable adapter ships.
 - Built-in routing sends code, bug, documentation, and review work to `codex` first, with conservative fallbacks for higher-risk code paths.
 
 Existing configs keep the user's chosen default agent. Missing built-in profiles are added during config normalization without overwriting customized commands, arguments, or enabled states.
+
+## Harness Support Profiles And Tiers
+
+Every configured agent is normalized to a `harness-support-profile/v1` contract.
+The profile records stable profile and adapter IDs, transport, executable and
+non-mutating authentication probes, version/build invalidation policy,
+platforms, launch/worktree behavior, environment and credential allowlists,
+conformance fixture identity, documentation, and remediation. The contract
+contains credential key names only, never credential values.
+
+The live status projection uses five tiers:
+
+| Tier          | Meaning                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `detected`    | The executable is installed, but the profile is disabled or not ready for dispatch.                                          |
+| `configured`  | The explicit adapter is enabled and its runtime probe is ready, but current certification evidence is absent.                |
+| `certified`   | The installed version, build, manifest digest, and probe revision match a passing conformance result.                        |
+| `degraded`    | The adapter exists, but installation, authentication, probe, compatibility, or certification evidence is unhealthy or stale. |
+| `unsupported` | The profile has no executable adapter or does not support the current platform.                                              |
+
+Settings -> Agents displays the same tier returned by
+`GET /api/config/agent-support`. `vk doctor` consumes that endpoint unchanged:
+an enabled `degraded` or `unsupported` profile is a blocking failure, while an
+enabled `configured` profile is a warning until certification is current.
+Reasons and remediation are redacted before leaving the server.
+
+Task start rechecks the normalized profile before attempt state is created. An
+explicit provider must match the profile's executable adapter. A display-only
+Claude Code or Copilot profile, an unsupported provider, or an unknown
+provider-less profile fails with an actionable `409` and can never fall through
+to OpenClaw.
+
+For backward compatibility, normalization migrates only known provider-less
+Codex and Hermes records when both the built-in type and command identity match
+(`codex` -> `codex-cli`, `hermes` -> `hermes-cli`). New and custom profiles must
+set an explicit provider. Command-name inference is not a general
+adapter-selection mechanism.
 
 ## Provider Runtime Manifests
 
@@ -23,9 +61,10 @@ timestamp and diagnostics, and every known runtime or sandbox capability as
 `supported`, `advisory`, `unsupported`, or `unknown`.
 
 Veritas currently has executable task adapters for `codex-cli`, `codex-sdk`,
-`hermes-cli`, and `openclaw`. An explicitly configured Codex Cloud, Ollama, LM
-Studio, or custom profile is not silently sent through OpenClaw; task dispatch
-fails with an actionable `409` until that provider has an execution adapter.
+`hermes-cli`, and `openclaw`. An explicitly configured Claude Code, Copilot,
+Codex Cloud, Ollama, LM Studio, or custom profile is not silently sent through
+OpenClaw; task dispatch fails with an actionable `409` until that provider has
+an execution adapter.
 
 The exact manifest and its `sha256:` digest are stored on the current attempt,
 attempt history, optional run trace, and Markdown run log. Provider identity

@@ -37,6 +37,23 @@ const baseRoutes: Record<string, Response> = {
       provider: 'codex-cli',
     },
   ]),
+  '/api/config/agent-support': jsonResponse([
+    {
+      agentType: 'codex',
+      profileId: 'openai-codex-cli',
+      adapterId: 'codex-cli',
+      transport: 'process-jsonl',
+      supportTier: 'configured',
+      reason: 'Certification evidence is not current.',
+      failureClass: 'none',
+      checkedAt: '2026-06-04T07:00:00.000Z',
+      enabled: true,
+      executableFound: true,
+      authenticated: true,
+      diagnosticCommands: ['codex --version', 'codex login status'],
+      remediation: ['Run vk doctor.'],
+    },
+  ]),
   '/api/agents/routing': jsonResponse({
     enabled: true,
     defaultAgent: 'codex',
@@ -79,6 +96,12 @@ describe('vk doctor', () => {
     expect(report.summary.fail).toBe(0);
     expect(report.checks.find((check) => check.id === 'agents')).toMatchObject({
       status: 'pass',
+    });
+    expect(report.checks.find((check) => check.id === 'harness-support')).toMatchObject({
+      status: 'warn',
+      details: expect.objectContaining({
+        configured: 1,
+      }),
     });
     expect(formatDoctorReport(report)).toContain('Doctor result: clean');
   });
@@ -123,6 +146,55 @@ describe('vk doctor', () => {
     });
     expect(report.checks.find((check) => check.id === 'agents')).toMatchObject({
       status: 'fail',
+    });
+  });
+
+  it('fails closed for an enabled unsupported harness and preserves safe remediation', async () => {
+    const routes = {
+      ...baseRoutes,
+      '/api/config/agent-support': jsonResponse([
+        {
+          agentType: 'claude-code',
+          profileId: 'claude-code',
+          transport: 'process-jsonl',
+          supportTier: 'unsupported',
+          reason: 'No executable adapter is registered.',
+          failureClass: 'adapter-unavailable',
+          checkedAt: '2026-06-04T07:00:00.000Z',
+          enabled: true,
+          executableFound: true,
+          authenticated: true,
+          diagnosticCommands: ['claude --version'],
+          remediation: ['Disable this profile or install a supported adapter.'],
+        },
+      ]),
+    };
+
+    const report = await runDoctorChecks(
+      { apiBase: 'http://vk.test', cwd: '/repo', timeoutMs: 1000 },
+      {
+        fetch: doctorFetch(routes),
+        env: {},
+        findProjectRoot: async () => '/repo',
+        countPromptTemplateFiles: async () => 1,
+        resolveCommand: async (command) =>
+          command === 'vk' ? '/repo/cli/dist/index.js' : `/usr/bin/${command}`,
+        now: () => new Date('2026-06-04T07:00:00.000Z'),
+      }
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.checks.find((check) => check.id === 'harness-support')).toMatchObject({
+      status: 'fail',
+      details: {
+        blocking: [
+          expect.objectContaining({
+            profileId: 'claude-code',
+            diagnosticCommands: ['claude --version'],
+            remediation: ['Disable this profile or install a supported adapter.'],
+          }),
+        ],
+      },
     });
   });
 

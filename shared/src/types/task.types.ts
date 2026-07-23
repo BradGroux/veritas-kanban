@@ -62,6 +62,7 @@ export interface TaskAttempt {
   budget?: import('./agent-budget.types.js').AgentBudgetState;
   agentProfile?: import('./agent-profile-package.types.js').AgentProfileLaunchMetadata;
   providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
+  harnessSupport?: import('./provider-runtime.types.js').HarnessSupportStatus;
   taskEnvelope?: import('./task-envelope.types.js').TaskEnvelope;
   completionResult?: import('./task-envelope.types.js').CompletionResult;
 }

@@ -343,6 +343,38 @@ describe('ClawdbotAgentService Codex providers', () => {
         providerVersion: 'codex-cli 0.144.0',
       });
       expect(task.attempt?.providerRuntimeManifest?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(task.attempt?.harnessSupport).toMatchObject({
+        profileId: 'openai-codex-cli',
+        adapterId: 'codex-cli',
+        supportTier: 'configured',
+        failureClass: 'none',
+        manifestDigest: task.attempt?.providerRuntimeManifest?.digest,
+      });
+      expect(mockTelemetryEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'run.started',
+          harnessSupport: expect.objectContaining({
+            profileId: 'openai-codex-cli',
+            adapterId: 'codex-cli',
+            providerVersion: 'codex-cli 0.144.0',
+            manifestDigest: task.attempt?.providerRuntimeManifest?.digest,
+            supportTier: 'configured',
+            failureClass: 'none',
+          }),
+        })
+      );
+      expect(mockTelemetryEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'run.completed',
+          harnessSupport: expect.objectContaining({
+            profileId: 'openai-codex-cli',
+            adapterId: 'codex-cli',
+            manifestDigest: task.attempt?.providerRuntimeManifest?.digest,
+            supportTier: 'configured',
+            failureClass: 'none',
+          }),
+        })
+      );
       expect(task.attempt?.taskEnvelope).toMatchObject({
         schemaVersion: 'task-envelope/v1',
         commitPolicy: 'allowed',

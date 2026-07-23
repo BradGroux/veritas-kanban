@@ -26,6 +26,14 @@ export function useProviderHealth() {
   });
 }
 
+export function useHarnessSupport() {
+  return useQuery({
+    queryKey: ['config', 'agent-support'],
+    queryFn: api.config.agents.support,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRepos() {
   return useQuery({
     queryKey: ['config', 'repos'],
@@ -88,6 +96,7 @@ export function useUpdateAgents() {
     mutationFn: (agents: AgentConfig[]) => api.config.agents.update(agents),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ['config', 'agent-support'] });
     },
   });
 }

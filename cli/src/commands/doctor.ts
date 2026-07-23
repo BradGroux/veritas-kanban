@@ -5,6 +5,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { API_BASE, buildApiHeaders } from '../utils/api.js';
+import type { HarnessSupportStatus } from '@veritas-kanban/shared';
 
 const execFileAsync = promisify(execFile);
 const CRITICAL_STATUSES = new Set<DoctorCheck['id']>([
@@ -13,6 +14,7 @@ const CRITICAL_STATUSES = new Set<DoctorCheck['id']>([
   'api-auth',
   'tasks',
   'agents',
+  'harness-support',
   'routing',
 ]);
 
@@ -538,6 +540,70 @@ function buildCodexCheck(health: CodexHealthResponse | null): DoctorCheck {
   );
 }
 
+function buildHarnessSupportCheck(statuses: HarnessSupportStatus[] | null): DoctorCheck {
+  if (!statuses) {
+    return check(
+      'harness-support',
+      'Harness support',
+      'skip',
+      'Skipped because harness support evidence was unavailable'
+    );
+  }
+
+  const counts = Object.fromEntries(
+    ['detected', 'configured', 'certified', 'degraded', 'unsupported'].map((tier) => [
+      tier,
+      statuses.filter((status) => status.supportTier === tier).length,
+    ])
+  ) as Record<HarnessSupportStatus['supportTier'], number>;
+  const enabled = statuses.filter((status) => status.enabled);
+  const blocking = enabled.filter(
+    (status) => status.supportTier === 'degraded' || status.supportTier === 'unsupported'
+  );
+
+  if (blocking.length > 0) {
+    return check(
+      'harness-support',
+      'Harness support',
+      'fail',
+      `${blocking.length} enabled harness profile(s) cannot dispatch safely`,
+      {
+        ...counts,
+        blocking: blocking.map((status) => ({
+          profileId: status.profileId,
+          adapterId: status.adapterId,
+          tier: status.supportTier,
+          failureClass: status.failureClass,
+          reason: status.reason,
+          diagnosticCommands: status.diagnosticCommands,
+          remediation: status.remediation,
+        })),
+      },
+      'Disable unsupported profiles or follow the profile remediation before dispatch.'
+    );
+  }
+
+  const uncertified = enabled.filter((status) => status.supportTier !== 'certified');
+  if (uncertified.length > 0) {
+    return check(
+      'harness-support',
+      'Harness support',
+      'warn',
+      `${uncertified.length} enabled harness profile(s) are configured but not certified`,
+      counts,
+      'Run the pinned harness conformance fixtures before treating these runtimes as certified.'
+    );
+  }
+
+  return check(
+    'harness-support',
+    'Harness support',
+    'pass',
+    `${enabled.length} enabled harness profile(s) have current certification evidence`,
+    counts
+  );
+}
+
 export async function runDoctorChecks(
   input: Partial<DoctorOptions> = {},
   depsInput: Partial<DoctorDependencies> = {}
@@ -630,6 +696,7 @@ export async function runDoctorChecks(
   );
 
   let agents: AgentConfigResponse[] | null = null;
+  let harnessSupport: HarnessSupportStatus[] | null = null;
   let routing: RoutingConfigResponse | null = null;
   let settings: FeatureSettingsResponse | null = null;
 
@@ -688,6 +755,13 @@ export async function runDoctorChecks(
       '/api/config/agents'
     );
     agents = agentsResponse.ok ? agentsResponse.data : null;
+
+    const harnessSupportResponse = await requestJson<HarnessSupportStatus[]>(
+      deps,
+      options,
+      '/api/config/agent-support'
+    );
+    harnessSupport = harnessSupportResponse.ok ? harnessSupportResponse.data : null;
 
     const routingResponse = await requestJson<RoutingConfigResponse>(
       deps,
@@ -748,10 +822,14 @@ export async function runDoctorChecks(
     checks.push(
       check('codex-health', 'Codex health', 'skip', 'Skipped because API is unreachable')
     );
+    checks.push(
+      check('harness-support', 'Harness support', 'skip', 'Skipped because API is unreachable')
+    );
   }
 
   const agentResult = await buildAgentCheck(deps, agents);
   checks.push(agentResult.check);
+  if (apiReachable) checks.push(buildHarnessSupportCheck(harnessSupport));
   checks.push(
     buildRoutingCheck(routing, agentResult.availableAgents, agentResult.configuredAgents)
   );

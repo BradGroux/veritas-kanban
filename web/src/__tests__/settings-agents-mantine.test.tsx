@@ -179,6 +179,41 @@ vi.mock('@/hooks/useConfig', () => ({
     isFetching: false,
     refetch: mocks.refetchProviderHealth,
   }),
+  useHarnessSupport: () => ({
+    data: [
+      {
+        agentType: 'codex',
+        profileId: 'openai-codex-cli',
+        adapterId: 'codex-cli',
+        transport: 'process-jsonl',
+        supportTier: 'configured',
+        reason: 'Certification evidence is not current.',
+        failureClass: 'none',
+        checkedAt: '2026-06-01T12:00:00.000Z',
+        enabled: true,
+        executableFound: true,
+        authenticated: true,
+        diagnosticCommands: ['codex --version', 'codex login status'],
+        remediation: ['Run vk doctor.'],
+      },
+      {
+        agentType: 'claude-code',
+        profileId: 'claude-code',
+        transport: 'process-jsonl',
+        supportTier: 'unsupported',
+        reason: 'No executable Claude Code adapter is registered.',
+        failureClass: 'adapter-unavailable',
+        checkedAt: '2026-06-01T12:00:00.000Z',
+        enabled: false,
+        executableFound: true,
+        authenticated: true,
+        diagnosticCommands: ['claude --version'],
+        remediation: ['Use a supported adapter.'],
+      },
+    ],
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
   useUpdateAgents: () => ({
     mutate: mocks.updateAgents,
   }),
@@ -474,6 +509,10 @@ describe('Agents settings Mantine migration', () => {
     expect(screen.getByRole('button', { name: 'Refresh Codex health' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Refresh host health' })).toBeDefined();
     expect(screen.getByRole('switch', { name: 'Enable Claude Code' })).toBeDefined();
+    expect(screen.getByText('Configured')).toBeDefined();
+    expect(screen.getByText('Unsupported')).toBeDefined();
+    expect(screen.getByText('Certification evidence is not current.')).toBeDefined();
+    expect(screen.getByText('No executable Claude Code adapter is registered.')).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Default Agent' })).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'Default Model' })).toBeDefined();
 

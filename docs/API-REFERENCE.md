@@ -534,9 +534,17 @@ GET    /api/config/repos/:name/branches # List branches
 
 ```
 GET /api/config/agents        # List configured agents
+GET /api/config/agent-support # Redacted live harness support tiers and remediation
 PUT /api/config/agents        # Update agent config
 PUT /api/config/default-agent # Set default agent
 ```
+
+`GET /api/config/agent-support` is the canonical operator projection used by
+Settings and `vk doctor`. Each row identifies the agent type, support profile,
+explicit adapter and transport, enabled state, tier, redacted reason/failure
+class, executable/authentication posture, version/build evidence, manifest
+digest, safe diagnostic commands, and remediation. It never returns credential
+values.
 
 ---
 

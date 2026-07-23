@@ -14,6 +14,7 @@ import { withFileLock } from './file-lock.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
 
 /** How long cached config stays valid before re-reading from disk */
 const CACHE_TTL_MS = 60_000; // 60 seconds
@@ -127,7 +128,13 @@ export function createDefaultConfig(): AppConfig {
 export function normalizeAppConfig(config: AppConfig): AppConfig {
   const normalized = cloneJson(config);
   normalized.features = deepMergeDefaults(normalized.features || {}, DEFAULT_FEATURE_SETTINGS);
-  normalized.agents = mergeDefaultAgents(normalized.agents || []);
+  normalized.agents = mergeDefaultAgents(normalized.agents || []).map((agent) => {
+    const migrated = migrateLegacyAgentProvider(agent);
+    return {
+      ...migrated,
+      supportProfile: normalizeHarnessSupportProfile(migrated),
+    };
+  });
   normalized.agentProfiles = normalized.agentProfiles || [];
   return normalized;
 }
@@ -136,6 +143,18 @@ function mergeDefaultAgents(agents: AgentConfig[]): AgentConfig[] {
   const existingTypes = new Set(agents.map((agent) => agent.type));
   const missingDefaults = DEFAULT_CONFIG.agents.filter((agent) => !existingTypes.has(agent.type));
   return [...agents, ...cloneJson(missingDefaults)];
+}
+
+function migrateLegacyAgentProvider(agent: AgentConfig): AgentConfig {
+  if (agent.provider) return agent;
+  const command = path.basename(agent.command.trim().split(/\s+/)[0] ?? '');
+  if (agent.type === 'codex' && command === 'codex') {
+    return { ...agent, provider: 'codex-cli' };
+  }
+  if (agent.type === 'hermes' && command === 'hermes') {
+    return { ...agent, provider: 'hermes-cli' };
+  }
+  return agent;
 }
 
 function cloneJson<T>(value: T): T {

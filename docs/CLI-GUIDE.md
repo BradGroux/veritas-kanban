@@ -586,9 +586,17 @@ Manage GitHub Issues bidirectional sync.
 | --------------------- | ------------------------------------------------------------------------------ |
 | `vk summary`          | Project stats: status counts, project progress, high-priority items            |
 | `vk summary standup`  | Daily standup summary (`--yesterday`, `--date YYYY-MM-DD`, `--json`, `--text`) |
+| `vk doctor`           | Validate API, routing, executable, and harness support readiness (`--json`)    |
 | `vk notify <message>` | Create a notification (`--type`, `--title`, `--task` options)                  |
 | `vk notify:check`     | Check for tasks that need notifications                                        |
 | `vk notify:pending`   | Get pending notifications formatted for Teams                                  |
+
+`vk doctor` reads the same redacted harness support projection shown in
+Settings. Enabled `degraded` or `unsupported` profiles fail the doctor check;
+enabled `configured` profiles warn until their installed build has current
+certification evidence. Use `vk doctor --json` for support-safe automation and
+diagnostics, including redacted readiness reasons, safe probe commands, and
+remediation.
 
 ---
 

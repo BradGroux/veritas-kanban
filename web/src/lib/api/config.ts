@@ -12,6 +12,7 @@ import type {
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
   AgentProfileValidationResult,
+  HarnessSupportStatus,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -71,13 +72,7 @@ export type ContextProviderState = 'connected' | 'degraded' | 'stale' | 'disconn
 export type ContextProviderRisk = 'safe' | 'normal' | 'risky';
 export type ContextProviderBoundary = 'local' | 'cloud' | 'mixed' | 'unknown';
 export type ContextProviderPostureStatus =
-  | 'safe'
-  | 'normal'
-  | 'risky'
-  | 'degraded'
-  | 'stale'
-  | 'disconnected'
-  | 'unknown';
+  'safe' | 'normal' | 'risky' | 'degraded' | 'stale' | 'disconnected' | 'unknown';
 
 export interface ContextProviderPostureCheck {
   id: string;
@@ -167,6 +162,10 @@ export const configApi = {
   },
 
   agents: {
+    support: async (): Promise<HarnessSupportStatus[]> => {
+      return apiFetch<HarnessSupportStatus[]>(`${API_BASE}/config/agent-support`);
+    },
+
     update: async (agents: AgentConfig[]): Promise<AppConfig> => {
       return apiFetch<AppConfig>(`${API_BASE}/config/agents`, {
         method: 'PUT',

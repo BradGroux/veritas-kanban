@@ -14,6 +14,7 @@ import type {
   ProviderRuntimeControlSet,
   TaskCommitPolicy,
   TaskEnvelope,
+  HarnessSupportStatus,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -253,6 +254,7 @@ export interface AgentStatus {
   provider?: string;
   model?: string;
   providerRuntimeManifest: ProviderRuntimeManifest;
+  harnessSupport: HarnessSupportStatus;
   taskEnvelope: TaskEnvelope;
   controls: ProviderRuntimeControlSet;
 }
@@ -267,6 +269,7 @@ export interface AgentStatusResponse {
   provider?: string;
   model?: string;
   providerRuntimeManifest?: ProviderRuntimeManifest;
+  harnessSupport?: HarnessSupportStatus;
   taskEnvelope?: TaskEnvelope;
   controls?: ProviderRuntimeControlSet;
 }

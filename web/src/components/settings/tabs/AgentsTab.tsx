@@ -18,6 +18,7 @@ import {
   useConfig,
   useDeleteAgentProfile,
   useExportAgentProfile,
+  useHarnessSupport,
   useImportAgentProfile,
   useProviderHealth,
   useUpdateAgentProfile,
@@ -71,6 +72,7 @@ import type {
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
   ProviderRuntimeManifest,
+  HarnessSupportStatus,
 } from '@veritas-kanban/shared';
 import type {
   CodexHealthStatus,
@@ -114,6 +116,7 @@ export function AgentsTab() {
     refetch: refetchProviderHealth,
   } = useProviderHealth();
   const { data: agentProfiles = [], isLoading: isAgentProfilesLoading } = useAgentProfiles();
+  const { data: harnessSupport = [] } = useHarnessSupport();
   const { data: sandboxPresets = [], isLoading: isSandboxPoliciesLoading } = useSandboxPolicies();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
@@ -211,6 +214,7 @@ export function AgentsTab() {
                 <AgentItem
                   key={agent.type}
                   agent={agent}
+                  supportStatus={harnessSupport.find((status) => status.agentType === agent.type)}
                   sandboxPresets={sandboxPresets}
                   isDefault={isDefault(agent.type)}
                   onToggle={() => handleToggleAgent(agent.type)}
@@ -315,6 +319,20 @@ function providerStateColor(state: ContextProviderHealth['state']): string {
       return 'red';
     case 'unknown':
       return 'gray';
+  }
+}
+
+function harnessSupportTierColor(tier: HarnessSupportStatus['supportTier']): string {
+  switch (tier) {
+    case 'certified':
+      return 'green';
+    case 'configured':
+    case 'detected':
+      return 'blue';
+    case 'degraded':
+      return 'yellow';
+    case 'unsupported':
+      return 'red';
   }
 }
 
@@ -1817,6 +1835,7 @@ function CodexHealthPanel({
 
 interface AgentItemProps {
   agent: AgentConfig;
+  supportStatus?: HarnessSupportStatus;
   sandboxPresets: SandboxPolicyPreset[];
   isDefault: boolean;
   onToggle: () => void;
@@ -1826,6 +1845,7 @@ interface AgentItemProps {
 
 function AgentItem({
   agent,
+  supportStatus,
   sandboxPresets,
   isDefault,
   onToggle,
@@ -1867,6 +1887,16 @@ function AgentItem({
                   {formatAgentProvider(agent.provider)}
                 </Badge>
               )}
+              {supportStatus && (
+                <Badge
+                  size="xs"
+                  variant="light"
+                  color={harnessSupportTierColor(supportStatus.supportTier)}
+                  title={supportStatus.reason}
+                >
+                  {formatProviderState(supportStatus.supportTier)}
+                </Badge>
+              )}
               {agent.model && (
                 <Badge size="xs" variant="light" color="gray">
                   {agent.model}
@@ -1883,6 +1913,9 @@ function AgentItem({
                 </Badge>
               )}
             </div>
+            {supportStatus && (
+              <p className="mt-1 max-w-2xl text-xs text-muted-foreground">{supportStatus.reason}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 // Telemetry Types
 
 import type { TaskStatus, AgentType } from './task.types.js';
+import type { HarnessSupportFailureClass, HarnessSupportTier } from './provider-runtime.types.js';
 
 export type TelemetryEventType =
   | 'task.created'
@@ -37,6 +38,7 @@ export interface RunStartedEvent extends TelemetryEvent {
   model?: string;
   sessionKey?: string;
   attemptId?: string;
+  harnessSupport?: HarnessSupportTelemetry;
 }
 
 /** Agent run completed event */
@@ -49,6 +51,7 @@ export interface RunCompletedEvent extends TelemetryEvent {
   error?: string;
   exitCode?: number;
   attemptId?: string;
+  harnessSupport?: HarnessSupportTelemetry;
 }
 
 /** Agent run error event */
@@ -59,6 +62,17 @@ export interface RunErrorEvent extends TelemetryEvent {
   error: string;
   stackTrace?: string;
   attemptId?: string;
+  harnessSupport?: HarnessSupportTelemetry;
+}
+
+export interface HarnessSupportTelemetry {
+  profileId: string;
+  adapterId?: string;
+  providerVersion?: string;
+  providerBuild?: string;
+  manifestDigest?: string;
+  supportTier: HarnessSupportTier;
+  failureClass: HarnessSupportFailureClass;
 }
 
 /** Legacy combined run event (for backward compatibility) */
@@ -74,6 +88,7 @@ export interface RunTelemetryEvent extends TelemetryEvent {
   model?: string;
   sessionKey?: string;
   stackTrace?: string;
+  harnessSupport?: HarnessSupportTelemetry;
 }
 
 /** Token usage events */

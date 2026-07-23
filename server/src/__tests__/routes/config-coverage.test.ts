@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
-const { mockConfigService } = vi.hoisted(() => ({
+const { mockConfigService, mockHarnessSupportService } = vi.hoisted(() => ({
   mockConfigService: {
     getConfig: vi.fn(),
     addRepo: vi.fn(),
@@ -17,11 +17,20 @@ const { mockConfigService } = vi.hoisted(() => ({
     setDefaultAgent: vi.fn(),
     saveConfig: vi.fn(),
   },
+  mockHarnessSupportService: {
+    list: vi.fn(),
+  },
 }));
 
 vi.mock('../../services/config-service.js', () => ({
   ConfigService: function () {
     return mockConfigService;
+  },
+}));
+
+vi.mock('../../services/harness-support-service.js', () => ({
+  HarnessSupportService: function () {
+    return mockHarnessSupportService;
   },
 }));
 
@@ -68,6 +77,40 @@ describe('Config Routes (actual module)', () => {
       mockConfigService.getConfig.mockRejectedValue(new Error('fail'));
       const res = await request(app).get('/api/config/repos');
       expect(res.status).toBe(500);
+    });
+  });
+
+  describe('GET /api/config/agent-support', () => {
+    it('returns the shared redacted harness support projection', async () => {
+      mockHarnessSupportService.list.mockResolvedValue([
+        {
+          agentType: 'codex',
+          profileId: 'openai-codex-cli',
+          adapterId: 'codex-cli',
+          transport: 'process-jsonl',
+          supportTier: 'configured',
+          reason: 'Certification evidence is not current.',
+          failureClass: 'none',
+          checkedAt: '2026-07-23T16:00:00.000Z',
+          enabled: true,
+          executableFound: true,
+          authenticated: true,
+          diagnosticCommands: ['codex --version', 'codex login status'],
+          remediation: ['Run vk doctor.'],
+        },
+      ]);
+
+      const res = await request(app).get('/api/config/agent-support');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([
+        expect.objectContaining({
+          profileId: 'openai-codex-cli',
+          supportTier: 'configured',
+          failureClass: 'none',
+          diagnosticCommands: ['codex --version', 'codex login status'],
+        }),
+      ]);
     });
   });
 

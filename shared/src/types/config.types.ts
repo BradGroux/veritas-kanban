@@ -7,6 +7,7 @@ import type { SandboxPolicyPreset } from './sandbox-policy.types.js';
 import type { AgentBudgetPolicy } from './agent-budget.types.js';
 import type { AgentProfilePackage } from './agent-profile-package.types.js';
 import type { TeamRosterManifest } from './team-roster.types.js';
+import type { HarnessSupportProfile } from './provider-runtime.types.js';
 import type {
   WorkspaceCapabilityManifest,
   WorkspaceDelegationRecord,
@@ -35,6 +36,8 @@ export interface AgentConfig {
   model?: string;
   sandboxPresetId?: string;
   budget?: AgentBudgetPolicy;
+  /** System-normalized harness support contract. */
+  supportProfile?: HarnessSupportProfile;
 }
 
 export type AgentProvider =

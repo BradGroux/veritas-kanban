@@ -1,5 +1,111 @@
 import type { SandboxProviderCapabilityId } from './sandbox-policy.types.js';
 
+export const HARNESS_SUPPORT_PROFILE_SCHEMA_VERSION = 'harness-support-profile/v1' as const;
+
+export const HARNESS_SUPPORT_TIERS = [
+  'detected',
+  'configured',
+  'certified',
+  'degraded',
+  'unsupported',
+] as const;
+
+export type HarnessSupportTier = (typeof HARNESS_SUPPORT_TIERS)[number];
+
+export type HarnessTransport =
+  'process-jsonl' | 'process-text' | 'sdk' | 'http-tools' | 'acp' | 'app-server' | 'unsupported';
+
+export type HarnessSupportInvalidationKey =
+  'provider-version' | 'provider-build' | 'configuration-digest' | 'probe-revision';
+
+export interface HarnessCertificationEvidence {
+  fixtureSet: string;
+  status: 'not-run' | 'passed' | 'failed' | 'stale';
+  certifiedAt?: string;
+  providerVersion?: string;
+  providerBuild?: string;
+  manifestDigest?: string;
+  configurationDigest?: string;
+  probeRevision?: number;
+}
+
+/**
+ * Stable product contract for a configured agent harness.
+ *
+ * Runtime readiness and certification are projected separately through
+ * `HarnessSupportStatus`; this profile records how the harness is discovered,
+ * launched, invalidated, remediated, and documented without carrying secrets.
+ */
+export interface HarnessSupportProfile {
+  schemaVersion: typeof HARNESS_SUPPORT_PROFILE_SCHEMA_VERSION;
+  id: string;
+  displayName: string;
+  adapterId?: string;
+  transport: HarnessTransport;
+  supportTier: HarnessSupportTier;
+  supportReason: string;
+  executable: {
+    command: string;
+    versionArgs: string[];
+  };
+  authentication: {
+    kind: 'command' | 'environment' | 'provider-managed' | 'none';
+    commandArgs?: string[];
+    environmentKeys?: string[];
+    nonMutating: boolean;
+  };
+  compatibility: {
+    policy: string;
+    testedVersions: string[];
+    invalidateOn: HarnessSupportInvalidationKey[];
+    configurationDigest: string;
+  };
+  platforms: Array<'darwin' | 'linux' | 'win32'>;
+  launch: {
+    args: string[];
+    workingDirectory: 'task-worktree' | 'workspace' | 'provider-managed';
+    worktree: 'required' | 'supported' | 'provider-managed';
+    environmentAllowlist: string[];
+    credentialAllowlist: string[];
+  };
+  conformance: HarnessCertificationEvidence;
+  documentationUrl: string;
+  remediation: string[];
+}
+
+export type HarnessSupportFailureClass =
+  | 'none'
+  | 'not-installed'
+  | 'disabled'
+  | 'unauthenticated'
+  | 'incompatible-build'
+  | 'adapter-unavailable'
+  | 'probe-failed'
+  | 'launch-failed'
+  | 'run-failed'
+  | 'certification-stale'
+  | 'unsupported-platform';
+
+/** Live, redacted projection consumed unchanged by API, CLI, and web. */
+export interface HarnessSupportStatus {
+  agentType: string;
+  enabled: boolean;
+  profileId: string;
+  adapterId?: string;
+  transport: HarnessTransport;
+  supportTier: HarnessSupportTier;
+  reason: string;
+  failureClass: HarnessSupportFailureClass;
+  checkedAt: string;
+  executableFound: boolean;
+  authenticated: boolean | null;
+  providerVersion?: string;
+  providerBuild?: string;
+  manifestDigest?: string;
+  diagnosticCommands: string[];
+  remediation: string[];
+}
+
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
 export const PROVIDER_RUNTIME_PROBE_REVISION = 3 as const;

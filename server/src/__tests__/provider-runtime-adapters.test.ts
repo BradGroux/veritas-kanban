@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentConfig } from '@veritas-kanban/shared';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { AgentHealthChecker } from '../services/agent-health-service.js';
+import { normalizeHarnessSupportProfile } from '../services/harness-support-profile-registry.js';
 
 const originalOpenClawVersion = process.env.OPENCLAW_GATEWAY_VERSION;
 
@@ -45,6 +46,75 @@ function config(provider: AgentConfig['provider']): AgentConfig {
 }
 
 describe('ClawdbotAgentService provider runtime adapters', () => {
+  it.each([
+    ['claude-code', 'claude'],
+    ['copilot', 'copilot'],
+  ] as const)(
+    'fails closed when the provider-less %s display profile is probed',
+    async (type, command) => {
+      await expect(
+        new ClawdbotAgentService(health).probeProviderRuntime({
+          type,
+          name: type,
+          command,
+          args: [],
+          enabled: true,
+        })
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+        details: expect.objectContaining({
+          agent: type,
+          reason: 'No executable provider adapter is configured',
+        }),
+      });
+    }
+  );
+
+  it('rejects a configured provider that does not match the normalized support profile', async () => {
+    const displayOnly: AgentConfig = {
+      type: 'claude-code',
+      name: 'Claude Code',
+      command: 'claude',
+      args: [],
+      enabled: true,
+    };
+
+    await expect(
+      new ClawdbotAgentService(health).probeProviderRuntime({
+        ...displayOnly,
+        provider: 'codex-cli',
+        supportProfile: normalizeHarnessSupportProfile(displayOnly),
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        profileId: 'claude-code',
+        provider: 'codex-cli',
+      }),
+    });
+  });
+
+  it('rejects a new custom provider-less profile even when its command is codex', async () => {
+    await expect(
+      new ClawdbotAgentService(health).probeProviderRuntime({
+        type: 'custom-codex-wrapper',
+        name: 'Custom Codex Wrapper',
+        command: 'codex',
+        args: [],
+        enabled: true,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        agent: 'custom-codex-wrapper',
+        reason: 'No executable provider adapter is configured',
+      }),
+    });
+  });
+
   it.each([
     ['codex-cli', 'codex-exec-json/v1', 'supported', 'ready'],
     ['codex-sdk', 'openai-codex-sdk/v1', 'supported', 'ready'],
