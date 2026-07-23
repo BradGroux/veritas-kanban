@@ -110,6 +110,10 @@ export function evaluateHarnessSupportStatus(
     );
   }
 
+  if (profile.supportTier === 'degraded') {
+    return status(base, 'degraded', 'unsafe-configuration', profile.supportReason);
+  }
+
   if (!health.executableFound) {
     return status(
       base,

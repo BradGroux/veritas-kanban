@@ -22,7 +22,10 @@ The profile records stable profile and adapter IDs, transport, executable and
 non-mutating authentication probes, version/build invalidation policy,
 platforms, launch/worktree behavior, environment and credential allowlists,
 conformance fixture identity, documentation, and remediation. The contract
-contains credential key names only, never credential values.
+contains credential key names only, never credential values. Credential-like
+launch arguments are replaced with `[REDACTED]` before the profile is exposed
+or hashed, so rotating a secret cannot turn the profile digest into a secret
+oracle.
 
 The live status projection uses five tiers:
 
@@ -44,7 +47,10 @@ Task start rechecks the normalized profile before attempt state is created. An
 explicit provider must match the profile's executable adapter. A display-only
 Claude Code or Copilot profile, an unsupported provider, or an unknown
 provider-less profile fails with an actionable `409` and can never fall through
-to OpenClaw.
+to OpenClaw. Recognized credential material in the configured command or launch
+arguments degrades the profile and blocks dispatch before probing or attempt
+creation. Put credentials in an allowlisted environment key or a run-scoped
+brokered credential reference instead.
 
 For backward compatibility, normalization migrates only known provider-less
 Codex and Hermes records when both the built-in type and command identity match

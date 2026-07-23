@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '@veritas-kanban/shared';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { AgentHealthChecker } from '../services/agent-health-service.js';
@@ -125,6 +125,29 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
         reason: 'Harness support profile has no executable adapter',
       }),
     });
+  });
+
+  it('fails closed when launch arguments contain credential material', async () => {
+    const checkAgent = vi.fn(health.checkAgent);
+
+    await expect(
+      new ClawdbotAgentService({ checkAgent }).probeProviderRuntime({
+        type: 'custom-secure-runner',
+        name: 'Secure Runner',
+        command: 'codex',
+        args: ['--api-key', 'sensitive-launch-value'],
+        enabled: true,
+        provider: 'codex-cli',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        profileId: 'openai-codex-cli',
+        reason: 'Credential material is not allowed in harness launch commands or arguments',
+      }),
+    });
+    expect(checkAgent).not.toHaveBeenCalled();
   });
 
   it('rejects a new custom provider-less profile even when its command is codex', async () => {

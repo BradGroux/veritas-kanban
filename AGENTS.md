@@ -172,6 +172,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - **Path traversal.** `validatePathSegment()` + `ensureWithinBase()` on every user-supplied path.
 - **Env passthrough.** Agents receive only the keys in the configured safe allowlist; see
   `server/src/utils/codex-env.ts` and `server/src/utils/hermes-env.ts`.
+- **Launch arguments.** Never put credential values in provider commands or arguments; use an
+  allowlisted environment key or run-scoped brokered credential reference.
 - **Log redaction.** Trace logs and telemetry run through `TRACE_SECRET_PATTERNS` before storage.
 - **No credentials in PR descriptions, test fixtures, or log snippets.**
 

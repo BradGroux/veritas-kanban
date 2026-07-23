@@ -124,8 +124,17 @@ export const HarnessSupportProfileSchema = z
       });
     }
     const publicText = [
+      profile.displayName,
       profile.supportReason,
+      profile.executable.command,
+      ...profile.executable.versionArgs,
+      ...(profile.authentication.commandArgs ?? []),
       profile.compatibility.policy,
+      ...profile.compatibility.testedVersions,
+      ...profile.launch.args,
+      ...(profile.conformance.providerVersion ? [profile.conformance.providerVersion] : []),
+      ...(profile.conformance.providerBuild ? [profile.conformance.providerBuild] : []),
+      profile.documentationUrl,
       ...profile.remediation,
     ];
     if (publicText.some(containsUnredactedProviderRuntimeSecret)) {

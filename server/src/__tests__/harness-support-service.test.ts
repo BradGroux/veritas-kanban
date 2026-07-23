@@ -312,4 +312,34 @@ describe('evaluateHarnessSupportStatus', () => {
     expect(status.diagnosticCommands).toContain('codex login status --token=[REDACTED]');
     expect(JSON.stringify(status)).not.toContain('diagnostic-secret');
   });
+
+  it('degrades unsafe launch configuration before evaluating runtime readiness', () => {
+    const candidate = agent({
+      type: 'custom-secure-runner',
+      name: 'Secure Runner',
+      command: 'codex',
+      args: ['--api-key', 'status-sensitive-value'],
+      provider: 'codex-cli',
+    });
+
+    const status = evaluateHarnessSupportStatus(candidate, {
+      type: candidate.type,
+      name: candidate.name,
+      enabled: true,
+      configured: true,
+      command: candidate.command,
+      executableFound: true,
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-07-23T16:00:00.000Z',
+    });
+
+    expect(status).toMatchObject({
+      profileId: 'openai-codex-cli',
+      supportTier: 'degraded',
+      failureClass: 'unsafe-configuration',
+      reason: expect.stringMatching(/credential material/i),
+    });
+    expect(JSON.stringify(status)).not.toContain('status-sensitive-value');
+  });
 });

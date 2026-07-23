@@ -80,6 +80,7 @@ export type HarnessSupportFailureClass =
   | 'unauthenticated'
   | 'incompatible-build'
   | 'adapter-unavailable'
+  | 'unsafe-configuration'
   | 'probe-failed'
   | 'launch-failed'
   | 'run-failed'

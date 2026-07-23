@@ -414,8 +414,8 @@ export class ClawdbotAgentService {
             model: profileLaunch.model ?? agentConfig.model,
           }
         : agentConfig;
-    const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const provider = this.resolveAgentProvider(profileAgentConfig, agent);
+    const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const adapter = this.resolveProviderAdapter(provider);
     const budgetService = getAgentBudgetService();
     const budgetPolicy = budgetService.resolve({
@@ -1194,8 +1194,8 @@ export class ClawdbotAgentService {
     agent: AgentType = agentConfig.type,
     surface: ProviderRuntimeSurface = 'task'
   ): Promise<ProviderRuntimeManifest> {
-    const health = await this.assertAgentAvailable(agent, agentConfig);
     const provider = this.resolveAgentProvider(agentConfig, agent);
+    const health = await this.assertAgentAvailable(agent, agentConfig);
     return this.resolveProviderAdapter(provider, surface).probe({ agentConfig, health });
   }
 
@@ -1281,6 +1281,19 @@ export class ClawdbotAgentService {
     // dispatch boundary. A caller-provided supportProfile may carry future
     // certification evidence, but it cannot authorize a different adapter.
     const profile = agentConfig ? normalizeHarnessSupportProfile(agentConfig) : undefined;
+    if (profile?.supportTier === 'degraded') {
+      throw new ConflictError(
+        `Harness support profile "${profile.id}" has an unsafe launch configuration`,
+        {
+          agent,
+          profileId: profile.id,
+          adapterId: profile.adapterId,
+          provider,
+          reason: 'Credential material is not allowed in harness launch commands or arguments',
+          remediation: profile.remediation,
+        }
+      );
+    }
     if (profile && profile.adapterId !== provider) {
       throw new ConflictError(
         `Harness support profile "${profile.id}" cannot dispatch through "${provider}"`,

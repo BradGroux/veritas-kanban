@@ -5,6 +5,10 @@ import {
   type HarnessSupportProfile,
   type HarnessTransport,
 } from '@veritas-kanban/shared';
+import {
+  containsUnredactedProviderRuntimeSecret,
+  sanitizeProviderRuntimeDiagnostic,
+} from '../utils/provider-runtime-manifest-sanitize.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
 const INVALIDATION_KEYS: HarnessSupportProfile['compatibility']['invalidateOn'] = [
@@ -48,6 +52,16 @@ interface ProfileDefinition {
   credentialAllowlist?: string[];
   documentationUrl: string;
   remediation: string[];
+}
+
+interface RedactedLaunchArgs {
+  args: string[];
+  containsCredentialMaterial: boolean;
+}
+
+interface RedactedCommand {
+  command: string;
+  containsCredentialMaterial: boolean;
 }
 
 const DEFINITIONS: Record<string, ProfileDefinition> = {
@@ -157,8 +171,12 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     );
 
   const executableProfile = Boolean(definition.adapterId);
+  const redactedCommand = redactCommand(agent.command);
+  const redactedLaunchArgs = redactLaunchArgs(agent.args);
+  const unsafeLaunchConfiguration =
+    redactedCommand.containsCredentialMaterial || redactedLaunchArgs.containsCredentialMaterial;
   const executable = {
-    command: agent.command,
+    command: redactedCommand.command,
     versionArgs: ['--version'],
   };
   const authentication = {
@@ -166,7 +184,7 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     nonMutating: true as const,
   };
   const launch = {
-    args: [...agent.args],
+    args: redactedLaunchArgs.args,
     workingDirectory: 'task-worktree' as const,
     worktree: 'required' as const,
     environmentAllowlist: [
@@ -188,6 +206,10 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     platforms: ALL_PLATFORMS,
     launch,
   });
+  const unsafeConfigurationReason =
+    'Credential material is not allowed in harness launch commands or arguments.';
+  const unsafeConfigurationRemediation =
+    'Remove credential values from launch arguments and use an allowlisted environment key or run-scoped credential reference.';
 
   return {
     schemaVersion: HARNESS_SUPPORT_PROFILE_SCHEMA_VERSION,
@@ -195,10 +217,16 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     displayName: definition.displayName,
     ...(definition.adapterId ? { adapterId: definition.adapterId } : {}),
     transport: definition.transport,
-    supportTier: executableProfile ? 'configured' : 'unsupported',
-    supportReason: executableProfile
-      ? 'An explicit executable adapter is registered; live readiness requires a runtime probe.'
-      : (definition.remediation[0] ?? 'No executable adapter is registered.'),
+    supportTier: !executableProfile
+      ? 'unsupported'
+      : unsafeLaunchConfiguration
+        ? 'degraded'
+        : 'configured',
+    supportReason: !executableProfile
+      ? (definition.remediation[0] ?? 'No executable adapter is registered.')
+      : unsafeLaunchConfiguration
+        ? unsafeConfigurationReason
+        : 'An explicit executable adapter is registered; live readiness requires a runtime probe.',
     executable,
     authentication,
     compatibility: {
@@ -215,8 +243,63 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
       status: 'not-run',
     },
     documentationUrl: definition.documentationUrl,
-    remediation: [...definition.remediation],
+    remediation: [
+      ...(unsafeLaunchConfiguration ? [unsafeConfigurationRemediation] : []),
+      ...definition.remediation,
+    ],
   };
+}
+
+function redactCommand(command: string): RedactedCommand {
+  const containsDiagnosticSecret = containsUnredactedProviderRuntimeSecret(command);
+  const sanitized = containsDiagnosticSecret ? sanitizeProviderRuntimeDiagnostic(command) : command;
+  const redacted = redactLaunchArgs(sanitized.trim().split(/\s+/));
+  return containsDiagnosticSecret || redacted.containsCredentialMaterial
+    ? {
+        command: redacted.args.join(' '),
+        containsCredentialMaterial: true,
+      }
+    : {
+        command,
+        containsCredentialMaterial: false,
+      };
+}
+
+function redactLaunchArgs(args: string[]): RedactedLaunchArgs {
+  const redacted: string[] = [];
+  let redactNext = false;
+  let containsCredentialMaterial = false;
+
+  for (const arg of args) {
+    if (redactNext) {
+      redacted.push('[REDACTED]');
+      redactNext = false;
+      containsCredentialMaterial = true;
+      continue;
+    }
+
+    const normalized = arg.trim();
+    const credentialArgument = normalized.match(
+      /^(--?(?:api[-_]?key|access[-_]?token|auth[-_]?token|token|secret|password|authorization|credentials?))(?:=(.*))?$/i
+    );
+    if (credentialArgument) {
+      const [, flag, inlineValue] = credentialArgument;
+      redacted.push(inlineValue === undefined ? flag : `${flag}=[REDACTED]`);
+      redactNext = inlineValue === undefined;
+      containsCredentialMaterial = true;
+      continue;
+    }
+
+    if (containsUnredactedProviderRuntimeSecret(arg)) {
+      redacted.push(sanitizeProviderRuntimeDiagnostic(arg));
+      containsCredentialMaterial = true;
+      continue;
+    }
+
+    redacted.push(arg);
+  }
+
+  return { args: redacted, containsCredentialMaterial };
 }
 
 function digestConfiguration(value: unknown): string {
