@@ -71,6 +71,7 @@ export function evaluateHarnessSupportStatus(
   probeError?: string
 ): HarnessSupportStatus {
   const profile = agent.supportProfile ?? normalizeHarnessSupportProfile(agent);
+  const providerVersion = manifest?.providerVersion ?? health.providerVersion;
   const base = {
     agentType: agent.type,
     enabled: agent.enabled,
@@ -80,7 +81,7 @@ export function evaluateHarnessSupportStatus(
     checkedAt: health.checkedAt,
     executableFound: health.executableFound,
     authenticated: health.authenticated,
-    ...(health.providerVersion ? { providerVersion: sanitized(health.providerVersion) } : {}),
+    ...(providerVersion ? { providerVersion: sanitized(providerVersion) } : {}),
     ...(manifest?.providerBuild ? { providerBuild: sanitized(manifest.providerBuild) } : {}),
     ...(manifest?.digest ? { manifestDigest: manifest.digest } : {}),
     diagnosticCommands: buildDiagnosticCommands(profile),

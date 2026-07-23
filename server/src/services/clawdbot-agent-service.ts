@@ -89,6 +89,7 @@ import {
 } from './provider-runtime-control-service.js';
 import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-service.js';
 import { evaluateHarnessSupportStatus } from './harness-support-service.js';
+import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -1276,7 +1277,10 @@ export class ClawdbotAgentService {
       });
     }
 
-    const profile = agentConfig?.supportProfile;
+    // Adapter identity is derived from system-owned profile definitions at the
+    // dispatch boundary. A caller-provided supportProfile may carry future
+    // certification evidence, but it cannot authorize a different adapter.
+    const profile = agentConfig ? normalizeHarnessSupportProfile(agentConfig) : undefined;
     if (profile && profile.adapterId !== provider) {
       throw new ConflictError(
         `Harness support profile "${profile.id}" cannot dispatch through "${provider}"`,

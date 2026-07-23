@@ -21,7 +21,6 @@ import {
   TeamRosterRoutePreviewBodySchema,
   TeamRosterValidateBodySchema,
 } from '../schemas/team-roster-schemas.js';
-import { HarnessSupportProfileSchema } from '../schemas/harness-support-profile-schemas.js';
 import { HarnessSupportService } from '../services/harness-support-service.js';
 
 const router: RouterType = Router();
@@ -63,7 +62,6 @@ const agentSchema = z.object({
   model: z.string().optional(),
   sandboxPresetId: z.string().min(1).max(80).optional(),
   budget: AgentBudgetPolicySchema.optional(),
-  supportProfile: HarnessSupportProfileSchema.optional(),
 });
 
 const setDefaultAgentSchema = z.object({

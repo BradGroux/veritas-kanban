@@ -128,13 +128,7 @@ export function createDefaultConfig(): AppConfig {
 export function normalizeAppConfig(config: AppConfig): AppConfig {
   const normalized = cloneJson(config);
   normalized.features = deepMergeDefaults(normalized.features || {}, DEFAULT_FEATURE_SETTINGS);
-  normalized.agents = mergeDefaultAgents(normalized.agents || []).map((agent) => {
-    const migrated = migrateLegacyAgentProvider(agent);
-    return {
-      ...migrated,
-      supportProfile: normalizeHarnessSupportProfile(migrated),
-    };
-  });
+  normalized.agents = mergeDefaultAgents(normalized.agents || []).map(normalizeAgentConfig);
   normalized.agentProfiles = normalized.agentProfiles || [];
   return normalized;
 }
@@ -155,6 +149,14 @@ function migrateLegacyAgentProvider(agent: AgentConfig): AgentConfig {
     return { ...agent, provider: 'hermes-cli' };
   }
   return agent;
+}
+
+function normalizeAgentConfig(agent: AgentConfig): AgentConfig {
+  const migrated = migrateLegacyAgentProvider(agent);
+  return {
+    ...migrated,
+    supportProfile: normalizeHarnessSupportProfile(migrated),
+  };
 }
 
 function cloneJson<T>(value: T): T {
@@ -526,7 +528,10 @@ export class ConfigService {
 
   async updateAgents(agents: AgentConfig[]): Promise<AppConfig> {
     const config = await this.getConfig();
-    config.agents = agents;
+    // Harness support profiles are system-owned evidence. Always rebuild them
+    // after parsing API input so clients cannot spoof adapter or certification
+    // state in the file-backed cache between writes and the next reload.
+    config.agents = agents.map(normalizeAgentConfig);
     await this.saveConfig(config);
     return config;
   }

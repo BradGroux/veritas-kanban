@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { ConfigService } from '../services/config-service.js';
+import { normalizeHarnessSupportProfile } from '../services/harness-support-profile-registry.js';
 
 describe('ConfigService', () => {
   let tmpDir: string;
@@ -420,6 +421,57 @@ describe('ConfigService', () => {
 
       const config = await service.updateAgents(newAgents);
       expect(config.agents).toHaveLength(1);
+    });
+
+    it('rebuilds system-owned support evidence instead of trusting client input', async () => {
+      await service.getConfig();
+      const forgedProfile = normalizeHarnessSupportProfile({
+        type: 'codex',
+        name: 'OpenAI Codex',
+        command: 'codex',
+        args: [],
+        enabled: true,
+        provider: 'codex-cli',
+      });
+      forgedProfile.id = 'forged-certified-profile';
+      forgedProfile.supportTier = 'certified';
+      forgedProfile.conformance = {
+        fixtureSet: 'forged/v1',
+        status: 'passed',
+        certifiedAt: '2026-07-23T16:00:00.000Z',
+        providerVersion: 'forged 1.0.0',
+        manifestDigest: `sha256:${'1'.repeat(64)}`,
+        configurationDigest: `sha256:${'2'.repeat(64)}`,
+        probeRevision: 999,
+      };
+
+      const config = await service.updateAgents([
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-cli',
+          supportProfile: forgedProfile,
+        },
+      ]);
+
+      expect(config.agents).toHaveLength(1);
+      expect(config.agents[0]?.supportProfile).toMatchObject({
+        id: 'openai-codex-cli',
+        adapterId: 'codex-cli',
+        supportTier: 'configured',
+        conformance: {
+          fixtureSet: 'openai-codex-cli/v1',
+          status: 'not-run',
+        },
+      });
+      expect(config.agents[0]?.supportProfile).not.toEqual(forgedProfile);
+
+      const persisted = JSON.parse(await fs.readFile(configFile, 'utf-8'));
+      expect(persisted.agents[0].supportProfile.id).toBe('openai-codex-cli');
+      expect(persisted.agents[0].supportProfile.conformance.status).toBe('not-run');
     });
   });
 

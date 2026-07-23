@@ -452,6 +452,43 @@ describe('ClawdbotAgentService Codex providers', () => {
     }
   );
 
+  it('redacts provider identity secrets before emitting harness telemetry', async () => {
+    const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
+    mockSpawn.mockReturnValue(createFakeChild(fixture));
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: agent.enabled,
+      configured: true,
+      command: agent.command,
+      executableFound: true,
+      executablePath: `/usr/local/bin/${agent.command}`,
+      providerVersion: 'codex-cli 0.144.0 token=telemetry-secret',
+      providerVersionSource: 'codex --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-06-03T00:00:00.000Z',
+    }));
+    const service = testableService(tmpDir);
+
+    await service.startAgent(task.id, 'codex');
+
+    await waitFor(() => {
+      expect(mockTelemetryEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'run.started',
+          harnessSupport: expect.objectContaining({
+            providerVersion: 'codex-cli 0.144.0 token=[REDACTED]',
+          }),
+        })
+      );
+    });
+    expect(JSON.stringify(mockTelemetryEmit.mock.calls)).not.toContain('telemetry-secret');
+    await waitFor(async () => {
+      expect(await service.getAgentStatus(task.id)).toBeNull();
+    });
+  });
+
   it('persists a run-level commit policy override in the immutable task envelope', async () => {
     const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
     mockSpawn.mockReturnValue(createFakeChild(fixture));

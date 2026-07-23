@@ -13,6 +13,7 @@ interface ProviderRuntimeManifestFixtureOptions {
   provider?: string;
   adapter?: string;
   providerVersion?: string;
+  providerBuild?: string;
   models?: string[];
   probeState?: ProviderRuntimeProbeState;
   capabilityStates?: Partial<Record<ProviderRuntimeCapabilityId, ProviderRuntimeCapabilityState>>;
@@ -37,6 +38,7 @@ export function providerRuntimeManifestFixture(
     adapter: options.adapter ?? provider,
     protocolVersion: 'fixture-runtime/v1',
     providerVersion: options.providerVersion ?? `${provider} 1.0.0`,
+    ...(options.providerBuild ? { providerBuild: options.providerBuild } : {}),
     models: options.models ?? ['gpt-5'],
     capabilities: KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS.map((id) => {
       const state =

@@ -96,6 +96,37 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
     });
   });
 
+  it('does not trust a caller-supplied profile to authorize an unsupported built-in adapter', async () => {
+    const openClawProfile = normalizeHarnessSupportProfile({
+      type: 'custom-openclaw',
+      name: 'Custom OpenClaw',
+      command: 'openclaw',
+      args: [],
+      enabled: true,
+      provider: 'openclaw',
+    });
+
+    await expect(
+      new ClawdbotAgentService(health).probeProviderRuntime({
+        type: 'claude-code',
+        name: 'Claude Code',
+        command: 'claude',
+        args: [],
+        enabled: true,
+        provider: 'openclaw',
+        supportProfile: openClawProfile,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        profileId: 'claude-code',
+        provider: 'openclaw',
+        reason: 'Harness support profile has no executable adapter',
+      }),
+    });
+  });
+
   it('rejects a new custom provider-less profile even when its command is codex', async () => {
     await expect(
       new ClawdbotAgentService(health).probeProviderRuntime({

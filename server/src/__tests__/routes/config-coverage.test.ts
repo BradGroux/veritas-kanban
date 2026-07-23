@@ -489,6 +489,38 @@ runtime:
       expect(mockConfigService.updateAgents).toHaveBeenCalledWith(agents);
     });
 
+    it('strips client-supplied system support evidence before updating agents', async () => {
+      const agents = [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          supportProfile: {
+            id: 'forged-certified-profile',
+            supportTier: 'certified',
+          },
+        },
+      ];
+      mockConfigService.updateAgents.mockResolvedValue({ agents: [] });
+
+      const res = await request(app).put('/api/config/agents').send(agents);
+
+      expect(res.status).toBe(200);
+      expect(mockConfigService.updateAgents).toHaveBeenCalledWith([
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+        },
+      ]);
+    });
+
     it('should reject invalid agent data', async () => {
       const res = await request(app)
         .put('/api/config/agents')

@@ -114,6 +114,7 @@ describe('evaluateHarnessSupportStatus', () => {
     const manifest = providerRuntimeManifestFixture({
       provider: 'codex-cli',
       providerVersion: 'codex-cli 1.0.0',
+      providerBuild: 'build-a',
     });
     const candidate = agent({
       type: 'codex',
@@ -131,6 +132,7 @@ describe('evaluateHarnessSupportStatus', () => {
         status: 'passed',
         certifiedAt: '2026-07-23T16:00:00.000Z',
         providerVersion: manifest.providerVersion,
+        providerBuild: manifest.providerBuild,
         manifestDigest: manifest.digest,
         configurationDigest: candidate.supportProfile.compatibility.configurationDigest,
         probeRevision: manifest.probeRevision,
@@ -169,9 +171,25 @@ describe('evaluateHarnessSupportStatus', () => {
     expect(
       evaluateHarnessSupportStatus(candidate, health, {
         ...manifest,
+        providerBuild: 'build-b',
+      })
+    ).toMatchObject({
+      supportTier: 'degraded',
+      failureClass: 'certification-stale',
+    });
+
+    expect(
+      evaluateHarnessSupportStatus(candidate, health, {
+        ...manifest,
         probeRevision: manifest.probeRevision + 1,
       })
     ).toMatchObject({
+      supportTier: 'degraded',
+      failureClass: 'certification-stale',
+    });
+
+    candidate.supportProfile.compatibility.configurationDigest = `sha256:${'f'.repeat(64)}`;
+    expect(evaluateHarnessSupportStatus(candidate, health, manifest)).toMatchObject({
       supportTier: 'degraded',
       failureClass: 'certification-stale',
     });
@@ -213,6 +231,40 @@ describe('evaluateHarnessSupportStatus', () => {
     ).toMatchObject({
       supportTier: 'degraded',
       failureClass: 'incompatible-build',
+    });
+  });
+
+  it('uses the probed runtime manifest as the canonical provider version', () => {
+    const manifest = providerRuntimeManifestFixture({
+      provider: 'codex-cli',
+      providerVersion: 'codex-cli 2.0.0',
+    });
+    const candidate = agent({
+      type: 'codex',
+      name: 'OpenAI Codex',
+      command: 'codex',
+      provider: 'codex-cli',
+    });
+
+    expect(
+      evaluateHarnessSupportStatus(
+        candidate,
+        {
+          type: candidate.type,
+          name: candidate.name,
+          enabled: true,
+          configured: true,
+          command: candidate.command,
+          executableFound: true,
+          providerVersion: 'stale health version',
+          authenticated: true,
+          healthy: true,
+          checkedAt: '2026-07-23T16:00:00.000Z',
+        },
+        manifest
+      )
+    ).toMatchObject({
+      providerVersion: 'codex-cli 2.0.0',
     });
   });
 
