@@ -5,6 +5,12 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Task, TaskAttempt } from '@veritas-kanban/shared';
+import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
+import {
+  TaskEnvelopeService,
+  type CompletionEvidenceSource,
+} from '../../services/task-envelope-service.js';
+import { ProviderCompletionService } from '../../services/provider-completion-service.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────
 
@@ -24,11 +30,16 @@ vi.mock('@veritas-kanban/shared', async (importOriginal) => {
 });
 
 const mockListTasks = vi.fn<[], Promise<Task[]>>();
-const mockUpdateTask = vi.fn<[string, Partial<Task>], Promise<Task>>();
+const mockGetTask = vi.fn<[string], Promise<Task | null>>();
+const mockUpdateTask = vi.fn<
+  [string, Partial<Task> & { expectedRevision?: number }],
+  Promise<Task>
+>();
 
 vi.mock('../../services/task-service.js', () => ({
   TaskService: class MockTaskService {
     listTasks = mockListTasks;
+    getTask = mockGetTask;
     updateTask = mockUpdateTask;
   },
 }));
@@ -203,5 +214,172 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     expect(update.attempt?.agent).toBe(agent);
     expect(update.attempt?.model).toBe(model);
     expect(update.attempt?.status).toBe('failed');
+  });
+
+  it('persists an interrupted completion result for a current provider attempt after restart', async () => {
+    const completedAt = '2026-07-23T18:00:00.000Z';
+    const evidence: CompletionEvidenceSource = {
+      captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
+        capturedAt,
+        headSha: 'a'.repeat(40),
+        dirty: false,
+        files: [],
+      }),
+      captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+        capturedAt,
+        headSha: taskEnvelope.workspace.baseline.headSha,
+        changedFiles: [],
+        commits: [],
+        artifacts: [],
+        verification: [],
+        sideEffects: [],
+      }),
+    };
+    const envelopes = new TaskEnvelopeService(evidence);
+    const providerRuntimeManifest = providerRuntimeManifestFixture({
+      provider: 'codex-cli',
+      adapter: 'codex-cli',
+    });
+    const runningTask = {
+      ...makeTask('task-current-running', 'running'),
+      revision: 4,
+      verificationSteps: [],
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/provider-completion',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-provider-completion',
+      },
+    } as Task;
+    const runningAttempt = runningTask.attempt;
+    const worktreePath = runningTask.git?.worktreePath;
+    if (!runningAttempt || !worktreePath) throw new Error('Expected a runnable task fixture');
+    const taskEnvelope = await envelopes.build({
+      task: runningTask,
+      attemptId: runningAttempt.id,
+      createdAt: '2026-07-23T17:00:00.000Z',
+      worktreePath,
+      providerRuntimeManifest,
+      commitPolicy: 'allowed',
+    });
+    runningTask.attempt = {
+      ...runningAttempt,
+      provider: 'codex-cli',
+      providerRuntimeManifest,
+      taskEnvelope,
+    };
+    runningTask.attempts = [runningTask.attempt];
+    mockListTasks.mockResolvedValue([runningTask]);
+    let persistedTask = runningTask;
+    let raced = false;
+    mockGetTask.mockImplementation(async () => persistedTask);
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (!raced) {
+        raced = true;
+        persistedTask = { ...persistedTask, revision: 5, priority: 'high' };
+        throw Object.assign(new Error('concurrent task mutation'), { statusCode: 409 });
+      }
+      persistedTask = {
+        ...persistedTask,
+        ...update,
+        revision: (persistedTask.revision ?? 1) + 1,
+      } as Task;
+      return persistedTask;
+    });
+    service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      envelopes,
+      undefined,
+      new ProviderCompletionService(evidence, () => completedAt)
+    );
+
+    await service.reconcileRunningAttempts();
+
+    expect(mockUpdateTask).toHaveBeenLastCalledWith(
+      runningTask.id,
+      expect.objectContaining({
+        expectedRevision: 5,
+        status: 'in-progress',
+        attempt: expect.objectContaining({
+          id: runningTask.attempt.id,
+          status: 'failed',
+          completionResult: expect.objectContaining({
+            status: 'interrupted',
+            terminalSource: 'operator-interruption',
+            completedAt,
+            taskEnvelopeDigest: taskEnvelope.digest,
+          }),
+        }),
+      })
+    );
+    expect(mockUpdateTask.mock.calls.map(([, update]) => update.expectedRevision)).toEqual([4, 5]);
+    expect(persistedTask.priority).toBe('high');
+    const completionResult = mockUpdateTask.mock.calls[1]?.[1].attempt?.completionResult;
+    expect(completionResult?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(completionResult?.idempotencyKey).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('defers an envelope-backed OpenClaw attempt to its authoritative callback after restart', async () => {
+    const evidence: CompletionEvidenceSource = {
+      captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
+        capturedAt,
+        headSha: 'a'.repeat(40),
+        dirty: false,
+        files: [],
+      }),
+      captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+        capturedAt,
+        headSha: taskEnvelope.workspace.baseline.headSha,
+        changedFiles: [],
+        commits: [],
+        artifacts: [],
+        verification: [],
+        sideEffects: [],
+      }),
+    };
+    const envelopes = new TaskEnvelopeService(evidence);
+    const providerRuntimeManifest = providerRuntimeManifestFixture({
+      provider: 'openclaw',
+      adapter: 'openclaw',
+    });
+    const runningTask = {
+      ...makeTask('task-openclaw-callback', 'running'),
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/provider-completion',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-provider-completion',
+      },
+      verificationSteps: [],
+    } as Task;
+    const runningAttempt = runningTask.attempt;
+    if (!runningAttempt) throw new Error('Expected a running attempt fixture');
+    const taskEnvelope = await envelopes.build({
+      task: runningTask,
+      attemptId: runningAttempt.id,
+      createdAt: '2026-07-23T17:00:00.000Z',
+      worktreePath: runningTask.git?.worktreePath ?? '/tmp/veritas-provider-completion',
+      providerRuntimeManifest,
+      commitPolicy: 'allowed',
+    });
+    runningTask.attempt = {
+      ...runningAttempt,
+      provider: 'openclaw',
+      providerRuntimeManifest,
+      taskEnvelope,
+    };
+    mockListTasks.mockResolvedValue([runningTask]);
+    service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      envelopes,
+      undefined,
+      new ProviderCompletionService(evidence)
+    );
+
+    await service.reconcileRunningAttempts();
+
+    expect(mockUpdateTask).not.toHaveBeenCalled();
   });
 });

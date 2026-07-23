@@ -317,8 +317,53 @@ describe('agent local capability enforcement', () => {
     expect(mockCompleteAgent).toHaveBeenCalledWith(
       'task_1',
       { success: true, summary: 'Done', error: undefined },
-      { attemptId: 'attempt_1', providerRuntimeManifestDigest: digest }
+      {
+        attemptId: 'attempt_1',
+        providerRuntimeManifestDigest: digest,
+        terminalSource: 'callback',
+      }
     );
+
+    const structured = await request(app)
+      .post('/api/agents/task_1/complete')
+      .send({
+        attemptId: 'attempt_1',
+        providerRuntimeManifestDigest: digest,
+        status: 'blocked',
+        summary: 'Waiting on an operator.',
+        blockers: [
+          {
+            code: 'operator-input',
+            summary: 'Operator input required',
+            detail: 'Choose the release channel.',
+            retryable: true,
+          },
+        ],
+      });
+    expect(structured.status).toBe(200);
+    expect(mockCompleteAgent).toHaveBeenLastCalledWith(
+      'task_1',
+      expect.objectContaining({
+        status: 'blocked',
+        summary: 'Waiting on an operator.',
+        blockers: [expect.objectContaining({ code: 'operator-input' })],
+      }),
+      {
+        attemptId: 'attempt_1',
+        providerRuntimeManifestDigest: digest,
+        terminalSource: 'callback',
+      }
+    );
+
+    const oversized = await request(app)
+      .post('/api/agents/task_1/complete')
+      .send({
+        attemptId: 'attempt_1',
+        providerRuntimeManifestDigest: digest,
+        success: false,
+        error: 'x'.repeat(20_001),
+      });
+    expect(oversized.status).toBe(400);
   });
 
   it('binds token budget mutation to the resolved active attempt', async () => {

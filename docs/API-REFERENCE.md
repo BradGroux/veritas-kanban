@@ -2059,9 +2059,34 @@ OpenClaw completion callbacks must identify the exact run that produced them:
 ```
 
 `POST /api/agents/:taskId/complete` rejects OpenClaw callbacks whose attempt or
-manifest digest does not match the active run. Codex CLI, Codex SDK, and Hermes
-do not call this endpoint; Veritas captures their terminal process or stream
-output and owns completion normalization. Token reports likewise bind
+manifest digest does not match the active run. The bounded legacy body above
+remains supported. A callback can instead send an explicit `status`
+(`success`, `blocked`, `failed`, `interrupted`, or `partial`) plus bounded
+`blockers`, provider `evidence`, `artifacts`, `verification`, and
+`continuation`. The route fixes the terminal source to `callback`; clients
+cannot spoof process, stream, or operator ownership. Only OpenClaw attempts
+accept callback or remote-session completion; process and SDK providers return
+`409 Conflict` for that transport.
+
+Every terminal path persists one digest-bound `completion-result/v1` on the
+current attempt and attempt history. It includes `digest`, `idempotencyKey`,
+`completedAt`, `terminalSource`, envelope/runtime bindings, normalized status,
+bounded redacted claims, harness evidence, attributable files and artifacts,
+verification, side effects, and continuation. Exact duplicate callbacks
+return success without mutating the task again, including after restart.
+Conflicting terminal claims return `409 Conflict`.
+Startup reconciliation also persists `interrupted` completion results for
+harness-owned process or stream attempts that were still running when the
+server restarted. OpenClaw attempts remain eligible for their authoritative
+callback after restart.
+
+Codex CLI, Codex SDK, and Hermes do not call this endpoint; Veritas captures
+their terminal process or stream output and owns completion normalization.
+Claimed success becomes `partial` when required harness evidence is absent,
+commit policy is violated, a required output is missing, or an unauthorized
+side effect is observed. `success` maps the task to `done`, `blocked` maps it
+to `blocked`, and `failed`, `interrupted`, or `partial` leaves it in
+`in-progress` recovery. Token reports likewise bind
 telemetry and budget mutation to their required `attemptId`, so a late event
 from a prior attempt cannot charge or stop a replacement run.
 

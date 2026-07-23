@@ -76,7 +76,12 @@ import type {
   ProviderRuntimeControlSet,
   ProviderRuntimeManifest,
   TaskCommitPolicy,
+  TaskCompletionBlocker,
+  TaskCompletionStatus,
+  TaskCompletionVerification,
   TaskEnvelope,
+  TaskTerminalSource,
+  CompletionResult,
   HarnessSupportStatus,
   HarnessSupportTelemetry,
   RunLaunchManifest,
@@ -110,6 +115,17 @@ import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-se
 import { evaluateHarnessSupportStatus } from './harness-support-service.js';
 import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
 import { RunLaunchManifestService, diffRunLaunchManifests } from './run-launch-manifest-service.js';
+import {
+  parseCompletionResultForEnvelope,
+  parseTaskEnvelope,
+} from '../schemas/task-envelope-schemas.js';
+import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
+import {
+  ProviderCompletionService,
+  type ProviderCompletionArtifactClaim,
+  type ProviderCompletionEvidenceClaim,
+  type ProviderTerminalClaim,
+} from './provider-completion-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -199,6 +215,7 @@ export interface AgentMessageOptions {
 export interface AgentCompletionProvenance {
   attemptId: string;
   providerRuntimeManifestDigest: string;
+  terminalSource?: TaskTerminalSource;
 }
 
 export interface AgentMessageDelivery {
@@ -248,6 +265,7 @@ interface PendingAgent {
    * provider-stop, abort-trace, or budget-enforcement side effects.
    */
   preparedFinalizationResult?: AgentTerminalResult;
+  terminalClaimIdempotencyKey?: string;
   completionTiming?: {
     endedAt: string;
     durationMs: number;
@@ -257,19 +275,47 @@ interface PendingAgent {
     status: AttemptStatus;
     taskBeforeCompletion?: Task;
     completedAttempt: TaskAttempt;
+    completionResult: CompletionResult;
   };
 }
 
 interface AgentTerminalResult {
-  success: boolean;
+  success?: boolean;
+  status?: TaskCompletionStatus;
+  terminalSource?: TaskTerminalSource;
   summary?: string;
   error?: string;
+  blockers?: TaskCompletionBlocker[];
+  evidence?: ProviderCompletionEvidenceClaim[];
+  artifacts?: ProviderCompletionArtifactClaim[];
+  verification?: TaskCompletionVerification[];
+  continuation?: CompletionResult['continuation'];
 }
 
 const pendingAgents = new Map<string, PendingAgent>();
 const startingAgents = new Set<string>();
 const finalizingAgents = new Map<PendingAgent, Promise<void>>();
 const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
+const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
+
+class CompletionPersistenceError extends Error {
+  constructor(readonly persistenceCause: unknown) {
+    super(
+      persistenceCause instanceof Error
+        ? persistenceCause.message
+        : 'Provider completion could not be persisted'
+    );
+    this.name = 'CompletionPersistenceError';
+  }
+}
+
+class CompletionOwnershipError extends ConflictError {}
+
+function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
+  return typeof task.revision === 'number' && Number.isInteger(task.revision) && task.revision >= 0
+    ? task.revision
+    : 1;
+}
 
 export class ClawdbotAgentService {
   private configService: ConfigService;
@@ -278,6 +324,7 @@ export class ClawdbotAgentService {
   private providerRuntimeManifests: ProviderRuntimeManifestService;
   private taskEnvelopes: TaskEnvelopeService;
   private runLaunchManifests: RunLaunchManifestService;
+  private providerCompletions: ProviderCompletionService;
   private workspaceFiles: WorkspaceFileRepository;
   private logsDir: string;
 
@@ -285,7 +332,8 @@ export class ClawdbotAgentService {
     agentHealth?: AgentHealthChecker,
     providerRuntimeManifests = new ProviderRuntimeManifestService(),
     taskEnvelopes = new TaskEnvelopeService(),
-    workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository()
+    workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository(),
+    providerCompletions = new ProviderCompletionService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -293,6 +341,7 @@ export class ClawdbotAgentService {
     this.providerRuntimeManifests = providerRuntimeManifests;
     this.taskEnvelopes = taskEnvelopes;
     this.runLaunchManifests = new RunLaunchManifestService();
+    this.providerCompletions = providerCompletions;
     this.workspaceFiles = workspaceFiles;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
@@ -307,8 +356,9 @@ export class ClawdbotAgentService {
    *
    * After an unexpected restart the in-memory `pendingAgents` map is empty,
    * but task files can still contain attempts with status `'running'`.
-   * This method scans all tasks and marks those orphaned attempts as `'failed'`
-   * so the UI and operators have a reliable, actionable state (issue #781).
+   * Current task-envelope attempts receive a digest-bound interrupted completion
+   * result. Legacy attempts without an envelope retain the older failed/todo
+   * migration behavior so the UI and operators have an actionable state.
    *
    * Safe to call multiple times; only tasks whose current attempt is `'running'`
    * and whose taskId is NOT in `pendingAgents` are touched.
@@ -325,7 +375,6 @@ export class ClawdbotAgentService {
       return;
     }
 
-    const now = new Date().toISOString();
     let reconciledCount = 0;
 
     for (const task of tasks) {
@@ -334,6 +383,39 @@ export class ClawdbotAgentService {
       if (pendingAgents.has(task.id)) continue;
 
       try {
+        if (task.attempt.taskEnvelope) {
+          this.assertPersistedAttemptCompletionBinding(task.id, task.attempt);
+          if (task.attempt.provider === 'openclaw') {
+            log.info(
+              { taskId: task.id, attemptId: task.attempt.id },
+              '[ClawdbotAgent] Deferred OpenClaw restart reconciliation to its callback terminal path'
+            );
+            continue;
+          }
+          const claim: ProviderTerminalClaim = {
+            terminalSource: 'operator-interruption',
+            status: 'interrupted',
+            summary: 'Server restarted before the provider terminal result could be persisted.',
+          };
+          await this.persistRestartedProviderCompletion(
+            task,
+            task.attempt,
+            claim,
+            this.providerCompletions.idempotencyKey({
+              taskEnvelope: task.attempt.taskEnvelope,
+              claim,
+            }),
+            { preserveNonActiveTaskStatus: true }
+          );
+          log.info(
+            { taskId: task.id, attemptId: task.attempt.id },
+            '[ClawdbotAgent] Reconciled orphaned running attempt with an interrupted completion result'
+          );
+          reconciledCount++;
+          continue;
+        }
+
+        const now = new Date().toISOString();
         const failedAttempt: TaskAttempt = {
           ...task.attempt,
           status: 'failed',
@@ -920,11 +1002,12 @@ export class ClawdbotAgentService {
         sandboxPolicy: sandboxPolicy.result,
         runLaunchManifest,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const startError = error instanceof Error ? error : new Error(String(error));
       pendingAgents.delete(taskId);
       this.recordTraceStep(attemptId, 'error', {
         eventType: 'run.start_failed',
-        error: this.redactTraceText(error.message || `Failed to start ${adapter.label}`),
+        error: this.redactTraceText(startError.message || `Failed to start ${adapter.label}`),
         provider,
         agent,
         model: agentConfig?.model,
@@ -949,11 +1032,11 @@ export class ClawdbotAgentService {
         attemptId,
         agent,
         project: task.project,
-        error: error.message || `Failed to start ${adapter.label}`,
-        stackTrace: error.stack,
+        error: startError.message || `Failed to start ${adapter.label}`,
+        stackTrace: startError.stack,
         harnessSupport: this.harnessTelemetry(harnessSupport, 'launch-failed'),
       });
-      throw new Error(`Failed to start agent via ${adapter.label}: ${error.message}`, {
+      throw new Error(`Failed to start agent via ${adapter.label}: ${startError.message}`, {
         cause: error,
       });
     }
@@ -1017,34 +1100,346 @@ export class ClawdbotAgentService {
   /**
    * Handle completion callback from Clawdbot sub-agent
    */
+  private normalizeTerminalClaim(
+    result: AgentTerminalResult,
+    terminalSource: TaskTerminalSource
+  ): ProviderTerminalClaim {
+    if (result.status) {
+      return {
+        terminalSource,
+        status: result.status,
+        summary: result.summary,
+        error: result.error,
+        blockers: result.blockers,
+        evidence: result.evidence,
+        artifacts: result.artifacts,
+        verification: result.verification,
+        continuation: result.continuation,
+      };
+    }
+    return this.providerCompletions.normalizeLegacyClaim(
+      {
+        success: result.success === true,
+        summary: result.summary,
+        error: result.error,
+      },
+      terminalSource
+    );
+  }
+
   async completeAgent(
     taskId: string,
     result: AgentTerminalResult,
     provenance: AgentCompletionProvenance
   ): Promise<void> {
     const pending = pendingAgents.get(taskId);
+    if (!pending) {
+      const task = await this.taskService.getTask(taskId);
+      const persistedAttempt = task?.attempt;
+      const terminalSource = provenance.terminalSource ?? 'callback';
+      if (
+        persistedAttempt?.id === provenance.attemptId &&
+        persistedAttempt.providerRuntimeManifest?.digest ===
+          provenance.providerRuntimeManifestDigest &&
+        persistedAttempt.taskEnvelope
+      ) {
+        this.assertPersistedAttemptCompletionBinding(taskId, persistedAttempt);
+        this.assertTerminalTransport(persistedAttempt.provider, terminalSource);
+        const claim = this.normalizeTerminalClaim(result, terminalSource);
+        const idempotencyKey = this.providerCompletions.idempotencyKey({
+          taskEnvelope: persistedAttempt.taskEnvelope,
+          claim,
+        });
+        if (persistedAttempt.completionResult) {
+          const persistedCompletion = this.parsePersistedCompletion(persistedAttempt);
+          if (persistedCompletion.idempotencyKey === idempotencyKey) return;
+          throw new ConflictError(
+            'Provider completion conflicts with the persisted terminal result',
+            {
+              attemptId: provenance.attemptId,
+              persistedIdempotencyKey: persistedCompletion.idempotencyKey,
+              completionIdempotencyKey: idempotencyKey,
+              remediation: 'Discard the conflicting callback; the attempt already has an owner.',
+            }
+          );
+        }
+        if (
+          task &&
+          persistedAttempt.provider === 'openclaw' &&
+          (terminalSource === 'callback' || terminalSource === 'remote-session') &&
+          (persistedAttempt.status === 'running' || persistedAttempt.status === 'failed')
+        ) {
+          await this.persistRestartedProviderCompletion(
+            task,
+            persistedAttempt,
+            claim,
+            idempotencyKey
+          );
+          return;
+        }
+      }
+      throw new ConflictError('Provider completion does not match the active run', {
+        activeAttemptId: task?.attempt?.id,
+        completionAttemptId: provenance.attemptId,
+        activeManifestDigest: task?.attempt?.providerRuntimeManifest?.digest,
+        completionManifestDigest: provenance.providerRuntimeManifestDigest,
+        remediation:
+          'Discard the stale callback and retry only from the provider process bound to the active attempt manifest.',
+      });
+    }
     if (
-      !pending ||
       pending.attemptId !== provenance.attemptId ||
       pending.providerRuntimeManifest.digest !== provenance.providerRuntimeManifestDigest
     ) {
       throw new ConflictError('Provider completion does not match the active run', {
-        activeAttemptId: pending?.attemptId,
+        activeAttemptId: pending.attemptId,
         completionAttemptId: provenance.attemptId,
-        activeManifestDigest: pending?.providerRuntimeManifest.digest,
+        activeManifestDigest: pending.providerRuntimeManifest.digest,
         completionManifestDigest: provenance.providerRuntimeManifestDigest,
         remediation:
           'Discard the stale callback and retry only from the provider process bound to the active attempt manifest.',
       });
     }
 
-    await this.finalizePendingAgent(taskId, pending, async () => result);
+    const terminalSource = provenance.terminalSource ?? 'callback';
+    this.assertTerminalTransport(pending.provider, terminalSource);
+    const claim = this.normalizeTerminalClaim(result, terminalSource);
+    const idempotencyKey = this.providerCompletions.idempotencyKey({
+      taskEnvelope: pending.taskEnvelope,
+      claim,
+    });
+    await this.finalizePendingAgent(
+      taskId,
+      pending,
+      async () => ({
+        ...result,
+        terminalSource,
+      }),
+      idempotencyKey
+    );
+  }
+
+  private assertTerminalTransport(
+    provider: string | undefined,
+    terminalSource: TaskTerminalSource
+  ): void {
+    if (
+      provider !== 'openclaw' &&
+      (terminalSource === 'callback' || terminalSource === 'remote-session')
+    ) {
+      throw new ConflictError(
+        'Provider completion transport is owned by the configured harness adapter',
+        {
+          provider,
+          terminalSource,
+          remediation: 'Use the harness-owned process or stream terminal path for this provider.',
+        }
+      );
+    }
+  }
+
+  private parsePersistedCompletion(attempt: TaskAttempt): CompletionResult {
+    if (!attempt.taskEnvelope || !attempt.completionResult) {
+      throw new CompletionOwnershipError(
+        'Persisted provider completion is missing its task envelope',
+        {
+          attemptId: attempt.id,
+        }
+      );
+    }
+    try {
+      return parseCompletionResultForEnvelope(attempt.completionResult, attempt.taskEnvelope);
+    } catch {
+      throw new CompletionOwnershipError(
+        'Persisted provider completion failed integrity validation',
+        {
+          attemptId: attempt.id,
+          remediation:
+            'Repair or remove the corrupted completion record before accepting another terminal claim.',
+        }
+      );
+    }
+  }
+
+  private assertCompletionRetryBinding(
+    taskId: string,
+    expectedAttempt: TaskAttempt,
+    latestAttempt: TaskAttempt
+  ): void {
+    this.assertPersistedAttemptCompletionBinding(taskId, latestAttempt);
+    const mismatches = [
+      expectedAttempt.provider !== latestAttempt.provider && 'provider',
+      expectedAttempt.providerRuntimeManifest?.digest !==
+        latestAttempt.providerRuntimeManifest?.digest && 'provider runtime manifest',
+      expectedAttempt.taskEnvelope?.digest !== latestAttempt.taskEnvelope?.digest &&
+        'task envelope',
+      expectedAttempt.runLaunchManifest?.digest !== latestAttempt.runLaunchManifest?.digest &&
+        'run launch manifest',
+    ].filter((field): field is string => typeof field === 'string');
+    if (mismatches.length > 0) {
+      throw new CompletionOwnershipError(
+        'Persisted attempt binding changed during completion retry',
+        {
+          attemptId: latestAttempt.id,
+          mismatches,
+          remediation:
+            'Discard the stale local finalizer and reconcile the currently persisted attempt.',
+        }
+      );
+    }
+  }
+
+  private assertPersistedAttemptCompletionBinding(taskId: string, attempt: TaskAttempt): void {
+    const providerRuntimeManifest = attempt.providerRuntimeManifest;
+    const taskEnvelope = attempt.taskEnvelope;
+    if (!providerRuntimeManifest || !taskEnvelope) {
+      throw new CompletionOwnershipError(
+        'Persisted attempt is missing immutable completion bindings',
+        { taskId, attemptId: attempt.id }
+      );
+    }
+    let parsedEnvelope: TaskEnvelope;
+    let parsedRunLaunchManifest: RunLaunchManifest | undefined;
+    try {
+      assertProviderRuntimeManifestSnapshot(providerRuntimeManifest);
+      parsedEnvelope = parseTaskEnvelope(taskEnvelope);
+      parsedRunLaunchManifest = attempt.runLaunchManifest
+        ? parseRunLaunchManifest(attempt.runLaunchManifest)
+        : undefined;
+    } catch {
+      throw new CompletionOwnershipError('Persisted attempt binding failed integrity validation', {
+        taskId,
+        attemptId: attempt.id,
+      });
+    }
+    const mismatches = [
+      attempt.provider !== providerRuntimeManifest.provider && 'attempt runtime provider',
+      parsedEnvelope.subject.id !== taskId && 'task ID',
+      parsedEnvelope.attempt.id !== attempt.id && 'attempt ID',
+      parsedEnvelope.launchManifest.digest !== providerRuntimeManifest.digest &&
+        'envelope runtime digest',
+      parsedEnvelope.launchManifest.provider !== providerRuntimeManifest.provider &&
+        'envelope runtime provider',
+      parsedEnvelope.launchManifest.adapter !== providerRuntimeManifest.adapter &&
+        'envelope runtime adapter',
+      parsedEnvelope.launchManifest.protocolVersion !== providerRuntimeManifest.protocolVersion &&
+        'envelope runtime protocol',
+      parsedRunLaunchManifest?.taskId !== undefined &&
+        parsedRunLaunchManifest.taskId !== taskId &&
+        'run launch task ID',
+      parsedRunLaunchManifest?.attemptId !== undefined &&
+        parsedRunLaunchManifest.attemptId !== attempt.id &&
+        'run launch attempt ID',
+      parsedRunLaunchManifest?.taskEnvelope.digest !== undefined &&
+        parsedRunLaunchManifest.taskEnvelope.digest !== parsedEnvelope.digest &&
+        'run launch task envelope digest',
+      parsedRunLaunchManifest?.providerRuntime.digest !== undefined &&
+        parsedRunLaunchManifest.providerRuntime.digest !== providerRuntimeManifest.digest &&
+        'run launch runtime digest',
+      parsedRunLaunchManifest?.providerRuntime.provider !== undefined &&
+        parsedRunLaunchManifest.providerRuntime.provider !== providerRuntimeManifest.provider &&
+        'run launch runtime provider',
+      parsedRunLaunchManifest?.providerRuntime.adapter !== undefined &&
+        parsedRunLaunchManifest.providerRuntime.adapter !== providerRuntimeManifest.adapter &&
+        'run launch runtime adapter',
+    ].filter((field): field is string => typeof field === 'string');
+    if (mismatches.length > 0) {
+      throw new CompletionOwnershipError('Persisted attempt completion bindings do not agree', {
+        taskId,
+        attemptId: attempt.id,
+        mismatches,
+        remediation: 'Repair the persisted attempt binding before accepting a terminal completion.',
+      });
+    }
+  }
+
+  private async persistRestartedProviderCompletion(
+    task: Task,
+    attempt: TaskAttempt,
+    claim: ProviderTerminalClaim,
+    idempotencyKey: string,
+    options: { preserveNonActiveTaskStatus?: boolean } = {}
+  ): Promise<void> {
+    if (!attempt.taskEnvelope) {
+      throw new ConflictError('Restarted provider completion has no task envelope', {
+        taskId: task.id,
+        attemptId: attempt.id,
+      });
+    }
+    this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+    const completionResult = await this.providerCompletions.complete({
+      task,
+      taskEnvelope: attempt.taskEnvelope,
+      claim,
+    });
+    const completedAttempt: TaskAttempt = {
+      ...attempt,
+      status: completionResult.status === 'success' ? 'complete' : 'failed',
+      ended: completionResult.completedAt,
+      completionResult,
+    };
+    const completionStatus = taskStatusForCompletion(completionResult.status);
+    let taskSnapshot = task;
+    let lastError: unknown;
+    for (
+      let persistenceAttempt = 1;
+      persistenceAttempt <= COMPLETION_PERSISTENCE_ATTEMPTS;
+      persistenceAttempt++
+    ) {
+      const taskStatusUpdate =
+        options.preserveNonActiveTaskStatus && taskSnapshot.status !== 'in-progress'
+          ? {}
+          : { status: completionStatus };
+      try {
+        const updatedTask = await this.taskService.updateTask(task.id, {
+          expectedRevision: normalizedTaskRevision(taskSnapshot),
+          ...taskStatusUpdate,
+          attempt: completedAttempt,
+          attempts: upsertAttemptHistory(taskSnapshot.attempts, completedAttempt),
+        });
+        if (!updatedTask) {
+          throw new CompletionOwnershipError(
+            'Task was archived or deleted before completion could be persisted',
+            { taskId: task.id, attemptId: attempt.id }
+          );
+        }
+        lastError = undefined;
+        break;
+      } catch (error) {
+        if (error instanceof CompletionOwnershipError) throw error;
+        lastError = error;
+        const latestTask = await this.taskService.getTask(task.id);
+        if (latestTask?.attempt?.id !== attempt.id) throw error;
+        this.assertCompletionRetryBinding(task.id, completedAttempt, latestTask.attempt);
+        if (latestTask.attempt.completionResult) {
+          const latestCompletion = this.parsePersistedCompletion(latestTask.attempt);
+          if (latestCompletion.idempotencyKey === idempotencyKey) return;
+          throw new CompletionOwnershipError(
+            'A different terminal result already owns this attempt',
+            {
+              taskId: task.id,
+              attemptId: attempt.id,
+              persistedIdempotencyKey: latestCompletion.idempotencyKey,
+              completionIdempotencyKey: idempotencyKey,
+            }
+          );
+        }
+        taskSnapshot = latestTask;
+      }
+    }
+    if (lastError) throw lastError;
+
+    log.info(
+      { taskId: task.id, attemptId: attempt.id, terminalSource: claim.terminalSource },
+      '[ClawdbotAgent] Persisted provider completion after server restart'
+    );
   }
 
   private async finalizePendingAgent(
     taskId: string,
     pending: PendingAgent,
-    prepareResult: () => Promise<AgentTerminalResult>
+    prepareResult: () => Promise<AgentTerminalResult>,
+    expectedIdempotencyKey?: string
   ): Promise<void> {
     if (pendingAgents.get(taskId) !== pending) {
       throw new ConflictError('Provider finalization does not match the active run', {
@@ -1056,7 +1451,30 @@ export class ClawdbotAgentService {
     const inFlight = finalizingAgents.get(pending);
     if (inFlight) {
       await inFlight;
+      if (
+        expectedIdempotencyKey &&
+        pending.terminalClaimIdempotencyKey !== expectedIdempotencyKey
+      ) {
+        throw new ConflictError('Provider completion conflicts with the claimed terminal result', {
+          attemptId: pending.attemptId,
+          claimedIdempotencyKey: pending.terminalClaimIdempotencyKey,
+          completionIdempotencyKey: expectedIdempotencyKey,
+          remediation: 'Discard the conflicting claim; terminal ownership is already committed.',
+        });
+      }
       return;
+    }
+    if (
+      expectedIdempotencyKey &&
+      pending.terminalClaimIdempotencyKey &&
+      pending.terminalClaimIdempotencyKey !== expectedIdempotencyKey
+    ) {
+      throw new ConflictError('Provider completion conflicts with the claimed terminal result', {
+        attemptId: pending.attemptId,
+        claimedIdempotencyKey: pending.terminalClaimIdempotencyKey,
+        completionIdempotencyKey: expectedIdempotencyKey,
+        remediation: 'Discard the conflicting claim; terminal ownership is already committed.',
+      });
     }
 
     // Defer preparation to the next microtask so the ownership claim is
@@ -1064,11 +1482,39 @@ export class ClawdbotAgentService {
     const finalization = Promise.resolve().then(async () => {
       const result = pending.preparedFinalizationResult ?? (await prepareResult());
       pending.preparedFinalizationResult = result;
+      const claim = this.normalizeTerminalClaim(result, result.terminalSource ?? 'process');
+      const idempotencyKey = this.providerCompletions.idempotencyKey({
+        taskEnvelope: pending.taskEnvelope,
+        claim,
+      });
+      if (expectedIdempotencyKey && expectedIdempotencyKey !== idempotencyKey) {
+        throw new ConflictError('Prepared terminal result changed after ownership was claimed', {
+          attemptId: pending.attemptId,
+          claimedIdempotencyKey: expectedIdempotencyKey,
+          completionIdempotencyKey: idempotencyKey,
+        });
+      }
+      if (
+        pending.terminalClaimIdempotencyKey &&
+        pending.terminalClaimIdempotencyKey !== idempotencyKey
+      ) {
+        throw new ConflictError('Terminal result conflicts with the claimed completion owner', {
+          attemptId: pending.attemptId,
+          claimedIdempotencyKey: pending.terminalClaimIdempotencyKey,
+          completionIdempotencyKey: idempotencyKey,
+        });
+      }
+      pending.terminalClaimIdempotencyKey = idempotencyKey;
       await this.completePendingAgent(taskId, result, pending);
     });
     finalizingAgents.set(pending, finalization);
     try {
       await finalization;
+    } catch (error) {
+      if (error instanceof CompletionOwnershipError && pendingAgents.get(taskId) === pending) {
+        pendingAgents.delete(taskId);
+      }
+      throw error;
     } finally {
       if (finalizingAgents.get(pending) === finalization) {
         finalizingAgents.delete(pending);
@@ -1084,7 +1530,6 @@ export class ClawdbotAgentService {
     await this.assertPendingRunControl(taskId, pending, 'complete');
 
     const { attemptId, emitter } = pending;
-    const status: AttemptStatus = result.success ? 'complete' : 'failed';
     const timing =
       pending.completionTiming ??
       (pending.completionTiming = (() => {
@@ -1113,6 +1558,19 @@ export class ClawdbotAgentService {
       pending.preparedCompletion ??
       (await (async () => {
         const taskBeforeCompletion = (await this.taskService.getTask(taskId)) ?? undefined;
+        if (!taskBeforeCompletion) {
+          throw new ConflictError('Task disappeared before completion could be persisted', {
+            taskId,
+            attemptId,
+          });
+        }
+        const claim = this.normalizeTerminalClaim(result, result.terminalSource ?? 'process');
+        const completionResult = await this.providerCompletions.complete({
+          task: taskBeforeCompletion,
+          taskEnvelope: pending.taskEnvelope,
+          claim,
+        });
+        const status: AttemptStatus = completionResult.status === 'success' ? 'complete' : 'failed';
         const completedAttempt: TaskAttempt = {
           id: attemptId,
           agent: pending.agent,
@@ -1131,29 +1589,28 @@ export class ClawdbotAgentService {
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
+          completionResult,
         };
         return (pending.preparedCompletion = {
           status,
           taskBeforeCompletion,
           completedAttempt,
+          completionResult,
         });
       })());
-    const { taskBeforeCompletion, completedAttempt } = preparedCompletion;
+    const { status, taskBeforeCompletion, completionResult } = preparedCompletion;
+    const successful = completionResult.status === 'success';
 
-    // Update task and preserve the exact launch manifest in attempt history.
-    await this.taskService.updateTask(taskId, {
-      status: result.success ? 'done' : 'in-progress',
-      attempt: completedAttempt,
-      attempts: upsertAttemptHistory(taskBeforeCompletion?.attempts, completedAttempt),
-    });
+    const persistedHere = await this.persistPendingCompletion(taskId, pending, preparedCompletion);
     if (pendingAgents.get(taskId) === pending) {
       pendingAgents.delete(taskId);
     }
+    if (!persistedHere) return;
 
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
-    const summary = result.summary || result.error || 'No summary provided';
+    const summary = completionResult.summary;
     const { durationMs } = timing;
-    const completionStepType = result.success ? 'complete' : 'error';
+    const completionStepType = successful ? 'complete' : 'error';
     const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
     const postCommitEffects: Array<[string, () => void | Promise<void>]> = [
       [
@@ -1166,11 +1623,13 @@ export class ClawdbotAgentService {
         'record terminal trace step',
         () =>
           this.recordTraceStep(attemptId, completionStepType, {
-            eventType: result.success ? 'run.completed' : 'run.failed',
+            eventType: successful ? 'run.completed' : 'run.failed',
             summary: this.redactTraceText(summary),
-            success: result.success,
+            success: successful,
             status,
-            error: result.error ? this.redactTraceText(result.error) : undefined,
+            error: completionResult.error
+              ? this.redactTraceText(completionResult.error)
+              : undefined,
             durationMs,
             agent: pending.agent,
             provider: pending.provider,
@@ -1187,17 +1646,17 @@ export class ClawdbotAgentService {
             agent: pending.agent,
             project: taskBeforeCompletion?.project,
             durationMs,
-            success: result.success,
-            error: result.error,
+            success: successful,
+            error: completionResult.error ?? undefined,
             harnessSupport: this.harnessTelemetry(
               pending.harnessSupport,
-              result.success ? 'none' : 'run-failed'
+              successful ? 'none' : 'run-failed'
             ),
           }),
       ],
       [
         'complete trace',
-        () => getTraceService().completeTrace(attemptId, result.success ? 'completed' : 'failed'),
+        () => getTraceService().completeTrace(attemptId, successful ? 'completed' : 'failed'),
       ],
       [
         'record completion activity',
@@ -1210,7 +1669,7 @@ export class ClawdbotAgentService {
               attemptId,
               provider: pending.provider,
               model: pending.model,
-              success: result.success,
+              success: successful,
               summary,
             },
             pending.agent
@@ -1241,6 +1700,76 @@ export class ClawdbotAgentService {
     log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
   }
 
+  private async persistPendingCompletion(
+    taskId: string,
+    pending: PendingAgent,
+    prepared: NonNullable<PendingAgent['preparedCompletion']>
+  ): Promise<boolean> {
+    let taskSnapshot = prepared.taskBeforeCompletion;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= COMPLETION_PERSISTENCE_ATTEMPTS; attempt++) {
+      if (!taskSnapshot) {
+        throw new ConflictError('Task disappeared before completion could be persisted', {
+          taskId,
+          attemptId: pending.attemptId,
+        });
+      }
+      try {
+        const updatedTask = await this.taskService.updateTask(taskId, {
+          expectedRevision: normalizedTaskRevision(taskSnapshot),
+          status: taskStatusForCompletion(prepared.completionResult.status),
+          attempt: prepared.completedAttempt,
+          attempts: upsertAttemptHistory(taskSnapshot.attempts, prepared.completedAttempt),
+        });
+        if (!updatedTask) {
+          throw new CompletionOwnershipError(
+            'Task was archived or deleted before completion could be persisted',
+            { taskId, attemptId: pending.attemptId }
+          );
+        }
+        return true;
+      } catch (error) {
+        if (error instanceof CompletionOwnershipError) throw error;
+        lastError = error;
+        let latestTask: Task | null;
+        try {
+          latestTask = await this.taskService.getTask(taskId);
+        } catch {
+          latestTask = null;
+        }
+        if (!latestTask) continue;
+        if (latestTask.attempt?.id !== pending.attemptId) {
+          throw new CompletionOwnershipError(
+            'Provider finalization no longer matches the active attempt',
+            {
+              taskId,
+              activeAttemptId: latestTask.attempt?.id,
+              finalizationAttemptId: pending.attemptId,
+            }
+          );
+        }
+        this.assertCompletionRetryBinding(taskId, prepared.completedAttempt, latestTask.attempt);
+        if (latestTask.attempt.completionResult) {
+          const persisted = this.parsePersistedCompletion(latestTask.attempt);
+          if (persisted.idempotencyKey === prepared.completionResult.idempotencyKey) return true;
+          throw new CompletionOwnershipError(
+            'A different terminal result already owns this attempt',
+            {
+              taskId,
+              attemptId: pending.attemptId,
+              persistedIdempotencyKey: persisted.idempotencyKey,
+              completionIdempotencyKey: prepared.completionResult.idempotencyKey,
+            }
+          );
+        }
+        taskSnapshot = latestTask;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Provider completion persistence retry budget was exhausted');
+  }
+
   /**
    * Stop a running agent
    */
@@ -1265,7 +1794,8 @@ export class ClawdbotAgentService {
         model: pending.model,
       });
       return {
-        success: false,
+        status: 'interrupted',
+        terminalSource: 'operator-interruption',
         error: 'Stopped by user',
       };
     });
@@ -1432,7 +1962,8 @@ export class ClawdbotAgentService {
       );
       await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
       return {
-        success: false,
+        status: 'interrupted',
+        terminalSource: 'operator-interruption',
         error: `Budget ${evaluation.decision}: ${evaluation.thresholdEvents
           .map((event) => event.message)
           .join(' ')}`,
@@ -1695,6 +2226,16 @@ export class ClawdbotAgentService {
           ).catch(async (error: unknown) => {
             const current = pendingAgents.get(task.id);
             if (!current || current.attemptId !== attemptId) return;
+            if (error instanceof CompletionPersistenceError) {
+              if (emitter.listenerCount('error') > 0) {
+                emitter.emit('error', error.persistenceCause);
+              }
+              log.error(
+                { err: error.persistenceCause, taskId: task.id, attemptId },
+                'Codex SDK completion could not be persisted after bounded retries'
+              );
+              return;
+            }
             abortController.abort();
             const message = error instanceof Error ? error.message : 'Codex SDK attempt failed';
             try {
@@ -1708,19 +2249,25 @@ export class ClawdbotAgentService {
                 { success: false, error: message },
                 {
                   attemptId,
+                  terminalSource: 'stream',
                   providerRuntimeManifestDigest: current.providerRuntimeManifest.digest,
                 }
               );
             } catch (finalizationError) {
-              if (pendingAgents.get(task.id)?.attemptId === attemptId) {
+              const retryable =
+                current.preparedCompletion !== undefined &&
+                !(finalizationError instanceof CompletionOwnershipError);
+              if (!retryable && pendingAgents.get(task.id)?.attemptId === attemptId) {
                 pendingAgents.delete(task.id);
               }
               if (emitter.listenerCount('error') > 0) {
                 emitter.emit('error', finalizationError);
               }
               log.error(
-                { err: finalizationError, taskId: task.id, attemptId },
-                'Codex SDK failure could not update stale persisted attempt state'
+                { err: finalizationError, taskId: task.id, attemptId, retryable },
+                retryable
+                  ? 'Codex SDK failure completion remains pending after bounded persistence retries'
+                  : 'Codex SDK failure could not update stale persisted attempt state'
               );
             }
           });
@@ -2051,6 +2598,7 @@ export class ClawdbotAgentService {
 
         return {
           success,
+          terminalSource: 'process',
           summary: finalOutput || (success ? 'Hermes completed.' : undefined),
           error: success ? undefined : finalOutput || `Hermes exited with code ${code}`,
         };
@@ -2242,6 +2790,7 @@ export class ClawdbotAgentService {
 
         return {
           success: succeeded,
+          terminalSource: 'process',
           summary: finalSummary,
           error: succeeded ? undefined : finalSummary || `Codex exited with code ${code}`,
         };
@@ -2383,19 +2932,24 @@ export class ClawdbotAgentService {
       `\n## Codex SDK Complete\n\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n`
     );
 
-    await this.completeAgent(
-      task.id,
-      {
-        success: !failureMessage,
-        summary: finalSummary || failureMessage || 'Codex SDK completed without a final summary.',
-        error: failureMessage || undefined,
-      },
-      {
-        attemptId,
-        providerRuntimeManifestDigest:
-          pendingAgents.get(task.id)?.providerRuntimeManifest.digest ?? '',
-      }
-    );
+    try {
+      await this.completeAgent(
+        task.id,
+        {
+          success: !failureMessage,
+          summary: finalSummary || failureMessage || 'Codex SDK completed without a final summary.',
+          error: failureMessage || undefined,
+        },
+        {
+          attemptId,
+          terminalSource: 'stream',
+          providerRuntimeManifestDigest:
+            pendingAgents.get(task.id)?.providerRuntimeManifest.digest ?? '',
+        }
+      );
+    } catch (error) {
+      throw new CompletionPersistenceError(error);
+    }
     emitter.emit('sdk.complete', { taskId: task.id, attemptId });
   }
 
@@ -4181,6 +4735,12 @@ ${prompt}
 
 // Export singleton
 export const clawdbotAgentService = new ClawdbotAgentService();
+
+function taskStatusForCompletion(status: TaskCompletionStatus): 'done' | 'blocked' | 'in-progress' {
+  if (status === 'success') return 'done';
+  if (status === 'blocked') return 'blocked';
+  return 'in-progress';
+}
 
 function upsertAttemptHistory(
   history: TaskAttempt[] | undefined,
