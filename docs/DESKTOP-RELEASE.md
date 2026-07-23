@@ -187,6 +187,12 @@ policy is tracked in
 - Confirm notarization succeeds with the intended credential mode and the DMG
   installs without Gatekeeper warnings on a clean Mac.
 - Confirm a first run creates the profile/workspace app data directories.
+- Confirm startup/auth/setup surfaces are draggable while their controls remain
+  clickable, and a populated isolated SQLite profile offers **Use Existing
+  Data** with representative counts before password setup.
+- Confirm the
+  [Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md) decision tree
+  matches the shipped onboarding labels and Maintenance import behavior.
 - Confirm update check, download, install, failed-download, and rollback paths
   on the selected channel.
 - Confirm `pnpm validate:release` passes and verifies root/shared/server/web,

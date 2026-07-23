@@ -95,7 +95,7 @@ Don't use it when:
 - **Stdio transport only** — the MCP server is a child process of the client. No network ports opened.
 - **Stateless proxy** — every tool call translates to one or more HTTP requests to the VK server. The MCP process holds no state.
 - **Zod validation** — all tool inputs are validated with Zod schemas before hitting the API.
-- **@modelcontextprotocol/sdk v1.27** — uses the official TypeScript SDK.
+- **@modelcontextprotocol/sdk v1.29** — uses the official TypeScript SDK.
 
 ---
 
@@ -822,9 +822,9 @@ Configure telemetry retention in `server/.env`:
 
 | Component          | Version      | Notes                       |
 | ------------------ | ------------ | --------------------------- |
-| MCP server package | `5.2.4`      | Matches VK server version   |
-| MCP SDK            | `1.27.1`     | `@modelcontextprotocol/sdk` |
-| MCP protocol       | `2024-11-05` | Latest stable spec          |
+| MCP server package | `5.2.5`      | Matches VK server version   |
+| MCP SDK            | `1.29.0`     | `@modelcontextprotocol/sdk` |
+| MCP protocol       | `2025-11-25` | Latest stable spec          |
 | Node.js            | `≥ 22`       | Matches the repo runtime    |
 | TypeScript         | `6.0+`       | Build dependency only       |
 
@@ -866,4 +866,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-07-13 · VK v5.2.4 · 36 tools / 8 categories_
+_Last updated: 2026-07-23 · VK v5.2.5 · 36 tools / 8 categories_

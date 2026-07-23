@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.5] - 2026-07-23
+
 ### Added
 
+- Added a complete web/source-to-Mac migration runbook with a decision path for
+  already-populated desktop SQLite, coherent stopped-writer backups, isolated
+  file-to-SQLite staging, governed bundle replacement, watchdog discovery,
+  authenticated automation cutover, verification, rollback, and warning
+  remediation (#899).
 - Added the versioned `task-envelope/v1` and `completion-result/v1` contracts,
   canonical envelope digests, immutable per-attempt persistence, launch HEAD and
   dirty-file attribution with staged-blob and worktree SHA-256 fingerprints,
@@ -70,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Raised vulnerable transitive `fast-uri` and `js-yaml` ranges to patched
+  releases so the production dependency audit passes at the release gate
+  (#903).
 - Made startup, setup, password, recovery, and login surfaces draggable in the
   frameless desktop window, and made first-run setup detect populated desktop
   SQLite data, default to a non-destructive **Use Existing Data** path, show
@@ -1857,7 +1867,11 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.1...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...HEAD
+[5.2.5]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.4...v5.2.5
+[5.2.4]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.3...v5.2.4
+[5.2.3]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.2...v5.2.3
+[5.2.2]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.1...v5.2.2
 [5.2.1]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.0...v5.2.1
 [5.2.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.1.0...v5.2.0
 [5.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.0.1...v5.1.0

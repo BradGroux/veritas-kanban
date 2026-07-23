@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/shared",
-  "version": "5.2.4",
+  "version": "5.2.5",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

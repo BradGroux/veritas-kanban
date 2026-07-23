@@ -2,13 +2,93 @@
 
 These notes describe the Veritas Kanban v5 stable release line.
 
-- Current source version: `v5.2.4`
+- Current source version: `v5.2.5`
 - Latest published GitHub release:
   [Veritas Kanban v5.2.4](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`
 - Manual macOS install:
   [Veritas-Kanban-5.2.4-mac-arm64.zip](https://github.com/BradGroux/veritas-kanban/releases/download/v5.2.4/Veritas-Kanban-5.2.4-mac-arm64.zip)
+
+## v5.2.5 Patch Candidate
+
+The v5.2.5 source candidate makes the signed desktop upgrade path unambiguous
+for operators whose data is already in the desktop SQLite workspace. It also
+prepares the provider runtime contract and SQLite safety work merged since
+v5.2.4 for publication.
+
+### Desktop startup and existing data
+
+- Startup, loading, setup, password, recovery, and login surfaces are draggable
+  throughout the frameless desktop flow. Buttons, fields, links, and other
+  controls remain clickable because interactive regions opt out of window drag.
+- First-run setup detects non-seed rows in the active desktop SQLite database,
+  recommends **Use Existing Data**, and shows task, Squad Chat, telemetry,
+  workflow-definition, and workflow-run counts before the operator continues.
+- **Secure Existing Data** creates the local password and recovery key without
+  replacing board records or imported owner metadata.
+- Interrupted or stale onboarding state returns to the existing-data path when
+  the database remains populated.
+- Packaged port selection checks IPv4 and IPv6 loopback before attaching to a
+  server, reducing the risk of connecting the app to an unrelated local
+  process.
+
+### Migration and recovery guidance
+
+- The new
+  [Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md) runbook
+  separates four cases: already-populated desktop SQLite, an empty board, a
+  governed export-bundle import, and a legacy file-backed source.
+- The file-backed path uses a fresh staging database and isolated loopback
+  migration server. It stops writers before backups and never writes through a
+  second connection to the authoritative desktop database.
+- The guide includes generic source/watchdog discovery, record-count checks,
+  exact API-token scopes, authenticated helper cutover, destructive replacement
+  warnings, rollback, and remediation for duplicate IDs and missing
+  attachments.
+- The onboarding **Restore Backup** card remains a native picker/preflight in
+  v5.2.5; it does not import during onboarding. Governed imports run from
+  Settings -> Maintenance or `/api/v1/sqlite/import`.
+
+### Provider runtime contracts and storage safety
+
+- Agent launches now persist versioned task envelopes and completion-result
+  contracts with canonical digests, bounded evidence, side-effect policy,
+  verification state, and immutable attempt attribution.
+- Codex CLI, Codex SDK, Hermes, OpenClaw, and custom providers expose validated,
+  versioned runtime manifests. Routing and active controls fail closed when the
+  selected runtime cannot satisfy required capabilities.
+- Launch, stop, steer, resume, tool, MCP, structured-output, token, and artifact
+  controls consume the exact attempt-bound manifest used for execution.
+- SQLite startup classifies the authoritative filesystem before opening the
+  database, refuses unsafe or unverified storage, and reports redacted posture
+  through health and Maintenance.
+- Governed offline journal maintenance adds previews, exclusive restart-time
+  conversion, backups, stage journals, integrity verification, recovery,
+  ownership locks, and expiring/revocable overrides.
+
+### Reliability and security
+
+- Agent start and terminalization ownership is serialized per task and attempt
+  so concurrent starts, stops, provider exits, and callbacks cannot duplicate a
+  run.
+- Verified local-owner password sessions receive only the narrow packaged
+  `local-agent:run` capability; production localhost bypass remains disabled.
+- Mobile notifications stay above safe-area navigation and cannot intercept
+  Task Detail input after close.
+- Patched transitive `fast-uri` and `js-yaml` floors clear the production
+  high-severity dependency audit.
+
+### Compatibility and upgrade notes
+
+- No SQLite schema or configuration migration is required from v5.2.4.
+- If the desktop database already contains the expected records, back it up,
+  install v5.2.5, choose **Use Existing Data**, and then **Secure Existing
+  Data**. Do not rerun file migration or restore over that database.
+- Server, web, CLI, MCP, shared, and desktop package versions move together to
+  5.2.5.
+- macOS Apple Silicon remains the supported signed desktop target. Linux and
+  Windows artifacts remain unsigned previews.
 
 ## v5.2.4 Patch
 
@@ -259,32 +339,37 @@ brew install --cask veritas-kanban
 
 Manual installation is also supported from the stable GitHub release ZIP.
 
-1. Launch Veritas Kanban and choose Board Only unless you already need agent or
-   remote setup.
+1. Launch Veritas Kanban. Choose **Use Existing Data** when setup reports the
+   expected desktop records; choose **Board Only** only for a new empty board.
 2. Save the recovery key.
 3. Verify Settings -> Maintenance health, storage, backup, and debug-bundle
    previews.
 
 ## Upgrade
 
-1. Back up the existing v4 file-backed project or desktop data directory.
-2. Run migration dry-run.
-3. Resolve warnings or record accepted risks.
-4. Run migration and preserve the journal/report.
-5. Verify board, task detail, search, workflows, chat, settings, work products,
-   Maintenance Center, and audit history.
-6. Run backup/export and restore verification before deleting old artifacts.
+1. Inspect the desktop SQLite counts and determine whether the expected data is
+   already present.
+2. If it is present, create a coherent stopped-app backup, upgrade, choose
+   **Use Existing Data**, and do not import or rerun migration.
+3. If the file-backed source remains authoritative, follow
+   [Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md) to stop
+   competing writers, back up, dry-run and migrate into staging, then install
+   the validated database.
+4. Verify board, task detail, search, workflows, chat, settings, work products,
+   Maintenance Center, authenticated automation, and audit history.
+5. Run backup/export and restore verification before deleting old artifacts.
 
 ## Release Artifacts
 
-The
-[v5.2.4 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
-publishes signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`,
-blockmaps, and SHA-256 sidecars. Use the release-attached `.sha256` files as the
-checksum source of truth.
+When the v5.2.5 release is published, its GitHub release must contain the
+signed/notarized macOS ZIP and DMG assets, `latest-mac.yml`, blockmaps, and
+SHA-256 sidecars. The release-attached `.sha256` files are the checksum source
+of truth after publication.
 
-The v5.2.3 and v5.2.2 desktop assets remain available for provenance and
-rollback.
+The current stable
+[v5.2.4 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
+and the v5.2.3 and v5.2.2 desktop assets remain available for installation,
+provenance, and rollback until v5.2.5 publication completes.
 
 The v5.2.1 desktop assets remain available for provenance, but the application
 bundle is not a supported rollback target because its emitted Electron main
@@ -322,6 +407,7 @@ desktop install, remote/mobile, admin, compatibility, and GA checklist docs.
 - [Post-GA Native Mobile Offline ADR](architecture/ADR-0003-post-ga-native-mobile-offline.md)
 - [Post-GA Cloud Sync And Hosted SaaS ADR](architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md)
 - [Desktop Release](DESKTOP-RELEASE.md)
+- [Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md)
 - [Migration Recovery](MIGRATION-RECOVERY.md)
 - [Self-Hosting Guide](guides/SELF_HOST.md)
 - [PWA Install](guides/PWA_INSTALL.md)

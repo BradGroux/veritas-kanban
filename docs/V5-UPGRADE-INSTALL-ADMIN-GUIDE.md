@@ -33,9 +33,13 @@ candidate, belongs in the reusable
    ```
 
    Manual install is also supported from the
-   [stable GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
+   [current stable GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.4)
    by downloading `Veritas-Kanban-5.2.4-mac-arm64.zip`, unzipping it, and
    moving `Veritas Kanban.app` into `/Applications`.
+
+   The v5.2.5 filename and release URL become valid only after the signed
+   release workflow and publication checks in
+   [the evidence packet](V5-RC-EVIDENCE-PACKET.md) pass.
 
 2. Launch normally. A stable release should not show a Gatekeeper warning.
 3. Pick the first-run path:

@@ -1,5 +1,80 @@
 # v5 Release Evidence Packets
 
+## v5.2.5 Release Evidence Packet
+
+This section records the desktop existing-data upgrade fix, migration runbook,
+and release-candidate validation for v5.2.5. Signed artifacts and Homebrew
+publication are added only after those independent gates pass.
+
+### Candidate scope
+
+| Field                  | Value                                                    |
+| ---------------------- | -------------------------------------------------------- |
+| Release version        | 5.2.5                                                    |
+| Release issue          | <https://github.com/BradGroux/veritas-kanban/issues/914> |
+| Desktop setup issue    | <https://github.com/BradGroux/veritas-kanban/issues/901> |
+| Desktop setup PR       | <https://github.com/BradGroux/veritas-kanban/pull/902>   |
+| Migration docs issue   | <https://github.com/BradGroux/veritas-kanban/issues/899> |
+| Migration docs PR      | <https://github.com/BradGroux/veritas-kanban/pull/900>   |
+| Dependency audit issue | <https://github.com/BradGroux/veritas-kanban/issues/903> |
+| Dependency audit PR    | <https://github.com/BradGroux/veritas-kanban/pull/908>   |
+| Release branch         | `release/v5.2.5-914`                                     |
+| Evidence date          | 2026-07-23                                               |
+
+### Upgrade contract
+
+- A populated desktop database is never treated as a fresh board. Setup offers
+  **Use Existing Data**, displays representative counts, and secures the
+  database without replacing board rows or imported owner metadata.
+- Startup, setup, password, recovery, loading, and login surfaces remain
+  draggable while interactive controls remain clickable.
+- Operators whose records already exist in the desktop SQLite workspace do not
+  rerun file migration and do not choose backup recovery.
+- Legacy file-backed data migrates into a fresh staging database with the
+  desktop app stopped. The authoritative desktop database is installed only
+  after every writer closes.
+- Governed export-bundle import is an explicit Maintenance operation with
+  destructive replacement confirmation. The onboarding **Restore Backup** card
+  remains picker/preflight only in v5.2.5.
+
+### Pre-publication gates
+
+| Gate                                             | Result  | Evidence                                                                                                                                                           |
+| ------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm check:pnpm-settings`                       | PASS    | Node 26.5.0, pnpm 11.1.1, and the repository package-manager contract agree                                                                                        |
+| `pnpm audit --prod --audit-level=high`           | PASS    | Zero high or critical advisories; one low and one moderate advisory remain documented below                                                                        |
+| `pnpm lint` and `pnpm lint:budget`               | PASS    | Zero errors; 595 warnings remain within the 600-warning budget                                                                                                     |
+| `pnpm qa:mantine`                                | PASS    | Mantine migration and bundle-size budgets passed                                                                                                                   |
+| `pnpm typecheck` and `pnpm build`                | PASS    | Shared, server, web, CLI, MCP, and desktop workspaces passed                                                                                                       |
+| `pnpm test:unit`                                 | PASS    | All workspace suites passed                                                                                                                                        |
+| Focused existing-data and auth regression suites | PASS    | Web 12/12; server 42/42; desktop 61/61                                                                                                                             |
+| `pnpm desktop:check:electron-artifacts`          | PASS    | Main and preload output preserved Electron runtime imports and rejected installer-shim patterns                                                                    |
+| `pnpm smoke:cli-mcp`                             | PARTIAL | Build and version checks passed; live read/write smoke skipped because no test API key was set                                                                     |
+| `pnpm test:e2e`                                  | PASS    | 36/36 across Chromium, mobile Chromium, and mobile WebKit using an isolated temporary data store                                                                   |
+| `pnpm desktop:smoke:mac:local`                   | PASS    | ARM64 unpacked app and isolated production staging passed                                                                                                          |
+| `pnpm desktop:package:mac:unsigned`              | PASS    | v5.2.5 ARM64 DMG, ZIP, blockmaps, update metadata, and app bundle produced                                                                                         |
+| `pnpm validate:release -- --version 5.2.5`       | PASS    | Versions, scripts, docs, and local build artifacts passed                                                                                                          |
+| Isolated populated SQLite packaged upgrade       | PASS    | Unsigned app selected **Use Existing Data**, showed 2/3/1/1/1 counts, and preserved every count plus migrated owner and task-owner metadata through password setup |
+| Packaged drag-region and control contract        | PASS    | Electron reported `drag` for the setup surface and `no-drag` for controls; Agent Ready remained clickable and selected                                             |
+| Independent standards and specification review   | PASS    | Two separate reviewers found the publication-proof and MCP-version gaps; both were corrected before commit                                                         |
+| Opposite-model review                            | BLOCKED | The Claude Code CLI has no authenticated session and GitHub Copilot CLI returned no quota; the repository Copilot reviewer will be requested on the release PR     |
+
+The residual production advisories are `body-parser` low-severity
+`GHSA-v422-hmwv-36x6` and `@hono/node-server` moderate-severity
+`GHSA-frvp-7c67-39w9`. The latter applies to Windows static-file serving in a
+transitive MCP dependency; the Veritas MCP package uses stdio and the supported
+desktop target is macOS. Neither advisory crosses the release gate's
+high/critical threshold. Both remain visible rather than being hidden behind an
+unsafe major-version override.
+
+### Publication evidence
+
+The release commit, tag object, Desktop Release run, signed artifact URLs and
+SHA-256 values, `latest-mac.yml` verification, notarization/stapling checks, and
+Homebrew tap PR are filled from the published v5.2.5 artifacts. Source merge,
+GitHub release publication, signed runtime verification, and Homebrew
+availability are separate gates; none substitutes for another.
+
 ## v5.2.2 Release Evidence Packet
 
 This section records the July 2026 UI-audit remediation and v5.2.2 release

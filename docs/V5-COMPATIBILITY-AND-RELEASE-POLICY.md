@@ -39,6 +39,16 @@ preview-only for v5 GA. They keep post-GA packaging paths exercised, but they
 are not supported install targets, release-channel targets, or stable update
 targets until a later compatibility policy explicitly promotes them.
 
+Desktop upgrade selection is data-driven. When the active desktop SQLite
+database contains non-seed records, setup must offer **Use Existing Data** and
+must not require file migration or backup restore. File-backed sources migrate
+offline into a fresh staging database before cutover. Governed export bundles
+import through Maintenance or `/api/v1/sqlite/import`; the v5.2.5 onboarding
+**Restore Backup** card is picker/preflight only and is not an import executor.
+See
+[Web To Mac Desktop Migration](WEB-TO-MAC-DESKTOP-MIGRATION.md) for the
+supported decision tree and one-writer rules.
+
 ## Version Negotiation Rules
 
 1. API clients may send `X-API-Version: v1`; unsupported values fail before the
