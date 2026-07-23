@@ -141,6 +141,7 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
     prompt: string,
     attemptId: string,
     worktreePath: string | undefined,
+    taskEnvelopeDigest: string,
     providerRuntimeDigest: string
   ): string;
   handleCodexEvent(
@@ -355,6 +356,18 @@ describe('ClawdbotAgentService Codex providers', () => {
         expect.arrayContaining(['exec', '--json', '--sandbox', 'workspace-write']),
         expect.objectContaining({ cwd: tmpDir, shell: false })
       );
+      const spawnedArgs = mockSpawn.mock.calls[0]?.[1] as string[] | undefined;
+      const providerRequest = spawnedArgs?.at(-1);
+      expect(providerRequest).toContain('# Codex CLI Task Envelope');
+      expect(providerRequest).toContain(
+        'Allowed: a commit is permitted, but successful completion does not require one.'
+      );
+      expect(providerRequest).not.toContain(`/api/agents/${task.id}/complete`);
+      expect(
+        status.runLaunchManifest.instructions.find(
+          (instruction) => instruction.id === 'effective-task-request'
+        )?.origin
+      ).toBe('task-envelope:task-envelope/v1;adapter:codex-cli');
       const spawnEnvironment = mockSpawn.mock.calls[0]?.[2]?.env as
         Record<string, string> | undefined;
       expect(status.runLaunchManifest.runtime.environmentKeys).toEqual(
@@ -734,15 +747,17 @@ describe('ClawdbotAgentService Codex providers', () => {
   it('normalizes checkpoint age out of material instruction evidence', () => {
     const service = testableService(tmpDir);
     const first = service.normalizeRunLaunchTaskPrompt(
-      'Last Checkpoint: 2026-07-23T20:00:00.000Z (5 minutes ago)',
+      `Envelope sha256:${'c'.repeat(64)} Last Checkpoint: 2026-07-23T20:00:00.000Z (5 minutes ago)`,
       'attempt-a',
       tmpDir,
+      `sha256:${'c'.repeat(64)}`,
       `sha256:${'a'.repeat(64)}`
     );
     const later = service.normalizeRunLaunchTaskPrompt(
-      'Last Checkpoint: 2026-07-23T20:00:00.000Z (125 minutes ago)',
+      `Envelope sha256:${'d'.repeat(64)} Last Checkpoint: 2026-07-23T20:00:00.000Z (125 minutes ago)`,
       'attempt-b',
       tmpDir,
+      `sha256:${'d'.repeat(64)}`,
       `sha256:${'b'.repeat(64)}`
     );
 

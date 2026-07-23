@@ -280,7 +280,8 @@ First-class support for autonomous coding agents.
 - **Multi-agent support** — Ships with Codex, Codex SDK, Codex Cloud, Hermes Agent, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
 - **Agent CRUD management** — Full Add/Edit/Remove for agents in Settings → Agents; add agent form with name, type slug (auto-generated), command, and args; inline edit via pencil icon; remove via trash icon with confirmation (blocked for the default agent); `AgentType` accepts any string slug, not just built-in names
 - **Agent request files** — Server writes structured requests to `.veritas-kanban/agent-requests/` for agent pickup
-- **Completion callbacks** — Agents call the completion endpoint with success/failure status and summary
+- **Provider-owned task-envelope transports** — OpenClaw, Codex CLI, Codex SDK, and Hermes each render the immutable task contract through an adapter-owned request with explicit commit policy, bounded attributed profile/checkpoint context, workspace baseline, verification gates, and completion evidence requirements
+- **Provider-specific completion posture** — OpenClaw receives an attempt-bound completion callback; Codex CLI, Codex SDK, and Hermes return terminal output through harness-supervised process or stream capture
 - **Multiple attempts** — Retry tasks with different agents; full attempt history preserved with status (pending, running, complete, failed)
 - **Attempt history viewer** — Browse past attempts with agent name, status, and log output
 - **Time tracking** — Start/stop timer or add manual time entries per task; running timer display with live elapsed counter
@@ -297,6 +298,7 @@ First-class support for autonomous coding agents.
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
+- **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle

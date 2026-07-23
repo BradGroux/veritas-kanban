@@ -231,6 +231,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Team roster routing** — Workspace coordinator/member manifests route tasks by capabilities, reviewers, fallbacks, and escalation posture
 - **Workspace capability discovery** — Trusted workspace capability catalogs let Veritas package delegated work intake before handing work across workspace boundaries
 - **Agent profile packages** — Portable YAML/JSON packages that bundle role, runtime, prompt, tools, permissions, sandbox, budget, workflow, and health metadata for reusable launches
+- **Provider-owned task envelopes** — OpenClaw, Codex CLI, Codex SDK, and Hermes render the same immutable task contract through adapter-owned transports with explicit commit policy and completion posture
 - **Decision review sessions** — Multi-participant decision reviews with independent responses, critique rounds, final synthesis packets, work-product attachment, and decision audit links
 - **Shared live run sessions** — Create workspace-scoped view, co-drive, or fork links for active task runs; viewers receive live output and events, editors send attributed messages and mobile-safe approval responses, and forks create linked tasks without mutating the parent run
 - **Sandbox policy presets** — Built-in and custom presets for filesystem scope, network egress, environment passthrough, and credential brokering, with Settings dry-runs before agent launch

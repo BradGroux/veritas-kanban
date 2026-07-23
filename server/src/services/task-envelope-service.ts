@@ -137,7 +137,7 @@ export class TaskEnvelopeService {
         id: input.task.id,
         title: input.task.title,
         objective: input.task.title,
-        background: compactStrings([
+        background: compactTaskEnvelopeStrings([
           input.task.description,
           ...(input.task.observations ?? [])
             .filter(
@@ -145,11 +145,11 @@ export class TaskEnvelopeService {
             )
             .map((observation) => observation.content),
         ]).slice(0, 64),
-        constraints: compactStrings([
+        constraints: compactTaskEnvelopeStrings([
           input.profileInstructions,
           `Operate only inside the assigned worktree: ${input.worktreePath}`,
         ]).slice(0, 128),
-        acceptanceCriteria: compactStrings(
+        acceptanceCriteria: compactTaskEnvelopeStrings(
           (input.task.subtasks ?? []).flatMap((subtask) => subtask.acceptanceCriteria ?? [])
         ).slice(0, 256),
       },
@@ -455,7 +455,7 @@ function normalizeWorkspaceId(value: string): string {
   return `${normalized.slice(0, 143).trimEnd()}~${suffix}`;
 }
 
-function compactStrings(values: Array<string | undefined>): string[] {
+export function compactTaskEnvelopeStrings(values: Array<string | undefined>): string[] {
   return values.flatMap((value) => {
     const normalized = value?.trim();
     if (!normalized) return [];

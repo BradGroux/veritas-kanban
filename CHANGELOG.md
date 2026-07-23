@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   readiness/override evidence, governance traces, attempt/history/log
   persistence, and completion-packet links to the exact launch and provider
   capability evidence (#854).
+- Added immutable provider-owned task-envelope transports for OpenClaw, Codex
+  CLI, Codex SDK, and Hermes. Each renderer binds the exact envelope and runtime
+  identity, commit policy, bounded attributed profile/checkpoint context,
+  workspace baseline, verification gates, and completion evidence to the
+  launched request. OpenClaw alone receives a completion callback; process and
+  stream providers return terminal output through harness-owned capture, and
+  mismatched provider/adapter identities fail closed (#892).
 
 ## [5.2.5] - 2026-07-23
 

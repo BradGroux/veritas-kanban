@@ -146,9 +146,35 @@ Requested filesystem, process, commit, and artifact scopes are intersected
 with the effective worktree sandbox; ancestor requests such as `/` are clamped
 to the assigned worktree and disjoint paths are rejected.
 The start response, active status response, task attempt/history, and Markdown
-run log expose the same immutable envelope. Provider-owned rendering and
-normalized completion enforcement land in the ordered follow-up work for
-parent issue #860.
+run log expose the same immutable envelope.
+
+### Provider-Owned Transport Rendering
+
+Each executable task adapter renders the provider-neutral envelope into its
+own immutable `provider-task-envelope-transport/v1` request. OpenClaw, Codex
+CLI, Codex SDK, and Hermes renderers all include the envelope digest, runtime
+identity, objective and bounded context, a bounded workspace-baseline summary,
+explicit commit policy, allowed side effects, expected outputs, verification
+gates, and completion evidence contract. Profile instructions and saved task
+checkpoints are rendered as separate, attributed sections and are capped at
+20,000 characters each. The persisted task envelope retains the complete
+baseline fingerprints used for later attribution.
+
+The callback posture belongs to the adapter:
+
+- OpenClaw receives the attempt-bound Veritas completion callback, including
+  the provider-runtime manifest digest.
+- Codex CLI returns terminal output through the supervised process.
+- Codex SDK returns terminal output through the captured SDK event stream.
+- Hermes returns terminal output through scripted process stdout.
+
+Process and stream adapters are explicitly told not to call the Veritas
+completion endpoint. None of the renderers claims provider-native structured
+output; Veritas owns validation and completion normalization. The exact
+rendered request is fingerprinted as `instructions.effective-task-request` in
+the run launch manifest, and the provider and adapter must match the envelope
+before dispatch. Completion-result normalization and evidence enforcement are
+tracked separately in #893.
 
 ## Effective Run Launch Manifests
 
@@ -245,7 +271,7 @@ policy:
   sandboxPresetId: workspace-write-default
 ```
 
-Profile launches pass `profileId` to `/api/agents/:taskId/start`. Veritas resolves the package runtime against the configured provider profile, applies the package model, sandbox preset, and budget policy, injects package instructions into the run prompt, and records the profile ID/version in the task attempt plus an `agent_event` activity entry.
+Profile launches pass `profileId` to `/api/agents/:taskId/start`. Veritas resolves the package runtime against the configured provider profile, applies the package model, sandbox preset, and budget policy, renders bounded package instructions in an attributed provider-transport section, and records the profile ID/version in the task attempt plus an `agent_event` activity entry.
 
 ## Budget Policies
 
@@ -393,9 +419,9 @@ install at the operator-level endpoint. You must explicitly allow them:
 
 ### Dispatch flow
 
-1. Veritas calls `sessions_spawn` with the full task prompt, including the
-   callback URL and required `attemptId` plus `providerRuntimeManifestDigest`
-   completion provenance.
+1. Veritas calls `sessions_spawn` with the OpenClaw-owned task-envelope
+   transport, including the callback URL and required `attemptId` plus
+   `providerRuntimeManifestDigest` completion provenance.
 2. A policy or connection failure rolls the task attempt back to `todo` with an error message.
 3. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
 4. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.

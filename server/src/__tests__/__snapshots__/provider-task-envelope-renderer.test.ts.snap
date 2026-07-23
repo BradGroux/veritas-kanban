@@ -1,0 +1,385 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`provider task-envelope renderers > renders a callback-free Codex CLI transport from a forbidden-commit envelope 1`] = `
+"# Codex CLI Task Envelope
+
+## Transport
+
+- Envelope: \`task-envelope/v1\`
+- Digest: \`sha256:9124d04ba445ec2a704a7a180f78897c4c97654e2db2fc0a40dd49fe36ba9f9f\`
+- Provider: \`codex-cli\`
+- Adapter: \`codex-cli\`
+- Runtime manifest: \`sha256:ac8168ea1345156e76f1ebd1dbdcb42ff19b808e52e2164a07257da52a546d24\`
+- Protocol: \`fixture-runtime/v1\`
+- Task: \`task_transport\`
+- Attempt: \`attempt_transport\`
+
+## Objective
+
+Ship the provider transport
+
+## Background
+
+- Translate the immutable task contract without changing completion ownership.
+
+
+## Constraints
+
+- Follow the release checklist.
+- Operate only inside the assigned worktree: /tmp/veritas-kanban-transport
+
+
+## Workspace
+
+- Repository: \`veritas-kanban\`
+- Branch: \`feat/codex-cli-transport\`
+- Base branch: \`main\`
+- Worktree: \`/tmp/veritas-kanban-transport\`
+- Launch HEAD: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Launch state: clean
+
+### Launch Baseline Files
+
+- None.
+
+
+
+## Commit Policy
+
+Forbidden: do not create a commit. Leave permitted worktree changes uncommitted.
+
+## Acceptance Criteria
+
+- The provider receives the persisted envelope.
+
+
+## Allowed Side Effects
+
+- \`filesystem-write\` within \`/tmp/veritas-kanban-transport\`
+- \`process-execute\` within \`/tmp/veritas-kanban-transport\`
+- \`network-egress\` within \`sandbox policy\`
+
+
+## Expected Outputs
+
+- Required \`text\` \`completion-summary\`: A concise summary of the completed work and remaining risks.
+
+
+## Verification Gates
+
+- Required \`provider-snapshot\`: Run the provider transport snapshot. Evidence is required.
+
+
+## Completion Evidence Contract
+
+- Schema: \`completion-result/v1\`
+- Required \`provider-output\` \`terminal-state\`: Harness-verified provider terminal state from the native transport.
+- Required \`verification\` \`verification\`: Harness-verified evidence for every required verification gate.
+
+
+
+
+## Completion (Codex CLI process)
+
+Return the final response through the process output captured by Veritas.
+
+Do not call the Veritas completion callback. The harness owns terminal-state capture.
+
+No native structured-output support is assumed; Veritas validates and normalizes process output."
+`;
+
+exports[`provider task-envelope renderers > renders a callback-free Codex SDK transport from an allowed-commit envelope 1`] = `
+"# Codex SDK Task Envelope
+
+## Transport
+
+- Envelope: \`task-envelope/v1\`
+- Digest: \`sha256:a3eafc0cbfd2b125c2e63d86614a97643ce5023dafc058499c863c41027a9e39\`
+- Provider: \`codex-sdk\`
+- Adapter: \`codex-sdk\`
+- Runtime manifest: \`sha256:e00151ad599160706e2d814412bbf8c71bdc352317352a9a72df14574def305a\`
+- Protocol: \`fixture-runtime/v1\`
+- Task: \`task_transport\`
+- Attempt: \`attempt_transport\`
+
+## Objective
+
+Ship the provider transport
+
+## Background
+
+- Translate the immutable task contract without changing completion ownership.
+
+
+## Constraints
+
+- Follow the release checklist.
+- Operate only inside the assigned worktree: /tmp/veritas-kanban-transport
+
+
+## Workspace
+
+- Repository: \`veritas-kanban\`
+- Branch: \`feat/codex-sdk-transport\`
+- Base branch: \`main\`
+- Worktree: \`/tmp/veritas-kanban-transport\`
+- Launch HEAD: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Launch state: clean
+
+### Launch Baseline Files
+
+- None.
+
+
+
+## Commit Policy
+
+Allowed: a commit is permitted, but successful completion does not require one.
+
+## Acceptance Criteria
+
+- The provider receives the persisted envelope.
+
+
+## Allowed Side Effects
+
+- \`filesystem-write\` within \`/tmp/veritas-kanban-transport\`
+- \`process-execute\` within \`/tmp/veritas-kanban-transport\`
+- \`git-commit\` within \`/tmp/veritas-kanban-transport\`
+- \`network-egress\` within \`sandbox policy\`
+
+
+## Expected Outputs
+
+- Required \`text\` \`completion-summary\`: A concise summary of the completed work and remaining risks.
+
+
+## Verification Gates
+
+- Required \`provider-snapshot\`: Run the provider transport snapshot. Evidence is required.
+
+
+## Completion Evidence Contract
+
+- Schema: \`completion-result/v1\`
+- Required \`provider-output\` \`terminal-state\`: Harness-verified provider terminal state from the native transport.
+- Required \`verification\` \`verification\`: Harness-verified evidence for every required verification gate.
+
+
+
+
+## Completion (Codex SDK stream)
+
+Return the final response through the SDK event stream captured by Veritas.
+
+Do not call the Veritas completion callback. The harness owns terminal-state capture.
+
+No native structured-output support is assumed; Veritas validates and normalizes SDK stream events."
+`;
+
+exports[`provider task-envelope renderers > renders a callback-free Hermes scripted transport 1`] = `
+"# Hermes Task Envelope
+
+## Transport
+
+- Envelope: \`task-envelope/v1\`
+- Digest: \`sha256:e5c6eac76fa867f258802075bbd01e46f3842745ee2270eb454d860da4fc65f2\`
+- Provider: \`hermes-cli\`
+- Adapter: \`hermes-cli\`
+- Runtime manifest: \`sha256:35efe1a6d4eee34a91f88ddf751fb2e746969f33a66c3dd1820c7dcc9ebed1eb\`
+- Protocol: \`fixture-runtime/v1\`
+- Task: \`task_transport\`
+- Attempt: \`attempt_transport\`
+
+## Objective
+
+Ship the provider transport
+
+## Background
+
+- Translate the immutable task contract without changing completion ownership.
+
+
+## Constraints
+
+- Follow the release checklist.
+- Operate only inside the assigned worktree: /tmp/veritas-kanban-transport
+
+
+## Workspace
+
+- Repository: \`veritas-kanban\`
+- Branch: \`feat/hermes-cli-transport\`
+- Base branch: \`main\`
+- Worktree: \`/tmp/veritas-kanban-transport\`
+- Launch HEAD: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Launch state: clean
+
+### Launch Baseline Files
+
+- None.
+
+
+
+## Commit Policy
+
+Required: create at least one new commit attributable to this attempt.
+
+## Acceptance Criteria
+
+- The provider receives the persisted envelope.
+
+
+## Allowed Side Effects
+
+- \`filesystem-write\` within \`/tmp/veritas-kanban-transport\`
+- \`process-execute\` within \`/tmp/veritas-kanban-transport\`
+- \`git-commit\` within \`/tmp/veritas-kanban-transport\`
+- \`network-egress\` within \`sandbox policy\`
+
+
+## Expected Outputs
+
+- Required \`text\` \`completion-summary\`: A concise summary of the completed work and remaining risks.
+- Required \`commit\` \`git-commit\`: At least one new commit attributable to this attempt.
+
+
+## Verification Gates
+
+- Required \`provider-snapshot\`: Run the provider transport snapshot. Evidence is required.
+
+
+## Completion Evidence Contract
+
+- Schema: \`completion-result/v1\`
+- Required \`provider-output\` \`terminal-state\`: Harness-verified provider terminal state from the native transport.
+- Required \`verification\` \`verification\`: Harness-verified evidence for every required verification gate.
+- Required \`commit\` \`commit\`: Harness-verified commit created after the launch baseline.
+
+
+
+
+## Completion (Hermes scripted process)
+
+Return the final response through scripted stdout captured by Veritas.
+
+Do not call the Veritas completion callback. The harness owns terminal-state capture.
+
+No native structured-output support is assumed; Veritas validates and normalizes scripted process output."
+`;
+
+exports[`provider task-envelope renderers > renders an OpenClaw callback transport from a required-commit envelope 1`] = `
+"# OpenClaw Task Envelope
+
+## Transport
+
+- Envelope: \`task-envelope/v1\`
+- Digest: \`sha256:b15c3895ab0b1573673a7079718b3fa45106b0704594932b5ffd1b8761213dc0\`
+- Provider: \`openclaw\`
+- Adapter: \`openclaw\`
+- Runtime manifest: \`sha256:a1b31859e0674254b1a7bffadc0d28b4a56999177a209be10003054f0ebad598\`
+- Protocol: \`fixture-runtime/v1\`
+- Task: \`task_transport\`
+- Attempt: \`attempt_transport\`
+
+## Objective
+
+Ship the provider transport
+
+## Background
+
+- Translate the immutable task contract without changing completion ownership.
+
+
+## Constraints
+
+- Operate only inside the assigned worktree: /tmp/veritas-kanban-transport
+
+
+## Workspace
+
+- Repository: \`veritas-kanban\`
+- Branch: \`feat/openclaw-transport\`
+- Base branch: \`main\`
+- Worktree: \`/tmp/veritas-kanban-transport\`
+- Launch HEAD: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Launch state: clean
+
+### Launch Baseline Files
+
+- None.
+
+
+
+## Commit Policy
+
+Required: create at least one new commit attributable to this attempt.
+
+## Acceptance Criteria
+
+- The provider receives the persisted envelope.
+
+
+## Allowed Side Effects
+
+- \`filesystem-write\` within \`/tmp/veritas-kanban-transport\`
+- \`process-execute\` within \`/tmp/veritas-kanban-transport\`
+- \`git-commit\` within \`/tmp/veritas-kanban-transport\`
+- \`network-egress\` within \`sandbox policy\`
+
+
+## Expected Outputs
+
+- Required \`text\` \`completion-summary\`: A concise summary of the completed work and remaining risks.
+- Required \`commit\` \`git-commit\`: At least one new commit attributable to this attempt.
+
+
+## Verification Gates
+
+- Required \`provider-snapshot\`: Run the provider transport snapshot. Evidence is required.
+
+
+## Completion Evidence Contract
+
+- Schema: \`completion-result/v1\`
+- Required \`provider-output\` \`terminal-state\`: Harness-verified provider terminal state from the native transport.
+- Required \`verification\` \`verification\`: Harness-verified evidence for every required verification gate.
+- Required \`commit\` \`commit\`: Harness-verified commit created after the launch baseline.
+
+
+## Profile Instructions (agent profile)
+
+Follow the release checklist.
+
+
+## Resume Context (task checkpoint)
+
+- Resume count: 1
+- Captured at: 2026-07-23T20:45:00.000Z
+- Last step: 2
+
+\`\`\`json
+{
+  "next": "dispatch"
+}
+\`\`\`
+
+Continue from this checkpoint. Do not repeat work already represented in the saved state.
+
+
+## Completion (OpenClaw callback)
+
+When the work reaches a terminal state, report it to Veritas.
+
+- Endpoint: \`POST http://localhost:3001/api/agents/task_transport/complete\`
+
+\`\`\`bash
+curl -X POST http://localhost:3001/api/agents/task_transport/complete \\
+  -H "Content-Type: application/json" \\
+  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:a1b31859e0674254b1a7bffadc0d28b4a56999177a209be10003054f0ebad598","success":true,"summary":"Brief description of what was done"}'
+\`\`\`
+
+For failure, send \`success: false\` and include an \`error\` message.
+
+No native structured-output support is assumed; Veritas validates and normalizes the callback."
+`;

@@ -38,6 +38,14 @@ import {
   HttpOpenClawTaskAdapter,
   isOpenClawGatewayPrivateIpAllowed,
 } from './openclaw-workflow-adapter.js';
+import {
+  renderCodexCliTaskEnvelope,
+  renderCodexSdkTaskEnvelope,
+  renderHermesTaskEnvelope,
+  renderOpenClawTaskEnvelope,
+  type ProviderTaskEnvelopeRenderInput,
+  type ProviderTaskEnvelopeTransport,
+} from './provider-task-envelope-renderer.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import { evaluateTaskReadiness, RUN_LAUNCH_MANIFEST_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import type {
@@ -119,7 +127,7 @@ const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
 export interface AgentProviderStartContext {
   task: Task;
   agentConfig?: AgentConfig;
-  prompt: string;
+  transport: ProviderTaskEnvelopeTransport;
   logPath: string;
   attemptId: string;
   startedAt: string;
@@ -142,6 +150,7 @@ export interface AgentProviderProbeContext {
 export interface AgentProviderAdapter {
   id: ExecutableAgentProvider;
   label: string;
+  renderTaskEnvelope(input: ProviderTaskEnvelopeRenderInput): ProviderTaskEnvelopeTransport;
   probe(context: AgentProviderProbeContext): Promise<ProviderRuntimeManifest>;
   start(context: AgentProviderStartContext): Promise<void> | void;
   stop(context: AgentProviderStopContext): Promise<void> | void;
@@ -491,17 +500,15 @@ export class ClawdbotAgentService {
       networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
       executionPolicy: task.executionPolicy,
     });
-    const taskPrompt = this.buildTaskPrompt(
-      task,
-      worktreePath,
-      attemptId,
-      providerRuntimeManifest.digest,
-      profileLaunch?.instructions
-    );
+    const taskTransport = adapter.renderTaskEnvelope({
+      taskEnvelope,
+      profileInstructions: profileLaunch?.instructions,
+      checkpoint: task.checkpoint,
+    });
     const manifest = await this.compileRunLaunchManifest({
       task,
       taskEnvelope,
-      taskPrompt,
+      taskTransport,
       attemptId,
       startedAt,
       logPath,
@@ -734,18 +741,15 @@ export class ClawdbotAgentService {
     validatePathSegment(taskId);
     validatePathSegment(attemptId);
 
-    // Build the task prompt for Clawdbot
-    const taskPrompt = this.buildTaskPrompt(
-      task,
-      worktreePath,
-      attemptId,
-      providerRuntimeManifest.digest,
-      profileLaunch?.instructions
-    );
+    const taskTransport = adapter.renderTaskEnvelope({
+      taskEnvelope,
+      profileInstructions: profileLaunch?.instructions,
+      checkpoint: task.checkpoint,
+    });
     const runLaunchManifest = await this.compileRunLaunchManifest({
       task,
       taskEnvelope,
-      taskPrompt,
+      taskTransport,
       attemptId,
       startedAt,
       logPath,
@@ -842,7 +846,7 @@ export class ClawdbotAgentService {
       logPath,
       task,
       agent,
-      taskPrompt,
+      taskTransport.content,
       providerRuntimeManifest,
       taskEnvelope,
       runLaunchManifest
@@ -907,7 +911,7 @@ export class ClawdbotAgentService {
       await adapter.start({
         task,
         agentConfig: launchAgentConfig,
-        prompt: taskPrompt,
+        transport: taskTransport,
         logPath,
         attemptId,
         startedAt,
@@ -1626,11 +1630,12 @@ export class ClawdbotAgentService {
       return {
         id: definition.id,
         label: definition.label,
+        renderTaskEnvelope: renderCodexCliTaskEnvelope,
         probe,
         start: ({
           task,
           agentConfig,
-          prompt,
+          transport,
           logPath,
           attemptId,
           startedAt,
@@ -1638,11 +1643,11 @@ export class ClawdbotAgentService {
           sandboxPolicy,
           runLaunchManifest,
         }) => {
-          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
           this.startCodexCli(
             task,
             agentConfig,
-            prompt,
+            transport.content,
             logPath,
             attemptId,
             startedAt,
@@ -1660,11 +1665,12 @@ export class ClawdbotAgentService {
       return {
         id: definition.id,
         label: definition.label,
+        renderTaskEnvelope: renderCodexSdkTaskEnvelope,
         probe,
         start: ({
           task,
           agentConfig,
-          prompt,
+          transport,
           logPath,
           attemptId,
           startedAt,
@@ -1672,14 +1678,14 @@ export class ClawdbotAgentService {
           sandboxPolicy,
           runLaunchManifest,
         }) => {
-          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
           const abortController = new AbortController();
           const pending = pendingAgents.get(task.id);
           if (pending) pending.abortController = abortController;
           void this.startCodexSdk(
             task,
             agentConfig,
-            prompt,
+            transport.content,
             logPath,
             attemptId,
             startedAt,
@@ -1729,11 +1735,12 @@ export class ClawdbotAgentService {
       return {
         id: definition.id,
         label: definition.label,
+        renderTaskEnvelope: renderHermesTaskEnvelope,
         probe,
         start: ({
           task,
           agentConfig,
-          prompt,
+          transport,
           logPath,
           attemptId,
           startedAt,
@@ -1741,11 +1748,11 @@ export class ClawdbotAgentService {
           sandboxPolicy,
           runLaunchManifest,
         }) => {
-          this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
           this.startHermesCli(
             task,
             agentConfig,
-            prompt,
+            transport.content,
             logPath,
             attemptId,
             startedAt,
@@ -1775,9 +1782,10 @@ export class ClawdbotAgentService {
     return {
       id: definition.id,
       label: definition.label,
+      renderTaskEnvelope: renderOpenClawTaskEnvelope,
       probe,
-      start: async ({ prompt, task, attemptId, agentConfig, runLaunchManifest }) => {
-        this.assertProviderAdapterLaunchManifest(provider, runLaunchManifest);
+      start: async ({ transport, task, attemptId, agentConfig, runLaunchManifest }) => {
+        this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
         // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
         // The real spawn acknowledgement surfaces policy denial or gateway
         // unreachability, which the caller's error handler rolls back to 'todo'.
@@ -1788,7 +1796,7 @@ export class ClawdbotAgentService {
           agentId: agentConfig?.type || 'openclaw',
           agentName: agentConfig?.name,
           model: agentConfig?.model,
-          prompt,
+          prompt: transport.content,
           timeoutSeconds: 900,
         });
         await this.taskService.patchTaskAttempt(task.id, attemptId, {
@@ -1845,6 +1853,28 @@ export class ClawdbotAgentService {
           manifestDigest: manifest.digest,
           remediation:
             'Use a run-scoped tool-control adapter after the tool-server control plane is enabled.',
+        }
+      );
+    }
+  }
+
+  private assertProviderAdapterTransport(
+    provider: ExecutableAgentProvider,
+    transport: ProviderTaskEnvelopeTransport,
+    manifest: RunLaunchManifest
+  ): void {
+    this.assertProviderAdapterLaunchManifest(provider, manifest);
+    if (
+      transport.provider !== provider ||
+      transport.taskEnvelopeDigest !== manifest.taskEnvelope.digest
+    ) {
+      throw new ConflictError(
+        'Provider task-envelope transport does not match the selected launch manifest.',
+        {
+          adapterProvider: provider,
+          transportProvider: transport.provider,
+          transportTaskEnvelopeDigest: transport.taskEnvelopeDigest,
+          manifestTaskEnvelopeDigest: manifest.taskEnvelope.digest,
         }
       );
     }
@@ -3219,7 +3249,7 @@ export class ClawdbotAgentService {
   private async compileRunLaunchManifest(input: {
     task: Task;
     taskEnvelope: TaskEnvelope;
-    taskPrompt: string;
+    taskTransport: ProviderTaskEnvelopeTransport;
     attemptId: string;
     startedAt: string;
     logPath: string;
@@ -3288,14 +3318,17 @@ export class ClawdbotAgentService {
       {
         id: 'effective-task-request',
         kind: 'task' as const,
-        content: input.taskPrompt,
+        content: input.taskTransport.content,
         materialContent: this.normalizeRunLaunchTaskPrompt(
-          input.taskPrompt,
+          input.taskTransport.content,
           input.attemptId,
           worktreePath,
+          input.taskEnvelope.digest,
           input.providerRuntimeManifest.digest
         ),
-        origin: `task-envelope:${input.taskEnvelope.schemaVersion}`,
+        origin:
+          `task-envelope:${input.taskEnvelope.schemaVersion};` +
+          `adapter:${input.taskTransport.provider}`,
         precedence: 100,
       },
       ...(hasRepositoryInstructions
@@ -3447,6 +3480,12 @@ export class ClawdbotAgentService {
         scope: 'task-envelope',
         source: `task-envelope:${input.taskEnvelope.schemaVersion}`,
         precedence: 100,
+      },
+      {
+        field: 'instructions.effective-task-request',
+        scope: 'provider',
+        source: `adapter:${input.taskTransport.provider}:task-envelope-transport`,
+        precedence: 110,
       },
       ...(hasRepositoryInstructions
         ? [
@@ -4028,11 +4067,13 @@ export class ClawdbotAgentService {
     prompt: string,
     attemptId: string,
     worktreePath: string | undefined,
+    taskEnvelopeDigest: string,
     providerRuntimeDigest: string
   ): string {
     const normalizedIdentifiers = [
       [attemptId, '<attempt-id>'],
       [worktreePath, '<worktree>'],
+      [taskEnvelopeDigest, '<task-envelope-digest>'],
       [providerRuntimeDigest, '<provider-runtime-digest>'],
     ].reduce(
       (normalized, [value, replacement]) =>
@@ -4078,64 +4119,6 @@ export class ClawdbotAgentService {
       });
     }
     return parent as TaskAttempt & { runLaunchManifest: RunLaunchManifest };
-  }
-
-  private buildTaskPrompt(
-    task: Task,
-    worktreePath: string,
-    attemptId: string,
-    providerRuntimeManifestDigest: string,
-    profileInstructions?: string
-  ): string {
-    // Build checkpoint context if available
-    let checkpointSection = '';
-    if (task.checkpoint) {
-      const resumeCount = task.checkpoint.resumeCount || 0;
-      const checkpointAge = Math.floor(
-        (Date.now() - new Date(task.checkpoint.timestamp).getTime()) / 1000 / 60
-      );
-      checkpointSection = `
-## ⚠️ CHECKPOINT DETECTED — This is a RESUME (not a fresh start)
-
-**Resume Count:** ${resumeCount} time(s)
-**Last Checkpoint:** ${task.checkpoint.timestamp} (${checkpointAge} minutes ago)
-**Last Step:** ${task.checkpoint.step}
-
-### Saved State:
-\`\`\`json
-${JSON.stringify(task.checkpoint.state, null, 2)}
-\`\`\`
-
-**IMPORTANT:** Continue from where you left off. Review the saved state above to understand what was already done.
-`;
-    }
-
-    return `# Agent Task Request
-
-**Task ID:** ${task.id}
-**Attempt ID:** ${attemptId}
-**Worktree:** ${worktreePath}
-${checkpointSection}
-## Task: ${task.title}
-
-${task.description || 'No description provided.'}
-
-${profileInstructions ? `${profileInstructions}\n` : ''}
-
-## Instructions
-
-1. Work in the directory: \`${worktreePath}\`
-2. Complete the task described above
-3. Commit your changes with a descriptive message
-4. When done, call the completion endpoint:
-   \`\`\`bash
-   curl -X POST http://localhost:3001/api/agents/${task.id}/complete \\
-     -H "Content-Type: application/json" \\
-     -d '{"attemptId": "${attemptId}", "providerRuntimeManifestDigest": "${providerRuntimeManifestDigest}", "success": true, "summary": "Brief description of what was done"}'
-   \`\`\`
-
-If you encounter errors, call with \`success: false\` and include the error message.
-`;
   }
 
   private async initLogFile(

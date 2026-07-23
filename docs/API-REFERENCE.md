@@ -1945,8 +1945,9 @@ additional runtime capabilities, and compare against a parent attempt:
 ```
 
 The launch path resolves the package runtime against configured provider
-profiles, applies package model/sandbox/budget posture, injects package
-instructions, and records the profile ID and version. Baseline launch
+profiles, applies package model/sandbox/budget posture, and renders bounded
+package instructions in an attributed section of the provider-owned transport.
+It also records the profile ID and version. Baseline launch
 capabilities plus caller, profile, sandbox, and budget requirements must be
 `supported` or `advisory` in one valid manifest before attempt state is
 mutated. Failure returns `409 Conflict` with `requiredCapabilities`, reasons,
@@ -2046,7 +2047,7 @@ delayed control cannot affect a replacement run:
 `actor`) to that body. `POST /api/agents/:taskId/tokens` also requires the exact
 `attemptId`; the server never falls back to the task's current attempt.
 
-Completion callbacks must identify the exact run that produced them:
+OpenClaw completion callbacks must identify the exact run that produced them:
 
 ```json
 {
@@ -2057,10 +2058,12 @@ Completion callbacks must identify the exact run that produced them:
 }
 ```
 
-`POST /api/agents/:taskId/complete` rejects callbacks whose attempt or manifest
-digest does not match the active run. Token reports likewise bind telemetry and
-budget mutation to their required `attemptId`, so a late event from a prior
-attempt cannot charge or stop a replacement run.
+`POST /api/agents/:taskId/complete` rejects OpenClaw callbacks whose attempt or
+manifest digest does not match the active run. Codex CLI, Codex SDK, and Hermes
+do not call this endpoint; Veritas captures their terminal process or stream
+output and owns completion normalization. Token reports likewise bind
+telemetry and budget mutation to their required `attemptId`, so a late event
+from a prior attempt cannot charge or stop a replacement run.
 
 ### Provider Runtime Manifest On Attempts
 
@@ -2127,6 +2130,23 @@ does not authorize. Path scopes wider than the assigned worktree are clamped to
 the worktree, while disjoint path scopes are dropped. Generic task PATCH calls
 cannot set `attempt.taskEnvelope` or `attempt.completionResult`; only the
 launch and finalization services may persist those authoritative contracts.
+
+Before dispatch, the selected adapter renders the envelope through an immutable
+`provider-task-envelope-transport/v1` request. Built-in renderers exist for
+OpenClaw, Codex CLI, Codex SDK, and Hermes. Every rendered request includes the
+envelope and runtime identity, objective and bounded context, workspace
+baseline, explicit commit policy, allowed side effects, outputs, verification
+gates, and completion evidence contract. Profile instructions and task
+checkpoint state are separate attributed sections capped at 20,000 characters
+each. The exact rendered content is fingerprinted in the run launch manifest
+as `instructions.effective-task-request`.
+
+OpenClaw's transport includes the attempt-bound completion callback. Codex CLI,
+Codex SDK, and Hermes transports explicitly forbid calling that callback and
+return terminal output through harness-owned process or stream capture.
+Provider and adapter identity must match the envelope before dispatch. Veritas
+does not infer native structured-output support from prompt rendering and owns
+completion validation and normalization.
 
 The full manifest contains one entry for every known runtime and sandbox
 capability. A provider version/build change invalidates cached conformance
