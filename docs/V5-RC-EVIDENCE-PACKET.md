@@ -57,7 +57,7 @@ publication are added only after those independent gates pass.
 | Isolated populated SQLite packaged upgrade       | PASS    | Unsigned app selected **Use Existing Data**, showed 2/3/1/1/1 counts, and preserved every count plus migrated owner and task-owner metadata through password setup |
 | Packaged drag-region and control contract        | PASS    | Electron reported `drag` for the setup surface and `no-drag` for controls; Agent Ready remained clickable and selected                                             |
 | Independent standards and specification review   | PASS    | Two separate reviewers found the publication-proof and MCP-version gaps; both were corrected before commit                                                         |
-| Opposite-model review                            | BLOCKED | The Claude Code CLI has no authenticated session and GitHub Copilot CLI returned no quota; the repository Copilot reviewer will be requested on the release PR     |
+| Repository Copilot review                        | PASS    | Reviewed all 19 changed files on PR #922; its two documentation consistency findings were corrected before merge                                                   |
 
 The residual production advisories are `body-parser` low-severity
 `GHSA-v422-hmwv-36x6` and `@hono/node-server` moderate-severity
@@ -66,6 +66,10 @@ transitive MCP dependency; the Veritas MCP package uses stdio and the supported
 desktop target is macOS. Neither advisory crosses the release gate's
 high/critical threshold. Both remain visible rather than being hidden behind an
 unsafe major-version override.
+
+Direct Claude CLI review was unavailable because Claude Code had no
+authenticated session and GitHub Copilot CLI returned no quota. The repository
+Copilot reviewer supplied the available external review gate on PR #922.
 
 ### Publication evidence
 

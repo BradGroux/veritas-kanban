@@ -95,7 +95,7 @@ Don't use it when:
 - **Stdio transport only** — the MCP server is a child process of the client. No network ports opened.
 - **Stateless proxy** — every tool call translates to one or more HTTP requests to the VK server. The MCP process holds no state.
 - **Zod validation** — all tool inputs are validated with Zod schemas before hitting the API.
-- **@modelcontextprotocol/sdk v1.29** — uses the official TypeScript SDK.
+- **@modelcontextprotocol/sdk v1.29.0** — uses the official TypeScript SDK.
 
 ---
 

@@ -1861,7 +1861,7 @@ Veritas Kanban is an AI-native project management board built for developers and
 - **Frontend:** React 19, Vite 6, TypeScript 5.7, Tailwind CSS 3.4, Shadcn UI
 - **Backend:** Express 4.21, TypeScript, file-based storage
 - **Testing:** Playwright 1.58, Vitest 4
-- **Runtime:** Node.js 22+, pnpm 9+
+- **Runtime:** Node.js ≥ 22.22.1, pnpm ≥ 11.0.0
 
 ---
 
