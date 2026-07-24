@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BuzzDefinitionLinkSchema } from './buzz-definition-schemas.js';
 
 const SlugSchema = z
   .string()
@@ -85,6 +86,7 @@ export const TeamRosterManifestSchema = z
         source: z.string().trim().min(1).max(500).optional(),
         importedAt: z.string().datetime().optional(),
         updatedAt: z.string().datetime().optional(),
+        buzz: BuzzDefinitionLinkSchema.optional(),
       })
       .strict()
       .optional(),

@@ -333,6 +333,58 @@ describe('ConfigService', () => {
     });
   });
 
+  describe('mutateConfig', () => {
+    it('serializes cross-instance file mutations without losing either update', async () => {
+      await service.getConfig();
+      const second = new ConfigService({ configDir, configFile, storageType: 'file' });
+      const profile = (id: string) =>
+        ({
+          id,
+          schemaVersion: 'agent-profile-package/v1',
+          version: '1.0.0',
+          displayName: id,
+          role: 'test',
+          enabled: false,
+          capabilities: [],
+          defaultTaskTypes: [],
+          runtime: { agent: id },
+        }) as const;
+
+      await Promise.all([
+        service.mutateConfig((config) => ({
+          config: { ...config, agentProfiles: [...(config.agentProfiles ?? []), profile('one')] },
+          result: 'one',
+        })),
+        second.mutateConfig((config) => ({
+          config: { ...config, agentProfiles: [...(config.agentProfiles ?? []), profile('two')] },
+          result: 'two',
+        })),
+      ]);
+      second.dispose();
+
+      service.invalidateCache();
+      expect((await service.getConfig()).agentProfiles?.map((item) => item.id).sort()).toEqual([
+        'one',
+        'two',
+      ]);
+    });
+
+    it('commits a SQLite read-modify-write mutation transactionally', async () => {
+      const sqlite = new ConfigService({
+        storageType: 'sqlite',
+        sqliteConnectionOptions: { databasePath: path.join(tmpDir, 'settings.db') },
+      });
+      const result = await sqlite.mutateConfig((config) => ({
+        config: { ...config, defaultAgent: 'hermes' },
+        result: { updated: true },
+      }));
+
+      expect(result).toEqual({ updated: true });
+      expect((await sqlite.getConfig()).defaultAgent).toBe('hermes');
+      sqlite.dispose();
+    });
+  });
+
   describe('invalidateCache', () => {
     it('should force re-read on next getConfig', async () => {
       const config1 = await service.getConfig();

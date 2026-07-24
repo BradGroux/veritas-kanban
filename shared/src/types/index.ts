@@ -41,6 +41,7 @@ export * from './sandbox-policy.types.js';
 export * from './agent-budget.types.js';
 export * from './agent-profile-package.types.js';
 export * from './team-roster.types.js';
+export * from './buzz-definition.types.js';
 export * from './workspace-capability.types.js';
 export * from './scheduler.types.js';
 export * from './queue-monitor.types.js';

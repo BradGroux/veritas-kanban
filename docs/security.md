@@ -176,6 +176,20 @@ Optional command discovery runs without a shell and receives a minimal
 environment that excludes provider and Buzz credentials. See
 [Buzz Communication Adapter](BUZZ-INTEGRATION.md).
 
+Buzz persona/team import accepts only reconstructed, signature-verified kinds
+`30175` and `30176` from the configured signed query path. Event, content,
+JSON depth, key count, array count, string, URL, and batch limits apply before
+preview. Secret-like values and fields for credentials, environment, commands,
+paths, processes, managed agents, MCP, hooks, skills, or engrams reject the
+record. Public avatar URLs are validated but never fetched.
+
+Definition import is an explicit one-way data operation. Newly materialized
+profiles, rosters, and roster members are disabled. Declared Buzz runtime,
+model, and provider values remain source metadata and are not provider-runtime
+evidence. The source event ID and optimistic local revision are checked again
+inside the authoritative JSON-file lock or SQLite transaction before mutation.
+Source removal never deletes local materializations.
+
 ## Provider Runtime Capability Enforcement
 
 Provider runtime manifests are authorization evidence, not display metadata.

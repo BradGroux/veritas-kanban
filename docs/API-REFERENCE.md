@@ -747,6 +747,10 @@ POST /api/integrations/communication/adapters/:adapterId/disconnect
 GET  /api/integrations/communication/adapters/:adapterId/buzz/channels
 PUT  /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId
 POST /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId/disable
+GET  /api/integrations/communication/adapters/:adapterId/buzz/definitions
+GET  /api/integrations/communication/adapters/:adapterId/buzz/definitions/links
+POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/preview
+POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/import
 GET  /api/integrations/communication/mappings
 GET  /api/integrations/communication/deliveries
 ```
@@ -846,6 +850,49 @@ Omit `replyToSquadMessageId` for a root. The response includes the signed Buzz
 coordinate and a delivery status. `delivery_unknown` is a durable visible
 state, not a failure alias. `POST .../poll` queries the event ID before any
 safe resubmission. See [Buzz Communication Adapter](BUZZ-INTEGRATION.md).
+
+**Buzz definition preview body**:
+
+```json
+{
+  "coordinate": {
+    "authorPubkey": "<64-hex-public-key>",
+    "kind": 30175,
+    "dTag": "security-reviewer"
+  },
+  "action": "create"
+}
+```
+
+The list returns only signature-verified NIP-33 persona and team heads from the
+current healthy Buzz connection. Preview returns the exact event/content hash,
+mapped/source-only/ignored/rejected field report, proposed disabled
+profile/roster, collisions, unresolved same-author persona slugs, and an
+optimistic `expectedLocalRevision` when a local target or linked persona
+dependency participates in the proposed materialization.
+
+**Buzz definition import body**:
+
+```json
+{
+  "coordinate": {
+    "authorPubkey": "<64-hex-public-key>",
+    "kind": 30175,
+    "dTag": "security-reviewer"
+  },
+  "action": "refresh",
+  "targetId": "buzz-security-reviewer",
+  "expectedEventId": "<64-hex-event-id>",
+  "expectedLocalRevision": "<64-hex-revision>"
+}
+```
+
+Actions are `create`, `link`, `refresh`, or `skip`. Source replacement,
+concurrent local changes, and unresolved collisions return `409`. Created
+profiles, rosters, and roster members are disabled. The link-status endpoint
+reports `current`, `changed`, `missing`, or `unavailable` without deleting the
+local materialization. Preview requires `settings:read`; import requires
+`settings:write`. No endpoint writes definitions back to Buzz.
 
 **Reply ingest body**:
 

@@ -7,7 +7,9 @@ native Nostr HTTP and WebSocket contracts. It does not spawn `buzz`,
 
 Buzz is a communication adapter, not an `AgentProvider`. It does not create a
 Veritas task, start an ACP agent, synchronize DMs or forums, or read Buzz
-Desktop's internal state.
+Desktop's internal state. An operator may separately materialize selected
+public Buzz persona and team definitions as disabled Veritas profiles and
+roster members. Definition import is data-only and never starts a process.
 
 ## Supported contract
 
@@ -136,6 +138,73 @@ vk doctor --json
 
 `POST .../buzz-default/test` runs the same read-only probe. It never sends a
 message.
+
+## Import persona and team definitions
+
+In **Settings -> Agents -> Buzz Persona and Team Definitions**, an operator can
+list, preview, and explicitly import public Buzz definition heads:
+
+- kind `30175` persona definitions keyed by `(author, kind, d tag)`;
+- kind `30176` team definitions keyed the same way; and
+- the deterministic NIP-33 head with the greatest `created_at`, using the
+  lowest event ID to break a tie.
+
+The importer reuses the signed, DNS-pinned Buzz `/query` transport and requires
+current healthy compatibility evidence. Every candidate has bounded Nostr
+shape, tags, content, JSON depth, arrays, strings, and batch size. Its
+signature is reconstructed and verified before it can appear in Settings.
+Invalid envelopes contribute only to a rejected count. A signature-valid
+current head with rejected content appears as a non-importable coordinate and
+field-level validation reason, so Veritas never silently falls back to an older
+definition. Unsafe source values are not echoed into the UI or logs.
+
+Preview classifies each field before mutation:
+
+| Buzz definition field                                                                     | Import behavior                                                                    |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Persona `display_name`                                                                    | Source-owned profile display name.                                                 |
+| Persona `system_prompt`                                                                   | Source-owned profile prompt when present.                                          |
+| Persona `avatar_url`                                                                      | Validated public metadata only. Veritas does not fetch it.                         |
+| Persona `runtime`, `model`, `provider`                                                    | Source preferences only, never runtime evidence or active provider configuration.  |
+| Persona `name_pool`                                                                       | Bounded source metadata only.                                                      |
+| Persona reserved response fields                                                          | Source-only. Veritas does not apply them.                                          |
+| Team `name`, `description`                                                                | Source-owned roster fields for create or refresh.                                  |
+| Team `persona_ids`                                                                        | Same-author persona slugs resolved to linked profiles and disabled roster members. |
+| Unknown fields                                                                            | Ignored with a field-level forward-compatibility explanation.                      |
+| Secrets, environment, commands, paths, managed process state, MCP, hooks, skills, engrams | Rejected.                                                                          |
+
+The available actions are:
+
+- `create`: use the deterministic `buzz-<slug>` profile ID or
+  `buzz-team-<slug>` roster ID;
+- `link`: attach provenance to an explicitly selected existing profile or
+  roster without replacing local fields;
+- `refresh`: replace only the saved source-owned fields after a new preview;
+  and
+- `skip`: record no local mutation.
+
+Create, link, and refresh require collision-free preview. A preview returns an
+optimistic local revision and exact source event ID. Import rejects a changed
+local target or replaced source, so the operator must review the current diff
+instead of overwriting concurrent edits. Native profile/roster fields remain
+authoritative; refresh preserves local-only fields and existing routing rules.
+
+New persona profiles, new rosters, and imported roster members are disabled.
+Import never launches, enables, routes, installs, fetches, or writes back to
+Buzz. Removing or replacing a Buzz definition changes its linked-source status
+to `missing` or `changed`; it does not delete the materialized local object.
+
+Definition API:
+
+```text
+GET  /api/integrations/communication/adapters/:adapterId/buzz/definitions
+GET  /api/integrations/communication/adapters/:adapterId/buzz/definitions/links
+POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/preview
+POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/import
+```
+
+Reads and preview require `settings:read`. Import requires `settings:write`.
+There is no continuous synchronization and no Buzz write-back endpoint.
 
 ## Send roots and replies
 

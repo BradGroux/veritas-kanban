@@ -379,4 +379,35 @@ describe('v1 REST permission guard presets', () => {
       })
     );
   });
+
+  it('keeps Buzz definition preview read-only while guarding materialization', () => {
+    expect(
+      runGuard(
+        integrationsAccess,
+        mockRequest(
+          'POST',
+          '/communication/adapters/buzz-default/buzz/definitions/preview',
+          'read-only',
+          ['settings:read']
+        )
+      ).next
+    ).toHaveBeenCalled();
+
+    const imported = runGuard(
+      integrationsAccess,
+      mockRequest(
+        'POST',
+        '/communication/adapters/buzz-default/buzz/definitions/import',
+        'read-only',
+        ['settings:read']
+      )
+    );
+    expect(imported.next).not.toHaveBeenCalled();
+    expect(imported.res.status).toHaveBeenCalledWith(403);
+    expect(imported.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['settings:write'] }),
+      })
+    );
+  });
 });

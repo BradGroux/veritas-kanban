@@ -182,6 +182,43 @@ describe('BuzzCommunicationService', () => {
     await expect(service.eventExists(config(identity.publicKey), eventId)).resolves.toBe(false);
     await expect(service.eventExists(config(identity.publicKey), eventId)).resolves.toBeUndefined();
   });
+
+  it('uses the signed DNS-pinned query transport for bounded definition reads', async () => {
+    const identity = credentials();
+    const definitions = [{ id: 'd'.repeat(64), kind: 30_175 }];
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(definitions), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const service = new BuzzCommunicationService({
+      fetch,
+      resolveSecret: vi.fn().mockResolvedValue(identity.privateKey),
+      nip98Signer: {
+        sign: vi.fn().mockResolvedValue({
+          authorization: 'Nostr signed',
+          publicKey: identity.publicKey,
+        }),
+      },
+    });
+
+    await expect(
+      service.queryEvents(config(identity.publicKey), [{ kinds: [30_175, 30_176], limit: 200 }])
+    ).resolves.toEqual(definitions);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://${COMMUNITY}/query`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Nostr signed' }),
+        body: JSON.stringify([{ kinds: [30_175, 30_176], limit: 200 }]),
+      }),
+      expect.objectContaining({ logFailures: false })
+    );
+    await expect(
+      service.queryEvents(config(identity.publicKey), [{ kinds: [30_177], limit: 1 }])
+    ).rejects.toThrow('outside the allowed definition bounds');
+  });
 });
 
 describe('Buzz inbound event contract', () => {

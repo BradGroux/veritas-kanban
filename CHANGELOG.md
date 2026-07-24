@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added one-way Buzz persona/team definition import with signed bounded NIP-33
+  head queries, exact v0.4.24 field policy, preview/diff/collision actions,
+  same-author team resolution, disabled profile and roster materialization,
+  immutable provenance, source-status reporting, optimistic JSON/SQLite
+  mutations, audit history, Settings controls, and malicious-source coverage.
+  Runtime/model/provider preferences remain source-only, and import never
+  launches, enables, routes, fetches, installs, or writes back (#910).
 - Added a reference-only Buzz communication adapter with typed configuration,
   host-preserving HTTP/WS normalization, SSRF-aware bounded relay probes,
   NIP-11 software/version/community checks, NIP-98 identity and membership/read

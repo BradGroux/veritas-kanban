@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
+import { BuzzDefinitionLinkSchema } from './buzz-definition-schemas.js';
 
 const AgentTypeSchema = z
   .string()
@@ -104,6 +105,7 @@ export const AgentProfilePackageMetadataSchema = z
     source: z.string().trim().min(1).max(500).optional(),
     importedAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime().optional(),
+    buzz: BuzzDefinitionLinkSchema.optional(),
   })
   .strict()
   .optional();

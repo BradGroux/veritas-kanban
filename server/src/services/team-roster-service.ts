@@ -1,6 +1,7 @@
 import yaml from 'yaml';
 import type {
   AgentType,
+  AgentProfilePackage,
   TeamRosterExportResult,
   TeamRosterFormat,
   TeamRosterManifest,
@@ -27,9 +28,27 @@ export class TeamRosterService {
     return config.teamRoster ?? null;
   }
 
+  async mutateRoster<T>(
+    mutator: (
+      roster: TeamRosterManifest | null,
+      profiles: AgentProfilePackage[]
+    ) => { roster: TeamRosterManifest; result: T }
+  ): Promise<T> {
+    return this.configService.mutateConfig((config) => {
+      const mutation = mutator(config.teamRoster ?? null, config.agentProfiles ?? []);
+      const parsed = TeamRosterManifestSchema.parse(mutation.roster) as TeamRosterManifest;
+      return {
+        config: { ...config, teamRoster: parsed },
+        result: mutation.result,
+      };
+    });
+  }
+
   validateContent(input: ImportRosterInput): TeamRosterValidationResult {
     try {
-      return this.validateUnknown(this.parseContent(input.content, input.format));
+      return this.rejectSystemOwnedBuzz(
+        this.validateUnknown(this.parseContent(input.content, input.format))
+      );
     } catch (error) {
       return {
         valid: false,
@@ -39,7 +58,7 @@ export class TeamRosterService {
   }
 
   validateRoster(roster: unknown): TeamRosterValidationResult {
-    return this.validateUnknown(roster);
+    return this.rejectSystemOwnedBuzz(this.validateUnknown(roster));
   }
 
   async saveRoster(roster: TeamRosterManifest): Promise<TeamRosterManifest> {
@@ -50,12 +69,20 @@ export class TeamRosterService {
     }
 
     const config = await this.configService.getConfig();
+    const existingBuzz = config.teamRoster?.metadata?.buzz;
+    if (
+      parsed.roster.metadata?.buzz &&
+      JSON.stringify(parsed.roster.metadata.buzz) !== JSON.stringify(existingBuzz)
+    ) {
+      throw new Error('Buzz provenance is system-owned and cannot be replaced directly');
+    }
     const now = new Date().toISOString();
     const next: TeamRosterManifest = {
       ...parsed.roster,
       metadata: {
         ...parsed.roster.metadata,
         updatedAt: now,
+        buzz: existingBuzz,
       },
     };
     config.teamRoster = next;
@@ -202,6 +229,23 @@ export class TeamRosterService {
     }
 
     return { valid: true, roster: parsed.data as TeamRosterManifest, issues: [] };
+  }
+
+  private rejectSystemOwnedBuzz(
+    validation: TeamRosterValidationResult
+  ): TeamRosterValidationResult {
+    if (validation.valid && validation.roster?.metadata?.buzz) {
+      return {
+        valid: false,
+        issues: [
+          {
+            path: '$.metadata.buzz',
+            message: 'Buzz provenance is system-owned and cannot be imported directly',
+          },
+        ],
+      };
+    }
+    return validation;
   }
 
   private parseContent(content: string, format?: TeamRosterFormat): unknown {

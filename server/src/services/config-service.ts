@@ -421,6 +421,46 @@ export class ConfigService {
     this.setupWatcher();
   }
 
+  /**
+   * Read, validate, and write one configuration mutation under the authoritative
+   * storage lock. The callback must remain synchronous so SQLite can keep the
+   * transaction open without yielding.
+   */
+  async mutateConfig<T>(
+    mutator: (config: AppConfig) => { config: AppConfig; result: T }
+  ): Promise<T> {
+    if (this.sqliteSettings) {
+      const mutation = this.sqliteSettings.mutateConfig((config) =>
+        mutator(normalizeAppConfig(config))
+      );
+      this.config = mutation.config;
+      this.cacheTimestamp = Date.now();
+      return mutation.result;
+    }
+
+    await this.ensureConfigDir();
+    const mutation = await withFileLock(this.configFile, async () => {
+      let current: AppConfig;
+      try {
+        current = normalizeAppConfig(
+          JSON.parse(await fs.readFile(this.configFile, 'utf-8')) as AppConfig
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        current = createDefaultConfig();
+      }
+      const result = mutator(cloneJson(current));
+      const normalized = normalizeAppConfig(result.config);
+      await fs.writeFile(this.configFile, JSON.stringify(normalized, null, 2), 'utf-8');
+      return { config: normalized, result: result.result };
+    });
+    this.lastWriteTime = Date.now();
+    this.config = mutation.config;
+    this.cacheTimestamp = Date.now();
+    this.setupWatcher();
+    return mutation.result;
+  }
+
   async addRepo(repo: RepoConfig): Promise<AppConfig> {
     const config = await this.getConfig();
 

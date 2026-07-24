@@ -1,6 +1,7 @@
 import type { AgentBudgetPolicy } from './agent-budget.types.js';
 import type { AgentProvider, AgentConfig } from './config.types.js';
 import type { AgentType, TaskType } from './task.types.js';
+import type { BuzzDefinitionLink } from './buzz-definition.types.js';
 
 export type AgentProfilePackageFormat = 'json' | 'yaml';
 
@@ -56,6 +57,7 @@ export interface AgentProfilePackageMetadata {
   source?: string;
   importedAt?: string;
   updatedAt?: string;
+  buzz?: BuzzDefinitionLink;
 }
 
 export interface AgentProfilePackage {

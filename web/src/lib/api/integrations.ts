@@ -1,6 +1,12 @@
 import { API_BASE, apiFetch } from './helpers';
 import type {
   BuzzChannelMapping,
+  BuzzDefinitionImportInput,
+  BuzzDefinitionImportResult,
+  BuzzDefinitionLinkedStatus,
+  BuzzDefinitionListResult,
+  BuzzDefinitionPreview,
+  BuzzDefinitionPreviewInput,
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,
@@ -113,6 +119,46 @@ export const integrationsApi = {
   buzzChannelMappings: async (adapterId: string): Promise<BuzzChannelMapping[]> => {
     return apiFetch<BuzzChannelMapping[]>(
       `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/channels`
+    );
+  },
+
+  buzzDefinitions: async (adapterId: string): Promise<BuzzDefinitionListResult> => {
+    return apiFetch<BuzzDefinitionListResult>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/definitions`
+    );
+  },
+
+  buzzDefinitionLinks: async (adapterId: string): Promise<BuzzDefinitionLinkedStatus[]> => {
+    return apiFetch<BuzzDefinitionLinkedStatus[]>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/definitions/links`
+    );
+  },
+
+  previewBuzzDefinition: async (
+    adapterId: string,
+    input: BuzzDefinitionPreviewInput
+  ): Promise<BuzzDefinitionPreview> => {
+    return apiFetch<BuzzDefinitionPreview>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/definitions/preview`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+
+  importBuzzDefinition: async (
+    adapterId: string,
+    input: BuzzDefinitionImportInput
+  ): Promise<BuzzDefinitionImportResult> => {
+    return apiFetch<BuzzDefinitionImportResult>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/definitions/import`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
     );
   },
 

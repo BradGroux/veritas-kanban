@@ -149,6 +149,12 @@ interface ValidatedBuzzAdapterConfig {
   configKey: string;
 }
 
+export interface BuzzQueryContext {
+  probeConfig: BuzzProbeConfig;
+  relay: string;
+  community: string;
+}
+
 function buzzConfigKey(config: BuzzProbeConfig, endpoints: NormalizedBuzzEndpoints): string {
   return JSON.stringify({
     probeRevision: BUZZ_PROBE_REVISION,
@@ -437,6 +443,29 @@ export class CommunicationAdapterService {
     await this.ensureLoaded();
     const adapter = this.state.adapters[adapterId];
     return adapter ? this.publicAdapter(adapter) : null;
+  }
+
+  async getBuzzQueryContext(adapterId: string): Promise<BuzzQueryContext> {
+    validatePathSegment(adapterId);
+    await this.ensureLoaded();
+    const adapter = this.requireAdapter(adapterId);
+    if (adapter.kind !== 'buzz') throw new Error('Definition import requires a Buzz adapter');
+    if (!adapter.enabled) throw new Error('Buzz adapter is disabled');
+    const validated = validateStoredBuzzConfig(adapter);
+    if (!validated) throw new Error('Buzz adapter configuration is invalid');
+    const health = await this.checkBuzzHealth(adapter);
+    if (
+      health.status !== 'healthy' ||
+      !isCurrentBuzzCompatibility(adapter, validated) ||
+      adapter.compatibility?.status !== 'healthy'
+    ) {
+      throw new Error('Buzz compatibility evidence is missing, stale, or unhealthy');
+    }
+    return {
+      probeConfig: validated.probeConfig,
+      relay: validated.endpoints.httpUrl,
+      community: validated.endpoints.community,
+    };
   }
 
   async listBuzzChannelMappings(adapterId?: string): Promise<BuzzChannelMapping[]> {

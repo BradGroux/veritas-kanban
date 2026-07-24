@@ -87,6 +87,11 @@ export const feedbackAccess = routeAccess('report:read', 'comment:write');
 export const integrationsAccess = routeAccess('settings:read', 'settings:write', [
   {
     methods: ['POST'],
+    path: /^\/communication\/adapters\/[^/]+\/buzz\/definitions\/preview\/?$/,
+    permissions: 'settings:read',
+  },
+  {
+    methods: ['POST'],
     path: /^\/communication\/adapters\/[^/]+\/replies\/?$/,
     permissions: 'comment:write',
   },

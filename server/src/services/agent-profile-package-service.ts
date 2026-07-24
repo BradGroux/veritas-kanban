@@ -7,6 +7,7 @@ import type {
   AgentProfilePackageSummary,
   AgentProfileResolvedLaunch,
   AgentProfileValidationResult,
+  AgentConfig,
 } from '@veritas-kanban/shared';
 import { getConfigService, type ConfigService } from './config-service.js';
 import { AgentProfilePackageSchema } from '../schemas/agent-profile-package-schemas.js';
@@ -34,14 +35,54 @@ export class AgentProfilePackageService {
     return (config.agentProfiles ?? []).map((profile) => this.toSummary(profile));
   }
 
+  async listProfilePackages(): Promise<AgentProfilePackage[]> {
+    const config = await this.configService.getConfig();
+    return structuredClone(config.agentProfiles ?? []);
+  }
+
+  async listConfiguredAgents(): Promise<AgentConfig[]> {
+    const config = await this.configService.getConfig();
+    return structuredClone(config.agents);
+  }
+
   async getProfile(id: string): Promise<AgentProfilePackage | null> {
     const config = await this.configService.getConfig();
     return (config.agentProfiles ?? []).find((profile) => profile.id === id) ?? null;
   }
 
+  async mutateProfiles<T>(
+    mutator: (
+      profiles: AgentProfilePackage[],
+      agents: AgentConfig[]
+    ) => { profiles: AgentProfilePackage[]; result: T }
+  ): Promise<T> {
+    return this.configService.mutateConfig((config) => {
+      const mutation = mutator(config.agentProfiles ?? [], config.agents);
+      const profiles = mutation.profiles.map(
+        (profile) => AgentProfilePackageSchema.parse(profile) as AgentProfilePackage
+      );
+      return {
+        config: { ...config, agentProfiles: profiles },
+        result: mutation.result,
+      };
+    });
+  }
+
   validateContent(input: ImportProfileInput): AgentProfileValidationResult {
     try {
-      return this.validateUnknown(this.parseContent(input.content, input.format));
+      const validation = this.validateUnknown(this.parseContent(input.content, input.format));
+      if (validation.valid && validation.profile?.metadata?.buzz) {
+        return {
+          valid: false,
+          issues: [
+            {
+              path: '$.metadata.buzz',
+              message: 'Buzz provenance is system-owned and cannot be imported directly',
+            },
+          ],
+        };
+      }
+      return validation;
     } catch (error) {
       return {
         valid: false,
@@ -75,6 +116,13 @@ export class AgentProfilePackageService {
     const config = await this.configService.getConfig();
     const profiles = config.agentProfiles ?? [];
     const index = profiles.findIndex((candidate) => candidate.id === profile.id);
+    const existing = index >= 0 ? profiles[index] : undefined;
+    if (existing?.metadata?.buzz) {
+      profile.metadata = {
+        ...profile.metadata,
+        buzz: existing.metadata.buzz,
+      };
+    }
     const created = index === -1;
     config.agentProfiles = created
       ? [...profiles, profile]
