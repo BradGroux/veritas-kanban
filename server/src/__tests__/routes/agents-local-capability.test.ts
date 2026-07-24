@@ -434,6 +434,33 @@ describe('agent local capability enforcement', () => {
     expect(mockInterruptConversation).toHaveBeenCalledWith('task_1', 'attempt_1', 'operator_1');
   });
 
+  it('starts a fresh provider-neutral conversation with the operator prompt', async () => {
+    const app = createApp(
+      auth({
+        clientMode: 'desktop-local',
+        capabilities: ['desktop:local'],
+      })
+    );
+
+    const response = await request(app).post('/api/agents/task_1/conversation/fresh').send({
+      agent: 'codex',
+      message: 'Start this task through ACP',
+    });
+
+    expect(response.status).toBe(201);
+    expect(mockStartAgent).toHaveBeenCalledWith(
+      'task_1',
+      'codex',
+      expect.objectContaining({
+        conversation: {
+          mode: 'fresh',
+          intent: 'fresh',
+          message: 'Start this task through ACP',
+        },
+      })
+    );
+  });
+
   it('requires and forwards completion attempt provenance', async () => {
     const app = createApp(auth());
     const digest = `sha256:${'a'.repeat(64)}`;

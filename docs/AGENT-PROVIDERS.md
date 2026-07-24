@@ -223,8 +223,36 @@ rules, so a partial catalog fails closed instead of exposing extra tools.
 Credential-bound server definitions remain blocked until brokered delivery
 lands in #962.
 
-The ACP client-facing server view is separate and tracked by #960. This
-provider adapter does not expose Veritas sessions to external editors.
+### Expose Veritas sessions to ACP clients
+
+The inverse ACP server view lets an editor or another ACP client operate one
+Veritas-managed task without creating a second session store:
+
+```bash
+vk acp status --json
+vk acp serve --stdio --task TASK-001
+```
+
+`vk acp status --json` reports API reachability, protocol methods, and the
+authenticated role/workspace context. Individual operations continue through
+the existing permission guard. `vk acp serve --stdio` writes protocol records
+only to stdout. Diagnostics remain on stderr.
+
+The process may bind one task with `--task`; otherwise `session/new` must
+provide `_meta["veritas/taskId"]`. The client cwd must exactly match the
+task's active worktree. A deterministic task-derived ACP session ID maps
+`session/new`, `session/load`, `session/resume`, `session/prompt`, and
+`session/cancel` onto the existing conversation lifecycle, supervisor,
+run-event journal, approval broker, and launch evidence. Optional
+`_meta["veritas/afterSequence"]` provides cursor replay after reconnect.
+
+The first prompt starts a fresh provider conversation while retaining the
+immutable task envelope. Later prompts use the attributed follow-up path.
+Permission requests are relayed to the ACP client and decided through the
+durable exact-action approval broker. Client-owned MCP server definitions are
+rejected because Veritas owns the run tool catalog. Closing stdin or
+disconnecting the client leaves the durable run active; `session/cancel`
+interrupts the current conversation and never invokes task stop.
 
 See [ACP Provider v1 architecture](architecture/ACP-PROVIDER-V1.md).
 

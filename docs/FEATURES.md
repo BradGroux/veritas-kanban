@@ -313,6 +313,10 @@ First-class support for autonomous coding agents.
   an explicit provider with negotiated lifecycle capabilities, causal message,
   plan, and tool events, durable approval brokering, supervised cancellation,
   immutable launch evidence, and fail-closed run-scoped MCP injection
+- **ACP server view** — `vk acp serve --stdio` exposes a task-bound,
+  provider-neutral ACP v1 view over Veritas conversation lifecycle, causal
+  replay, tool events, and durable approvals without creating a parallel
+  session store; disconnect leaves the supervised run active
 - **Buzz Agent ACP profile** — A disabled-by-default `buzz-agent` runtime uses
   the generic ACP provider, pins Buzz v0.4.24 compatibility evidence, exposes
   only its tested configuration and boot-authentication environment keys, and
