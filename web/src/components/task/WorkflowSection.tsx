@@ -40,6 +40,75 @@ interface WorkflowRun {
   startedAt: string;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function unwrapCollection(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  const record = asRecord(value);
+  return Array.isArray(record?.data) ? record.data : [];
+}
+
+function normalizeWorkflows(value: unknown): Workflow[] {
+  return unwrapCollection(value).flatMap((entry) => {
+    const workflow = asRecord(entry);
+    if (
+      !workflow ||
+      typeof workflow.id !== 'string' ||
+      typeof workflow.name !== 'string' ||
+      typeof workflow.version !== 'number'
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: workflow.id,
+        name: workflow.name,
+        version: workflow.version,
+        description: typeof workflow.description === 'string' ? workflow.description : '',
+        agents: unwrapCollection(workflow.agents).flatMap((agent) => {
+          const record = asRecord(agent);
+          return record && typeof record.id === 'string' && typeof record.name === 'string'
+            ? [{ id: record.id, name: record.name }]
+            : [];
+        }),
+        steps: unwrapCollection(workflow.steps).flatMap((step) => {
+          const record = asRecord(step);
+          return record && typeof record.id === 'string' && typeof record.name === 'string'
+            ? [{ id: record.id, name: record.name }]
+            : [];
+        }),
+      },
+    ];
+  });
+}
+
+function normalizeActiveRuns(value: unknown): WorkflowRun[] {
+  return unwrapCollection(value).flatMap((entry) => {
+    const run = asRecord(entry);
+    if (
+      !run ||
+      typeof run.id !== 'string' ||
+      typeof run.workflowId !== 'string' ||
+      typeof run.startedAt !== 'string' ||
+      !['pending', 'running', 'blocked', 'completed', 'failed'].includes(String(run.status))
+    ) {
+      return [];
+    }
+
+    const normalized = {
+      id: run.id,
+      workflowId: run.workflowId,
+      status: run.status as WorkflowRun['status'],
+      startedAt: run.startedAt,
+      ...(typeof run.currentStep === 'string' ? { currentStep: run.currentStep } : {}),
+    };
+    return normalized.status === 'running' || normalized.status === 'blocked' ? [normalized] : [];
+  });
+}
+
 function getRunStatusColor(status: WorkflowRun['status']) {
   switch (status) {
     case 'running':
@@ -62,6 +131,8 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
     Record<string, LaunchRecommendation[]>
   >({});
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
   const [isStarting, setIsStarting] = useState<string | null>(null);
   const { toast } = useToast();
   const { hasPermission } = useIdentity();
@@ -74,47 +145,56 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
 
     const fetchData = async () => {
       setIsLoading(true);
+      setLoadError(null);
+      setWorkflows([]);
+      setActiveRuns([]);
+      setRecommendationsByWorkflow({});
       try {
         // Fetch available workflows
         const workflowsRes = await fetch(`${API_BASE}/workflows`);
-        if (workflowsRes.ok) {
-          const wJson = await workflowsRes.json();
-          const workflowList = (wJson.data ?? wJson) as Workflow[];
-          if (isCancelled) return;
-          setWorkflows(workflowList);
-
-          const recommendationEntries = await Promise.all(
-            workflowList.map(async (workflow) => {
-              try {
-                const result = await workflowsApi.launchRecommendations({
-                  workflowId: workflow.id,
-                  taskId: task.id,
-                  project: task.project,
-                  taskType: task.type,
-                  cwd: task.git?.worktreePath,
-                });
-                return [workflow.id, result.recommendations] as const;
-              } catch {
-                return [workflow.id, []] as const;
-              }
-            })
-          );
-          if (isCancelled) return;
-          setRecommendationsByWorkflow(Object.fromEntries(recommendationEntries));
+        if (!workflowsRes.ok) {
+          throw new Error(`Unable to load workflows (${workflowsRes.status})`);
         }
+        const workflowList = normalizeWorkflows(await workflowsRes.json());
+        if (isCancelled) return;
+        setWorkflows(workflowList);
+
+        const recommendationEntries = await Promise.all(
+          workflowList.map(async (workflow) => {
+            try {
+              const result = await workflowsApi.launchRecommendations({
+                workflowId: workflow.id,
+                taskId: task.id,
+                project: task.project,
+                taskType: task.type,
+                cwd: task.git?.worktreePath,
+              });
+              return [
+                workflow.id,
+                Array.isArray(result.recommendations) ? result.recommendations : [],
+              ] as const;
+            } catch {
+              return [workflow.id, []] as const;
+            }
+          })
+        );
+        if (isCancelled) return;
+        setRecommendationsByWorkflow(Object.fromEntries(recommendationEntries));
 
         // Fetch active runs for this task
         const runsRes = await fetch(`${API_BASE}/workflows/runs?taskId=${task.id}`);
-        if (runsRes.ok) {
-          const rJson = await runsRes.json();
-          const runs = rJson.data ?? rJson;
-          if (isCancelled) return;
-          setActiveRuns(
-            runs.filter((r: WorkflowRun) => r.status === 'running' || r.status === 'blocked')
-          );
+        if (!runsRes.ok) {
+          throw new Error(`Unable to load workflow runs (${runsRes.status})`);
         }
+        const runs = normalizeActiveRuns(await runsRes.json());
+        if (isCancelled) return;
+        setActiveRuns(runs);
       } catch (error) {
-        console.error('Failed to fetch workflows:', error);
+        if (isCancelled) return;
+        const message = error instanceof Error ? error.message : 'Unknown workflow loading error';
+        setLoadError(message);
+        setWorkflows([]);
+        setActiveRuns([]);
       } finally {
         if (!isCancelled) setIsLoading(false);
       }
@@ -124,7 +204,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
     return () => {
       isCancelled = true;
     };
-  }, [open, task.id, task.project, task.type, task.git?.worktreePath]);
+  }, [loadRevision, open, task.id, task.project, task.type, task.git?.worktreePath]);
 
   const handleStartWorkflow = async (workflowId: string) => {
     setIsStarting(workflowId);
@@ -174,6 +254,24 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
           <Group justify="center" className="py-12">
             <Loader color="gray" size="sm" />
           </Group>
+        ) : loadError ? (
+          <Paper className="bg-card p-4" radius="md" withBorder>
+            <Stack gap="sm" align="flex-start">
+              <Text size="sm" fw={500}>
+                Workflows could not be loaded
+              </Text>
+              <Text size="sm" c="dimmed">
+                {loadError}
+              </Text>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setLoadRevision((value) => value + 1)}
+              >
+                Retry
+              </Button>
+            </Stack>
+          </Paper>
         ) : (
           <ScrollArea.Autosize mah="65vh" type="auto">
             <Stack gap="lg">
