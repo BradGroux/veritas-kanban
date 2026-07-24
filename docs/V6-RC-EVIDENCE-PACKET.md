@@ -16,7 +16,7 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.0.
 | Harness epic             | [Equal-footing agent harness support](https://github.com/BradGroux/veritas-kanban/issues/915)                      |
 | Implementation baseline  | `398fe7f67e94c3d6cabee0702b2331d9c873fd0f`                                                                         |
 | Release branch           | `release/v6.0.0`                                                                                                   |
-| Release PR               | Pending source publication                                                                                         |
+| Release PR               | [#985](https://github.com/BradGroux/veritas-kanban/pull/985)                                                       |
 | Release merge            | Pending source publication                                                                                         |
 | Tag and GitHub release   | Pending source publication                                                                                         |
 | Desktop Release workflow | Pending tag publication                                                                                            |
@@ -103,9 +103,11 @@ evidence. A skipped credential gate remains skipped, not passed.
 
 ### Observed isolated-runtime support tiers
 
-The packaged 6.0.0 candidate returned these redacted
-`harness-compatibility-matrix/v1` support statuses from the copied v5.2.5
-profile. Deterministic fixture results do not replace these live tiers.
+The packaged 6.0.0 candidate returned the configured-profile rows below through
+the redacted `harness-compatibility-matrix/v1` status path from the copied
+v5.2.5 profile. The OpenClaw row applies the same normalized tier contract at
+the host executable boundary because that copied profile had no OpenClaw entry.
+Deterministic fixture results do not replace these live tiers.
 
 | Profile                 | Observed tier | Certification | Evidence date | Runtime evidence                                                     |
 | ----------------------- | ------------- | ------------- | ------------- | -------------------------------------------------------------------- |
