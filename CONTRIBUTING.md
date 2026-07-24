@@ -250,9 +250,11 @@ docs: update README with deployment instructions
 2. **Branch naming:** Use descriptive names like `feat/task-filters`, `fix/login-redirect`, `docs/api-reference`.
 3. **Open a PR** against `main`.
 4. **Fill out the PR template** — describe changes, link related issues, include screenshots for UI changes.
-5. **Ensure the PR CI tier passes** — all checks started for the pull request
-   must be green. Full workspace and packaging evidence runs after merge, on
-   explicit dispatch, or when the `ci:full` label is applied.
+5. **Ensure the selected PR CI tier passes** — all checks started for the pull
+   request must be green. The scope selector runs related tests for affected
+   workspaces, escalates high-risk paths to the complete suite, and records its
+   base/head evidence in the job summary. Use `ci:full` for release candidates
+   or other changes that require an explicit complete-suite gate.
 6. **Request review** — a maintainer will review and may request changes.
 7. **Address feedback** — push additional commits as needed.
 8. **Merge** — once approved, a maintainer will merge.
@@ -299,12 +301,36 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 
 ### CI tiers
 
-| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                              |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pull request                                                                                                | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Static gates, full build, and only test files added or changed by the pull request |
-| Pull request with `ci:full`                                                                                 | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and dual-storage parity         |
-| Push to `main`, nightly 08:00 UTC, or manual `CI` dispatch                                                  | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                             |
-| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                           |
+| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Documentation-only pull request or merge                                                                    | Static gates; unit-test jobs record skip decisions              | No workspace unit suite                                                                                 |
+| Ordinary code pull request                                                                                  | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Vitest `related` coverage for affected server, web, CLI, or MCP workspaces                              |
+| Ordinary code merge to `main`                                                                               | Default static gates plus `Changed Tests`                       | Related coverage limited to affected workspaces                                                         |
+| Pull request with `ci:full`, or a high-risk CI/manifest/shared/storage/desktop change                       | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity                        |
+| Merge whose reviewed head already passed `Workspace Unit Tests`                                             | Static gates; both unit-test tiers record skip decisions        | Reuses exact successful head evidence when that head is an ancestor of the merge commit                 |
+| Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`                                            | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                                                  |
+| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`); high-risk paths still conservatively escalate to full |
+| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                                                |
+
+`Select Test Scope` is the decision record for each run. Its summary names the
+event, exact base/head range, changed-path count, selected tier, affected
+workspaces, and why `Changed Tests` or `Workspace Unit Tests` ran or skipped.
+The selector fails safe to the complete suite for unknown non-documentation
+paths and for changes to:
+
+- GitHub Actions workflows and the selector itself
+- package manifests, lockfiles, workspace configuration, and test configuration
+- the shared package
+- storage implementations and storage parity coverage
+- the desktop package and desktop readiness boundary
+- deletion of any non-documentation path, because related selection cannot
+  reconstruct the deleted dependency graph
+
+Run the selector contract locally with:
+
+```bash
+pnpm test:ci-scope
+```
 
 Release validation remains the final authority: clean-clone build, full unit
 and integration suites, applicable E2E, and signed artifact verification.
@@ -312,8 +338,8 @@ and integration suites, applicable E2E, and signed artifact verification.
 The operational target for the default pull-request tier is under 15 minutes,
 with no desktop packaging. This is a target rather than an SLA; dependency
 installation and hosted-runner availability still vary. Behavior changes
-should include a focused test change so the pull-request selector executes
-relevant coverage.
+should include coverage reachable from the changed source so Vitest's related
+test selection can execute it.
 
 ## Questions?
 
