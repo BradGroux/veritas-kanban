@@ -53,8 +53,10 @@ import type { ThreadEvent } from '@openai/codex-sdk';
 import {
   evaluateTaskReadiness,
   CONVERSATION_LIFECYCLE_SCHEMA_VERSION,
+  DEFAULT_ROUTING_CONFIG,
   EXECUTABLE_AGENT_PROVIDERS,
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
+  ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
 import type {
   Task,
@@ -76,6 +78,7 @@ import type {
   AgentBudgetUsage,
   AgentBudgetDecision,
   AgentBudgetEvaluation,
+  RunRecoveryRecord,
   AgentProfileLaunchMetadata,
   AgentProfileResolvedLaunch,
   ExecutableAgentProvider,
@@ -119,7 +122,7 @@ import type {
   RunApprovalRiskClass,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
-import { ConflictError } from '../middleware/error-handler.js';
+import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
 import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 import {
@@ -225,6 +228,7 @@ import {
   type RunToolBridgeService,
 } from './run-tool-bridge-service.js';
 import { getToolPolicyService } from './tool-policy-service.js';
+import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -290,6 +294,7 @@ export interface AgentStatus {
   runLaunchManifest: RunLaunchManifest;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  runRetry?: RunRecoveryRecord;
   conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
 }
@@ -309,6 +314,8 @@ export interface AgentStartOptions {
   commitPolicy?: TaskCommitPolicy;
   parentAttemptId?: string;
   conversation?: ConversationLaunchRequest;
+  /** Internal durable recovery context. API callers cannot supply this field. */
+  recovery?: RunRecoveryRecord;
 }
 
 export interface AgentMessageOptions {
@@ -349,6 +356,7 @@ interface PendingAgent {
   provider: ExecutableAgentProvider;
   model?: string;
   budget?: AgentBudgetState;
+  recoveryBudgetBase?: AgentBudgetUsage;
   budgetStopped?: boolean;
   agentProfile?: AgentProfileLaunchMetadata;
   providerRuntimeManifest: ProviderRuntimeManifest;
@@ -358,6 +366,7 @@ interface PendingAgent {
   runLaunchManifestTraceId: string;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  runRetry?: RunRecoveryRecord;
   conversation: ConversationLifecycleRecord;
   supervisorId?: string;
   recoveredControl?: boolean;
@@ -415,6 +424,10 @@ const startingAgents = new Set<string>();
 const finalizingAgents = new Map<PendingAgent, Promise<void>>();
 const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
 const recoveredProcessMonitors = new Map<string, NodeJS.Timeout>();
+const scheduledRecoveries = new Map<
+  string,
+  { attemptId: string; timer: ReturnType<typeof setTimeout> }
+>();
 const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
 const NOOP_CREDENTIAL_LEASE_LIFECYCLE: CredentialLeaseLifecycle = {
   async revokeRun() {
@@ -464,6 +477,7 @@ export class ClawdbotAgentService {
   private conversationLifecycle: ConversationLifecycleService;
   private toolControlPlane: ToolControlPlaneService;
   private runToolBridge: RunToolBridgeService;
+  private runRecoveryPolicy: RunRecoveryPolicyService;
   private logsDir: string;
 
   constructor(
@@ -479,7 +493,8 @@ export class ClawdbotAgentService {
     runSupervisor: RunSupervisorService = getRunSupervisorService(),
     conversationLifecycle = new ConversationLifecycleService(),
     toolControlPlane: ToolControlPlaneService = getToolControlPlaneService(),
-    runToolBridge: RunToolBridgeService = getRunToolBridgeService()
+    runToolBridge: RunToolBridgeService = getRunToolBridgeService(),
+    runRecoveryPolicy = new RunRecoveryPolicyService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -502,6 +517,7 @@ export class ClawdbotAgentService {
     this.conversationLifecycle = conversationLifecycle;
     this.toolControlPlane = toolControlPlane;
     this.runToolBridge = runToolBridge;
+    this.runRecoveryPolicy = runRecoveryPolicy;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -731,6 +747,443 @@ export class ClawdbotAgentService {
     }
   }
 
+  /**
+   * Restore durable retry/fallback timers after process restart.
+   *
+   * A record left in `launching` has no child attempt, otherwise the child
+   * would be the task's current attempt. Re-queueing that exact record is safe
+   * because the task revision and parent attempt ID are claimed again before
+   * launch.
+   */
+  async reconcilePendingRecoveries(): Promise<void> {
+    let tasks: Task[];
+    try {
+      tasks = await this.taskService.listTasks();
+    } catch (error) {
+      log.warn({ err: error }, '[ClawdbotAgent] reconcilePendingRecoveries: failed to list tasks');
+      return;
+    }
+
+    let scheduledCount = 0;
+    for (const task of tasks) {
+      const attempt = task.attempt;
+      const recovery = attempt?.runRetry;
+      if (!attempt || !recovery) continue;
+      if (attempt.status === 'running' || !['scheduled', 'launching'].includes(recovery.state)) {
+        continue;
+      }
+
+      try {
+        let record = recovery;
+        if (record.state === 'launching') {
+          record = {
+            ...record,
+            state: 'scheduled',
+            notBefore: new Date().toISOString(),
+            reason: `${record.reason} Re-queued after server restart before child launch.`,
+          };
+          const recoveredAttempt = { ...attempt, runRetry: record };
+          const updated = await this.taskService.updateTask(task.id, {
+            expectedRevision: normalizedTaskRevision(task),
+            attempt: recoveredAttempt,
+            attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+          });
+          if (!updated) continue;
+          await this.appendRunEvent(
+            task.id,
+            attempt.id,
+            'recovery.reconciled',
+            {
+              action: record.action,
+              sequence: record.sequence,
+              state: record.state,
+              notBefore: record.notBefore,
+            },
+            {
+              provider: 'system',
+              adapter: 'run-recovery',
+              agent: record.selectedAgent,
+              dedupeKey: `recovery.reconciled:${record.sequence}`,
+            }
+          );
+        }
+        this.scheduleTaskRecovery(task.id, attempt.id, record);
+        scheduledCount += 1;
+      } catch (error) {
+        log.warn(
+          { err: error, taskId: task.id, attemptId: attempt.id },
+          '[ClawdbotAgent] Failed to reconcile pending recovery'
+        );
+      }
+    }
+
+    if (scheduledCount > 0) {
+      log.info(
+        { scheduledCount },
+        '[ClawdbotAgent] Durable retry/fallback reconciliation complete'
+      );
+    }
+  }
+
+  async getTaskRecovery(taskId: string): Promise<RunRecoveryRecord | null> {
+    const task = await this.taskService.getTask(taskId);
+    if (!task) throw new NotFoundError(`Task "${taskId}" not found`);
+    if (task.attempt?.runRetry) return task.attempt.runRetry;
+    return (
+      [...(task.attempts ?? [])].reverse().find((attempt) => attempt.runRetry)?.runRetry ?? null
+    );
+  }
+
+  async cancelTaskRecovery(
+    taskId: string,
+    expectedAttemptId: string,
+    actor = 'operator'
+  ): Promise<RunRecoveryRecord> {
+    const task = await this.taskService.getTask(taskId);
+    if (!task) throw new NotFoundError(`Task "${taskId}" not found`);
+    const attempt = task.attempt;
+    const recovery = attempt?.runRetry;
+    if (!attempt || attempt.id !== expectedAttemptId || !recovery) {
+      throw new ConflictError('Recovery cancellation does not match the active attempt', {
+        activeAttemptId: attempt?.id,
+        requestedAttemptId: expectedAttemptId,
+      });
+    }
+    if (!['scheduled', 'launching'].includes(recovery.state)) {
+      throw new ConflictError('Recovery is not pending cancellation', {
+        attemptId: attempt.id,
+        recoveryState: recovery.state,
+      });
+    }
+
+    const cancelled: RunRecoveryRecord = {
+      ...recovery,
+      state: 'cancelled',
+      action: 'cancelled',
+      reason: 'Automatic recovery was cancelled by an operator.',
+      backoffMs: 0,
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: actor.trim() || 'operator',
+      handoff: {
+        summary: 'Automatic recovery was cancelled.',
+        nextActions: ['Launch a new attempt explicitly if the objective should continue.'],
+      },
+    };
+    const cancelledAttempt = { ...attempt, runRetry: cancelled };
+    const updated = await this.taskService.updateTask(taskId, {
+      expectedRevision: normalizedTaskRevision(task),
+      status: 'blocked',
+      attempt: cancelledAttempt,
+      attempts: upsertAttemptHistory(task.attempts, cancelledAttempt),
+    });
+    if (!updated) throw new Error(`Task "${taskId}" disappeared during recovery cancellation`);
+    this.clearScheduledRecovery(taskId, expectedAttemptId);
+    await this.appendRunEvent(
+      taskId,
+      attempt.id,
+      'recovery.cancelled',
+      {
+        action: recovery.action,
+        sequence: recovery.sequence,
+        actor: cancelled.cancelledBy,
+      },
+      {
+        provider: 'operator',
+        adapter: 'run-recovery',
+        agent: recovery.selectedAgent,
+        dedupeKey: `recovery.cancelled:${recovery.sequence}`,
+      }
+    );
+    return cancelled;
+  }
+
+  private async planTaskRecovery(
+    taskId: string,
+    failedAttempt: TaskAttempt,
+    failure: RunRecoveryRecord['failure']
+  ): Promise<RunRecoveryRecord | null> {
+    const task = await this.taskService.getTask(taskId);
+    if (!task || task.attempt?.id !== failedAttempt.id) return null;
+    const currentAttempt = task.attempt;
+    const currentRecovery = currentAttempt.runRetry;
+    if (
+      currentRecovery &&
+      ['scheduled', 'approval-required', 'exhausted', 'cancelled'].includes(currentRecovery.state)
+    ) {
+      return currentRecovery;
+    }
+    const redactedFailure = {
+      ...failure,
+      summary: this.redactTraceText(failure.summary),
+    };
+
+    const launchManifest = currentAttempt.runLaunchManifest;
+    const routing = launchManifest?.routing;
+    const maxRetries = routing?.maxRetries ?? DEFAULT_ROUTING_CONFIG.maxRetries;
+    const fallbackOnFailure = routing?.fallbackOnFailure ?? routing?.fallbackAllowed ?? false;
+    const requiredRuntimeCapabilities = [
+      ...(launchManifest?.providerRequirements.required ?? []),
+    ] as ProviderRuntimeCapabilityId[];
+    const previousSequence = currentRecovery?.sequence ?? 0;
+    const fallbackUsed = currentRecovery?.fallbackUsed ?? false;
+    const cumulativeBudget =
+      currentAttempt.budget?.usage ??
+      currentRecovery?.cumulativeBudget ??
+      ({ ...ZERO_AGENT_BUDGET_USAGE } satisfies AgentBudgetUsage);
+    const preferredFallback = currentRecovery?.fallbackAgent ?? routing?.fallbackAgent ?? undefined;
+    let fallbackAgent: AgentType | undefined = preferredFallback;
+    let fallbackEligible: boolean | undefined;
+    let fallbackReason: string | undefined;
+
+    if (failure.retryable && previousSequence >= maxRetries && fallbackOnFailure && !fallbackUsed) {
+      const fallback = await getAgentRoutingService().getFallback(task, currentAttempt.agent, {
+        ...(preferredFallback ? { preferredFallback } : {}),
+        requiredRuntimeCapabilities,
+      });
+      fallbackAgent = fallback?.agent ?? preferredFallback;
+      fallbackEligible = Boolean(fallback);
+      fallbackReason =
+        fallback?.reason ??
+        (fallbackAgent
+          ? `Fallback ${fallbackAgent} is unavailable or lacks required runtime capabilities.`
+          : 'No compatible fallback route is configured.');
+    }
+
+    const decisionInput = {
+      rootRunId: currentRecovery?.rootRunId ?? currentAttempt.id,
+      parentRunId: currentAttempt.id,
+      selectedAgent: currentAttempt.agent,
+      routingDecision:
+        currentRecovery?.routingDecision ??
+        routing?.reason ??
+        'Legacy run without captured routing evidence.',
+      ...(launchManifest?.digest ? { sourceManifestDigest: launchManifest.digest } : {}),
+      requiredRuntimeCapabilities,
+      cumulativeBudget,
+      previousSequence,
+      fallbackUsed,
+      maxRetries,
+      fallbackOnFailure,
+      ...(fallbackAgent ? { fallbackAgent } : {}),
+      ...(fallbackEligible !== undefined ? { fallbackEligible } : {}),
+      ...(fallbackReason ? { fallbackReason } : {}),
+    };
+    let decision = this.runRecoveryPolicy.decide(redactedFailure, decisionInput);
+
+    if (decision.action === 'fallback' && fallbackAgent) {
+      try {
+        const preview = await this.previewAgentLaunch(
+          taskId,
+          fallbackAgent,
+          this.recoveryLaunchOptions(currentAttempt, decision)
+        );
+        this.runLaunchManifests.assertEnforceable(preview.manifest);
+      } catch (error) {
+        decision = this.runRecoveryPolicy.decide(redactedFailure, {
+          ...decisionInput,
+          fallbackEligible: false,
+          fallbackReason: this.redactTraceText(
+            error instanceof Error ? error.message : String(error)
+          ),
+        });
+      }
+    }
+
+    const recoveredAttempt = { ...currentAttempt, runRetry: decision };
+    try {
+      const updated = await this.taskService.updateTask(taskId, {
+        expectedRevision: normalizedTaskRevision(task),
+        ...(decision.state !== 'scheduled' ? { status: 'blocked' as const } : {}),
+        attempt: recoveredAttempt,
+        attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+      });
+      if (!updated) return null;
+    } catch (error) {
+      const latest = await this.taskService.getTask(taskId);
+      if (
+        latest?.attempt?.id === currentAttempt.id &&
+        latest.attempt.runRetry?.state === decision.state &&
+        latest.attempt.runRetry.sequence === decision.sequence
+      ) {
+        return latest.attempt.runRetry;
+      }
+      throw error;
+    }
+
+    await this.appendRunEvent(
+      taskId,
+      currentAttempt.id,
+      `recovery.${decision.state}`,
+      {
+        action: decision.action,
+        state: decision.state,
+        sequence: decision.sequence,
+        failureClass: decision.failure.classification,
+        reason: decision.reason,
+        backoffMs: decision.backoffMs,
+        notBefore: decision.notBefore,
+        selectedAgent: decision.selectedAgent,
+        fallbackAgent: decision.fallbackAgent,
+        cumulativeBudget: decision.cumulativeBudget,
+        handoff: decision.handoff,
+      },
+      {
+        provider: 'system',
+        adapter: 'run-recovery',
+        agent: decision.selectedAgent,
+        dedupeKey: `recovery.${decision.state}:${decision.sequence}`,
+      }
+    );
+    if (decision.state === 'scheduled') {
+      this.scheduleTaskRecovery(taskId, currentAttempt.id, decision);
+    }
+    return decision;
+  }
+
+  private recoveryLaunchOptions(
+    parentAttempt: TaskAttempt,
+    recovery: RunRecoveryRecord
+  ): AgentStartOptions {
+    const retryingSameAgent = recovery.action === 'retry';
+    return {
+      ...(retryingSameAgent && parentAttempt.agentProfile?.id
+        ? { profileId: parentAttempt.agentProfile.id }
+        : {}),
+      ...(parentAttempt.runLaunchManifest?.sandbox.presetId
+        ? { sandboxPresetId: parentAttempt.runLaunchManifest.sandbox.presetId }
+        : {}),
+      ...(parentAttempt.runLaunchManifest?.budget
+        ? { budget: parentAttempt.runLaunchManifest.budget }
+        : {}),
+      ...(parentAttempt.runLaunchManifest?.providerRequirements.required.length
+        ? {
+            requiredRuntimeCapabilities: [
+              ...parentAttempt.runLaunchManifest.providerRequirements.required,
+            ] as ProviderRuntimeCapabilityId[],
+          }
+        : {}),
+      ...(parentAttempt.taskEnvelope?.commitPolicy
+        ? { commitPolicy: parentAttempt.taskEnvelope.commitPolicy }
+        : {}),
+      parentAttemptId: parentAttempt.id,
+      recovery,
+    };
+  }
+
+  private scheduleTaskRecovery(
+    taskId: string,
+    attemptId: string,
+    recovery: RunRecoveryRecord
+  ): void {
+    if (recovery.state !== 'scheduled') return;
+    this.clearScheduledRecovery(taskId);
+    const notBefore = recovery.notBefore ? Date.parse(recovery.notBefore) : Date.now();
+    const delay = Math.max(0, Math.min(2_147_483_647, notBefore - Date.now()));
+    const timer = setTimeout(() => {
+      const scheduled = scheduledRecoveries.get(taskId);
+      if (!scheduled || scheduled.attemptId !== attemptId) return;
+      scheduledRecoveries.delete(taskId);
+      void this.launchScheduledTaskRecovery(taskId, attemptId).catch((error) => {
+        log.error(
+          { err: error, taskId, attemptId },
+          '[ClawdbotAgent] Scheduled recovery launch failed'
+        );
+      });
+    }, delay);
+    timer.unref?.();
+    scheduledRecoveries.set(taskId, { attemptId, timer });
+  }
+
+  private clearScheduledRecovery(taskId: string, expectedAttemptId?: string): void {
+    const scheduled = scheduledRecoveries.get(taskId);
+    if (!scheduled || (expectedAttemptId && scheduled.attemptId !== expectedAttemptId)) return;
+    clearTimeout(scheduled.timer);
+    scheduledRecoveries.delete(taskId);
+  }
+
+  private async launchScheduledTaskRecovery(taskId: string, attemptId: string): Promise<void> {
+    const task = await this.taskService.getTask(taskId);
+    const parentAttempt = task?.attempt;
+    const recovery = parentAttempt?.runRetry;
+    if (
+      !task ||
+      !parentAttempt ||
+      parentAttempt.id !== attemptId ||
+      parentAttempt.status === 'running' ||
+      recovery?.state !== 'scheduled'
+    ) {
+      return;
+    }
+    if (recovery.notBefore && Date.parse(recovery.notBefore) > Date.now()) {
+      this.scheduleTaskRecovery(taskId, attemptId, recovery);
+      return;
+    }
+
+    const launching: RunRecoveryRecord = { ...recovery, state: 'launching' };
+    const claimedAttempt = { ...parentAttempt, runRetry: launching };
+    const claimed = await this.taskService.updateTask(taskId, {
+      expectedRevision: normalizedTaskRevision(task),
+      attempt: claimedAttempt,
+      attempts: upsertAttemptHistory(task.attempts, claimedAttempt),
+    });
+    if (!claimed) return;
+    await this.appendRunEvent(
+      taskId,
+      attemptId,
+      'recovery.launching',
+      {
+        action: launching.action,
+        sequence: launching.sequence,
+        selectedAgent: launching.selectedAgent,
+      },
+      {
+        provider: 'system',
+        adapter: 'run-recovery',
+        agent: launching.selectedAgent,
+        dedupeKey: `recovery.launching:${launching.sequence}`,
+      }
+    );
+
+    try {
+      const child = await this.startAgent(
+        taskId,
+        launching.selectedAgent,
+        this.recoveryLaunchOptions(claimedAttempt, launching)
+      );
+      await this.appendRunEvent(
+        taskId,
+        child.attemptId,
+        'recovery.launched',
+        {
+          action: launching.action,
+          sequence: launching.sequence,
+          parentAttemptId: attemptId,
+          launchedAttemptId: child.attemptId,
+          selectedAgent: child.agent,
+          sourceManifestDigest: launching.sourceManifestDigest,
+          launchedManifestDigest: child.runLaunchManifest.digest,
+          cumulativeBudget: launching.cumulativeBudget,
+        },
+        {
+          provider: 'system',
+          adapter: 'run-recovery',
+          agent: child.agent,
+          dedupeKey: `recovery.launched:${launching.sequence}`,
+        }
+      );
+    } catch (error) {
+      const latest = await this.taskService.getTask(taskId);
+      if (latest?.attempt?.id === attemptId) {
+        await this.planTaskRecovery(
+          taskId,
+          latest.attempt,
+          this.runRecoveryPolicy.classifyError(error)
+        );
+      }
+      throw error;
+    }
+  }
+
   private async restoreRecoveredRun(
     task: Task,
     attempt: TaskAttempt,
@@ -770,6 +1223,7 @@ export class ClawdbotAgentService {
       provider,
       model: attempt.model,
       budget: supervisor.budget ?? attempt.budget,
+      recoveryBudgetBase: attempt.runRetry?.cumulativeBudget,
       agentProfile: attempt.agentProfile,
       providerRuntimeManifest: attempt.providerRuntimeManifest,
       harnessSupport: attempt.harnessSupport,
@@ -779,6 +1233,7 @@ export class ClawdbotAgentService {
         attempt.runLaunchManifestTraceId ?? `run-supervisor:${supervisor.id}`,
       runLaunchParentAttemptId: attempt.runLaunchParentAttemptId,
       runLaunchManifestDrift: attempt.runLaunchManifestDrift,
+      runRetry: attempt.runRetry,
       conversation: recoveredConversation,
       supervisorId: supervisor.id,
       recoveredControl: true,
@@ -911,6 +1366,7 @@ export class ClawdbotAgentService {
     }
 
     const config = await this.configService.getConfig();
+    const routingPolicy = config.agentRouting ?? DEFAULT_ROUTING_CONFIG;
     const profileLaunch = options.profileId
       ? await getAgentProfilePackageService().resolveLaunch(options.profileId)
       : undefined;
@@ -961,16 +1417,19 @@ export class ClawdbotAgentService {
       agentBudget: budgetSources.agentBudget,
       runBudget: budgetSources.runBudget ?? profileLaunch?.budget,
     });
-    const budgetEvaluation = budgetService.evaluate(
-      budgetPolicy,
-      { fanOut: 1 },
-      {
-        taskId,
-        agentId: agent,
-        actionType: 'agent.launch-preview',
-        project: task.project,
-      }
-    );
+    const recoveryBudgetUsage = options.recovery
+      ? {
+          ...options.recovery.cumulativeBudget,
+          retries: Math.max(options.recovery.cumulativeBudget.retries, options.recovery.sequence),
+          fanOut: Math.max(1, options.recovery.cumulativeBudget.fanOut),
+        }
+      : { fanOut: 1 };
+    const budgetEvaluation = budgetService.evaluate(budgetPolicy, recoveryBudgetUsage, {
+      taskId,
+      agentId: agent,
+      actionType: 'agent.launch-preview',
+      project: task.project,
+    });
     if (this.isBlockingBudgetDecision(budgetEvaluation.decision)) {
       throw new ConflictError('Agent run budget requires operator action before launch', {
         decision: budgetEvaluation.decision,
@@ -1055,6 +1514,8 @@ export class ClawdbotAgentService {
       requestedAgent,
       routingReason,
       routingFallback,
+      routingFallbackOnFailure: routingPolicy.fallbackOnFailure,
+      routingMaxRetries: routingPolicy.maxRetries,
       agent,
       launchAgentConfig,
       provider,
@@ -1138,6 +1599,7 @@ export class ClawdbotAgentService {
 
     // Get agent config — use routing engine when agent is "auto" or not specified
     const config = await this.configService.getConfig();
+    const routingPolicy = config.agentRouting ?? DEFAULT_ROUTING_CONFIG;
     const profileLaunch = options.profileId
       ? await getAgentProfilePackageService().resolveLaunch(options.profileId)
       : undefined;
@@ -1195,16 +1657,19 @@ export class ClawdbotAgentService {
       agentBudget: budgetSources.agentBudget,
       runBudget: budgetSources.runBudget ?? profileLaunch?.budget,
     });
-    const budgetEvaluation = budgetService.evaluate(
-      budgetPolicy,
-      { fanOut: 1 },
-      {
-        taskId,
-        agentId: agent,
-        actionType: 'agent.start',
-        project: task.project,
-      }
-    );
+    const recoveryBudgetUsage = options.recovery
+      ? {
+          ...options.recovery.cumulativeBudget,
+          retries: Math.max(options.recovery.cumulativeBudget.retries, options.recovery.sequence),
+          fanOut: Math.max(1, options.recovery.cumulativeBudget.fanOut),
+        }
+      : { fanOut: 1 };
+    const budgetEvaluation = budgetService.evaluate(budgetPolicy, recoveryBudgetUsage, {
+      taskId,
+      agentId: agent,
+      actionType: 'agent.start',
+      project: task.project,
+    });
     const budgetTraceIds: string[] = [];
     if (budgetEvaluation.trace) {
       const trace = await getGovernanceTraceService().record(budgetEvaluation.trace);
@@ -1345,6 +1810,8 @@ export class ClawdbotAgentService {
       requestedAgent,
       routingReason,
       routingFallback,
+      routingFallbackOnFailure: routingPolicy.fallbackOnFailure,
+      routingMaxRetries: routingPolicy.maxRetries,
       agent,
       launchAgentConfig,
       provider,
@@ -1367,6 +1834,16 @@ export class ClawdbotAgentService {
     );
     const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
       ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
+      : undefined;
+    const runRetry = options.recovery
+      ? {
+          ...options.recovery,
+          state: 'launched' as const,
+          launchedAt: startedAt,
+          launchedRunId: attemptId,
+          launchedManifestDigest: runLaunchManifest.digest,
+          selectedAgent: agent,
+        }
       : undefined;
     const runLaunchTrace = await getGovernanceTraceService().record({
       kind: 'policy',
@@ -1433,6 +1910,7 @@ export class ClawdbotAgentService {
       runLaunchManifestTraceId: runLaunchTrace.id,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      runRetry,
       conversation,
       budget: budgetPolicy
         ? {
@@ -1445,6 +1923,7 @@ export class ClawdbotAgentService {
             overrideReason: options.overrideReason,
           }
         : undefined,
+      recoveryBudgetBase: options.recovery?.cumulativeBudget,
     });
 
     // Initialize log file (ensure it stays within logs dir)
@@ -1476,6 +1955,7 @@ export class ClawdbotAgentService {
       runLaunchManifestTraceId: runLaunchTrace.id,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      runRetry,
       conversation,
     };
 
@@ -1493,6 +1973,24 @@ export class ClawdbotAgentService {
         throw new Error(`Task "${taskId}" disappeared while claiming its worktree`);
       }
       task = claimedTask;
+    }
+    if (options.recovery) {
+      const claimedRecovery = task.attempt?.runRetry;
+      if (
+        task.attempt?.id !== options.parentAttemptId ||
+        claimedRecovery?.state !== 'launching' ||
+        claimedRecovery.sequence !== options.recovery.sequence ||
+        claimedRecovery.parentRunId !== options.recovery.parentRunId
+      ) {
+        pendingAgents.delete(taskId);
+        throw new ConflictError('Recovery launch no longer matches the claimed parent attempt', {
+          taskId,
+          activeAttemptId: task.attempt?.id,
+          parentAttemptId: options.parentAttemptId,
+          recoveryState: claimedRecovery?.state,
+          recoverySequence: claimedRecovery?.sequence,
+        });
+      }
     }
     try {
       const pending = pendingAgents.get(taskId);
@@ -1514,6 +2012,7 @@ export class ClawdbotAgentService {
             })
           : undefined;
       await this.taskService.updateTask(taskId, {
+        ...(options.recovery ? { expectedRevision: normalizedTaskRevision(task) } : {}),
         status: 'in-progress',
         attempt,
         attempts: task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
@@ -1727,6 +2226,42 @@ export class ClawdbotAgentService {
         stackTrace: startError.stack,
         harnessSupport: this.harnessTelemetry(harnessSupport, 'launch-failed'),
       });
+      const launchCleanupEffects: Array<[string, () => void | Promise<void>]> = [
+        [
+          'release worktree ownership',
+          async () => {
+            if (usesManagedWorktree) {
+              await this.worktrees.releaseOwnership(taskId, attemptId);
+            }
+          },
+        ],
+        [
+          'revoke run credential leases',
+          () =>
+            this.revokeRunCredentialLeases(taskId, attemptId, 'failed', runLaunchManifest.digest),
+        ],
+        ['close run tool sessions', () => this.toolControlPlane.closeRun(taskId, attemptId)],
+      ];
+      for (const [effect, cleanup] of launchCleanupEffects) {
+        try {
+          await cleanup();
+        } catch (cleanupError) {
+          log.error(
+            { err: cleanupError, taskId, attemptId, effect },
+            'Failed to clean up a failed recovery-capable launch'
+          );
+        }
+      }
+      await this.planTaskRecovery(
+        taskId,
+        failedAttempt,
+        this.runRecoveryPolicy.classifyError(startError)
+      ).catch((recoveryError) => {
+        log.error(
+          { err: recoveryError, taskId, attemptId },
+          'Failed to persist recovery policy after provider launch failure'
+        );
+      });
       throw new Error(`Failed to start agent via ${adapter.label}: ${startError.message}`, {
         cause: error,
       });
@@ -1746,6 +2281,7 @@ export class ClawdbotAgentService {
       runLaunchManifest,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      runRetry,
       conversation,
       controls: providerRuntimeControls(providerRuntimeManifest),
     };
@@ -2481,6 +3017,7 @@ export class ClawdbotAgentService {
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
+          runRetry: pending.runRetry,
           conversation: pending.conversation,
           completionResult,
         };
@@ -2661,6 +3198,19 @@ export class ClawdbotAgentService {
           '[ClawdbotAgent] Post-commit completion effect failed'
         );
       }
+    }
+
+    if (!successful) {
+      await this.planTaskRecovery(
+        taskId,
+        preparedCompletion.completedAttempt,
+        this.runRecoveryPolicy.classifyCompletion(completionResult)
+      ).catch((recoveryError) => {
+        log.error(
+          { err: recoveryError, taskId, attemptId },
+          '[ClawdbotAgent] Failed to persist automatic recovery decision'
+        );
+      });
     }
 
     log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
@@ -3222,6 +3772,19 @@ export class ClawdbotAgentService {
         }
         const budgetService = getAgentBudgetService();
         const usage = budgetService.mergeUsage(pending.budget.usage, delta);
+        if (pending.recoveryBudgetBase) {
+          if (delta.runtimeSeconds !== undefined) {
+            usage.runtimeSeconds =
+              pending.recoveryBudgetBase.runtimeSeconds + Math.max(0, delta.runtimeSeconds);
+          }
+          if (delta.idleRuntimeSeconds !== undefined) {
+            usage.idleRuntimeSeconds =
+              pending.recoveryBudgetBase.idleRuntimeSeconds + Math.max(0, delta.idleRuntimeSeconds);
+          }
+          if (pending.runRetry) {
+            usage.retries = Math.max(usage.retries, pending.runRetry.sequence);
+          }
+        }
         const nextEvaluation = budgetService.evaluate(pending.budget.policy, usage, {
           taskId,
           agentId: pending.agent,
@@ -7110,6 +7673,7 @@ export class ClawdbotAgentService {
       runLaunchManifest: pending.runLaunchManifest,
       runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
       runLaunchManifestDrift: pending.runLaunchManifestDrift,
+      runRetry: pending.runRetry,
       conversation: pending.conversation,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
@@ -7325,6 +7889,8 @@ export class ClawdbotAgentService {
     requestedAgent: AgentType;
     routingReason: string;
     routingFallback?: AgentType;
+    routingFallbackOnFailure: boolean;
+    routingMaxRetries: number;
     agent: AgentType;
     launchAgentConfig?: AgentConfig;
     provider: ExecutableAgentProvider;
@@ -7951,7 +8517,9 @@ export class ClawdbotAgentService {
         selectedHost: input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process',
         reason: input.routingReason,
         fallbackAgent: input.routingFallback ?? null,
-        fallbackAllowed: Boolean(input.routingFallback),
+        fallbackAllowed: Boolean(input.routingFallback && input.routingFallbackOnFailure),
+        fallbackOnFailure: input.routingFallbackOnFailure,
+        maxRetries: input.routingMaxRetries,
       },
       ...(profile
         ? {

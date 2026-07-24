@@ -118,6 +118,21 @@ describe('MCP agent runtime capability controls', () => {
     });
   });
 
+  it('publishes and forwards exact recovery cancellation provenance', async () => {
+    const cancel = agentTools.find((tool) => tool.name === 'cancel_agent_recovery');
+    expect(cancel?.inputSchema.required).toEqual(['id', 'attemptId']);
+
+    await handleAgentTool('cancel_agent_recovery', {
+      id: 'task_1',
+      attemptId: 'attempt_parent',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/recovery/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ attemptId: 'attempt_parent' }),
+    });
+  });
+
   it('forwards a native history fork with its source turn boundary', async () => {
     await handleAgentTool('control_agent_conversation', {
       id: 'task_1',

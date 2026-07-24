@@ -48,6 +48,11 @@ interface RoutingTraceContext {
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
 }
 
+interface FallbackRoutingContext {
+  preferredFallback?: AgentType;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+}
+
 interface RuntimeManifestRegistryReader {
   list(): RegisteredAgent[];
 }
@@ -429,7 +434,8 @@ export class AgentRoutingService {
    */
   async getFallback(
     task: Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'>,
-    failedAgent: AgentType
+    failedAgent: AgentType,
+    context: FallbackRoutingContext = {}
   ): Promise<RoutingResult | null> {
     const config = await this.configService.getConfig();
     const routing: AgentRoutingConfig = config.agentRouting || DEFAULT_ROUTING_CONFIG;
@@ -437,15 +443,43 @@ export class AgentRoutingService {
     if (!routing.fallbackOnFailure) {
       return null;
     }
+    const requiredRuntimeCapabilities = uniqueRuntimeCapabilities(
+      context.requiredRuntimeCapabilities ?? []
+    );
+
+    if (context.preferredFallback && context.preferredFallback !== failedAgent) {
+      const preferredAvailability = await this.getAgentAvailability(
+        config.agents,
+        context.preferredFallback,
+        requiredRuntimeCapabilities
+      );
+      if (!preferredAvailability.available) {
+        log.warn(
+          `Preferred fallback agent "${context.preferredFallback}" is unavailable: ${preferredAvailability.reason}`
+        );
+        return null;
+      }
+      return {
+        agent: context.preferredFallback,
+        model: preferredAvailability.agentConfig?.model,
+        reason: `Fallback: ${failedAgent} failed → ${context.preferredFallback} (captured launch route)`,
+        runtimeSelection: preferredAvailability.runtimeSelection,
+      };
+    }
 
     // Find the rule that originally matched (to get its fallback)
     for (const rule of routing.rules) {
       if (!rule.enabled) continue;
       if (rule.agent !== failedAgent) continue;
       if (!rule.fallback) continue;
+      if (rule.fallback === failedAgent) continue;
       if (!this.matchesRule(task, rule.match)) continue;
 
-      const fallbackAvailability = await this.getAgentAvailability(config.agents, rule.fallback);
+      const fallbackAvailability = await this.getAgentAvailability(
+        config.agents,
+        rule.fallback,
+        requiredRuntimeCapabilities
+      );
       if (!fallbackAvailability.available) {
         log.warn(
           `Fallback agent "${rule.fallback}" for rule "${rule.name}" is unavailable: ${fallbackAvailability.reason}`
@@ -456,20 +490,27 @@ export class AgentRoutingService {
       log.info(`Falling back from ${failedAgent} → ${rule.fallback} (rule: ${rule.name})`);
       return {
         agent: rule.fallback,
+        model: fallbackAvailability.agentConfig?.model,
         rule: rule.id,
         reason: `Fallback: ${failedAgent} failed → ${rule.fallback} (rule: ${rule.name})`,
+        runtimeSelection: fallbackAvailability.runtimeSelection,
       };
     }
 
     // No specific fallback found — try default if it's different from failed
     const defaultAgent = routing.defaultAgent || config.defaultAgent;
     if (defaultAgent !== failedAgent) {
-      const defaultAvailability = await this.getAgentAvailability(config.agents, defaultAgent);
+      const defaultAvailability = await this.getAgentAvailability(
+        config.agents,
+        defaultAgent,
+        requiredRuntimeCapabilities
+      );
       if (defaultAvailability.available) {
         return {
           agent: defaultAgent,
           model: routing.defaultModel,
           reason: `Fallback: ${failedAgent} failed → default agent (${defaultAgent})`,
+          runtimeSelection: defaultAvailability.runtimeSelection,
         };
       }
     }

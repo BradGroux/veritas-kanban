@@ -68,6 +68,10 @@ export interface RunLaunchRouting {
   reason: string;
   fallbackAgent: string | null;
   fallbackAllowed: boolean;
+  /** Captured recovery policy. Optional only for legacy v1 manifests. */
+  fallbackOnFailure?: boolean;
+  /** Captured retry bound. Optional only for legacy v1 manifests. */
+  maxRetries?: number;
 }
 
 export interface RunLaunchProfileReference {

@@ -958,6 +958,10 @@ Execute a single agent prompt with configurable retries.
 - Template rendering with `{{variable}}` and `{{nested.path}}` substitution
 - Acceptance criteria validation (substring, regex, JSON path)
 - Retry routing: retry same step, retry different step, escalate
+- Production retry/fallback state machine: only explicitly transient failure
+  classes retry; each decision persists causal parents, jittered backoff,
+  route and manifest evidence, and cumulative budget. Fallback agents must pass
+  runtime capability and sandbox preflight before launch.
 
 #### 2. Loop Steps
 
@@ -1074,8 +1078,15 @@ All three types are backward-compatible — substring matching was the original 
 
 Every workflow run persists its state to disk, enabling:
 
-- **Server restart recovery** — Runs can resume from last checkpoint
-- **Retry with exponential backoff** — Configurable `retry_delay_ms` prevents rapid retry loops
+- **Server restart recovery** — Scheduled retries and fallbacks are restored
+  from their durable step records
+- **Retry with exponential backoff** — `retry_delay_ms` supplies the base delay;
+  recovery applies bounded exponential backoff with jitter
+- **Fail-closed fallback** — Explicit `agent:<id>` escalation and compatible
+  workspace fallback routes run only after retry exhaustion and runtime/sandbox
+  preflight
+- **Operator cancellation** — Exact pending workflow recovery can be cancelled
+  before another provider launch
 - **Progress file tracking** — Shared `progress.md` per run for context passing:
   - Each step appends its output with timestamp
   - Templates can access `{{progress}}` for previous step context
@@ -1866,7 +1877,7 @@ vk done <id> "Added OAuth2 with Google and GitHub providers"
 
 ## MCP Server
 
-Model Context Protocol server for AI assistant integration (Claude Desktop, OpenClaw, Cursor, Codex, etc.). 41 tools across task management, agent orchestration, automation, notifications, summaries, sprint management, comments, projects, and run-scoped tool control.
+Model Context Protocol server for AI assistant integration (Claude Desktop, OpenClaw, Cursor, Codex, etc.). 42 tools across task management, agent orchestration, automation, notifications, summaries, sprint management, comments, projects, and run-scoped tool control.
 
 ### Tools
 
@@ -1880,6 +1891,7 @@ Model Context Protocol server for AI assistant integration (Claude Desktop, Open
 | `delete_task`               | Permanently delete a task                                   |
 | `start_agent`               | Start an AI agent on a code task                            |
 | `stop_agent`                | Stop a running agent                                        |
+| `cancel_agent_recovery`     | Cancel an exact pending retry or fallback                   |
 | `list_pending_automation`   | List automation tasks awaiting execution                    |
 | `list_running_automation`   | List currently running automation tasks                     |
 | `start_automation`          | Start an automation task via sub-agent                      |

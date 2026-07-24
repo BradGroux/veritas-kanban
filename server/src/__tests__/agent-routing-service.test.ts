@@ -760,6 +760,21 @@ describe('AgentRoutingService', () => {
       expect(result).toBeNull();
     });
 
+    it('ignores a matched fallback that resolves to the failed agent', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      const routing = requireRouting(config);
+      const [firstRule] = routing.rules;
+      if (!firstRule) throw new Error('Expected first routing rule in test fixture');
+      routing.rules = [firstRule];
+      firstRule.fallback = firstRule.agent;
+      routing.defaultAgent = firstRule.agent;
+      mockGetConfig.mockResolvedValue(config);
+
+      const result = await service.getFallback({ type: 'code', priority: 'high' }, firstRule.agent);
+
+      expect(result).toBeNull();
+    });
+
     it('returns default agent when it differs from failed', async () => {
       const result = await service.getFallback(
         { type: 'docs', priority: 'low' },

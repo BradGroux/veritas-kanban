@@ -119,6 +119,22 @@ describe('vk agent runtime capability controls', () => {
     });
   });
 
+  it('binds recovery cancellation to the exact persisted parent attempt', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      ['agent:cancel-recovery', 'task_1', '--attempt', 'attempt_parent', '--json'],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/recovery/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ attemptId: 'attempt_parent' }),
+    });
+  });
+
   it('starts a native history fork from an explicit source attempt and turn', async () => {
     const program = new Command();
     program.exitOverride();

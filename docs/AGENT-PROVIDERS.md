@@ -907,6 +907,34 @@ Recommended starting point:
 3. Enable `ollama-cloud` only when the workflow is allowed to leave local execution.
 4. Use explicit routing rules for local LLM profiles instead of making them global defaults on teams with mixed operating systems.
 
+### Automatic retry and fallback
+
+`agentRouting.maxRetries` and `agentRouting.fallbackOnFailure` are captured in
+each new run launch manifest. Task attempts and workflow steps use the same
+durable `run-recovery/v1` decision record:
+
+- Only transient transport, provider unavailable, rate-limit, timeout, and
+  verification failures are automatically retryable.
+- Invalid configuration and policy blocks require operator action. Explicit
+  cancellation stops recovery. A partial result with destructive side effects
+  requires approval before another launch.
+- Retry backoff is exponential, capped at 30 seconds, and jittered by 20
+  percent. The attempt chain retains its root and parent IDs, route, source and
+  launched manifest digests, and cumulative budget.
+- A fallback is launched only after retry exhaustion and only after its runtime
+  capabilities and sandbox policy pass the normal launch preflight. An
+  incompatible fallback produces an actionable exhausted handoff.
+- Scheduled task and workflow recovery is reconciled after server restart.
+  Revision claims and terminal idempotency prevent duplicate callbacks from
+  starting multiple branches.
+
+Inspect a task decision with `vk agent:recovery <task> --json`. Cancel the
+exact pending parent with
+`vk agent:cancel-recovery <task> --attempt <attempt-id>`. MCP clients use
+`cancel_agent_recovery` with the same task and parent attempt. REST clients use
+`GET /api/agents/:taskId/recovery` and
+`POST /api/agents/:taskId/recovery/cancel`.
+
 ---
 
 ## Hermes Agent (v2026.7.7.2)

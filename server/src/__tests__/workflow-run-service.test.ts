@@ -6,9 +6,11 @@ import path from 'path';
 const mockLoadWorkflow = vi.fn();
 const mockListWorkflowsMetadata = vi.fn();
 const mockExecuteStep = vi.fn();
+const mockValidateFallbackAgent = vi.fn();
 const mockBroadcastWorkflowStatus = vi.fn();
 const mockGetTask = vi.fn();
 const mockCheckWorkflowPermission = vi.fn();
+const mockGetFallback = vi.fn();
 
 vi.mock('../services/workflow-service.js', () => ({
   getWorkflowService: () => ({
@@ -23,6 +25,7 @@ vi.mock('../services/workflow-step-executor.js', async (importOriginal) => {
     HumanGateBlockError: actual.HumanGateBlockError,
     WorkflowStepExecutor: class {
       executeStep = mockExecuteStep;
+      validateFallbackAgent = mockValidateFallbackAgent;
     },
   };
 });
@@ -37,6 +40,10 @@ vi.mock('../services/task-service.js', () => ({
 
 vi.mock('../middleware/workflow-auth.js', () => ({
   checkWorkflowPermission: mockCheckWorkflowPermission,
+}));
+
+vi.mock('../services/agent-routing-service.js', () => ({
+  getAgentRoutingService: () => ({ getFallback: mockGetFallback }),
 }));
 
 function makeWorkflow(overrides: Record<string, any> = {}) {
@@ -72,6 +79,8 @@ describe('WorkflowRunService', () => {
       output: { done: step.id },
       outputPath: `/tmp/${step.id}.json`,
     }));
+    mockValidateFallbackAgent.mockResolvedValue({});
+    mockGetFallback.mockResolvedValue(null);
     const mod = await import('../services/workflow-run-service.js');
     service = new mod.WorkflowRunService(tmpDir);
   });
@@ -201,12 +210,16 @@ describe('WorkflowRunService', () => {
 
   it('handles retry, retry_step, skip, block, and workflow failure', async () => {
     const delaySpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any) => {
-      fn();
-      return 0 as any;
+      queueMicrotask(fn);
+      return { unref: vi.fn() } as any;
     }) as any);
 
     mockLoadWorkflow.mockResolvedValue(
       makeWorkflow({
+        agents: [
+          { id: 'agent-1', name: 'Agent 1' },
+          { id: 'TARS', name: 'TARS' },
+        ],
         steps: [
           { id: 'prep', type: 'agent', agent: 'agent-1', prompt: 'prep' },
           {
@@ -240,12 +253,16 @@ describe('WorkflowRunService', () => {
         ],
       })
     );
+    mockGetFallback.mockResolvedValue({
+      agent: 'TARS',
+      reason: 'Workspace fallback should not override retry_step.',
+    });
 
     const counts: Record<string, number> = {};
     mockExecuteStep.mockImplementation(async (step: any) => {
       counts[step.id] = (counts[step.id] || 0) + 1;
-      if (step.id === 'retryable' && counts[step.id] === 1) throw new Error('fail once');
-      if (step.id === 'reroute' && counts[step.id] === 1) throw new Error('reroute me');
+      if (step.id === 'retryable' && counts[step.id] === 1) throw new Error('ECONNRESET fail once');
+      if (step.id === 'reroute' && counts[step.id] === 1) throw new Error('ECONNRESET reroute me');
       if (step.id === 'skippable') throw new Error('skip me');
       if (step.id === 'blocking') throw new Error('block me');
       return { output: { done: step.id }, outputPath: `/tmp/${step.id}.json` };
@@ -261,6 +278,151 @@ describe('WorkflowRunService', () => {
       expect(saved.context._retryContext.failedStep).toBe('reroute');
     });
     delaySpy.mockRestore();
+  });
+
+  it('routes an exhausted transient step to a validated fallback agent', async () => {
+    mockLoadWorkflow.mockResolvedValue(
+      makeWorkflow({
+        agents: [
+          { id: 'agent-1', name: 'Agent 1' },
+          { id: 'TARS', name: 'TARS' },
+        ],
+        steps: [
+          {
+            id: 'step-1',
+            type: 'agent',
+            agent: 'agent-1',
+            prompt: 'x',
+            on_fail: {
+              retry: 0,
+              retry_delay_ms: 1,
+              escalate_to: 'agent:TARS',
+            },
+          },
+        ],
+      })
+    );
+    mockExecuteStep
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce({ output: { ok: true }, outputPath: '/tmp/fallback.json' });
+
+    const run = await service.startRun('wf-1');
+    await vi.waitFor(
+      async () => {
+        const saved = await service.getRun(run.id);
+        expect(saved.status).toBe('completed');
+        expect(saved.steps[0]).toMatchObject({
+          agent: 'TARS',
+          retries: 1,
+          runRetry: {
+            action: 'fallback',
+            state: 'launched',
+            fallbackUsed: true,
+            selectedAgent: 'TARS',
+          },
+        });
+      },
+      { timeout: 2_000 }
+    );
+    expect(mockValidateFallbackAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'step-1' }),
+      expect.objectContaining({ id: run.id }),
+      'TARS'
+    );
+  });
+
+  it('cancels the exact pending workflow retry before its timer can launch', async () => {
+    mockLoadWorkflow.mockResolvedValue(
+      makeWorkflow({
+        steps: [
+          {
+            id: 'step-1',
+            type: 'agent',
+            agent: 'agent-1',
+            prompt: 'x',
+            on_fail: { retry: 2, retry_delay_ms: 10_000 },
+          },
+        ],
+      })
+    );
+    mockExecuteStep.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+
+    const run = await service.startRun('wf-1');
+    let parentRunId = '';
+    await vi.waitFor(async () => {
+      const saved = await service.getRun(run.id);
+      expect(saved.status).toBe('pending');
+      expect(saved.steps[0].runRetry?.state).toBe('scheduled');
+      parentRunId = saved.steps[0].runRetry.parentRunId;
+    });
+
+    const cancelled = await service.cancelPendingRecovery(
+      run.id,
+      'step-1',
+      parentRunId,
+      'test-operator'
+    );
+    expect(cancelled).toMatchObject({
+      status: 'blocked',
+      steps: [
+        expect.objectContaining({
+          runRetry: expect.objectContaining({
+            state: 'cancelled',
+            action: 'cancelled',
+            cancelledBy: 'test-operator',
+          }),
+        }),
+      ],
+    });
+    expect(mockExecuteStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a restarted workflow when a launched recovery cannot be proven terminal', async () => {
+    mockLoadWorkflow.mockResolvedValue(
+      makeWorkflow({
+        steps: [
+          {
+            id: 'step-1',
+            type: 'agent',
+            agent: 'agent-1',
+            prompt: 'x',
+            on_fail: { retry: 1, retry_delay_ms: 10_000 },
+          },
+        ],
+      })
+    );
+    mockExecuteStep.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    const run = await service.startRun('wf-1');
+    const persisted = await vi.waitFor(async () => {
+      const saved = await service.getRun(run.id);
+      expect(saved.steps[0].runRetry?.state).toBe('scheduled');
+      return saved;
+    });
+    service.clearScheduledWorkflowRecovery(run.id, 'step-1');
+    persisted.status = 'running';
+    persisted.steps[0].status = 'running';
+    persisted.steps[0].runRetry = {
+      ...persisted.steps[0].runRetry,
+      state: 'launched',
+    };
+    await service.saveRun(persisted);
+
+    await service.reconcilePendingRecoveries();
+
+    expect(await service.getRun(run.id)).toMatchObject({
+      status: 'blocked',
+      error: 'Workflow recovery requires operator reconciliation after restart.',
+      steps: [
+        expect.objectContaining({
+          runRetry: expect.objectContaining({
+            state: 'approval-required',
+            action: 'approval',
+          }),
+        }),
+      ],
+    });
+    expect(mockExecuteStep).toHaveBeenCalledTimes(1);
   });
 
   it('resumes blocked runs and validates invalid resume requests', async () => {
@@ -443,7 +605,7 @@ describe('WorkflowRunService', () => {
     ]);
   });
 
-  it('rejects invalid ids, missing workflows, invalid metadata reads, and unimplemented agent escalation', async () => {
+  it('rejects invalid ids, missing workflows, invalid metadata reads, and incompatible agent escalation', async () => {
     await expect(service.getRun('../bad')).rejects.toThrow(/illegal path characters/);
     await expect(service.getRun('run_invalid')).rejects.toThrow(/format is invalid/);
 
@@ -458,14 +620,17 @@ describe('WorkflowRunService', () => {
             type: 'agent',
             agent: 'agent-1',
             prompt: 'x',
-            on_fail: { escalate_to: 'agent:TARS' },
+            on_fail: { retry: 0, escalate_to: 'agent:TARS' },
           },
         ],
       })
     );
-    mockExecuteStep.mockRejectedValueOnce(new Error('boom'));
+    mockExecuteStep.mockRejectedValueOnce(new Error('ECONNRESET'));
+    mockValidateFallbackAgent.mockRejectedValueOnce(
+      new Error('Workflow fallback agent TARS is not defined in the workflow')
+    );
     const run = await service.startRun('wf-1');
     await vi.waitFor(async () => expect((await service.getRun(run.id)).status).toBe('failed'));
-    expect((await service.getRun(run.id)).error).toMatch(/Agent escalation not yet implemented/);
+    expect((await service.getRun(run.id)).error).toMatch(/Fallback TARS was rejected/);
   });
 });

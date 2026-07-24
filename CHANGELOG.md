@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added one durable `run-recovery/v1` state machine for production task
+  attempts and workflow steps. Only classified transient transport, provider
+  availability, rate-limit, timeout, and verification failures retry; policy,
+  configuration, cancellation, destructive partial-side-effect, and unknown
+  failures fail closed or require operator review. Recovery records preserve
+  causal parents, exponential jittered backoff, selected routes, launch
+  manifest digests, and cumulative budgets; compatible fallbacks are probed
+  through runtime capability and sandbox gates before launch. Pending recovery
+  survives restart, duplicate terminal callbacks cannot create multiple
+  branches, and exact task recovery can be cancelled through REST, CLI, or MCP
+  controls. Workflow recovery exposes the same exact-parent cancellation
+  through REST (#861).
+
 ## [6.0.2] - 2026-07-24
 
 Veritas Kanban 6.0.2 is a desktop recovery and supportability hotfix. It keeps

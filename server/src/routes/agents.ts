@@ -345,6 +345,38 @@ router.post(
   })
 );
 
+// GET /api/agents/:taskId/recovery - Read the latest durable recovery decision.
+router.get(
+  '/:taskId/recovery',
+  asyncHandler(async (req, res) => {
+    const recovery = await clawdbotAgentService.getTaskRecovery(req.params.taskId as string);
+    res.json({ recovery });
+  })
+);
+
+// POST /api/agents/:taskId/recovery/cancel - Cancel the exact pending retry/fallback.
+router.post(
+  '/:taskId/recovery/cancel',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    let attemptId: string;
+    try {
+      ({ attemptId } = runControlSchema.parse(req.body));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    const recovery = await clawdbotAgentService.cancelTaskRecovery(
+      req.params.taskId as string,
+      attemptId,
+      requestActor(req)
+    );
+    res.json({ cancelled: true, recovery });
+  })
+);
+
 // POST /api/agents/:taskId/message - Send an attributed operator message to a running agent
 router.post(
   '/:taskId/message',

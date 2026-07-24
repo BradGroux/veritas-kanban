@@ -11,6 +11,7 @@ import type {
   AgentProfileValidationResult,
   ConversationLifecycleRecord,
   ConversationLifecycleResult,
+  RunRecoveryRecord,
   RunLaunchManifestPreview,
 } from '@veritas-kanban/shared';
 
@@ -412,6 +413,59 @@ export function registerAgentCommands(program: Command): void {
           console.log(JSON.stringify({ stopped: true }));
         } else {
           console.log(chalk.yellow('✓ Agent stopped'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('agent:recovery <id>')
+    .description('Show the latest durable retry or fallback decision for a task')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const result = await api<{ recovery: RunRecoveryRecord | null }>(
+          `/api/agents/${taskId}/recovery`
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else if (!result.recovery) {
+          console.log(chalk.dim('No recovery decision is recorded for this task'));
+        } else {
+          console.log(chalk.yellow(`Recovery: ${result.recovery.state}`));
+          console.log(`  Action: ${result.recovery.action}`);
+          console.log(`  Attempt: ${result.recovery.parentRunId}`);
+          console.log(`  Sequence: ${result.recovery.sequence}`);
+          console.log(`  Reason: ${result.recovery.reason}`);
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('agent:cancel-recovery <id>')
+    .description('Cancel the exact pending retry or fallback for a task')
+    .requiredOption('--attempt <attemptId>', 'Parent attempt that owns the pending recovery')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options: { attempt: string; json?: boolean }) => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const result = await api<{ cancelled: boolean; recovery: RunRecoveryRecord }>(
+          `/api/agents/${taskId}/recovery/cancel`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ attemptId: options.attempt }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          console.log(chalk.yellow('✓ Automatic recovery cancelled'));
         }
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));

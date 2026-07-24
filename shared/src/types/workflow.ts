@@ -253,6 +253,8 @@ export interface StepRun {
   /** Exact provider evidence snapshot used for this step's launch and controls. */
   providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
   runtimeControls?: import('./provider-runtime.types.js').ProviderRuntimeControlSet;
+  /** Durable retry/fallback decision for this workflow step. */
+  runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
 
   // Loop-specific state
   loopState?: {

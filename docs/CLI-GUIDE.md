@@ -450,6 +450,8 @@ Manage AI agents on code tasks.
 | `vk start <id>`                                                               | Start an agent; optionally require runtime capabilities   |
 | `vk launch-preview <id>`                                                      | Preview effective launch inputs, blockers, and drift      |
 | `vk stop <id>`                                                                | Stop a run only when its persisted manifest supports stop |
+| `vk agent:recovery <id>`                                                      | Inspect the latest retry or fallback decision             |
+| `vk agent:cancel-recovery <id> --attempt <id>`                                | Cancel the exact pending recovery parent                  |
 | `vk agent:resume <id> --source-attempt <id> -m <text>`                        | Resume the exact persisted provider conversation          |
 | `vk agent:follow-up <id> --source-attempt <id> -m <text>`                     | Start a provider-native follow-up turn                    |
 | `vk agent:fork <id> --source-attempt <id> -m <text>`                          | Fork provider history without mutating its source         |
@@ -509,6 +511,18 @@ agent name. It resolves the current `attemptId` from status and includes it in
 the stop request, so a replacement run fails a delayed stop closed. The CLI
 preserves the server's reason when `run.stop` is unavailable or the active and
 persisted manifest digests do not match.
+
+Automatic recovery is separate from stopping an active provider. Use
+`vk agent:recovery TASK-001 --json` to inspect its classification, backoff,
+route, causal parent, manifest evidence, and cumulative budget. A cancellation
+must include the exact parent attempt:
+
+```bash
+vk agent:cancel-recovery TASK-001 --attempt attempt_parent --json
+```
+
+The server rejects stale parent IDs, recoveries that already launched, and
+recoveries that are already terminal.
 
 ---
 

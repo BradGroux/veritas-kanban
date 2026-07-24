@@ -50,6 +50,13 @@ const resumeRunSchema = z.object({
   context: z.record(z.string(), z.unknown()).optional(),
 });
 
+const cancelRecoverySchema = z
+  .object({
+    stepId: z.string().trim().min(1).max(160),
+    parentRunId: z.string().trim().min(1).max(320),
+  })
+  .strict();
+
 const authoringContextSchema = z
   .object({
     taskId: z.string().optional(),
@@ -615,6 +622,30 @@ router.post(
     const resumed = await workflowRunService.resumeRun(runId, context);
 
     res.json(resumed);
+  })
+);
+
+/**
+ * POST /api/workflows/runs/:id/recovery/cancel — Cancel an exact pending step recovery.
+ */
+router.post(
+  '/runs/:id/recovery/cancel',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const runId = getStringParam(req.params.id);
+    const userId = getUserId(req);
+    const run = await workflowRunService.getRun(runId);
+    if (!run) {
+      throw new NotFoundError(`Workflow run ${runId} not found`);
+    }
+    await assertWorkflowPermission(run.workflowId, userId, 'execute');
+    const { stepId, parentRunId } = cancelRecoverySchema.parse(req.body || {});
+    const cancelled = await workflowRunService.cancelPendingRecovery(
+      runId,
+      stepId,
+      parentRunId,
+      userId
+    );
+    res.json(cancelled);
   })
 );
 

@@ -226,6 +226,8 @@ export interface StepRun {
   error?: string;
   providerRuntimeManifest?: import('@veritas-kanban/shared').ProviderRuntimeManifest;
   runtimeControls?: import('@veritas-kanban/shared').ProviderRuntimeControlSet;
+  /** Durable retry/fallback decision for this workflow step. */
+  runRetry?: import('@veritas-kanban/shared').RunRecoveryRecord;
 
   // Loop-specific state
   loopState?: {

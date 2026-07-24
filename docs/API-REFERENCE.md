@@ -2335,6 +2335,38 @@ Approval-required tools are omitted from native provider configuration and use
 the mediated tool-call API below. Prompt text is never accepted as equivalent
 enforcement.
 
+### Automatic Run Recovery
+
+```
+GET  /api/agents/:taskId/recovery
+POST /api/agents/:taskId/recovery/cancel
+POST /api/workflows/runs/:runId/recovery/cancel
+```
+
+The GET endpoint returns the latest durable `run-recovery/v1` decision or
+`null`. Cancellation requires the exact parent attempt:
+
+```json
+{ "attemptId": "attempt_parent" }
+```
+
+Only a `scheduled` or `launching` recovery can be cancelled. A stale attempt
+ID, already launched child, or terminal recovery returns `409 Conflict`.
+Recovery records expose the normalized failure class, action, state, root and
+parent IDs, sequence, backoff and not-before time, selected route, manifest
+digests, cumulative budget, and any operator handoff.
+
+Workflow cancellation requires the exact step and causal parent:
+
+```json
+{
+  "stepId": "implement",
+  "parentRunId": "run_123:implement:0"
+}
+```
+
+The caller must have execute permission on the workflow.
+
 ### Conversation Lifecycle
 
 ```

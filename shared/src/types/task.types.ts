@@ -81,6 +81,7 @@ export interface TaskAttempt {
   runLaunchManifestTraceId?: string;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: import('./run-launch-manifest.types.js').RunLaunchManifestDriftResult;
+  runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
   completionResult?: import('./task-envelope.types.js').CompletionResult;
   conversation?: import('./conversation-lifecycle.types.js').ConversationLifecycleRecord;
 }
