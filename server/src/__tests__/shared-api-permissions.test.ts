@@ -94,4 +94,17 @@ describe('shared API permission metadata', () => {
       }).permissions
     ).toEqual(['admin:manage']);
   });
+
+  it('separates tool-server administration from run-scoped reads and calls', () => {
+    expect(getApiPermissionRequirement('/api/tool-servers').permissions).toEqual(['settings:read']);
+    expect(
+      getApiPermissionRequirement('/api/tool-servers/fixture', { method: 'PUT' }).permissions
+    ).toEqual(['admin:manage']);
+    expect(
+      getApiPermissionRequirement('/api/v1/tool-servers/runs/task_1/attempt_1/catalog').permissions
+    ).toEqual(['agent:read']);
+    expect(
+      getApiPermissionRequirement('/api/tool-servers/call', { method: 'POST' }).permissions
+    ).toEqual(['agent:write']);
+  });
 });

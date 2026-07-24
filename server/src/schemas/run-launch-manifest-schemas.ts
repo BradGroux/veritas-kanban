@@ -161,6 +161,10 @@ export const RunLaunchManifestSchema = z
         denied: stringListSchema,
         policyIds: stringListSchema,
         mcpServers: stringListSchema,
+        catalogDigest: z
+          .string()
+          .regex(/^sha256:[a-f0-9]{64}$/)
+          .optional(),
         enforcement: enforcementSchema,
       })
       .strict(),

@@ -14,6 +14,7 @@ import { SqliteSetupContextRepository } from './setup-context-repository.js';
 import { SqliteRunEventRepository } from './run-event-repository.js';
 import { SqliteRunApprovalRepository } from './run-approval-repository.js';
 import { SqliteRunSupervisorRepository } from './run-supervisor-repository.js';
+import { SqliteToolControlPlaneRepository } from './tool-control-plane-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
 
 export interface SqliteStorageOptions {
@@ -35,6 +36,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly runEvents: SqliteRunEventRepository;
   readonly runApprovals: SqliteRunApprovalRepository;
   readonly runSupervisors: SqliteRunSupervisorRepository;
+  readonly toolControlPlane: SqliteToolControlPlaneRepository;
 
   private readonly sqlite: SqliteDatabase;
 
@@ -57,6 +59,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.runEvents = new SqliteRunEventRepository(this.sqlite);
     this.runApprovals = new SqliteRunApprovalRepository(this.sqlite);
     this.runSupervisors = new SqliteRunSupervisorRepository(this.sqlite);
+    this.toolControlPlane = new SqliteToolControlPlaneRepository(this.sqlite);
   }
 
   getDatabase(): SqliteDatabase {

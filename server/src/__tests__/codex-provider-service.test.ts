@@ -134,6 +134,10 @@ import type {
 } from '../services/run-approval-broker-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import type { RunSupervisorService } from '../services/run-supervisor-service.js';
+import type {
+  PrepareRunToolCatalogInput,
+  ToolControlPlaneService,
+} from '../services/tool-control-plane-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -174,7 +178,8 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
 function testableService(
   tmpDir: string,
   credentialLeases?: CredentialLeaseLifecycle,
-  approvalBroker?: RunApprovalBrokerService
+  approvalBroker?: RunApprovalBrokerService,
+  toolControlPlane?: ToolControlPlaneService
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -188,7 +193,9 @@ function testableService(
     undefined,
     undefined,
     approvalBroker,
-    testRunSupervisor()
+    testRunSupervisor(),
+    undefined,
+    toolControlPlane
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -1533,6 +1540,80 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(mockSpawn).not.toHaveBeenCalled();
     expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('compiles transient preview and durable start tool catalogs before launch enforcement', async () => {
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex',
+          name: 'OpenAI Codex',
+          command: 'codex',
+          args: ['exec', '--json'],
+          enabled: true,
+          provider: 'codex-cli',
+          model: 'gpt-5.5',
+        },
+      ],
+      agentProfiles: [
+        {
+          id: 'mcp-reviewer',
+          schemaVersion: 'agent-profile-package/v1',
+          version: '1.0.0',
+          displayName: 'MCP reviewer',
+          role: 'reviewer',
+          enabled: true,
+          capabilities: ['review'],
+          defaultTaskTypes: ['code'],
+          runtime: { agent: 'codex', provider: 'codex-cli' },
+          tools: { mcpServers: ['fixture'] },
+        },
+      ],
+    });
+    const prepareRunCatalog = vi.fn(async (input: PrepareRunToolCatalogInput) => ({
+      schemaVersion: 'run-tool-catalog/v1' as const,
+      taskId: input.taskId,
+      attemptId: input.attemptId,
+      provider: input.provider,
+      providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
+      taskEnvelopeDigest: input.taskEnvelopeDigest,
+      entries: [],
+      createdAt: '2026-07-24T12:00:00.000Z',
+      digest: `sha256:${'c'.repeat(64)}`,
+    }));
+    const toolControlPlane = {
+      prepareRunCatalog,
+      environmentKeys: vi.fn(async () => []),
+    } as unknown as ToolControlPlaneService;
+    const service = testableService(tmpDir, undefined, undefined, toolControlPlane);
+
+    const preview = await service.previewAgentLaunch(task.id, undefined, {
+      profileId: 'mcp-reviewer',
+    });
+    expect(preview.manifest.tools.catalogDigest).toBe(`sha256:${'c'.repeat(64)}`);
+    expect(prepareRunCatalog).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        taskId: task.id,
+        serverIds: ['fixture'],
+        persist: false,
+      })
+    );
+
+    await expect(
+      service.startAgent(task.id, undefined, { profileId: 'mcp-reviewer' })
+    ).rejects.toThrow(/cannot be enforced/i);
+    expect(prepareRunCatalog).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        taskId: task.id,
+        attemptId: expect.stringMatching(/^attempt_/),
+        serverIds: ['fixture'],
+      })
+    );
+    expect(prepareRunCatalog.mock.calls[1]?.[0]).not.toHaveProperty('persist');
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(task.attempt).toBeUndefined();
   });
 
   it('fails before attempt mutation when profile tool restrictions cannot be enforced', async () => {

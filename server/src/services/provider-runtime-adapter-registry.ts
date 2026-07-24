@@ -131,8 +131,8 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'tool.calls': supported(
         'Command, file, tool, and item lifecycle notifications are journaled and budgeted.'
       ),
-      'tool.mcp': unsupported(
-        'Inherited MCP servers, apps, and plugins are disabled until issue #857 provides a run-scoped control plane.'
+      'tool.mcp': supported(
+        'Only the immutable run-scoped MCP catalog is injected through thread configuration; inherited servers remain disabled.'
       ),
       'output.structured': advisory(
         'The transport is schema-validated JSON-RPC; caller output-schema enforcement is not yet exposed.'
@@ -180,8 +180,8 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'tool.calls': supported(
       'Claude assistant tool-use and user tool-result records are journaled and budgeted.'
     ),
-    'tool.mcp': unsupported(
-      'Bare mode blocks inherited MCP servers until the run-scoped MCP control plane in issue #857 is available.'
+    'tool.mcp': supported(
+      'Strict MCP mode exposes only the immutable run-scoped catalog and its allowed tools.'
     ),
     'output.structured': advisory(
       'The adapter validates bounded JSONL stream records without enforcing a caller output schema.'

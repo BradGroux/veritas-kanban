@@ -106,6 +106,7 @@ import type {
   ConversationLaunchRequest,
   ConversationLifecycleRecord,
   ConversationLifecycleResult,
+  RunToolCatalog,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -187,6 +188,11 @@ import {
   ConversationLifecycleService,
   type ConversationSource,
 } from './conversation-lifecycle-service.js';
+import {
+  getToolControlPlaneService,
+  type ToolControlPlaneService,
+} from './tool-control-plane-service.js';
+import { getToolPolicyService } from './tool-policy-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -421,6 +427,7 @@ export class ClawdbotAgentService {
   private approvalBroker: RunApprovalBrokerService;
   private runSupervisor: RunSupervisorService;
   private conversationLifecycle: ConversationLifecycleService;
+  private toolControlPlane: ToolControlPlaneService;
   private logsDir: string;
 
   constructor(
@@ -434,7 +441,8 @@ export class ClawdbotAgentService {
     runEvents: RunEventJournalService = getRunEventJournalService(),
     approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService(),
     runSupervisor: RunSupervisorService = getRunSupervisorService(),
-    conversationLifecycle = new ConversationLifecycleService()
+    conversationLifecycle = new ConversationLifecycleService(),
+    toolControlPlane: ToolControlPlaneService = getToolControlPlaneService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -455,6 +463,7 @@ export class ClawdbotAgentService {
     this.approvalBroker = approvalBroker;
     this.runSupervisor = runSupervisor;
     this.conversationLifecycle = conversationLifecycle;
+    this.toolControlPlane = toolControlPlane;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -976,6 +985,22 @@ export class ClawdbotAgentService {
       networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
       executionPolicy: task.executionPolicy,
     });
+    const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
+    const runToolCatalog = await this.toolControlPlane.prepareRunCatalog({
+      taskId,
+      attemptId,
+      provider,
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+      taskEnvelopeDigest: taskEnvelope.digest,
+      serverIds: profileLaunch?.profile.tools?.mcpServers ?? [],
+      allowedTools: this.intersectToolAllowLists(
+        profileLaunch?.profile.tools?.allowed ?? [],
+        toolPolicy.allowed
+      ),
+      deniedTools: toolPolicy.denied,
+      cwd: worktreePath,
+      persist: false,
+    });
     const taskTransport = adapter.renderTaskEnvelope({
       taskEnvelope,
       profileInstructions: profileLaunch?.instructions,
@@ -1005,6 +1030,7 @@ export class ClawdbotAgentService {
       budgetModelOverride: budgetEvaluation.modelOverride,
       budgetSources,
       options,
+      runToolCatalog,
     });
     const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
     return {
@@ -1227,6 +1253,21 @@ export class ClawdbotAgentService {
       networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
       executionPolicy: task.executionPolicy,
     });
+    const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
+    const runToolCatalog = await this.toolControlPlane.prepareRunCatalog({
+      taskId,
+      attemptId,
+      provider,
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+      taskEnvelopeDigest: taskEnvelope.digest,
+      serverIds: profileLaunch?.profile.tools?.mcpServers ?? [],
+      allowedTools: this.intersectToolAllowLists(
+        profileLaunch?.profile.tools?.allowed ?? [],
+        toolPolicy.allowed
+      ),
+      deniedTools: toolPolicy.denied,
+      cwd: worktreePath,
+    });
 
     // Validate path segments for log file
     validatePathSegment(taskId);
@@ -1273,6 +1314,7 @@ export class ClawdbotAgentService {
       budgetModelOverride: budgetEvaluation.modelOverride,
       budgetSources,
       options,
+      runToolCatalog,
     });
     const parentAttempt = await this.resolveParentAttempt(
       task,
@@ -2473,6 +2515,7 @@ export class ClawdbotAgentService {
             pending.runLaunchManifest?.digest
           ),
       ],
+      ['close run tool sessions', () => this.toolControlPlane.closeRun(taskId, pending.attemptId)],
       [
         'append result log',
         () =>
@@ -3197,6 +3240,45 @@ export class ClawdbotAgentService {
     return [...launchRuntimeCapabilities].sort((left, right) => left.localeCompare(right));
   }
 
+  private async resolveLaunchToolPolicy(
+    profileLaunch: AgentProfileResolvedLaunch | undefined
+  ): Promise<{ allowed: string[]; denied: string[] }> {
+    const policyIds = profileLaunch?.profile.policy?.toolPolicyIds ?? [];
+    if (policyIds.length === 0) return { allowed: [], denied: [] };
+    const denied = new Set<string>();
+    let allowed: Set<string> | undefined;
+    const service = getToolPolicyService();
+    for (const policyId of policyIds) {
+      const policy = await service.getToolPolicy(policyId);
+      if (!policy) {
+        throw new ConflictError(`Tool policy ${policyId} was not found.`, {
+          profileId: profileLaunch?.profile.id,
+          policyId,
+        });
+      }
+      for (const tool of policy.denied) denied.add(tool);
+      if (policy.allowed.includes('*')) continue;
+      const current = new Set(policy.allowed);
+      allowed =
+        allowed === undefined ? current : new Set([...allowed].filter((tool) => current.has(tool)));
+    }
+    return {
+      allowed: [...(allowed ?? [])].sort(),
+      denied: [...denied].sort(),
+    };
+  }
+
+  private intersectToolAllowLists(profileAllowed: string[], policyAllowed: string[]): string[] {
+    const normalize = (values: string[]) =>
+      values.length === 0 || values.includes('*') ? undefined : new Set(values);
+    const profile = normalize(profileAllowed);
+    const policy = normalize(policyAllowed);
+    if (!profile && !policy) return [];
+    if (!profile) return [...(policy as Set<string>)].sort();
+    if (!policy) return [...profile].sort();
+    return [...profile].filter((tool) => policy.has(tool)).sort();
+  }
+
   private assertLaunchReadiness(
     task: Task,
     agent: AgentType,
@@ -3727,20 +3809,14 @@ export class ClawdbotAgentService {
       });
     }
     if (
-      manifest.tools.allowed.length > 0 ||
-      manifest.tools.denied.length > 0 ||
-      manifest.tools.policyIds.length > 0 ||
-      manifest.tools.mcpServers.length > 0
+      manifest.tools.mcpServers.length > 0 &&
+      (!manifest.tools.catalogDigest || manifest.tools.enforcement !== 'enforced')
     ) {
-      throw new ConflictError(
-        'The selected adapter cannot inject the manifest tool and MCP catalog.',
-        {
-          provider,
-          manifestDigest: manifest.digest,
-          remediation:
-            'Use a run-scoped tool-control adapter after the tool-server control plane is enabled.',
-        }
-      );
+      throw new ConflictError('The selected adapter has no immutable run-scoped tool catalog.', {
+        provider,
+        manifestDigest: manifest.digest,
+        remediation: 'Validate and compile every selected tool server before provider dispatch.',
+      });
     }
   }
 
@@ -3865,11 +3941,26 @@ export class ClawdbotAgentService {
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Codex app-server');
     }
+    const runToolCatalog = runLaunchManifest.tools.catalogDigest
+      ? await this.toolControlPlane.getRunCatalog(task.id, attemptId)
+      : undefined;
+    if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
+      throw new ConflictError('Run tool catalog does not match launch evidence.');
+    }
+    const mcpServers = runToolCatalog
+      ? await this.toolControlPlane.providerConfig(runToolCatalog)
+      : undefined;
+    const toolEnvironmentKeys = runToolCatalog
+      ? await this.toolControlPlane.environmentKeys(runToolCatalog)
+      : [];
     const command = agentConfig?.command || 'codex';
     const args = buildCodexAppServerArgs(agentConfig?.args);
     const child = spawn(command, args, {
       cwd: worktreePath,
-      env: buildSafeCodexAppServerEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      env: buildSafeCodexAppServerEnv(process.env, [
+        ...(sandboxPolicy?.effective.envPassthrough ?? []),
+        ...toolEnvironmentKeys,
+      ]),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -4203,7 +4294,7 @@ export class ClawdbotAgentService {
       logPath,
       `\n## Codex app-server\n\n**Command:** \`${[command, ...args].join(
         ' '
-      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** strict stdio with inherited MCP, hooks, plugins, apps, and remote control disabled\n\n`
+      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** strict stdio with only the run-scoped MCP catalog; hooks, plugins, apps, and remote control disabled\n\n`
     );
 
     void (async () => {
@@ -4220,6 +4311,7 @@ export class ClawdbotAgentService {
           cwd: worktreePath,
           model: agentConfig?.model,
           sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+          ...(mcpServers && Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
         };
         threadId =
           pending.conversation.mode === 'resume'
@@ -4649,6 +4741,18 @@ export class ClawdbotAgentService {
         attemptId,
       });
     }
+    const runToolCatalog = runLaunchManifest.tools.catalogDigest
+      ? await this.toolControlPlane.getRunCatalog(task.id, attemptId)
+      : undefined;
+    if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
+      throw new ConflictError('Run tool catalog does not match launch evidence.');
+    }
+    const claudeMcp = runToolCatalog
+      ? await this.toolControlPlane.claudeConfig(runToolCatalog)
+      : undefined;
+    const toolEnvironmentKeys = runToolCatalog
+      ? await this.toolControlPlane.environmentKeys(runToolCatalog)
+      : [];
     const command = agentConfig?.command || 'claude';
     const args = buildClaudeCodeArgs({
       prompt: effectivePrompt,
@@ -4672,15 +4776,28 @@ export class ClawdbotAgentService {
       maxBudgetUsd: runLaunchManifest.budget.enabled
         ? runLaunchManifest.budget.limits?.costUsd
         : undefined,
+      ...(claudeMcp
+        ? {
+            mcpConfig: claudeMcp.config,
+            mcpAllowedTools: claudeMcp.allowedToolNames,
+          }
+        : {}),
     });
+    const serializedMcpConfig = claudeMcp ? JSON.stringify(claudeMcp.config) : undefined;
     await this.appendLog(
       logPath,
       `\n## Claude Code\n\n**Command:** \`${[
         command,
-        ...args.map((argument) => (argument === effectivePrompt ? '<prompt>' : argument)),
+        ...args.map((argument) =>
+          argument === effectivePrompt
+            ? '<prompt>'
+            : argument === serializedMcpConfig
+              ? '<run-tool-catalog>'
+              : argument
+        ),
       ].join(
         ' '
-      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** bare mode with Veritas-owned static permissions\n\n`
+      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** bare mode with Veritas-owned static permissions and only the run-scoped MCP catalog\n\n`
     );
     await this.recordAgentStarted(
       task,
@@ -4692,7 +4809,10 @@ export class ClawdbotAgentService {
 
     const child = spawn(command, args, {
       cwd: worktreePath,
-      env: buildSafeClaudeCodeEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      env: buildSafeClaudeCodeEnv(process.env, [
+        ...(sandboxPolicy?.effective.envPassthrough ?? []),
+        ...toolEnvironmentKeys,
+      ]),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -6746,6 +6866,7 @@ export class ClawdbotAgentService {
       runBudget?: AgentBudgetPolicy;
     };
     options: AgentStartOptions;
+    runToolCatalog?: RunToolCatalog;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
     const hasToolRestrictions =
@@ -6780,6 +6901,25 @@ export class ClawdbotAgentService {
       input.budgetPolicy,
       input.options.conversation
     );
+    if (input.runToolCatalog) {
+      runtime.environmentKeys = [
+        ...new Set([
+          ...runtime.environmentKeys,
+          ...(await this.toolControlPlane.environmentKeys(input.runToolCatalog)),
+        ]),
+      ].sort();
+      if (input.provider === 'claude-code') {
+        const promptIndex = runtime.args.lastIndexOf('<prompt>');
+        const marker = `<run-tool-catalog:${input.runToolCatalog.digest}>`;
+        runtime.args.splice(
+          promptIndex < 0 ? runtime.args.length : promptIndex,
+          0,
+          '--strict-mcp-config',
+          '--mcp-config',
+          marker
+        );
+      }
+    }
     const worktreePath = input.task.git?.worktreePath
       ? this.expandPath(input.task.git.worktreePath)
       : undefined;
@@ -7342,10 +7482,23 @@ export class ClawdbotAgentService {
       runtime,
       tools: {
         allowed: profile?.tools?.allowed ?? [],
-        denied: [],
+        denied: input.runToolCatalog
+          ? input.runToolCatalog.entries.flatMap((entry) =>
+              entry.tools
+                .filter((tool) => tool.decision === 'deny')
+                .map((tool) => tool.qualifiedName)
+            )
+          : [],
         policyIds: profile?.policy?.toolPolicyIds ?? [],
         mcpServers: profile?.tools?.mcpServers ?? [],
-        enforcement: hasToolRestrictions || hasMcpRestrictions ? 'unavailable' : 'not-required',
+        ...(input.runToolCatalog ? { catalogDigest: input.runToolCatalog.digest } : {}),
+        enforcement: hasToolRestrictions
+          ? 'unavailable'
+          : input.runToolCatalog
+            ? 'enforced'
+            : hasMcpRestrictions
+              ? 'unavailable'
+              : 'not-required',
       },
       permissions: {
         level: profile?.permissions?.level ?? 'specialist',

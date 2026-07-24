@@ -67,6 +67,7 @@ async function discoverCliCommands() {
     'summary',
     'tasks',
     'time',
+    'tool-servers',
     'usage',
     'workflow',
   ];
@@ -92,6 +93,7 @@ async function discoverMcpTools() {
     'sprints',
     'summary',
     'tasks',
+    'tool-control-plane',
   ];
   const ids = [];
 

@@ -27,6 +27,7 @@ For current v5 screenshots and GIFs, see the
 ### AI Agents
 
 - [Agent Integration](#agent-integration)
+- [Run-scoped Tools](#run-scoped-tools-v6)
 - [Team Roster & Capability Routing](#team-roster--capability-routing)
 - [OpenAI Codex Integration](#openai-codex-integration-v5)
 - [Claude Code Integration](#claude-code-integration-v6)
@@ -296,6 +297,10 @@ First-class support for autonomous coding agents.
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
 - **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
 - **Provider-native approval broker** — Provider requests pause on an exact action hash, persist a bounded workspace-scoped review record, and resume only after an authenticated compare-and-set approve/reject decision; expiry, interruption, cancellation, stale evidence, changed arguments, and duplicate decisions fail closed
+- **Run-scoped tool control plane** — Versioned MCP definitions and discovery,
+  immutable per-attempt catalogs, required and optional server posture,
+  allow/deny/approval decisions, bounded supervised invocation, and native
+  catalog injection for Codex app-server and Claude Code
 - **Send message to agent** — Send text messages to running agents
 - **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
@@ -319,6 +324,39 @@ First-class support for autonomous coding agents.
 
 ---
 
+## Run-scoped Tools (v6)
+
+Veritas stores validated `tool-server-definition/v1` records for stdio and
+Streamable HTTP MCP servers. Discovery results are cached by the exact
+definition digest, including the declared server version. Each launch selects
+servers by profile, applies definition-level tool restrictions, and
+persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
+
+- Required server failures block launch; optional failures produce visible,
+  audited degraded entries.
+- Codex app-server receives only the run catalog through thread-scoped
+  `mcp_servers`; Claude Code receives it through `--strict-mcp-config` and an
+  exact MCP `--allowedTools` list.
+- Other providers reject a positive MCP catalog until they have a conforming
+  adapter.
+- Profile-wide named-tool policies still fail closed when a provider cannot
+  constrain its built-in tools alongside MCP; prompt instructions do not count
+  as enforcement.
+- Denied and approval-required tools are not exposed in native provider
+  configuration. Approval-required calls use Veritas REST, CLI, or MCP
+  mediation and bind approval to the exact arguments and catalog digest.
+- Stdio processes run without a shell and with a minimal environment.
+  Streamable HTTP calls use bounded JSON/SSE responses and run-scoped session
+  identity.
+- Arguments, schemas, results, and errors are bounded. Causal tool events are
+  redacted and deduplicated by the caller's stable operation ID.
+- Credential and header references may be declared, but those definitions
+  remain fail-closed until brokered provider launch handles are available.
+
+See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
+
+---
+
 ## OpenAI Codex Integration (v5)
 
 v5 uses OpenAI Codex as the default fresh-install agent profile and supports local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
@@ -329,7 +367,7 @@ Implemented:
 - **Codex agent defaults** — Fresh installs enable the OpenAI Codex CLI profile by default with `codex exec --sandbox workspace-write --json`; existing configs keep their selected default agent.
 - **Ollama and LM Studio profiles** — Adds disabled-by-default Ollama Local, Ollama Cloud, and LM Studio Local profiles with provider metadata and health probes.
 - **Codex SDK provider** — Uses `@openai/codex-sdk` to start durable local Codex threads, stream SDK events into attempt logs, persist `threadId` on attempts, and emit token telemetry from completed turns.
-- **Codex app-server provider** — Runs the exact v0.145.0 JSON-RPC v2 app-server over strict stdio, validates the pinned generated schemas, persists task-bound thread identity, streams item/usage/completion events, supports cooperative interruption, and brokers command, file, permission, tool-question, and elicitation requests through exact method-specific response contracts. Unsupported lifecycle, inherited MCP, and remote-control surfaces still fail closed.
+- **Codex app-server provider** — Runs the exact v0.145.0 JSON-RPC v2 app-server over strict stdio, validates the pinned generated schemas, persists task-bound thread identity, streams item/usage/completion events, supports cooperative interruption, brokers command, file, permission, tool-question, and elicitation requests through exact method-specific response contracts, and injects only the immutable run-scoped MCP catalog. Inherited MCP and remote-control surfaces remain disabled.
 - **Codex Cloud delegation** — Creates scoped `@codex` GitHub issue/PR prompts, records cloud attempt metadata, and links the GitHub artifact back to the Veritas task.
 - **Workflow Codex steps** — Executes workflow-engine agent steps through Codex SDK streaming, writes step outputs, and stores Codex thread IDs in workflow session context.
 - **Codex review actions** — Reviews task branch diffs in read-only Codex SDK mode, maps structured findings to Veritas review comments, and stores review decisions.
@@ -354,8 +392,9 @@ event journal, terminal result, and completion normalization.
 
 Implemented:
 
-- **Bare-mode launch** — No shell, inherited settings, plugins, MCP config,
-  Chrome integration, slash commands, or permission bypass.
+- **Bare-mode launch** — No shell, inherited settings, plugins, or MCP config;
+  only the Veritas-owned run catalog is added. Chrome integration, slash
+  commands, and permission bypass remain disabled.
 - **Static permissions** — Read tools are always available; writes, Bash, and
   web tools are derived from the effective filesystem and network sandbox.
 - **Explicit authentication** — OAuth/keychain status is diagnostic only;
@@ -369,13 +408,15 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 8,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 9,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this
   Claude adapter still uses static `dontAsk` permissions and reports
   interactive approval and elicitation as unsupported. Exact-session resume
-  and native fork are supported; steering and MCP injection remain unsupported.
+  and native fork are supported; steering remains unsupported. Run-scoped MCP
+  injection is supported, while approval-required tools stay on the mediated
+  Veritas call path.
 
 See [Agent Providers](AGENT-PROVIDERS.md#claude-code-v21218) for setup,
 credentials, arguments, permissions, and limitations.
@@ -1773,7 +1814,7 @@ vk done <id> "Added OAuth2 with Google and GitHub providers"
 
 ## MCP Server
 
-Model Context Protocol server for AI assistant integration (Claude Desktop, OpenClaw, Cursor, Codex, etc.). 36 tools across task management, agent orchestration, automation, notifications, summaries, sprint management, comments, and projects.
+Model Context Protocol server for AI assistant integration (Claude Desktop, OpenClaw, Cursor, Codex, etc.). 41 tools across task management, agent orchestration, automation, notifications, summaries, sprint management, comments, projects, and run-scoped tool control.
 
 ### Tools
 

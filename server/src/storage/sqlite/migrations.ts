@@ -1217,6 +1217,45 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON run_supervisors(state, lease_expires_at);
     `,
   },
+  {
+    version: 21,
+    name: '0021_run_scoped_tool_control_plane',
+    up: `
+      CREATE TABLE tool_server_definitions (
+        id TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        digest TEXT NOT NULL,
+        document_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE tool_server_discoveries (
+        definition_digest TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        server_version TEXT NOT NULL,
+        discovery_digest TEXT NOT NULL,
+        document_json TEXT NOT NULL,
+        discovered_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_tool_server_discoveries_server
+        ON tool_server_discoveries(server_id, server_version);
+
+      CREATE TABLE run_tool_catalogs (
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        digest TEXT NOT NULL,
+        document_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (task_id, attempt_id)
+      );
+
+      CREATE INDEX idx_run_tool_catalogs_provider_created
+        ON run_tool_catalogs(provider, created_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

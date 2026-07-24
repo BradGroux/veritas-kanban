@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "lastReviewed": "2026-07-15",
-  "notes": "Authority surface manifest for v5. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
+  "lastReviewed": "2026-07-24",
+  "notes": "Authority surface manifest for v6. The REST route-map entry is backed by shared/src/utils/api-permissions.ts, and CI compares it against server/src/routes/v1/index.ts.",
   "surfaces": [
     {
       "id": "rest:v1-route-map",
@@ -1108,6 +1108,102 @@
       "denialReason": "Closing a sprint mutates tasks and requires task write access."
     },
     {
+      "id": "cli:tool-servers:tool-servers",
+      "kind": "cli",
+      "classification": "public/setup",
+      "permissions": [],
+      "source": "cli/src/commands/tool-servers.ts",
+      "justification": "Parent command only; subcommands carry authorization."
+    },
+    {
+      "id": "cli:tool-servers:list",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Tool-server definition lists require settings read access."
+    },
+    {
+      "id": "cli:tool-servers:get",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Tool-server definition reads require settings read access."
+    },
+    {
+      "id": "cli:tool-servers:create",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Creating executable tool-server definitions requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:update",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Updating executable tool-server definitions requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:delete",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Deleting executable tool-server definitions requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:enable",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Enabling executable tool-server definitions requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:disable",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Disabling executable tool-server definitions requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:version",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Changing tool-server version identity requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:discover",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Starting tool-server discovery requires admin management access."
+    },
+    {
+      "id": "cli:tool-servers:catalog",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Reading an attempt-bound tool catalog requires agent read access."
+    },
+    {
+      "id": "cli:tool-servers:call",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["agent:write"],
+      "source": "cli/src/commands/tool-servers.ts",
+      "denialReason": "Mediated run-tool invocation requires agent write access."
+    },
+    {
       "id": "cli:summary:summary",
       "kind": "cli",
       "classification": "authenticated-read",
@@ -1274,6 +1370,38 @@
       "permissions": ["task:read", "task:write"],
       "source": "mcp/src/tools/agents.ts",
       "denialReason": "Stopping an agent requires task read and task write access."
+    },
+    {
+      "id": "mcp:list_tool_servers",
+      "kind": "mcp",
+      "classification": "authenticated-read",
+      "permissions": ["settings:read"],
+      "source": "mcp/src/tools/tool-control-plane.ts",
+      "denialReason": "Tool-server definition lists require settings read access."
+    },
+    {
+      "id": "mcp:discover_tool_server",
+      "kind": "mcp",
+      "classification": "owner-admin",
+      "permissions": ["admin:manage"],
+      "source": "mcp/src/tools/tool-control-plane.ts",
+      "denialReason": "Starting tool-server discovery requires admin management access."
+    },
+    {
+      "id": "mcp:get_run_tool_catalog",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["agent:read"],
+      "source": "mcp/src/tools/tool-control-plane.ts",
+      "denialReason": "Reading an attempt-bound tool catalog requires agent read access."
+    },
+    {
+      "id": "mcp:call_run_tool",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["agent:write"],
+      "source": "mcp/src/tools/tool-control-plane.ts",
+      "denialReason": "Mediated run-tool invocation requires agent write access."
     },
     {
       "id": "mcp:list_pending_automation",

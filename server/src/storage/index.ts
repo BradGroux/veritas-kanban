@@ -26,6 +26,7 @@ export type {
   RunEventRepository,
   RunEventRepositoryAppendInput,
   RunApprovalRepository,
+  ToolControlPlaneRepository,
   SetupContextRepository,
   WorkspaceFileRepository,
   StorageProvider,
@@ -77,6 +78,11 @@ export { SqliteStatusHistoryRepository } from './sqlite/status-history-repositor
 export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
+export {
+  FileToolControlPlaneRepository,
+  InMemoryToolControlPlaneRepository,
+} from './tool-control-plane-repository.js';
+export { SqliteToolControlPlaneRepository } from './sqlite/tool-control-plane-repository.js';
 export { SqliteSetupContextRepository } from './sqlite/setup-context-repository.js';
 export {
   SqliteDecisionRepository,

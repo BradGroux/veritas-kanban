@@ -23,6 +23,7 @@ import { summaryTools, handleSummaryTool } from './tools/summary.js';
 import { sprintTools, handleSprintTool } from './tools/sprints.js';
 import { commentTools, handleCommentTool } from './tools/comments.js';
 import { projectTools, handleProjectTool } from './tools/projects.js';
+import { toolControlPlaneTools, handleToolControlPlaneTool } from './tools/tool-control-plane.js';
 
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
@@ -52,6 +53,7 @@ const allTools = [
   ...sprintTools,
   ...commentTools,
   ...projectTools,
+  ...toolControlPlaneTools,
 ];
 
 // List available tools
@@ -90,6 +92,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     if (projectTools.some((t) => t.name === name)) {
       return await handleProjectTool(name, args);
+    }
+    if (toolControlPlaneTools.some((t) => t.name === name)) {
+      return await handleToolControlPlaneTool(name, args);
     }
 
     return {

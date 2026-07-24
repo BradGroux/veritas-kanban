@@ -23,6 +23,14 @@ export const diffAccess = routeAccess('task:read', 'task:write', [
 ]);
 export const settingsAccess = routeAccess('settings:read', 'settings:write');
 export const adminAccess = routeAccess('admin:manage', 'admin:manage');
+export const toolControlPlaneAccess = routeAccess('settings:read', 'admin:manage', [
+  {
+    methods: ['GET'],
+    path: /^\/runs\/[^/]+\/[^/]+\/catalog\/?$/,
+    permissions: 'agent:read',
+  },
+  { methods: ['POST'], path: /^\/call\/?$/, permissions: 'agent:write' },
+]);
 export const agentRegistryAccess = routeAccess('agent:read', 'telemetry:write');
 export const agentPermissionAccess = routeAccess('agent:read', 'admin:manage', [
   { methods: ['POST'], path: /^\/check\/?$/, permissions: 'agent:read' },

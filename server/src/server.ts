@@ -80,6 +80,7 @@ import { closeWebSocketSafely } from './utils/websocket-close.js';
 import { startAfterInitialization } from './utils/startup-gate.js';
 import { getCommunicationAdapterService } from './services/communication-adapter-service.js';
 import { getRunEventJournalService } from './services/run-event-journal-service.js';
+import { getToolControlPlaneService } from './services/tool-control-plane-service.js';
 
 const log = createLogger('server');
 
@@ -1213,6 +1214,17 @@ async function gracefulShutdown(signal: string) {
 
     await getCommunicationAdapterService().shutdown();
     log.info('Communication adapter workers stopped');
+
+    await Promise.race([
+      getToolControlPlaneService().closeAll(),
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          log.warn('Tool control-plane shutdown timed out after 3s');
+          resolve();
+        }, 3000)
+      ),
+    ]);
+    log.info('Tool control-plane sessions stopped');
 
     // Flush pending telemetry writes (timeout: 5s)
     await Promise.race([

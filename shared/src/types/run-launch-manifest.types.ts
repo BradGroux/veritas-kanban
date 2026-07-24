@@ -124,6 +124,8 @@ export interface RunLaunchTools {
   denied: string[];
   policyIds: string[];
   mcpServers: string[];
+  /** Immutable run-scoped catalog evidence compiled by the tool control plane. */
+  catalogDigest?: string;
   enforcement: RunLaunchManifestEnforcementState;
 }
 

@@ -113,6 +113,8 @@ export interface ClaudeCodeLaunchInput {
   sandboxMode: SandboxPolicyDryRunResult['effective']['sandboxMode'];
   networkAccessEnabled: boolean;
   maxBudgetUsd?: number;
+  mcpConfig?: Record<string, unknown>;
+  mcpAllowedTools?: string[];
 }
 
 export interface ClaudeCodeUsage {
@@ -202,7 +204,13 @@ export function buildClaudeCodeArgs(input: ClaudeCodeLaunchInput): string[] {
   const configuredMaxTurns = readConfiguredMaxTurns(normalizedExtras);
   const extraArgs = removeFlagAndValue(normalizedExtras, '--max-turns');
   const writable = input.sandboxMode !== 'read-only';
-  const allowedTools = ['Read', 'Glob', 'Grep', ...(writable ? ['Edit', 'Write'] : [])];
+  const allowedTools = [
+    'Read',
+    'Glob',
+    'Grep',
+    ...(writable ? ['Edit', 'Write'] : []),
+    ...(input.mcpAllowedTools ?? []),
+  ];
   if (writable && input.networkAccessEnabled) allowedTools.push('Bash');
   const deniedTools = [
     'Read(.env)',
@@ -241,6 +249,13 @@ export function buildClaudeCodeArgs(input: ClaudeCodeLaunchInput): string[] {
     args.push('--max-budget-usd', String(input.maxBudgetUsd));
   }
   if (input.model?.trim()) args.push('--model', input.model.trim());
+  if (input.mcpConfig) {
+    const serialized = JSON.stringify(input.mcpConfig);
+    if (Buffer.byteLength(serialized, 'utf8') > 256 * 1024) {
+      throw new Error('Claude Code MCP configuration exceeds the bounded launch limit.');
+    }
+    args.push('--strict-mcp-config', '--mcp-config', serialized);
+  }
   if (input.resumeSessionId) {
     const sessionId = validatedSessionId(input.resumeSessionId);
     args.push('--resume', sessionId);

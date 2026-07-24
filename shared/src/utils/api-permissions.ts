@@ -322,6 +322,19 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'admin:manage',
   },
   {
+    prefix: '/api/tool-servers',
+    read: 'settings:read',
+    write: 'admin:manage',
+    overrides: [
+      {
+        methods: ['GET'],
+        path: /^\/runs\/[^/]+\/[^/]+\/catalog\/?$/,
+        permissions: 'agent:read',
+      },
+      { methods: ['POST'], path: /^\/call\/?$/, permissions: 'agent:write' },
+    ],
+  },
+  {
     prefix: '/api/skills/capabilities',
     read: 'policy:read',
     write: 'policy:write',

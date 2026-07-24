@@ -71,6 +71,27 @@ describe('Claude Code v2.1.218 adapter contract', () => {
     }
   });
 
+  it('injects only the system-owned run-scoped MCP catalog in strict mode', () => {
+    const mcpConfig = {
+      mcpServers: {
+        veritas: {
+          command: '/usr/bin/node',
+          args: ['/opt/veritas/mcp.js'],
+        },
+      },
+    };
+    const args = buildClaudeCodeArgs({
+      prompt: 'Use the selected tool.',
+      sandboxMode: 'workspace-write',
+      networkAccessEnabled: false,
+      mcpConfig,
+      mcpAllowedTools: ['mcp__veritas__get_task'],
+    });
+    expect(args[args.indexOf('--mcp-config') + 1]).toBe(JSON.stringify(mcpConfig));
+    expect(args).toContain('--strict-mcp-config');
+    expect(args[args.indexOf('--allowedTools') + 1]).toContain('mcp__veritas__get_task');
+  });
+
   it('builds provider-owned resume and fork invocations from exact session identities', () => {
     const resumed = buildClaudeCodeArgs({
       prompt: 'Continue with the focused fix.',
@@ -238,7 +259,7 @@ describe('Claude Code v2.1.218 adapter contract', () => {
     expect(state('run.fork')).toBe('supported');
     expect(state('run.approvals')).toBe('unsupported');
     expect(state('run.elicitation')).toBe('unsupported');
-    expect(state('tool.mcp')).toBe('unsupported');
+    expect(state('tool.mcp')).toBe('supported');
   });
 
   it('fails malformed and truncated records closed', () => {

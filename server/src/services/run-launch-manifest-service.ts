@@ -393,6 +393,7 @@ function normalizeTools(tools: RunLaunchTools): RunLaunchTools {
     denied: uniqueSorted(tools.denied),
     policyIds: uniqueSorted(tools.policyIds),
     mcpServers: uniqueSorted(tools.mcpServers),
+    ...(tools.catalogDigest ? { catalogDigest: tools.catalogDigest } : {}),
     enforcement: tools.enforcement,
   };
 }
@@ -460,6 +461,14 @@ function collectBlockers({
       'tools.mcpServers',
       'The profile declares MCP servers that the selected adapter cannot inject safely.',
       'Select an adapter with explicit MCP injection or remove the MCP declarations.'
+    );
+  }
+  if (tools.enforcement === 'enforced' && tools.mcpServers.length > 0 && !tools.catalogDigest) {
+    add(
+      'tool-catalog-missing',
+      'tools.catalogDigest',
+      'The launch declares enforced MCP servers without an immutable run-scoped catalog.',
+      'Validate and compile the selected servers through the tool control plane before launch.'
     );
   }
   if (permissions.enforcement !== 'enforced' && permissions.required.length > 0) {

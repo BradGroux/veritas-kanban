@@ -42,6 +42,7 @@ import type {
   RunEventRepository,
   RunApprovalRepository,
   RunSupervisorRepository,
+  ToolControlPlaneRepository,
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
@@ -68,6 +69,7 @@ import { TelemetryService, type TelemetryServiceOptions } from '../services/tele
 import { FileRunEventRepository } from './run-event-repository.js';
 import { FileRunApprovalRepository } from './run-approval-repository.js';
 import { FileRunSupervisorRepository } from './run-supervisor-repository.js';
+import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 
 // ---------------------------------------------------------------------------
 // FileTaskRepository
@@ -487,6 +489,7 @@ export interface FileStorageOptions {
   runEventsDir?: string;
   runApprovalsPath?: string;
   runSupervisorsPath?: string;
+  toolControlPlanePath?: string;
 }
 
 export class FileStorageProvider implements StorageProvider {
@@ -501,6 +504,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly runEvents: RunEventRepository;
   readonly runApprovals: RunApprovalRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly toolControlPlane: ToolControlPlaneRepository;
 
   private taskService: TaskService;
   private configService: ConfigService;
@@ -553,6 +557,7 @@ export class FileStorageProvider implements StorageProvider {
     this.runEvents = new FileRunEventRepository(options.runEventsDir);
     this.runApprovals = new FileRunApprovalRepository(options.runApprovalsPath);
     this.runSupervisors = new FileRunSupervisorRepository(options.runSupervisorsPath);
+    this.toolControlPlane = new FileToolControlPlaneRepository(options.toolControlPlanePath);
   }
 
   async initialize(): Promise<void> {
