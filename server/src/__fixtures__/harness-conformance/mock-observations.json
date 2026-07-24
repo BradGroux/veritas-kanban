@@ -1,0 +1,40 @@
+[
+  {
+    "combinationId": "codex-mock",
+    "scenarioId": "complete-task",
+    "trial": 1,
+    "observation": {
+      "outcome": "passed",
+      "durationMs": 120,
+      "tokens": 90,
+      "costUsd": 0.01,
+      "retries": 0,
+      "files": [
+        {
+          "path": "src/result.txt",
+          "state": "created"
+        }
+      ],
+      "completions": [
+        {
+          "schema": "provider-completion/v1",
+          "valid": true
+        }
+      ],
+      "capabilities": [
+        {
+          "id": "tool.mcp",
+          "state": "supported"
+        }
+      ],
+      "evidence": {
+        "launchManifestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "providerRuntimeManifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "taskId": "task-smoke",
+        "attemptId": "attempt-smoke",
+        "eventSequenceStart": 1,
+        "eventSequenceEnd": 4
+      }
+    }
+  }
+]

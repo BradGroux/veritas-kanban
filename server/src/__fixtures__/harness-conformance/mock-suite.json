@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "harness-conformance-suite/v1",
+  "id": "mock-provider-smoke",
+  "revision": 1,
+  "objective": "Exercise a deterministic provider task and retain immutable evidence references.",
+  "fixture": {
+    "id": "seeded-task-repository",
+    "revision": 1,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "seed": "smoke-1"
+  },
+  "combinations": [
+    {
+      "id": "codex-mock",
+      "provider": "codex-cli",
+      "model": "gpt-5.6-sol",
+      "profileId": "openai-codex-cli",
+      "policyId": "workspace",
+      "sandboxPresetId": "workspace-write",
+      "mode": "mock"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "complete-task",
+      "objective": "Create the selected fixture output and return a valid completion.",
+      "repetitions": 1,
+      "assertions": [
+        {
+          "kind": "outcome",
+          "expected": "passed"
+        },
+        {
+          "kind": "file",
+          "path": "src/result.txt",
+          "expected": "created"
+        },
+        {
+          "kind": "completion",
+          "expectedSchema": "provider-completion/v1",
+          "valid": true
+        },
+        {
+          "kind": "capability",
+          "capabilityId": "tool.mcp",
+          "expected": "supported"
+        }
+      ]
+    }
+  ],
+  "capabilityClaims": [
+    {
+      "profileId": "openai-codex-cli",
+      "capabilityId": "tool.mcp",
+      "scenarioIds": ["complete-task"]
+    }
+  ],
+  "baselines": [
+    {
+      "revision": 1,
+      "combinationId": "codex-mock",
+      "scenarioId": "complete-task",
+      "minPassRate": 1,
+      "maxMeanLatencyMs": 500,
+      "maxLatencyStdDevMs": 0,
+      "maxMeanTokens": 200,
+      "maxMeanCostUsd": 0.05
+    }
+  ]
+}
