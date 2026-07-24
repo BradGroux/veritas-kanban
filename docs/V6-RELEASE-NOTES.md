@@ -1,12 +1,17 @@
 # Veritas Kanban v6 Release Notes
 
-Veritas Kanban 6.0.0 makes agent runtimes explicit, evidence-backed, and
-fail-closed. It adds first-class Buzz integration and puts Grok Build, OpenAI
-Codex, Claude Code, and GitHub Copilot CLI behind the same provider-neutral run,
-approval, credential, tool, worktree, event, and completion contracts.
+Veritas Kanban 6.0.1 is the first supported stable v6 release. It makes agent
+runtimes explicit, evidence-backed, and fail-closed, adds first-class Buzz
+integration, and puts Grok Build, OpenAI Codex, Claude Code, and GitHub Copilot
+CLI behind the same provider-neutral run, approval, credential, tool, worktree,
+event, and completion contracts.
+
+The 6.0.0 publication is retained as a quarantined prerelease after unresolved
+desktop and workflow issues were found in the live backlog. Install 6.0.1 or
+newer.
 
 - Release tracker:
-  [Veritas Kanban 6.0.0 harness parity and Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/924)
+  [Stabilize Veritas Kanban 6.0.1 after quarantined 6.0.0](https://github.com/BradGroux/veritas-kanban/issues/924)
 - Buzz epic:
   [First-class Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/904)
 - Harness epic:
@@ -15,7 +20,7 @@ approval, credential, tool, worktree, event, and completion contracts.
 - Versioned architecture:
   [v6 Agent Runtime Control Plane](architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
 - Retained validation record: [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md)
-- Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.0
+- Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1
 
 ## What Changed For Users
 
@@ -38,6 +43,26 @@ approval, credential, tool, worktree, event, and completion contracts.
 - Packaged SQLite startup now defers run-supervisor repository lookup until
   storage is initialized, and the desktop updater refuses older release
   metadata instead of offering a downgrade.
+
+## Stabilization In 6.0.1
+
+- Chat remains a reversible, bounded desktop panel with visible, Escape,
+  browser Back, startup-state, and native menu recovery paths (#945).
+- Task drawers, shared overlays, Archive cards, scoring profiles, and the
+  template editor use intentional, reachable scroll and resize behavior
+  (#935, #938, #939, #941).
+- Workflow actions normalize omitted collections and show recoverable load
+  failures instead of crashing task detail (#936).
+- Full-page views, task detail, and nested Workflow overlays preserve their
+  actual route origin, browser history, keyboard Back, and scroll position
+  (#937).
+- New scoring profiles open as visible, validated drafts from Profiles and
+  Score Explorer (#943).
+- Operations Digest distinguishes current task state from windowed events,
+  reconciles board inventory and exclusions, bounds observed wall time, and
+  exposes source IDs and metadata-quality findings (#944).
+- Desktop setup is version-neutral and the bridge reports Electron's packaged
+  application version instead of an absent npm environment value (#986).
 
 ## Tested Harness Baselines
 
@@ -99,7 +124,7 @@ task or completion authority.
   says the provider supports them.
 - The public REST API remains `v1`; v6 adds contracts and endpoints without
   renaming the API mount. CLI, MCP, server, web, shared, and desktop package
-  versions must all be 6.0.0.
+  versions must all be 6.0.1.
 
 Back up the current workspace before upgrading. Keep the complete v5.2.5
 backup until v6 runtime verification is accepted. App rollback is safe only
@@ -145,11 +170,11 @@ restore the pre-upgrade backup. See the
 
 ## Release Artifacts
 
-The supported v6.0.0 publication set is:
+The supported v6.0.1 publication set is:
 
-- annotated source tag and GitHub release `v6.0.0`;
-- signed and notarized `Veritas-Kanban-6.0.0-mac-arm64.dmg`;
-- signed and notarized `Veritas-Kanban-6.0.0-mac-arm64.zip`;
+- annotated source tag and GitHub release `v6.0.1`;
+- signed and notarized `Veritas-Kanban-6.0.1-mac-arm64.dmg`;
+- signed and notarized `Veritas-Kanban-6.0.1-mac-arm64.zip`;
 - DMG and ZIP blockmaps;
 - `latest-mac.yml`;
 - SHA-256 sidecars; and
@@ -164,5 +189,5 @@ publication. Source preparation does not count as signed distribution proof.
 
 - [Run-scoped egress gateway](https://github.com/BradGroux/veritas-kanban/issues/855)
   remains a v6.x enhancement for fine-grained outbound HTTP enforcement.
-  v6.0.0 already blocks any required rule that the selected provider cannot
+  v6.0.1 already blocks any required rule that the selected provider cannot
   prove it enforces.

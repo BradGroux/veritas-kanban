@@ -4,7 +4,7 @@
 > read this file first. Harness-specific supplements (e.g. `CLAUDE.md`) extend, never duplicate
 > or contradict, these rules.
 >
-> **Version:** 6.0.0
+> **Version:** 6.0.1
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
 > `pnpm check:pnpm-settings` and the smoke-test CI job.

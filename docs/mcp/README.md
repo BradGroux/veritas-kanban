@@ -843,7 +843,7 @@ Configure telemetry retention in `server/.env`:
 
 | Component          | Version      | Notes                       |
 | ------------------ | ------------ | --------------------------- |
-| MCP server package | `6.0.0`      | Matches VK server version   |
+| MCP server package | `6.0.1`      | Matches VK server version   |
 | MCP SDK            | `1.29.0`     | `@modelcontextprotocol/sdk` |
 | MCP protocol       | `2025-11-25` | Latest stable spec          |
 | Node.js            | `≥ 22`       | Matches the repo runtime    |
@@ -887,4 +887,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-07-24 · VK v6.0.0 · 41 tools / 9 categories_
+_Last updated: 2026-07-24 · VK v6.0.1 · 41 tools / 9 categories_
