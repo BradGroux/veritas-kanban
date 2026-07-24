@@ -190,8 +190,12 @@ This section is optional. Agents interact through HTTP + WebSocket; nothing is h
    ```
 7. **Agent workflow** (example prompt to an agent runner):
    ```
-   Hey Veritas, pick up task <ID>. Set status to in-progress, start the timer, do the work, then call `vk done <id> "summary"` when finished. Use cross-model review if you wrote code.
+   Start the configured agent on task <ID>. Use the persisted task envelope,
+   assigned worktree, and run-scoped tool catalog. Return focused verification
+   and a concise completion summary through the harness result.
    ```
+   Managed agents must not call `vk begin`, `vk done`, or lifecycle callbacks.
+   See [AGENTS-TEMPLATE.md](AGENTS-TEMPLATE.md).
 8. **Agent completion**
    - Verify `tasks/active/...` reflects status/time tracking
    - Check `.veritas-kanban/logs/agents.log` for run details

@@ -1,18 +1,21 @@
 # SOP: Cross-Model Code Review (Claude ↔ GPT)
 
-**Rule (non-negotiable):** If Claude wrote it, GPT reviews it. If GPT wrote it, Claude reviews it. The author may self-check during development, but the final gate must be a different model.
+Cross-model review is an optional independent-review workflow. Use it only
+when the task, configured review gate, issue owner, or release owner explicitly
+requires a different model.
 
 ---
 
 ## When to Trigger
 
-| Work Type                        | Review Required?                    |
-| -------------------------------- | ----------------------------------- |
-| Application code, infra, scripts | ✅ Always                           |
-| Docs/content                     | ⚠️ Only if accuracy/safety critical |
-| Research summaries               | Optional (human discretion)         |
+| Work Type                        | Review Required?         |
+| -------------------------------- | ------------------------ |
+| Application code, infra, scripts | When explicitly required |
+| Docs/content                     | When explicitly required |
+| Research summaries               | When explicitly required |
 
-If in doubt, review.
+If no review requirement is present, use focused self-verification and the
+normal human/CI review path.
 
 ---
 
@@ -97,7 +100,8 @@ Store in `prompt-registry/cross-model-review.md`.
 
 ## Review Gates (Veritas Kanban Enforcement)
 
-VK's built-in enforcement gates integrate directly with the cross-model review workflow, turning this SOP from a process suggestion into a structural guarantee:
+VK's built-in enforcement gates can make this optional workflow a structural
+requirement for selected workspaces or tasks:
 
 1. **reviewGate** — Blocks task completion unless all four reviewScores (security, reliability, performance, accessibility) are 10. This is the automated enforcement layer that ensures the cross-model review checklist has been completed rigorously.
 
@@ -121,10 +125,13 @@ VK's built-in enforcement gates integrate directly with the cross-model review w
 
 5. **Handling gate failures** — If task completion returns a 400 error with `REVIEW_GATE_FAILED` or `CLOSING_COMMENT_REQUIRED`, the reviewer must address the deficiency (raise a score, add a comment) and retry.
 
-6. **Recommendation**: Enable both `reviewGate` and `closingComments` for production workflows. This transforms the cross-model review from a process suggestion into a structural guarantee—no task can slip through without evidence of a thorough review.
+6. **Recommendation**: Enable `reviewGate` and `closingComments` only when the
+   workspace deliberately requires independent scored review. Leave them off
+   when normal task verification and human/CI review are sufficient.
 
 7. Full documentation: See [Enforcement Gates](enforcement.md) for all available gates, configuration options, and API reference.
 
 ---
 
-This SOP preserved a 91% accuracy rate in RF-002. Keep following it.
+RF-002 recorded a 91% accuracy rate for this review method. That result supports
+using the method when selected; it does not make it a universal gate.

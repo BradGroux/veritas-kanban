@@ -93,7 +93,8 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 41 tools, architecture, tool catalog, security model, and read/write smoke checks.
-- [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed runtime manifests, Codex and Hermes execution, optional model profiles, routing, and host behavior.
+- [Agent Guide and `AGENTS.md` Template](docs/AGENTS-TEMPLATE.md) — shared managed-run protocol, external self-reporting template, and unmanaged MCP setup.
+- [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, OpenClaw, and optional model profiles.
 - [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
@@ -105,7 +106,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) — release-safe views of provider support, Buzz setup, approvals, and run evidence.
 - [v6 Upgrade, Install, Remote, And Admin Guide](docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v5-to-v6 upgrade, harness setup, desktop, backup, and diagnostics paths.
 - [v6 Compatibility And Release Policy](docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md) — provider support tiers, tested builds, platform combinations, update channels, and rollback limits.
-- [v6 Release Notes](docs/V6-RELEASE-NOTES.md) — harness control-plane outcomes, migrations, known limits, release artifacts, and deferred v6.x work.
+- [v6 Release Notes](docs/V6-RELEASE-NOTES.md) — user-facing highlights, stabilization fixes, install/upgrade steps, behavior changes, and known limits.
 - [v5 Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
 - [Post-GA Desktop Agent Workbench Spec](docs/DESKTOP-AGENT-WORKBENCH.md) — desktop workbench UX, run controls, approvals, evidence, native affordances, and safety coverage.
 - [Post-GA Native Mobile Offline ADR](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md) — native mobile authority model, offline queue semantics, conflict handling, and security review.
@@ -724,15 +725,25 @@ vk agents:pending
 # then call the completion endpoint automatically.
 ```
 
-### Codex + HermesAgent
+### Managed agent harnesses and external clients
 
-- Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when Codex should implement, review, or delegate Veritas tasks.
-- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex,
-  ACP-compatible agents, Ollama, LM Studio, provider-specific routing, or
-  sandbox presets in the web app or macOS app. It also documents
-  `vk acp serve --stdio` for exposing a Veritas-managed task to ACP clients.
-- Use the [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) when routing work through the HermesAgent roster, enforcing QA evidence, or creating GitHub-backed task templates.
-- Configure Codex MCP access with the [MCP Server Guide](docs/mcp/README.md#codex) so Codex reads and updates Veritas through typed tools instead of one-off HTTP calls.
+- Start with the [Agent Guide and `AGENTS.md` Template](docs/AGENTS-TEMPLATE.md)
+  so managed and external agents do not duplicate lifecycle callbacks or
+  telemetry.
+- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) to enable and operate
+  Buzz Agent, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, OpenClaw,
+  ACP-compatible agents, Ollama, or LM Studio.
+- Use [Harness Compatibility](docs/HARNESS-COMPATIBILITY.md) and
+  `vk doctor --json` to verify the installed runtime instead of relying on a
+  provider name alone.
+- Use the [Buzz Integration guide](docs/BUZZ-INTEGRATION.md) for relay,
+  community, persona/team import, ACP execution, and workflow-trigger setup.
+- Configure unmanaged client access with the
+  [MCP Server Guide](docs/mcp/README.md). Managed runs receive only their
+  selected run-scoped catalog and do not need a separate global VK MCP config.
+- Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) or
+  [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) only when those
+  specialized workflows apply.
 
 ---
 

@@ -14,7 +14,7 @@ Steal these end-to-end flows when building your own automations. Each example sh
    ```
 2. **Prompt (worker)**
    ```
-   Implement markdown lessonsLearned field on tasks (UI + API). Include migration + docs. Cross-model review required.
+   Implement markdown lessonsLearned field on tasks (UI + API). Include migration + docs. Run the task's configured review gate, if any.
    ```
 3. **Workflow**
    - `vk begin <id>`
@@ -38,7 +38,7 @@ Steal these end-to-end flows when building your own automations. Each example sh
    - Patch bulk archive handler
    - Add regression test (Playwright)
 3. CLI flow: `vk begin`, fix, `vk done "Bulk archive now calls API"`
-4. Cross-model review ensures UI + API parity.
+4. Focused tests verify UI + API parity; add independent review when required.
 
 ---
 

@@ -6,8 +6,9 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 
 ## Do This
 
-1. **Always track time**
-   - Start timers with `vk begin` the moment you pick up a task.
+1. **Track time through the correct lifecycle owner**
+   - Humans and external agents start timers with `vk begin` when they pick up a task.
+   - Managed harness runs let VK and the adapter own timing automatically.
    - If you forgot, add a manual entry with reason. Time data fuels estimation and billing.
 
 2. **Use subtasks as living checklists**
@@ -26,8 +27,9 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 6. **Update SOP files after every lesson**
    - Mistake → update AGENTS.md/CLAUDE.md + Lessons Learned field.
 
-7. **Respect cross-model review**
-   - Treat it like CI. No code ships without the opposite model’s signoff.
+7. **Respect configured review requirements**
+   - Run independent or cross-model review only when the task, governance
+     policy, issue owner, or release owner requires it.
 
 8. **Mirror important artifacts to Brain/knowledge base**
    - Use `scripts/brain-write.sh` or equivalent so humans can find deliverables later.
@@ -52,7 +54,8 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
    - “Implement feature + write docs + shoot video” belongs in separate tasks.
 
 4. **Auto-piloting agents without supervision**
-   - Always read summaries, review diffs, enforce cross-model review.
+   - Read summaries, inspect diffs, and enforce the review policy selected for
+     the task.
 
 5. **Letting prompts drift**
    - Keep prompt registry updated or agents will regress.
