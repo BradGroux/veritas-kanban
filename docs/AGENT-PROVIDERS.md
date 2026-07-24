@@ -758,20 +758,23 @@ block outstanding leases. Manifest declarations and sandbox broker references
 must match definition IDs exactly.
 
 This core does not make an uncontrolled provider process broker-capable.
-Required brokered presets treat advisory or externally delegated
-`credential.broker` evidence as unsupported and block launch. Provider-facing
-handles remain disabled until the provider migration and a controlled egress or
-tool boundary are complete. Model-provider boot authentication and explicit
-`env-passthrough` compatibility remain separate, high-risk paths and are never
-labeled as brokered. See [Credential Broker](CREDENTIAL-BROKER.md).
+Credential-bound tool definitions compile only when enabled broker definitions,
+MCP scopes, source targets, and immutable catalog evidence match. They are
+omitted from native provider MCP configuration and provider environment
+passthrough. Mediated calls remain blocked until #969 consumes exact-action
+leases, and system-owned provider bridge injection remains under #970.
+Model-provider boot authentication and explicit `env-passthrough`
+compatibility remain separate, high-risk paths and are never labeled as
+brokered. See [Credential Broker](CREDENTIAL-BROKER.md).
 
 New launches persist `run-launch-credential-plan/v1` evidence. The plan
 classifies known provider boot keys, task integration definition IDs, and
 unknown credential-like environment passthrough; binds the classification to
 the provider runtime manifest and probe revision; and contains no values. Task
-integration references remain blocked until a controlled tool or egress
-boundary proves non-bypassable delivery. A provider-native boot key is reported
-as provider-required authentication, not as `credential.broker` support.
+integration references report a brokered tool-control-plane boundary only when
+the exact run catalog covers every reference; uncovered references remain
+blocked. A provider-native boot key is reported as provider-required
+authentication, not as `credential.broker` support.
 
 ## Agent Profile Packages
 

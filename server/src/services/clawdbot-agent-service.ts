@@ -7898,6 +7898,7 @@ export class ClawdbotAgentService {
       },
       requiredHealthChecks,
       sandboxPolicy: input.sandboxPolicy,
+      runToolCatalog: input.runToolCatalog,
       budgetPolicy: input.budgetPolicy ?? {
         enabled: false,
         scope: 'run',

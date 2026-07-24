@@ -79,6 +79,21 @@ export interface ToolServerDiscovery {
 
 export type RunToolPolicyDecision = 'allow' | 'deny' | 'approval';
 
+export interface RunToolCredentialBinding {
+  credentialReference: string;
+  credentialDefinitionDigest: string;
+  scopeDigest: string;
+  target:
+    | {
+        kind: 'environment';
+        name: string;
+      }
+    | {
+        kind: 'http-header';
+        name: string;
+      };
+}
+
 export interface RunToolCatalogEntry {
   serverId: string;
   serverVersion: string;
@@ -87,6 +102,8 @@ export interface RunToolCatalogEntry {
   transport: ToolServerTransportKind;
   requirement: ToolServerRequirement;
   status: 'ready' | 'degraded';
+  /** Value-free credential evidence for calls that must use the Veritas bridge. */
+  credentialBindings?: RunToolCredentialBinding[];
   tools: Array<{
     name: string;
     qualifiedName: string;

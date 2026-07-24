@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
   type HarnessSupportStatus,
+  type RunToolCatalog,
   type SandboxPolicyDryRunResult,
   type TaskEnvelope,
 } from '@veritas-kanban/shared';
@@ -16,6 +17,7 @@ import {
 } from '../services/run-launch-manifest-service.js';
 import { calculateProviderRuntimeManifestDigest } from '../utils/provider-runtime-manifest-digest.js';
 import { verifyRunLaunchManifestDigest } from '../utils/run-launch-manifest-digest.js';
+import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 const providerRuntimeManifest = providerRuntimeManifestFixture({
@@ -243,6 +245,40 @@ function input(
   };
 }
 
+function brokeredCatalog(): RunToolCatalog {
+  const payload: RunToolCatalog = {
+    schemaVersion: 'run-tool-catalog/v1',
+    taskId: 'task-854',
+    attemptId: 'attempt-854',
+    provider: 'codex-cli',
+    providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+    taskEnvelopeDigest: taskEnvelope.digest,
+    entries: [
+      {
+        serverId: 'github-tools',
+        serverVersion: '1.0.0',
+        definitionDigest: `sha256:${'b'.repeat(64)}`,
+        discoveryDigest: `sha256:${'c'.repeat(64)}`,
+        transport: 'stdio',
+        requirement: 'required',
+        status: 'ready',
+        credentialBindings: [
+          {
+            credentialReference: 'github-token',
+            credentialDefinitionDigest: `sha256:${'d'.repeat(64)}`,
+            scopeDigest: `sha256:${'e'.repeat(64)}`,
+            target: { kind: 'environment', name: 'GITHUB_TOKEN' },
+          },
+        ],
+        tools: [],
+      },
+    ],
+    createdAt: '2026-07-23T20:00:00.000Z',
+    digest: `sha256:${'0'.repeat(64)}`,
+  };
+  return { ...payload, digest: calculateRunToolCatalogDigest(payload) };
+}
+
 describe('RunLaunchManifestService', () => {
   it('compiles a canonical immutable manifest without prompt or credential values', () => {
     const manifest = new RunLaunchManifestService().compile(input());
@@ -357,6 +393,59 @@ describe('RunLaunchManifestService', () => {
       blockers: expect.arrayContaining([
         expect.objectContaining({ code: 'credential-boundary-unavailable' }),
       ]),
+    });
+  });
+
+  it('accepts an exact tool-control-plane credential boundary', () => {
+    const brokeredPolicy: SandboxPolicyDryRunResult = {
+      ...sandboxPolicy,
+      preset: {
+        ...sandboxPolicy.preset,
+        credentials: {
+          mode: 'brokered',
+          brokerRefs: ['github-token'],
+        },
+      },
+      effective: {
+        ...sandboxPolicy.effective,
+        credentialRefs: ['github-token'],
+      },
+    };
+    const runToolCatalog = brokeredCatalog();
+    const manifest = new RunLaunchManifestService().compile(
+      input({
+        sandboxPolicy: brokeredPolicy,
+        runToolCatalog,
+        tools: {
+          allowed: [],
+          denied: [],
+          policyIds: [],
+          mcpServers: ['github-tools'],
+          catalogDigest: runToolCatalog.digest,
+          enforcement: 'enforced',
+        },
+        runtime: {
+          ...input().runtime,
+          credentialReferences: ['env:OPENAI_API_KEY', 'github-token'],
+        },
+      })
+    );
+
+    expect(manifest.credentials).toMatchObject({
+      brokerState: 'supported',
+      references: expect.arrayContaining([
+        {
+          reference: 'github-token',
+          classification: 'task-integration',
+          delivery: 'brokered-boundary',
+          boundary: 'tool-control-plane',
+          risk: 'brokered',
+        },
+      ]),
+    });
+    expect(manifest.enforcement).toMatchObject({
+      enforceable: true,
+      blockers: [],
     });
   });
 

@@ -17,9 +17,11 @@ The v6 foundation includes:
   authentication, task integration references, and high-risk compatibility
   passthrough without storing values.
 
-It does not yet make a provider broker-capable. A handle in a prompt or
-environment is not a security boundary. Provider use stays disabled until an
-accepted network or tool dispatcher can prevent bypass.
+The tool control plane can now compile value-free credential boundary evidence
+into a run catalog. A handle in a prompt or provider environment is still not a
+security boundary: credential-bound native server injection is omitted, and
+mediated calls stay blocked until exact-action lease consumption lands in
+#969.
 
 ## Credential classes
 
@@ -152,10 +154,10 @@ treated as unsupported and blocks launch.
 Current executable providers classify their launch credentials consistently,
 but classification alone does not make them broker-capable. Controlled HTTP
 consumption belongs to the run-scoped egress gateway; controlled MCP/tool
-consumption belongs to the tool-server control plane. Until those boundaries
-deliver handles without a bypass, task integration references block launch and
-the registry and lease service remain limited to trusted internal dispatch
-code.
+consumption belongs to the tool-server control plane. A task reference is
+reported as brokered only when an immutable run catalog contains the matching
+credential-definition and scope digests. Uncovered references still block
+launch. Catalog evidence alone never resolves a value or enables dispatch.
 
 ## Rotation and revocation
 

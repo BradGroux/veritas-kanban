@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  CredentialDefinition,
+  CredentialDefinitionInput,
   RunEventEnvelope,
   ToolServerDefinition,
   ToolServerDefinitionInput,
@@ -19,6 +21,7 @@ import {
 } from '../storage/tool-control-plane-repository.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteToolControlPlaneRepository } from '../storage/sqlite/tool-control-plane-repository.js';
+import { calculateCredentialDefinitionDigest } from '../utils/credential-broker-digest.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
 const roots: string[] = [];
@@ -51,6 +54,46 @@ function definition(overrides: Partial<ToolServerDefinitionInput> = {}): ToolSer
   };
 }
 
+function credentialDefinition(
+  overrides: Partial<CredentialDefinitionInput> = {}
+): CredentialDefinition {
+  const input: CredentialDefinitionInput = {
+    id: 'github-token',
+    name: 'GitHub token',
+    enabled: true,
+    source: {
+      kind: 'environment',
+      reference: 'FIXTURE_TOKEN',
+    },
+    scope: {
+      dispatchTypes: ['mcp'],
+      hosts: [],
+      tools: ['fixture/search'],
+      destinations: [],
+      methods: [],
+      actions: ['fixture/search'],
+      pathPrefixes: [],
+    },
+    lease: {
+      ttlSeconds: 60,
+      maxUses: 1,
+      renewable: false,
+    },
+    approval: 'not-required',
+    ...overrides,
+  };
+  const payload = {
+    ...input,
+    schemaVersion: 'credential-definition/v1' as const,
+    createdAt: '2026-07-24T12:00:00.000Z',
+    updatedAt: '2026-07-24T12:00:00.000Z',
+  };
+  return {
+    ...payload,
+    digest: calculateCredentialDefinitionDigest(payload),
+  };
+}
+
 function fixture(
   options: {
     tools?: Array<Record<string, unknown>>;
@@ -59,6 +102,7 @@ function fixture(
     approval?: 'pending' | 'approved';
     environment?: NodeJS.ProcessEnv;
     journal?: RunEventJournalService;
+    credentialDefinitions?: CredentialDefinition[];
   } = {}
 ) {
   const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -120,6 +164,12 @@ function fixture(
     runtime: { open },
     journal: options.journal ?? ({ append } as unknown as RunEventJournalService),
     approvals: { request: requestApproval } as unknown as RunApprovalBrokerService,
+    credentialBroker: {
+      getDefinition: vi.fn(async (id: string) => {
+        const credential = options.credentialDefinitions?.find((candidate) => candidate.id === id);
+        return credential ? structuredClone(credential) : null;
+      }),
+    },
     now: () => new Date('2026-07-24T12:00:00.000Z'),
     environment: options.environment ?? {},
   });
@@ -440,8 +490,12 @@ describe('ToolControlPlaneService', () => {
     }
   });
 
-  it('fails closed on credential references until brokered launch handles are active', async () => {
-    const { service } = fixture();
+  it('compiles value-free credential evidence and omits brokered servers from native injection', async () => {
+    const credential = credentialDefinition();
+    const { service, open } = fixture({
+      environment: { FIXTURE_TOKEN: 'credential-sensitive-value' },
+      credentialDefinitions: [credential],
+    });
     await expect(
       service.createDefinition(
         definition({
@@ -455,6 +509,152 @@ describe('ToolControlPlaneService', () => {
         })
       )
     ).rejects.toThrow('Credential-shaped tool server arguments');
+    const runCatalog = await catalog(service, {
+      transport: {
+        kind: 'stdio',
+        command: '/usr/bin/fixture',
+        args: [],
+        environmentKeys: ['FIXTURE_TOKEN'],
+        credentialReferences: ['github-token'],
+      },
+    });
+    if (!runCatalog) throw new Error('Expected a run tool catalog.');
+
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transport: expect.objectContaining({ environmentKeys: [] }),
+      }),
+      '/tmp/worktree'
+    );
+    expect(runCatalog.entries[0].credentialBindings).toEqual([
+      {
+        credentialReference: 'github-token',
+        credentialDefinitionDigest: credential.digest,
+        scopeDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        target: { kind: 'environment', name: 'FIXTURE_TOKEN' },
+      },
+    ]);
+    expect(await service.providerConfig(runCatalog)).toEqual({});
+    expect(await service.claudeConfig(runCatalog)).toEqual({
+      config: { mcpServers: {} },
+      allowedToolNames: [],
+    });
+    expect(await service.acpConfig(runCatalog)).toEqual([]);
+    expect(await service.environmentKeys(runCatalog)).toEqual([]);
+    expect(JSON.stringify({ runCatalog })).not.toContain('credential-sensitive-value');
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'search',
+          arguments: { query: 'kanban' },
+          operationId: 'brokered-before-lease-consumption',
+        },
+        'agent-a'
+      )
+    ).rejects.toThrow('mediated lease consumption');
+  });
+
+  it('fails closed when credential evidence is missing, disabled, out of scope, or unmapped', async () => {
+    const cases = [
+      {
+        name: 'missing',
+        credentials: [],
+        transport: {
+          kind: 'stdio' as const,
+          command: '/usr/bin/fixture',
+          args: [],
+          environmentKeys: ['FIXTURE_TOKEN'],
+          credentialReferences: ['github-token'],
+        },
+      },
+      {
+        name: 'disabled',
+        credentials: [credentialDefinition({ enabled: false })],
+        transport: {
+          kind: 'stdio' as const,
+          command: '/usr/bin/fixture',
+          args: [],
+          environmentKeys: ['FIXTURE_TOKEN'],
+          credentialReferences: ['github-token'],
+        },
+      },
+      {
+        name: 'out of scope',
+        credentials: [
+          credentialDefinition({
+            scope: {
+              ...credentialDefinition().scope,
+              tools: ['fixture/other'],
+              actions: ['fixture/other'],
+            },
+          }),
+        ],
+        transport: {
+          kind: 'stdio' as const,
+          command: '/usr/bin/fixture',
+          args: [],
+          environmentKeys: ['FIXTURE_TOKEN'],
+          credentialReferences: ['github-token'],
+        },
+      },
+      {
+        name: 'unmapped',
+        credentials: [credentialDefinition()],
+        transport: {
+          kind: 'stdio' as const,
+          command: '/usr/bin/fixture',
+          args: [],
+          environmentKeys: [],
+          credentialReferences: ['github-token'],
+        },
+      },
+    ];
+
+    for (const candidate of cases) {
+      const { service } = fixture({ credentialDefinitions: candidate.credentials });
+      await service.createDefinition(
+        definition({
+          transport: candidate.transport,
+        })
+      );
+      await expect(
+        service.prepareRunCatalog({
+          taskId: 'task-tools',
+          attemptId: `attempt-${candidate.name.replaceAll(' ', '-')}`,
+          provider: 'codex-app-server',
+          providerRuntimeManifestDigest: DIGEST,
+          taskEnvelopeDigest: DIGEST,
+          serverIds: ['fixture'],
+        })
+      ).rejects.toThrow();
+    }
+  });
+
+  it('rejects credential definition drift after catalog compilation', async () => {
+    const definitions = [credentialDefinition()];
+    const { service } = fixture({ credentialDefinitions: definitions });
+    const runCatalog = await catalog(service, {
+      transport: {
+        kind: 'stdio',
+        command: '/usr/bin/fixture',
+        args: [],
+        environmentKeys: ['FIXTURE_TOKEN'],
+        credentialReferences: ['github-token'],
+      },
+    });
+    if (!runCatalog) throw new Error('Expected a run tool catalog.');
+    definitions[0] = credentialDefinition({
+      lease: { ttlSeconds: 120, maxUses: 1, renewable: false },
+    });
+
+    await expect(service.providerConfig(runCatalog)).rejects.toThrow('drifted');
+  });
+
+  it('keeps unbound credential-shaped environment keys fail closed', async () => {
+    const { service } = fixture();
     await service.createDefinition(
       definition({
         transport: {
@@ -466,38 +666,7 @@ describe('ToolControlPlaneService', () => {
         },
       })
     );
-    await expect(service.discover('fixture')).rejects.toThrow('brokered provider launch handles');
-
-    const optional = fixture();
-    await optional.service.createDefinition(
-      definition({
-        requirement: 'optional',
-        transport: {
-          kind: 'stdio',
-          command: '/usr/bin/fixture',
-          args: [],
-          environmentKeys: [],
-          credentialReferences: ['github-token'],
-        },
-      })
-    );
-    await expect(
-      optional.service.prepareRunCatalog({
-        taskId: 'task-tools',
-        attemptId: 'attempt-tools',
-        provider: 'codex-app-server',
-        providerRuntimeManifestDigest: DIGEST,
-        taskEnvelopeDigest: DIGEST,
-        serverIds: ['fixture'],
-      })
-    ).resolves.toMatchObject({
-      entries: [
-        expect.objectContaining({
-          status: 'degraded',
-          error: expect.stringContaining('brokered provider launch handles'),
-        }),
-      ],
-    });
+    await expect(service.discover('fixture')).rejects.toThrow('exact broker definitions');
   });
 
   it('validates, dispatches, journals, and rejects replay of an allowed tool call', async () => {

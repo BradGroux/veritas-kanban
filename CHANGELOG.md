@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added value-free credential boundary evidence to `run-tool-catalog/v1`.
+  Credential-bound definitions now require enabled MCP-scoped broker
+  definitions, exact source targets, and immutable definition/scope digests.
+  Discovery strips source environment and header values, native provider
+  configuration omits credential-bound servers, covered launch references
+  report a tool-control-plane boundary, and uncovered, drifted, or invoked
+  references remain fail closed pending exact-action lease consumption (#968).
 - Added `vk acp serve --stdio` and `vk acp status --json` to expose a
   task-bound, provider-neutral ACP v1 server view over Veritas-managed
   conversations. Fresh prompts retain the immutable task envelope, reconnect
