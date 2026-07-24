@@ -324,6 +324,10 @@ First-class support for autonomous coding agents.
   reports no persistent session loading or network MCP instead of inventing
   capabilities; selected run tools arrive only through the opaque
   system-owned `veritas-run` bridge
+- **Buzz composed compatibility gate** — One credential-free command verifies
+  pinned relay diagnostics, communication/replay, generic ACP, run-scoped MCP,
+  persona/team import, workflow-trigger, secret-safety, and matrix evidence
+  without treating optional live credentials as certification authority
 - **GitHub Copilot CLI ACP profile** — A disabled-by-default `copilot` runtime
   uses the generic ACP provider with a system-owned stdio/public-preview
   baseline, exact v1.0.74 handshake evidence, bounded restrictive process

@@ -215,6 +215,53 @@ POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/import
 Reads and preview require `settings:read`. Import requires `settings:write`.
 There is no continuous synchronization and no Buzz write-back endpoint.
 
+## Trigger a Veritas workflow
+
+A `buzz-workflow-trigger/v1` rule can bind one active channel mapping to one
+Veritas workflow. The first supported event is a root kind `9`
+`message.posted`. Replies, edits, deletes, reactions, adapter-originated
+echoes, disabled rules, and predicate mismatches do not launch a run.
+
+Create a rule with the mapping ID returned by the channel-mapping API:
+
+```bash
+curl -X POST \
+  http://localhost:3001/api/integrations/communication/adapters/buzz-default/buzz/workflow-triggers \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: <veritas-api-key>' \
+  --data '{
+    "mappingId": "buzz_map_example",
+    "workflowId": "triage-external-request",
+    "contentIncludes": "help"
+  }'
+```
+
+An exact 64-character author public key may be supplied as `authorPubkey`.
+Content matching is a bounded, case-insensitive substring check. There is no
+regex, expression, code, shell, or arbitrary Nostr-kind filter.
+
+Rule creation requires `settings:write` and execute permission on the
+destination workflow. The mapping alone does not grant workflow or task
+mutation rights.
+
+Veritas persists the accepted causal key
+`buzz:{community}:{eventId}:{ruleId}` before dispatch through the
+provider-neutral `workflow.pre-external-trigger` hook. Workflow context
+retains the community, channel, event, author, mapping, rule, and sanitized
+message. A replay returns the existing run. After restart, Veritas searches
+the destination workflow's run context for the causal key before launching
+another run.
+
+List or disable rules and inspect bounded disposition history:
+
+```text
+GET  /api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers
+POST /api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers/:ruleId/disable
+GET  /api/integrations/communication/adapters/:adapterId/buzz/workflow-trigger-audits
+```
+
+Disabling a rule retains its prior audits and linked workflow runs.
+
 ## Send roots and replies
 
 Send a root and associate it with a local Squad Chat message:
@@ -340,6 +387,67 @@ disabled, payloads are bounded, and requests have fixed timeouts.
 
 Enable only the narrow network class required by the relay.
 
+## Credential-free release gate
+
+Run the composed Buzz gate from the repository root:
+
+```bash
+pnpm test:buzz:compatibility
+```
+
+This command runs the existing credential-free fixtures for:
+
+- pinned relay/community/identity compatibility and secret non-retention;
+- signed root/reply communication, reconnect replay, dedupe, loop prevention,
+  and ambiguous delivery recovery;
+- `buzz-agent` through generic ACP;
+- the opaque run-scoped Veritas MCP bridge;
+- persona/team preview, import, refresh, provenance, and unsafe-source
+  rejection;
+- the typed root-message workflow trigger and causal replay; and
+- the machine-readable compatibility record.
+
+The canonical support record is still
+`GET /api/config/harness-compatibility`. Its Buzz entry pins release `0.4.24`,
+commit `710ed9fff57878a1d69f809b80a6ee0416c53fc4`, `buzz-agent 0.1.0`,
+provider probe revision, fixture revision, and every seam fixture path. A
+provider build, protocol, capability, probe, configuration, or fixture change
+invalidates prior certification.
+
+The green aggregate gate means only the following:
+
+| Capability                                                              | Disposition                                    |
+| ----------------------------------------------------------------------- | ---------------------------------------------- |
+| Relay/community/identity diagnostics                                    | Supported at the pinned baseline               |
+| Mapped roots/replies, replay, dedupe, and loop prevention               | Supported                                      |
+| `buzz-agent` through generic ACP                                        | Supported at the pinned ACP contract           |
+| Run-scoped Veritas MCP                                                  | Supported through the provider-neutral bridge  |
+| Public persona/team import                                              | Supported as explicit one-way materialization  |
+| One typed root message to a Veritas workflow                            | Supported                                      |
+| `buzz-acp` as a Veritas provider                                        | Rejected; it is the inverse Buzz-owned harness |
+| Buzz workflow definition execution and cross-system approvals           | Deferred                                       |
+| NIP-AE memory sync and automatic NIP-34 task mirroring                  | Deferred or rejected                           |
+| Desktop internals, DMs, forums, canvas, moderation, huddles, and mobile | Not implied by this gate                       |
+
+An unknown or changed Buzz build remains unsupported or degraded until the
+baseline, evidence digest, fixtures, and documentation are explicitly
+updated.
+
+### Optional live smoke
+
+Live smoke is supplemental and must target the exact candidate build with a
+dedicated least-privilege identity. It is not normal CI:
+
+1. Run `vk doctor --json` and retain only redacted public build/status fields.
+2. Publish one Veritas root to a dedicated mapped test channel.
+3. Reply from Buzz and verify the reply appears in the correct Squad Chat
+   thread, not merely as an HTTP success or ACP `end_turn`.
+4. Trigger one allowlisted test workflow and verify its causal event/run link.
+5. Disable the test mapping, rule, and profile.
+
+Do not upload raw events, private messages, authorization headers, auth tags,
+private keys, provider keys, or unredacted logs as evidence.
+
 ## Disable, upgrade, and rollback
 
 Disabling a channel mapping closes and rebuilds the worker without deleting
@@ -353,4 +461,11 @@ Buzz Desktop state.
 
 After a Buzz upgrade, run `vk doctor --json`. A version/build change
 invalidates prior compatibility evidence and must pass the pinned contract
-before workers or sends resume.
+and `pnpm test:buzz:compatibility` before workers, sends, or ACP dispatch
+resume. A baseline change updates the release/commit constants, matrix
+evidence digest, fixtures, and this guide together.
+
+If a candidate fails, keep the prior baseline and report the failing facet.
+Disable the affected adapter, mapping, profile, or trigger rule without
+deleting redacted configuration, mappings, cursors, import provenance, trigger
+audits, or workflow-run evidence.
