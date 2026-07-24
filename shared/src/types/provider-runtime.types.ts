@@ -103,6 +103,7 @@ export interface HarnessSupportStatus {
   providerVersion?: string;
   providerBuild?: string;
   manifestDigest?: string;
+  certification?: HarnessCertificationEvidence;
   diagnostics?: string[];
   diagnosticCommands: string[];
   remediation: string[];

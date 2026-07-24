@@ -200,8 +200,8 @@ vi.mock('@/hooks/useConfig', () => ({
     isFetching: false,
     refetch: mocks.refetchProviderHealth,
   }),
-  useHarnessSupport: () => ({
-    data: [
+  useHarnessCompatibilityMatrix: () => {
+    const supportStatuses = [
       {
         agentType: 'codex',
         profileId: 'openai-codex-cli',
@@ -231,10 +231,36 @@ vi.mock('@/hooks/useConfig', () => ({
         diagnosticCommands: ['claude --version'],
         remediation: ['Use a supported adapter.'],
       },
-    ],
-    isFetching: false,
-    refetch: vi.fn(),
-  }),
+    ];
+    return {
+      data: {
+        digest: 'a'.repeat(64),
+        probeRevision: 14,
+        supportStatuses,
+        records: [
+          {
+            profileId: 'openai-codex-app-server',
+            displayName: 'OpenAI Codex app-server',
+            testedVersions: ['codex-cli 0.145.0'],
+            testedBuilds: ['25af12f7e61572b0bc18ddb1008be543b91519b0'],
+            limitations: ['Experimental methods remain excluded.'],
+            sourceAvailability: 'open-source',
+          },
+          {
+            profileId: 'claude-code',
+            displayName: 'Claude Code',
+            testedVersions: ['2.1.218 (Claude Code)'],
+            testedBuilds: ['2982f951552e94f38cd972764ae94c1d90c41da3'],
+            limitations: ['The complete implementation is not public.'],
+            sourceAvailability: 'partial-source',
+            supportStatus: supportStatuses[1],
+          },
+        ],
+      },
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+  },
   useUpdateAgents: () => ({
     mutate: mocks.updateAgents,
   }),

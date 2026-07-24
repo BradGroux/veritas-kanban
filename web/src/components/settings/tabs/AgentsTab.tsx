@@ -19,7 +19,7 @@ import {
   useConfig,
   useDeleteAgentProfile,
   useExportAgentProfile,
-  useHarnessSupport,
+  useHarnessCompatibilityMatrix,
   useImportAgentProfile,
   useProviderHealth,
   useUpdateAgentProfile,
@@ -76,6 +76,7 @@ import type {
   SandboxPolicyPreset,
   ProviderRuntimeManifest,
   HarnessSupportStatus,
+  HarnessCompatibilityMatrix,
 } from '@veritas-kanban/shared';
 import type {
   CodexHealthStatus,
@@ -123,7 +124,8 @@ export function AgentsTab() {
     refetch: refetchProviderHealth,
   } = useProviderHealth();
   const { data: agentProfiles = [], isLoading: isAgentProfilesLoading } = useAgentProfiles();
-  const { data: harnessSupport = [] } = useHarnessSupport();
+  const { data: harnessCompatibility } = useHarnessCompatibilityMatrix();
+  const harnessSupport = harnessCompatibility?.supportStatuses ?? [];
   const { data: sandboxPresets = [], isLoading: isSandboxPoliciesLoading } = useSandboxPolicies();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
@@ -234,6 +236,8 @@ export function AgentsTab() {
         )}
       </div>
 
+      <HarnessCompatibilityPanel matrix={harnessCompatibility} />
+
       <AgentProfilePackagesSection
         profiles={agentProfiles}
         agents={config?.agents || []}
@@ -314,6 +318,59 @@ export function AgentsTab() {
       {/* Agent Routing Rules */}
       <RoutingRulesSection agents={config?.agents || []} />
     </div>
+  );
+}
+
+function HarnessCompatibilityPanel({ matrix }: { matrix?: HarnessCompatibilityMatrix }) {
+  if (!matrix) return null;
+
+  return (
+    <section className="space-y-3" aria-labelledby="harness-compatibility-title">
+      <div>
+        <h3 id="harness-compatibility-title" className="text-sm font-medium">
+          Harness Compatibility
+        </h3>
+        <Text size="xs" c="dimmed">
+          Reviewed builds and live support evidence from one compatibility record.
+        </Text>
+      </div>
+      <div className="divide-y rounded-md border">
+        {matrix.records.map((record) => (
+          <div
+            key={record.profileId}
+            className="grid gap-2 p-3 md:grid-cols-[minmax(10rem,1fr)_minmax(11rem,1fr)_auto]"
+          >
+            <div>
+              <Text size="sm" fw={500}>
+                {record.displayName}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {record.testedVersions.join(', ')}
+              </Text>
+              {record.testedBuilds.length > 0 && (
+                <Text size="xs" c="dimmed">
+                  Build {record.testedBuilds.map((build) => build.slice(0, 12)).join(', ')}
+                </Text>
+              )}
+            </div>
+            <Text size="xs" c="dimmed">
+              {record.limitations[0]}
+            </Text>
+            <div className="flex flex-wrap items-start gap-1">
+              <Badge size="xs" variant="light">
+                {record.supportStatus?.supportTier ?? 'not configured'}
+              </Badge>
+              <Badge size="xs" variant="outline">
+                {record.sourceAvailability.replace('-', ' ')}
+              </Badge>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Text size="xs" c="dimmed">
+        Matrix {matrix.digest.slice(0, 12)} · probe revision {matrix.probeRevision}
+      </Text>
+    </section>
   );
 }
 

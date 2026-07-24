@@ -26,6 +26,7 @@ export * from './run-session.types.js';
 export * from './run-supervisor.types.js';
 export * from './evaluation.types.js';
 export * from './harness-conformance.types.js';
+export * from './harness-compatibility.types.js';
 export * from './policy.types.js';
 export * from './prompt-registry.types.js';
 export * from './provider-runtime.types.js';

@@ -22,10 +22,12 @@ import {
   TeamRosterValidateBodySchema,
 } from '../schemas/team-roster-schemas.js';
 import { HarnessSupportService } from '../services/harness-support-service.js';
+import { HarnessCompatibilityMatrixService } from '../services/harness-compatibility-matrix-service.js';
 
 const router: RouterType = Router();
 const configService = new ConfigService();
 const harnessSupportService = new HarnessSupportService({ configService });
+const harnessCompatibilityMatrixService = new HarnessCompatibilityMatrixService();
 const agentProfilePackageService = new AgentProfilePackageService(configService);
 const teamRosterService = new TeamRosterService(configService);
 
@@ -364,6 +366,15 @@ router.get(
   '/agent-support',
   asyncHandler(async (_req, res) => {
     res.json(await harnessSupportService.list());
+  })
+);
+
+// GET /api/config/harness-compatibility - Reviewed compatibility and live support evidence
+router.get(
+  '/harness-compatibility',
+  asyncHandler(async (_req, res) => {
+    const supportStatuses = await harnessSupportService.list();
+    res.json(harnessCompatibilityMatrixService.build(supportStatuses));
   })
 );
 

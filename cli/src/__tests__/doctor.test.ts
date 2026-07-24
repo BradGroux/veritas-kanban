@@ -19,6 +19,25 @@ function doctorFetch(routes: Record<string, Response>) {
   }) as unknown as typeof fetch;
 }
 
+function compatibilityResponse(supportStatuses: unknown[]): Response {
+  return jsonResponse({
+    schemaVersion: 'harness-compatibility-matrix/v1',
+    generatedAt: '2026-06-04T07:00:00.000Z',
+    probeRevision: 14,
+    digest: 'a'.repeat(64),
+    tierDefinitions: {},
+    records: [
+      {
+        profileId: 'openai-codex-app-server',
+        testedVersions: ['codex-cli 0.145.0'],
+        sourceAvailability: 'open-source',
+        certification: { status: 'not-run' },
+      },
+    ],
+    supportStatuses,
+  });
+}
+
 const baseRoutes: Record<string, Response> = {
   '/api/health': jsonResponse({ ok: true, version: '4.3.2', uptimeMs: 1000 }),
   '/api/auth/context': jsonResponse({
@@ -37,7 +56,7 @@ const baseRoutes: Record<string, Response> = {
       provider: 'codex-cli',
     },
   ]),
-  '/api/config/agent-support': jsonResponse([
+  '/api/config/harness-compatibility': compatibilityResponse([
     {
       agentType: 'codex',
       profileId: 'openai-codex-cli',
@@ -156,7 +175,7 @@ describe('vk doctor', () => {
   it('fails closed for an enabled unsupported harness and preserves safe remediation', async () => {
     const routes = {
       ...baseRoutes,
-      '/api/config/agent-support': jsonResponse([
+      '/api/config/harness-compatibility': compatibilityResponse([
         {
           agentType: 'claude-code',
           profileId: 'claude-code',

@@ -141,6 +141,7 @@ import {
 } from './provider-runtime-control-service.js';
 import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-service.js';
 import { evaluateHarnessSupportStatus } from './harness-support-service.js';
+import { getHarnessCompatibilityRecordDigest } from './harness-compatibility-matrix-service.js';
 import {
   harnessToolCatalogDelivery,
   normalizeHarnessSupportProfile,
@@ -6357,8 +6358,10 @@ export class ClawdbotAgentService {
     status: HarnessSupportStatus,
     failureClass: HarnessSupportTelemetry['failureClass'] = status.failureClass
   ): HarnessSupportTelemetry {
+    const compatibilityDigest = getHarnessCompatibilityRecordDigest(status.profileId);
     return {
       profileId: status.profileId,
+      ...(compatibilityDigest ? { compatibilityDigest } : {}),
       ...(status.adapterId ? { adapterId: status.adapterId } : {}),
       ...(status.providerVersion ? { providerVersion: status.providerVersion } : {}),
       ...(status.providerBuild ? { providerBuild: status.providerBuild } : {}),

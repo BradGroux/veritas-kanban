@@ -34,6 +34,14 @@ export function useHarnessSupport() {
   });
 }
 
+export function useHarnessCompatibilityMatrix() {
+  return useQuery({
+    queryKey: ['config', 'harness-compatibility'],
+    queryFn: api.config.agents.compatibility,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRepos() {
   return useQuery({
     queryKey: ['config', 'repos'],
@@ -97,6 +105,7 @@ export function useUpdateAgents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['config'] });
       queryClient.invalidateQueries({ queryKey: ['config', 'agent-support'] });
+      queryClient.invalidateQueries({ queryKey: ['config', 'harness-compatibility'] });
     },
   });
 }
