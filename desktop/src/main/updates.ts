@@ -14,6 +14,7 @@ type DesktopUpdateEvent =
   | 'error';
 
 export interface DesktopUpdateAdapterConfigureOptions {
+  allowDowngrade: boolean;
   allowPrerelease: boolean;
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
@@ -48,6 +49,9 @@ export class ElectronAutoUpdaterAdapter implements DesktopUpdateAdapter {
     this.updater.autoInstallOnAppQuit = options.autoInstallOnAppQuit;
     this.updater.allowPrerelease = options.allowPrerelease;
     this.updater.channel = options.channel === 'stable' ? null : options.channel;
+    // electron-updater sets allowDowngrade=true whenever channel is assigned.
+    // Stable checks must never turn older release metadata into an update.
+    this.updater.allowDowngrade = options.allowDowngrade;
     this.updater.forceDevUpdateConfig = options.forceDevUpdateConfig;
   }
 
@@ -83,6 +87,7 @@ export class DesktopUpdateService {
       : this.createStatus('unsupported', 'Updater checks run only from packaged builds.');
 
     options.adapter.configure({
+      allowDowngrade: false,
       allowPrerelease: options.channel !== 'stable',
       autoDownload: false,
       autoInstallOnAppQuit: false,

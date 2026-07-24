@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   DesktopUpdateService,
+  ElectronAutoUpdaterAdapter,
   resolveDesktopUpdateChannel,
   type DesktopUpdateAdapter,
   type DesktopUpdateAdapterConfigureOptions,
@@ -36,7 +37,7 @@ class FakeUpdateAdapter implements DesktopUpdateAdapter {
   }
 }
 
-function service(adapter = new FakeUpdateAdapter()) {
+function service(adapter = new FakeUpdateAdapter(), currentVersion = '4.3.2') {
   const emitStatus = vi.fn();
   return {
     adapter,
@@ -44,7 +45,7 @@ function service(adapter = new FakeUpdateAdapter()) {
     service: new DesktopUpdateService({
       adapter,
       packaged: true,
-      currentVersion: '4.3.2',
+      currentVersion,
       channel: 'stable',
       now: () => new Date('2026-05-31T00:00:00.000Z'),
       emitStatus,
@@ -57,6 +58,7 @@ describe('desktop update service', () => {
     const harness = service();
 
     expect(harness.adapter.configure).toHaveBeenCalledWith({
+      allowDowngrade: false,
       allowPrerelease: false,
       autoDownload: false,
       autoInstallOnAppQuit: false,
@@ -88,6 +90,31 @@ describe('desktop update service', () => {
       state: 'ready',
       availableVersion: '4.3.3',
     });
+  });
+
+  it('disables downgrade after assigning the updater channel', () => {
+    const updater = {
+      allowDowngrade: false,
+      allowPrerelease: false,
+      autoDownload: true,
+      autoInstallOnAppQuit: true,
+      forceDevUpdateConfig: false,
+      set channel(_value: string | null) {
+        this.allowDowngrade = true;
+      },
+    };
+    const adapter = new ElectronAutoUpdaterAdapter(updater as never);
+
+    adapter.configure({
+      allowDowngrade: false,
+      allowPrerelease: false,
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      channel: 'stable',
+      forceDevUpdateConfig: false,
+    });
+
+    expect(updater.allowDowngrade).toBe(false);
   });
 
   it('keeps dev builds unsupported unless force dev update config is enabled', async () => {
