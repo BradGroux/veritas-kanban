@@ -1,7 +1,7 @@
 /**
  * Regression tests for issue #781:
  * ClawdbotAgentService.reconcileRunningAttempts() must detect persisted running
- * attempts after a server restart and mark them as failed with status 'todo'.
+ * attempts after a server restart and move legacy runs into an actionable blocked state.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Task, TaskAttempt } from '@veritas-kanban/shared';
@@ -112,7 +112,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     mockUpdateTask.mockResolvedValue({} as Task);
   });
 
-  it('marks orphaned running attempts as failed and reverts in-progress task to todo', async () => {
+  it('marks legacy orphaned attempts failed and blocks unsafe automatic restart', async () => {
     const runningTask = makeTask('task-running-1', 'running'); // status: 'in-progress'
     mockListTasks.mockResolvedValue([runningTask]);
 
@@ -121,7 +121,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     expect(mockUpdateTask).toHaveBeenCalledTimes(1);
     const [calledId, update] = mockUpdateTask.mock.calls[0];
     expect(calledId).toBe('task-running-1');
-    expect(update.status).toBe('todo');
+    expect(update.status).toBe('blocked');
     expect(update.attempt?.status).toBe('failed');
     expect(update.attempt?.ended).toBeDefined();
     const ended = update.attempt?.ended;

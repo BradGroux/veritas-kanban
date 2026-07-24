@@ -778,9 +778,15 @@ export VERITAS_DATA_DIR=/var/lib/veritas-kanban
 All services resolve runtime paths through `server/src/utils/paths.ts`, which
 respects `DATA_DIR` / `VERITAS_DATA_DIR` as the authoritative override (#774).
 
-**Startup reconciliation:** If the server was stopped uncleanly while agents
-were running, the next startup automatically marks any orphaned `running`
-agent attempts as `failed` and reverts the owning task to `todo` (#781).
+**Startup reconciliation:** Current agent launches persist a
+`run-supervisor/v1` record under the configured runtime data directory or in
+SQLite. After an unclean stop, startup validates the exact provider, launch,
+task-envelope, worktree, host, lease, and process/session identity before
+reattaching. A stale lease has one compare-and-set winner, verified process
+groups remain stoppable, event replay resumes after the durable cursor, and a
+terminal result is applied idempotently if the server crashed before task
+mutation. Unsafe or legacy runs move to `blocked` with a typed recovery reason
+and operator action instead of being restarted automatically (#781, #853).
 
 ---
 

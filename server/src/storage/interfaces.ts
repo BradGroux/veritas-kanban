@@ -36,6 +36,10 @@ import type {
   RunApprovalRequest,
   RunApprovalTransitionInput,
   RunApprovalTransitionResult,
+  RunSupervisorCompareAndSetInput,
+  RunSupervisorCompareAndSetResult,
+  RunSupervisorListQuery,
+  RunSupervisorRecord,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -352,6 +356,24 @@ export interface RunApprovalRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Durable Run Supervisor Repository
+// ---------------------------------------------------------------------------
+
+export interface RunSupervisorRepository {
+  /** Persist one newly allocated run supervisor record at revision 1. */
+  create(record: RunSupervisorRecord): Promise<RunSupervisorRecord>;
+
+  /** Return one supervisor record, or null when it does not exist. */
+  get(id: string): Promise<RunSupervisorRecord | null>;
+
+  /** Query materialized supervisor records. */
+  list(query: RunSupervisorListQuery): Promise<RunSupervisorRecord[]>;
+
+  /** Replace one record with a revision-guarded compare-and-set operation. */
+  compareAndSet(input: RunSupervisorCompareAndSetInput): Promise<RunSupervisorCompareAndSetResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 
@@ -366,6 +388,7 @@ export interface StorageProvider {
   readonly telemetry: TelemetryRepository;
   readonly runEvents: RunEventRepository;
   readonly runApprovals: RunApprovalRepository;
+  readonly runSupervisors: RunSupervisorRepository;
   readonly setupContext?: SetupContextRepository;
 
   /** One-time startup hook (create dirs, open connections, etc.). */

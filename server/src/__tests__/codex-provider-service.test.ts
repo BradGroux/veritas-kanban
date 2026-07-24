@@ -133,6 +133,7 @@ import type {
   RunApprovalBrokerService,
 } from '../services/run-approval-broker-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import type { RunSupervisorService } from '../services/run-supervisor-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -186,10 +187,27 @@ function testableService(
     credentialLeases,
     undefined,
     undefined,
-    approvalBroker
+    approvalBroker,
+    testRunSupervisor()
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testRunSupervisor(): RunSupervisorService {
+  return {
+    register: vi.fn(async (input: { attemptId: string }) => ({
+      id: `runsupervisor_test_${input.attemptId}`,
+    })),
+    attachLocalProcess: vi.fn(),
+    attachRemoteSession: vi.fn(),
+    checkpoint: vi.fn(),
+    markTerminal: vi.fn(),
+    findByAttempt: vi.fn().mockResolvedValue(null),
+    get: vi.fn().mockResolvedValue({ control: { kind: 'local-process' } }),
+    stopLocalProcess: vi.fn(),
+    isLocalProcessAlive: vi.fn().mockReturnValue(true),
+  } as unknown as RunSupervisorService;
 }
 
 function testCompletionEvidence(): CompletionEvidenceSource {
@@ -2226,7 +2244,11 @@ describe('ClawdbotAgentService Codex providers', () => {
       taskEnvelopes,
       undefined,
       new ProviderCompletionService(completionEvidence),
-      { revokeRun }
+      { revokeRun },
+      undefined,
+      undefined,
+      undefined,
+      testRunSupervisor()
     );
     const provenance = {
       attemptId,

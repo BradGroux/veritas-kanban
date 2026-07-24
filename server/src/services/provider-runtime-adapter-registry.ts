@@ -44,6 +44,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...CLI_SANDBOX,
     ...NOT_YET_IMPLEMENTED,
     'run.stop': supported('The adapter terminates the supervised Codex process.'),
+    'run.reattach': supported(
+      'The durable run supervisor validates and reattaches the original Codex process group.'
+    ),
     'run.streaming': supported('Codex JSONL output is streamed into run events.'),
     'run.structured-events': supported('Codex CLI emits contract-tested JSONL events.'),
     'run.interrupt': advisory('Process termination is available; semantic interrupt is not.'),
@@ -86,6 +89,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       ...NOT_YET_IMPLEMENTED,
       'run.stop': supported(
         'The adapter requests turn/interrupt, closes the supervised stdio connection, and retains a bounded process-kill fallback.'
+      ),
+      'run.reattach': supported(
+        'The durable run supervisor validates and reattaches the app-server process group.'
       ),
       'run.streaming': supported(
         'Validated app-server notifications stream into the causal run journal through terminal turn completion.'
@@ -137,6 +143,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...NOT_YET_IMPLEMENTED,
     'run.stop': supported(
       'The adapter sends SIGTERM to the supervised Claude Code process with a bounded SIGKILL fallback.'
+    ),
+    'run.reattach': supported(
+      'The durable run supervisor validates and reattaches the original Claude Code process group.'
     ),
     'run.streaming': supported(
       'Claude Code stream-json output is drained and journaled through terminal result.'
@@ -191,6 +200,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...CLI_SANDBOX,
     ...NOT_YET_IMPLEMENTED,
     'run.stop': supported('The adapter terminates the supervised Hermes process.'),
+    'run.reattach': supported(
+      'The durable run supervisor validates and reattaches the original Hermes process group.'
+    ),
     'run.streaming': supported('Hermes stdout and diagnostics are streamed into the run log.'),
     'run.structured-events': unsupported(
       'Hermes currently runs through its one-shot text interface.'

@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `run-supervisor/v1`, a durable provider-run ownership record with exact
+  provider, task-envelope, launch-manifest, and worktree bindings; persisted
+  process groups or remote-session handles; budget and event cursors; expiring
+  single-owner leases; typed recovery actions; and idempotent terminal
+  ownership. Startup now reattaches verified local provider processes, resumes
+  journal reconciliation strictly after the durable cursor, restores exact
+  completion results across crash races, and blocks unsafe recovery without
+  signaling reused PIDs or starting duplicate work. File and SQLite
+  repositories share the same compare-and-set contract, and provider capability
+  evidence advances to probe revision 7 (#853).
 - Added a provider-native `run-approval/v1` broker with file and SQLite
   persistence, exact action hashes, atomic compare-and-set decisions,
   auth-derived reviewer identity, critical-action authentication freshness,

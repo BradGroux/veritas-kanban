@@ -1174,6 +1174,49 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON run_approvals(status, expires_at);
     `,
   },
+  {
+    version: 20,
+    name: '0020_durable_run_supervisor',
+    up: `
+      CREATE TABLE run_supervisors (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (
+          state IN (
+            'launching',
+            'running',
+            'recovering',
+            'reattached',
+            'recovery-required',
+            'completed',
+            'failed',
+            'interrupted',
+            'cancelled'
+          )
+        ),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        lease_owner_id TEXT NOT NULL,
+        lease_expires_at TEXT NOT NULL,
+        supervisor_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (workspace_id, task_id, attempt_id)
+      );
+
+      CREATE INDEX idx_run_supervisors_workspace_state_updated
+        ON run_supervisors(workspace_id, state, updated_at DESC);
+
+      CREATE INDEX idx_run_supervisors_task_attempt
+        ON run_supervisors(task_id, attempt_id);
+
+      CREATE INDEX idx_run_supervisors_lease
+        ON run_supervisors(state, lease_expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
