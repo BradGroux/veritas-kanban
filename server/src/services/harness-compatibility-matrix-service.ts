@@ -87,10 +87,27 @@ const REVIEWED_HARNESSES: ReviewedHarness[] = [
         'Buzz compatibility contract',
         'server/src/__tests__/buzz-compatibility-integration.test.ts'
       ),
+      fixture(
+        'Buzz communication and replay contract',
+        'server/src/__tests__/buzz-communication-adapter-service.test.ts'
+      ),
+      fixture(
+        'Run-scoped MCP bridge contract',
+        'server/src/__tests__/run-tool-bridge-runtime.test.ts'
+      ),
+      fixture(
+        'Buzz persona and team import contract',
+        'server/src/__tests__/buzz-definition-import-service.test.ts'
+      ),
+      fixture(
+        'Buzz workflow trigger contract',
+        'server/src/__tests__/buzz-workflow-trigger-service.test.ts'
+      ),
     ],
     [
       'Veritas launches buzz-agent as an ACP server; buzz-acp is the inverse relay-side client.',
       'Relay, identity, community, and workflow compatibility are reported separately from task execution.',
+      'Credential-gated live smoke is supplemental; the credential-free composed gate is the release authority.',
     ]
   ),
   reviewedHarness(

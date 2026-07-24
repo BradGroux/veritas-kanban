@@ -70,6 +70,7 @@ pnpm lint:fix
 # Smoke checks
 pnpm check:pnpm-settings        # Validates package manager fields match this file
 pnpm smoke:cli-mcp              # CLI ↔ MCP compatibility smoke test
+pnpm test:buzz:compatibility    # Credential-free composed Buzz release gate
 ```
 
 Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise, resolve with

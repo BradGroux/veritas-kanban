@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a composed credential-free Buzz compatibility gate and complete
+  machine-readable seam evidence for the pinned Buzz `0.4.24` /
+  `710ed9fff57878a1d69f809b80a6ee0416c53fc4` baseline, plus trigger setup,
+  support dispositions, optional live-smoke boundaries, upgrade, and rollback
+  guidance (#912).
 - Added allowlisted Buzz root-message workflow triggers with bounded predicates,
   provider-neutral pre-dispatch hooks, durable causal keys, replay and echo
   suppression, restart reconciliation, API configuration, and audit history

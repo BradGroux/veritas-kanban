@@ -35,6 +35,25 @@ describe('HarnessCompatibilityMatrixService', () => {
       protocolVersion: 'acp/v1',
       testedBuilds: ['94172f2aa4e5'],
     });
+    const buzz = matrix.records.find((record) => record.agentType === 'buzz-agent');
+    expect(buzz).toMatchObject({
+      sourceAvailability: 'open-source',
+      protocolVersion: 'acp/v1',
+      testedVersions: ['buzz-agent 0.1.0'],
+      testedBuilds: ['710ed9fff57878a1d69f809b80a6ee0416c53fc4'],
+      certification: {
+        fixtureRevision: 1,
+        credentialSmokePolicy: 'supplemental-only',
+      },
+    });
+    expect(buzz?.certification.deterministicEvidence.map((entry) => entry.path)).toEqual([
+      'server/src/__tests__/acp-stdio-provider.test.ts',
+      'server/src/__tests__/buzz-compatibility-integration.test.ts',
+      'server/src/__tests__/buzz-communication-adapter-service.test.ts',
+      'server/src/__tests__/run-tool-bridge-runtime.test.ts',
+      'server/src/__tests__/buzz-definition-import-service.test.ts',
+      'server/src/__tests__/buzz-workflow-trigger-service.test.ts',
+    ]);
   });
 
   it('keeps deterministic evidence and all drift keys in the stable record digest', () => {

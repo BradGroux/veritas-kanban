@@ -42,6 +42,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
+    "test:buzz:compatibility": "pnpm --filter @veritas-kanban/shared build && pnpm --filter @veritas-kanban/server exec vitest run src/__tests__/buzz-compatibility-integration.test.ts src/__tests__/buzz-communication-adapter-service.test.ts src/__tests__/acp-stdio-provider.test.ts src/__tests__/run-tool-bridge-runtime.test.ts src/__tests__/buzz-definition-import-service.test.ts src/__tests__/buzz-workflow-trigger-service.test.ts src/__tests__/harness-compatibility-matrix-service.test.ts",
     "qa:mantine": "node scripts/check-mantine-qa-gate.mjs",
     "test:load:smoke": "k6 run load-tests/k6/smoke.js",
     "test:load": "k6 run load-tests/k6/smoke.js && k6 run load-tests/k6/read-load.js && k6 run load-tests/k6/write-load.js && k6 run load-tests/k6/mixed-load.js && k6 run load-tests/k6/ws-stress.js && k6 run load-tests/k6/v5-remote-mix.js",

@@ -58,6 +58,17 @@ runtime evidence, but it cannot replace or overwrite a deterministic failure.
 Raw observations retain launch-manifest, runtime-manifest, task, attempt, and
 event references through `harness-conformance-result/v1`.
 
+Buzz additionally has a composed credential-free gate:
+
+```bash
+pnpm test:buzz:compatibility
+```
+
+Its matrix record names the relay compatibility, communication/replay, ACP,
+run-scoped MCP, persona/team import, and workflow-trigger fixtures. Live Buzz
+smoke is supplemental and never replaces a deterministic failure. See the
+[Buzz integration guide](BUZZ-INTEGRATION.md#credential-free-release-gate).
+
 ## Operating each harness
 
 Detailed installation, authentication, configuration, permissions, MCP,
