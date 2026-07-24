@@ -293,6 +293,7 @@ First-class support for autonomous coding agents.
 - **Agent status indicator** — Header-level indicator showing global agent state (idle, working, sub-agent mode with count)
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
+- **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
 - **Send message to agent** — Send text messages to running agents
 - **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state

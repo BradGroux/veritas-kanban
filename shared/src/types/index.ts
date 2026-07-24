@@ -50,6 +50,7 @@ export * from './evidence.types.js';
 export * from './time-breakdown.types.js';
 export * from './task-envelope.types.js';
 export * from './run-launch-manifest.types.js';
+export * from './run-event.types.js';
 export * from './auth.types.js';
 export * from './credential-broker.types.js';
 export * from './worktree-manifest.types.js';

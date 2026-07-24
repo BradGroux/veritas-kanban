@@ -129,6 +129,39 @@ routing. Provider version/build changes invalidate the readiness cache and
 force a new conformance probe; active controls continue to use the immutable
 snapshot persisted for that attempt.
 
+## Causal Run Event Journal
+
+Executable adapters own a mapper into the shared `run-event/v1` envelope.
+OpenClaw, Codex CLI, Codex SDK, and Hermes preserve provider event identity,
+turn/item identity, provider time, receive time, source, causal links, and a
+monotonic per-attempt sequence. Known kinds cover run lifecycle, operator and
+assistant messages, deltas, reasoning, progress, streams, commands, file
+changes, tools, approvals, artifacts, usage, and errors. A new provider event
+that Veritas does not understand is retained as a namespaced kind or
+`provider.unknown`; it is never silently discarded or assigned semantics that
+the adapter cannot prove.
+
+The journal is the ordering boundary for provider output. An event is appended
+and fsynced or committed before legacy Markdown logs, traces, activity,
+telemetry, budget accounting, completion state, or WebSocket output project
+from it. Provider event IDs create stable deduplication keys. File mode stores
+private per-task/per-attempt JSONL under `.veritas-kanban/run-events/`; SQLite
+mode uses migration `0018_causal_run_event_journal` and a transactional
+per-attempt sequence. Each attempt is bounded to 50,000 events and file journals
+to 128 MiB. Payloads are recursively redacted, strings and collections are
+bounded, and payloads larger than 32 KiB are replaced by explicit dropped
+metadata before persistence.
+
+The TypeScript contract is in `shared/src/types/run-event.types.ts`; the
+portable schema is `shared/schemas/run-event-envelope.v1.schema.json`.
+Consumers replay with
+`GET /api/agents/:taskId/attempts/:attemptId/events?afterSequence=<cursor>`.
+WebSocket subscribers send `taskId`, `attemptId`, and `afterSequence`; Veritas
+attaches the live listener before replay, buffers concurrent events, then
+delivers one ordered `agent:event` stream. The older `agent:output` projection
+remains for compatible clients. Existing Markdown attempt logs remain readable
+and are not rewritten by the journal migration.
+
 ## Task Envelopes And Commit Policy
 
 Every launch also persists a provider-neutral `task-envelope/v1` snapshot. It

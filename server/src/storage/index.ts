@@ -23,6 +23,8 @@ export type {
   ManagedListRepository,
   ManagedListProvider,
   TelemetryRepository,
+  RunEventRepository,
+  RunEventRepositoryAppendInput,
   SetupContextRepository,
   WorkspaceFileRepository,
   StorageProvider,
@@ -45,6 +47,7 @@ export {
   FileManagedListProvider,
   FileTelemetryRepository,
 } from './file-storage.js';
+export { FileRunEventRepository, getRunEventsDir } from './run-event-repository.js';
 export type { FileStorageOptions } from './file-storage.js';
 export {
   DEFAULT_SQLITE_FILENAME,
@@ -70,6 +73,7 @@ export { SqlitePromptRegistryRepository } from './sqlite/prompt-registry-reposit
 export { SqliteActivityRepository } from './sqlite/activity-repository.js';
 export { SqliteStatusHistoryRepository } from './sqlite/status-history-repository.js';
 export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
+export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteSetupContextRepository } from './sqlite/setup-context-repository.js';
 export {
   SqliteDecisionRepository,

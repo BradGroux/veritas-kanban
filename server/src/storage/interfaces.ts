@@ -28,6 +28,10 @@ import type {
   RenderPreviewRequest,
   RenderPreviewResponse,
   DesktopSetupContext,
+  RunEventAppendResult,
+  RunEventEnvelope,
+  RunEventPage,
+  RunEventQuery,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -304,6 +308,25 @@ export interface WorkspaceFileRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Run Event Journal Repository
+// ---------------------------------------------------------------------------
+
+export type RunEventRepositoryAppendInput = Omit<RunEventEnvelope, 'sequence'>;
+
+export interface RunEventRepository {
+  /**
+   * Append one event and allocate the next attempt-local sequence.
+   *
+   * Implementations must enforce `(attemptId, dedupeKey)` idempotency when a
+   * dedupe key is present and return the prior event with `appended: false`.
+   */
+  append(event: RunEventRepositoryAppendInput): Promise<RunEventAppendResult>;
+
+  /** Replay one attempt in ascending sequence order. */
+  list(query: RunEventQuery): Promise<RunEventPage>;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 
@@ -316,6 +339,7 @@ export interface StorageProvider {
   readonly statusHistory: StatusHistoryRepository;
   readonly managedLists: ManagedListProvider;
   readonly telemetry: TelemetryRepository;
+  readonly runEvents: RunEventRepository;
   readonly setupContext?: SetupContextRepository;
 
   /** One-time startup hook (create dirs, open connections, etc.). */

@@ -21,7 +21,8 @@
     "./types/workflow": {
       "types": "./dist/types/workflow.d.ts",
       "import": "./dist/types/workflow.js"
-    }
+    },
+    "./schemas/run-event-envelope.v1.json": "./schemas/run-event-envelope.v1.schema.json"
   },
   "scripts": {
     "build": "tsc",

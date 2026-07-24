@@ -60,7 +60,7 @@ import { swaggerSpec } from './config/swagger.js';
 import { apiRateLimit, authRateLimit } from './middleware/rate-limit.js';
 import { apiVersionMiddleware } from './middleware/api-version.js';
 import { apiCacheHeaders } from './middleware/cache-control.js';
-import type { AgentOutput } from './services/clawdbot-agent-service.js';
+import type { RunEventEnvelope } from '@veritas-kanban/shared';
 import { webhookN8nRouter } from './routes/webhook-n8n.js';
 import { cspNonceMiddleware, injectCspNonceAttributes } from './middleware/csp-nonce.js';
 import { apiDocsCspOverride, buildCspDirectives } from './config/csp.js';
@@ -70,6 +70,7 @@ import { prometheusMetricsRouter } from './routes/prometheus.js';
 import { getStorageTypeFromEnv, initStorage, shutdownStorage } from './storage/index.js';
 import {
   canReceiveWebSocketEvent,
+  sendWebSocketEvent,
   subscribeWebSocketChatSession,
   subscribeWebSocketChannel,
   unsubscribeWebSocketChatSession,
@@ -78,6 +79,7 @@ import {
 import { closeWebSocketSafely } from './utils/websocket-close.js';
 import { startAfterInitialization } from './utils/startup-gate.js';
 import { getCommunicationAdapterService } from './services/communication-adapter-service.js';
+import { getRunEventJournalService } from './services/run-event-journal-service.js';
 
 const log = createLogger('server');
 
@@ -764,20 +766,20 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   );
 
   let subscribedTaskId: string | null = null;
+  let subscribedAttemptId: string | null = null;
   let subscribedChatSession: string | null = null;
+  let agentSubscriptionGeneration = 0;
 
   // Track current emitter listeners for cleanup on re-subscribe or close
   let currentEmitter: import('events').EventEmitter | null = null;
-  let currentOutputHandler: ((output: AgentOutput) => void) | null = null;
   let currentCompleteHandler:
     ((result: { code: number; signal: string | null; status: string }) => void) | null = null;
   let currentErrorHandler: ((error: Error) => void) | null = null;
+  let currentRunEventUnsubscribe: (() => void) | null = null;
+  const runEventJournal = getRunEventJournalService();
 
   const cleanupEmitterListeners = () => {
     if (currentEmitter) {
-      if (currentOutputHandler) {
-        currentEmitter.off('output', currentOutputHandler);
-      }
       if (currentCompleteHandler) {
         currentEmitter.off('complete', currentCompleteHandler);
       }
@@ -785,10 +787,59 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         currentEmitter.off('error', currentErrorHandler);
       }
       currentEmitter = null;
-      currentOutputHandler = null;
       currentCompleteHandler = null;
       currentErrorHandler = null;
     }
+    if (currentRunEventUnsubscribe) {
+      currentRunEventUnsubscribe();
+      currentRunEventUnsubscribe = null;
+    }
+  };
+
+  const sendRunEvent = (event: RunEventEnvelope): boolean => {
+    const delivery = {
+      permissions: ['task:read'] as AuthPermission[],
+      channel: 'agent-output' as const,
+    };
+    const eventSent = sendWebSocketEvent(
+      ws,
+      JSON.stringify({
+        type: 'agent:event',
+        taskId: event.taskId,
+        attemptId: event.attemptId,
+        data: event,
+        timestamp: event.receivedAt,
+      }),
+      delivery
+    );
+    if (!eventSent) return false;
+    const content =
+      typeof event.payload.content === 'string'
+        ? event.payload.content
+        : typeof event.payload.summary === 'string'
+          ? event.payload.summary
+          : undefined;
+    if (!content) return true;
+    return sendWebSocketEvent(
+      ws,
+      JSON.stringify({
+        type: 'agent:output',
+        taskId: event.taskId,
+        attemptId: event.attemptId,
+        outputType:
+          event.source.provider === 'operator'
+            ? 'stdin'
+            : event.kind === 'stream.stderr' || event.kind === 'run.error'
+              ? 'stderr'
+              : event.source.provider === 'system'
+                ? 'system'
+                : 'stdout',
+        content,
+        sequence: event.sequence,
+        timestamp: event.receivedAt,
+      }),
+      delivery
+    );
   };
 
   // ---- Message rate limiting ----
@@ -797,7 +848,9 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   const WS_MESSAGE_RATE_LIMIT = 30; // messages per window
   const WS_MESSAGE_RATE_WINDOW_MS = 10_000; // 10 second window
 
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
+    let failedAgentSubscriptionGeneration: number | null = null;
+    let failedAgentSubscriptionTaskId: string | null = null;
     // Rate limit check
     const now = Date.now();
     if (now - messageWindowStart > WS_MESSAGE_RATE_WINDOW_MS) {
@@ -966,25 +1019,46 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
 
         // Clean up previous emitter listeners before subscribing to new task
         cleanupEmitterListeners();
+        const generation = ++agentSubscriptionGeneration;
+        failedAgentSubscriptionGeneration = generation;
+        failedAgentSubscriptionTaskId = newTaskId;
+        const requestedAttemptId =
+          typeof message.attemptId === 'string' ? message.attemptId : undefined;
+        const afterSequence =
+          Number.isInteger(message.afterSequence) && message.afterSequence >= 0
+            ? message.afterSequence
+            : 0;
+        const attemptId = await agentService.resolveRunEventAttemptId(
+          newTaskId,
+          requestedAttemptId
+        );
+        if (generation !== agentSubscriptionGeneration) return;
+        subscribedAttemptId = attemptId;
 
-        // Set up listener for agent output
+        await agentService.assertRunControl(newTaskId, 'logs', attemptId);
+        const runEventSubscription = await runEventJournal.subscribe(
+          {
+            taskId: newTaskId,
+            attemptId,
+            afterSequence,
+          },
+          (event) => {
+            if (generation === agentSubscriptionGeneration && !sendRunEvent(event)) {
+              throw new Error('Run event WebSocket delivery stopped');
+            }
+          }
+        );
+        if (generation !== agentSubscriptionGeneration) {
+          runEventSubscription.unsubscribe();
+          return;
+        }
+        currentRunEventUnsubscribe = runEventSubscription.unsubscribe;
+        const replayCursor = runEventSubscription.cursor;
+
+        // Retain terminal/error compatibility events for existing clients.
         const emitter = agentService.getAgentEmitter(newTaskId);
         if (emitter) {
           const taskIdForHandlers = newTaskId;
-
-          currentOutputHandler = (output: AgentOutput) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(
-                JSON.stringify({
-                  type: 'agent:output',
-                  taskId: taskIdForHandlers,
-                  outputType: output.type,
-                  content: output.content,
-                  timestamp: output.timestamp,
-                })
-              );
-            }
-          };
 
           currentCompleteHandler = (result: {
             code: number;
@@ -1015,7 +1089,6 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
           };
 
           currentEmitter = emitter;
-          emitter.on('output', currentOutputHandler);
           emitter.on('complete', currentCompleteHandler);
           emitter.on('error', currentErrorHandler);
         }
@@ -1025,11 +1098,30 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
           JSON.stringify({
             type: 'subscribed',
             taskId: subscribedTaskId,
+            attemptId: subscribedAttemptId,
+            cursor: replayCursor,
             running: !!emitter,
           })
         );
+        failedAgentSubscriptionGeneration = null;
+        failedAgentSubscriptionTaskId = null;
       }
     } catch (error) {
+      if (
+        failedAgentSubscriptionGeneration !== null &&
+        failedAgentSubscriptionGeneration === agentSubscriptionGeneration
+      ) {
+        cleanupEmitterListeners();
+        if (failedAgentSubscriptionTaskId) {
+          const subscribers = agentSubscriptions.get(failedAgentSubscriptionTaskId);
+          subscribers?.delete(ws);
+          if (subscribers?.size === 0) {
+            agentSubscriptions.delete(failedAgentSubscriptionTaskId);
+          }
+        }
+        subscribedTaskId = null;
+        subscribedAttemptId = null;
+      }
       log.error({ err: error }, 'WebSocket message error');
     }
   });

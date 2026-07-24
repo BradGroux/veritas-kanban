@@ -11,6 +11,7 @@ import { SqliteStatusHistoryRepository } from './status-history-repository.js';
 import { SqliteTelemetryRepository } from './telemetry-repository.js';
 import { SqliteOperationalProvenanceRepository } from './provenance-repository.js';
 import { SqliteSetupContextRepository } from './setup-context-repository.js';
+import { SqliteRunEventRepository } from './run-event-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
 
 export interface SqliteStorageOptions {
@@ -29,6 +30,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly telemetry: SqliteTelemetryRepository;
   readonly provenance: SqliteOperationalProvenanceRepository;
   readonly setupContext: SqliteSetupContextRepository;
+  readonly runEvents: SqliteRunEventRepository;
 
   private readonly sqlite: SqliteDatabase;
 
@@ -48,6 +50,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.telemetry = new SqliteTelemetryRepository(this.sqlite);
     this.provenance = new SqliteOperationalProvenanceRepository(this.sqlite);
     this.setupContext = new SqliteSetupContextRepository(this.sqlite);
+    this.runEvents = new SqliteRunEventRepository(this.sqlite);
   }
 
   getDatabase(): SqliteDatabase {

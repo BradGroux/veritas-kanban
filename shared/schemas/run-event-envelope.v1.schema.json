@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritaskanban.com/schemas/run-event-envelope.v1.schema.json",
+  "title": "Veritas Run Event Envelope v1",
+  "description": "Versioned, append-only provider-neutral run event. Unknown namespaced kinds remain storable and replayable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "taskId",
+    "runId",
+    "attemptId",
+    "sequence",
+    "receivedAt",
+    "kind",
+    "source",
+    "redaction",
+    "payload",
+    "payloadHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "run-event/v1"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^runevt_[A-Za-z0-9_-]{12,32}$"
+    },
+    "taskId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "runId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attemptId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "turnId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "itemId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "providerEventId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "parentEventId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "causalEventId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "providerTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "run.started",
+            "run.completed",
+            "run.failed",
+            "run.interrupted",
+            "run.recovered",
+            "message.operator",
+            "message.assistant",
+            "message.delta",
+            "reasoning.delta",
+            "progress",
+            "stream.stdout",
+            "stream.stderr",
+            "command.started",
+            "command.completed",
+            "file.changed",
+            "tool.started",
+            "tool.completed",
+            "approval.requested",
+            "approval.resolved",
+            "artifact.created",
+            "usage.updated",
+            "run.error",
+            "provider.unknown"
+          ]
+        },
+        {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$"
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "adapter"],
+      "properties": {
+        "provider": {
+          "enum": ["openclaw", "codex-cli", "codex-sdk", "hermes-cli", "operator", "system"]
+        },
+        "adapter": {
+          "$ref": "#/$defs/identifier"
+        },
+        "agent": {
+          "$ref": "#/$defs/identifier"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "fields", "originalBytes", "persistedBytes"],
+      "properties": {
+        "status": {
+          "enum": ["none", "redacted", "dropped"]
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "originalBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "persistedBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonValue"
+      }
+    },
+    "payloadHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "dedupeKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "jsonValue": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      ]
+    }
+  }
+}

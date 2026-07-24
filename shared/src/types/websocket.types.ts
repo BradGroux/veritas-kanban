@@ -2,9 +2,11 @@
 
 import type { AttemptStatus } from './task.types.js';
 import type { ChatMessage } from './chat.types.js';
+import type { RunEventEnvelope } from './run-event.types.js';
 
 export type WSMessageType =
   | 'agent:output'
+  | 'agent:event'
   | 'agent:status'
   | 'agent:complete'
   | 'task:updated'
@@ -20,12 +22,20 @@ export interface WSMessage {
   timestamp: string;
 }
 
-export interface AgentOutputMessage extends WSMessage {
+export interface AgentOutputMessage extends Omit<WSMessage, 'data'> {
   type: 'agent:output';
-  data: {
-    stream: 'stdout' | 'stderr';
-    content: string;
-  };
+  taskId: string;
+  attemptId: string;
+  outputType: 'stdout' | 'stderr' | 'stdin' | 'system';
+  content: string;
+  sequence: number;
+}
+
+export interface AgentRunEventMessage extends WSMessage {
+  type: 'agent:event';
+  taskId: string;
+  attemptId: string;
+  data: RunEventEnvelope;
 }
 
 export interface AgentStatusMessage extends WSMessage {
