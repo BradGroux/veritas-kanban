@@ -24,6 +24,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
   checks: read
   pull-requests: read
@@ -70,8 +71,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Verify CI scope selector
-        run: node --test scripts/select-ci-test-scope.test.mjs
+      - name: Verify CI scope controls
+        run: >-
+          node --test
+          scripts/select-ci-test-scope.test.mjs
+          scripts/verify-full-suite-job-evidence.test.mjs
 
       - name: Find reviewed full-suite evidence
         id: reviewed_full
@@ -115,15 +119,35 @@ jobs:
                 printf '{"check_runs":[]}'
             )"
 
-            if jq -e '
-              .check_runs |
-              any(.[];
+            full_suite_check_id="$(
+              jq -r '
+                [
+                  .check_runs[] |
+                  select(
                 .name == "Workspace Unit Tests" and
                 .status == "completed" and
                 .conclusion == "success" and
                 .app.slug == "github-actions"
-              )
-            ' <<<"$check_runs" >/dev/null; then
+                  )
+                ] |
+                sort_by(.completed_at) |
+                last |
+                .id // empty
+              ' <<<"$check_runs"
+            )"
+            full_suite_job="$(
+              if [[ -n "$full_suite_check_id" ]]; then
+                gh api \
+                  -H 'Accept: application/vnd.github+json' \
+                  "repos/${GITHUB_REPOSITORY}/actions/jobs/${full_suite_check_id}" \
+                  2>/dev/null ||
+                  printf '{}'
+              else
+                printf '{}'
+              fi
+            )"
+
+            if node scripts/verify-full-suite-job-evidence.mjs <<<"$full_suite_job"; then
               if git cat-file -e "${reviewed_head}^{commit}" 2>/dev/null ||
                 git fetch --no-tags origin "$reviewed_head"; then
                 if git merge-base --is-ancestor "$reviewed_head" "$GITHUB_SHA"; then
