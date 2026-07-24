@@ -153,6 +153,10 @@ export interface CredentialLeaseIssueRequest {
   attemptId: string;
   runLaunchManifestDigest: string;
   action: CredentialAction;
+  /** Exact durable tool approval selected for this operation, when required. */
+  approvalId?: string;
+  /** Caller-stable operation identity used only for approval correlation. */
+  operationId?: string;
 }
 
 export interface CredentialLeaseUseRequest {

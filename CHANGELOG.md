@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added exact-action credential lease consumption to mediated run-tool calls.
+  The server binds each operation to the active launch manifest, catalog,
+  server, tool, arguments digest, approval, and operation ID; resolves values
+  only inside a one-shot downstream MCP session; rejects replay, drift,
+  approval mismatch, unavailable sources, and credential-bearing results; and
+  relies on the existing terminal lifecycle reconciliation to revoke leases
+  (#969).
 - Added value-free credential boundary evidence to `run-tool-catalog/v1`.
   Credential-bound definitions now require enabled MCP-scoped broker
   definitions, exact source targets, and immutable definition/scope digests.

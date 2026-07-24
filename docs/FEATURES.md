@@ -373,8 +373,10 @@ persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
 - Credential-bound entries compile only with enabled, scope-compatible broker
   definitions. Their definition/scope digests and safe target names enter the
   immutable catalog, discovery receives no source values, and native provider
-  injection omits them. Mediated calls remain blocked until exact-action lease
-  consumption lands in #969.
+  injection omits them. Mediated calls issue exact-action leases using the
+  server-owned launch manifest, deliver values only inside one-shot downstream
+  sessions, and reject replay, drift, approval mismatch, source failure, or
+  credential-bearing results.
 
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 

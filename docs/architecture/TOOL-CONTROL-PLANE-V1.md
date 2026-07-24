@@ -144,10 +144,19 @@ configuration and from provider environment passthrough. The launch credential
 plan reports `brokerState: supported` only when every selected sandbox
 credential reference has this exact tool-control-plane evidence.
 
-This slice does not resolve a source value. Mediated invocation remains blocked
-until #969 adds exact-action lease consumption, and system-owned provider
-bridge injection remains under #970. Credential-shaped command arguments and
-recognizable credential literals remain forbidden.
+Mediated invocation now derives one canonical MCP credential action from the
+exact server, tool, arguments, and catalog digest. The route supplies the
+active launch-manifest digest internally. Each catalog binding issues and
+consumes a unique run lease inside nested controlled callbacks, opens a
+one-shot downstream MCP session with the resolved environment/header values,
+and closes it before the callback returns. Results are checked for credential
+material before they leave the broker.
+
+Approval-required definitions reuse the durable approval for the same
+operation and credential-action fingerprint. Replayed operations, caller
+manifest overrides, stale run bindings, changed definitions/scopes, mismatched
+approvals, unavailable sources, and credential-bearing results fail closed.
+System-owned provider bridge injection remains under #970.
 
 ## Operator Surfaces
 

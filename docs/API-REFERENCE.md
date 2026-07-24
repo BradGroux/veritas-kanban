@@ -3807,8 +3807,11 @@ native provider configuration omits credential-bound entries.
 
 New launch manifests classify a task reference as a brokered
 tool-control-plane boundary only when the exact run catalog covers it.
-Uncovered references remain blocked. Credential-bound calls remain disabled
-until #969 adds exact-action lease consumption.
+Uncovered references remain blocked. Credential-bound calls derive the exact
+MCP action and receive the active launch-manifest digest from the server, not
+the request body. Values are resolved only inside a one-shot downstream
+dispatch callback; replays, stale evidence, approval mismatch, unavailable
+sources, and credential-bearing results fail closed.
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 
 ---

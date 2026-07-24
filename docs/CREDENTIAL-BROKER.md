@@ -17,11 +17,11 @@ The v6 foundation includes:
   authentication, task integration references, and high-risk compatibility
   passthrough without storing values.
 
-The tool control plane can now compile value-free credential boundary evidence
-into a run catalog. A handle in a prompt or provider environment is still not a
-security boundary: credential-bound native server injection is omitted, and
-mediated calls stay blocked until exact-action lease consumption lands in
-#969.
+The tool control plane compiles value-free credential boundary evidence into a
+run catalog and consumes leases only inside mediated tool calls. A handle in a
+prompt or provider environment is still not a security boundary:
+credential-bound native server injection remains omitted, and automatic
+system-owned provider bridge injection is tracked by #970.
 
 ## Credential classes
 
@@ -157,7 +157,9 @@ consumption belongs to the run-scoped egress gateway; controlled MCP/tool
 consumption belongs to the tool-server control plane. A task reference is
 reported as brokered only when an immutable run catalog contains the matching
 credential-definition and scope digests. Uncovered references still block
-launch. Catalog evidence alone never resolves a value or enables dispatch.
+launch. During a mediated call, the server-owned manifest digest and exact
+catalog action issue a lease; its source value exists only inside the
+downstream dispatch callback.
 
 ## Rotation and revocation
 

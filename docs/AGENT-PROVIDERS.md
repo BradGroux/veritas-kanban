@@ -761,8 +761,9 @@ This core does not make an uncontrolled provider process broker-capable.
 Credential-bound tool definitions compile only when enabled broker definitions,
 MCP scopes, source targets, and immutable catalog evidence match. They are
 omitted from native provider MCP configuration and provider environment
-passthrough. Mediated calls remain blocked until #969 consumes exact-action
-leases, and system-owned provider bridge injection remains under #970.
+passthrough. Mediated calls consume exact-action leases using the server-owned
+launch-manifest digest and one-shot downstream sessions. System-owned provider
+bridge injection remains under #970.
 Model-provider boot authentication and explicit `env-passthrough`
 compatibility remain separate, high-risk paths and are never labeled as
 brokered. See [Credential Broker](CREDENTIAL-BROKER.md).
