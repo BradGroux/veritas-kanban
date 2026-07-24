@@ -29,6 +29,9 @@ const LEFT_RAIL_STORAGE_KEY = 'veritas.desktop.leftRailOpen';
 const RIGHT_RAIL_STORAGE_KEY = 'veritas.desktop.rightRailOpen';
 const BOTTOM_PANEL_STORAGE_KEY = 'veritas.desktop.bottomPanel';
 const BOTTOM_PANEL_HEIGHT_STORAGE_KEY = 'veritas.workbench.bottomPanelHeight';
+const BOTTOM_PANEL_HISTORY_STATE_KEY = 'veritasBottomPanel';
+const BOTTOM_PANEL_VIEWPORT_RESERVE = 220;
+const COMPACT_BOTTOM_PANEL_HEIGHT = 200;
 export const DEFAULT_BOTTOM_PANEL_HEIGHT = 340;
 export const MIN_BOTTOM_PANEL_HEIGHT = 320;
 export const MAX_BOTTOM_PANEL_HEIGHT = 640;
@@ -68,26 +71,16 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
   }
 }
 
-function readStoredBottomPanel(): DesktopBottomPanel | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const value = window.localStorage.getItem(BOTTOM_PANEL_STORAGE_KEY);
-    return value === 'board-chat' || value === 'squad-chat' ? value : null;
-  } catch {
-    return null;
-  }
-}
-
 function clampBottomPanelHeight(height: number): number {
   const viewportMax =
     typeof window === 'undefined'
       ? MAX_BOTTOM_PANEL_HEIGHT
-      : Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.floor(window.innerHeight * 0.68));
-  return Math.min(
-    Math.min(MAX_BOTTOM_PANEL_HEIGHT, viewportMax),
-    Math.max(MIN_BOTTOM_PANEL_HEIGHT, height)
-  );
+      : Math.min(
+          MAX_BOTTOM_PANEL_HEIGHT,
+          Math.max(COMPACT_BOTTOM_PANEL_HEIGHT, window.innerHeight - BOTTOM_PANEL_VIEWPORT_RESERVE)
+        );
+  const viewportMin = Math.min(MIN_BOTTOM_PANEL_HEIGHT, viewportMax);
+  return Math.min(viewportMax, Math.max(viewportMin, height));
 }
 
 function readStoredBottomPanelHeight(): number {
@@ -111,6 +104,18 @@ function writeStoredValue(key: string, value: string): void {
   }
 }
 
+function removeStoredValue(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Local storage can be unavailable in hardened test/browser environments.
+  }
+}
+
+function isBottomPanel(value: unknown): value is DesktopBottomPanel {
+  return value === 'board-chat' || value === 'squad-chat';
+}
+
 export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const desktopClient = isDesktopClient();
   const supportsWorkbenchPanel = useMediaQuery('(min-width: 768px)', false);
@@ -121,9 +126,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const [rightRailOpen, setRightRailOpenState] = useState(() =>
     readStoredBoolean(RIGHT_RAIL_STORAGE_KEY, false)
   );
-  const [bottomPanel, setBottomPanel] = useState<DesktopBottomPanel | null>(() =>
-    readStoredBottomPanel()
-  );
+  const [bottomPanel, setBottomPanel] = useState<DesktopBottomPanel | null>(null);
   const [bottomPanelHeight, setBottomPanelHeightState] = useState(() =>
     readStoredBottomPanelHeight()
   );
@@ -150,28 +153,113 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
     writeStoredValue(BOTTOM_PANEL_HEIGHT_STORAGE_KEY, String(next));
   }, []);
 
-  const openBottomPanel = useCallback((panel: DesktopBottomPanel) => {
-    setBottomPanel(panel);
-    writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, panel);
-  }, []);
-
   const closeBottomPanel = useCallback(() => {
     setBottomPanel(null);
-    writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, 'closed');
+    removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
+    if (typeof window !== 'undefined' && window.history.state?.[BOTTOM_PANEL_HISTORY_STATE_KEY]) {
+      window.history.back();
+    }
   }, []);
 
-  const toggleBottomPanel = useCallback((panel: DesktopBottomPanel = 'board-chat') => {
-    setBottomPanel((current) => {
-      const next = current === panel ? null : panel;
-      writeStoredValue(BOTTOM_PANEL_STORAGE_KEY, next ?? 'closed');
-      return next;
-    });
+  const openBottomPanel = useCallback((panel: DesktopBottomPanel) => {
+    setBottomPanel(panel);
+    removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
+    if (typeof window === 'undefined') return;
+
+    const state = {
+      ...(typeof window.history.state === 'object' && window.history.state
+        ? window.history.state
+        : {}),
+      [BOTTOM_PANEL_HISTORY_STATE_KEY]: panel,
+    };
+    if (window.history.state?.[BOTTOM_PANEL_HISTORY_STATE_KEY]) {
+      window.history.replaceState(state, '', window.location.href);
+    } else {
+      window.history.pushState(state, '', window.location.href);
+    }
+  }, []);
+
+  const toggleBottomPanel = useCallback(
+    (panel: DesktopBottomPanel = 'board-chat') => {
+      if (bottomPanel === panel) {
+        closeBottomPanel();
+        return;
+      }
+      openBottomPanel(panel);
+    },
+    [bottomPanel, closeBottomPanel, openBottomPanel]
+  );
+
+  const resetDesktopLayout = useCallback(() => {
+    setLeftRailOpenState(true);
+    setRightRailOpenState(false);
+    setBottomPanel(null);
+    setBottomPanelHeightState(clampBottomPanelHeight(DEFAULT_BOTTOM_PANEL_HEIGHT));
+    removeStoredValue(LEFT_RAIL_STORAGE_KEY);
+    removeStoredValue(RIGHT_RAIL_STORAGE_KEY);
+    removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
+    removeStoredValue(BOTTOM_PANEL_HEIGHT_STORAGE_KEY);
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.history.state === 'object' &&
+      window.history.state
+    ) {
+      const { [BOTTOM_PANEL_HISTORY_STATE_KEY]: _panel, ...rest } = window.history.state;
+      window.history.replaceState(rest, '', window.location.href);
+    }
   }, []);
 
   useEffect(() => {
     if (!desktopClient || typeof document === 'undefined') return;
     document.documentElement.dataset.client = 'desktop';
   }, [desktopClient]);
+
+  useEffect(() => {
+    removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || !bottomPanel) return;
+      event.preventDefault();
+      closeBottomPanel();
+    };
+    const handlePopState = (event: PopStateEvent) => {
+      const panel = event.state?.[BOTTOM_PANEL_HISTORY_STATE_KEY];
+      setBottomPanel(isBottomPanel(panel) ? panel : null);
+    };
+    const handleResize = () => {
+      setBottomPanelHeightState((current) => {
+        const next = clampBottomPanelHeight(current);
+        if (next !== current) {
+          writeStoredValue(BOTTOM_PANEL_HEIGHT_STORAGE_KEY, String(next));
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [bottomPanel, closeBottomPanel]);
+
+  useEffect(() => {
+    const desktop = (
+      window as Window & {
+        veritasDesktop?: {
+          onMenuCommand?: (listener: (payload: { command: string }) => void) => () => void;
+        };
+      }
+    ).veritasDesktop;
+    return desktop?.onMenuCommand?.((payload) => {
+      if (payload.command === 'reset-layout') resetDesktopLayout();
+    });
+  }, [resetDesktopLayout]);
 
   const value = useMemo<DesktopShellContextValue>(
     () => ({
