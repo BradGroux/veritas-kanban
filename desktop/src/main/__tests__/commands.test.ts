@@ -93,6 +93,10 @@ describe('desktop command registry', () => {
     expect(DESKTOP_COMMAND_REGISTRY['new-task'].accelerator).toBe('CommandOrControl+N');
     expect(DESKTOP_COMMAND_REGISTRY['open-command-center'].accelerator).toBe('CommandOrControl+K');
     expect(DESKTOP_COMMAND_REGISTRY['open-onboarding'].label).toBe('Setup & Diagnostics');
+    expect(DESKTOP_COMMAND_REGISTRY['reset-layout']).toMatchObject({
+      label: 'Reset Window Layout',
+      nativeAction: 'renderer',
+    });
   });
 
   it('routes renderer commands through the menu command event path', async () => {

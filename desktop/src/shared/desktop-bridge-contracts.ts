@@ -90,6 +90,7 @@ export const DESKTOP_COMMAND_NAMES = [
   'open-search',
   'open-settings',
   'open-command-center',
+  'reset-layout',
   'import-data',
   'export-data',
   'create-backup',

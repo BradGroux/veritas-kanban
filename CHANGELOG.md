@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept desktop Chat in a bounded, reversible workbench panel; Escape and browser
+  Back now close it, obsolete persisted panel visibility is discarded, compact
+  window heights preserve the application shell, and the native Navigate menu
+  can reset layout state without deleting application data (#945).
+
 ## [6.0.0] - 2026-07-24
 
 Each release entry below names its tracking issue. The complete issue-to-pull

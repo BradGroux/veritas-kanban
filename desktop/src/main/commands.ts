@@ -60,6 +60,8 @@ function commandLabel(name: DesktopCommandName): string {
       return 'Settings';
     case 'open-command-center':
       return 'Command Center';
+    case 'reset-layout':
+      return 'Reset Window Layout';
     case 'import-data':
       return 'Import';
     case 'export-data':

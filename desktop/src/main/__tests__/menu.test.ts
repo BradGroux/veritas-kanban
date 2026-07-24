@@ -54,6 +54,7 @@ describe('desktop native menu', () => {
     expect(labels).toContain('Search');
     expect(labels).toContain('Settings');
     expect(labels).toContain('Restart Local Server');
+    expect(labels).toContain('Reset Window Layout');
 
     const fileMenu = template.find((item) => item.label === 'File');
     const newTask = Array.isArray(fileMenu?.submenu)

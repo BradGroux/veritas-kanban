@@ -250,7 +250,7 @@ export function ChatPanel({
           </ActionIcon>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">Mode:</span>
           <Button
             variant={mode === 'ask' ? 'filled' : 'outline'}
@@ -266,7 +266,7 @@ export function ChatPanel({
           >
             Build
           </Button>
-          <span className="text-muted-foreground ml-1">
+          <span className="ml-1 min-w-0 text-muted-foreground">
             {mode === 'ask' ? '· Read-only queries' : '· Changes, files, commands'}
           </span>
         </div>

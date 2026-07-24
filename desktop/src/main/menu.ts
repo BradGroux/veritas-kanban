@@ -61,7 +61,13 @@ export function createDesktopMenuTemplate(
     { role: 'editMenu' },
     {
       label: 'Navigate',
-      submenu: [command('open-command-center'), command('open-search'), command('open-settings')],
+      submenu: [
+        command('open-command-center'),
+        command('open-search'),
+        command('open-settings'),
+        { type: 'separator' },
+        command('reset-layout'),
+      ],
     },
     {
       label: 'Desktop',
