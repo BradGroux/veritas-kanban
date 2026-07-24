@@ -92,6 +92,23 @@
   }
 }
 
+.veritas-overlay-scroll {
+  scrollbar-color: color-mix(in oklch, var(--foreground) 45%, transparent) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.veritas-overlay-scroll::-webkit-scrollbar {
+  width: 0.625rem;
+}
+
+.veritas-overlay-scroll::-webkit-scrollbar-thumb {
+  border: 0.1875rem solid transparent;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--foreground) 45%, transparent);
+  background-clip: content-box;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

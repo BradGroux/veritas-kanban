@@ -200,10 +200,10 @@ export function TaskDetailPanel({
         <Drawer.Content
           aria-label={`Task details: ${localTask.title}`}
           data-testid="task-detail-panel"
-          className="veritas-overlay-surface flex h-full max-h-[100dvh] w-[min(100vw,700px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
+          className="veritas-overlay-surface flex h-full min-h-0 max-h-[100dvh] w-[min(100vw,700px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:max-w-[700px]"
         >
-          <Drawer.Body className="contents">
-            <Stack gap={0} className="h-full overflow-hidden">
+          <Drawer.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+            <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
               <header className="flex-shrink-0 border-b px-4 py-4 pr-12 sm:px-6">
                 <Group
                   gap="xs"
@@ -323,7 +323,7 @@ export function TaskDetailPanel({
                 onChange={(value) => {
                   if (isTaskDetailTabId(value)) setActiveTab(value);
                 }}
-                className="flex flex-1 flex-col overflow-hidden px-4 pt-3 pb-6 sm:px-6"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-3 pb-6 sm:px-6"
               >
                 <Tabs.List className="w-full flex-shrink-0 justify-start overflow-x-auto">
                   {visibleTabs.map((tab) => {
@@ -342,7 +342,12 @@ export function TaskDetailPanel({
                   })}
                 </Tabs.List>
 
-                <div className="mt-4 flex-1 overflow-y-auto pr-1">
+                <div
+                  className="veritas-overlay-scroll mt-4 min-h-0 flex-1 overflow-y-scroll overscroll-contain pr-1"
+                  data-testid="task-detail-scroll-region"
+                  aria-label="Task detail content"
+                  tabIndex={0}
+                >
                   {visibleTabs.map((tab) => {
                     const tabContent = (
                       <Suspense
@@ -357,7 +362,7 @@ export function TaskDetailPanel({
                     );
 
                     return (
-                      <Tabs.Panel key={tab.id} value={tab.id} className="mt-0">
+                      <Tabs.Panel key={tab.id} value={tab.id} className="mt-0 min-h-full">
                         {tab.fallbackTitle ? (
                           <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
                             {tabContent}

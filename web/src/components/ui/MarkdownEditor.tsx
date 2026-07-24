@@ -12,6 +12,7 @@ interface MarkdownEditorProps {
   maxHeight?: number | string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }
 
 type SelectionUpdate = {
@@ -38,6 +39,7 @@ export function MarkdownEditor({
   maxHeight,
   onKeyDown,
   disabled = false,
+  ariaLabel,
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState('edit');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -217,8 +219,15 @@ export function MarkdownEditor({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={cn('resize-y')}
-          style={{ minHeight, maxHeight }}
+          aria-label={ariaLabel}
+          classNames={{ input: 'resize-y' }}
+          styles={{
+            input: {
+              minHeight,
+              maxHeight,
+              resize: disabled ? 'none' : 'vertical',
+            },
+          }}
           disabled={disabled}
         />
       </Tabs.Panel>

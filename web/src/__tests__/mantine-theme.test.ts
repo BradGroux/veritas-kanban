@@ -10,4 +10,35 @@ describe('veritasMantineTheme', () => {
       lockScroll: false,
     });
   });
+
+  it('gives shared overlays one bounded scroll owner', () => {
+    expect(veritasMantineTheme.components?.Modal?.styles).toMatchObject({
+      content: {
+        minHeight: 0,
+        overflow: 'hidden',
+      },
+      body: {
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+      },
+    });
+    expect(veritasMantineTheme.components?.Drawer?.styles).toMatchObject({
+      content: {
+        minHeight: 0,
+        overflow: 'hidden',
+      },
+      body: {
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+      },
+    });
+    expect(veritasMantineTheme.components?.Popover?.styles).toMatchObject({
+      dropdown: {
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+      },
+    });
+  });
 });
