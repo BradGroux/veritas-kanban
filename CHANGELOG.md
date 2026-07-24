@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Tiered GitHub Actions so pull requests run changed test files with
+  lint/typecheck, security, and build gates, while the complete workspace suite
+  runs on `main`, nightly, by manual dispatch, or with the `ci:full` label.
+  Cross-platform unsigned desktop packaging now runs for desktop/package PRs,
+  after relevant changes merge to `main`, or by manual dispatch (#955).
+
 ### Fixed
 
 - Added bounded macOS desktop startup verification that retries through the

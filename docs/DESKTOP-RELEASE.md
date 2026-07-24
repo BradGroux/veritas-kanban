@@ -50,7 +50,8 @@ live repository install into a production-only dependency state.
 
 ## GitHub Workflows
 
-`Desktop Artifacts` runs on desktop/server/web/shared changes and on manual
+`Desktop Artifacts` runs on desktop/package/release-workflow pull requests,
+after server/web/shared/desktop changes merge to `main`, and on manual
 dispatch. It builds unsigned artifacts on:
 
 - `macos-15`: DMG, ZIP, blockmap, and update YAML.

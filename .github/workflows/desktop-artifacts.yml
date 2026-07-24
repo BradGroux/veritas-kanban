@@ -1,13 +1,24 @@
 name: Desktop Artifacts
 
 on:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - 'desktop/**'
       - 'server/**'
       - 'web/**'
       - 'shared/**'
+      - 'docs/DESKTOP-RELEASE.md'
+      - 'scripts/desktop-after-pack.mjs'
+      - 'scripts/prepare-desktop-release.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/desktop-artifacts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/**'
       - 'docs/DESKTOP-RELEASE.md'
       - 'scripts/desktop-after-pack.mjs'
       - 'scripts/prepare-desktop-release.mjs'
