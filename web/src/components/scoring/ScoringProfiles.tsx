@@ -115,8 +115,14 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   const [draftMode, setDraftMode] = useState<DraftMode>('edit');
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const selectedProfileButtonRef = useRef<HTMLButtonElement>(null);
   const shouldFocusListRef = useRef(false);
+  const shouldFocusNameRef = useRef(false);
+  const createOriginRef = useRef<{ activeTab: string; mobileView: MobileView }>({
+    activeTab: 'profiles',
+    mobileView: 'list',
+  });
   const [evaluationForm, setEvaluationForm] = useState<EvaluationRequest>({
     profileId: '',
     action: '',
@@ -151,6 +157,12 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   }, [profiles, selectedProfileId]);
 
   useEffect(() => {
+    if (activeTab === 'profiles' && shouldFocusNameRef.current) {
+      shouldFocusNameRef.current = false;
+      nameInputRef.current?.focus();
+      return;
+    }
+
     if (mobileView === 'detail') {
       detailHeadingRef.current?.focus();
       return;
@@ -160,7 +172,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
       shouldFocusListRef.current = false;
       selectedProfileButtonRef.current?.focus();
     }
-  }, [mobileView, selectedProfileId]);
+  }, [activeTab, mobileView, selectedProfileId]);
 
   const loadProfileIntoDraft = (profile: ScoringProfile) => {
     if (!confirmDiscardChanges()) return;
@@ -175,11 +187,33 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
 
   const handleCreateNew = () => {
     if (!confirmDiscardChanges()) return;
+    createOriginRef.current = { activeTab, mobileView };
     const nextDraft = createEmptyDraft();
     setDraft(nextDraft);
     setCleanDraft(nextDraft);
     setDraftMode('create');
+    shouldFocusNameRef.current = true;
+    setActiveTab('profiles');
     setMobileView('detail');
+  };
+
+  const handleCancelCreate = () => {
+    if (!confirmDiscardChanges()) return;
+
+    if (selectedProfile) {
+      const nextDraft = profileToDraft(selectedProfile);
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('edit');
+    } else {
+      const nextDraft = createEmptyDraft();
+      setDraft(nextDraft);
+      setCleanDraft(nextDraft);
+      setDraftMode('create');
+    }
+
+    setActiveTab(createOriginRef.current.activeTab);
+    setMobileView(createOriginRef.current.mobileView);
   };
 
   const handleDuplicate = (profile: ScoringProfile) => {
@@ -351,7 +385,12 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                 h={48}
                 className="w-full flex-1 sm:w-auto sm:flex-none"
                 onClick={handleSave}
-                disabled={draftReadOnly || createProfile.isPending || updateProfile.isPending}
+                disabled={
+                  !draft.name.trim() ||
+                  draftReadOnly ||
+                  createProfile.isPending ||
+                  updateProfile.isPending
+                }
               >
                 <Save className="mr-2 h-4 w-4" />
                 Save Profile
@@ -462,31 +501,37 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         Define weighted scorers and a composite strategy.
                       </p>
                     </div>
-                    {draftMode === 'edit' && selectedProfile && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          h={48}
-                          className="flex-1 sm:flex-none"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDuplicate(selectedProfile)}
-                        >
-                          <Copy className="mr-2 h-4 w-4" />
-                          Duplicate
-                        </Button>
-                        {!selectedProfile.builtIn && (
+                    {draftMode === 'create' ? (
+                      <Button h={48} variant="outline" size="sm" onClick={handleCancelCreate}>
+                        Cancel
+                      </Button>
+                    ) : (
+                      selectedProfile && (
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             h={48}
                             className="flex-1 sm:flex-none"
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDelete(selectedProfile)}
+                            onClick={() => handleDuplicate(selectedProfile)}
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicate
                           </Button>
-                        )}
-                      </div>
+                          {!selectedProfile.builtIn && (
+                            <Button
+                              h={48}
+                              className="flex-1 sm:flex-none"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(selectedProfile)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
 
@@ -494,11 +539,13 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Name</label>
                       <TextInput
+                        ref={nameInputRef}
                         aria-label="Profile name"
                         value={draft.name}
                         onChange={(event) =>
                           setDraft((current) => ({ ...current, name: event.target.value }))
                         }
+                        error={!draft.name.trim() ? 'Profile name is required' : undefined}
                         disabled={draftReadOnly}
                       />
                     </div>
