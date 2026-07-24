@@ -46,8 +46,9 @@ const DEFAULT_CONFIG: AppConfig = {
       type: 'copilot',
       name: 'GitHub Copilot',
       command: 'copilot',
-      args: ['-p'],
+      args: [],
       enabled: false,
+      provider: 'acp-stdio',
     },
     {
       type: 'gemini',
@@ -171,6 +172,13 @@ function migrateLegacyAgentProvider(agent: AgentConfig): AgentConfig {
   }
   if (agent.type === 'codex' && command === 'codex') {
     return { ...agent, provider: 'codex-cli' };
+  }
+  if (agent.type === 'copilot' && command === 'copilot') {
+    return {
+      ...agent,
+      provider: 'acp-stdio',
+      args: agent.args.length === 1 && agent.args[0] === '-p' ? [] : agent.args,
+    };
   }
   if (agent.type === 'hermes' && command === 'hermes') {
     return { ...agent, provider: 'hermes-cli' };

@@ -11,6 +11,8 @@ import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import {
   BUZZ_AGENT_CREDENTIAL_ENV_KEYS,
   BUZZ_AGENT_RUNTIME_PROFILE_ID,
+  COPILOT_ACP_CREDENTIAL_ENV_KEYS,
+  COPILOT_ACP_RUNTIME_PROFILE_ID,
 } from './acp-stdio-adapter.js';
 
 const CREDENTIAL_ENV_KEY_PATTERN =
@@ -42,6 +44,9 @@ export function compileProviderLaunchCredentialPlan(input: {
     ...(PROVIDER_BOOT_AUTH_KEYS[input.provider as ExecutableAgentProvider] ?? []),
     ...(input.harnessProfileId === BUZZ_AGENT_RUNTIME_PROFILE_ID
       ? BUZZ_AGENT_CREDENTIAL_ENV_KEYS
+      : []),
+    ...(input.harnessProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID
+      ? COPILOT_ACP_CREDENTIAL_ENV_KEYS
       : []),
   ]);
   const taskReferences = new Set(input.sandbox.effective.credentialRefs);

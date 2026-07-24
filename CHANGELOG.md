@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a disabled-by-default GitHub Copilot CLI profile under the generic ACP
+  provider, pinned to the `Copilot 1.0.74` public-preview handshake. Veritas
+  now owns a safe stdio baseline, compiles bounded restrictive model/effort/
+  tool/URL/context/credit settings into immutable launch argv, classifies
+  Copilot boot credentials without probing authentication or inference, and
+  reports the incomplete-source and release-tag provenance limits truthfully.
+  Provider probe evidence advances to revision 12 (#917).
 - Added a disabled-by-default `buzz-agent` conformance profile under the generic
   ACP provider, pinned to Buzz v0.4.24 commit
   `710ed9fff57878a1d69f809b80a6ee0416c53fc4`. The profile validates exact ACP

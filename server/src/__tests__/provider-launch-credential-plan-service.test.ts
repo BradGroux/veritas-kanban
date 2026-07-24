@@ -115,24 +115,29 @@ describe('provider launch credential plan', () => {
     ]);
   });
 
-  it('classifies Buzz model authentication as profile boot authentication', () => {
-    const plan = compileProviderLaunchCredentialPlan({
-      provider: 'acp-stdio',
-      providerRuntimeManifest: providerRuntimeManifestFixture({ provider: 'acp-stdio' }),
-      runtime: runtime(['OPENAI_COMPAT_API_KEY']),
-      sandbox: sandbox(),
-      harnessProfileId: 'buzz-agent',
-    });
+  it('classifies ACP profile authentication separately from task credentials', () => {
+    for (const [harnessProfileId, key] of [
+      ['buzz-agent', 'OPENAI_COMPAT_API_KEY'],
+      ['github-copilot-cli', 'COPILOT_GITHUB_TOKEN'],
+    ] as const) {
+      const plan = compileProviderLaunchCredentialPlan({
+        provider: 'acp-stdio',
+        providerRuntimeManifest: providerRuntimeManifestFixture({ provider: 'acp-stdio' }),
+        runtime: runtime([key]),
+        sandbox: sandbox(),
+        harnessProfileId,
+      });
 
-    expect(plan.references).toEqual([
-      {
-        reference: 'env:OPENAI_COMPAT_API_KEY',
-        classification: 'harness-boot-authentication',
-        delivery: 'provider-native-environment',
-        boundary: 'provider-process',
-        risk: 'provider-required',
-      },
-    ]);
+      expect(plan.references).toEqual([
+        {
+          reference: `env:${key}`,
+          classification: 'harness-boot-authentication',
+          delivery: 'provider-native-environment',
+          boundary: 'provider-process',
+          risk: 'provider-required',
+        },
+      ]);
+    }
   });
 
   it('fails task integration references closed until a controlled boundary is present', () => {

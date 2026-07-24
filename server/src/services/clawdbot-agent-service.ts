@@ -199,7 +199,9 @@ import {
   type ConversationSource,
 } from './conversation-lifecycle-service.js';
 import {
+  buildCopilotAcpArgs,
   buildSafeAcpEnv,
+  COPILOT_ACP_RUNTIME_PROFILE_ID,
   openAcpStdio,
   probeAcpStdioRuntime,
   type AcpStdioControl,
@@ -3909,9 +3911,10 @@ export class ClawdbotAgentService {
       throw new ConflictError('ACP runtime probe requires an explicit agent configuration.');
     }
     const supportProfile = normalizeHarnessSupportProfile(agentConfig);
+    const args = this.buildAcpProviderArgs(agentConfig, supportProfile.id);
     const runtime = await probeAcpStdioRuntime({
       command: agentConfig.command,
-      args: agentConfig.args,
+      args,
       cwd: context.cwd ?? process.cwd(),
       environment: process.env,
       environmentKeys: [
@@ -3936,7 +3939,7 @@ export class ClawdbotAgentService {
           `ACP protocol ${runtime.protocolVersion} negotiated with ${runtime.agentInfo.name}.`,
           ...(runtime.runtimeProfile
             ? [
-                `ACP runtime profile ${runtime.runtimeProfile.id}@${runtime.runtimeProfile.revision} matches Buzz ${runtime.runtimeProfile.testedRelease} (${runtime.runtimeProfile.testedCommit}).`,
+                `ACP runtime profile ${runtime.runtimeProfile.id}@${runtime.runtimeProfile.revision} matches tested release ${runtime.runtimeProfile.testedRelease} (${runtime.runtimeProfile.testedCommit}).`,
                 `Known limitations: ${runtime.runtimeProfile.limitations.join(', ')}.`,
               ]
             : []),
@@ -4065,7 +4068,7 @@ export class ClawdbotAgentService {
     const summaryChunks: string[] = [];
     const control = await openAcpStdio({
       command: agentConfig.command,
-      args: agentConfig.args,
+      args: this.buildAcpProviderArgs(agentConfig, supportProfile.id),
       cwd: worktreePath,
       environment: process.env,
       environmentKeys: [
@@ -7976,10 +7979,11 @@ export class ClawdbotAgentService {
       };
     }
     if (provider === 'acp-stdio') {
+      const supportProfile = agentConfig ? normalizeHarnessSupportProfile(agentConfig) : undefined;
       return {
         ...runtimeBase,
         command: agentConfig?.command || '',
-        args: [...(agentConfig?.args ?? [])],
+        args: agentConfig ? this.buildAcpProviderArgs(agentConfig, supportProfile?.id) : [],
       };
     }
     if (provider === 'hermes-cli') {
@@ -8138,6 +8142,15 @@ export class ClawdbotAgentService {
       environmentKeys,
       credentialReferences: gatewayTokenKey ? [`env:${gatewayTokenKey}`] : [],
     };
+  }
+
+  private buildAcpProviderArgs(agentConfig: AgentConfig, supportProfileId?: string): string[] {
+    return supportProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID
+      ? buildCopilotAcpArgs({
+          model: agentConfig.model,
+          extraArgs: agentConfig.args,
+        })
+      : [...agentConfig.args];
   }
 
   private firstConfiguredEnvironmentKey(keys: string[]): string | undefined {

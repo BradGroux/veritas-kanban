@@ -46,7 +46,7 @@ function config(provider: AgentConfig['provider']): AgentConfig {
 }
 
 describe('ClawdbotAgentService provider runtime adapters', () => {
-  it.each([['copilot', 'copilot']] as const)(
+  it.each([['amp', 'amp']] as const)(
     'fails closed when the provider-less %s display profile is probed',
     async (type, command) => {
       await expect(

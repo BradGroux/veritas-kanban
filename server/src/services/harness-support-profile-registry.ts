@@ -24,6 +24,12 @@ import {
   BUZZ_AGENT_CREDENTIAL_ENV_KEYS,
   BUZZ_AGENT_ENVIRONMENT_KEYS,
   BUZZ_AGENT_TESTED_RELEASE,
+  buildCopilotAcpArgs,
+  COPILOT_ACP_CREDENTIAL_ENV_KEYS,
+  COPILOT_ACP_ENVIRONMENT_KEYS,
+  COPILOT_ACP_RUNTIME_PROFILE_ID,
+  COPILOT_ACP_TESTED_RELEASE,
+  COPILOT_ACP_VERSION,
 } from './acp-stdio-adapter.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
@@ -119,12 +125,22 @@ const DEFINITIONS: Record<string, ProfileDefinition> = {
     ],
   },
   amp: unsupported('amp', 'Amp', 'process-text', 'No executable Amp adapter is registered.'),
-  copilot: unsupported(
-    'github-copilot-cli',
-    'GitHub Copilot CLI',
-    'acp',
-    'The GitHub Copilot CLI ACP adapter is tracked by issue #917.'
-  ),
+  copilot: {
+    id: COPILOT_ACP_RUNTIME_PROFILE_ID,
+    displayName: 'GitHub Copilot CLI',
+    adapterId: 'acp-stdio',
+    transport: 'acp',
+    auth: { kind: 'provider-managed' },
+    environmentAllowlist: [...COPILOT_ACP_ENVIRONMENT_KEYS],
+    credentialAllowlist: [...COPILOT_ACP_CREDENTIAL_ENV_KEYS],
+    testedVersions: [`Copilot ${COPILOT_ACP_VERSION}`],
+    documentationUrl: '/docs/AGENT-PROVIDERS.md#github-copilot-cli-acp-public-preview',
+    remediation: [
+      `Install GitHub Copilot CLI ${COPILOT_ACP_TESTED_RELEASE} and authenticate with \`copilot login\` or an allowlisted boot credential.`,
+      'Remove broad allow, remote, TCP, prompt-mode, plugin, and arbitrary MCP launch arguments; Veritas owns the ACP stdio baseline.',
+      'ACP is public preview and provider-managed authentication has no non-consuming status probe.',
+    ],
+  },
   gemini: unsupported(
     'gemini-cli',
     'Gemini CLI',
@@ -226,7 +242,10 @@ const PROVIDER_DEFINITIONS: Record<string, ProfileDefinition> = {
   'codex-sdk': DEFINITIONS['codex-sdk'],
   'codex-app-server': DEFINITIONS['codex-app-server'],
   'claude-code': DEFINITIONS['claude-code'],
-  'acp-stdio': executable('acp-stdio', 'ACP stdio agent', 'acp-stdio', 'acp', [], [], []),
+  'acp-stdio': {
+    ...executable('acp-stdio', 'ACP stdio agent', 'acp-stdio', 'acp', [], [], []),
+    versionArgs: [],
+  },
   'hermes-cli': DEFINITIONS.hermes,
 };
 
@@ -268,6 +287,21 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     } catch (error) {
       providerLaunchError =
         error instanceof Error ? error.message : 'Codex app-server launch configuration is unsafe.';
+    }
+  }
+  if (
+    definition.id === COPILOT_ACP_RUNTIME_PROFILE_ID &&
+    definition.adapterId === 'acp-stdio' &&
+    !unsafeLaunchConfiguration
+  ) {
+    try {
+      normalizedProviderArgs = buildCopilotAcpArgs({
+        model: agent.model,
+        extraArgs: agent.args,
+      });
+    } catch (error) {
+      providerLaunchError =
+        error instanceof Error ? error.message : 'Copilot ACP launch configuration is unsafe.';
     }
   }
   const executable = {
@@ -343,7 +377,7 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     remediation: [
       ...(unsafeLaunchConfiguration ? [unsafeConfigurationRemediation] : []),
       ...(providerLaunchError
-        ? ['Remove ungoverned Claude Code launch flags and use Veritas policy fields instead.']
+        ? ['Remove ungoverned provider launch flags and use Veritas policy fields instead.']
         : []),
       ...definition.remediation,
     ],

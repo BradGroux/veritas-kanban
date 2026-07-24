@@ -318,6 +318,11 @@ First-class support for autonomous coding agents.
   only its tested configuration and boot-authentication environment keys, and
   reports no persistent session loading or network MCP instead of inventing
   capabilities
+- **GitHub Copilot CLI ACP profile** — A disabled-by-default `copilot` runtime
+  uses the generic ACP provider with a system-owned stdio/public-preview
+  baseline, exact v1.0.74 handshake evidence, bounded restrictive process
+  policy, provider-managed authentication, and explicit source-provenance
+  limitations
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
 - **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
@@ -419,7 +424,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 11,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 12,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this

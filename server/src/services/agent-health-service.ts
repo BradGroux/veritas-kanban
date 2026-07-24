@@ -69,9 +69,10 @@ export class AgentHealthService implements AgentHealthChecker {
   async checkAgent(agent: AgentConfig): Promise<AgentHealthStatus> {
     const checkedAt = new Date().toISOString();
     const executable = await this.findExecutable(agent.command);
+    const versionArgs = this.versionProbeArgs(agent);
     const version =
-      executable.found && agent.provider !== 'acp-stdio'
-        ? await this.probeProviderVersion(agent.command)
+      executable.found && versionArgs
+        ? await this.probeProviderVersion(agent.command, versionArgs)
         : { attempted: false };
     const auth = executable.found ? await this.checkAuth(agent, version) : { authenticated: null };
     const reason = this.buildReason(agent, executable.found, auth.authenticated, auth.error);
@@ -250,10 +251,22 @@ export class AgentHealthService implements AgentHealthChecker {
     }
   }
 
-  private async probeProviderVersion(command: string): Promise<ProviderVersionProbe> {
-    const source = `${path.basename(command)} --version`;
+  private versionProbeArgs(agent: AgentConfig): string[] | undefined {
+    if (agent.supportProfile) {
+      return agent.supportProfile.executable.versionArgs.length > 0
+        ? [...agent.supportProfile.executable.versionArgs]
+        : undefined;
+    }
+    return agent.provider === 'acp-stdio' ? undefined : ['--version'];
+  }
+
+  private async probeProviderVersion(
+    command: string,
+    args: string[]
+  ): Promise<ProviderVersionProbe> {
+    const source = `${path.basename(command)} ${args.join(' ')}`;
     try {
-      const { stdout, stderr } = await this.runCommand(command, ['--version'], {
+      const { stdout, stderr } = await this.runCommand(command, args, {
         timeout: PROVIDER_VERSION_TIMEOUT_MS,
         maxBuffer: PROVIDER_VERSION_MAX_BUFFER_BYTES,
         shell: false,
