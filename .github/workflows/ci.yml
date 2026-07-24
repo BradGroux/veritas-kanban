@@ -29,7 +29,19 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ${{
+      format(
+        '{0}-{1}-{2}',
+        github.workflow,
+        github.ref,
+        github.event_name == 'pull_request' &&
+          contains(fromJSON('["labeled","unlabeled"]'), github.event.action) &&
+          github.event.label.name != 'ci:full' &&
+          format('cosmetic-{0}', github.run_id) ||
+          'authoritative'
+      )
+    }}
   cancel-in-progress: true
 
 env:
@@ -39,6 +51,10 @@ jobs:
   # ─── Deterministic Test Scope ───────────────────────────────────
   select-tests:
     name: Select Test Scope
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+      github.event.label.name == 'ci:full'
     runs-on: ubuntu-latest
     outputs:
       scope: ${{ steps.scope.outputs.scope }}
@@ -69,6 +85,7 @@ jobs:
           reviewed_full=false
           reviewed_pr=
           reviewed_head=
+          reviewed_mode=
           associated_prs="$(
             gh api \
               -H 'Accept: application/vnd.github+json' \
@@ -111,6 +128,11 @@ jobs:
                 git fetch --no-tags origin "$reviewed_head"; then
                 if git merge-base --is-ancestor "$reviewed_head" "$GITHUB_SHA"; then
                   reviewed_full=true
+                  reviewed_mode=ancestor
+                elif [[ "$(git rev-parse "${reviewed_head}^{tree}")" == \
+                  "$(git rev-parse "${GITHUB_SHA}^{tree}")" ]]; then
+                  reviewed_full=true
+                  reviewed_mode=identical-tree
                 fi
               fi
             fi
@@ -120,6 +142,7 @@ jobs:
             echo "reviewed_full=$reviewed_full"
             echo "reviewed_pr=$reviewed_pr"
             echo "reviewed_head=$reviewed_head"
+            echo "reviewed_mode=$reviewed_mode"
           } >> "$GITHUB_OUTPUT"
 
       - name: Select verification tier
@@ -131,6 +154,7 @@ jobs:
           CI_PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           CI_REVIEWED_FULL: ${{ steps.reviewed_full.outputs.reviewed_full || 'false' }}
           CI_REVIEWED_PR: ${{ steps.reviewed_full.outputs.reviewed_pr || '' }}
+          CI_REVIEWED_MODE: ${{ steps.reviewed_full.outputs.reviewed_mode || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
@@ -178,6 +202,10 @@ jobs:
   # ─── Lint & Type Check ───────────────────────────────────────────
   lint-and-typecheck:
     name: Lint & Type Check
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+      github.event.label.name == 'ci:full'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -214,7 +242,13 @@ jobs:
   test-changed:
     name: Changed Tests
     needs: select-tests
-    if: always()
+    if: >-
+      always() &&
+      (
+        github.event_name != 'pull_request' ||
+        !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+        github.event.label.name == 'ci:full'
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Require a successful scope decision
@@ -340,7 +374,13 @@ jobs:
   test-workspace:
     name: Workspace Unit Tests
     needs: select-tests
-    if: always()
+    if: >-
+      always() &&
+      (
+        github.event_name != 'pull_request' ||
+        !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+        github.event.label.name == 'ci:full'
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Require a successful scope decision
@@ -426,6 +466,10 @@ jobs:
   # ─── Build ───────────────────────────────────────────────────────
   build:
     name: Build
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+      github.event.label.name == 'ci:full'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -477,6 +521,10 @@ jobs:
   # ─── Security Audit ──────────────────────────────────────────────
   security-audit:
     name: Security Audit
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+      github.event.label.name == 'ci:full'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
