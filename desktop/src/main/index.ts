@@ -309,20 +309,29 @@ async function boot(): Promise<void> {
     },
   });
 
-  registerDesktopBridge(ipcMain, runtime, shell, packaged, commandDispatcher, updateService, {
-    toggleMaximize: () => {
-      const window = activeMainWindow();
-      if (!window) {
-        return { maximized: false };
-      }
-      if (window.isMaximized()) {
-        window.unmaximize();
-      } else {
-        window.maximize();
-      }
-      return { maximized: window.isMaximized() };
-    },
-  });
+  registerDesktopBridge(
+    ipcMain,
+    runtime,
+    shell,
+    packaged,
+    app.getVersion(),
+    commandDispatcher,
+    updateService,
+    {
+      toggleMaximize: () => {
+        const window = activeMainWindow();
+        if (!window) {
+          return { maximized: false };
+        }
+        if (window.isMaximized()) {
+          window.unmaximize();
+        } else {
+          window.maximize();
+        }
+        return { maximized: window.isMaximized() };
+      },
+    }
+  );
   refreshDesktopMenu();
   runtime.on('status', (status) => {
     activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);

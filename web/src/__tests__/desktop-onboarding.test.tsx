@@ -57,6 +57,8 @@ describe('desktop onboarding', () => {
     );
 
     expect(await screen.findByText('Choose setup path')).toBeDefined();
+    expect(screen.getByText('Desktop Setup')).toBeDefined();
+    expect(screen.queryByText('v5 Desktop Setup')).toBeNull();
     expect(screen.getByTestId('setup-mode-board').getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByTestId('setup-mode-board'));
     fireEvent.click(screen.getByRole('button', { name: 'Continue to Password' }));
