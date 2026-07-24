@@ -46,6 +46,7 @@ export type AgentProvider =
   | 'codex-sdk'
   | 'codex-app-server'
   | 'claude-code'
+  | 'acp-stdio'
   | 'codex-cloud'
   | 'hermes-cli'
   | 'ollama-local'
@@ -59,6 +60,7 @@ export const EXECUTABLE_AGENT_PROVIDERS = [
   'codex-sdk',
   'codex-app-server',
   'claude-code',
+  'acp-stdio',
   'hermes-cli',
 ] as const satisfies readonly AgentProvider[];
 

@@ -24,6 +24,7 @@ export type BuiltInAgentType =
   | 'codex'
   | 'codex-sdk'
   | 'codex-cloud'
+  | 'acp-stdio'
   | 'ollama-local'
   | 'ollama-cloud'
   | 'lm-studio-local'

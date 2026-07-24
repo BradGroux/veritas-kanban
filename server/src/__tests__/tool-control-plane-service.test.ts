@@ -350,6 +350,34 @@ describe('ToolControlPlaneService', () => {
     expect(await service.getRunCatalog('task-tools', 'attempt-tools')).toEqual(runCatalog);
   });
 
+  it('maps an all-allow run catalog to ACP session MCP configuration', async () => {
+    const { service } = fixture();
+    const runCatalog = await catalog(service);
+
+    await expect(service.acpConfig(runCatalog)).resolves.toEqual([
+      {
+        name: 'Fixture tools',
+        command: '/usr/bin/fixture',
+        args: ['serve'],
+        env: [],
+      },
+    ]);
+  });
+
+  it('fails ACP native MCP configuration closed when per-tool restrictions cannot be enforced', async () => {
+    const { service } = fixture({
+      tools: [
+        { name: 'read', inputSchema: { type: 'object' } },
+        { name: 'delete', inputSchema: { type: 'object' } },
+      ],
+    });
+    const runCatalog = await catalog(service, { deniedTools: ['delete'] });
+
+    await expect(service.acpConfig(runCatalog)).rejects.toThrow(
+      'cannot enforce a partially restricted native MCP tool catalog'
+    );
+  });
+
   it('blocks required discovery failures and records optional failures as degraded', async () => {
     const required = fixture({ discoveryError: new Error('offline') });
     await required.service.createDefinition(definition());

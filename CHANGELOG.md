@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a generic stable ACP v1 stdio provider adapter with no-shell supervised
+  launch, initialize-time identity and capability evidence, fresh/resume/fork/
+  close session lifecycle, bounded bidirectional JSON-RPC, causal message,
+  thought, plan, and tool events, durable permission brokering, capability
+  drift rejection, explicit environment filtering, and immutable all-allow
+  run-scoped MCP session configuration. Provider capability evidence advances
+  to probe revision 10; the client-facing ACP server view is tracked separately
+  by #960 (#870).
 - Added the `tool-server-definition/v1`, `tool-server-discovery/v1`, and
   `run-tool-catalog/v1` control-plane contracts with file and SQLite
   persistence, version-bound discovery caching, required and optional server

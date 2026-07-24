@@ -43,6 +43,7 @@ import {
   renderCodexSdkTaskEnvelope,
   renderCodexAppServerTaskEnvelope,
   renderClaudeCodeTaskEnvelope,
+  renderAcpStdioTaskEnvelope,
   renderHermesTaskEnvelope,
   renderOpenClawTaskEnvelope,
   type ProviderTaskEnvelopeRenderInput,
@@ -107,6 +108,15 @@ import type {
   ConversationLifecycleRecord,
   ConversationLifecycleResult,
   RunToolCatalog,
+  AcpRuntimeProbe,
+  AcpSessionNotification,
+  AcpRequestPermissionRequest,
+  AcpRequestPermissionResponse,
+  AcpSessionUpdate,
+  AcpStopReason,
+  ProviderRuntimeCapabilityEvidence,
+  RunApprovalActionClass,
+  RunApprovalRiskClass,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -189,6 +199,12 @@ import {
   type ConversationSource,
 } from './conversation-lifecycle-service.js';
 import {
+  buildSafeAcpEnv,
+  openAcpStdio,
+  probeAcpStdioRuntime,
+  type AcpStdioControl,
+} from './acp-stdio-adapter.js';
+import {
   getToolControlPlaneService,
   type ToolControlPlaneService,
 } from './tool-control-plane-service.js';
@@ -230,6 +246,7 @@ export interface AgentProviderStopContext {
 export interface AgentProviderProbeContext {
   agentConfig?: AgentConfig;
   health: AgentHealthStatus;
+  cwd?: string;
 }
 
 export interface AgentProviderAdapter {
@@ -338,6 +355,7 @@ interface PendingAgent {
     archive(): Promise<void>;
     close(): void;
   };
+  acpControl?: AcpStdioControl;
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
@@ -946,6 +964,7 @@ export class ClawdbotAgentService {
     const providerRuntimeManifest = await adapter.probe({
       agentConfig: launchAgentConfig,
       health: agentHealth,
+      cwd: this.expandPath(task.git.worktreePath),
     });
     const harnessSupport = evaluateHarnessSupportStatus(
       launchAgentConfig as AgentConfig,
@@ -1185,6 +1204,7 @@ export class ClawdbotAgentService {
     const providerRuntimeManifest = await adapter.probe({
       agentConfig: launchAgentConfig,
       health: agentHealth,
+      cwd: this.expandPath(task.git.worktreePath),
     });
     const harnessSupport = evaluateHarnessSupportStatus(
       launchAgentConfig as AgentConfig,
@@ -3357,6 +3377,7 @@ export class ClawdbotAgentService {
         agentConfig.provider === 'codex-cli' ||
         agentConfig.provider === 'codex-app-server' ||
         agentConfig.provider === 'claude-code' ||
+        agentConfig.provider === 'acp-stdio' ||
         agentConfig.provider === 'hermes-cli'
       ) {
         provider = agentConfig.provider;
@@ -3640,6 +3661,43 @@ export class ClawdbotAgentService {
       };
     }
 
+    if (provider === 'acp-stdio') {
+      return {
+        id: definition.id,
+        label: definition.label,
+        renderTaskEnvelope: renderAcpStdioTaskEnvelope,
+        probe: (context) => this.probeAcpProviderRuntime(context, definition),
+        runEventMapper: getProviderRunEventMapper(provider),
+        start: async ({
+          task,
+          agentConfig,
+          transport,
+          logPath,
+          attemptId,
+          sandboxPolicy,
+          runLaunchManifest,
+          conversation,
+        }) => {
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
+          await this.startAcpStdio(
+            task,
+            agentConfig,
+            transport.content,
+            logPath,
+            attemptId,
+            sandboxPolicy,
+            runLaunchManifest,
+            conversation
+          );
+        },
+        stop: async ({ pending }) => {
+          pending.abortController?.abort();
+          await pending.acpControl?.cancel().catch(() => undefined);
+          await pending.acpControl?.close().catch(() => undefined);
+        },
+      };
+    }
+
     if (provider === 'claude-code') {
       return {
         id: definition.id,
@@ -3842,6 +3900,44 @@ export class ClawdbotAgentService {
     }
   }
 
+  private async probeAcpProviderRuntime(
+    context: AgentProviderProbeContext,
+    definition: ReturnType<typeof getProviderRuntimeAdapterDefinition>
+  ): Promise<ProviderRuntimeManifest> {
+    const agentConfig = context.agentConfig;
+    if (!agentConfig) {
+      throw new ConflictError('ACP runtime probe requires an explicit agent configuration.');
+    }
+    const runtime = await probeAcpStdioRuntime({
+      command: agentConfig.command,
+      args: agentConfig.args,
+      cwd: context.cwd ?? process.cwd(),
+      environment: process.env,
+      environmentKeys: [
+        ...(agentConfig.supportProfile?.launch.environmentAllowlist ?? []),
+        ...(agentConfig.supportProfile?.launch.credentialAllowlist ?? []),
+      ],
+    });
+    const base = this.buildProviderRuntimeProbeRequest('acp-stdio', context, definition);
+    const providerVersion = acpProviderVersion(runtime);
+    return this.providerRuntimeManifests.probe({
+      ...base,
+      protocolVersion: 'acp/v1',
+      identity: {
+        ...base.identity,
+        providerVersion,
+        providerBuild: acpCapabilityBuild(runtime),
+        verified: true,
+        source: runtime.agentInfo.version ? 'acp-initialize:agentInfo' : 'acp-initialize:protocol',
+        diagnostics: [
+          ...(base.identity.diagnostics ?? []),
+          `ACP protocol ${runtime.protocolVersion} negotiated with ${runtime.agentInfo.name}.`,
+        ],
+      },
+      capabilities: negotiatedAcpCapabilities(definition.capabilities, runtime),
+    });
+  }
+
   private buildProviderRuntimeProbeRequest(
     provider: ExecutableAgentProvider,
     context: AgentProviderProbeContext,
@@ -3924,6 +4020,262 @@ export class ClawdbotAgentService {
       child.kill('SIGTERM');
       throw error;
     }
+  }
+
+  private async startAcpStdio(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined,
+    runLaunchManifest: RunLaunchManifest,
+    conversation: ConversationLifecycleRecord
+  ): Promise<void> {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath || !agentConfig) {
+      throw new ConflictError('ACP launch requires an explicit agent and task worktree.');
+    }
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('ACP launch no longer matches the active attempt.');
+    }
+    const runToolCatalog = runLaunchManifest.tools.catalogDigest
+      ? await this.toolControlPlane.getRunCatalog(task.id, attemptId)
+      : undefined;
+    if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
+      throw new ConflictError('ACP run tool catalog does not match launch evidence.');
+    }
+    const mcpServers = runToolCatalog ? await this.toolControlPlane.acpConfig(runToolCatalog) : [];
+    const toolEnvironmentKeys = runToolCatalog
+      ? await this.toolControlPlane.environmentKeys(runToolCatalog)
+      : [];
+    const approvalAbort = new AbortController();
+    pending.abortController = approvalAbort;
+    let activeSessionId: string | undefined;
+    const summaryChunks: string[] = [];
+    const control = await openAcpStdio({
+      command: agentConfig.command,
+      args: agentConfig.args,
+      cwd: worktreePath,
+      environment: process.env,
+      environmentKeys: [...(sandboxPolicy?.effective.envPassthrough ?? []), ...toolEnvironmentKeys],
+      onSpawn: async (child) => {
+        pending.process = child;
+        await this.attachSpawnedProcess(pending, child);
+      },
+      onNotification: async (notification) => {
+        if (activeSessionId && notification.sessionId !== activeSessionId) {
+          throw new ConflictError('ACP session update does not match the active session.', {
+            expectedSessionId: activeSessionId,
+            receivedSessionId: notification.sessionId,
+          });
+        }
+        const summary = await this.recordAcpSessionUpdate(
+          task,
+          attemptId,
+          agentConfig,
+          notification
+        );
+        if (summary) summaryChunks.push(summary);
+      },
+      onPermissionRequest: (request) =>
+        this.resolveAcpPermission(task, attemptId, agentConfig, request, approvalAbort.signal),
+    });
+    const launchProviderVersion = acpProviderVersion(control.probe);
+    if (
+      runLaunchManifest.providerRuntime.providerBuild !== acpCapabilityBuild(control.probe) ||
+      runLaunchManifest.providerRuntime.providerVersion !== launchProviderVersion
+    ) {
+      await control.close();
+      throw new ConflictError(
+        'ACP runtime identity or capabilities drifted after launch evidence was compiled.',
+        {
+          expectedProviderVersion: runLaunchManifest.providerRuntime.providerVersion,
+          receivedProviderVersion: launchProviderVersion,
+          expectedProviderBuild: runLaunchManifest.providerRuntime.providerBuild,
+          receivedProviderBuild: acpCapabilityBuild(control.probe),
+          remediation: 'Compile a new launch preview and start the run again.',
+        }
+      );
+    }
+    try {
+      activeSessionId = await control.openSession({
+        mode: conversation.mode,
+        cwd: worktreePath,
+        mcpServers,
+        conversationId: conversation.conversationId ?? conversation.parentConversationId,
+      });
+    } catch (error) {
+      approvalAbort.abort();
+      await control.close().catch(() => undefined);
+      throw error;
+    }
+    pending.acpControl = control;
+    pending.threadId = activeSessionId;
+    await this.recordConversationIdentity(task.id, attemptId, {
+      conversationId: activeSessionId,
+    });
+    await this.recordAgentStarted(task, attemptId, agentConfig.type, 'acp-stdio', agentConfig);
+
+    void control
+      .prompt(prompt)
+      .then(async (response) => {
+        approvalAbort.abort();
+        await control.close();
+        const summary =
+          summaryChunks.join('').trim().slice(-20_000) ||
+          `ACP session stopped with ${response.stopReason}.`;
+        await this.finalizePendingAgent(task.id, pending, async () => ({
+          status: acpCompletionStatus(response.stopReason),
+          terminalSource: 'stream',
+          summary,
+          ...(response.stopReason === 'refusal'
+            ? { error: 'ACP agent refused the requested turn.' }
+            : {}),
+        }));
+      })
+      .catch(async (error: unknown) => {
+        approvalAbort.abort();
+        await control.close().catch(() => undefined);
+        if (pendingAgents.get(task.id) !== pending) return;
+        const message = this.redactTraceText(
+          error instanceof Error ? error.message : 'ACP prompt failed.'
+        );
+        await this.appendLog(logPath, `\n## ACP Error\n\n${message}\n`).catch(() => undefined);
+        await this.finalizePendingAgent(task.id, pending, async () => ({
+          status: 'failed',
+          terminalSource: 'stream',
+          error: message,
+          summary: message,
+        }));
+      });
+  }
+
+  private async recordAcpSessionUpdate(
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig,
+    notification: AcpSessionNotification
+  ): Promise<string | undefined> {
+    const update = notification.update;
+    const updateType = update.sessionUpdate;
+    const summary = this.redactTraceText(acpUpdateSummary(update));
+    const kind: RunEventKind =
+      updateType === 'agent_message_chunk'
+        ? 'message.delta'
+        : updateType === 'agent_thought_chunk'
+          ? 'reasoning.delta'
+          : updateType === 'user_message_chunk'
+            ? 'message.operator'
+            : updateType === 'tool_call'
+              ? 'tool.started'
+              : updateType === 'tool_call_update'
+                ? update.status === 'completed' || update.status === 'failed'
+                  ? 'tool.completed'
+                  : 'progress'
+                : updateType === 'plan'
+                  ? 'progress'
+                  : 'provider.unknown';
+    const event = await this.appendRunEvent(
+      task.id,
+      attemptId,
+      kind,
+      {
+        providerType: `acp.${updateType}`,
+        summary,
+        update,
+      },
+      {
+        provider: 'acp-stdio',
+        adapter: 'acp-stdio',
+        agent: agentConfig.type,
+        model: agentConfig.model,
+        sessionId: notification.sessionId,
+        itemId:
+          'toolCallId' in update && typeof update.toolCallId === 'string'
+            ? update.toolCallId
+            : undefined,
+      }
+    );
+    this.emitJournalOutput(event);
+    this.recordTraceStep(attemptId, kind === 'run.error' ? 'error' : 'stream', {
+      provider: 'acp-stdio',
+      eventType: `acp.${updateType}`,
+      summary,
+    });
+    return updateType === 'agent_message_chunk' ? summary : undefined;
+  }
+
+  private async resolveAcpPermission(
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig,
+    request: AcpRequestPermissionRequest,
+    signal: AbortSignal
+  ): Promise<AcpRequestPermissionResponse> {
+    const pending = pendingAgents.get(task.id);
+    if (
+      !pending ||
+      pending.attemptId !== attemptId ||
+      (pending.threadId && request.sessionId !== pending.threadId)
+    ) {
+      throw new ConflictError('ACP permission request does not match the active run.');
+    }
+    const actionClass = acpApprovalActionClass(request.toolCall.kind);
+    const riskClass = acpApprovalRisk(request.toolCall.kind);
+    const approval = await this.approvalBroker.request({
+      workspaceId: 'local',
+      taskId: task.id,
+      attemptId,
+      provider: 'acp-stdio',
+      agentId: agentConfig.type,
+      providerRequestId: request.toolCall.toolCallId,
+      threadId: request.sessionId,
+      itemId: request.toolCall.toolCallId,
+      requestKind: 'approval',
+      actionClass,
+      action: request.toolCall.title || request.toolCall.name || 'ACP tool call',
+      details: this.redactTraceText(JSON.stringify(request.toolCall.rawInput ?? {})).slice(
+        0,
+        4_000
+      ),
+      workingDirectory: task.git?.worktreePath,
+      resourceScope: (request.toolCall.locations ?? []).map((location) => location.path),
+      riskClass,
+      policyReason: 'ACP provider requested permission through session/request_permission.',
+      evidenceRevision: pending.runLaunchManifest.digest,
+      mobileSafe: riskClass === 'low',
+      exactAction: {
+        name: request.toolCall.name,
+        kind: request.toolCall.kind,
+        input: request.toolCall.rawInput,
+        options: request.options.map((option) => ({
+          optionId: option.optionId,
+          kind: option.kind,
+        })),
+      },
+    });
+    let decision: Awaited<ReturnType<RunApprovalBrokerService['awaitDecision']>>;
+    try {
+      decision = await this.approvalBroker.awaitDecision(approval.id, { signal });
+    } catch (error) {
+      if (signal.aborted) return { outcome: { outcome: 'cancelled' } };
+      throw error;
+    }
+    if (decision.request.status === 'approved') {
+      const allowed = request.options.find((option) => option.kind === 'allow_once');
+      return allowed
+        ? { outcome: { outcome: 'selected', optionId: allowed.optionId } }
+        : { outcome: { outcome: 'cancelled' } };
+    }
+    if (decision.request.status === 'rejected') {
+      const rejected = request.options.find((option) => option.kind === 'reject_once');
+      return rejected
+        ? { outcome: { outcome: 'selected', optionId: rejected.optionId } }
+        : { outcome: { outcome: 'cancelled' } };
+    }
+    return { outcome: { outcome: 'cancelled' } };
   }
 
   private async startCodexAppServer(
@@ -6047,9 +6399,11 @@ export class ClawdbotAgentService {
               ? 'codex-app-server:strict-config:approval-never'
               : provider === 'claude-code'
                 ? 'claude-code:static-permissions'
-                : provider === 'hermes-cli'
-                  ? 'hermes-cli:workspace-write'
-                  : 'openclaw:delegated',
+                : provider === 'acp-stdio'
+                  ? 'acp-stdio:negotiated-v1'
+                  : provider === 'hermes-cli'
+                    ? 'hermes-cli:workspace-write'
+                    : 'openclaw:delegated',
       provider,
       model: agentConfig?.model,
       taskType: task.type,
@@ -7606,6 +7960,13 @@ export class ClawdbotAgentService {
         }),
       };
     }
+    if (provider === 'acp-stdio') {
+      return {
+        ...runtimeBase,
+        command: agentConfig?.command || '',
+        args: [...(agentConfig?.args ?? [])],
+      };
+    }
     if (provider === 'hermes-cli') {
       return {
         ...runtimeBase,
@@ -7717,6 +8078,14 @@ export class ClawdbotAgentService {
           ...sandboxPolicy.effective.credentialRefs,
           ...environmentKeys.filter((key) => credentialKeys.has(key)).map((key) => `env:${key}`),
         ],
+      };
+    }
+    if (provider === 'acp-stdio') {
+      return {
+        environmentKeys: Object.keys(
+          buildSafeAcpEnv(process.env, sandboxPolicy.effective.envPassthrough)
+        ),
+        credentialReferences: [...sandboxPolicy.effective.credentialRefs],
       };
     }
 
@@ -7910,6 +8279,130 @@ ${prompt}
 `;
     await fs.writeFile(logPath, header, 'utf-8');
   }
+}
+
+function acpCapabilityBuild(probe: AcpRuntimeProbe): string {
+  return `acp-v1:${probe.capabilityDigest}`;
+}
+
+function acpProviderVersion(probe: AcpRuntimeProbe): string {
+  return probe.agentInfo.version
+    ? `${probe.agentInfo.name} ${probe.agentInfo.version}`
+    : `${probe.agentInfo.name} (ACP v1)`;
+}
+
+function negotiatedAcpCapabilities(
+  baseline: ProviderRuntimeCapabilityEvidence[],
+  probe: AcpRuntimeProbe
+): ProviderRuntimeCapabilityEvidence[] {
+  const canResume =
+    probe.capabilities.loadSession === true ||
+    Boolean(probe.capabilities.sessionCapabilities?.resume);
+  const overrides = new Map<ProviderRuntimeCapabilityId, ProviderRuntimeCapabilityEvidence>([
+    [
+      'run.resume',
+      acpNegotiatedCapability(
+        'run.resume',
+        canResume,
+        'The ACP runtime negotiated session/resume or session/load.',
+        'The ACP runtime did not negotiate session/resume or session/load.'
+      ),
+    ],
+    [
+      'run.follow-up',
+      acpNegotiatedCapability(
+        'run.follow-up',
+        canResume,
+        'The ACP runtime can resume the exact session for a follow-up turn.',
+        'Follow-up requires negotiated session/resume or session/load support.'
+      ),
+    ],
+    [
+      'run.fork',
+      acpNegotiatedCapability(
+        'run.fork',
+        Boolean(probe.capabilities.sessionCapabilities?.fork),
+        'The ACP runtime negotiated session/fork.',
+        'The ACP runtime did not negotiate session/fork.'
+      ),
+    ],
+    [
+      'run.close',
+      acpNegotiatedCapability(
+        'run.close',
+        Boolean(probe.capabilities.sessionCapabilities?.close),
+        'The ACP runtime negotiated session/close.',
+        'The ACP runtime did not negotiate session/close.'
+      ),
+    ],
+  ]);
+  return baseline.map((capability) => overrides.get(capability.id) ?? capability);
+}
+
+function acpNegotiatedCapability(
+  id: ProviderRuntimeCapabilityId,
+  supported: boolean,
+  supportedReason: string,
+  unsupportedReason: string
+): ProviderRuntimeCapabilityEvidence {
+  return {
+    id,
+    state: supported ? 'supported' : 'unsupported',
+    source: 'runtime-probe',
+    reason: supported ? supportedReason : unsupportedReason,
+  };
+}
+
+function acpCompletionStatus(stopReason: AcpStopReason): TaskCompletionStatus {
+  if (stopReason === 'end_turn') return 'success';
+  if (stopReason === 'refusal') return 'blocked';
+  if (stopReason === 'cancelled') return 'interrupted';
+  return 'partial';
+}
+
+function acpUpdateSummary(update: AcpSessionUpdate): string {
+  const record = update as Record<string, unknown>;
+  const content = record.content;
+  if (
+    content &&
+    typeof content === 'object' &&
+    !Array.isArray(content) &&
+    typeof (content as Record<string, unknown>).text === 'string'
+  ) {
+    return (content as Record<string, unknown>).text as string;
+  }
+  if (update.sessionUpdate === 'plan' && Array.isArray(record.entries)) {
+    return record.entries
+      .flatMap((entry) =>
+        entry &&
+        typeof entry === 'object' &&
+        !Array.isArray(entry) &&
+        typeof (entry as Record<string, unknown>).content === 'string'
+          ? [(entry as Record<string, unknown>).content as string]
+          : []
+      )
+      .join('\n');
+  }
+  const title = typeof record.title === 'string' ? record.title : undefined;
+  const status = typeof record.status === 'string' ? record.status : undefined;
+  return [title, status].filter(Boolean).join(' - ') || `ACP ${update.sessionUpdate}`;
+}
+
+function acpApprovalActionClass(kind: string | null | undefined): RunApprovalActionClass {
+  const normalized = kind?.toLowerCase();
+  if (normalized === 'execute') return 'shell';
+  if (normalized === 'fetch') return 'network';
+  if (['read', 'edit', 'delete', 'move', 'search'].includes(normalized ?? '')) {
+    return 'filesystem';
+  }
+  return 'tool';
+}
+
+function acpApprovalRisk(kind: string | null | undefined): RunApprovalRiskClass {
+  const normalized = kind?.toLowerCase();
+  if (['read', 'search', 'think'].includes(normalized ?? '')) return 'low';
+  if (['delete', 'execute', 'fetch'].includes(normalized ?? '')) return 'high';
+  return 'medium';
 }
 
 // Export singleton

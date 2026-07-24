@@ -1,11 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { Buffer } from 'node:buffer';
+import path from 'node:path';
 import { Ajv, type ValidateFunction } from 'ajv';
 import {
   RUN_TOOL_CATALOG_SCHEMA_VERSION,
   TOOL_DISCOVERY_SCHEMA_VERSION,
   TOOL_SERVER_DEFINITION_SCHEMA_VERSION,
   type ExecutableAgentProvider,
+  type AcpMcpServer,
   type RunToolCatalog,
   type RunToolCatalogEntry,
   type ToolInvocationRequest,
@@ -597,6 +599,56 @@ export class ToolControlPlaneService {
       config: { mcpServers: servers },
       allowedToolNames: allowedToolNames.sort(),
     };
+  }
+
+  async acpConfig(
+    catalog: RunToolCatalog,
+    environment: NodeJS.ProcessEnv = process.env
+  ): Promise<AcpMcpServer[]> {
+    const servers: AcpMcpServer[] = [];
+    for (const entry of catalog.entries.filter((candidate) => candidate.status === 'ready')) {
+      const restricted = entry.tools.filter((tool) => tool.decision !== 'allow');
+      if (restricted.length > 0) {
+        throw new ConflictError(
+          'ACP v1 cannot enforce a partially restricted native MCP tool catalog.',
+          {
+            serverId: entry.serverId,
+            restrictedTools: restricted.map((tool) => tool.name),
+            remediation:
+              'Use an all-allow server catalog or route calls through the Veritas tool bridge.',
+          }
+        );
+      }
+      const definition = await this.getCatalogDefinition(entry);
+      if (definition.transport.kind === 'stdio') {
+        if (!path.isAbsolute(definition.transport.command)) {
+          throw new ConflictError('ACP v1 requires an absolute stdio MCP server command.', {
+            serverId: entry.serverId,
+            command: definition.transport.command,
+          });
+        }
+        servers.push({
+          name: definition.displayName,
+          command: definition.transport.command,
+          args: definition.transport.args,
+          env: definition.transport.environmentKeys.flatMap((name) => {
+            const value = environment[name];
+            return typeof value === 'string' ? [{ name, value }] : [];
+          }),
+        });
+      } else {
+        servers.push({
+          type: 'http',
+          name: definition.displayName,
+          url: definition.transport.url,
+          headers: definition.transport.headers.flatMap((header) => {
+            const value = environment[header.environmentKey];
+            return typeof value === 'string' ? [{ name: header.name, value }] : [];
+          }),
+        });
+      }
+    }
+    return servers;
   }
 
   async environmentKeys(catalog: RunToolCatalog): Promise<string[]> {

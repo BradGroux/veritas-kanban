@@ -114,12 +114,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - `AgentProvider` union is the single definition consumed by both server and web.
   **Currently supported providers:**
   `openclaw` | `codex-cli` | `codex-sdk` | `codex-app-server` | `codex-cloud` |
-  `claude-code` | `hermes-cli` | `ollama-local` | `ollama-cloud` |
+  `claude-code` | `acp-stdio` | `hermes-cli` | `ollama-local` | `ollama-cloud` |
   `lm-studio-local` | `custom`
 - Executable task adapters are currently `openclaw`, `codex-cli`, `codex-sdk`,
-  `codex-app-server`, `claude-code`, and `hermes-cli`. Explicitly configured
-  providers outside that set must fail closed; never route them through an
-  implicit OpenClaw fallback.
+  `codex-app-server`, `claude-code`, `acp-stdio`, and `hermes-cli`. Explicitly
+  configured providers outside that set must fail closed; never route them
+  through an implicit OpenClaw fallback.
 - Probe and persist `provider-runtime-manifest/v1` before mutating attempt state.
   New runtime controls must use the persisted evidence instead of provider-name
   checks, and provider version/build changes must invalidate cached conformance.
@@ -214,6 +214,19 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   `dontAsk` permissions until its adapter exposes a pinned interactive
   request/response contract.
 
+### Agent Client Protocol (ACP v1)
+
+- Provider ID: `acp-stdio`. Configure the exact ACP agent command and arguments.
+- Veritas launches the agent without a shell in the task worktree and negotiates
+  stable ACP protocol version 1 before attempt mutation.
+- Capability evidence comes from `initialize`; resume/load, fork, and close fail
+  closed when the runtime does not advertise them.
+- `session/update` records enter the causal run journal.
+  `session/request_permission` uses the durable approval broker.
+- Only immutable all-allow MCP server catalogs can be passed natively because
+  ACP v1 has no per-tool allowlist. Partial catalogs fail closed.
+- See `docs/AGENT-PROVIDERS.md` § ACP stdio agent provider.
+
 ---
 
 ## Security boundaries
@@ -223,7 +236,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - **Path traversal.** `validatePathSegment()` + `ensureWithinBase()` on every user-supplied path.
 - **Env passthrough.** Agents receive only the keys in the configured safe allowlist; see
   `server/src/utils/codex-env.ts`, `server/src/utils/hermes-env.ts`, and
-  `server/src/services/claude-code-adapter.ts`.
+  `server/src/services/claude-code-adapter.ts` plus
+  `server/src/services/acp-stdio-adapter.ts`.
 - **Launch arguments.** Never put credential values in provider commands or arguments; use an
   allowlisted environment key or run-scoped brokered credential reference.
 - **Log redaction.** Trace logs and telemetry run through `TRACE_SECRET_PATTERNS` before storage.

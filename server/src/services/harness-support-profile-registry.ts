@@ -199,6 +199,7 @@ const PROVIDER_DEFINITIONS: Record<string, ProfileDefinition> = {
   'codex-sdk': DEFINITIONS['codex-sdk'],
   'codex-app-server': DEFINITIONS['codex-app-server'],
   'claude-code': DEFINITIONS['claude-code'],
+  'acp-stdio': executable('acp-stdio', 'ACP stdio agent', 'acp-stdio', 'acp', [], [], []),
   'hermes-cli': DEFINITIONS.hermes,
 };
 
@@ -258,7 +259,8 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
       ...(definition.transport === 'process-jsonl' ||
       definition.transport === 'process-text' ||
       definition.transport === 'sdk' ||
-      definition.transport === 'app-server'
+      definition.transport === 'app-server' ||
+      definition.transport === 'acp'
         ? PROCESS_ENVIRONMENT_ALLOWLIST
         : []),
       ...(definition.environmentAllowlist ?? []),

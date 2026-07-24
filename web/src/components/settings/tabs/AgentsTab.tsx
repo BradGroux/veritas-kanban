@@ -96,6 +96,7 @@ const AGENT_PROVIDER_OPTIONS: Array<{ value: AgentProvider | '__none__'; label: 
   { value: 'codex-sdk', label: 'Codex SDK' },
   { value: 'codex-app-server', label: 'Codex app-server' },
   { value: 'claude-code', label: 'Claude Code' },
+  { value: 'acp-stdio', label: 'ACP stdio agent' },
   { value: 'hermes-cli', label: 'Hermes Agent' },
   { value: 'codex-cloud', label: 'Codex Cloud' },
   { value: 'ollama-local', label: 'Ollama Local' },

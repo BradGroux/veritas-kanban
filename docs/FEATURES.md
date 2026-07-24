@@ -283,10 +283,10 @@ First-class support for autonomous coding agents.
 ![Agent provider settings](assets/v5/v5-agent-providers.png)
 
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
-- **Multi-agent support** — Ships with Codex CLI, Codex SDK, Codex app-server, Codex Cloud, Hermes Agent, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
+- **Multi-agent support** — Ships with Codex CLI, Codex SDK, Codex app-server, Codex Cloud, Hermes Agent, Claude Code, a generic ACP stdio provider, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
 - **Agent CRUD management** — Full Add/Edit/Remove for agents in Settings → Agents; add agent form with name, type slug (auto-generated), command, and args; inline edit via pencil icon; remove via trash icon with confirmation (blocked for the default agent); `AgentType` accepts any string slug, not just built-in names
 - **Agent request files** — Server writes structured requests to `.veritas-kanban/agent-requests/` for agent pickup
-- **Provider-owned task-envelope transports** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes each render the immutable task contract through an adapter-owned request with explicit commit policy, bounded attributed profile/checkpoint context, workspace baseline, verification gates, and completion evidence requirements
+- **Provider-owned task-envelope transports** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, ACP stdio, and Hermes each render the immutable task contract through an adapter-owned request with explicit commit policy, bounded attributed profile/checkpoint context, workspace baseline, verification gates, and completion evidence requirements
 - **Provider-specific completion posture** — OpenClaw receives an attempt-bound completion callback; Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes return terminal output through harness-supervised process or stream capture
 - **Multiple attempts** — Retry tasks with different agents; full attempt history preserved with status (pending, running, complete, failed)
 - **Attempt history viewer** — Browse past attempts with agent name, status, and log output
@@ -295,7 +295,7 @@ First-class support for autonomous coding agents.
 - **Agent status indicator** — Header-level indicator showing global agent state (idle, working, sub-agent mode with count)
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
-- **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
+- **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, ACP stdio, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
 - **Provider-native approval broker** — Provider requests pause on an exact action hash, persist a bounded workspace-scoped review record, and resume only after an authenticated compare-and-set approve/reject decision; expiry, interruption, cancellation, stale evidence, changed arguments, and duplicate decisions fail closed
 - **Run-scoped tool control plane** — Versioned MCP definitions and discovery,
   immutable per-attempt catalogs, required and optional server posture,
@@ -309,12 +309,16 @@ First-class support for autonomous coding agents.
   static sandbox-derived permissions, bounded JSONL event ingestion, session
   persistence, usage/cost telemetry, artifact discovery, deterministic health
   diagnostics, and fail-closed unsupported lifecycle controls
+- **ACP provider support** — Any conforming stable ACP v1 stdio agent can run as
+  an explicit provider with negotiated lifecycle capabilities, causal message,
+  plan, and tool events, durable approval brokering, supervised cancellation,
+  immutable launch evidence, and fail-closed run-scoped MCP injection
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
 - **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
-- **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
+- **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, ACP stdio, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
@@ -337,8 +341,10 @@ persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
 - Codex app-server receives only the run catalog through thread-scoped
   `mcp_servers`; Claude Code receives it through `--strict-mcp-config` and an
   exact MCP `--allowedTools` list.
-- Other providers reject a positive MCP catalog until they have a conforming
-  adapter.
+- ACP stdio sessions receive a native catalog only when every discovered tool
+  is allowed; partial catalogs fail closed because ACP v1 has no per-tool
+  filtering contract. Other providers reject a positive MCP catalog until they
+  have a conforming adapter.
 - Profile-wide named-tool policies still fail closed when a provider cannot
   constrain its built-in tools alongside MCP; prompt instructions do not count
   as enforcement.
@@ -408,7 +414,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 9,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 10,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this
