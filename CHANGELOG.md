@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed competing profile-editor and scorer-list scroll containers so Agent
   Output Scoring uses the application page scrollbar at compact and full
   desktop sizes (#938).
+- Expanded the template editor into a responsive authoring surface with one
+  bounded scroll region, fixed actions, a resizable Markdown editor, inline
+  validation, and unsaved-change protection (#941).
 
 ## [6.0.0] - 2026-07-24
 
