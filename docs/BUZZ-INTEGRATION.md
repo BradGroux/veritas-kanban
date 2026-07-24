@@ -11,6 +11,11 @@ Desktop's internal state. An operator may separately materialize selected
 public Buzz persona and team definitions as disabled Veritas profiles and
 roster members. Definition import is data-only and never starts a process.
 
+Task execution is a separate seam. A disabled-by-default `buzz-agent`
+configuration uses provider `acp-stdio` and the generic ACP client. It never
+turns relay delivery into task completion and never launches `buzz-acp`.
+See [Buzz Agent ACP](AGENT-PROVIDERS.md#buzz-agent-acp).
+
 ## Supported contract
 
 The adapter is fixture-pinned to:

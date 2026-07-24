@@ -230,6 +230,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   `session/request_permission` uses the durable approval broker.
 - Only immutable all-allow MCP server catalogs can be passed natively because
   ACP v1 has no per-tool allowlist. Partial catalogs fail closed.
+- The built-in `buzz-agent` profile remains provider `acp-stdio`, pins Buzz
+  `v0.4.24` at commit `710ed9fff57878a1d69f809b80a6ee0416c53fc4`, and rejects
+  `buzz-acp`, version drift, session loading, and network MCP claims.
 - See `docs/AGENT-PROVIDERS.md` § ACP stdio agent provider.
 
 ---

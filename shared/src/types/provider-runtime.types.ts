@@ -110,7 +110,7 @@ export interface HarnessSupportStatus {
 
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
-export const PROVIDER_RUNTIME_PROBE_REVISION = 10 as const;
+export const PROVIDER_RUNTIME_PROBE_REVISION = 11 as const;
 
 export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.start',

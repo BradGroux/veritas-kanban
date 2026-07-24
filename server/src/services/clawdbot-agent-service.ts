@@ -3908,15 +3908,17 @@ export class ClawdbotAgentService {
     if (!agentConfig) {
       throw new ConflictError('ACP runtime probe requires an explicit agent configuration.');
     }
+    const supportProfile = normalizeHarnessSupportProfile(agentConfig);
     const runtime = await probeAcpStdioRuntime({
       command: agentConfig.command,
       args: agentConfig.args,
       cwd: context.cwd ?? process.cwd(),
       environment: process.env,
       environmentKeys: [
-        ...(agentConfig.supportProfile?.launch.environmentAllowlist ?? []),
-        ...(agentConfig.supportProfile?.launch.credentialAllowlist ?? []),
+        ...supportProfile.launch.environmentAllowlist,
+        ...supportProfile.launch.credentialAllowlist,
       ],
+      runtimeProfileId: supportProfile.id,
     });
     const base = this.buildProviderRuntimeProbeRequest('acp-stdio', context, definition);
     const providerVersion = acpProviderVersion(runtime);
@@ -3932,6 +3934,12 @@ export class ClawdbotAgentService {
         diagnostics: [
           ...(base.identity.diagnostics ?? []),
           `ACP protocol ${runtime.protocolVersion} negotiated with ${runtime.agentInfo.name}.`,
+          ...(runtime.runtimeProfile
+            ? [
+                `ACP runtime profile ${runtime.runtimeProfile.id}@${runtime.runtimeProfile.revision} matches Buzz ${runtime.runtimeProfile.testedRelease} (${runtime.runtimeProfile.testedCommit}).`,
+                `Known limitations: ${runtime.runtimeProfile.limitations.join(', ')}.`,
+              ]
+            : []),
         ],
       },
       capabilities: negotiatedAcpCapabilities(definition.capabilities, runtime),
@@ -4040,6 +4048,7 @@ export class ClawdbotAgentService {
     if (!pending || pending.attemptId !== attemptId) {
       throw new ConflictError('ACP launch no longer matches the active attempt.');
     }
+    const supportProfile = normalizeHarnessSupportProfile(agentConfig);
     const runToolCatalog = runLaunchManifest.tools.catalogDigest
       ? await this.toolControlPlane.getRunCatalog(task.id, attemptId)
       : undefined;
@@ -4059,7 +4068,13 @@ export class ClawdbotAgentService {
       args: agentConfig.args,
       cwd: worktreePath,
       environment: process.env,
-      environmentKeys: [...(sandboxPolicy?.effective.envPassthrough ?? []), ...toolEnvironmentKeys],
+      environmentKeys: [
+        ...(sandboxPolicy?.effective.envPassthrough ?? []),
+        ...toolEnvironmentKeys,
+        ...supportProfile.launch.environmentAllowlist,
+        ...supportProfile.launch.credentialAllowlist,
+      ],
+      runtimeProfileId: supportProfile.id,
       onSpawn: async (child) => {
         pending.process = child;
         await this.attachSpawnedProcess(pending, child);
@@ -7894,7 +7909,7 @@ export class ClawdbotAgentService {
     budgetPolicy?: AgentBudgetPolicy,
     conversationRequest?: ConversationLaunchRequest
   ): RunLaunchRuntime {
-    const environment = this.buildRunLaunchEnvironment(provider, sandboxPolicy);
+    const environment = this.buildRunLaunchEnvironment(provider, sandboxPolicy, agentConfig);
     const runtimeBase = {
       ...(agentConfig?.model ? { model: agentConfig.model } : {}),
       workingDirectory: 'task-worktree' as const,
@@ -8035,7 +8050,8 @@ export class ClawdbotAgentService {
 
   private buildRunLaunchEnvironment(
     provider: ExecutableAgentProvider,
-    sandboxPolicy: SandboxPolicyDryRunResult
+    sandboxPolicy: SandboxPolicyDryRunResult,
+    agentConfig?: AgentConfig
   ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'> {
     if (provider === 'codex-cli' || provider === 'codex-sdk' || provider === 'codex-app-server') {
       const environmentKeys = Object.keys(
@@ -8081,11 +8097,24 @@ export class ClawdbotAgentService {
       };
     }
     if (provider === 'acp-stdio') {
+      const supportProfile = agentConfig ? normalizeHarnessSupportProfile(agentConfig) : undefined;
+      const profileEnvironmentKeys = [
+        ...(supportProfile?.launch.environmentAllowlist ?? []),
+        ...(supportProfile?.launch.credentialAllowlist ?? []),
+      ];
+      const environmentKeys = Object.keys(
+        buildSafeAcpEnv(process.env, [
+          ...sandboxPolicy.effective.envPassthrough,
+          ...profileEnvironmentKeys,
+        ])
+      );
+      const credentialKeys = new Set(supportProfile?.launch.credentialAllowlist ?? []);
       return {
-        environmentKeys: Object.keys(
-          buildSafeAcpEnv(process.env, sandboxPolicy.effective.envPassthrough)
-        ),
-        credentialReferences: [...sandboxPolicy.effective.credentialRefs],
+        environmentKeys,
+        credentialReferences: [
+          ...sandboxPolicy.effective.credentialRefs,
+          ...environmentKeys.filter((key) => credentialKeys.has(key)).map((key) => `env:${key}`),
+        ],
       };
     }
 
@@ -8282,7 +8311,9 @@ ${prompt}
 }
 
 function acpCapabilityBuild(probe: AcpRuntimeProbe): string {
-  return `acp-v1:${probe.capabilityDigest}`;
+  return probe.runtimeProfile
+    ? `acp-v1:${probe.capabilityDigest}:profile:${probe.runtimeProfile.id}@${probe.runtimeProfile.revision}:${probe.runtimeProfile.digest}`
+    : `acp-v1:${probe.capabilityDigest}`;
 }
 
 function acpProviderVersion(probe: AcpRuntimeProbe): string {

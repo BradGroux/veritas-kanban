@@ -115,6 +115,26 @@ describe('provider launch credential plan', () => {
     ]);
   });
 
+  it('classifies Buzz model authentication as profile boot authentication', () => {
+    const plan = compileProviderLaunchCredentialPlan({
+      provider: 'acp-stdio',
+      providerRuntimeManifest: providerRuntimeManifestFixture({ provider: 'acp-stdio' }),
+      runtime: runtime(['OPENAI_COMPAT_API_KEY']),
+      sandbox: sandbox(),
+      harnessProfileId: 'buzz-agent',
+    });
+
+    expect(plan.references).toEqual([
+      {
+        reference: 'env:OPENAI_COMPAT_API_KEY',
+        classification: 'harness-boot-authentication',
+        delivery: 'provider-native-environment',
+        boundary: 'provider-process',
+        risk: 'provider-required',
+      },
+    ]);
+  });
+
   it('fails task integration references closed until a controlled boundary is present', () => {
     const manifest = providerRuntimeManifestFixture({ provider: 'codex-cli' });
     const plan = compileProviderLaunchCredentialPlan({

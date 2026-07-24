@@ -154,6 +154,7 @@ export class RunLaunchManifestService {
       providerRuntimeManifest: providerRuntime,
       runtime,
       sandbox: input.sandboxPolicy,
+      harnessProfileId: input.harnessSupport.profileId,
     });
     const blockers = collectBlockers({
       input,

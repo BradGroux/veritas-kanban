@@ -112,7 +112,9 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
-- [Buzz Communication Adapter](docs/BUZZ-INTEGRATION.md) — signed Squad Chat bridging plus explicit, disabled-by-default persona/team definition import with provenance and safe refresh.
+- [Buzz Integration](docs/BUZZ-INTEGRATION.md) — signed Squad Chat bridging,
+  explicit persona/team import, and a separate disabled-by-default
+  `buzz-agent` profile under the generic ACP provider.
 - [Sprint Planning SOP](docs/SOP-sprint-planning.md) — epic → sprint → task breakdown.
 - [Multi-Agent Orchestration](docs/SOP-multi-agent-orchestration.md) — PM + worker handoffs.
 - [Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — enforce Claude ↔ GPT reviews.
@@ -248,6 +250,9 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery
 - **Squad Chat Webhook** — Configurable webhooks (generic HTTP or OpenClaw Direct) for external agent integration
 - **Buzz Communication Adapter** — Native signed root/reply bridge between one mapped Buzz community channel and Squad Chat, with durable replay, ambiguous-send reconciliation, and operator-confirmed persona/team definition materialization
+- **Buzz Agent ACP profile** — Generic ACP execution with pinned Buzz v0.4.24
+  identity/capability evidence, safe environment allowlists, and honest
+  no-resume and stdio-only MCP posture
 - **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status
 - **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators
 - **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips

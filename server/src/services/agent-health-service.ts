@@ -69,9 +69,10 @@ export class AgentHealthService implements AgentHealthChecker {
   async checkAgent(agent: AgentConfig): Promise<AgentHealthStatus> {
     const checkedAt = new Date().toISOString();
     const executable = await this.findExecutable(agent.command);
-    const version = executable.found
-      ? await this.probeProviderVersion(agent.command)
-      : { attempted: false };
+    const version =
+      executable.found && agent.provider !== 'acp-stdio'
+        ? await this.probeProviderVersion(agent.command)
+        : { attempted: false };
     const auth = executable.found ? await this.checkAuth(agent, version) : { authenticated: null };
     const reason = this.buildReason(agent, executable.found, auth.authenticated, auth.error);
 

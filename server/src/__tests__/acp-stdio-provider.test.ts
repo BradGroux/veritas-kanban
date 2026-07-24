@@ -1,8 +1,15 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { openAcpStdio, probeAcpStdioRuntime } from '../services/acp-stdio-adapter.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  BUZZ_AGENT_TESTED_COMMIT,
+  BUZZ_AGENT_TESTED_RELEASE,
+  openAcpStdio,
+  probeAcpStdioRuntime,
+} from '../services/acp-stdio-adapter.js';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import { AgentHealthService } from '../services/agent-health-service.js';
+import { normalizeHarnessSupportProfile } from '../services/harness-support-profile-registry.js';
 import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
 
 const FIXTURE_PATH = fileURLToPath(new URL('./fixtures/acp-v1-agent.mjs', import.meta.url));
@@ -50,7 +57,7 @@ describe('ACP v1 stdio provider adapter', () => {
       protocolVersion: 'acp/v1',
       providerVersion: 'VK ACP fixture 1.3.0',
       providerBuild: expect.stringMatching(/^acp-v1:sha256:[a-f0-9]{64}$/),
-      probeRevision: 10,
+      probeRevision: 11,
     });
     expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
       'supported'
@@ -58,6 +65,98 @@ describe('ACP v1 stdio provider adapter', () => {
     expect(manifest.capabilities.find((capability) => capability.id === 'run.fork')?.state).toBe(
       'supported'
     );
+  });
+
+  it('recognizes the pinned Buzz agent profile without creating a Buzz provider', async () => {
+    const agent = {
+      type: 'buzz-agent',
+      name: 'Buzz Agent',
+      command: process.execPath,
+      args: [FIXTURE_PATH, 'buzz'],
+      enabled: true,
+      provider: 'acp-stdio' as const,
+    };
+    const supportProfile = normalizeHarnessSupportProfile(agent);
+    expect(supportProfile).toMatchObject({
+      id: 'buzz-agent',
+      adapterId: 'acp-stdio',
+      transport: 'acp',
+      executable: { versionArgs: [] },
+      compatibility: { testedVersions: ['buzz-agent 0.1.0'] },
+    });
+
+    const service = new ClawdbotAgentService({
+      async checkAgent() {
+        return {
+          type: agent.type,
+          name: agent.name,
+          enabled: true,
+          configured: true,
+          command: agent.command,
+          executableFound: true,
+          executablePath: process.execPath,
+          authenticated: null,
+          healthy: true,
+          checkedAt: '2026-07-24T12:00:00.000Z',
+        };
+      },
+    });
+    const manifest = await service.probeProviderRuntime(agent);
+
+    expect(manifest).toMatchObject({
+      provider: 'acp-stdio',
+      adapter: 'acp-stdio',
+      providerVersion: 'buzz-agent 0.1.0',
+      providerBuild: expect.stringMatching(/profile:buzz-agent@1:sha256:/),
+      probeRevision: 11,
+      probe: {
+        diagnostics: expect.arrayContaining([
+          expect.stringContaining(BUZZ_AGENT_TESTED_RELEASE),
+          expect.stringContaining(BUZZ_AGENT_TESTED_COMMIT),
+        ]),
+      },
+    });
+    expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
+      'unsupported'
+    );
+  });
+
+  it('fails Buzz profile identity and version mismatches closed', async () => {
+    await expect(
+      probeAcpStdioRuntime({
+        ...options('buzz-wrong-name'),
+        runtimeProfileId: 'buzz-agent',
+      })
+    ).rejects.toThrow(/outside the tested compatibility profile/i);
+    await expect(
+      probeAcpStdioRuntime({
+        ...options('buzz-wrong-version'),
+        runtimeProfileId: 'buzz-agent',
+      })
+    ).rejects.toThrow(/outside the tested compatibility profile/i);
+  });
+
+  it('uses ACP initialize instead of a hanging buzz-agent --version health probe', async () => {
+    const runCommand = vi.fn(async (command: string) => {
+      if (command === 'which') return { stdout: '/usr/local/bin/buzz-agent\n', stderr: '' };
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    const health = await new AgentHealthService(runCommand).checkAgent({
+      type: 'buzz-agent',
+      name: 'Buzz Agent',
+      command: 'buzz-agent',
+      args: [],
+      enabled: true,
+      provider: 'acp-stdio',
+    });
+
+    expect(health).toMatchObject({
+      executableFound: true,
+      providerVersion: undefined,
+      authenticated: null,
+      healthy: true,
+    });
+    expect(runCommand).toHaveBeenCalledTimes(1);
   });
 
   it('negotiates, prompts, streams tool updates, and resolves permission requests', async () => {

@@ -3,6 +3,7 @@ import readline from 'node:readline';
 
 // Stable ACP v1 fixture aligned with @agentclientprotocol/sdk 1.3.0.
 const mode = process.argv[2] ?? 'complete';
+const buzzMode = mode.startsWith('buzz');
 const lines = readline.createInterface({ input: process.stdin });
 let activeSessionId;
 let pendingPromptId;
@@ -24,15 +25,29 @@ lines.on('line', (line) => {
     }
     result(record.id, {
       protocolVersion: 1,
-      agentCapabilities:
-        mode === 'no-resume'
+      agentCapabilities: buzzMode
+        ? {
+            loadSession: false,
+            promptCapabilities: { image: false, audio: false, embeddedContext: false },
+            mcpCapabilities: { http: false, sse: false },
+          }
+        : mode === 'no-resume'
           ? { loadSession: false, sessionCapabilities: {} }
           : {
               loadSession: true,
               mcpCapabilities: { http: true, sse: true },
               sessionCapabilities: { resume: {}, fork: {}, close: {} },
             },
-      ...(mode === 'no-info' ? {} : { agentInfo: { name: 'VK ACP fixture', version: '1.3.0' } }),
+      ...(mode === 'no-info'
+        ? {}
+        : {
+            agentInfo: buzzMode
+              ? {
+                  name: mode === 'buzz-wrong-name' ? 'buzz-acp' : 'buzz-agent',
+                  version: mode === 'buzz-wrong-version' ? '0.2.0' : '0.1.0',
+                }
+              : { name: 'VK ACP fixture', version: '1.3.0' },
+          }),
     });
     return;
   }

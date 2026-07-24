@@ -97,6 +97,14 @@ const DEFAULT_CONFIG: AppConfig = {
       provider: 'hermes-cli',
     },
     {
+      type: 'buzz-agent',
+      name: 'Buzz Agent',
+      command: 'buzz-agent',
+      args: [],
+      enabled: false,
+      provider: 'acp-stdio',
+    },
+    {
       type: 'ollama-local',
       name: 'Ollama Local',
       command: 'ollama',
