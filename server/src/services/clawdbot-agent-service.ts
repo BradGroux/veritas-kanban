@@ -99,6 +99,9 @@ import type {
   CredentialLeaseTerminalReason,
   RunEventEnvelope,
   RunEventKind,
+  RunSupervisorRecord,
+  RunSupervisorRecoveryRecord,
+  RunSupervisorRecoveryOperation,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -175,6 +178,7 @@ import {
   getRunApprovalBrokerService,
   type RunApprovalBrokerService,
 } from './run-approval-broker-service.js';
+import { getRunSupervisorService, type RunSupervisorService } from './run-supervisor-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -307,6 +311,8 @@ interface PendingAgent {
   runLaunchManifestTraceId: string;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  supervisorId?: string;
+  recoveredControl?: boolean;
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
@@ -355,6 +361,7 @@ const pendingAgents = new Map<string, PendingAgent>();
 const startingAgents = new Set<string>();
 const finalizingAgents = new Map<PendingAgent, Promise<void>>();
 const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
+const recoveredProcessMonitors = new Map<string, NodeJS.Timeout>();
 const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
 const NOOP_CREDENTIAL_LEASE_LIFECYCLE: CredentialLeaseLifecycle = {
   async revokeRun() {
@@ -400,6 +407,7 @@ export class ClawdbotAgentService {
   private worktrees: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>;
   private runEvents: RunEventJournalService;
   private approvalBroker: RunApprovalBrokerService;
+  private runSupervisor: RunSupervisorService;
   private logsDir: string;
 
   constructor(
@@ -411,7 +419,8 @@ export class ClawdbotAgentService {
     credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE,
     worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>,
     runEvents: RunEventJournalService = getRunEventJournalService(),
-    approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService()
+    approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService(),
+    runSupervisor: RunSupervisorService = getRunSupervisorService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -430,6 +439,7 @@ export class ClawdbotAgentService {
       });
     this.runEvents = runEvents;
     this.approvalBroker = approvalBroker;
+    this.runSupervisor = runSupervisor;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -462,65 +472,187 @@ export class ClawdbotAgentService {
       return;
     }
 
-    let reconciledCount = 0;
+    let recoveredCount = 0;
+    let recoveryRequiredCount = 0;
 
     for (const task of tasks) {
       if (!task.attempt || task.attempt.status !== 'running') continue;
-      // If there is already a live in-memory entry, leave it alone.
       if (pendingAgents.has(task.id)) continue;
 
       try {
-        if (task.attempt.taskEnvelope) {
-          this.assertPersistedAttemptCompletionBinding(task.id, task.attempt);
-          if (task.attempt.provider === 'openclaw') {
-            log.info(
-              { taskId: task.id, attemptId: task.attempt.id },
-              '[ClawdbotAgent] Deferred OpenClaw restart reconciliation to its callback terminal path'
-            );
-            continue;
-          }
+        const attempt = task.attempt;
+        if (
+          !attempt.taskEnvelope ||
+          !attempt.runLaunchManifest ||
+          !attempt.providerRuntimeManifest ||
+          !attempt.harnessSupport
+        ) {
           const claim: ProviderTerminalClaim = {
             terminalSource: 'operator-interruption',
             status: 'interrupted',
-            summary: 'Server restarted before the provider terminal result could be persisted.',
+            summary:
+              'Legacy running attempt has no durable supervisor bindings and cannot be recovered safely.',
           };
-          await this.persistRestartedProviderCompletion(
-            task,
-            task.attempt,
-            claim,
-            this.providerCompletions.idempotencyKey({
-              taskEnvelope: task.attempt.taskEnvelope,
+          if (attempt.taskEnvelope && attempt.providerRuntimeManifest) {
+            await this.persistRestartedProviderCompletion(
+              task,
+              attempt,
               claim,
-            }),
-            { preserveNonActiveTaskStatus: true }
-          );
-          log.info(
-            { taskId: task.id, attemptId: task.attempt.id },
-            '[ClawdbotAgent] Reconciled orphaned running attempt with an interrupted completion result'
-          );
-          reconciledCount++;
+              this.providerCompletions.idempotencyKey({
+                taskEnvelope: attempt.taskEnvelope,
+                claim,
+              }),
+              { preserveNonActiveTaskStatus: true }
+            );
+          } else {
+            const failedAttempt: TaskAttempt = {
+              ...attempt,
+              status: 'failed',
+              ended: new Date().toISOString(),
+            };
+            await this.taskService.updateTask(task.id, {
+              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+              attempt: failedAttempt,
+              attempts: upsertAttemptHistory(task.attempts, failedAttempt),
+            });
+          }
+          recoveryRequiredCount += 1;
           continue;
         }
 
-        const now = new Date().toISOString();
-        const failedAttempt: TaskAttempt = {
-          ...task.attempt,
-          status: 'failed',
-          ended: now,
+        this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+        const provider = executableProvider(attempt.provider);
+        if (provider === 'system') {
+          throw new CompletionOwnershipError('Persisted attempt has no executable provider.', {
+            taskId: task.id,
+            attemptId: attempt.id,
+          });
+        }
+        let supervisor = await this.runSupervisor.findByAttempt(
+          attempt.taskEnvelope.workspace.workspaceId,
+          task.id,
+          attempt.id
+        );
+        let recovery: Awaited<ReturnType<RunSupervisorService['recover']>>;
+        if (!supervisor) {
+          const recoveryOperations = providerRuntimeControls(attempt.providerRuntimeManifest)
+            .controls.filter(
+              (control) =>
+                control.available &&
+                ['status', 'stop', 'reattach', 'resume'].includes(control.action)
+            )
+            .map((control) => control.action as RunSupervisorRecoveryOperation);
+          supervisor = await this.runSupervisor.register({
+            workspaceId: attempt.taskEnvelope.workspace.workspaceId,
+            taskId: task.id,
+            attemptId: attempt.id,
+            provider,
+            adapter: attempt.providerRuntimeManifest.adapter,
+            providerVersion: attempt.providerRuntimeManifest.providerVersion,
+            providerRuntimeManifestDigest: attempt.providerRuntimeManifest.digest,
+            taskEnvelopeDigest: attempt.taskEnvelope.digest,
+            runLaunchManifestDigest: attempt.runLaunchManifest.digest,
+            worktreePath: attempt.taskEnvelope.workspace.worktreePath,
+            worktreeManifestId: attempt.taskEnvelope.workspace.worktreeManifestId,
+            worktreeLeaseId: attempt.taskEnvelope.workspace.ownershipLeaseId,
+            recoveryOperations,
+            budget: attempt.budget,
+          });
+          supervisor = await this.runSupervisor.requireRecovery(
+            supervisor.id,
+            'supervisor-record-missing',
+            'The running attempt predates its durable supervisor record.',
+            'Verify that no provider process or remote session remains, then launch a new attempt.'
+          );
+          recovery = { outcome: 'recovery-required', record: supervisor };
+        } else {
+          recovery = await this.runSupervisor.recover(supervisor.id, {
+            provider,
+            adapter: attempt.providerRuntimeManifest.adapter,
+            providerRuntimeManifestDigest: attempt.providerRuntimeManifest.digest,
+            taskEnvelopeDigest: attempt.taskEnvelope.digest,
+            runLaunchManifestDigest: attempt.runLaunchManifest.digest,
+            worktreePath: attempt.taskEnvelope.workspace.worktreePath,
+            worktreeManifestId: attempt.taskEnvelope.workspace.worktreeManifestId,
+            worktreeLeaseId: attempt.taskEnvelope.workspace.ownershipLeaseId,
+          });
+        }
+        if (recovery.outcome === 'lease-held') {
+          log.info(
+            { taskId: task.id, attemptId: attempt.id, supervisorId: supervisor.id },
+            'Skipped run recovery because another live supervisor owns the lease'
+          );
+          continue;
+        }
+        if (recovery.outcome === 'reattached') {
+          await this.restoreRecoveredRun(task, attempt, recovery.record);
+          recoveredCount += 1;
+          continue;
+        }
+        if (recovery.outcome === 'terminal') {
+          if (recovery.record.terminal?.completionResult) {
+            await this.persistSupervisorCompletion(
+              task,
+              attempt,
+              recovery.record.terminal.completionResult
+            );
+            recoveredCount += 1;
+          } else {
+            const runRecovery: RunSupervisorRecoveryRecord = {
+              code: 'terminal-result-missing',
+              detail: 'The supervisor is terminal but has no durable normalized completion result.',
+              nextAction:
+                'Inspect the terminal run event and provider log, then resolve the attempt manually.',
+              recordedAt: new Date().toISOString(),
+            };
+            const recoveredAttempt: TaskAttempt = {
+              ...attempt,
+              runSupervisorId: recovery.record.id,
+              runRecovery,
+            };
+            await this.taskService.updateTask(task.id, {
+              expectedRevision: normalizedTaskRevision(task),
+              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+              attempt: recoveredAttempt,
+              attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+            });
+            recoveryRequiredCount += 1;
+          }
+          continue;
+        }
+
+        const runRecovery = recovery.recovery ?? recovery.record.recovery;
+        await this.appendRunEvent(
+          task.id,
+          attempt.id,
+          'run.recovered',
+          {
+            status: 'recovery-required',
+            recoveryCode: runRecovery?.code,
+            summary: runRecovery?.detail,
+            nextAction: runRecovery?.nextAction,
+            lastEventSequence: recovery.record.lastEventSequence,
+          },
+          {
+            provider,
+            adapter: attempt.providerRuntimeManifest.adapter,
+            agent: attempt.agent,
+            model: attempt.model,
+            dedupeKey: `run.recovery-required:${recovery.record.revision}`,
+          }
+        );
+        const recoveredAttempt: TaskAttempt = {
+          ...attempt,
+          runSupervisorId: recovery.record.id,
+          runRecovery,
         };
         await this.taskService.updateTask(task.id, {
-          // Only revert task status if it is still 'in-progress' from this run.
-          // Tasks in other states (blocked, done, todo, etc.) keep their status;
-          // we only fix the orphaned attempt record.
-          ...(task.status === 'in-progress' ? { status: 'todo' } : {}),
-          attempt: failedAttempt,
-          attempts: upsertAttemptHistory(task.attempts, failedAttempt),
+          expectedRevision: normalizedTaskRevision(task),
+          ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+          attempt: recoveredAttempt,
+          attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
         });
-        log.info(
-          { taskId: task.id, attemptId: task.attempt.id },
-          '[ClawdbotAgent] Reconciled orphaned running attempt as failed after restart'
-        );
-        reconciledCount++;
+        recoveryRequiredCount += 1;
       } catch (err) {
         log.warn(
           { err, taskId: task.id },
@@ -529,12 +661,169 @@ export class ClawdbotAgentService {
       }
     }
 
-    if (reconciledCount > 0) {
+    if (recoveredCount > 0 || recoveryRequiredCount > 0) {
       log.info(
-        { count: reconciledCount },
-        '[ClawdbotAgent] Startup reconciliation complete: orphaned running attempts marked failed'
+        { recoveredCount, recoveryRequiredCount },
+        '[ClawdbotAgent] Durable run supervisor startup reconciliation complete'
       );
     }
+  }
+
+  private async restoreRecoveredRun(
+    task: Task,
+    attempt: TaskAttempt,
+    supervisor: RunSupervisorRecord
+  ): Promise<void> {
+    if (
+      !attempt.providerRuntimeManifest ||
+      !attempt.harnessSupport ||
+      !attempt.taskEnvelope ||
+      !attempt.runLaunchManifest
+    ) {
+      throw new CompletionOwnershipError('Recovered attempt is missing immutable run evidence.', {
+        taskId: task.id,
+        attemptId: attempt.id,
+      });
+    }
+    const provider = executableProvider(attempt.provider);
+    if (provider === 'system') {
+      throw new CompletionOwnershipError('Recovered attempt has no executable provider.', {
+        taskId: task.id,
+        attemptId: attempt.id,
+      });
+    }
+    const sessionId =
+      supervisor.control.kind === 'remote-session'
+        ? supervisor.control.sessionId
+        : supervisor.control.kind === 'local-process'
+          ? supervisor.control.sessionId
+          : undefined;
+    const pending: PendingAgent = {
+      taskId: task.id,
+      attemptId: attempt.id,
+      agent: attempt.agent,
+      startedAt: attempt.started ?? supervisor.createdAt,
+      emitter: new EventEmitter(),
+      provider,
+      model: attempt.model,
+      budget: supervisor.budget ?? attempt.budget,
+      agentProfile: attempt.agentProfile,
+      providerRuntimeManifest: attempt.providerRuntimeManifest,
+      harnessSupport: attempt.harnessSupport,
+      taskEnvelope: attempt.taskEnvelope,
+      runLaunchManifest: attempt.runLaunchManifest,
+      runLaunchManifestTraceId:
+        attempt.runLaunchManifestTraceId ?? `run-supervisor:${supervisor.id}`,
+      runLaunchParentAttemptId: attempt.runLaunchParentAttemptId,
+      runLaunchManifestDrift: attempt.runLaunchManifestDrift,
+      supervisorId: supervisor.id,
+      recoveredControl: true,
+      threadId: attempt.threadId ?? sessionId,
+      openclawSessionKey: provider === 'openclaw' ? (attempt.sessionKey ?? sessionId) : undefined,
+      hermesSessionId: provider === 'hermes-cli' ? sessionId : undefined,
+    };
+    pendingAgents.set(task.id, pending);
+    try {
+      await this.reconcileRecoveredRunCursor(task.id, attempt.id, supervisor);
+      await this.appendRunEvent(
+        task.id,
+        attempt.id,
+        'run.recovered',
+        {
+          status: 'reattached',
+          supervisorId: supervisor.id,
+          controlKind: supervisor.control.kind,
+          lastEventSequence: supervisor.lastEventSequence,
+          summary: 'Durable run control was reattached after server restart.',
+        },
+        {
+          provider,
+          adapter: attempt.providerRuntimeManifest.adapter,
+          agent: attempt.agent,
+          model: attempt.model,
+          dedupeKey: `run.reattached:${supervisor.revision}`,
+        }
+      );
+      if (supervisor.control.kind === 'local-process') {
+        this.monitorRecoveredProcess(task.id, pending, supervisor);
+      }
+    } catch (error) {
+      this.clearRecoveredProcessMonitor(task.id);
+      pendingAgents.delete(task.id);
+      throw error;
+    }
+  }
+
+  private async reconcileRecoveredRunCursor(
+    taskId: string,
+    attemptId: string,
+    supervisor: RunSupervisorRecord
+  ): Promise<void> {
+    let cursor = supervisor.lastEventSequence;
+    for (;;) {
+      const pageStart = cursor;
+      const page = await this.runEvents.list({
+        taskId,
+        attemptId,
+        afterSequence: cursor,
+        limit: 500,
+      });
+      for (const event of page.events) cursor = Math.max(cursor, event.sequence);
+      if (!page.hasMore) break;
+      if (cursor === pageStart) {
+        throw new Error('Run event journal pagination did not advance during recovery.');
+      }
+    }
+    if (cursor > supervisor.lastEventSequence) {
+      await this.runSupervisor.checkpoint(supervisor.id, {
+        lastEventSequence: cursor,
+      });
+    }
+  }
+
+  private monitorRecoveredProcess(
+    taskId: string,
+    pending: PendingAgent,
+    supervisor: RunSupervisorRecord
+  ): void {
+    this.clearRecoveredProcessMonitor(taskId);
+    let checking = false;
+    const timer = setInterval(() => {
+      if (checking) return;
+      if (pendingAgents.get(taskId) !== pending) {
+        this.clearRecoveredProcessMonitor(taskId);
+        return;
+      }
+      if (this.runSupervisor.isLocalProcessAlive(supervisor)) return;
+      checking = true;
+      this.clearRecoveredProcessMonitor(taskId);
+      void (async () => {
+        await this.runSupervisor.requireRecovery(
+          supervisor.id,
+          'process-exited',
+          'The reattached provider process exited without a recoverable terminal stream.',
+          'Review output through the last durable event cursor and launch a new attempt if work remains.'
+        );
+        await this.finalizePendingAgent(taskId, pending, async () => ({
+          status: 'interrupted',
+          terminalSource: 'process',
+          error: 'Recovered provider process exited without a recoverable terminal result.',
+        }));
+      })().catch((error) => {
+        log.error(
+          { err: error, taskId, attemptId: pending.attemptId, supervisorId: supervisor.id },
+          'Failed to finalize a recovered provider process after exit'
+        );
+      });
+    }, 1_000);
+    timer.unref();
+    recoveredProcessMonitors.set(taskId, timer);
+  }
+
+  private clearRecoveredProcessMonitor(taskId: string): void {
+    const timer = recoveredProcessMonitors.get(taskId);
+    if (timer) clearInterval(timer);
+    recoveredProcessMonitors.delete(taskId);
   }
 
   private expandPath(p: string): string {
@@ -1079,7 +1368,43 @@ export class ClawdbotAgentService {
     }
 
     const telemetry = getTelemetryService();
+    let supervisorId: string | undefined;
     try {
+      const recoveryOperations = providerRuntimeControls(providerRuntimeManifest)
+        .controls.filter(
+          (control) =>
+            control.available && ['status', 'stop', 'reattach', 'resume'].includes(control.action)
+        )
+        .map((control) => control.action as RunSupervisorRecoveryOperation);
+      const supervisor = await this.runSupervisor.register({
+        workspaceId: taskEnvelope.workspace.workspaceId,
+        taskId,
+        attemptId,
+        provider,
+        adapter: adapter.id,
+        providerVersion: providerRuntimeManifest.providerVersion,
+        providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+        taskEnvelopeDigest: taskEnvelope.digest,
+        runLaunchManifestDigest: runLaunchManifest.digest,
+        worktreePath: taskEnvelope.workspace.worktreePath,
+        worktreeManifestId: taskEnvelope.workspace.worktreeManifestId,
+        worktreeLeaseId: taskEnvelope.workspace.ownershipLeaseId,
+        recoveryOperations,
+        budget: pendingAgents.get(taskId)?.budget,
+      });
+      supervisorId = supervisor.id;
+      const pending = pendingAgents.get(taskId);
+      if (!pending || pending.attemptId !== attemptId) {
+        throw new ConflictError('Run supervisor no longer matches the pending launch.', {
+          taskId,
+          attemptId,
+          supervisorId,
+        });
+      }
+      pending.supervisorId = supervisorId;
+      await this.taskService.patchTaskAttempt(taskId, attemptId, {
+        runSupervisorId: supervisorId,
+      });
       await this.appendRunEvent(
         taskId,
         attemptId,
@@ -1186,6 +1511,20 @@ export class ClawdbotAgentService {
           failedAttempt
         ),
       });
+      if (supervisorId) {
+        await this.runSupervisor
+          .markTerminal(
+            supervisorId,
+            'failed',
+            this.redactTraceText(startError.message || `Failed to start ${adapter.label}`)
+          )
+          .catch((supervisorError) => {
+            log.error(
+              { err: supervisorError, taskId, attemptId, supervisorId },
+              'Failed to mark the durable run supervisor after launch failure'
+            );
+          });
+      }
       await telemetry.emit<RunErrorEvent>({
         type: 'run.error',
         taskId,
@@ -1521,6 +1860,90 @@ export class ClawdbotAgentService {
     }
   }
 
+  private async persistSupervisorCompletion(
+    task: Task,
+    attempt: TaskAttempt,
+    value: CompletionResult
+  ): Promise<void> {
+    if (!attempt.taskEnvelope) {
+      throw new CompletionOwnershipError('Durable supervisor completion has no task envelope.', {
+        taskId: task.id,
+        attemptId: attempt.id,
+      });
+    }
+    this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+    const completionResult = parseCompletionResultForEnvelope(value, attempt.taskEnvelope);
+    const completedAttempt: TaskAttempt = {
+      ...attempt,
+      status: completionResult.status === 'success' ? 'complete' : 'failed',
+      ended: completionResult.completedAt,
+      completionResult,
+      runRecovery: undefined,
+    };
+    let taskSnapshot = task;
+    let lastError: unknown;
+    for (
+      let persistenceAttempt = 1;
+      persistenceAttempt <= COMPLETION_PERSISTENCE_ATTEMPTS;
+      persistenceAttempt++
+    ) {
+      try {
+        const updatedTask = await this.taskService.updateTask(task.id, {
+          expectedRevision: normalizedTaskRevision(taskSnapshot),
+          status: taskStatusForCompletion(completionResult.status),
+          attempt: completedAttempt,
+          attempts: upsertAttemptHistory(taskSnapshot.attempts, completedAttempt),
+        });
+        if (!updatedTask) {
+          throw new CompletionOwnershipError(
+            'Task was archived or deleted before supervisor completion could be persisted.',
+            { taskId: task.id, attemptId: attempt.id }
+          );
+        }
+        lastError = undefined;
+        break;
+      } catch (error) {
+        if (error instanceof CompletionOwnershipError) throw error;
+        lastError = error;
+        const latestTask = await this.taskService.getTask(task.id);
+        if (latestTask?.attempt?.id !== attempt.id) throw error;
+        this.assertCompletionRetryBinding(task.id, completedAttempt, latestTask.attempt);
+        if (latestTask.attempt.completionResult) {
+          const persisted = this.parsePersistedCompletion(latestTask.attempt);
+          if (persisted.idempotencyKey === completionResult.idempotencyKey) {
+            lastError = undefined;
+            break;
+          }
+          throw new CompletionOwnershipError(
+            'A different terminal result already owns this attempt.',
+            {
+              taskId: task.id,
+              attemptId: attempt.id,
+              persistedIdempotencyKey: persisted.idempotencyKey,
+              completionIdempotencyKey: completionResult.idempotencyKey,
+            }
+          );
+        }
+        taskSnapshot = latestTask;
+      }
+    }
+    if (lastError) throw lastError;
+    await this.revokeRunCredentialLeases(
+      task.id,
+      attempt.id,
+      completionResult.status,
+      attempt.runLaunchManifest?.digest
+    );
+    if (attempt.taskEnvelope.workspace.worktreeManifestId) {
+      await this.worktrees.releaseOwnership(task.id, attempt.id).catch((error) => {
+        log.error(
+          { err: error, taskId: task.id, attemptId: attempt.id },
+          'Failed to release worktree ownership after supervisor completion recovery'
+        );
+      });
+    }
+  }
+
   private async persistRestartedProviderCompletion(
     task: Task,
     attempt: TaskAttempt,
@@ -1602,6 +2025,24 @@ export class ClawdbotAgentService {
         dedupeKey: `run.terminal:${completionResult.idempotencyKey}`,
       }
     );
+    const supervisor = await this.runSupervisor.findByAttempt(
+      attempt.taskEnvelope.workspace.workspaceId,
+      task.id,
+      attempt.id
+    );
+    if (supervisor) {
+      await this.runSupervisor.markTerminal(
+        supervisor.id,
+        completionResult.status === 'success'
+          ? 'completed'
+          : completionResult.status === 'interrupted'
+            ? 'interrupted'
+            : 'failed',
+        completionResult.summary,
+        completionResult.idempotencyKey,
+        completionResult
+      );
+    }
     let taskSnapshot = task;
     let lastError: unknown;
     for (
@@ -1843,6 +2284,7 @@ export class ClawdbotAgentService {
           harnessSupport: pending.harnessSupport,
           taskEnvelope: pending.taskEnvelope,
           runLaunchManifest: pending.runLaunchManifest,
+          runSupervisorId: pending.supervisorId,
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
@@ -1899,10 +2341,24 @@ export class ClawdbotAgentService {
         dedupeKey: `run.terminal:${completionResult.idempotencyKey}`,
       }
     );
+    if (pending.supervisorId) {
+      await this.runSupervisor.markTerminal(
+        pending.supervisorId,
+        completionResult.status === 'success'
+          ? 'completed'
+          : completionResult.status === 'interrupted'
+            ? 'interrupted'
+            : 'failed',
+        completionResult.summary,
+        completionResult.idempotencyKey,
+        completionResult
+      );
+    }
     const persistedHere = await this.persistPendingCompletion(taskId, pending, preparedCompletion);
     if (pendingAgents.get(taskId) === pending) {
       pendingAgents.delete(taskId);
     }
+    this.clearRecoveredProcessMonitor(taskId);
     if (!persistedHere) return;
 
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
@@ -2119,7 +2575,22 @@ export class ClawdbotAgentService {
 
     await this.finalizePendingAgent(taskId, pending, async () => {
       await this.assertPendingRunControl(taskId, pending, 'stop');
-      await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+      if (pending.recoveredControl && pending.supervisorId) {
+        const supervisor = await this.runSupervisor.get(pending.supervisorId);
+        if (supervisor.control.kind === 'local-process') {
+          await this.runSupervisor.stopLocalProcess(pending.supervisorId);
+        } else {
+          await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+        }
+      } else {
+        await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+        if (pending.supervisorId) {
+          const supervisor = await this.runSupervisor.get(pending.supervisorId);
+          if (supervisor.control.kind === 'local-process') {
+            await this.runSupervisor.stopLocalProcess(pending.supervisorId);
+          }
+        }
+      }
       await this.appendRunEvent(
         taskId,
         pending.attemptId,
@@ -2546,7 +3017,7 @@ export class ClawdbotAgentService {
         renderTaskEnvelope: renderCodexCliTaskEnvelope,
         probe,
         runEventMapper: getProviderRunEventMapper(provider),
-        start: ({
+        start: async ({
           task,
           agentConfig,
           transport,
@@ -2558,7 +3029,7 @@ export class ClawdbotAgentService {
           runLaunchManifest,
         }) => {
           this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          this.startCodexCli(
+          await this.startCodexCli(
             task,
             agentConfig,
             transport.content,
@@ -2582,7 +3053,7 @@ export class ClawdbotAgentService {
         renderTaskEnvelope: renderCodexSdkTaskEnvelope,
         probe,
         runEventMapper: getProviderRunEventMapper(provider),
-        start: ({
+        start: async ({
           task,
           agentConfig,
           transport,
@@ -2687,7 +3158,7 @@ export class ClawdbotAgentService {
         renderTaskEnvelope: renderCodexAppServerTaskEnvelope,
         probe,
         runEventMapper: getProviderRunEventMapper(provider),
-        start: ({
+        start: async ({
           task,
           agentConfig,
           transport,
@@ -2699,7 +3170,7 @@ export class ClawdbotAgentService {
           runLaunchManifest,
         }) => {
           this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          this.startCodexAppServer(
+          await this.startCodexAppServer(
             task,
             agentConfig,
             transport.content,
@@ -2787,7 +3258,7 @@ export class ClawdbotAgentService {
         renderTaskEnvelope: renderHermesTaskEnvelope,
         probe,
         runEventMapper: getProviderRunEventMapper(provider),
-        start: ({
+        start: async ({
           task,
           agentConfig,
           transport,
@@ -2799,7 +3270,7 @@ export class ClawdbotAgentService {
           runLaunchManifest,
         }) => {
           this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          this.startHermesCli(
+          await this.startHermesCli(
             task,
             agentConfig,
             transport.content,
@@ -2861,9 +3332,14 @@ export class ClawdbotAgentService {
           agentConfig
         );
         const pending = pendingAgents.get(task.id);
-        if (pending) {
-          pending.openclawSessionKey = result.sessionKey;
+        if (!pending || pending.attemptId !== attemptId || !pending.supervisorId) {
+          throw new ConflictError('OpenClaw session has no durable run supervisor binding.', {
+            taskId: task.id,
+            attemptId,
+          });
         }
+        pending.openclawSessionKey = result.sessionKey;
+        await this.runSupervisor.attachRemoteSession(pending.supervisorId, result.sessionKey);
         log.info(
           { taskId: task.id, attemptId, sessionKey: result.sessionKey },
           '[ClawdbotAgent] OpenClaw session spawned via gateway'
@@ -2990,7 +3466,32 @@ export class ClawdbotAgentService {
     };
   }
 
-  private startCodexAppServer(
+  private async attachSpawnedProcess(
+    pending: PendingAgent,
+    child: ChildProcessWithoutNullStreams
+  ): Promise<void> {
+    if (!pending.supervisorId || !child.pid) {
+      child.kill('SIGTERM');
+      throw new ConflictError('Provider process has no durable run supervisor binding.', {
+        taskId: pending.taskId,
+        attemptId: pending.attemptId,
+        supervisorId: pending.supervisorId,
+        pid: child.pid,
+      });
+    }
+    try {
+      await this.runSupervisor.attachLocalProcess(
+        pending.supervisorId,
+        child.pid,
+        process.platform === 'win32' ? undefined : child.pid
+      );
+    } catch (error) {
+      child.kill('SIGTERM');
+      throw error;
+    }
+  }
+
+  private async startCodexAppServer(
     task: Task,
     agentConfig: AgentConfig | undefined,
     prompt: string,
@@ -3000,7 +3501,7 @@ export class ClawdbotAgentService {
     emitter: EventEmitter,
     sandboxPolicy: SandboxPolicyDryRunResult | undefined,
     runLaunchManifest: RunLaunchManifest
-  ): void {
+  ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Codex app-server');
@@ -3011,6 +3512,7 @@ export class ClawdbotAgentService {
       cwd: worktreePath,
       env: buildSafeCodexAppServerEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
+      detached: process.platform !== 'win32',
     });
     const pending = pendingAgents.get(task.id);
     if (!pending || pending.attemptId !== attemptId) {
@@ -3021,6 +3523,7 @@ export class ClawdbotAgentService {
       });
     }
     pending.process = child;
+    await this.attachSpawnedProcess(pending, child);
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -3324,6 +3827,12 @@ export class ClawdbotAgentService {
         });
         pending.threadId = threadId;
         await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId });
+        if (pending.supervisorId) {
+          await this.runSupervisor.checkpoint(pending.supervisorId, {
+            sessionId: threadId,
+            threadId,
+          });
+        }
         turnId = await rpcClient.startTurn({
           threadId,
           prompt,
@@ -3756,8 +4265,10 @@ export class ClawdbotAgentService {
       cwd: worktreePath,
       env: buildSafeClaudeCodeEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
+      detached: process.platform !== 'win32',
     });
     pending.process = child;
+    await this.attachSpawnedProcess(pending, child);
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -4133,9 +4644,15 @@ export class ClawdbotAgentService {
     const pending = pendingAgents.get(task.id);
     if (pending && pending.attemptId === attemptId) pending.threadId = sessionId;
     await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId: sessionId });
+    if (pending?.supervisorId && pending.attemptId === attemptId) {
+      await this.runSupervisor.checkpoint(pending.supervisorId, {
+        sessionId,
+        threadId: sessionId,
+      });
+    }
   }
 
-  private startHermesCli(
+  private async startHermesCli(
     task: Task,
     agentConfig: AgentConfig | undefined,
     prompt: string,
@@ -4144,7 +4661,7 @@ export class ClawdbotAgentService {
     startedAt: string,
     emitter: EventEmitter,
     sandboxPolicy: SandboxPolicyDryRunResult | undefined
-  ): void {
+  ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Hermes CLI');
@@ -4162,12 +4679,19 @@ export class ClawdbotAgentService {
       cwd: worktreePath,
       env: buildSafeHermesEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
+      detached: process.platform !== 'win32',
     });
 
     const pending = pendingAgents.get(task.id);
-    if (pending) {
-      pending.process = child;
+    if (!pending || pending.attemptId !== attemptId) {
+      child.kill('SIGTERM');
+      throw new ConflictError('Hermes launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
     }
+    pending.process = child;
+    await this.attachSpawnedProcess(pending, child);
 
     void this.appendLog(
       logPath,
@@ -4224,6 +4748,11 @@ export class ClawdbotAgentService {
           const p = pendingAgents.get(task.id);
           if (p && !p.hermesSessionId) {
             p.hermesSessionId = hermesSessionId;
+            if (p.supervisorId) {
+              await this.runSupervisor.checkpoint(p.supervisorId, {
+                sessionId: hermesSessionId,
+              });
+            }
             log.debug(
               { taskId: task.id, hermesSessionId },
               '[ClawdbotAgent] Hermes session ID captured'
@@ -4299,7 +4828,7 @@ export class ClawdbotAgentService {
     });
   }
 
-  private startCodexCli(
+  private async startCodexCli(
     task: Task,
     agentConfig: AgentConfig | undefined,
     prompt: string,
@@ -4308,7 +4837,7 @@ export class ClawdbotAgentService {
     startedAt: string,
     emitter: EventEmitter,
     sandboxPolicy: SandboxPolicyDryRunResult | undefined
-  ): void {
+  ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Codex CLI');
@@ -4320,12 +4849,19 @@ export class ClawdbotAgentService {
       cwd: worktreePath,
       env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
+      detached: process.platform !== 'win32',
     });
 
     const pending = pendingAgents.get(task.id);
-    if (pending) {
-      pending.process = child;
+    if (!pending || pending.attemptId !== attemptId) {
+      child.kill('SIGTERM');
+      throw new ConflictError('Codex CLI launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
     }
+    pending.process = child;
+    await this.attachSpawnedProcess(pending, child);
 
     void this.appendLog(
       logPath,
@@ -4822,6 +5358,14 @@ export class ClawdbotAgentService {
         model: options.model ?? pending?.model,
       },
     });
+    if (pending?.supervisorId && pending.attemptId === attemptId) {
+      await this.runSupervisor.checkpoint(pending.supervisorId, {
+        lastEventSequence: result.event.sequence,
+        budget: pending.budget,
+        sessionId: pending.threadId ?? pending.hermesSessionId ?? pending.openclawSessionKey,
+        threadId: pending.threadId,
+      });
+    }
     return result.event;
   }
 

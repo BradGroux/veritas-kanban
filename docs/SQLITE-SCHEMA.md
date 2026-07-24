@@ -1065,15 +1065,16 @@ SQLite tables with JSON payload columns plus query indexes. This keeps the v4
 service contracts intact while preventing SQLite mode from writing operational
 state back to `.veritas-kanban/*.json` or telemetry NDJSON files.
 
-| Runtime table      | Stored data                                                                                                    |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `activity_events`  | Complete activity entries plus type, task, agent, and created-time columns.                                    |
-| `status_history`   | Complete status transition entries plus previous/new status and task columns.                                  |
-| `telemetry_events` | Complete telemetry events plus type, task, project, token, duration, and result columns.                       |
-| `run_events`       | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns. |
+| Runtime table      | Stored data                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `activity_events`  | Complete activity entries plus type, task, agent, and created-time columns.                                          |
+| `status_history`   | Complete status transition entries plus previous/new status and task columns.                                        |
+| `telemetry_events` | Complete telemetry events plus type, task, project, token, duration, and result columns.                             |
+| `run_events`       | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns.       |
+| `run_supervisors`  | Complete `run-supervisor/v1` snapshots plus task/attempt, state, revision, lease owner/expiry, and recovery indexes. |
 
-`ActivityService`, `StatusHistoryService`, `TelemetryService`, and
-`RunEventJournalService` select these SQLite repositories when
+`ActivityService`, `StatusHistoryService`, `TelemetryService`,
+`RunEventJournalService`, and `RunSupervisorService` select these SQLite repositories when
 `VERITAS_STORAGE=sqlite`. File storage still forces the file-backed services to
 `storageType='file'`, so explicit file mode cannot be accidentally flipped by
 the environment.

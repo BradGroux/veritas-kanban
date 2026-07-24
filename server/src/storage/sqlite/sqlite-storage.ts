@@ -13,6 +13,7 @@ import { SqliteOperationalProvenanceRepository } from './provenance-repository.j
 import { SqliteSetupContextRepository } from './setup-context-repository.js';
 import { SqliteRunEventRepository } from './run-event-repository.js';
 import { SqliteRunApprovalRepository } from './run-approval-repository.js';
+import { SqliteRunSupervisorRepository } from './run-supervisor-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
 
 export interface SqliteStorageOptions {
@@ -33,6 +34,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly setupContext: SqliteSetupContextRepository;
   readonly runEvents: SqliteRunEventRepository;
   readonly runApprovals: SqliteRunApprovalRepository;
+  readonly runSupervisors: SqliteRunSupervisorRepository;
 
   private readonly sqlite: SqliteDatabase;
 
@@ -54,6 +56,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.setupContext = new SqliteSetupContextRepository(this.sqlite);
     this.runEvents = new SqliteRunEventRepository(this.sqlite);
     this.runApprovals = new SqliteRunApprovalRepository(this.sqlite);
+    this.runSupervisors = new SqliteRunSupervisorRepository(this.sqlite);
   }
 
   getDatabase(): SqliteDatabase {

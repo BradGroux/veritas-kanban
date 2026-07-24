@@ -207,6 +207,13 @@ terminate the detached provider through its host supervisor, reconcile attempt
 state, and launch a fresh run. Veritas does not offer a UI force-stop that
 bypasses runtime evidence.
 
+The durable run supervisor also binds the provider snapshot to the exact task
+envelope, launch manifest, worktree fingerprint and ownership lease, host
+identity, and operating-system process start identity. Recovery uses an
+expiring compare-and-set lease. Process-group stop is refused when the PID has
+exited, been reused, moved hosts, or cannot be identified safely; remote
+sessions are contacted only through adapter-declared recovery controls.
+
 Public sandbox dry-runs accept a live registered manifest digest, not a
 caller-supplied manifest body. The server resolves the digest from current host
 registrations and rejects unknown, expired, or provider-mismatched evidence.

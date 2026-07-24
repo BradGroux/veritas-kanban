@@ -75,6 +75,8 @@ export interface TaskAttempt {
   harnessSupport?: import('./provider-runtime.types.js').HarnessSupportStatus;
   taskEnvelope?: import('./task-envelope.types.js').TaskEnvelope;
   runLaunchManifest?: import('./run-launch-manifest.types.js').RunLaunchManifest;
+  runSupervisorId?: string;
+  runRecovery?: import('./run-supervisor.types.js').RunSupervisorRecoveryRecord;
   runLaunchManifestTraceId?: string;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: import('./run-launch-manifest.types.js').RunLaunchManifestDriftResult;
