@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inclusion and exclusion reasons plus metadata quality findings, bounded
   observed wall time to the selected window, and documented current-state
   versus windowed metrics (#944).
+- Removed competing profile-editor and scorer-list scroll containers so Agent
+  Output Scoring uses the application page scrollbar at compact and full
+  desktop sizes (#938).
 
 ## [6.0.0] - 2026-07-24
 
