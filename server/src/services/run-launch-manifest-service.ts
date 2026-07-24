@@ -13,6 +13,7 @@ import type {
   RunLaunchPermissions,
   RunLaunchProfileReference,
   RunLaunchResources,
+  RunToolCatalog,
   RunLaunchRouting,
   RunLaunchRuntime,
   RunLaunchTools,
@@ -25,11 +26,13 @@ import { RUN_LAUNCH_MANIFEST_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import { ConflictError, ValidationError } from '../middleware/error-handler.js';
 import { parseProviderRuntimeManifest } from '../schemas/provider-runtime-manifest-schemas.js';
 import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
+import { runToolCatalogSchema } from '../schemas/tool-control-plane-schemas.js';
 import {
   calculateRunLaunchManifestDigest,
   digestRunLaunchValue,
 } from '../utils/run-launch-manifest-digest.js';
 import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
+import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import { compileProviderLaunchCredentialPlan } from './provider-launch-credential-plan-service.js';
 
 export interface RunLaunchManifestInstructionInput {
@@ -63,6 +66,7 @@ export interface RunLaunchManifestCompileInput {
   requiredHealthChecks: string[];
   satisfiedHealthChecks?: string[];
   sandboxPolicy: SandboxPolicyDryRunResult;
+  runToolCatalog?: RunToolCatalog;
   budgetPolicy: AgentBudgetPolicy;
   workspaceTrust: RunLaunchWorkspaceTrust;
   origins: RunLaunchManifestOrigin[];
@@ -149,12 +153,14 @@ export class RunLaunchManifestService {
       warnings: uniqueSorted(input.sandboxPolicy.warnings.map(sanitizeProviderRuntimeDiagnostic)),
     };
     const runtime = normalizeRuntime(input.runtime);
+    const brokeredCredentialReferences = brokeredReferencesFromCatalog(input, providerRuntime);
     const credentials = compileProviderLaunchCredentialPlan({
       provider: providerRuntime.provider,
       providerRuntimeManifest: providerRuntime,
       runtime,
       sandbox: input.sandboxPolicy,
       harnessProfileId: input.harnessSupport.profileId,
+      brokeredCredentialReferences,
     });
     const blockers = collectBlockers({
       input,
@@ -441,6 +447,40 @@ function normalizeResources(resources: RunLaunchResources): RunLaunchResources {
     shared: uniqueSorted(resources.shared),
     enforcement: resources.enforcement,
   };
+}
+
+function brokeredReferencesFromCatalog(
+  input: RunLaunchManifestCompileInput,
+  providerRuntime: ProviderRuntimeManifest
+): string[] {
+  if (!input.runToolCatalog) return [];
+  const catalog = runToolCatalogSchema.parse(input.runToolCatalog);
+  if (
+    catalog.taskId !== input.taskId.trim() ||
+    catalog.attemptId !== input.attemptId.trim() ||
+    catalog.provider !== providerRuntime.provider ||
+    catalog.providerRuntimeManifestDigest !== providerRuntime.digest ||
+    catalog.taskEnvelopeDigest !== input.taskEnvelope.digest ||
+    catalog.digest !== input.tools.catalogDigest ||
+    catalog.digest !== calculateRunToolCatalogDigest(catalog)
+  ) {
+    throw new ConflictError(
+      'Brokered credential evidence does not match the exact run tool catalog.',
+      {
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        catalogDigest: catalog.digest,
+        manifestCatalogDigest: input.tools.catalogDigest,
+      }
+    );
+  }
+  return uniqueSorted(
+    catalog.entries
+      .filter((entry) => entry.status === 'ready')
+      .flatMap((entry) =>
+        (entry.credentialBindings ?? []).map((binding) => binding.credentialReference)
+      )
+  );
 }
 
 function collectBlockers({

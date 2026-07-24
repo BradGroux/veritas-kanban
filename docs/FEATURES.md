@@ -370,8 +370,11 @@ persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
   identity.
 - Arguments, schemas, results, and errors are bounded. Causal tool events are
   redacted and deduplicated by the caller's stable operation ID.
-- Credential and header references may be declared, but those definitions
-  remain fail-closed until brokered provider launch handles are available.
+- Credential-bound entries compile only with enabled, scope-compatible broker
+  definitions. Their definition/scope digests and safe target names enter the
+  immutable catalog, discovery receives no source values, and native provider
+  injection omits them. Mediated calls remain blocked until exact-action lease
+  consumption lands in #969.
 
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 

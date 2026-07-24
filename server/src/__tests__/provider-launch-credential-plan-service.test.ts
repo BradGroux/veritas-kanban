@@ -159,4 +159,39 @@ describe('provider launch credential plan', () => {
       risk: 'blocked',
     });
   });
+
+  it('marks only exact catalog-backed task credentials as brokered', () => {
+    const manifest = providerRuntimeManifestFixture({ provider: 'codex-app-server' });
+    const supported = compileProviderLaunchCredentialPlan({
+      provider: 'codex-app-server',
+      providerRuntimeManifest: manifest,
+      runtime: runtime(['OPENAI_API_KEY']),
+      sandbox: sandbox('brokered', ['github-token']),
+      brokeredCredentialReferences: ['github-token'],
+    });
+    expect(supported).toMatchObject({
+      brokerState: 'supported',
+      references: expect.arrayContaining([
+        {
+          reference: 'github-token',
+          classification: 'task-integration',
+          delivery: 'brokered-boundary',
+          boundary: 'tool-control-plane',
+          risk: 'brokered',
+        },
+      ]),
+    });
+
+    const partial = compileProviderLaunchCredentialPlan({
+      provider: 'codex-app-server',
+      providerRuntimeManifest: manifest,
+      runtime: runtime([]),
+      sandbox: sandbox('brokered', ['github-token', 'slack-token']),
+      brokeredCredentialReferences: ['github-token'],
+    });
+    expect(partial.brokerState).toBe('blocked');
+    expect(partial.references).toContainEqual(
+      expect.objectContaining({ reference: 'slack-token', delivery: 'blocked' })
+    );
+  });
 });

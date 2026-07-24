@@ -41,6 +41,7 @@ export function compileProviderLaunchCredentialPlan(input: {
   runtime: RunLaunchRuntime;
   sandbox: SandboxPolicyDryRunResult;
   harnessProfileId?: string;
+  brokeredCredentialReferences?: string[];
 }): RunLaunchCredentialPlan {
   const providerBootAuthKeys = new Set([
     ...(PROVIDER_BOOT_AUTH_KEYS[input.provider as ExecutableAgentProvider] ?? []),
@@ -55,6 +56,7 @@ export function compileProviderLaunchCredentialPlan(input: {
       : []),
   ]);
   const taskReferences = new Set(input.sandbox.effective.credentialRefs);
+  const brokeredReferences = new Set(input.brokeredCredentialReferences ?? []);
   const environmentReferences = new Set(
     input.runtime.credentialReferences
       .filter((reference) => reference.startsWith('env:'))
@@ -83,13 +85,16 @@ export function compileProviderLaunchCredentialPlan(input: {
             risk: 'high-risk',
           };
     }),
-    ...[...taskReferences].map((reference): RunLaunchCredentialReference => ({
-      reference,
-      classification: 'task-integration',
-      delivery: 'blocked',
-      boundary: 'unavailable',
-      risk: 'blocked',
-    })),
+    ...[...taskReferences].map((reference): RunLaunchCredentialReference => {
+      const brokered = brokeredReferences.has(reference);
+      return {
+        reference,
+        classification: 'task-integration',
+        delivery: brokered ? 'brokered-boundary' : 'blocked',
+        boundary: brokered ? 'tool-control-plane' : 'unavailable',
+        risk: brokered ? 'brokered' : 'blocked',
+      };
+    }),
   ].sort(
     (left, right) =>
       left.classification.localeCompare(right.classification) ||
@@ -99,7 +104,12 @@ export function compileProviderLaunchCredentialPlan(input: {
   const payload: Omit<RunLaunchCredentialPlan, 'digest'> = {
     schemaVersion: RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION,
     mode: input.sandbox.preset.credentials.mode,
-    brokerState: taskReferences.size > 0 ? 'blocked' : 'not-required',
+    brokerState:
+      taskReferences.size === 0
+        ? 'not-required'
+        : [...taskReferences].every((reference) => brokeredReferences.has(reference))
+          ? 'supported'
+          : 'blocked',
     providerRuntimeManifestDigest: input.providerRuntimeManifest.digest,
     providerRuntimeProbeRevision: input.providerRuntimeManifest.probeRevision,
     references,

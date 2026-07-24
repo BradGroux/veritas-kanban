@@ -174,6 +174,33 @@ const catalogToolSchema = discoveryToolSchema
   })
   .strict();
 
+const catalogCredentialBindingSchema = z
+  .object({
+    credentialReference: serverIdSchema,
+    credentialDefinitionDigest: digestSchema,
+    scopeDigest: digestSchema,
+    target: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('environment'),
+          name: environmentKeySchema,
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('http-header'),
+          name: z
+            .string()
+            .trim()
+            .min(1)
+            .max(120)
+            .regex(/^[A-Za-z][A-Za-z0-9-]*$/),
+        })
+        .strict(),
+    ]),
+  })
+  .strict();
+
 const catalogEntrySchema = z
   .object({
     serverId: serverIdSchema,
@@ -183,6 +210,7 @@ const catalogEntrySchema = z
     transport: z.enum(['stdio', 'http']),
     requirement: z.enum(['required', 'optional']),
     status: z.enum(['ready', 'degraded']),
+    credentialBindings: z.array(catalogCredentialBindingSchema).max(50).optional(),
     tools: z.array(catalogToolSchema).max(1_000),
     error: z.string().trim().min(1).max(4_000).optional(),
   })

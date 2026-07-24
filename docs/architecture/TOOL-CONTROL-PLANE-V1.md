@@ -131,13 +131,23 @@ the route singleton first accesses storage.
 ## Credential Boundary
 
 Definitions persist environment key names, header key names, and broker
-reference IDs, never their values. Credential-like environment keys,
-credential references, and HTTP-header-bound definitions currently fail closed
-during discovery, launch, and invocation. Issue
-[#932](https://github.com/BradGroux/veritas-kanban/issues/932) owns resolving
-those references into run-scoped provider launch handles without exposing or
-persisting values. Credential-shaped command arguments and recognizable
-credential literals are rejected during definition validation.
+reference IDs, never their values. Credential-bound discovery removes the
+referenced environment keys and HTTP headers before starting the server. It
+therefore succeeds only when the server can expose its schema without
+credentials.
+
+Each ready catalog entry binds the exact credential-definition digest, scope
+digest, and safe environment or header target name. Missing, disabled,
+unmapped, out-of-scope, external-source, or drifted definitions fail closed.
+Credential-bound entries are omitted from every native provider MCP
+configuration and from provider environment passthrough. The launch credential
+plan reports `brokerState: supported` only when every selected sandbox
+credential reference has this exact tool-control-plane evidence.
+
+This slice does not resolve a source value. Mediated invocation remains blocked
+until #969 adds exact-action lease consumption, and system-owned provider
+bridge injection remains under #970. Credential-shaped command arguments and
+recognizable credential literals remain forbidden.
 
 ## Operator Surfaces
 

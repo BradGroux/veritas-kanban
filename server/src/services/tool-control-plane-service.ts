@@ -8,8 +8,10 @@ import {
   TOOL_SERVER_DEFINITION_SCHEMA_VERSION,
   type ExecutableAgentProvider,
   type AcpMcpServer,
+  type CredentialDefinition,
   type RunToolCatalog,
   type RunToolCatalogEntry,
+  type RunToolCredentialBinding,
   type ToolInvocationRequest,
   type ToolInvocationResult,
   type ToolServerDefinition,
@@ -37,9 +39,14 @@ import {
   calculateToolDiscoveryDigest,
   calculateToolServerDefinitionDigest,
 } from '../utils/tool-control-plane-digest.js';
+import { calculateCredentialScopeDigest } from '../utils/credential-broker-digest.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { RunApprovalBrokerService } from './run-approval-broker-service.js';
 import { RunEventJournalService } from './run-event-journal-service.js';
+import {
+  getCredentialBrokerService,
+  type CredentialBrokerService,
+} from './credential-broker-service.js';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const MAX_RPC_BYTES = 4 * 1024 * 1024;
@@ -79,6 +86,7 @@ export interface ToolControlPlaneServiceOptions {
   runtime?: ToolControlPlaneRuntime;
   journal?: RunEventJournalService;
   approvals?: RunApprovalBrokerService;
+  credentialBroker?: Pick<CredentialBrokerService, 'getDefinition'>;
   now?: () => Date;
   environment?: NodeJS.ProcessEnv;
 }
@@ -97,6 +105,7 @@ export class ToolControlPlaneService {
   private readonly runtime: ToolControlPlaneRuntime;
   private readonly journal: RunEventJournalService;
   private readonly approvals: RunApprovalBrokerService;
+  private readonly credentialBroker: Pick<CredentialBrokerService, 'getDefinition'>;
   private readonly now: () => Date;
   private readonly environment: NodeJS.ProcessEnv;
   private readonly sessions = new Map<string, Promise<RpcSession>>();
@@ -108,6 +117,7 @@ export class ToolControlPlaneService {
     this.runtime = options.runtime ?? new McpJsonRpcRuntime(this.environment);
     this.journal = options.journal ?? new RunEventJournalService();
     this.approvals = options.approvals ?? new RunApprovalBrokerService();
+    this.credentialBroker = options.credentialBroker ?? getCredentialBrokerService();
     this.now = options.now ?? (() => new Date());
   }
 
@@ -165,13 +175,13 @@ export class ToolControlPlaneService {
   async discover(id: string, force = false, cwd?: string): Promise<ToolServerDiscovery> {
     const definition = await this.getDefinition(id);
     if (!definition.enabled) throw new ConflictError('Tool server definition is disabled.');
-    this.assertCredentialBoundary(definition);
+    const runtimeDefinition = await this.credentialFreeDiscoveryDefinition(definition);
     const cached = await this.repository().getDiscovery(definition.digest);
 
     let session: RpcSession | undefined;
     let discovery: ToolServerDiscovery;
     try {
-      session = await this.runtime.open(definition, cwd);
+      session = await this.runtime.open(runtimeDefinition, cwd);
       const protocolVersion = await initializeSession(
         session,
         definition.startupTimeoutMs,
@@ -266,6 +276,55 @@ export class ToolControlPlaneService {
         );
         continue;
       }
+      const catalogTools = discovery.tools.map((tool) => {
+        const qualifiedName = `${definition.id}/${tool.name}`;
+        const definitionAllows =
+          definition.allowedTools.length === 0 ||
+          definition.allowedTools.includes('*') ||
+          matchesTool(definition.allowedTools, tool.name, qualifiedName);
+        const runAllows =
+          allowed.size === 0 ||
+          allowed.has('*') ||
+          allowed.has(tool.name) ||
+          allowed.has(qualifiedName);
+        const isDenied =
+          matchesTool(definition.deniedTools, tool.name, qualifiedName) ||
+          denied.has(tool.name) ||
+          denied.has(qualifiedName);
+        const approval =
+          definition.approvalMode === 'always' ||
+          matchesTool(definition.approvalRequiredTools, tool.name, qualifiedName);
+        return {
+          ...tool,
+          qualifiedName,
+          decision:
+            !definitionAllows || !runAllows || isDenied
+              ? ('deny' as const)
+              : approval
+                ? ('approval' as const)
+                : ('allow' as const),
+        };
+      });
+      const brokeredToolNames = new Set(
+        catalogTools.filter((tool) => tool.decision !== 'deny').map((tool) => tool.name)
+      );
+      let credentialBindings: RunToolCredentialBinding[];
+      try {
+        credentialBindings = await this.compileCredentialBindings(definition, {
+          ...discovery,
+          tools: discovery.tools.filter((tool) => brokeredToolNames.has(tool.name)),
+        });
+      } catch (error) {
+        const message = boundedError(error);
+        if (definition.requirement === 'required') {
+          throw new ConflictError(
+            `Required tool server ${serverId} has invalid credential boundary evidence.`,
+            { error: message }
+          );
+        }
+        entries.push(degradedEntry(definition, message, discovery));
+        continue;
+      }
       entries.push({
         serverId: definition.id,
         serverVersion: definition.version,
@@ -274,35 +333,8 @@ export class ToolControlPlaneService {
         transport: definition.transport.kind,
         requirement: definition.requirement,
         status: 'ready',
-        tools: discovery.tools.map((tool) => {
-          const qualifiedName = `${definition.id}/${tool.name}`;
-          const definitionAllows =
-            definition.allowedTools.length === 0 ||
-            definition.allowedTools.includes('*') ||
-            matchesTool(definition.allowedTools, tool.name, qualifiedName);
-          const runAllows =
-            allowed.size === 0 ||
-            allowed.has('*') ||
-            allowed.has(tool.name) ||
-            allowed.has(qualifiedName);
-          const isDenied =
-            matchesTool(definition.deniedTools, tool.name, qualifiedName) ||
-            denied.has(tool.name) ||
-            denied.has(qualifiedName);
-          const approval =
-            definition.approvalMode === 'always' ||
-            matchesTool(definition.approvalRequiredTools, tool.name, qualifiedName);
-          return {
-            ...tool,
-            qualifiedName,
-            decision:
-              !definitionAllows || !runAllows || isDenied
-                ? ('deny' as const)
-                : approval
-                  ? ('approval' as const)
-                  : ('allow' as const),
-          };
-        }),
+        ...(credentialBindings.length > 0 ? { credentialBindings } : {}),
+        tools: catalogTools,
       });
     }
 
@@ -378,6 +410,16 @@ export class ToolControlPlaneService {
       });
     }
     const definition = await this.getCatalogDefinition(entry);
+    if ((entry.credentialBindings?.length ?? 0) > 0) {
+      throw new ConflictError(
+        'Credential-bound tool calls require mediated lease consumption through the Veritas bridge.',
+        {
+          serverId: entry.serverId,
+          catalogDigest: catalog.digest,
+          remediation: 'Complete #969 before invoking this credential-bound tool.',
+        }
+      );
+    }
 
     if (tool.decision === 'approval') {
       const approval = await this.approvals.request({
@@ -539,6 +581,7 @@ export class ToolControlPlaneService {
     const servers: Record<string, unknown> = {};
     for (const entry of catalog.entries.filter((candidate) => candidate.status === 'ready')) {
       const definition = await this.getCatalogDefinition(entry);
+      if ((entry.credentialBindings?.length ?? 0) > 0) continue;
       const allowedTools = entry.tools
         .filter((tool) => tool.decision === 'allow')
         .map((tool) => tool.name);
@@ -581,6 +624,7 @@ export class ToolControlPlaneService {
     const allowedToolNames: string[] = [];
     for (const entry of catalog.entries.filter((candidate) => candidate.status === 'ready')) {
       const definition = await this.getCatalogDefinition(entry);
+      if ((entry.credentialBindings?.length ?? 0) > 0) continue;
       servers[entry.serverId] =
         definition.transport.kind === 'stdio'
           ? {
@@ -607,6 +651,10 @@ export class ToolControlPlaneService {
   ): Promise<AcpMcpServer[]> {
     const servers: AcpMcpServer[] = [];
     for (const entry of catalog.entries.filter((candidate) => candidate.status === 'ready')) {
+      if ((entry.credentialBindings?.length ?? 0) > 0) {
+        await this.getCatalogDefinition(entry);
+        continue;
+      }
       const restricted = entry.tools.filter((tool) => tool.decision !== 'allow');
       if (restricted.length > 0) {
         throw new ConflictError(
@@ -655,6 +703,7 @@ export class ToolControlPlaneService {
     const keys = new Set<string>();
     for (const entry of catalog.entries.filter((candidate) => candidate.status === 'ready')) {
       const definition = await this.getCatalogDefinition(entry);
+      if ((entry.credentialBindings?.length ?? 0) > 0) continue;
       if (definition.transport.kind === 'stdio') {
         for (const key of definition.transport.environmentKeys) keys.add(key);
       } else {
@@ -723,32 +772,228 @@ export class ToolControlPlaneService {
         }
       );
     }
-    this.assertCredentialBoundary(definition);
+    await this.assertCredentialEvidence(entry, definition);
     return definition;
   }
 
-  private assertCredentialBoundary(definition: ToolServerDefinition): void {
+  private async credentialFreeDiscoveryDefinition(
+    definition: ToolServerDefinition
+  ): Promise<ToolServerDefinition> {
     assertSafeDefinition(definition);
-    const credentialReferences = definition.transport.credentialReferences;
-    const credentialEnvironmentKeys =
-      definition.transport.kind === 'stdio'
-        ? definition.transport.environmentKeys.filter((key) => isCredentialLikeKey(key))
-        : [];
-    const headerReferences =
-      definition.transport.kind === 'http' ? definition.transport.headers : [];
-    if (
-      credentialReferences.length > 0 ||
-      credentialEnvironmentKeys.length > 0 ||
-      headerReferences.length > 0
-    ) {
+    const resolved = await this.resolveCredentialTargets(definition);
+    if (definition.transport.kind === 'stdio') {
+      const credentialKeys = new Set(
+        resolved.flatMap((entry) =>
+          entry.binding.target.kind === 'environment' ? [entry.binding.target.name] : []
+        )
+      );
+      const unbound = definition.transport.environmentKeys.filter(
+        (key) => isCredentialLikeKey(key) && !credentialKeys.has(key)
+      );
+      if (unbound.length > 0) {
+        throw new ConflictError(
+          'Credential-shaped tool server environment keys require exact broker definitions.',
+          { serverId: definition.id, environmentKeys: unbound }
+        );
+      }
+      return {
+        ...definition,
+        transport: {
+          ...definition.transport,
+          environmentKeys: definition.transport.environmentKeys.filter(
+            (key) => !credentialKeys.has(key)
+          ),
+        },
+      };
+    }
+    const credentialHeaders = new Set(
+      resolved.flatMap((entry) =>
+        entry.binding.target.kind === 'http-header' ? [entry.binding.target.name.toLowerCase()] : []
+      )
+    );
+    const unbound = definition.transport.headers.filter(
+      (header) => !credentialHeaders.has(header.name.toLowerCase())
+    );
+    if (unbound.length > 0) {
+      throw new ConflictError('HTTP tool server headers require exact broker definitions.', {
+        serverId: definition.id,
+        headerNames: unbound.map((header) => header.name),
+      });
+    }
+    return {
+      ...definition,
+      transport: {
+        ...definition.transport,
+        headers: [],
+      },
+    };
+  }
+
+  private async compileCredentialBindings(
+    definition: ToolServerDefinition,
+    discovery: ToolServerDiscovery
+  ): Promise<RunToolCredentialBinding[]> {
+    const resolved = await this.resolveCredentialTargets(definition);
+    if (resolved.length > 0 && discovery.tools.length === 0) {
       throw new ConflictError(
-        'Credential-bound tool servers remain disabled until brokered provider launch handles are active.',
-        {
+        'Credential-bound tool server has no callable tools in the exact run policy.',
+        { serverId: definition.id }
+      );
+    }
+    for (const { credential } of resolved) {
+      const scope = credential.scope;
+      if (
+        scope.hosts.length > 0 ||
+        scope.destinations.length > 0 ||
+        scope.methods.length > 0 ||
+        scope.pathPrefixes.length > 0
+      ) {
+        throw new ConflictError(
+          'MCP credential definitions cannot require HTTP-only scope dimensions.',
+          { credentialReference: credential.id, serverId: definition.id }
+        );
+      }
+      for (const tool of discovery.tools) {
+        const qualifiedName = `${definition.id}/${tool.name}`;
+        if (
+          scope.tools.length > 0 &&
+          !scope.tools.includes(tool.name) &&
+          !scope.tools.includes(qualifiedName)
+        ) {
+          throw new ConflictError('Credential definition does not accept every discovered tool.', {
+            credentialReference: credential.id,
+            serverId: definition.id,
+            tool: tool.name,
+          });
+        }
+        if (
+          scope.actions.length > 0 &&
+          !scope.actions.includes(tool.name) &&
+          !scope.actions.includes(qualifiedName)
+        ) {
+          throw new ConflictError(
+            'Credential definition does not accept every discovered MCP action.',
+            {
+              credentialReference: credential.id,
+              serverId: definition.id,
+              action: qualifiedName,
+            }
+          );
+        }
+      }
+    }
+    return resolved.map((entry) => entry.binding);
+  }
+
+  private async resolveCredentialTargets(definition: ToolServerDefinition): Promise<
+    Array<{
+      credential: CredentialDefinition;
+      binding: RunToolCredentialBinding;
+    }>
+  > {
+    const resolved: Array<{
+      credential: CredentialDefinition;
+      binding: RunToolCredentialBinding;
+    }> = [];
+    const targetKeys = new Set<string>();
+    for (const reference of [...definition.transport.credentialReferences].sort()) {
+      const credential = await this.credentialBroker.getDefinition(reference);
+      if (!credential) {
+        throw new ConflictError('Tool server credential definition was not found.', {
           serverId: definition.id,
-          credentialReferences,
-          credentialEnvironmentKeys,
-          headerEnvironmentKeys: headerReferences.map((header) => header.environmentKey),
-          remediation: 'Complete #932 before selecting this definition for a run.',
+          credentialReference: reference,
+        });
+      }
+      if (!credential.enabled) {
+        throw new ConflictError('Tool server credential definition is disabled.', {
+          serverId: definition.id,
+          credentialReference: reference,
+        });
+      }
+      if (!credential.scope.dispatchTypes.includes('mcp')) {
+        throw new ConflictError('Tool server credential definition does not allow MCP dispatch.', {
+          serverId: definition.id,
+          credentialReference: reference,
+        });
+      }
+      if (credential.source.kind !== 'environment') {
+        throw new ConflictError(
+          'External credential sources require an explicit bridge target mapping.',
+          { serverId: definition.id, credentialReference: reference }
+        );
+      }
+      let target: RunToolCredentialBinding['target'];
+      if (definition.transport.kind === 'stdio') {
+        if (!definition.transport.environmentKeys.includes(credential.source.reference)) {
+          throw new ConflictError(
+            'Credential source key is not an environment target on the stdio tool server.',
+            { serverId: definition.id, credentialReference: reference }
+          );
+        }
+        target = { kind: 'environment', name: credential.source.reference };
+      } else {
+        const matches = definition.transport.headers.filter(
+          (header) => header.environmentKey === credential.source.reference
+        );
+        if (matches.length !== 1) {
+          throw new ConflictError(
+            'Credential source key must map to exactly one HTTP tool server header.',
+            { serverId: definition.id, credentialReference: reference }
+          );
+        }
+        target = { kind: 'http-header', name: matches[0].name };
+      }
+      const targetKey = `${target.kind}:${target.name.toLowerCase()}`;
+      if (targetKeys.has(targetKey)) {
+        throw new ConflictError('Tool server credential target is ambiguous.', {
+          serverId: definition.id,
+          target,
+        });
+      }
+      targetKeys.add(targetKey);
+      resolved.push({
+        credential,
+        binding: {
+          credentialReference: credential.id,
+          credentialDefinitionDigest: credential.digest,
+          scopeDigest: calculateCredentialScopeDigest(credential.scope),
+          target,
+        },
+      });
+    }
+    return resolved.sort((left, right) =>
+      left.binding.credentialReference.localeCompare(right.binding.credentialReference)
+    );
+  }
+
+  private async assertCredentialEvidence(
+    entry: RunToolCatalogEntry,
+    definition: ToolServerDefinition
+  ): Promise<void> {
+    const current = await this.compileCredentialBindings(definition, {
+      schemaVersion: TOOL_DISCOVERY_SCHEMA_VERSION,
+      serverId: entry.serverId,
+      serverVersion: entry.serverVersion,
+      definitionDigest: entry.definitionDigest,
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      status: 'ready',
+      tools: entry.tools
+        .filter((tool) => tool.decision !== 'deny')
+        .map(({ name, description, inputSchema, inputSchemaDigest }) => ({
+          name,
+          ...(description ? { description } : {}),
+          inputSchema,
+          inputSchemaDigest,
+        })),
+      discoveredAt: this.now().toISOString(),
+      digest: entry.discoveryDigest,
+    });
+    if (digestRunLaunchValue(current) !== digestRunLaunchValue(entry.credentialBindings ?? [])) {
+      throw new ConflictError(
+        'Credential definition or scope drifted after the run catalog was compiled.',
+        {
+          serverId: entry.serverId,
+          remediation: 'Compile a new launch manifest and run tool catalog.',
         }
       );
     }

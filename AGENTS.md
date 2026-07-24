@@ -131,6 +131,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   whose built-in type and command both identify `codex` or `hermes` may infer a
   provider during migration; provider-less or profile/adapter-mismatched records
   fail closed before an attempt is created.
+- Credential-bound tool servers persist only exact definition/scope digests and
+  safe target names in `run-tool-catalog/v1`. Discovery strips their source
+  environment/header values, native provider injection omits them, and
+  mediated invocation remains blocked until exact-action lease consumption is
+  available.
 - Classify launch credentials through `run-launch-credential-plan/v1`.
   Provider boot authentication, task integration definition IDs, and explicit
   high-risk environment passthrough are separate classes. Task integration

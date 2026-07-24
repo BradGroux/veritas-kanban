@@ -3799,14 +3799,16 @@ and failed dispatches append bounded, redacted causal events, and an operation
 ID cannot dispatch twice.
 
 Raw environment and credential values are never stored in a definition,
-catalog, event, or launch manifest. Credential-reference definitions,
-header-bound definitions, and credential-like environment keys remain
-fail-closed until a controlled broker boundary is available. Newly compiled
-launch manifests include a value-free `run-launch-credential-plan/v1` section
-that separates provider boot authentication, task integration references, and
-high-risk compatibility passthrough. Task references report `brokerState:
-"blocked"` and make the launch unenforceable until an accepted boundary can
-deliver them without provider bypass.
+catalog, event, or launch manifest. Credential-bound definitions compile only
+when each reference resolves to an enabled MCP-scoped broker definition and an
+exact environment or HTTP-header target. The catalog persists definition and
+scope digests plus safe target names. Discovery removes source values, and
+native provider configuration omits credential-bound entries.
+
+New launch manifests classify a task reference as a brokered
+tool-control-plane boundary only when the exact run catalog covers it.
+Uncovered references remain blocked. Credential-bound calls remain disabled
+until #969 adds exact-action lease consumption.
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 
 ---
