@@ -17,6 +17,7 @@ import type {
   ConversationLaunchMode,
 } from '@veritas-kanban/shared';
 import { ACP_METHODS, ACP_PROTOCOL_VERSION, AcpJsonRpcPeer } from '@veritas-kanban/shared';
+import { ACP_RUNTIME_PROFILE_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import { ConflictError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
 
@@ -25,12 +26,48 @@ const ACP_PROMPT_TIMEOUT_MS = 24 * 60 * 60 * 1_000;
 const ACP_TERMINATION_GRACE_MS = 2_000;
 const ACP_MAX_STDERR_BYTES = 8 * 1024;
 
+export const BUZZ_AGENT_RUNTIME_PROFILE_ID = 'buzz-agent';
+export const BUZZ_AGENT_RUNTIME_PROFILE_REVISION = 1;
+export const BUZZ_AGENT_TESTED_RELEASE = 'v0.4.24';
+export const BUZZ_AGENT_TESTED_COMMIT = '710ed9fff57878a1d69f809b80a6ee0416c53fc4';
+export const BUZZ_AGENT_ACP_VERSION = '0.1.0';
+export const BUZZ_AGENT_CREDENTIAL_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'DATABRICKS_TOKEN',
+  'OPENAI_COMPAT_API_KEY',
+] as const;
+export const BUZZ_AGENT_ENVIRONMENT_KEYS = [
+  'ANTHROPIC_API_VERSION',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'BUZZ_AGENT_LLM_TIMEOUT_SECS',
+  'BUZZ_AGENT_MAX_CONTEXT_TOKENS',
+  'BUZZ_AGENT_MAX_HANDOFFS',
+  'BUZZ_AGENT_MAX_HISTORY_BYTES',
+  'BUZZ_AGENT_MAX_LINE_BYTES',
+  'BUZZ_AGENT_MAX_OUTPUT_TOKENS',
+  'BUZZ_AGENT_MAX_PARALLEL_TOOLS',
+  'BUZZ_AGENT_MAX_ROUNDS',
+  'BUZZ_AGENT_MAX_SESSIONS',
+  'BUZZ_AGENT_MAX_TOOL_RESULT_TEXT_BYTES',
+  'BUZZ_AGENT_PROVIDER',
+  'BUZZ_AGENT_SYSTEM_PROMPT',
+  'BUZZ_AGENT_SYSTEM_PROMPT_FILE',
+  'BUZZ_AGENT_TOOL_TIMEOUT_SECS',
+  'DATABRICKS_HOST',
+  'DATABRICKS_MODEL',
+  'OPENAI_COMPAT_API',
+  'OPENAI_COMPAT_BASE_URL',
+  'OPENAI_COMPAT_MODEL',
+] as const;
+
 export interface AcpStdioOpenOptions {
   command: string;
   args: string[];
   cwd: string;
   environment: NodeJS.ProcessEnv;
   environmentKeys?: string[];
+  runtimeProfileId?: string;
   onNotification?: (notification: AcpSessionNotification) => void | Promise<void>;
   onPermissionRequest?: (
     request: AcpRequestPermissionRequest
@@ -162,7 +199,10 @@ class AcpStdioConnection implements AcpStdioControl {
         },
         ACP_STARTUP_TIMEOUT_MS
       );
-      const probe = parseInitializeResponse(initialized, path.basename(command));
+      const probe = applyAcpRuntimeProfile(
+        parseInitializeResponse(initialized, path.basename(command)),
+        options.runtimeProfileId
+      );
       return new AcpStdioConnection(child, peer, probe, options);
     } catch (error) {
       peer.close(error instanceof Error ? error : new Error(String(error)));
@@ -295,6 +335,66 @@ function parseInitializeResponse(value: unknown, fallbackName: string): AcpRunti
     agentInfo,
     capabilities,
     capabilityDigest: digestCapabilities(capabilities),
+  };
+}
+
+function applyAcpRuntimeProfile(
+  probe: AcpRuntimeProbe,
+  runtimeProfileId: string | undefined
+): AcpRuntimeProbe {
+  if (!runtimeProfileId || runtimeProfileId === 'acp-stdio') return probe;
+  if (runtimeProfileId !== BUZZ_AGENT_RUNTIME_PROFILE_ID) {
+    throw new ConflictError('Configured ACP runtime profile is not registered.', {
+      runtimeProfileId,
+    });
+  }
+  const failures = [
+    ...(probe.agentInfo.name !== 'buzz-agent'
+      ? [`Expected agentInfo.name buzz-agent, received ${probe.agentInfo.name}.`]
+      : []),
+    ...(probe.agentInfo.version !== BUZZ_AGENT_ACP_VERSION
+      ? [
+          `Expected buzz-agent ACP version ${BUZZ_AGENT_ACP_VERSION}, received ${
+            probe.agentInfo.version ?? 'unknown'
+          }.`,
+        ]
+      : []),
+    ...(probe.capabilities.loadSession === false
+      ? []
+      : ['The tested Buzz profile requires loadSession: false.']),
+    ...(probe.capabilities.mcpCapabilities?.http === false &&
+    probe.capabilities.mcpCapabilities?.sse === false
+      ? []
+      : ['The tested Buzz profile supports stdio MCP only.']),
+  ];
+  if (failures.length > 0) {
+    throw new ConflictError('Buzz ACP runtime is outside the tested compatibility profile.', {
+      runtimeProfileId,
+      testedRelease: BUZZ_AGENT_TESTED_RELEASE,
+      testedCommit: BUZZ_AGENT_TESTED_COMMIT,
+      failures,
+    });
+  }
+  const payload = {
+    schemaVersion: ACP_RUNTIME_PROFILE_SCHEMA_VERSION,
+    id: BUZZ_AGENT_RUNTIME_PROFILE_ID,
+    revision: BUZZ_AGENT_RUNTIME_PROFILE_REVISION,
+    testedRelease: BUZZ_AGENT_TESTED_RELEASE,
+    testedCommit: BUZZ_AGENT_TESTED_COMMIT,
+    limitations: [
+      'non-streaming-llm',
+      'in-memory-sessions',
+      'no-session-load',
+      'stdio-mcp-only',
+      'provider-environment-authentication',
+    ],
+  };
+  return {
+    ...probe,
+    runtimeProfile: {
+      ...payload,
+      digest: `sha256:${createHash('sha256').update(stableJson(payload)).digest('hex')}`,
+    },
   };
 }
 

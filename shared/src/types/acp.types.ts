@@ -1,5 +1,6 @@
 export const ACP_PROTOCOL_VERSION = 1 as const;
 export const ACP_PROTOCOL_ID = 'acp/v1' as const;
+export const ACP_RUNTIME_PROFILE_SCHEMA_VERSION = 'acp-runtime-profile/v1' as const;
 
 export const ACP_METHODS = {
   agent: {
@@ -266,4 +267,13 @@ export interface AcpRuntimeProbe {
   agentInfo: AcpImplementation;
   capabilities: AcpAgentCapabilities;
   capabilityDigest: string;
+  runtimeProfile?: {
+    schemaVersion: typeof ACP_RUNTIME_PROFILE_SCHEMA_VERSION;
+    id: string;
+    revision: number;
+    testedRelease: string;
+    testedCommit: string;
+    limitations: string[];
+    digest: string;
+  };
 }

@@ -8,6 +8,10 @@ import type {
 } from '@veritas-kanban/shared';
 import { RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import {
+  BUZZ_AGENT_CREDENTIAL_ENV_KEYS,
+  BUZZ_AGENT_RUNTIME_PROFILE_ID,
+} from './acp-stdio-adapter.js';
 
 const CREDENTIAL_ENV_KEY_PATTERN =
   /(?:^|_)(?:API_KEYS?|AUTHORIZATION|AUTH_TOKEN|BEARER|BEARER_TOKEN|COOKIE|CREDENTIALS?|DATABASE_URL|DB_URL|PASSWORD|PASS|PRIVATE_KEY|SECRET|SESSION|SESSION_TOKEN|TOKEN|WEBHOOK)(?:_|$)/i;
@@ -32,9 +36,14 @@ export function compileProviderLaunchCredentialPlan(input: {
   providerRuntimeManifest: ProviderRuntimeManifest;
   runtime: RunLaunchRuntime;
   sandbox: SandboxPolicyDryRunResult;
+  harnessProfileId?: string;
 }): RunLaunchCredentialPlan {
-  const providerBootAuthKeys =
-    PROVIDER_BOOT_AUTH_KEYS[input.provider as ExecutableAgentProvider] ?? new Set<string>();
+  const providerBootAuthKeys = new Set([
+    ...(PROVIDER_BOOT_AUTH_KEYS[input.provider as ExecutableAgentProvider] ?? []),
+    ...(input.harnessProfileId === BUZZ_AGENT_RUNTIME_PROFILE_ID
+      ? BUZZ_AGENT_CREDENTIAL_ENV_KEYS
+      : []),
+  ]);
   const taskReferences = new Set(input.sandbox.effective.credentialRefs);
   const environmentReferences = new Set(
     input.runtime.credentialReferences

@@ -184,6 +184,7 @@ describe('ConfigService', () => {
       expect(config.agents.some((a) => a.type === 'claude-code')).toBe(true);
       expect(config.agents.some((a) => a.type === 'codex')).toBe(true);
       expect(config.agents.some((a) => a.type === 'hermes')).toBe(true);
+      expect(config.agents.some((a) => a.type === 'buzz-agent')).toBe(true);
       expect(config.agents.some((a) => a.type === 'ollama-local')).toBe(true);
       expect(config.agents.some((a) => a.type === 'ollama-cloud')).toBe(true);
       expect(config.agents.some((a) => a.type === 'lm-studio-local')).toBe(true);

@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a disabled-by-default `buzz-agent` conformance profile under the generic
+  ACP provider, pinned to Buzz v0.4.24 commit
+  `710ed9fff57878a1d69f809b80a6ee0416c53fc4`. The profile validates exact ACP
+  identity, version, capabilities, known limitations, safe configuration and
+  boot-authentication environment keys, rejects `buzz-acp` and incompatible
+  capability drift,
+  and advances provider probe evidence to revision 11 (#907).
 - Added `run-launch-credential-plan/v1` to classify provider boot
   authentication, broker-targeted task credentials, and explicit high-risk
   environment passthrough in immutable launch evidence. Plans bind to provider

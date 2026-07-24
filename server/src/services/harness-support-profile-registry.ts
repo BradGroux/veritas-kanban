@@ -19,6 +19,12 @@ import {
   buildCodexAppServerArgs,
   CODEX_APP_SERVER_CERTIFIED_VERSION,
 } from './codex-app-server-adapter.js';
+import {
+  BUZZ_AGENT_ACP_VERSION,
+  BUZZ_AGENT_CREDENTIAL_ENV_KEYS,
+  BUZZ_AGENT_ENVIRONMENT_KEYS,
+  BUZZ_AGENT_TESTED_RELEASE,
+} from './acp-stdio-adapter.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
 const INVALIDATION_KEYS: HarnessSupportProfile['compatibility']['invalidateOn'] = [
@@ -60,6 +66,7 @@ interface ProfileDefinition {
     | { kind: 'none' };
   environmentAllowlist?: string[];
   credentialAllowlist?: string[];
+  versionArgs?: string[];
   testedVersions?: string[];
   documentationUrl: string;
   remediation: string[];
@@ -76,6 +83,26 @@ interface RedactedCommand {
 }
 
 const DEFINITIONS: Record<string, ProfileDefinition> = {
+  'buzz-agent': {
+    id: 'buzz-agent',
+    displayName: 'Buzz Agent',
+    adapterId: 'acp-stdio',
+    transport: 'acp',
+    auth: {
+      kind: 'environment',
+      environmentKeys: [...BUZZ_AGENT_CREDENTIAL_ENV_KEYS],
+    },
+    environmentAllowlist: [...BUZZ_AGENT_ENVIRONMENT_KEYS],
+    credentialAllowlist: [...BUZZ_AGENT_CREDENTIAL_ENV_KEYS],
+    versionArgs: [],
+    testedVersions: [`buzz-agent ${BUZZ_AGENT_ACP_VERSION}`],
+    documentationUrl: '/docs/AGENT-PROVIDERS.md#buzz-agent-acp',
+    remediation: [
+      `Install buzz-agent from Buzz ${BUZZ_AGENT_TESTED_RELEASE}; Veritas does not install Buzz or Rust.`,
+      'Set BUZZ_AGENT_PROVIDER and the matching model and authentication environment keys, then run `vk doctor`.',
+      'Do not configure buzz-acp here; it is the inverse relay-side ACP client.',
+    ],
+  },
   'claude-code': {
     id: 'claude-code',
     displayName: 'Claude Code',
@@ -245,7 +272,7 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
   }
   const executable = {
     command: redactedCommand.command,
-    versionArgs: ['--version'],
+    versionArgs: definition.versionArgs ?? ['--version'],
   };
   const authentication = {
     ...definition.auth,
