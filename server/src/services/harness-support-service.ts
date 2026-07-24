@@ -84,6 +84,13 @@ export function evaluateHarnessSupportStatus(
     ...(providerVersion ? { providerVersion: sanitized(providerVersion) } : {}),
     ...(manifest?.providerBuild ? { providerBuild: sanitized(manifest.providerBuild) } : {}),
     ...(manifest?.digest ? { manifestDigest: manifest.digest } : {}),
+    ...((manifest?.probe.diagnostics.length ?? 0) > 0 || (health.diagnostics?.length ?? 0) > 0
+      ? {
+          diagnostics: [...(health.diagnostics ?? []), ...(manifest?.probe.diagnostics ?? [])]
+            .map(sanitized)
+            .slice(0, 32),
+        }
+      : {}),
     diagnosticCommands: buildDiagnosticCommands(profile),
     remediation: profile.remediation.map(sanitized),
   };

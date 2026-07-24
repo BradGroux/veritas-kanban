@@ -16,11 +16,13 @@ const baseAgent: AgentConfig = {
 
 const originalHermesApiKey = process.env.HERMES_API_KEY;
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAnthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
 
 afterEach(() => {
   vi.restoreAllMocks();
   restoreEnv('HERMES_API_KEY', originalHermesApiKey);
   restoreEnv('ANTHROPIC_API_KEY', originalAnthropicApiKey);
+  restoreEnv('ANTHROPIC_AUTH_TOKEN', originalAnthropicAuthToken);
 });
 
 describe('AgentHealthService provider version evidence', () => {
@@ -93,6 +95,86 @@ describe('AgentHealthService provider version evidence', () => {
       providerVersion: 'Hermes Agent 2026.7.7.2',
     });
     expect(runCommand).toHaveBeenCalledOnce();
+  });
+
+  it('probes Claude Code auth and agent discovery without trusting OAuth for bare mode', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-only';
+    const runCommand = vi
+      .fn<AgentHealthCommandRunner>()
+      .mockResolvedValueOnce({
+        stdout: '2.1.218 (Claude Code)\n',
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        stdout: '{"loggedIn":true,"authMethod":"api_key"}\n',
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        stdout: '[{"name":"reviewer"},{"name":"builder"}]\n',
+        stderr: '',
+      });
+    const claudeAgent: AgentConfig = {
+      ...baseAgent,
+      type: 'claude-code',
+      name: 'Claude Code',
+      command: process.execPath,
+      provider: 'claude-code',
+    };
+
+    const result = await new AgentHealthService(runCommand).checkAgent(claudeAgent);
+
+    expect(result).toMatchObject({
+      healthy: true,
+      authenticated: true,
+      providerVersion: '2.1.218 (Claude Code)',
+      diagnostics: expect.arrayContaining([
+        'Claude Code authentication status is ready.',
+        'Explicit bare-mode authentication is configured.',
+        'Claude Code agent discovery returned 2 definition(s).',
+      ]),
+    });
+    expect(runCommand).toHaveBeenNthCalledWith(2, process.execPath, ['auth', 'status'], {
+      timeout: 5_000,
+      maxBuffer: 8 * 1024,
+      shell: false,
+    });
+    expect(runCommand).toHaveBeenNthCalledWith(3, process.execPath, ['agents', '--json'], {
+      timeout: 5_000,
+      maxBuffer: 8 * 1024,
+      shell: false,
+    });
+  });
+
+  it('fails Claude Code readiness when bare-mode authentication is absent', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    const runCommand = vi
+      .fn<AgentHealthCommandRunner>()
+      .mockResolvedValueOnce({
+        stdout: '2.1.218 (Claude Code)\n',
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        stdout: '{"loggedIn":true,"authMethod":"oauth"}\n',
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        stdout: '[]\n',
+        stderr: '',
+      });
+    const result = await new AgentHealthService(runCommand).checkAgent({
+      ...baseAgent,
+      type: 'claude-code',
+      name: 'Claude Code',
+      command: process.execPath,
+      provider: 'claude-code',
+    });
+
+    expect(result).toMatchObject({
+      healthy: false,
+      authenticated: false,
+      reason: expect.stringMatching(/bare mode requires explicit environment authentication/i),
+    });
   });
 });
 

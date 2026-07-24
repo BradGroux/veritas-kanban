@@ -108,6 +108,23 @@ describe('RunEventJournalService', () => {
     expect(raw).not.toContain('sk-secret');
   });
 
+  it('persists provider session identity separately from turn identity', async () => {
+    const directory = await temporaryDirectory();
+    const journal = new RunEventJournalService(new FileRunEventRepository(directory));
+    const result = await journal.append(
+      appendInput({
+        sessionId: 'session_claude_1',
+        turnId: 'turn_1',
+        payload: { summary: 'session-bound event' },
+      })
+    );
+
+    expect(result.event).toMatchObject({
+      sessionId: 'session_claude_1',
+      turnId: 'turn_1',
+    });
+  });
+
   it('drops payload bodies that remain oversized after bounded normalization', async () => {
     const directory = await temporaryDirectory();
     const journal = new RunEventJournalService(new FileRunEventRepository(directory));

@@ -62,6 +62,7 @@ export interface RunEventEnvelope {
   taskId: string;
   runId: string;
   attemptId: string;
+  sessionId?: string;
   turnId?: string;
   itemId?: string;
   providerEventId?: string;
@@ -81,6 +82,7 @@ export interface RunEventEnvelope {
 export interface RunEventAppendInput {
   taskId: string;
   attemptId: string;
+  sessionId?: string;
   turnId?: string;
   itemId?: string;
   providerEventId?: string;

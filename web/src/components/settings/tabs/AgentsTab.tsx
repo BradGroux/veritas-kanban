@@ -94,6 +94,7 @@ const AGENT_PROVIDER_OPTIONS: Array<{ value: AgentProvider | '__none__'; label: 
   { value: '__none__', label: 'None / legacy' },
   { value: 'codex-cli', label: 'Codex CLI' },
   { value: 'codex-sdk', label: 'Codex SDK' },
+  { value: 'claude-code', label: 'Claude Code' },
   { value: 'hermes-cli', label: 'Hermes Agent' },
   { value: 'codex-cloud', label: 'Codex Cloud' },
   { value: 'ollama-local', label: 'Ollama Local' },

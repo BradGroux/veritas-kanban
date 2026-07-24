@@ -113,11 +113,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - All cross-package types live in `shared/src/types/`.
 - `AgentProvider` union is the single definition consumed by both server and web.
   **Currently supported providers:**
-  `openclaw` | `codex-cli` | `codex-sdk` | `codex-cloud` | `hermes-cli` |
+  `openclaw` | `codex-cli` | `codex-sdk` | `codex-cloud` | `claude-code` | `hermes-cli` |
   `ollama-local` | `ollama-cloud` | `lm-studio-local` | `custom`
 - Executable task adapters are currently `openclaw`, `codex-cli`, `codex-sdk`,
-  and `hermes-cli`. Explicitly configured providers outside that set must fail
-  closed; never route them through an implicit OpenClaw fallback.
+  `claude-code`, and `hermes-cli`. Explicitly configured providers outside
+  that set must fail closed; never route them through an implicit OpenClaw
+  fallback.
 - Probe and persist `provider-runtime-manifest/v1` before mutating attempt state.
   New runtime controls must use the persisted evidence instead of provider-name
   checks, and provider version/build changes must invalidate cached conformance.
@@ -163,6 +164,19 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - `codex-sdk`: programmatic SDK, requires `@openai/codex-sdk`
 - Auth: `codex login status` / `OPENAI_API_KEY`
 
+### Claude Code (v2.1.218)
+
+- Provider ID: `claude-code`. Default command: `claude`.
+- Veritas launches `claude --bare --print --output-format stream-json` with
+  static sandbox-derived permissions and no shell.
+- Bare mode requires explicit environment authentication. OAuth/keychain state
+  reported by `claude auth status` does not prove bare-mode readiness.
+- The terminal `result` record is authoritative. Veritas drains stdout after
+  process close, persists `session_id`, and maps partial, hook, tool, subagent,
+  usage, cost, and result records into `run-event/v1`.
+- Resume, fork, interactive approval, elicitation, and MCP injection remain
+  fail-closed until their provider-neutral brokers land.
+
 ---
 
 ## Security boundaries
@@ -171,7 +185,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - **Input validation.** All user input is validated with Zod schemas before processing.
 - **Path traversal.** `validatePathSegment()` + `ensureWithinBase()` on every user-supplied path.
 - **Env passthrough.** Agents receive only the keys in the configured safe allowlist; see
-  `server/src/utils/codex-env.ts` and `server/src/utils/hermes-env.ts`.
+  `server/src/utils/codex-env.ts`, `server/src/utils/hermes-env.ts`, and
+  `server/src/services/claude-code-adapter.ts`.
 - **Launch arguments.** Never put credential values in provider commands or arguments; use an
   allowlisted environment key or run-scoped brokered credential reference.
 - **Log redaction.** Trace logs and telemetry run through `TRACE_SECRET_PATTERNS` before storage.

@@ -49,8 +49,9 @@ describe('ConfigService', () => {
             supportProfile: expect.objectContaining({
               schemaVersion: 'harness-support-profile/v1',
               id: 'claude-code',
+              adapterId: 'claude-code',
               transport: 'process-jsonl',
-              supportTier: 'unsupported',
+              supportTier: 'configured',
             }),
           }),
           expect.objectContaining({
@@ -114,7 +115,7 @@ describe('ConfigService', () => {
       expect(config.defaultAgent).toBe('codex');
 
       const expectedSupport = [
-        ['claude-code', undefined, 'unsupported'],
+        ['claude-code', 'claude-code', 'configured'],
         ['amp', undefined, 'unsupported'],
         ['copilot', undefined, 'unsupported'],
         ['gemini', undefined, 'unsupported'],

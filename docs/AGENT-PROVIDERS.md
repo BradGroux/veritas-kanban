@@ -9,11 +9,88 @@ Veritas works as a board without any agent runner. When you do enable agents, pr
 Fresh v5 installs use OpenAI Codex as the default agent:
 
 - `codex` is enabled by default and uses `codex exec --sandbox workspace-write --json`.
-- `codex-sdk` and `hermes` have executable adapters but are disabled by default.
-- `claude-code`, `amp`, `copilot`, `gemini`, `codex-cloud`, `ollama-local`, `ollama-cloud`, and `lm-studio-local` remain visible for configuration and migration, but they cannot dispatch until a matching executable adapter ships.
+- `codex-sdk`, `claude-code`, and `hermes` have executable adapters but are
+  disabled by default.
+- `amp`, `copilot`, `gemini`, `codex-cloud`, `ollama-local`, `ollama-cloud`,
+  and `lm-studio-local` remain visible for configuration and migration, but
+  they cannot dispatch until a matching executable adapter ships.
 - Built-in routing sends code, bug, documentation, and review work to `codex` first, with conservative fallbacks for higher-risk code paths.
 
 Existing configs keep the user's chosen default agent. Missing built-in profiles are added during config normalization without overwriting customized commands, arguments, or enabled states.
+
+## Claude Code v2.1.218
+
+The first-class `claude-code` adapter contract is pinned to Claude Code
+v2.1.218. Veritas launches the executable directly in the assigned worktree
+with no shell and a reproducible system-owned argument set:
+
+```text
+claude --bare --print --output-format stream-json --verbose \
+  --include-partial-messages --include-hook-events \
+  --forward-subagent-text --permission-mode dontAsk
+```
+
+The public Claude Code repository does not contain the complete CLI
+implementation. This contract is therefore pinned to the v2.1.218 release,
+official CLI/headless documentation, and checked-in golden stream fixtures;
+unknown versions invalidate conformance instead of inheriting certification.
+
+The exact launch also disables slash commands and Chrome, caps turns at 100 by
+default, applies an optional run cost budget, and derives allowed and denied
+tools from the effective sandbox. Read, Glob, and Grep are available in all
+sandboxes. Edit and Write require a writable sandbox. Bash requires both a
+writable sandbox and network access. WebFetch and WebSearch are denied when
+network access is disabled, and sensitive environment, secret, and credential
+file patterns are denied. Caller arguments cannot replace these controls,
+inherit settings/plugins/MCP configuration, resume an unrelated session, or
+bypass permissions.
+
+`--bare` deliberately skips Claude Code's local settings, plugins, MCP servers,
+OAuth, and keychain state. Veritas therefore copies the worktree's `AGENTS.md`
+into the attributed task request and requires explicit bare-mode
+authentication. Supported credential keys are `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_FOUNDRY_API_KEY`,
+`ANTHROPIC_FOUNDRY_AUTH_TOKEN`, `AWS_BEARER_TOKEN_BEDROCK`, and the bounded AWS
+credential set used for Bedrock. Vertex requires an explicit
+`GOOGLE_APPLICATION_CREDENTIALS` file reference. Vertex, Bedrock, and Foundry
+selectors are allowlisted separately but do not prove authentication on their
+own. Claude Code's subprocess environment scrubbing is forced on so Bash,
+hooks, and MCP subprocesses cannot inherit provider credentials. Arbitrary
+custom headers, config directories, and unrelated credential-shaped
+environment variables are not forwarded.
+
+Readiness runs bounded `claude --version`, `claude auth status`, and
+`claude agents --json` probes without a shell. The auth status probe is useful
+diagnostic evidence, but only the explicit bare-mode environment satisfies
+launch authentication. The runtime profile requires an exact
+`2.1.218 (Claude Code)` version match and probe revision 4; version or build
+drift invalidates conformance evidence.
+
+Claude's stream is consumed as bounded JSONL. Partial text/thinking, tool
+use/results, hooks, subagents, retries, usage/cost, and terminal results map to
+the shared causal event journal. The provider `session_id` is stored separately
+from turn identity in `run-event/v1` and on the attempt as its continuation
+handle. Veritas waits for queued stdout processing and parses the final
+unterminated record after process close, preventing the terminal result from
+being lost during stream drain. A successful process exit without an
+authoritative successful `result` record fails closed.
+
+Resume/fork, interactive approvals, elicitation, and run-scoped MCP injection
+remain explicitly unsupported until their provider-neutral lifecycle and
+broker issues land. Static `dontAsk` permissions are the only accepted launch
+posture in this adapter version.
+
+Credential-gated release smoke is opt-in:
+
+```bash
+VERITAS_CLAUDE_CODE_SMOKE=1 pnpm --filter @veritas-kanban/server exec vitest run \
+  src/__tests__/claude-code-provider.smoke.test.ts
+```
+
+The smoke requires the exact certified executable and explicit bare-mode
+authentication. It runs one read-only, network-disabled, one-turn request with
+a $0.25 provider cap and verifies the authoritative result record. The normal
+test suite skips it.
 
 ## Buzz communication harness
 
@@ -55,18 +132,20 @@ Reasons and remediation are redacted before leaving the server.
 
 Task start rechecks the normalized profile before attempt state is created. An
 explicit provider must match the profile's executable adapter. A display-only
-Claude Code or Copilot profile, an unsupported provider, or an unknown
-provider-less profile fails with an actionable `409` and can never fall through
-to OpenClaw. Recognized credential material in the configured command or launch
+Copilot profile, an unsupported provider, or an unknown provider-less profile
+fails with an actionable `409` and can never fall through to OpenClaw.
+Recognized credential material in the configured command or launch
 arguments degrades the profile and blocks dispatch before probing or attempt
 creation. Put credentials in an allowlisted environment key or a run-scoped
 brokered credential reference instead.
 
 For backward compatibility, normalization migrates only known provider-less
-Codex and Hermes records when both the built-in type and command identity match
-(`codex` -> `codex-cli`, `hermes` -> `hermes-cli`). New and custom profiles must
-set an explicit provider. Command-name inference is not a general
-adapter-selection mechanism.
+Claude Code, Codex, and Hermes records when both the built-in type and command
+identity match (`claude-code` plus `claude` -> `claude-code`, `codex` ->
+`codex-cli`, `hermes` -> `hermes-cli`). The legacy Claude-only
+`--dangerously-skip-permissions` default is removed during that narrow
+migration. New and custom profiles must set an explicit provider. Command-name
+inference is not a general adapter-selection mechanism.
 
 ## Provider Runtime Manifests
 
@@ -77,7 +156,7 @@ timestamp and diagnostics, and every known runtime or sandbox capability as
 `supported`, `advisory`, `unsupported`, or `unknown`.
 
 Veritas currently has executable task adapters for `codex-cli`, `codex-sdk`,
-`hermes-cli`, and `openclaw`. An explicitly configured Claude Code, Copilot,
+`claude-code`, `hermes-cli`, and `openclaw`. An explicitly configured Copilot,
 Codex Cloud, Ollama, LM Studio, or custom profile is not silently sent through
 OpenClaw; task dispatch fails with an actionable `409` until that provider has
 an execution adapter.
@@ -132,14 +211,14 @@ snapshot persisted for that attempt.
 ## Causal Run Event Journal
 
 Executable adapters own a mapper into the shared `run-event/v1` envelope.
-OpenClaw, Codex CLI, Codex SDK, and Hermes preserve provider event identity,
-turn/item identity, provider time, receive time, source, causal links, and a
-monotonic per-attempt sequence. Known kinds cover run lifecycle, operator and
-assistant messages, deltas, reasoning, progress, streams, commands, file
-changes, tools, approvals, artifacts, usage, and errors. A new provider event
-that Veritas does not understand is retained as a namespaced kind or
-`provider.unknown`; it is never silently discarded or assigned semantics that
-the adapter cannot prove.
+OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes preserve provider event
+identity, session/turn/item identity when the provider reports it, provider
+time, receive time, source, causal links, and a monotonic per-attempt sequence.
+Known kinds cover run lifecycle, operator and assistant messages, deltas,
+reasoning, progress, streams, commands, file changes, tools, approvals,
+artifacts, usage, and errors. A new provider event that Veritas does not
+understand is retained as a namespaced kind or `provider.unknown`; it is never
+silently discarded or assigned semantics that the adapter cannot prove.
 
 The journal is the ordering boundary for provider output. An event is appended
 and fsynced or committed before legacy Markdown logs, traces, activity,
@@ -203,13 +282,14 @@ run log expose the same immutable envelope.
 
 Each executable task adapter renders the provider-neutral envelope into its
 own immutable `provider-task-envelope-transport/v1` request. OpenClaw, Codex
-CLI, Codex SDK, and Hermes renderers all include the envelope digest, runtime
-identity, objective and bounded context, a bounded workspace-baseline summary,
-explicit commit policy, allowed side effects, expected outputs, verification
-gates, and completion evidence contract. Profile instructions and saved task
-checkpoints are rendered as separate, attributed sections and are capped at
-20,000 characters each. The persisted task envelope retains the complete
-baseline fingerprints used for later attribution.
+CLI, Codex SDK, Claude Code, and Hermes renderers all include the envelope
+digest, runtime identity, objective and bounded context, a bounded
+workspace-baseline summary, explicit commit policy, allowed side effects,
+expected outputs, verification gates, and completion evidence contract.
+Profile instructions and saved task checkpoints are rendered as separate,
+attributed sections and are capped at 20,000 characters each. The persisted
+task envelope retains the complete baseline fingerprints used for later
+attribution.
 
 The callback posture belongs to the adapter:
 
@@ -217,6 +297,8 @@ The callback posture belongs to the adapter:
   the provider-runtime manifest digest.
 - Codex CLI returns terminal output through the supervised process.
 - Codex SDK returns terminal output through the captured SDK event stream.
+- Claude Code returns its authoritative terminal result through the drained
+  stream-json process output.
 - Hermes returns terminal output through scripted process stdout.
 
 Process and stream adapters are explicitly told not to call the Veritas
@@ -261,8 +343,9 @@ Completion status maps to task state as follows:
 The legacy bounded `{ success, summary, error }` OpenClaw callback remains
 accepted and is normalized into the same contract. New callbacks may report
 the explicit status, blockers, provider evidence, artifacts, verification
-claims, and a continuation handle. Codex CLI, Codex SDK, and Hermes still use
-their native harness-owned terminal paths rather than the callback endpoint.
+claims, and a continuation handle. Codex CLI, Codex SDK, Claude Code, and
+Hermes still use their native harness-owned terminal paths rather than the
+callback endpoint.
 If the server restarts before a harness-owned process or stream attempt
 persists a terminal result, startup reconciliation records a digest-bound
 `interrupted` result instead of leaving a provider-specific running or failed
@@ -333,7 +416,12 @@ Presets can be assigned to:
 - A workflow agent, as the guardrail for that workflow role.
 - A one-off agent start request, by passing `sandboxPresetId`.
 
-The launch path dry-runs the selected preset before starting Codex CLI, Codex SDK, or OpenClaw-backed work. Required controls fail closed when the provider cannot support them. Advisory controls continue with warnings and a governance trace. Settings also includes a dry-run panel that shows effective sandbox mode, network access, environment allowlist, unsupported controls, and the trace ID.
+The launch path dry-runs the selected preset before starting Codex CLI, Codex
+SDK, Claude Code, or OpenClaw-backed work. Required controls fail closed when
+the provider cannot support them. Advisory controls continue with warnings and
+a governance trace. Settings also includes a dry-run panel that shows effective
+sandbox mode, network access, environment allowlist, unsupported controls, and
+the trace ID.
 
 Credential references and environment-style `name=value` values are redacted from dry-run output and governance traces. Prefer brokered credential presets for workflows that need scoped secrets instead of exposing broad environment passthrough.
 
@@ -400,6 +488,7 @@ Soft thresholds create `budget-policy` governance traces and visible warnings. H
 | OpenAI Codex       | `codex-cli`       | `codex exec --sandbox workspace-write --json` | `codex login status`                                         |
 | OpenAI Codex SDK   | `codex-sdk`       | `codex`                                       | SDK import plus Codex login                                  |
 | OpenAI Codex Cloud | `codex-cloud`     | `gh`                                          | `gh auth status`                                             |
+| Claude Code        | `claude-code`     | `claude`                                      | Explicit bare-mode environment auth plus bounded probes      |
 | Hermes Agent       | `hermes-cli`      | `hermes`                                      | `hermes --version` + `HERMES_API_KEY` or `ANTHROPIC_API_KEY` |
 | Ollama Local       | `ollama-local`    | `ollama run llama3.2`                         | `ollama list`                                                |
 | Ollama Cloud       | `ollama-cloud`    | `ollama run gpt-oss:120b-cloud`               | `ollama signin` or `OLLAMA_API_KEY`                          |

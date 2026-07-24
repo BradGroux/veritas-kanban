@@ -37,7 +37,7 @@ function config(provider: AgentConfig['provider']): AgentConfig {
   return {
     type: provider ?? 'fixture',
     name: provider ?? 'Fixture',
-    command: provider === 'hermes-cli' ? 'hermes' : 'codex',
+    command: provider === 'hermes-cli' ? 'hermes' : provider === 'claude-code' ? 'claude' : 'codex',
     args: [],
     enabled: true,
     provider,
@@ -46,10 +46,7 @@ function config(provider: AgentConfig['provider']): AgentConfig {
 }
 
 describe('ClawdbotAgentService provider runtime adapters', () => {
-  it.each([
-    ['claude-code', 'claude'],
-    ['copilot', 'copilot'],
-  ] as const)(
+  it.each([['copilot', 'copilot']] as const)(
     'fails closed when the provider-less %s display profile is probed',
     async (type, command) => {
       await expect(
@@ -122,7 +119,7 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
       details: expect.objectContaining({
         profileId: 'claude-code',
         provider: 'openclaw',
-        reason: 'Harness support profile has no executable adapter',
+        reason: 'Harness support profile adapter does not match the configured provider',
       }),
     });
   });
@@ -172,6 +169,7 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
   it.each([
     ['codex-cli', 'codex-exec-json/v1', 'supported', 'ready'],
     ['codex-sdk', 'openai-codex-sdk/v1', 'supported', 'ready'],
+    ['claude-code', 'claude-code-stream-json/v1', 'supported', 'ready'],
     ['hermes-cli', 'hermes-one-shot/v1', 'supported', 'ready'],
     ['openclaw', 'openclaw-tools/v1', 'unsupported', 'degraded'],
   ] as const)(

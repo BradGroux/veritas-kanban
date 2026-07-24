@@ -103,13 +103,14 @@ export interface HarnessSupportStatus {
   providerVersion?: string;
   providerBuild?: string;
   manifestDigest?: string;
+  diagnostics?: string[];
   diagnosticCommands: string[];
   remediation: string[];
 }
 
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
-export const PROVIDER_RUNTIME_PROBE_REVISION = 3 as const;
+export const PROVIDER_RUNTIME_PROBE_REVISION = 4 as const;
 
 export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.start',

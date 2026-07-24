@@ -186,6 +186,7 @@ export class RunEventJournalService {
       taskId: input.taskId,
       runId: input.attemptId,
       attemptId: input.attemptId,
+      sessionId: input.sessionId,
       turnId: input.turnId,
       itemId: input.itemId,
       providerEventId: input.providerEventId,
