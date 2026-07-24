@@ -1267,8 +1267,19 @@ or `X-API-Key`. In production, do not rely on localhost bypass.
 **Subscribe to task output**:
 
 ```json
-{ "type": "subscribe", "taskId": "TASK-001" }
+{
+  "type": "subscribe",
+  "taskId": "TASK-001",
+  "attemptId": "attempt_001",
+  "afterSequence": 41
+}
 ```
+
+`attemptId` defaults to the active/latest attempt. `afterSequence` defaults to
+`0`. The server attaches the live tail before replaying stored events, so
+events appended during replay are delivered once and in sequence. The
+`subscribed` confirmation returns the resolved `attemptId` and current
+`cursor`.
 
 **Subscribe to chat session**:
 
@@ -1293,14 +1304,51 @@ The server confirms with `run-session:subscribed` after the connection has
 { "type": "task:updated", "task": { "id": "TASK-001", "status": "done" } }
 ```
 
-**Agent output**:
+**Durable agent event**:
+
+```json
+{
+  "type": "agent:event",
+  "taskId": "TASK-001",
+  "attemptId": "attempt_001",
+  "data": {
+    "schemaVersion": "run-event/v1",
+    "eventId": "runevt_abcdefghijklmnopqr",
+    "taskId": "TASK-001",
+    "runId": "attempt_001",
+    "attemptId": "attempt_001",
+    "sequence": 42,
+    "receivedAt": "2026-07-23T20:00:00.000Z",
+    "kind": "message.delta",
+    "source": { "provider": "codex-cli", "adapter": "codex-cli" },
+    "redaction": {
+      "status": "none",
+      "fields": [],
+      "originalBytes": 16,
+      "persistedBytes": 30
+    },
+    "payload": { "content": "Running tests..." },
+    "payloadHash": "<64 lowercase hex characters>"
+  },
+  "timestamp": "2026-07-23T20:00:00.000Z"
+}
+```
+
+Unknown future event kinds remain replayable. Persisted payloads are bounded
+and redacted; `redaction.status: "dropped"` means the provider payload exceeded
+the journal limit and was replaced by safe metadata.
+
+**Legacy agent output projection**:
 
 ```json
 {
   "type": "agent:output",
   "taskId": "TASK-001",
+  "attemptId": "attempt_001",
   "outputType": "stdout",
-  "data": "Running tests..."
+  "content": "Running tests...",
+  "sequence": 42,
+  "timestamp": "2026-07-23T20:00:00.000Z"
 }
 ```
 
@@ -2208,6 +2256,18 @@ Stop, message, completion, token-reporting, and attempt-log endpoints re-check
 both persisted snapshots. Invalid or active/persisted provider or run-launch
 digest mismatches return `409 Conflict`; unsupported capability states return
 the same structured control evidence.
+
+Durable run events can be replayed independently of the Markdown attempt log:
+
+```http
+GET /api/agents/TASK-001/attempts/attempt_123/events?afterSequence=41&limit=200
+```
+
+The response contains `schemaVersion`, `taskId`, `attemptId`, ordered `events`,
+`nextCursor`, and `hasMore`. `afterSequence` must be non-negative and `limit`
+must be between 1 and 500. Access uses the same `run.logs` capability check as
+attempt logs. Clients should persist `nextCursor` and reconnect with it rather
+than inferring order from timestamps.
 
 Stop and message requests must carry the `attemptId` returned by status so a
 delayed control cannot affect a replacement run:

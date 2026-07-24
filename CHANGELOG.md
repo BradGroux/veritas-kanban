@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `run-event/v1`, a provider-neutral causal event journal for OpenClaw,
+  Codex CLI, Codex SDK, and Hermes. Provider mappers now durably append bounded,
+  redacted, deduplicated lifecycle, message, reasoning, command, file, tool,
+  approval, artifact, usage, error, and unknown events before projecting them
+  into legacy logs, traces, telemetry, budgets, and live output. File and SQLite
+  repositories allocate per-attempt monotonic cursors, REST and WebSocket
+  clients can replay after a cursor, and reconnect subscriptions merge replay
+  with concurrent live events without gaps. The published JSON Schema,
+  symlink-safe file storage, SQLite migration, provider fixtures, replay,
+  migration, redaction, and interleaved operator/provider tests define the v1
+  compatibility boundary (#850).
 - Added one-way Buzz persona/team definition import with signed bounded NIP-33
   head queries, exact v0.4.24 field policy, preview/diff/collision actions,
   same-author team resolution, disabled profile and roster materialization,

@@ -1110,6 +1110,32 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON governance_decision_traces(task_id, created_at DESC);
     `,
   },
+  {
+    version: 18,
+    name: '0018_causal_run_event_journal',
+    up: `
+      CREATE TABLE run_events (
+        event_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        provider_event_id TEXT,
+        dedupe_key TEXT,
+        received_at TEXT NOT NULL,
+        event_json TEXT NOT NULL,
+        UNIQUE (workspace_id, task_id, attempt_id, sequence),
+        UNIQUE (workspace_id, task_id, attempt_id, dedupe_key)
+      );
+
+      CREATE INDEX idx_run_events_task_attempt_sequence
+        ON run_events(workspace_id, task_id, attempt_id, sequence);
+
+      CREATE INDEX idx_run_events_received_at
+        ON run_events(workspace_id, received_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

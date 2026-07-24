@@ -13,6 +13,7 @@ const {
   mockGetAgentStatus,
   mockAssertActiveRunControl,
   mockRecordBudgetUsage,
+  mockGetRunEvents,
   mockGetTask,
   mockTelemetryEmit,
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   mockGetAgentStatus: vi.fn(),
   mockAssertActiveRunControl: vi.fn(),
   mockRecordBudgetUsage: vi.fn(),
+  mockGetRunEvents: vi.fn(),
   mockGetTask: vi.fn(),
   mockTelemetryEmit: vi.fn(),
 }));
@@ -50,6 +52,7 @@ vi.mock('../../services/clawdbot-agent-service.js', () => ({
     listPendingRequests: vi.fn(),
     listAttempts: vi.fn(),
     getAttemptLog: vi.fn(),
+    getRunEvents: mockGetRunEvents,
   },
 }));
 
@@ -103,6 +106,14 @@ describe('agent local capability enforcement', () => {
     mockGetAgentStatus.mockReturnValue(null);
     mockAssertActiveRunControl.mockResolvedValue(undefined);
     mockRecordBudgetUsage.mockResolvedValue(undefined);
+    mockGetRunEvents.mockResolvedValue({
+      schemaVersion: 'run-event/v1',
+      taskId: 'task_1',
+      attemptId: 'attempt_1',
+      events: [],
+      nextCursor: 12,
+      hasMore: false,
+    });
     mockGetTask.mockResolvedValue({
       id: 'task_1',
       project: 'veritas',
@@ -389,5 +400,24 @@ describe('agent local capability enforcement', () => {
       totalTokens: 15,
       costUsd: undefined,
     });
+  });
+
+  it('validates and forwards durable run-event replay cursors', async () => {
+    const app = createApp(auth());
+    const response = await request(app)
+      .get('/api/agents/task_1/attempts/attempt_1/events')
+      .query({ afterSequence: 12, limit: 50 });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      schemaVersion: 'run-event/v1',
+      nextCursor: 12,
+    });
+    expect(mockGetRunEvents).toHaveBeenCalledWith('task_1', 'attempt_1', 12, 50);
+
+    const invalid = await request(app)
+      .get('/api/agents/task_1/attempts/attempt_1/events')
+      .query({ afterSequence: -1 });
+    expect(invalid.status).toBe(400);
   });
 });

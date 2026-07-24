@@ -722,6 +722,20 @@ CREATE TABLE telemetry_events (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE run_events (
+  event_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL DEFAULT 'local' REFERENCES workspaces(id),
+  task_id TEXT NOT NULL,
+  attempt_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL CHECK (sequence > 0),
+  provider_event_id TEXT,
+  dedupe_key TEXT,
+  received_at TEXT NOT NULL,
+  event_json TEXT NOT NULL,
+  UNIQUE (workspace_id, task_id, attempt_id, sequence),
+  UNIQUE (workspace_id, task_id, attempt_id, dedupe_key)
+);
+
 CREATE TABLE traces (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -743,6 +757,8 @@ CREATE INDEX idx_audit_workspace_created ON audit_events(workspace_id, timestamp
 CREATE INDEX idx_notifications_target ON notifications(workspace_id, target_agent, delivered, created_at DESC);
 CREATE INDEX idx_telemetry_type_created ON telemetry_events(workspace_id, type, created_at DESC);
 CREATE INDEX idx_telemetry_task_created ON telemetry_events(task_id, created_at DESC);
+CREATE INDEX idx_run_events_task_attempt_sequence ON run_events(workspace_id, task_id, attempt_id, sequence);
+CREATE INDEX idx_run_events_received_at ON run_events(workspace_id, received_at);
 CREATE INDEX idx_traces_attempt ON traces(attempt_id, created_at DESC);
 ```
 
@@ -1049,16 +1065,18 @@ SQLite tables with JSON payload columns plus query indexes. This keeps the v4
 service contracts intact while preventing SQLite mode from writing operational
 state back to `.veritas-kanban/*.json` or telemetry NDJSON files.
 
-| Runtime table      | Stored data                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `activity_events`  | Complete activity entries plus type, task, agent, and created-time columns.              |
-| `status_history`   | Complete status transition entries plus previous/new status and task columns.            |
-| `telemetry_events` | Complete telemetry events plus type, task, project, token, duration, and result columns. |
+| Runtime table      | Stored data                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `activity_events`  | Complete activity entries plus type, task, agent, and created-time columns.                                    |
+| `status_history`   | Complete status transition entries plus previous/new status and task columns.                                  |
+| `telemetry_events` | Complete telemetry events plus type, task, project, token, duration, and result columns.                       |
+| `run_events`       | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns. |
 
-`ActivityService`, `StatusHistoryService`, and `TelemetryService` select these
-SQLite repositories when `VERITAS_STORAGE=sqlite`. File storage still forces the
-file-backed services to `storageType='file'`, so explicit file mode cannot be
-accidentally flipped by the environment.
+`ActivityService`, `StatusHistoryService`, `TelemetryService`, and
+`RunEventJournalService` select these SQLite repositories when
+`VERITAS_STORAGE=sqlite`. File storage still forces the file-backed services to
+`storageType='file'`, so explicit file mode cannot be accidentally flipped by
+the environment.
 
 Dashboard metric aggregation uses the same active storage backend. In SQLite
 mode, `/metrics/all`, `/metrics/trends`, agent comparison, task cost, and

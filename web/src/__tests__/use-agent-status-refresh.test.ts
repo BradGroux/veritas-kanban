@@ -61,13 +61,31 @@ describe('agent status refresh cadence', () => {
         type: 'agent:output',
         outputType: 'stdout',
         content: 'prior attempt output',
+        sequence: 7,
         timestamp: '2026-07-16T08:00:00.000Z',
       });
     });
     expect(result.current.outputs).toHaveLength(1);
+    expect(socketMocks.options).toMatchObject({
+      onOpen: {
+        type: 'subscribe',
+        taskId: 'task-runtime',
+        attemptId: 'attempt-1',
+        afterSequence: 7,
+      },
+    });
 
     rerender({ attemptId: 'attempt-2' });
 
     expect(result.current.outputs).toEqual([]);
+    expect(socketMocks.send).toHaveBeenLastCalledWith({
+      type: 'subscribe',
+      taskId: 'task-runtime',
+      attemptId: 'attempt-2',
+      afterSequence: 0,
+    });
+    expect(socketMocks.options).toMatchObject({
+      autoReconnect: true,
+    });
   });
 });

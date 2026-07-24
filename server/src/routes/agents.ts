@@ -23,6 +23,7 @@ import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
+import { RunEventQuerySchema } from '../schemas/run-event-schemas.js';
 
 const router: RouterType = Router();
 
@@ -393,6 +394,33 @@ router.get(
       req.params.attemptId as string
     );
     res.type('text/markdown').send(log);
+  })
+);
+
+// GET /api/agents/:taskId/attempts/:attemptId/events - Replay durable run events
+router.get(
+  '/:taskId/attempts/:attemptId/events',
+  asyncHandler(async (req, res) => {
+    let query: z.infer<typeof RunEventQuerySchema>;
+    try {
+      query = RunEventQuerySchema.parse({
+        ...req.query,
+        attemptId: req.params.attemptId,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    res.json(
+      await clawdbotAgentService.getRunEvents(
+        req.params.taskId as string,
+        query.attemptId,
+        query.afterSequence,
+        query.limit
+      )
+    );
   })
 );
 

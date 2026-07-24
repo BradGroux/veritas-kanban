@@ -47,7 +47,11 @@ import {
   type ProviderTaskEnvelopeTransport,
 } from './provider-task-envelope-renderer.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
-import { evaluateTaskReadiness, RUN_LAUNCH_MANIFEST_SCHEMA_VERSION } from '@veritas-kanban/shared';
+import {
+  evaluateTaskReadiness,
+  EXECUTABLE_AGENT_PROVIDERS,
+  RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
+} from '@veritas-kanban/shared';
 import type {
   Task,
   AgentType,
@@ -91,6 +95,8 @@ import type {
   RunLaunchRuntime,
   CredentialRunRevocationRequest,
   CredentialLeaseTerminalReason,
+  RunEventEnvelope,
+  RunEventKind,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -130,6 +136,15 @@ import {
 } from './provider-completion-service.js';
 import { getCredentialBrokerService } from './credential-broker-service.js';
 import { WorktreeService } from './worktree-service.js';
+import {
+  getRunEventJournalService,
+  type RunEventJournalService,
+} from './run-event-journal-service.js';
+import {
+  getProviderRunEventMapper,
+  type ProviderMappedRunEvent,
+  type ProviderRunEventMapper,
+} from './provider-run-event-mappers.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -172,6 +187,7 @@ export interface AgentProviderAdapter {
   label: string;
   renderTaskEnvelope(input: ProviderTaskEnvelopeRenderInput): ProviderTaskEnvelopeTransport;
   probe(context: AgentProviderProbeContext): Promise<ProviderRuntimeManifest>;
+  runEventMapper: ProviderRunEventMapper;
   start(context: AgentProviderStartContext): Promise<void> | void;
   stop(context: AgentProviderStopContext): Promise<void> | void;
 }
@@ -281,7 +297,7 @@ interface PendingAgent {
   completionBudgetEvaluated?: boolean;
   preparedCompletion?: {
     status: AttemptStatus;
-    taskBeforeCompletion?: Task;
+    taskBeforeCompletion: Task;
     completedAttempt: TaskAttempt;
     completionResult: CompletionResult;
   };
@@ -330,6 +346,12 @@ function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
     : 1;
 }
 
+function executableProvider(value: string | undefined): ExecutableAgentProvider | 'system' {
+  return EXECUTABLE_AGENT_PROVIDERS.includes(value as ExecutableAgentProvider)
+    ? (value as ExecutableAgentProvider)
+    : 'system';
+}
+
 export class ClawdbotAgentService {
   private configService: ConfigService;
   private taskService: TaskService;
@@ -341,6 +363,7 @@ export class ClawdbotAgentService {
   private credentialLeases: CredentialLeaseLifecycle;
   private workspaceFiles: WorkspaceFileRepository;
   private worktrees: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>;
+  private runEvents: RunEventJournalService;
   private logsDir: string;
 
   constructor(
@@ -350,7 +373,8 @@ export class ClawdbotAgentService {
     workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository(),
     providerCompletions = new ProviderCompletionService(),
     credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE,
-    worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>
+    worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>,
+    runEvents: RunEventJournalService = getRunEventJournalService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -367,6 +391,7 @@ export class ClawdbotAgentService {
         taskService: this.taskService,
         configService: this.configService,
       });
+    this.runEvents = runEvents;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -502,6 +527,7 @@ export class ClawdbotAgentService {
     let routingReason: string;
     let routingFallback: AgentType | undefined;
     const requestedAgent = profileLaunch ? profileLaunch.agent : (agentType ?? 'auto');
+
     if (profileLaunch) {
       agent = profileLaunch.agent;
       routingReason = `Agent profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent}.`;
@@ -1014,37 +1040,57 @@ export class ClawdbotAgentService {
       throw error;
     }
 
-    if (profileLaunch) {
-      await activityService.logActivity(
-        'agent_event',
-        taskId,
-        task.title,
-        {
-          event: 'profile_launch',
-          profile: profileLaunch.metadata,
-          effectivePolicy: {
-            sandboxPresetId: options.sandboxPresetId ?? profileLaunch.sandboxPresetId,
-            budgetEnabled: pendingAgents.get(taskId)?.budget?.enabled ?? false,
-            model: launchAgentConfig?.model,
-            provider,
-          },
-        },
-        agent
-      );
-    }
-
     const telemetry = getTelemetryService();
-    await telemetry.emit<RunStartedEvent>({
-      type: 'run.started',
-      taskId,
-      attemptId,
-      agent,
-      model: launchAgentConfig?.model,
-      project: task.project,
-      harnessSupport: this.harnessTelemetry(harnessSupport),
-    });
-
     try {
+      await this.appendRunEvent(
+        taskId,
+        attemptId,
+        'run.started',
+        {
+          summary: 'Agent run initialized',
+          taskEnvelopeDigest: taskEnvelope.digest,
+          runLaunchManifestDigest: runLaunchManifest.digest,
+          providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+          worktreeManifestId: taskEnvelope.workspace.worktreeManifestId,
+        },
+        {
+          provider,
+          adapter: adapter.id,
+          agent,
+          model: launchAgentConfig?.model,
+          dedupeKey: 'run.started',
+        }
+      );
+
+      if (profileLaunch) {
+        await activityService.logActivity(
+          'agent_event',
+          taskId,
+          task.title,
+          {
+            event: 'profile_launch',
+            profile: profileLaunch.metadata,
+            effectivePolicy: {
+              sandboxPresetId: options.sandboxPresetId ?? profileLaunch.sandboxPresetId,
+              budgetEnabled: pendingAgents.get(taskId)?.budget?.enabled ?? false,
+              model: launchAgentConfig?.model,
+              provider,
+            },
+          },
+          agent
+        );
+      }
+
+      await telemetry.emit<RunStartedEvent>({
+        type: 'run.started',
+        taskId,
+        attemptId,
+        agent,
+        model: launchAgentConfig?.model,
+        project: task.project,
+        harnessSupport: this.harnessTelemetry(harnessSupport),
+      });
+
       await adapter.start({
         task,
         agentConfig: launchAgentConfig,
@@ -1059,6 +1105,27 @@ export class ClawdbotAgentService {
       });
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
+      await this.appendRunEvent(
+        taskId,
+        attemptId,
+        'run.failed',
+        {
+          summary: this.redactTraceText(startError.message || `Failed to start ${adapter.label}`),
+          phase: 'launch',
+        },
+        {
+          provider,
+          adapter: adapter.id,
+          agent,
+          model: launchAgentConfig?.model,
+          dedupeKey: 'run.launch-failed',
+        }
+      ).catch((journalError) => {
+        log.error(
+          { err: journalError, taskId, attemptId },
+          'Failed to record launch failure in run event journal'
+        );
+      });
       pendingAgents.delete(taskId);
       this.recordTraceStep(attemptId, 'error', {
         eventType: 'run.start_failed',
@@ -1442,6 +1509,61 @@ export class ClawdbotAgentService {
       completionResult,
     };
     const completionStatus = taskStatusForCompletion(completionResult.status);
+    if (attempt.provider === 'openclaw' && completionResult.summary) {
+      await this.appendMappedProviderEvent(
+        task,
+        attempt.id,
+        undefined,
+        'openclaw',
+        this.resolveProviderAdapter('openclaw').runEventMapper.mapEvent(
+          'message.completed',
+          {
+            type: 'message.completed',
+            event_id: `completion_${completionResult.idempotencyKey}`,
+          },
+          completionResult.summary
+        )
+      );
+    }
+    await this.appendRunEvent(
+      task.id,
+      attempt.id,
+      'run.recovered',
+      {
+        summary: completionResult.summary,
+        status: completionResult.status,
+        terminalSource: completionResult.terminalSource,
+      },
+      {
+        provider: executableProvider(attempt.provider),
+        adapter: attempt.provider ?? 'restart-reconciliation',
+        agent: attempt.agent,
+        model: attempt.model,
+        dedupeKey: `run.recovery:${completionResult.idempotencyKey}`,
+      }
+    );
+    await this.appendRunEvent(
+      task.id,
+      attempt.id,
+      completionResult.status === 'success'
+        ? 'run.completed'
+        : completionResult.status === 'interrupted'
+          ? 'run.interrupted'
+          : 'run.failed',
+      {
+        summary: completionResult.summary,
+        error: completionResult.error,
+        status: completionResult.status,
+        terminalSource: completionResult.terminalSource,
+      },
+      {
+        provider: executableProvider(attempt.provider),
+        adapter: attempt.provider ?? 'restart-reconciliation',
+        agent: attempt.agent,
+        model: attempt.model,
+        dedupeKey: `run.terminal:${completionResult.idempotencyKey}`,
+      }
+    );
     let taskSnapshot = task;
     let lastError: unknown;
     for (
@@ -1624,6 +1746,22 @@ export class ClawdbotAgentService {
       // Terminal ownership wins over an older usage report. Waiting behind that
       // report can deadlock when it is itself waiting for this finalization.
       if (!budgetEvaluations.has(pending)) {
+        await this.appendRunEvent(
+          taskId,
+          attemptId,
+          'usage.updated',
+          {
+            runtimeSeconds: Math.ceil(timing.durationMs / 1000),
+            source: 'run-completion',
+          },
+          {
+            provider: pending.provider,
+            adapter: pending.provider,
+            agent: pending.agent,
+            model: pending.model,
+            dedupeKey: 'usage.runtime-terminal',
+          }
+        );
         await this.evaluatePendingBudget(
           taskId,
           attemptId,
@@ -1682,6 +1820,47 @@ export class ClawdbotAgentService {
     const { status, taskBeforeCompletion, completionResult } = preparedCompletion;
     const successful = completionResult.status === 'success';
 
+    if (pending.provider === 'openclaw' && completionResult.summary) {
+      await this.appendMappedProviderEvent(
+        taskBeforeCompletion,
+        attemptId,
+        undefined,
+        'openclaw',
+        this.resolveProviderAdapter('openclaw').runEventMapper.mapEvent(
+          'message.completed',
+          {
+            type: 'message.completed',
+            event_id: `completion_${completionResult.idempotencyKey}`,
+          },
+          completionResult.summary
+        )
+      );
+    }
+    const terminalKind: RunEventKind =
+      completionResult.status === 'success'
+        ? 'run.completed'
+        : completionResult.status === 'interrupted'
+          ? 'run.interrupted'
+          : 'run.failed';
+    await this.appendRunEvent(
+      taskId,
+      attemptId,
+      terminalKind,
+      {
+        summary: completionResult.summary,
+        error: completionResult.error,
+        status: completionResult.status,
+        terminalSource: completionResult.terminalSource,
+        durationMs: timing.durationMs,
+      },
+      {
+        provider: pending.provider,
+        adapter: pending.provider,
+        agent: pending.agent,
+        model: pending.model,
+        dedupeKey: `run.terminal:${completionResult.idempotencyKey}`,
+      }
+    );
     const persistedHere = await this.persistPendingCompletion(taskId, pending, preparedCompletion);
     if (pendingAgents.get(taskId) === pending) {
       pendingAgents.delete(taskId);
@@ -1903,6 +2082,19 @@ export class ClawdbotAgentService {
     await this.finalizePendingAgent(taskId, pending, async () => {
       await this.assertPendingRunControl(taskId, pending, 'stop');
       await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+      await this.appendRunEvent(
+        taskId,
+        pending.attemptId,
+        'run.interrupted',
+        { summary: 'Stopped by user', phase: 'requested' },
+        {
+          provider: 'operator',
+          adapter: 'veritas-run-control',
+          agent: pending.agent,
+          model: pending.model,
+          dedupeKey: 'run.interruption-requested',
+        }
+      );
       this.recordTraceStep(pending.attemptId, 'abort', {
         eventType: 'run.aborted',
         summary: 'Stopped by user',
@@ -1937,21 +2129,32 @@ export class ClawdbotAgentService {
     }
 
     const actor = options.actor?.trim() || 'operator';
-    const timestamp = new Date().toISOString();
     const redacted = this.redactTraceText(content);
     const logPath = path.join(this.logsDir, `${taskId}_${pending.attemptId}.md`);
 
+    const journalEvent = await this.appendRunEvent(
+      taskId,
+      pending.attemptId,
+      'message.operator',
+      {
+        content: `${actor}: ${redacted}`,
+        actor,
+        source: options.source || 'agent-panel',
+      },
+      {
+        provider: 'operator',
+        adapter: 'veritas-operator-message',
+        agent: pending.agent,
+        model: pending.model,
+      }
+    );
     await this.appendLog(
       logPath,
       `\n## Operator Message\n\n**Actor:** ${actor}\n**Source:** ${
         options.source || 'agent-panel'
       }\n\n${redacted}\n`
     );
-    pending.emitter.emit('output', {
-      type: 'stdin',
-      content: `${actor}: ${redacted}`,
-      timestamp,
-    } satisfies AgentOutput);
+    this.emitJournalOutput(journalEvent);
     this.recordTraceStep(pending.attemptId, 'execute', {
       eventType: 'operator.message',
       actor,
@@ -1978,6 +2181,10 @@ export class ClawdbotAgentService {
     attemptId: string,
     delta: Partial<AgentBudgetUsage>
   ): Promise<void> {
+    await this.appendRunEvent(taskId, attemptId, 'usage.updated', {
+      ...delta,
+      source: 'external-report',
+    });
     await this.evaluatePendingBudget(taskId, attemptId, delta, 'agent.usage', true);
   }
 
@@ -2281,6 +2488,7 @@ export class ClawdbotAgentService {
         label: definition.label,
         renderTaskEnvelope: renderCodexCliTaskEnvelope,
         probe,
+        runEventMapper: getProviderRunEventMapper(provider),
         start: ({
           task,
           agentConfig,
@@ -2316,6 +2524,7 @@ export class ClawdbotAgentService {
         label: definition.label,
         renderTaskEnvelope: renderCodexSdkTaskEnvelope,
         probe,
+        runEventMapper: getProviderRunEventMapper(provider),
         start: ({
           task,
           agentConfig,
@@ -2355,11 +2564,29 @@ export class ClawdbotAgentService {
               return;
             }
             abortController.abort();
-            const message = error instanceof Error ? error.message : 'Codex SDK attempt failed';
+            const message = this.redactTraceText(
+              error instanceof Error ? error.message : 'Codex SDK attempt failed'
+            );
             try {
+              const journalEvent = await this.appendRunEvent(
+                task.id,
+                attemptId,
+                'run.error',
+                { summary: message, error: message, phase: 'stream' },
+                {
+                  provider: 'codex-sdk',
+                  adapter: 'codex-sdk',
+                  agent: agentConfig?.type || 'codex-sdk',
+                  model: agentConfig?.model,
+                }
+              );
+              this.emitJournalOutput(journalEvent);
               await this.appendLog(logPath, `\n## Codex SDK Error\n\n${message}\n`);
             } catch (logError) {
-              log.error({ err: logError, taskId: task.id }, 'Failed to append Codex SDK error');
+              log.error(
+                { err: logError, taskId: task.id },
+                'Failed to record Codex SDK error evidence'
+              );
             }
             try {
               await this.completeAgent(
@@ -2402,6 +2629,7 @@ export class ClawdbotAgentService {
         label: definition.label,
         renderTaskEnvelope: renderHermesTaskEnvelope,
         probe,
+        runEventMapper: getProviderRunEventMapper(provider),
         start: ({
           task,
           agentConfig,
@@ -2449,6 +2677,7 @@ export class ClawdbotAgentService {
       label: definition.label,
       renderTaskEnvelope: renderOpenClawTaskEnvelope,
       probe,
+      runEventMapper: getProviderRunEventMapper(provider),
       start: async ({ transport, task, attemptId, agentConfig, runLaunchManifest }) => {
         this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
         // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
@@ -2650,45 +2879,82 @@ export class ClawdbotAgentService {
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
+    let eventProcessing = Promise.resolve();
+    let eventProcessingError: Error | undefined;
+    const enqueueEventProcessing = (work: () => Promise<void>) => {
+      eventProcessing = eventProcessing.then(async () => {
+        if (eventProcessingError) return;
+        try {
+          await work();
+        } catch (error) {
+          eventProcessingError =
+            error instanceof Error ? error : new Error('Provider event ingestion failed closed.');
+          child.kill('SIGTERM');
+        }
+      });
+    };
     const SESSION_ID_PATTERN = /hermes[_-]session[_-]id[:\s]+([a-zA-Z0-9_-]{8,})/i;
 
     child.stdout.setEncoding('utf-8');
     child.stdout.on('data', (chunk: string) => {
       stdoutBuffer += chunk;
-      this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stdout', chunk);
+      enqueueEventProcessing(() =>
+        this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stdout', chunk)
+      );
     });
 
     child.stderr.setEncoding('utf-8');
     child.stderr.on('data', (chunk: string) => {
       stderrBuffer += chunk;
-      this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stderr', chunk);
-      void this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+      enqueueEventProcessing(async () => {
+        await this.recordStreamChunk(task, attemptId, agentConfig, 'hermes-cli', 'stderr', chunk);
+        await this.appendLog(
+          logPath,
+          `\n### stderr\n\n\`\`\`\n${this.redactTraceText(chunk.trimEnd())}\n\`\`\`\n`
+        );
 
-      // Extract session identity from stderr output if Hermes emits it
-      const sessionMatch = SESSION_ID_PATTERN.exec(chunk);
-      if (sessionMatch) {
-        const hermesSessionId = sessionMatch[1];
-        const p = pendingAgents.get(task.id);
-        if (p && !p.hermesSessionId) {
-          p.hermesSessionId = hermesSessionId;
-          log.debug(
-            { taskId: task.id, hermesSessionId },
-            '[ClawdbotAgent] Hermes session ID captured'
-          );
+        // Extract session identity from stderr output if Hermes emits it
+        const sessionMatch = SESSION_ID_PATTERN.exec(chunk);
+        if (sessionMatch) {
+          const hermesSessionId = sessionMatch[1];
+          const p = pendingAgents.get(task.id);
+          if (p && !p.hermesSessionId) {
+            p.hermesSessionId = hermesSessionId;
+            log.debug(
+              { taskId: task.id, hermesSessionId },
+              '[ClawdbotAgent] Hermes session ID captured'
+            );
+          }
         }
-      }
+      });
     });
 
     child.on('error', (error) => {
-      this.recordTraceStep(attemptId, 'error', {
-        eventType: 'process.error',
-        error: this.redactTraceText(error.message),
-        provider: 'hermes-cli',
-        agent: agentConfig?.type || 'hermes',
-        model: agentConfig?.model,
+      enqueueEventProcessing(async () => {
+        const message = this.redactTraceText(error.message);
+        const event = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'process' },
+          {
+            provider: 'hermes-cli',
+            adapter: 'hermes-cli',
+            agent: agentConfig?.type || 'hermes',
+            model: agentConfig?.model,
+          }
+        );
+        this.emitJournalOutput(event);
+        this.recordTraceStep(attemptId, 'error', {
+          eventType: 'process.error',
+          error: message,
+          provider: 'hermes-cli',
+          agent: agentConfig?.type || 'hermes',
+          model: agentConfig?.model,
+        });
+        await this.appendLog(logPath, `\n## Hermes Process Error\n\n${message}\n`);
+        emitter.emit('error', error);
       });
-      void this.appendLog(logPath, `\n## Hermes Process Error\n\n${error.message}\n`);
-      emitter.emit('error', error);
     });
 
     child.on('close', (code, signal) => {
@@ -2696,12 +2962,14 @@ export class ClawdbotAgentService {
         return;
       }
       void this.finalizePendingAgent(task.id, pending, async () => {
+        await eventProcessing;
         const finalOutput = stdoutBuffer.trim() || stderrBuffer.trim();
-        const success = code === 0;
+        const success = code === 0 && !eventProcessingError;
+        const boundedOutput = eventProcessingError?.message || finalOutput;
 
         await this.appendLog(
           logPath,
-          `\n## Hermes Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n\n**Output:**\n\`\`\`\n${this.redactTraceText(finalOutput)}\n\`\`\`\n`
+          `\n## Hermes Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n\n**Output:**\n\`\`\`\n${this.redactTraceText(boundedOutput)}\n\`\`\`\n`
         );
         this.recordTraceStep(attemptId, 'finalize', {
           eventType: 'run.finalizing',
@@ -2717,8 +2985,8 @@ export class ClawdbotAgentService {
         return {
           success,
           terminalSource: 'process',
-          summary: finalOutput || (success ? 'Hermes completed.' : undefined),
-          error: success ? undefined : finalOutput || `Hermes exited with code ${code}`,
+          summary: boundedOutput || (success ? 'Hermes completed.' : undefined),
+          error: success ? undefined : boundedOutput || `Hermes exited with code ${code}`,
         };
       }).catch((error) => {
         if (pendingAgents.get(task.id) !== pending) return;
@@ -2798,7 +3066,7 @@ export class ClawdbotAgentService {
     child.stdout.on('data', (chunk: string) => {
       enqueueEventProcessing(async () => {
         await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
-        this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stdout', chunk);
+        await this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stdout', chunk);
         stdoutBuffer += chunk;
         const lines = stdoutBuffer.split(/\r?\n/);
         stdoutBuffer = lines.pop() || '';
@@ -2821,21 +3089,40 @@ export class ClawdbotAgentService {
       enqueueEventProcessing(async () => {
         await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
         stderrBuffer += chunk;
-        this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stderr', chunk);
-        await this.appendLog(logPath, `\n### stderr\n\n\`\`\`\n${chunk.trimEnd()}\n\`\`\`\n`);
+        await this.recordStreamChunk(task, attemptId, agentConfig, 'codex-cli', 'stderr', chunk);
+        await this.appendLog(
+          logPath,
+          `\n### stderr\n\n\`\`\`\n${this.redactTraceText(chunk.trimEnd())}\n\`\`\`\n`
+        );
       });
     });
 
     child.on('error', (error) => {
-      this.recordTraceStep(attemptId, 'error', {
-        eventType: 'process.error',
-        error: this.redactTraceText(error.message),
-        provider: 'codex-cli',
-        agent: agentConfig?.type || 'codex',
-        model: agentConfig?.model,
+      enqueueEventProcessing(async () => {
+        const message = this.redactTraceText(error.message);
+        const journalEvent = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'process' },
+          {
+            provider: 'codex-cli',
+            adapter: 'codex-cli',
+            agent: agentConfig?.type || 'codex',
+            model: agentConfig?.model,
+          }
+        );
+        this.emitJournalOutput(journalEvent);
+        this.recordTraceStep(attemptId, 'error', {
+          eventType: 'process.error',
+          error: message,
+          provider: 'codex-cli',
+          agent: agentConfig?.type || 'codex',
+          model: agentConfig?.model,
+        });
+        await this.appendLog(logPath, `\n## Codex Process Error\n\n${message}\n`);
+        emitter.emit('error', error);
       });
-      void this.appendLog(logPath, `\n## Codex Process Error\n\n${error.message}\n`);
-      emitter.emit('error', error);
     });
 
     child.on('close', (code, signal) => {
@@ -3129,13 +3416,14 @@ export class ClawdbotAgentService {
         'token-usage'
       );
     }
-    await this.appendLog(
-      logPath,
-      `\n### ${type}\n\n${summary ? `${summary}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n\n</details>\n`
-    );
     if (task && attemptId) {
       await this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary);
     }
+    const redactedRecord = this.redactTraceText(JSON.stringify(record, null, 2));
+    await this.appendLog(
+      logPath,
+      `\n### ${type}\n\n${summary ? `${this.redactTraceText(summary)}\n\n` : ''}<details><summary>Raw event</summary>\n\n\`\`\`json\n${redactedRecord}\n\`\`\`\n\n</details>\n`
+    );
     return { summary, usage };
   }
 
@@ -3196,16 +3484,102 @@ export class ClawdbotAgentService {
     traceService.endStep(attemptId, stepType);
   }
 
-  private recordStreamChunk(
+  private async appendRunEvent(
+    taskId: string,
+    attemptId: string,
+    kind: RunEventKind,
+    payload: Record<string, unknown>,
+    options: Partial<ProviderMappedRunEvent> & {
+      provider?: ExecutableAgentProvider | 'operator' | 'system';
+      adapter?: string;
+      agent?: string;
+      model?: string;
+    } = {}
+  ): Promise<RunEventEnvelope> {
+    const pending = pendingAgents.get(taskId);
+    const provider = options.provider ?? pending?.provider ?? 'system';
+    const result = await this.runEvents.append({
+      taskId,
+      attemptId,
+      kind,
+      payload,
+      providerEventId: options.providerEventId,
+      providerTimestamp: options.providerTimestamp,
+      turnId: options.turnId,
+      itemId: options.itemId,
+      parentEventId: options.parentEventId,
+      causalEventId: options.causalEventId,
+      dedupeKey: options.dedupeKey,
+      source: {
+        provider,
+        adapter: options.adapter ?? (typeof provider === 'string' ? provider : 'system'),
+        agent: options.agent ?? pending?.agent,
+        model: options.model ?? pending?.model,
+      },
+    });
+    return result.event;
+  }
+
+  private async appendMappedProviderEvent(
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    provider: ExecutableAgentProvider,
+    mapped: ProviderMappedRunEvent
+  ): Promise<RunEventEnvelope> {
+    return this.appendRunEvent(task.id, attemptId, mapped.kind, mapped.payload, {
+      ...mapped,
+      provider,
+      adapter: provider,
+      agent: agentConfig?.type || task.agent || provider,
+      model: agentConfig?.model,
+    });
+  }
+
+  private emitJournalOutput(event: RunEventEnvelope): void {
+    const pending = pendingAgents.get(event.taskId);
+    if (!pending || pending.attemptId !== event.attemptId) return;
+    const content =
+      typeof event.payload.content === 'string'
+        ? event.payload.content
+        : typeof event.payload.summary === 'string'
+          ? event.payload.summary
+          : undefined;
+    if (!content?.trim()) return;
+    const type: AgentOutput['type'] =
+      event.source.provider === 'operator'
+        ? 'stdin'
+        : event.kind === 'stream.stderr' || event.kind === 'run.error'
+          ? 'stderr'
+          : event.source.provider === 'system'
+            ? 'system'
+            : 'stdout';
+    pending.emitter.emit('output', {
+      type,
+      content,
+      timestamp: event.receivedAt,
+    } satisfies AgentOutput);
+  }
+
+  private async recordStreamChunk(
     task: Task,
     attemptId: string,
     agentConfig: AgentConfig | undefined,
     provider: ExecutableAgentProvider,
     stream: 'stdout' | 'stderr',
     chunk: string
-  ): void {
+  ): Promise<void> {
     const content = this.redactTraceText(chunk.trimEnd());
     if (!content.trim()) return;
+    const mapper = this.resolveProviderAdapter(provider).runEventMapper;
+    const event = await this.appendMappedProviderEvent(
+      task,
+      attemptId,
+      agentConfig,
+      provider,
+      mapper.mapStream(stream, content)
+    );
+    this.emitJournalOutput(event);
     this.recordTraceStep(attemptId, 'stream', {
       eventType: `stream.${stream}`,
       stream,
@@ -3271,8 +3645,39 @@ export class ClawdbotAgentService {
     const sanitizedSummary = summary ? this.redactTraceText(summary) : undefined;
     const stepType = this.codexTraceStepType(type, event);
     const stream = this.extractCodexStream(event, type);
+    const provider = agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex-cli';
+    const journalEvent = await this.appendMappedProviderEvent(
+      task,
+      attemptId,
+      agentConfig,
+      provider,
+      this.resolveProviderAdapter(provider).runEventMapper.mapEvent(type, event, sanitizedSummary)
+    );
+    this.emitJournalOutput(journalEvent);
+    if (usage) {
+      await this.appendRunEvent(
+        task.id,
+        attemptId,
+        'usage.updated',
+        {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          cost: usage.cost,
+          model: usage.model || agentConfig?.model,
+        },
+        {
+          provider,
+          adapter: provider,
+          agent,
+          model: usage.model || agentConfig?.model,
+          causalEventId: journalEvent.eventId,
+          dedupeKey: `${journalEvent.eventId}:usage`,
+        }
+      );
+    }
     this.recordTraceStep(attemptId, stepType, {
-      provider: agentConfig?.provider || 'codex-cli',
+      provider,
       eventType: type,
       summary: sanitizedSummary,
       content: stepType === 'stream' ? sanitizedSummary : undefined,
@@ -3909,6 +4314,30 @@ export class ClawdbotAgentService {
     } catch {
       throw new Error('Log file not found');
     }
+  }
+
+  async resolveRunEventAttemptId(taskId: string, requestedAttemptId?: string): Promise<string> {
+    validatePathSegment(taskId);
+    if (requestedAttemptId) validatePathSegment(requestedAttemptId);
+    const pending = pendingAgents.get(taskId);
+    if (pending && (!requestedAttemptId || pending.attemptId === requestedAttemptId)) {
+      return pending.attemptId;
+    }
+    const task = await this.taskService.getTask(taskId);
+    if (!task) throw new Error('Task not found');
+    const attempts = [task.attempt, ...(task.attempts ?? [])].filter(
+      (attempt): attempt is TaskAttempt => Boolean(attempt)
+    );
+    const resolved = requestedAttemptId
+      ? attempts.find((attempt) => attempt.id === requestedAttemptId)
+      : task.attempt;
+    if (!resolved) throw new Error('Run attempt not found');
+    return resolved.id;
+  }
+
+  async getRunEvents(taskId: string, attemptId: string, afterSequence = 0, limit = 200) {
+    await this.assertRunControl(taskId, 'logs', attemptId);
+    return this.runEvents.list({ taskId, attemptId, afterSequence, limit });
   }
 
   async listAttempts(taskId: string): Promise<string[]> {

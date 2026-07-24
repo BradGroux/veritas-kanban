@@ -184,17 +184,34 @@ export function useAgentStream(taskId: string | undefined, attemptId?: string) {
   const [outputs, setOutputs] = useState<AgentOutput[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const activeAttemptRef = useRef<string | undefined>(undefined);
+  const eventCursorRef = useRef(0);
   const queryClient = useQueryClient();
 
   const handleMessage = useCallback(
     (message: WebSocketMessage) => {
       if (message.type === 'subscribed') {
         const running = message.running as boolean;
+        const cursor = message.cursor;
+        if (typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0) {
+          eventCursorRef.current = Math.max(eventCursorRef.current, cursor);
+        }
         setIsRunning(running);
         if (running) {
           queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
         }
+      } else if (message.type === 'agent:event') {
+        const data = message.data;
+        if (data && typeof data === 'object') {
+          const sequence = (data as Record<string, unknown>).sequence;
+          if (typeof sequence === 'number' && Number.isSafeInteger(sequence) && sequence > 0) {
+            eventCursorRef.current = Math.max(eventCursorRef.current, sequence);
+          }
+        }
       } else if (message.type === 'agent:output') {
+        const sequence = message.sequence;
+        if (typeof sequence === 'number' && Number.isSafeInteger(sequence) && sequence > 0) {
+          eventCursorRef.current = Math.max(eventCursorRef.current, sequence);
+        }
         setOutputs((prev) => [
           ...prev,
           {
@@ -219,21 +236,30 @@ export function useAgentStream(taskId: string | undefined, attemptId?: string) {
   useEffect(() => {
     setOutputs([]);
     activeAttemptRef.current = undefined;
+    eventCursorRef.current = 0;
   }, [taskId]);
 
   useEffect(() => {
     if (!attemptId) return;
     if (activeAttemptRef.current && activeAttemptRef.current !== attemptId) {
       setOutputs([]);
+      eventCursorRef.current = 0;
     }
     activeAttemptRef.current = attemptId;
   }, [attemptId]);
 
   const { isConnected, send } = useWebSocket({
     autoConnect: !!taskId,
-    onOpen: taskId ? { type: 'subscribe', taskId } : undefined,
+    onOpen: taskId
+      ? {
+          type: 'subscribe',
+          taskId,
+          attemptId,
+          afterSequence: eventCursorRef.current,
+        }
+      : undefined,
     onMessage: handleMessage,
-    autoReconnect: false, // Don't auto-reconnect for agent streams
+    autoReconnect: true,
   });
 
   // A client can subscribe while the task is idle and then observe a run that
@@ -241,7 +267,12 @@ export function useAgentStream(taskId: string | undefined, attemptId?: string) {
   // the task subscription so the server attaches to that attempt's emitter.
   useEffect(() => {
     if (isConnected && taskId && attemptId) {
-      send({ type: 'subscribe', taskId });
+      send({
+        type: 'subscribe',
+        taskId,
+        attemptId,
+        afterSequence: eventCursorRef.current,
+      });
     }
   }, [attemptId, isConnected, send, taskId]);
 

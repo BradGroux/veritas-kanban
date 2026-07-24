@@ -39,6 +39,7 @@ import type {
   ManagedListRepository,
   ManagedListProvider,
   TelemetryRepository,
+  RunEventRepository,
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
@@ -62,6 +63,7 @@ import {
 } from '../services/status-history-service.js';
 import { ManagedListService } from '../services/managed-list-service.js';
 import { TelemetryService, type TelemetryServiceOptions } from '../services/telemetry-service.js';
+import { FileRunEventRepository } from './run-event-repository.js';
 
 // ---------------------------------------------------------------------------
 // FileTaskRepository
@@ -478,6 +480,7 @@ export interface FileStorageOptions {
   promptRegistryServiceOptions?: PromptRegistryServiceOptions;
   statusHistoryServiceOptions?: StatusHistoryServiceOptions;
   telemetryServiceOptions?: TelemetryServiceOptions;
+  runEventsDir?: string;
 }
 
 export class FileStorageProvider implements StorageProvider {
@@ -489,6 +492,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly statusHistory: FileStatusHistoryRepository;
   readonly managedLists: FileManagedListProvider;
   readonly telemetry: FileTelemetryRepository;
+  readonly runEvents: RunEventRepository;
 
   private taskService: TaskService;
   private configService: ConfigService;
@@ -538,6 +542,7 @@ export class FileStorageProvider implements StorageProvider {
     this.statusHistory = new FileStatusHistoryRepository(this.statusHistoryService);
     this.managedLists = new FileManagedListProvider();
     this.telemetry = new FileTelemetryRepository(this.telemetryService);
+    this.runEvents = new FileRunEventRepository(options.runEventsDir);
   }
 
   async initialize(): Promise<void> {
