@@ -510,15 +510,17 @@ describe('governance surfaces Mantine migration', () => {
     expectNoLegacySlots(detail.baseElement);
   });
 
-  it('renders scoring profiles and score explorer with Mantine tabs, selects, and scroll areas', async () => {
+  it('renders scoring profiles and score explorer in the page scroll flow', async () => {
     const user = userEvent.setup();
     const { baseElement } = renderWithProviders(<ScoringProfiles onBack={vi.fn()} />);
 
     expect(screen.getByText('Agent Output Scoring')).toBeDefined();
+    expect(screen.getByTestId('scoring-page').className).not.toContain('h-[100dvh]');
+    expect(screen.getByTestId('scoring-profile-detail').className).not.toContain('overflow-y-auto');
+    expect(screen.getByTestId('scoring-scorer-list').className).not.toContain('h-[440px]');
     expect(baseElement.querySelector('.mantine-Tabs-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Textarea-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
     expect(screen.queryByText('Composite Score Trend')).toBeNull();
 
     await user.click(screen.getByRole('tab', { name: /score explorer/i }));
@@ -526,6 +528,42 @@ describe('governance surfaces Mantine migration', () => {
     expect(await screen.findByText('Composite Score Trend')).toBeDefined();
     expect(baseElement.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(2);
     expectNoLegacySlots(baseElement);
+  });
+
+  it('keeps every scorer in document flow and allows keyboard focus to reach the last field', async () => {
+    mocks.useScoringProfiles.mockReturnValue({
+      data: [
+        {
+          id: 'long-profile',
+          name: 'Long Profile',
+          description: 'Exercises a profile with many scorer cards.',
+          compositeMethod: 'weightedAvg',
+          builtIn: false,
+          created: now,
+          updated: now,
+          scorers: Array.from({ length: 12 }, (_, index) => ({
+            id: `keyword-${index + 1}`,
+            name: `Keyword check ${index + 1}`,
+            type: 'KeywordContains',
+            keywords: ['verified'],
+            weight: 1,
+            target: 'output',
+          })),
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<ScoringProfiles onBack={vi.fn()} />);
+
+    const lastScorer = await screen.findByRole('textbox', { name: 'Scorer 12 name' });
+    expect(screen.getAllByRole('textbox', { name: /Scorer \d+ name/ })).toHaveLength(12);
+    expect(screen.getByTestId('scoring-scorer-list').className).not.toMatch(
+      /overflow-y|h-\[440px\]/
+    );
+
+    lastScorer.focus();
+    expect(document.activeElement).toBe(lastScorer);
   });
 
   it('opens and cancels a focused scoring profile draft from Score Explorer', async () => {

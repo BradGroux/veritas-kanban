@@ -11,7 +11,6 @@ import {
   ActionIcon,
   Badge,
   Button,
-  ScrollArea,
   Select,
   Tabs,
   Textarea,
@@ -347,7 +346,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col gap-4 bg-background">
+    <div data-testid="scoring-page" className="flex min-h-full flex-col gap-4 bg-background">
       <div className="border-b bg-card px-3 py-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -400,12 +399,12 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-3 pb-3 sm:px-6 sm:pb-6">
+      <div className="flex-1 px-3 pb-3 sm:px-6 sm:pb-6">
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
           keepMounted={false}
-          className="flex h-full flex-col gap-4"
+          className="flex flex-col gap-4"
         >
           <Tabs.List className="w-full sm:w-fit">
             <Tabs.Tab h={48} value="profiles">
@@ -416,7 +415,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
             </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="profiles" className="m-0 flex min-h-0 min-w-0 flex-1 gap-4">
+          <Tabs.Panel value="profiles" className="m-0 flex min-w-0 items-start gap-4">
             <div
               data-testid="scoring-profile-list"
               className={`${
@@ -429,7 +428,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                   Built-ins are read-only. Duplicate them to customize.
                 </div>
               </div>
-              <ScrollArea className="flex-1">
+              <div>
                 <div className="divide-y">
                   {isLoading ? (
                     <div className="p-4 text-sm text-muted-foreground">Loading profiles…</div>
@@ -469,14 +468,14 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                     ))
                   )}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             <div
               data-testid="scoring-profile-detail"
               className={`${
                 mobileView === 'list' ? 'hidden md:flex' : 'flex'
-              } w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto`}
+              } w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden`}
             >
               <div data-testid="scoring-mobile-back" className="md:hidden">
                 <Button h={48} variant="subtle" onClick={handleBackToProfiles}>
@@ -602,7 +601,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                       </Button>
                     </div>
 
-                    <ScrollArea className="h-[440px] rounded-md border">
+                    <div data-testid="scoring-scorer-list" className="rounded-md border">
                       <div className="space-y-3 p-3">
                         {draft.scorers.map((scorer, index) => (
                           <div
@@ -829,7 +828,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                           </div>
                         ))}
                       </div>
-                    </ScrollArea>
+                    </div>
                   </div>
                 </div>
 
@@ -926,7 +925,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
             </div>
           </Tabs.Panel>
 
-          <Tabs.Panel value="explorer" className="m-0 min-h-0 flex-1 overflow-auto">
+          <Tabs.Panel value="explorer" className="m-0">
             <Suspense
               fallback={
                 <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
