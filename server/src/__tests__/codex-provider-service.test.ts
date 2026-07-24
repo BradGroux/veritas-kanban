@@ -209,7 +209,7 @@ function testRunSupervisor(): RunSupervisorService {
     attachLocalProcess: vi.fn(),
     attachRemoteSession: vi.fn(),
     checkpoint: vi.fn(),
-    markTerminal: vi.fn(),
+    markTerminal: vi.fn().mockResolvedValue(undefined),
     findByAttempt: vi.fn().mockResolvedValue(null),
     get: vi.fn().mockResolvedValue({ control: { kind: 'local-process' } }),
     stopLocalProcess: vi.fn(),
@@ -1476,19 +1476,19 @@ describe('ClawdbotAgentService Codex providers', () => {
     const service = testableService(tmpDir);
 
     const preview = await service.previewAgentLaunch(task.id, 'codex', {
-      requiredRuntimeCapabilities: ['run.resume'],
+      requiredRuntimeCapabilities: ['run.approvals'],
     });
 
     expect(preview.manifest.providerRequirements.capabilities).toContainEqual(
       expect.objectContaining({
-        id: 'run.resume',
+        id: 'run.approvals',
         satisfied: false,
       })
     );
     expect(preview.manifest.enforcement.blockers).toContainEqual(
       expect.objectContaining({
         code: 'provider-capability-unavailable',
-        field: 'providerRequirements.run.resume',
+        field: 'providerRequirements.run.approvals',
       })
     );
     expect(mockSpawn).not.toHaveBeenCalled();
