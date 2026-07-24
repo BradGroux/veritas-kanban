@@ -6,7 +6,7 @@
 > Harness-specific supplements (for example `CLAUDE.md`) extend, never duplicate or contradict,
 > these rules. See `docs/AGENTS-TEMPLATE.md` for the managed-run and external-agent protocols.
 >
-> **Version:** 6.0.1
+> **Version:** 6.0.2
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
 > `pnpm check:pnpm-settings` and the smoke-test CI job.
@@ -90,6 +90,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   can perform the operation.
 - Fall back only when `gh` is unavailable or cannot support the required operation. Report the
   exact blocker before changing paths.
+- Source every published GitHub release body from `docs/releases/vX.Y.Z.md` and pass that file
+  to `gh release create` or `gh release edit` with `--notes-file`.
+- Keep each prose paragraph, blockquote, and list item on one logical Markdown source line.
+  Separate blocks with blank lines. Do not hard-wrap release prose or add carriage returns,
+  trailing-space hard breaks, literal escaped newlines, or HTML `<br>` tags.
+- Run `pnpm validate:release -- --version X.Y.Z`; the post-publication `--github` form also
+  requires the published GitHub body to match the reviewed file exactly.
 
 ---
 

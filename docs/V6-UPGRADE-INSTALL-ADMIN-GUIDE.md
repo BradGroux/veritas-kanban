@@ -1,15 +1,15 @@
 # Veritas Kanban v6 Upgrade, Install, Remote, And Admin Guide
 
-This is the release-facing operator guide for Veritas Kanban 6.0.1. The
+This is the release-facing operator guide for Veritas Kanban 6.0.2. The
 detailed provider commands live in [Agent Providers](AGENT-PROVIDERS.md), the
 machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
+Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
 
-Do not install 6.0.0. It is retained as a quarantined prerelease; 6.0.1 is the
-first supported stable v6 build.
+Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.0.2
+is the current supported stable v6 build and supersedes 6.0.1.
 
 ## Fresh Mac Desktop Install
 
@@ -21,8 +21,8 @@ brew install --cask veritas-kanban
 ```
 
 Manual installation uses
-`Veritas-Kanban-6.0.1-mac-arm64.zip` from the
-[v6.0.1 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.1).
+`Veritas-Kanban-6.0.2-mac-arm64.zip` from the
+[v6.0.2 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.2).
 Move `Veritas Kanban.app` into `/Applications`, launch it normally, and verify
 Settings -> Maintenance before enabling an agent or external integration.
 
@@ -30,7 +30,7 @@ For a new board:
 
 1. Choose Board Only unless agent execution is required immediately.
 2. Create the local admin password and retain the recovery key securely.
-3. Confirm `/api/health` reports version 6.0.1.
+3. Confirm `/api/health` reports version 6.0.2.
 4. Create a governed backup before adding external credentials or relay
    mappings.
 
@@ -58,14 +58,14 @@ equivalent v5.2.5 self-hosted workspace.
    preferred port are stopped before copying data.
 5. Preserve the complete workspace, not only the SQLite file. Keep the backup
    through release acceptance.
-6. Install v6.0.1 without replacing the workspace.
+6. Install v6.0.2 without replacing the workspace.
 7. Launch with the same profile. If setup appears for a populated database,
    choose **Use Existing Data**. Do not rerun file migration or restore over the
    populated database.
 8. Wait for the exact-version readiness gate:
 
    ```bash
-   EXPECTED_VERSION=6.0.1
+   EXPECTED_VERSION=6.0.2
    pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
    ```
 

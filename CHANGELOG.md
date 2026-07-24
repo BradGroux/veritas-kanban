@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.2] - 2026-07-24
+
+Veritas Kanban 6.0.2 is a desktop recovery and supportability hotfix. It keeps
+Chat contained within a reversible Workbench dock, adds authoritative native
+version/build information, and makes CI verification proportional to the
+change while retaining full release gates.
+
 ### Changed
 
 - Made CI test scope deterministic and path-aware. Documentation-only changes
@@ -2239,7 +2246,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...HEAD
+[6.0.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...v6.0.2
 [6.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...v6.0.0
 [5.2.5]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.4...v5.2.5

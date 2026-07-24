@@ -1,10 +1,10 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist is the stable-release gate for Veritas Kanban 6.0.1. Command
+This checklist is the stable-release gate for Veritas Kanban 6.0.2. Command
 results, platform details, workflow links, limitations, and artifact hashes
 belong in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
+Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
 
 ## Source And Scope
 
@@ -14,9 +14,9 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
       through merged, focused pull requests.
 - [x] The release tracker lists the exact main baseline, release branch, release
       PR, deferred v6.x work, and no unresolved release blocker.
-- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.0.1.
+- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.0.2.
 - [x] `AGENTS.md`, README badge, health, CLI, MCP, desktop bundle, artifact
-      names, updater metadata, changelog, and current docs agree on 6.0.1.
+      names, updater metadata, changelog, and current docs agree on 6.0.2.
 - [x] The public API remains intentionally `v1`, with additive v6 contracts and
       tested CLI/MCP compatibility.
 
@@ -37,6 +37,24 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
 - [x] Desktop setup is version-neutral and the bridge consumes Electron's
       application version; the published bundle, health endpoint, updater, and
       bridge all report 6.0.1 (#986).
+
+## 6.0.2 Desktop Recovery Hotfix
+
+- [x] Board Chat and Squad Chat default to a bounded right-side Workbench dock
+      and can switch between Right and Bottom without remounting the active
+      conversation (#1004).
+- [x] Chat width and height clamp to the live viewport; scrolling, wheel input,
+      Close, Escape, browser Back, Reset Layout, persisted-state recovery, and
+      focus restoration have focused coverage (#1004).
+- [x] Native About, copied support information, the desktop bridge, and updater
+      fallback consume one authoritative version/build/channel/OS/architecture
+      record (#1005).
+- [x] Pull-request verification uses documentation-only, focused, or full test
+      scope, while explicit and milestone release gates remain full (#1000).
+- [x] Published release notes are sourced from
+      `docs/releases/vX.Y.Z.md`, use one full-width Markdown line per paragraph
+      or list item, and are compared with GitHub during post-publication
+      validation.
 
 ## Provider Certification
 
@@ -150,8 +168,8 @@ pnpm desktop:build
 pnpm desktop:check:electron-artifacts
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
-pnpm validate:release -- --version 6.0.1
-pnpm validate:release -- --version 6.0.1 --docker-build
+pnpm validate:release -- --version 6.0.2
+pnpm validate:release -- --version 6.0.2 --docker-build
 ```
 
 Provider-specific deterministic suites are part of `pnpm test:unit`; record
@@ -161,26 +179,28 @@ quota are available.
 
 ## Distribution And Post-Publication
 
-- [x] The ready release PR passes required CI and the `ci:full` workspace suite,
-      receives focused standards/spec review, and merges to main.
-- [x] Annotated tag `v6.0.1` peels to the exact release merge commit.
-- [x] The GitHub release is published from reviewed v6 release notes.
-- [x] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
+- [ ] The ready release PR passes required CI and the milestone-wide workspace
+      suite, then merges to main.
+- [ ] Annotated tag `v6.0.2` peels to the exact release merge commit.
+- [ ] The GitHub release is published from reviewed
+      `docs/releases/v6.0.2.md` without hard-wrapped prose.
+- [ ] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
       blockmaps, `latest-mac.yml`, and SHA-256 sidecars.
-- [x] Independent downloads match GitHub digests, sidecars, updater metadata,
+- [ ] Independent downloads match GitHub digests, sidecars, updater metadata,
       byte sizes, and SHA-256 values.
-- [x] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
+- [ ] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
       stapling pass.
-- [x] The downloaded signed app launches with an isolated profile, reports
-      6.0.1 through bundle, health, updater, and desktop bridge metadata,
-      verifies Chat recovery, executes a bounded task,
-      and quits cleanly.
-- [x] `pnpm validate:release -- --version 6.0.1 --github --repo BradGroux/veritas-kanban`
+- [ ] The downloaded signed app launches with an isolated profile, reports
+      6.0.2 through bundle, health, updater, native About, copied support
+      information, and desktop bridge metadata; verifies Right and Bottom Chat
+      recovery at the minimum supported window; executes a bounded task; and
+      quits cleanly.
+- [ ] `pnpm validate:release -- --version 6.0.2 --github --repo BradGroux/veritas-kanban`
       passes.
-- [x] The Homebrew cask PR uses the published ZIP checksum, merges, and the
+- [ ] The Homebrew cask PR uses the published ZIP checksum, merges, and the
       registered tap passes style, strict online audit, dry-run install, and
       livecheck.
-- [x] The evidence packet contains release/workflow/asset/Homebrew links,
+- [ ] The evidence packet contains release/workflow/asset/Homebrew links,
       exact hashes, runtime results, limitations, and deferred v6.x issues.
-- [x] The release tracker closes only after every distribution surface above is
+- [ ] The release tracker closes only after every distribution surface above is
       independently verified.
