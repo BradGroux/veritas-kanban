@@ -8,20 +8,20 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.0.
 
 ## Release Scope
 
-| Field                    | Value                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Release version          | 6.0.0                                                                                                              |
-| Release tracker          | [Veritas Kanban 6.0.0 harness parity and Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/924) |
-| Buzz epic                | [First-class Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/904)                             |
-| Harness epic             | [Equal-footing agent harness support](https://github.com/BradGroux/veritas-kanban/issues/915)                      |
-| Implementation baseline  | `398fe7f67e94c3d6cabee0702b2331d9c873fd0f`                                                                         |
-| Release branch           | `release/v6.0.0`                                                                                                   |
-| Release PR               | [#985](https://github.com/BradGroux/veritas-kanban/pull/985)                                                       |
-| Release merge            | Pending source publication                                                                                         |
-| Tag and GitHub release   | Pending source publication                                                                                         |
-| Desktop Release workflow | Pending tag publication                                                                                            |
-| Homebrew PR              | Pending signed ZIP publication                                                                                     |
-| Evidence host            | macOS 26.5.2 arm64; Node 26.5.0; pnpm 11.1.1; Git 2.55.0                                                           |
+| Field                    | Value                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version          | 6.0.0                                                                                                                                     |
+| Release tracker          | [Veritas Kanban 6.0.0 harness parity and Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/924)                        |
+| Buzz epic                | [First-class Buzz integration](https://github.com/BradGroux/veritas-kanban/issues/904)                                                    |
+| Harness epic             | [Equal-footing agent harness support](https://github.com/BradGroux/veritas-kanban/issues/915)                                             |
+| Implementation baseline  | `398fe7f67e94c3d6cabee0702b2331d9c873fd0f`                                                                                                |
+| Release branch           | `release/v6.0.0`                                                                                                                          |
+| Release PR               | [#985](https://github.com/BradGroux/veritas-kanban/pull/985)                                                                              |
+| Release merge            | [`1bd43f9279f5ab736bff03378d5d85243e16813e`](https://github.com/BradGroux/veritas-kanban/commit/1bd43f9279f5ab736bff03378d5d85243e16813e) |
+| Tag and GitHub release   | [`v6.0.0`](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.0)                                                               |
+| Desktop Release workflow | [Run 30109135335](https://github.com/BradGroux/veritas-kanban/actions/runs/30109135335)                                                   |
+| Homebrew PR              | [#37](https://github.com/BradGroux/homebrew-tap/pull/37), merged as `7d77106e7c526a0975c49b9b11e0c9526921ead0`                            |
+| Evidence host            | macOS 26.5.2 arm64; Node 26.5.0; pnpm 11.1.1; Git 2.55.0                                                                                  |
 
 ## Issue And Pull Request Traceability
 
@@ -217,25 +217,24 @@ runtime profile is retained in this packet.
 
 ## Publication Evidence
 
-Source publication values are intentionally pending until the release PR
-merges and the annotated tag exists. Signed distribution values are
-intentionally pending until the tag-triggered workflow completes.
+Source publication completed from reviewed release PR #985. The tag-triggered
+workflow, independent artifact verification, signed-app runtime check, and
+Homebrew publication are also complete.
 
-| Publication item                                | Result                                                                       |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| Release merge SHA                               | Pending                                                                      |
-| Annotated `v6.0.0` tag object and peeled commit | Pending                                                                      |
-| GitHub release URL                              | Pending                                                                      |
-| Desktop Release workflow URL and duration       | Pending                                                                      |
-| Signed/notarized DMG                            | Pending name, bytes, SHA-256, GitHub digest, signature, Gatekeeper, stapling |
-| Signed/notarized ZIP                            | Pending name, bytes, SHA-256, GitHub digest, signature, Gatekeeper, stapling |
-| DMG/ZIP blockmaps and SHA-256 sidecars          | Pending                                                                      |
-| `latest-mac.yml`                                | Pending version, names, sizes, SHA-512 matches                               |
-| Downloaded signed-app isolated launch           | Pending                                                                      |
-| Homebrew tap issue/PR/merge                     | Pending                                                                      |
-| Homebrew style/audit/dry-run/livecheck          | Pending                                                                      |
+| Publication item                                | Result                                                                                                                                                                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Release merge SHA                               | `1bd43f9279f5ab736bff03378d5d85243e16813e`                                                                                                                                                                                     |
+| Annotated `v6.0.0` tag object and peeled commit | `85d0328a23b54bd7e7d578b5725d50cd2e0084f3`; `1bd43f9279f5ab736bff03378d5d85243e16813e`                                                                                                                                         |
+| GitHub release URL                              | https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.0                                                                                                                                                                |
+| Desktop Release workflow URL and duration       | https://github.com/BradGroux/veritas-kanban/actions/runs/30109135335; pass in 12m7s                                                                                                                                            |
+| Signed/notarized DMG                            | `Veritas-Kanban-6.0.0-mac-arm64.dmg`; 276,118,002 bytes; SHA-256/GitHub digest `0a2a51cb279d42089770932f760bb77abedf9db767c151cc0071d1ee3e1bfa55`; Developer ID, Gatekeeper, and stapling pass                                 |
+| Signed/notarized ZIP                            | `Veritas-Kanban-6.0.0-mac-arm64.zip`; 279,976,801 bytes; SHA-256/GitHub digest `7a5947bb6abd440c4d69da36def9f891e154139547f741d2f44c4733c6719cb8`; extracted app Developer ID, hardened runtime, Gatekeeper, and stapling pass |
+| DMG/ZIP blockmaps and SHA-256 sidecars          | Present; blockmap digests `b31e50258dd3744a0daeef45a1f7ae375f538b24e6c68243f13c0963661b95b5` and `af99a35b1e6380a8b9888658054690846c84b325067f7108299a4eedb6993255`; both sidecars verify                                      |
+| `latest-mac.yml`                                | Version 6.0.0; 530 bytes; SHA-256 `ac2e5ee7f25d235d607409a62a047359145f80dbaf9f1f5333131dc20700df72`; DMG/ZIP names, sizes, and SHA-512 values match independent downloads                                                     |
+| Downloaded signed-app isolated launch           | Pass; fresh disposable profile, ready SQLite, health/update version 6.0.0, latest-version update check, task creation, and clean quit                                                                                          |
+| Homebrew tap issue/PR/merge                     | [Issue #36](https://github.com/BradGroux/homebrew-tap/issues/36); [PR #37](https://github.com/BradGroux/homebrew-tap/pull/37); merge `7d77106e7c526a0975c49b9b11e0c9526921ead0`                                                |
+| Homebrew style/audit/dry-run/livecheck          | Pass against registered `bradgroux/tap/veritas-kanban` at 6.0.0 with the published ZIP checksum                                                                                                                                |
 
-The final values are added through a focused post-publication documentation PR.
 Source CI, tag creation, asset upload, signing, notarization, downloaded runtime,
 and Homebrew availability are independent gates.
 
@@ -248,6 +247,10 @@ and Homebrew availability are independent gates.
 - GitHub Copilot CLI ACP remains public preview.
 - Buzz Agent does not resume in-memory sessions; Buzz communication does not
   project files, reactions, forums, DMs, or destructive edit/delete behavior.
+- [Packaged desktop version reporting](https://github.com/BradGroux/veritas-kanban/issues/986)
+  is a v6.0.1 follow-up: health, updater, and bundle metadata report 6.0.0,
+  while the first-run heading retains `v5` wording and the desktop bridge
+  reports `0.0.0`.
 - Linux and Windows desktop packages remain unsigned previews.
 - Provider and Buzz Settings screenshots were captured from the isolated
   profile. No public-safe active approval existed, so approval visual evidence
