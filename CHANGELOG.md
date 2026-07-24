@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `run-launch-credential-plan/v1` to classify provider boot
+  authentication, broker-targeted task credentials, and explicit high-risk
+  environment passthrough in immutable launch evidence. Plans bind to provider
+  runtime evidence, remain value-free, ignore timestamp-only probe refreshes,
+  and block task credential launches until an accepted tool or egress boundary
+  proves brokered delivery (#932).
 - Added a generic stable ACP v1 stdio provider adapter with no-shell supervised
   launch, initialize-time identity and capability evidence, fresh/resume/fork/
   close session lifecycle, bounded bidirectional JSON-RPC, causal message,

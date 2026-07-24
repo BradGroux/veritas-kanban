@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
   HARNESS_SUPPORT_TIERS,
+  RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION,
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
   type RunLaunchManifest,
 } from '@veritas-kanban/shared';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
 import { calculateRunLaunchManifestDigest } from '../utils/run-launch-manifest-digest.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { containsUnredactedProviderRuntimeSecret } from '../utils/provider-runtime-manifest-sanitize.js';
 
 const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -155,6 +157,44 @@ export const RunLaunchManifestSchema = z
         credentialReferences: z.array(z.string().trim().min(1).max(300)).max(128),
       })
       .strict(),
+    credentials: z
+      .object({
+        schemaVersion: z.literal(RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION),
+        digest: digestSchema,
+        mode: z.enum(['none', 'brokered', 'env-passthrough']),
+        brokerState: z.enum(['not-required', 'supported', 'blocked']),
+        providerRuntimeManifestDigest: digestSchema,
+        providerRuntimeProbeRevision: z.number().int().positive(),
+        references: z
+          .array(
+            z
+              .object({
+                reference: z.string().trim().min(1).max(300),
+                classification: z.enum([
+                  'harness-boot-authentication',
+                  'task-integration',
+                  'compatibility-passthrough',
+                ]),
+                delivery: z.enum([
+                  'provider-native-environment',
+                  'brokered-boundary',
+                  'raw-environment',
+                  'blocked',
+                ]),
+                boundary: z.enum([
+                  'provider-process',
+                  'tool-control-plane',
+                  'egress-gateway',
+                  'unavailable',
+                ]),
+                risk: z.enum(['provider-required', 'brokered', 'high-risk', 'blocked']),
+              })
+              .strict()
+          )
+          .max(256),
+      })
+      .strict()
+      .optional(),
     tools: z
       .object({
         allowed: stringListSchema,
@@ -259,6 +299,26 @@ export const RunLaunchManifestSchema = z
   })
   .strict()
   .superRefine((manifest, context) => {
+    if (manifest.credentials) {
+      const { digest, ...payload } = manifest.credentials;
+      if (digest !== digestRunLaunchValue(payload)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['credentials', 'digest'],
+          message: 'Credential plan digest does not match its canonical payload',
+        });
+      }
+      if (
+        manifest.credentials.providerRuntimeManifestDigest !== manifest.providerRuntime.digest ||
+        manifest.credentials.providerRuntimeProbeRevision !== manifest.providerRuntime.probeRevision
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['credentials', 'providerRuntimeManifestDigest'],
+          message: 'Credential plan provider evidence does not match the launch manifest',
+        });
+      }
+    }
     if (manifest.enforcement.enforceable !== (manifest.enforcement.blockers.length === 0)) {
       context.addIssue({
         code: 'custom',

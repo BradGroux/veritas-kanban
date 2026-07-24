@@ -3,6 +3,7 @@ import type { HarnessSupportTier, HarnessTransport } from './provider-runtime.ty
 import type { ProviderRuntimeCapabilityState } from './provider-runtime.types.js';
 
 export const RUN_LAUNCH_MANIFEST_SCHEMA_VERSION = 'run-launch-manifest/v1' as const;
+export const RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION = 'run-launch-credential-plan/v1' as const;
 
 export type RunLaunchManifestEnforcementState = 'enforced' | 'not-required' | 'unavailable';
 
@@ -104,6 +105,30 @@ export interface RunLaunchRuntime {
   worktree: 'required' | 'supported' | 'provider-managed';
   environmentKeys: string[];
   credentialReferences: string[];
+}
+
+export type RunLaunchCredentialClass =
+  'harness-boot-authentication' | 'task-integration' | 'compatibility-passthrough';
+
+export type RunLaunchCredentialDelivery =
+  'provider-native-environment' | 'brokered-boundary' | 'raw-environment' | 'blocked';
+
+export interface RunLaunchCredentialReference {
+  reference: string;
+  classification: RunLaunchCredentialClass;
+  delivery: RunLaunchCredentialDelivery;
+  boundary: 'provider-process' | 'tool-control-plane' | 'egress-gateway' | 'unavailable';
+  risk: 'provider-required' | 'brokered' | 'high-risk' | 'blocked';
+}
+
+export interface RunLaunchCredentialPlan {
+  schemaVersion: typeof RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION;
+  digest: string;
+  mode: import('./sandbox-policy.types.js').SandboxCredentialMode;
+  brokerState: 'not-required' | 'supported' | 'blocked';
+  providerRuntimeManifestDigest: string;
+  providerRuntimeProbeRevision: number;
+  references: RunLaunchCredentialReference[];
 }
 
 export interface RunLaunchWorkspace {
@@ -209,6 +234,8 @@ export interface RunLaunchManifest {
   /** Present on newly compiled manifests; absent only on pre-6.0 legacy records. */
   workspace?: RunLaunchWorkspace;
   runtime: RunLaunchRuntime;
+  /** Present on newly compiled manifests; absent only on pre-6.0 legacy records. */
+  credentials?: RunLaunchCredentialPlan;
   tools: RunLaunchTools;
   permissions: RunLaunchPermissions;
   resources: RunLaunchResources;

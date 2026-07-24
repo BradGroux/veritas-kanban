@@ -13,6 +13,9 @@ The v6 foundation includes:
 - metadata-only audit events; and
 - a controlled in-process callback that is the only API allowed to receive the
   resolved value.
+- `run-launch-credential-plan/v1` evidence that classifies provider boot
+  authentication, task integration references, and high-risk compatibility
+  passthrough without storing values.
 
 It does not yet make a provider broker-capable. A handle in a prompt or
 environment is not a security boundary. Provider use stays disabled until an
@@ -28,6 +31,16 @@ Treat these as separate:
    action during a run. These are the broker target.
 3. **Compatibility passthrough** explicitly places a raw value in the provider
    environment. It is high risk and never counts as brokered.
+
+Every newly compiled run launch manifest records those classes, delivery
+posture, boundary posture, and provider-runtime evidence in a deterministic
+credential plan. Known native provider authentication keys are classified as
+boot authentication. Unknown credential-like environment keys are classified
+as high-risk compatibility passthrough. Broker definition IDs are classified
+as task integration credentials and block launch while their controlled
+boundary is unavailable. Probe timestamp-only refreshes do not create material
+drift, but provider build, classification, mode, reference, delivery, boundary,
+or risk changes do.
 
 ## Register a definition
 
@@ -136,11 +149,13 @@ A required brokered sandbox preset needs `credential.broker: supported`.
 `advisory`, externally delegated, unknown, stale, or bypassable evidence is
 treated as unsupported and blocks launch.
 
-Current executable providers have not completed provider-facing handle
-migration. Controlled HTTP consumption belongs to the run-scoped egress
-gateway; controlled MCP/tool consumption belongs to the tool-server control
-plane. Until those boundaries and provider migration are complete, use the
-registry and lease service only from trusted internal dispatch code.
+Current executable providers classify their launch credentials consistently,
+but classification alone does not make them broker-capable. Controlled HTTP
+consumption belongs to the run-scoped egress gateway; controlled MCP/tool
+consumption belongs to the tool-server control plane. Until those boundaries
+deliver handles without a bypass, task integration references block launch and
+the registry and lease service remain limited to trusted internal dispatch
+code.
 
 ## Rotation and revocation
 

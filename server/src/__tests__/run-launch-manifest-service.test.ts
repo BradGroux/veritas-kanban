@@ -120,8 +120,8 @@ const sandboxPolicy: SandboxPolicyDryRunResult = {
       redactDisplay: true,
     },
     credentials: {
-      mode: 'brokered',
-      brokerRefs: ['openai=provider-sensitive-value'],
+      mode: 'none',
+      brokerRefs: [],
     },
     createdAt: '2026-07-23T20:00:00.000Z',
     updatedAt: '2026-07-23T20:00:00.000Z',
@@ -130,7 +130,7 @@ const sandboxPolicy: SandboxPolicyDryRunResult = {
     sandboxMode: 'workspace-write',
     networkAccessEnabled: false,
     envPassthrough: ['PATH', 'OPENAI_API_KEY'],
-    credentialRefs: ['openai=[redacted]'],
+    credentialRefs: [],
   },
   evaluations: [],
   unsupportedRules: [],
@@ -194,7 +194,7 @@ function input(
       workingDirectory: 'task-worktree',
       worktree: 'required',
       environmentKeys: ['PATH', 'OPENAI_API_KEY'],
-      credentialReferences: ['openai=[redacted]'],
+      credentialReferences: ['env:OPENAI_API_KEY'],
     },
     tools: {
       allowed: [],
@@ -260,6 +260,20 @@ describe('RunLaunchManifestService', () => {
         provider: 'codex-cli',
         probeRevision: expect.any(Number),
       },
+      credentials: {
+        schemaVersion: 'run-launch-credential-plan/v1',
+        mode: 'none',
+        brokerState: 'not-required',
+        references: [
+          {
+            reference: 'env:OPENAI_API_KEY',
+            classification: 'harness-boot-authentication',
+            delivery: 'provider-native-environment',
+            boundary: 'provider-process',
+            risk: 'provider-required',
+          },
+        ],
+      },
       workspace: {
         worktreeId: 'worktree-854',
         worktreeManifestId: 'manifest-854',
@@ -288,6 +302,12 @@ describe('RunLaunchManifestService', () => {
         byteLength: expect.any(Number),
       }),
     ]);
+    expect(manifest.credentials?.providerRuntimeManifestDigest).toBe(
+      manifest.providerRuntime.digest
+    );
+    expect(manifest.credentials?.providerRuntimeProbeRevision).toBe(
+      manifest.providerRuntime.probeRevision
+    );
     expect(JSON.stringify(manifest)).not.toContain('Implement the task envelope');
     expect(JSON.stringify(manifest)).not.toContain('provider-sensitive-value');
     expect(RunLaunchManifestSchema.safeParse(manifest).success).toBe(true);
@@ -295,6 +315,49 @@ describe('RunLaunchManifestService', () => {
     expect(Object.isFrozen(manifest)).toBe(true);
     expect(Object.isFrozen(manifest.runtime.args)).toBe(true);
     expect(() => manifest.runtime.args.push('--tamper')).toThrow(TypeError);
+  });
+
+  it('fails closed when task credentials lack a controlled broker boundary', () => {
+    const brokeredPolicy: SandboxPolicyDryRunResult = {
+      ...sandboxPolicy,
+      preset: {
+        ...sandboxPolicy.preset,
+        credentials: {
+          mode: 'brokered',
+          brokerRefs: ['github-token'],
+        },
+      },
+      effective: {
+        ...sandboxPolicy.effective,
+        credentialRefs: ['github-token'],
+      },
+    };
+    const manifest = new RunLaunchManifestService().compile(
+      input({
+        sandboxPolicy: brokeredPolicy,
+        runtime: {
+          ...input().runtime,
+          credentialReferences: ['env:OPENAI_API_KEY', 'github-token'],
+        },
+      })
+    );
+
+    expect(manifest.credentials).toMatchObject({
+      brokerState: 'blocked',
+      references: expect.arrayContaining([
+        expect.objectContaining({
+          reference: 'github-token',
+          classification: 'task-integration',
+          delivery: 'blocked',
+        }),
+      ]),
+    });
+    expect(manifest.enforcement).toMatchObject({
+      enforceable: false,
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: 'credential-boundary-unavailable' }),
+      ]),
+    });
   });
 
   it('fails closed for declared tools, MCP servers, permissions, and health checks without enforcement', () => {
