@@ -85,15 +85,18 @@ export function TaskDetailsTab({
             value={task.description}
             onChange={(value) => onUpdate('description', value)}
             placeholder="Add a description... (supports Markdown)"
-            minHeight={120}
+            minHeight={180}
+            ariaLabel="Task description"
           />
         ) : (
           <Textarea
             value={task.description}
             onChange={(e) => onUpdate('description', e.currentTarget.value)}
             placeholder="Add a description..."
-            rows={4}
-            className="resize-none"
+            aria-label="Task description"
+            rows={8}
+            classNames={{ input: 'min-h-[180px] resize-y' }}
+            styles={{ input: { resize: 'vertical' } }}
           />
         )}
       </Stack>

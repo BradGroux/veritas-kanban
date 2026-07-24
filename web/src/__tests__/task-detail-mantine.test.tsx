@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
+import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { renderWithProviders, createMockTask } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
@@ -150,6 +151,14 @@ vi.mock('@/components/task/WorkflowSection', () => ({
   WorkflowSection: () => null,
 }));
 
+vi.mock('@/components/evidence/EvidenceTimelinePanel', () => ({
+  EvidenceTimelinePanel: () => (
+    <div data-testid="long-evidence-content">
+      Long evidence timeline content remains inside the task detail scroll region
+    </div>
+  ),
+}));
+
 vi.mock('@/components/task/SubtasksSection', () => ({
   SubtasksSection: () => <div>Subtasks section</div>,
 }));
@@ -207,6 +216,17 @@ describe('task detail Mantine migration', () => {
       'veritas-overlay'
     );
     expect(screen.getByTestId('task-detail-panel').className).toContain('veritas-overlay-surface');
+    expect(screen.getByTestId('task-detail-panel').className).toContain('min-h-0');
+    const scrollRegion = screen.getByTestId('task-detail-scroll-region');
+    expect(scrollRegion.className).toContain('min-h-0');
+    expect(scrollRegion.className).toContain('overflow-y-scroll');
+    expect(scrollRegion.className).toContain('overscroll-contain');
+    expect(scrollRegion.getAttribute('tabindex')).toBe('0');
+    expect(scrollRegion.contains(screen.getByLabelText('Task title'))).toBe(false);
+    const taskDescription = within(scrollRegion).getByLabelText('Task description');
+    expect(taskDescription.className).toContain('min-h-[180px]');
+    expect(taskDescription.className).toContain('resize-y');
+    expect((taskDescription as HTMLTextAreaElement).style.resize).toBe('vertical');
     expect(container.querySelector('.mantine-Tabs-root')).toBeDefined();
     expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(5);
@@ -217,6 +237,35 @@ describe('task detail Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
+  });
+
+  it('keeps Details and Evidence in the same desktop viewport scroll region', async () => {
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    const scrollRegion = screen.getByTestId('task-detail-scroll-region');
+    expect(within(scrollRegion).getByLabelText('Task description')).toBeDefined();
+
+    await user.click(screen.getByRole('tab', { name: 'Evidence' }));
+
+    expect(await within(scrollRegion).findByTestId('long-evidence-content')).toBeDefined();
+    expect(screen.getByTestId('task-detail-scroll-region')).toBe(scrollRegion);
+  });
+
+  it('applies description height and vertical resizing to the textarea input', () => {
+    renderWithProviders(
+      <MarkdownEditor
+        value={'Long task description\n'.repeat(20)}
+        onChange={vi.fn()}
+        minHeight={180}
+        ariaLabel="Resizable task description"
+      />
+    );
+
+    const textarea = screen.getByLabelText('Resizable task description');
+    expect(textarea.className).toContain('resize-y');
+    expect((textarea as HTMLTextAreaElement).style.minHeight).toBe('180px');
+    expect((textarea as HTMLTextAreaElement).style.resize).toBe('vertical');
   });
 
   it('keeps title editing and progress tab behavior wired after the migration', async () => {

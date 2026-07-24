@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Let Archive cards grow with expanded content, clamp collapsed text by whole
   lines with accessible full text, wrap long metadata safely, and keep Restore
   reachable beside long task content (#939).
+- Established one bounded, keyboard-focusable scroll owner for task drawers and
+  shared overlays, kept drawer chrome fixed, and made task description editors
+  taller and vertically resizable (#935).
 
 ## [6.0.0] - 2026-07-24
 

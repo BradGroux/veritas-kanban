@@ -179,6 +179,21 @@ export const veritasMantineTheme = createTheme({
         closeButtonProps: { 'aria-label': 'Close dialog' },
         overlayProps: { blur: 2, opacity: 0.45 },
       },
+      styles: {
+        content: {
+          display: 'flex',
+          maxHeight: 'calc(100dvh - 2rem)',
+          minHeight: 0,
+          flexDirection: 'column',
+          overflow: 'hidden',
+        },
+        body: {
+          minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          scrollbarGutter: 'stable',
+        },
+      },
     },
     Drawer: {
       defaultProps: {
@@ -187,6 +202,32 @@ export const veritasMantineTheme = createTheme({
         returnFocus: true,
         closeButtonProps: { 'aria-label': 'Close panel' },
         overlayProps: { blur: 2, opacity: 0.35 },
+      },
+      styles: {
+        content: {
+          display: 'flex',
+          maxHeight: '100dvh',
+          minHeight: 0,
+          flexDirection: 'column',
+          overflow: 'hidden',
+        },
+        body: {
+          minHeight: 0,
+          flex: '1 1 auto',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          scrollbarGutter: 'stable',
+        },
+      },
+    },
+    Popover: {
+      styles: {
+        dropdown: {
+          maxHeight: 'min(70dvh, 32rem)',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          scrollbarGutter: 'stable',
+        },
       },
     },
   },
