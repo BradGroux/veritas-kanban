@@ -154,6 +154,22 @@ limits are tracked in
 Compatibility errors and debug bundles must redact tokens, cookies, private
 keys, local private paths, raw chat content, and task body text.
 
+Buzz communication diagnostics store environment-variable references and
+public/redacted metadata only. The Nostr private key and optional NIP-OA auth
+tag are resolved only for the active read-only probe and are never returned.
+The built-in signer accepts hexadecimal or `nsec` private-key material,
+constructs the Buzz-required nonce and exact request-body hash, and clears its
+decoded key bytes after signing on a best-effort basis.
+Relay URLs reject userinfo, query strings, and fragments. Outbound requests use
+scheme validation, explicit plaintext/local/RFC1918/ULA opt-ins, DNS pinning,
+manual redirects, fixed timeouts, and bounded response reads. Link-local,
+cloud-metadata, and CGNAT ranges remain blocked under the private-network
+opt-in. The default probe reads NIP-11 metadata and authenticated query filters
+only; it does not send a Buzz event. Optional command discovery runs without a
+shell and receives a minimal environment that excludes provider and Buzz
+credentials. See
+[Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
+
 ## Provider Runtime Capability Enforcement
 
 Provider runtime manifests are authorization evidence, not display metadata.

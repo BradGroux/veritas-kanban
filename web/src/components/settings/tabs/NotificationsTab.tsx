@@ -24,6 +24,7 @@ import {
   type OutboundDeliveryAttempt,
   type OutboundEndpointRecord,
 } from '@/lib/api';
+import { BuzzConnectionPanel } from './BuzzConnectionPanel';
 
 type CommunicationState = 'ok' | 'warn' | 'off' | 'unknown';
 
@@ -386,6 +387,10 @@ export function NotificationsTab() {
           </Paper>
         </SimpleGrid>
       </div>
+
+      <div className="border-t my-6" />
+
+      <BuzzConnectionPanel />
 
       <div className="border-t my-6" />
 

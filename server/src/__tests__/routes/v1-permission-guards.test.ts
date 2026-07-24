@@ -8,6 +8,7 @@ import {
   agentRoutingAccess,
   agentTaskAccess,
   diffAccess,
+  integrationsAccess,
   maintenanceAccess,
   policyAccess,
   previewAccess,
@@ -107,6 +108,36 @@ describe('v1 REST permission guard presets', () => {
         }),
       })
     );
+  });
+
+  it('allows Buzz diagnostics to settings readers and guards Buzz mutations', () => {
+    expect(
+      runGuard(
+        integrationsAccess,
+        mockRequest('GET', '/communication/adapters/buzz-default/health', 'read-only', [
+          'settings:read',
+        ])
+      ).next
+    ).toHaveBeenCalled();
+
+    for (const path of [
+      '/communication/adapters/buzz-default',
+      '/communication/adapters/buzz-default/test',
+      '/communication/adapters/buzz-default/disconnect',
+    ]) {
+      const method = path.endsWith('buzz-default') ? 'PUT' : 'POST';
+      const { res, next } = runGuard(
+        integrationsAccess,
+        mockRequest(method, path, 'read-only', ['settings:read'])
+      );
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({ required: ['settings:write'] }),
+        })
+      );
+    }
   });
 
   it('requires admin permission for destructive telemetry maintenance routes', () => {

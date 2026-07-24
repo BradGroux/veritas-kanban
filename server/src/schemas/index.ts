@@ -13,6 +13,7 @@ export * from './time-schemas.js';
 export * from './archive-schemas.js';
 export * from './config-schemas.js';
 export * from './agent-schemas.js';
+export * from './communication-adapter-schemas.js';
 export * from './auth-schemas.js';
 export * from './shared-resources-schemas.js';
 export * from './doc-freshness-schemas.js';

@@ -323,6 +323,100 @@ describe('integrations routes', () => {
     });
   });
 
+  it('configures a reference-only Buzz adapter and runs a read-only test probe', async () => {
+    const buzzRecord = {
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+      deliveryMode: 'manual',
+      replyMode: 'ingest-api',
+      destinationType: 'channel',
+      relayHttpUrl: 'https://relay.example.test',
+      relayWebSocketUrl: 'wss://relay.example.test',
+      expectedCommunity: 'relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      publicKeyFingerprint: 'public-fp',
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      authTagConfigured: false,
+      hasCredential: true,
+      createdAt: '2026-07-23T18:00:00.000Z',
+      updatedAt: '2026-07-23T18:00:00.000Z',
+    };
+    mockCommunicationAdapters.configureAdapter.mockResolvedValueOnce(buzzRecord);
+
+    const configured = await request(app)
+      .put('/api/integrations/communication/adapters/buzz-default')
+      .send({
+        kind: 'buzz',
+        relayHttpUrl: 'https://relay.example.test',
+        expectedCommunity: 'relay.example.test',
+        publicKey: 'ab'.repeat(32),
+        credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      });
+
+    expect(configured.status).toBe(200);
+    expect(configured.body).toMatchObject({
+      kind: 'buzz',
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      hasCredential: true,
+    });
+    expect(JSON.stringify(configured.body)).not.toContain('nsec');
+
+    mockCommunicationAdapters.getAdapter
+      .mockResolvedValueOnce(buzzRecord)
+      .mockResolvedValueOnce(buzzRecord);
+    mockCommunicationAdapters.checkHealth.mockResolvedValueOnce({
+      adapterId: 'buzz-default',
+      status: 'healthy',
+      configured: true,
+      canSend: false,
+      canReceiveReplies: false,
+      checkedAt: '2026-07-23T18:01:00.000Z',
+      detail: 'Buzz read-only compatibility probe passed.',
+      reasonCode: 'ok',
+    });
+
+    const tested = await request(app)
+      .post('/api/integrations/communication/adapters/buzz-default/test')
+      .send({ message: 'must not be sent' });
+
+    expect(tested.status).toBe(200);
+    expect(tested.body).toMatchObject({
+      status: 'healthy',
+      canSend: false,
+      canReceiveReplies: false,
+    });
+    expect(mockCommunicationAdapters.checkHealth).toHaveBeenCalledWith('buzz-default');
+    expect(mockCommunicationAdapters.send).not.toHaveBeenCalledWith(
+      'buzz-default',
+      expect.anything()
+    );
+  });
+
+  it('rejects raw Buzz credentials and API-token fields', async () => {
+    const res = await request(app)
+      .put('/api/integrations/communication/adapters/buzz-default')
+      .send({
+        kind: 'buzz',
+        relayHttpUrl: 'https://relay.example.test',
+        publicKey: 'ab'.repeat(32),
+        credentialRef: 'env:BUZZ_PRIVATE_KEY',
+        credential: 'raw-secret',
+        apiTokenRef: 'env:BUZZ_TOKEN',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Validation failed',
+    });
+    expect(mockCommunicationAdapters.configureAdapter).not.toHaveBeenCalledWith(
+      'buzz-default',
+      expect.anything()
+    );
+  });
+
   it('ingests communication replies and broadcasts the resulting squad message', async () => {
     const res = await request(app)
       .post('/api/integrations/communication/adapters/msteams-default/replies')

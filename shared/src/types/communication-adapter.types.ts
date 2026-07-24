@@ -1,16 +1,112 @@
 import type { SquadMessage } from './chat.types.js';
 
-export type CommunicationAdapterKind = 'msteams';
+export type CommunicationAdapterKind = 'msteams' | 'buzz';
 
 export type CommunicationAdapterDeliveryMode = 'manual' | 'webhook';
 
 export type CommunicationAdapterDestinationType = 'channel' | 'direct';
 
-export type CommunicationAdapterHealthStatus = 'ok' | 'warning' | 'disabled' | 'error';
+export type CommunicationAdapterHealthStatus =
+  'ok' | 'warning' | 'disabled' | 'error' | BuzzCompatibilityStatus;
 
 export type CommunicationAdapterReplyMode = 'ingest-api';
 
 export type CommunicationReplyTargetKind = 'squad' | 'task' | 'run' | 'approval' | 'notification';
+
+export const BUZZ_COMPATIBILITY_SCHEMA_VERSION = 'buzz-compatibility/v1' as const;
+export const BUZZ_PROBE_REVISION = 1;
+export const BUZZ_TESTED_RELEASE = '0.4.24';
+export const BUZZ_TESTED_COMMIT = '710ed9fff57878a1d69f809b80a6ee0416c53fc4';
+
+export type BuzzCompatibilityStatus =
+  | 'healthy'
+  | 'degraded'
+  | 'unsupported'
+  | 'unauthorized'
+  | 'not_member'
+  | 'misconfigured'
+  | 'unreachable';
+
+export type BuzzCompatibilityReasonCode =
+  | 'ok'
+  | 'adapter_disabled'
+  | 'configuration_missing'
+  | 'configuration_invalid'
+  | 'endpoint_invalid'
+  | 'endpoint_mismatch'
+  | 'network_policy_blocked'
+  | 'relay_unreachable'
+  | 'response_too_large'
+  | 'relay_info_invalid'
+  | 'query_response_invalid'
+  | 'relay_software_mismatch'
+  | 'relay_version_unsupported'
+  | 'community_mismatch'
+  | 'credential_unavailable'
+  | 'auth_tag_invalid'
+  | 'public_key_mismatch'
+  | 'authentication_rejected'
+  | 'relay_membership_required'
+  | 'read_capability_rejected'
+  | 'relay_rate_limited'
+  | 'relay_error';
+
+export type BuzzVerificationState = 'verified' | 'not_enforced' | 'unverified' | 'failed';
+
+export interface BuzzCommandConfig {
+  executable: string;
+  args?: string[];
+}
+
+export interface BuzzCommandDiagnostic {
+  command: 'buzz' | 'buzz-acp' | 'buzz-agent' | 'configured';
+  executable: string;
+  available: boolean;
+  version?: string;
+  detail?: string;
+}
+
+export interface BuzzCompatibilityChecks {
+  relayIdentity: BuzzVerificationState;
+  communityBinding: BuzzVerificationState;
+  configuredIdentity: BuzzVerificationState;
+  authentication: BuzzVerificationState;
+  membership: BuzzVerificationState;
+  channelRead: BuzzVerificationState;
+  messageRead: BuzzVerificationState;
+}
+
+export interface BuzzRelayContract {
+  software: string;
+  version: string;
+  supportedNips: number[];
+  supportedExtensions: string[];
+  relayPublicKey?: string;
+  authRequired: boolean;
+}
+
+export interface BuzzCompatibilityResult {
+  schemaVersion: typeof BUZZ_COMPATIBILITY_SCHEMA_VERSION;
+  probeRevision: typeof BUZZ_PROBE_REVISION;
+  testedRelease: typeof BUZZ_TESTED_RELEASE;
+  testedCommit: typeof BUZZ_TESTED_COMMIT;
+  status: BuzzCompatibilityStatus;
+  reasonCode: BuzzCompatibilityReasonCode;
+  detail: string;
+  remediation?: string;
+  configuredRelayHttpUrl: string;
+  resolvedRelayHttpUrl?: string;
+  configuredRelayWebSocketUrl?: string;
+  resolvedRelayWebSocketUrl?: string;
+  expectedCommunity?: string;
+  observedCommunity?: string;
+  publicKeyFingerprint: string;
+  contract?: BuzzRelayContract;
+  checks: BuzzCompatibilityChecks;
+  commands: BuzzCommandDiagnostic[];
+  evidenceKey: string;
+  checkedAt: string;
+}
 
 export interface CommunicationReplyTarget {
   kind: CommunicationReplyTargetKind;
@@ -37,6 +133,18 @@ export interface CommunicationAdapterRecord {
   webhookUrlConfigured?: boolean;
   webhookUrlRedacted?: boolean;
   hasCredential: boolean;
+  relayHttpUrl?: string;
+  relayWebSocketUrl?: string;
+  expectedCommunity?: string;
+  publicKey?: string;
+  publicKeyFingerprint?: string;
+  credentialRef?: string;
+  authTagRef?: string;
+  authTagConfigured?: boolean;
+  allowLocalhost?: boolean;
+  allowPrivateNetwork?: boolean;
+  command?: BuzzCommandConfig;
+  compatibility?: BuzzCompatibilityResult;
   createdAt: string;
   updatedAt: string;
   lastHealth?: CommunicationAdapterHealth;
@@ -54,6 +162,15 @@ export interface CommunicationAdapterInput {
   chatId?: string;
   webhookUrl?: string;
   credential?: string;
+  relayHttpUrl?: string;
+  relayWebSocketUrl?: string | null;
+  expectedCommunity?: string | null;
+  publicKey?: string;
+  credentialRef?: string;
+  authTagRef?: string | null;
+  allowLocalhost?: boolean;
+  allowPrivateNetwork?: boolean;
+  command?: BuzzCommandConfig | null;
 }
 
 export interface CommunicationAdapterHealth {
@@ -64,6 +181,9 @@ export interface CommunicationAdapterHealth {
   canReceiveReplies: boolean;
   checkedAt: string;
   detail: string;
+  reasonCode?: BuzzCompatibilityReasonCode;
+  remediation?: string;
+  buzz?: BuzzCompatibilityResult;
 }
 
 export interface CommunicationThreadMapping {
@@ -78,12 +198,7 @@ export interface CommunicationThreadMapping {
 }
 
 export type CommunicationDeliveryOperation =
-  | 'configure'
-  | 'health'
-  | 'send'
-  | 'reply-ingest'
-  | 'poll'
-  | 'disconnect';
+  'configure' | 'health' | 'send' | 'reply-ingest' | 'poll' | 'disconnect';
 
 export type CommunicationDeliveryStatus = 'success' | 'queued' | 'failed' | 'blocked' | 'skipped';
 
@@ -112,6 +227,8 @@ export interface CommunicationSendResult {
   delivery: CommunicationDeliveryAudit;
   mapping: CommunicationThreadMapping;
 }
+
+export type CommunicationAdapterTestResult = CommunicationSendResult | CommunicationAdapterHealth;
 
 export interface CommunicationReplyIngestInput {
   externalThreadId: string;

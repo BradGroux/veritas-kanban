@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a reference-only Buzz communication adapter with typed configuration,
+  host-preserving HTTP/WS normalization, SSRF-aware bounded relay probes,
+  NIP-11 software/version/community checks, NIP-98 identity and membership/read
+  diagnostics with built-in hexadecimal/`nsec` signing, stable machine-readable
+  reason codes, evidence invalidation, shell-free optional command discovery,
+  Settings controls, `vk doctor` reporting, and operator/API/security
+  documentation. Buzz message delivery and reply subscription remain
+  fail-closed for their dedicated follow-up issue (#905).
 - Added transactional, remote-safe worktree lifecycle management with
   versioned manifests, exact fetched base commits, reasoned offline fallback,
   task/attempt ownership leases, active-run locks, recovery states, and
