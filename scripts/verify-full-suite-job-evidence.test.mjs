@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { hasSuccessfulFullSuiteEvidence } from './verify-full-suite-job-evidence.mjs';
+
+const scriptPath = fileURLToPath(new URL('./verify-full-suite-job-evidence.mjs', import.meta.url));
 
 function job(overrides = {}) {
   return {
@@ -48,4 +52,18 @@ test('rejects failed, incomplete, malformed, and missing job evidence', () => {
   assert.equal(hasSuccessfulFullSuiteEvidence(job({ steps: [] })), false);
   assert.equal(hasSuccessfulFullSuiteEvidence({}), false);
   assert.equal(hasSuccessfulFullSuiteEvidence(null), false);
+});
+
+test('command-line entrypoint validates piped GitHub job JSON', () => {
+  const accepted = spawnSync(process.execPath, [scriptPath], {
+    input: JSON.stringify(job()),
+    encoding: 'utf8',
+  });
+  assert.equal(accepted.status, 0, accepted.stderr);
+
+  const rejected = spawnSync(process.execPath, [scriptPath], {
+    input: JSON.stringify(job({ steps: [] })),
+    encoding: 'utf8',
+  });
+  assert.equal(rejected.status, 1, rejected.stderr);
 });
