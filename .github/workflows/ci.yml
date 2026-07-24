@@ -9,6 +9,24 @@ on:
   schedule:
     - cron: '0 8 * * *'
   workflow_dispatch:
+    inputs:
+      test_scope:
+        description: Unit-test verification tier
+        required: true
+        default: focused
+        type: choice
+        options:
+          - focused
+          - full
+      base_sha:
+        description: Optional base commit for a focused run (defaults to HEAD^)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +36,145 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+  # ─── Deterministic Test Scope ───────────────────────────────────
+  select-tests:
+    name: Select Test Scope
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+      packages: ${{ steps.scope.outputs.packages }}
+      diff_range: ${{ steps.scope.outputs.diff_range }}
+      reason: ${{ steps.scope.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify CI scope selector
+        run: node --test scripts/select-ci-test-scope.test.mjs
+
+      - name: Find reviewed full-suite evidence
+        id: reviewed_full
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          reviewed_full=false
+          reviewed_pr=
+          reviewed_head=
+          associated_prs="$(
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+              2>/dev/null ||
+              printf '[]'
+          )"
+          merged_pr="$(
+            jq -c \
+              --arg merge_sha "$GITHUB_SHA" \
+              '[.[] | select(
+                .merged_at != null and
+                .base.ref == "main" and
+                .merge_commit_sha == $merge_sha
+              )] | first // empty' \
+              <<<"$associated_prs"
+          )"
+
+          if [[ -n "$merged_pr" ]]; then
+            reviewed_pr="$(jq -r '.number' <<<"$merged_pr")"
+            reviewed_head="$(jq -r '.head.sha' <<<"$merged_pr")"
+            check_runs="$(
+              gh api \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/${GITHUB_REPOSITORY}/commits/${reviewed_head}/check-runs?per_page=100" \
+                2>/dev/null ||
+                printf '{"check_runs":[]}'
+            )"
+
+            if jq -e '
+              .check_runs |
+              any(.[];
+                .name == "Workspace Unit Tests" and
+                .status == "completed" and
+                .conclusion == "success" and
+                .app.slug == "github-actions"
+              )
+            ' <<<"$check_runs" >/dev/null; then
+              if git cat-file -e "${reviewed_head}^{commit}" 2>/dev/null ||
+                git fetch --no-tags origin "$reviewed_head"; then
+                if git merge-base --is-ancestor "$reviewed_head" "$GITHUB_SHA"; then
+                  reviewed_full=true
+                fi
+              fi
+            fi
+          fi
+
+          {
+            echo "reviewed_full=$reviewed_full"
+            echo "reviewed_pr=$reviewed_pr"
+            echo "reviewed_head=$reviewed_head"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Select verification tier
+        id: scope
+        shell: bash
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_MANUAL_SCOPE: ${{ inputs.test_scope || '' }}
+          CI_PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          CI_REVIEWED_FULL: ${{ steps.reviewed_full.outputs.reviewed_full || 'false' }}
+          CI_REVIEWED_PR: ${{ steps.reviewed_full.outputs.reviewed_pr || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
+          DISPATCH_BASE_SHA: ${{ inputs.base_sha || '' }}
+        run: |
+          set -euo pipefail
+
+          case "$CI_EVENT_NAME" in
+            pull_request)
+              CI_BASE_SHA="$PR_BASE_SHA"
+              CI_HEAD_SHA="$PR_HEAD_SHA"
+              ;;
+            push)
+              CI_BASE_SHA="$PUSH_BEFORE_SHA"
+              CI_HEAD_SHA="$GITHUB_SHA"
+              if [[ "$CI_BASE_SHA" =~ ^0+$ ]]; then
+                CI_BASE_SHA="$(git rev-parse "${GITHUB_SHA}^")"
+              fi
+              ;;
+            workflow_dispatch)
+              CI_HEAD_SHA="$GITHUB_SHA"
+              if [[ -n "$DISPATCH_BASE_SHA" ]]; then
+                if [[ ! "$DISPATCH_BASE_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+                  echo "::error::base_sha must be a 7-40 character hexadecimal commit ID"
+                  exit 1
+                fi
+                CI_BASE_SHA="$(git rev-parse --verify "${DISPATCH_BASE_SHA}^{commit}")"
+              else
+                CI_BASE_SHA="$(git rev-parse "${GITHUB_SHA}^")"
+              fi
+              ;;
+            schedule)
+              CI_BASE_SHA="$GITHUB_SHA"
+              CI_HEAD_SHA="$GITHUB_SHA"
+              ;;
+            *)
+              echo "::error::Unsupported CI event: $CI_EVENT_NAME"
+              exit 1
+              ;;
+          esac
+
+          export CI_BASE_SHA CI_HEAD_SHA
+          node scripts/select-ci-test-scope.mjs
+
   # ─── Lint & Type Check ───────────────────────────────────────────
   lint-and-typecheck:
     name: Lint & Type Check
@@ -53,109 +210,218 @@ jobs:
       - name: Type check all packages
         run: pnpm typecheck
 
-  # ─── Changed PR Tests ────────────────────────────────────────────
+  # ─── Focused Related Tests ──────────────────────────────────────
   test-changed:
     name: Changed Tests
-    if: github.event_name == 'pull_request'
+    needs: select-tests
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful scope decision
+        env:
+          SELECTOR_RESULT: ${{ needs.select-tests.result }}
+          SELECTED_SCOPE: ${{ needs.select-tests.outputs.scope }}
+          SELECTED_PACKAGES: ${{ needs.select-tests.outputs.packages }}
+        run: |
+          if [[ "$SELECTOR_RESULT" != "success" ]]; then
+            echo "::error::Select Test Scope did not complete successfully"
+            exit 1
+          fi
+          if [[ ! "$SELECTED_SCOPE" =~ ^(none|focused|full)$ ]]; then
+            echo "::error::Select Test Scope returned an invalid scope"
+            exit 1
+          fi
+          if [[ "$SELECTED_SCOPE" == "focused" && -z "$SELECTED_PACKAGES" ]]; then
+            echo "::error::Focused scope requires at least one workspace"
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
+        if: needs.select-tests.outputs.scope == 'focused'
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
+        if: needs.select-tests.outputs.scope == 'focused'
 
       - uses: actions/setup-node@v6
+        if: needs.select-tests.outputs.scope == 'focused'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
+        if: needs.select-tests.outputs.scope == 'focused'
         run: pnpm install --frozen-lockfile
 
       - name: Build shared test dependency
+        if: needs.select-tests.outputs.scope == 'focused'
         run: pnpm --filter @veritas-kanban/shared build
 
-      - name: Run changed workspace tests
+      - name: Run related tests in affected workspaces
+        if: needs.select-tests.outputs.scope == 'focused'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DIFF_RANGE: ${{ needs.select-tests.outputs.diff_range }}
+          SELECTED_PACKAGES: ${{ needs.select-tests.outputs.packages }}
+          VERITAS_DISABLE_WATCHERS: '1'
+        shell: bash
         run: |
-          selected_count=0
-          for package_name in server web cli mcp; do
-            package_tests=()
-            while IFS= read -r test_file; do
-              package_tests+=("${test_file#"$package_name/"}")
-            done < <(
-              git diff --name-only --diff-filter=ACMR "$BASE_SHA...HEAD" |
-                grep -E "^${package_name}/.*\\.(test|spec)\\.[cm]?[jt]sx?$" || true
-            )
-            if (( ${#package_tests[@]} > 0 )); then
-              for test_file in "${package_tests[@]}"; do
-                pnpm --filter "@veritas-kanban/${package_name}" exec vitest run \
-                  --passWithNoTests \
-                  "$test_file"
-                selected_count=$((selected_count + 1))
-              done
-            fi
-          done
-          if (( selected_count == 0 )); then
-            echo "No changed server, web, CLI, or MCP test files."
-          fi
+          set -euo pipefail
 
-      - name: Run changed desktop tests
+          IFS=',' read -r -a packages <<< "$SELECTED_PACKAGES"
+          executed_packages=()
+          {
+            echo "### Changed Tests"
+            echo
+            echo "- Diff range: \`$DIFF_RANGE\`"
+            echo "- Selected workspaces: \`$SELECTED_PACKAGES\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for package_name in "${packages[@]}"; do
+            related_files=()
+            while IFS= read -r changed_file; do
+              related_files+=("./${changed_file#"$package_name/"}")
+            done < <(
+              git diff --name-only --diff-filter=ACMR "$DIFF_RANGE" -- "$package_name/"
+            )
+
+            if (( ${#related_files[@]} == 0 )); then
+              continue
+            fi
+
+            case "$package_name" in
+              server|web|cli|mcp)
+                package_filter="@veritas-kanban/${package_name}"
+                extra_args=()
+                if [[ "$package_name" == "web" ]]; then
+                  extra_args+=(--testTimeout 15000)
+                fi
+                ;;
+              desktop)
+                package_filter="@veritas-kanban/desktop"
+                extra_args=(--config vitest.config.ts)
+                ;;
+              *)
+                echo "::error::Unknown selected workspace: $package_name"
+                exit 1
+                ;;
+            esac
+
+            pnpm --filter "$package_filter" exec vitest related \
+              --run \
+              --passWithNoTests \
+              "${extra_args[@]}" \
+              "${related_files[@]}"
+            executed_packages+=("$package_name")
+          done
+
+          {
+            if (( ${#executed_packages[@]} > 0 )); then
+              echo "- Related coverage executed for: \`${executed_packages[*]}\`"
+            else
+              echo "- No added, copied, modified, or renamed workspace inputs required related coverage."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record focused-tier skip
+        if: needs.select-tests.outputs.scope != 'focused'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SELECTED_SCOPE: ${{ needs.select-tests.outputs.scope }}
+          SELECTION_REASON: ${{ needs.select-tests.outputs.reason }}
         run: |
-          desktop_tests=()
-          while IFS= read -r test_file; do
-            desktop_tests+=("$test_file")
-          done < <(
-            git diff --name-only --diff-filter=ACMR "$BASE_SHA...HEAD" |
-              grep -E '^desktop/.*\.(test|spec)\.[cm]?[jt]sx?$' |
-              sed 's#^desktop/##' || true
-          )
-          if (( ${#desktop_tests[@]} == 0 )); then
-            echo "No changed desktop test files."
-          else
-            for test_file in "${desktop_tests[@]}"; do
-              pnpm --filter @veritas-kanban/desktop exec vitest run \
-                --config vitest.config.ts \
-                --passWithNoTests \
-                "$test_file"
-            done
-          fi
+          {
+            echo "### Changed Tests"
+            echo
+            echo "- Decision: skipped related coverage because scope is \`$SELECTED_SCOPE\`."
+            echo "- Selection reason: $SELECTION_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ─── Full Workspace Unit Tests ───────────────────────────────────
   test-workspace:
     name: Workspace Unit Tests
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:full')
+    needs: select-tests
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Require a successful scope decision
+        env:
+          SELECTOR_RESULT: ${{ needs.select-tests.result }}
+          SELECTED_SCOPE: ${{ needs.select-tests.outputs.scope }}
+        run: |
+          if [[ "$SELECTOR_RESULT" != "success" ]]; then
+            echo "::error::Select Test Scope did not complete successfully"
+            exit 1
+          fi
+          if [[ ! "$SELECTED_SCOPE" =~ ^(none|focused|full)$ ]]; then
+            echo "::error::Select Test Scope returned an invalid scope"
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
+        if: needs.select-tests.outputs.scope == 'full'
 
       - uses: pnpm/action-setup@v6
+        if: needs.select-tests.outputs.scope == 'full'
 
       - uses: actions/setup-node@v6
+        if: needs.select-tests.outputs.scope == 'full'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
+        if: needs.select-tests.outputs.scope == 'full'
         run: pnpm install --frozen-lockfile
 
       - name: Build shared (dependency for workspace tests)
+        if: needs.select-tests.outputs.scope == 'full'
         run: pnpm --filter @veritas-kanban/shared build
 
       - name: Run workspace unit tests
+        if: needs.select-tests.outputs.scope == 'full'
         run: pnpm test:unit
 
       - name: Run desktop readiness regression tests
+        if: needs.select-tests.outputs.scope == 'full'
         run: pnpm desktop:test:readiness
 
       - name: Run dual-storage parity tests
-        run: pnpm --filter @veritas-kanban/server test -- src/__tests__/storage/dual-storage-parity.test.ts
+        if: needs.select-tests.outputs.scope == 'full'
+        run: >-
+          pnpm --filter @veritas-kanban/server exec vitest run
+          src/__tests__/storage/dual-storage-parity.test.ts
+
+      - name: Record full-suite evidence
+        if: >-
+          always() &&
+          needs.select-tests.result == 'success' &&
+          needs.select-tests.outputs.scope == 'full'
+        env:
+          DIFF_RANGE: ${{ needs.select-tests.outputs.diff_range }}
+          SELECTION_REASON: ${{ needs.select-tests.outputs.reason }}
+          CURRENT_JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### Workspace Unit Tests"
+            echo
+            echo "- Diff range: \`${DIFF_RANGE:-not required}\`"
+            echo "- Selection reason: $SELECTION_REASON"
+            echo "- Workflow checkout SHA: \`$GITHUB_SHA\`"
+            echo "- Current job status: \`$CURRENT_JOB_STATUS\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record full-tier skip
+        if: needs.select-tests.outputs.scope != 'full'
+        env:
+          SELECTED_SCOPE: ${{ needs.select-tests.outputs.scope }}
+          SELECTION_REASON: ${{ needs.select-tests.outputs.reason }}
+        run: |
+          {
+            echo "### Workspace Unit Tests"
+            echo
+            echo "- Decision: skipped the complete suite because scope is \`$SELECTED_SCOPE\`."
+            echo "- Selection reason: $SELECTION_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ─── Build ───────────────────────────────────────────────────────
   build:

@@ -71,6 +71,7 @@ pnpm lint:fix
 
 # Smoke checks
 pnpm check:pnpm-settings        # Validates package manager fields match this file
+pnpm test:ci-scope              # Validates path-aware CI test selection
 pnpm smoke:cli-mcp              # CLI ↔ MCP compatibility smoke test
 pnpm test:buzz:compatibility    # Credential-free composed Buzz release gate
 ```

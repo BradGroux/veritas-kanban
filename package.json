@@ -39,6 +39,7 @@
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "vitest run",
     "test:unit": "pnpm -r --workspace-concurrency=1 test",
+    "test:ci-scope": "node --test scripts/select-ci-test-scope.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",

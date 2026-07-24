@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Made CI test scope deterministic and path-aware. Documentation-only changes
+  skip workspace suites, ordinary code changes run Vitest related coverage for
+  affected packages, and CI, manifest, shared, storage, or desktop changes
+  conservatively select the full gate. A successful reviewed full-suite head is
+  reused after merge only when it is an ancestor of the merge commit, avoiding
+  a duplicate full run while scheduled and explicit release gates remain
+  authoritative. Dual-storage parity now invokes its exact Vitest file instead
+  of expanding through the package test wrapper, and job summaries retain exact
+  range and selection evidence (#1000).
+
 ## [6.0.1] - 2026-07-24
 
 Veritas Kanban 6.0.1 is the first supported stable v6 release. It supersedes
