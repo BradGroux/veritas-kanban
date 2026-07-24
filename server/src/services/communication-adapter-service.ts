@@ -18,6 +18,9 @@ import type {
   BuzzCursor,
   BuzzExternalCoordinate,
   BuzzRuntimeHealth,
+  BuzzWorkflowTriggerAudit,
+  BuzzWorkflowTriggerRule,
+  BuzzWorkflowTriggerRuleInput,
   SquadMessage,
 } from '@veritas-kanban/shared';
 import {
@@ -62,6 +65,10 @@ import {
   buzzAdapterConfigSchema,
   type BuzzAdapterConfig,
 } from '../schemas/communication-adapter-schemas.js';
+import {
+  BuzzWorkflowTriggerService,
+  type BuzzWorkflowTriggerEvent,
+} from './buzz-workflow-trigger-service.js';
 
 const DEFAULT_ADAPTER_ID = 'msteams-default';
 const MAX_DELIVERIES = 500;
@@ -130,6 +137,7 @@ export interface CommunicationAdapterServiceOptions {
   buzzCompatibility?: BuzzCompatibilityService;
   buzzCommunication?: BuzzCommunicationService;
   buzzWorkerFactory?: BuzzSubscriptionWorkerFactory;
+  buzzWorkflowTriggers?: BuzzWorkflowTriggerService;
   audit?: (event: AuditEvent) => Promise<void>;
 }
 
@@ -402,6 +410,7 @@ export class CommunicationAdapterService {
   private readonly buzzCompatibility: BuzzCompatibilityService;
   private readonly buzzCommunication: BuzzCommunicationService;
   private readonly buzzWorkerFactory: BuzzSubscriptionWorkerFactory;
+  private readonly buzzWorkflowTriggers: BuzzWorkflowTriggerService;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly buzzWorkers = new Map<string, BuzzSubscriptionWorkerHandle>();
   private readonly buzzWorkerGenerations = new Map<string, number>();
@@ -417,6 +426,12 @@ export class CommunicationAdapterService {
     this.buzzCommunication = options.buzzCommunication || new BuzzCommunicationService();
     this.buzzWorkerFactory =
       options.buzzWorkerFactory || new DefaultBuzzSubscriptionWorkerFactory();
+    this.buzzWorkflowTriggers =
+      options.buzzWorkflowTriggers ||
+      new BuzzWorkflowTriggerService({
+        storageDir: path.join(this.storageDir, 'workflow-triggers'),
+        persist: this.persist,
+      });
     this.audit = options.audit || auditLog;
   }
 
@@ -473,6 +488,46 @@ export class CommunicationAdapterService {
     return Object.values(this.state.buzzChannelMappings)
       .filter((mapping) => !adapterId || mapping.adapterId === adapterId)
       .sort((a, b) => a.channelId.localeCompare(b.channelId));
+  }
+
+  async listBuzzWorkflowTriggerRules(adapterId: string): Promise<BuzzWorkflowTriggerRule[]> {
+    validatePathSegment(adapterId);
+    await this.ensureLoaded();
+    this.requireAdapter(adapterId);
+    return this.buzzWorkflowTriggers.listRules(adapterId);
+  }
+
+  async createBuzzWorkflowTriggerRule(
+    adapterId: string,
+    input: BuzzWorkflowTriggerRuleInput,
+    createdBy: string
+  ): Promise<BuzzWorkflowTriggerRule> {
+    validatePathSegment(adapterId);
+    await this.ensureLoaded();
+    const adapter = this.requireAdapter(adapterId);
+    if (adapter.kind !== 'buzz') throw new Error('Workflow triggers require a Buzz adapter');
+    const mapping = this.state.buzzChannelMappings[input.mappingId];
+    if (!mapping || mapping.adapterId !== adapterId || !mapping.enabled) {
+      throw new Error('Workflow triggers require an active Buzz channel mapping');
+    }
+    return this.buzzWorkflowTriggers.createRule(adapterId, mapping, input, createdBy);
+  }
+
+  async disableBuzzWorkflowTriggerRule(
+    adapterId: string,
+    ruleId: string
+  ): Promise<BuzzWorkflowTriggerRule> {
+    return this.buzzWorkflowTriggers.disableRule(adapterId, ruleId);
+  }
+
+  async listBuzzWorkflowTriggerAudits(
+    adapterId: string,
+    limit = 100
+  ): Promise<BuzzWorkflowTriggerAudit[]> {
+    validatePathSegment(adapterId);
+    await this.ensureLoaded();
+    this.requireAdapter(adapterId);
+    return this.buzzWorkflowTriggers.listAudits(adapterId, limit);
   }
 
   async configureBuzzChannelMapping(
@@ -976,6 +1031,17 @@ export class CommunicationAdapterService {
     const adapterOrigin = isVeritasBuzzOrigin(inbound.event, adapter.publicKey);
     const existing = this.state.buzzEvents[key];
     if (existing && !outbound && !adapterOrigin) {
+      if (inbound.event.kind === BUZZ_MESSAGE_KIND) {
+        await this.processBuzzWorkflowTrigger({
+          adapterId,
+          mapping,
+          eventId,
+          authorPubkey: coordinate.authorPubkey ?? inbound.event.pubkey,
+          content: cleanInboundMessage(inbound.content),
+          occurredAt: new Date(inbound.event.created_at * 1000).toISOString(),
+          rootEventId: coordinate.rootEventId,
+        });
+      }
       const delivery = this.recordDelivery({
         adapterId,
         operation: 'event-ingest',
@@ -995,6 +1061,18 @@ export class CommunicationAdapterService {
 
     delete this.state.buzzPendingEvents[key];
     if (outbound || adapterOrigin) {
+      if (inbound.event.kind === BUZZ_MESSAGE_KIND) {
+        await this.processBuzzWorkflowTrigger({
+          adapterId,
+          mapping,
+          eventId,
+          authorPubkey: coordinate.authorPubkey ?? inbound.event.pubkey,
+          content: cleanInboundMessage(inbound.content),
+          occurredAt: new Date(inbound.event.created_at * 1000).toISOString(),
+          rootEventId: coordinate.rootEventId,
+          echo: true,
+        });
+      }
       this.recordBuzzEvent({
         key,
         adapterId,
@@ -1099,6 +1177,16 @@ export class CommunicationAdapterService {
       return delivery;
     }
 
+    await this.processBuzzWorkflowTrigger({
+      adapterId,
+      mapping,
+      eventId,
+      authorPubkey: coordinate.authorPubkey ?? inbound.event.pubkey,
+      content: cleanedMessage,
+      occurredAt: new Date(inbound.event.created_at * 1000).toISOString(),
+      rootEventId: coordinate.rootEventId,
+    });
+
     const squadMessage = await this.chatService.sendSquadMessage(
       {
         id: `msg_buzz_${eventId}`,
@@ -1167,6 +1255,20 @@ export class CommunicationAdapterService {
     broadcastSquadMessage(squadMessage);
     await this.replayPendingBuzzReplies(adapterId, mapping, eventId);
     return delivery;
+  }
+
+  private async processBuzzWorkflowTrigger(event: BuzzWorkflowTriggerEvent): Promise<void> {
+    if (!event.content) return;
+    try {
+      await this.buzzWorkflowTriggers.processEvent(event);
+    } catch (error) {
+      await this.audit({
+        action: 'buzz.workflow-trigger.error',
+        actor: 'system',
+        resource: event.adapterId,
+        details: { eventId: event.eventId, error: sanitizeError(error) },
+      }).catch(() => undefined);
+    }
   }
 
   private async sendBuzz(

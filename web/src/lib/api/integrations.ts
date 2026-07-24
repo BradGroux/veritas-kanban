@@ -7,6 +7,9 @@ import type {
   BuzzDefinitionListResult,
   BuzzDefinitionPreview,
   BuzzDefinitionPreviewInput,
+  BuzzWorkflowTriggerAudit,
+  BuzzWorkflowTriggerRule,
+  BuzzWorkflowTriggerRuleInput,
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,
@@ -185,6 +188,45 @@ export const integrationsApi = {
     return apiFetch<BuzzChannelMapping>(
       `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/channels/${encodeURIComponent(channelId)}/disable`,
       { method: 'POST' }
+    );
+  },
+
+  buzzWorkflowTriggerRules: async (adapterId: string): Promise<BuzzWorkflowTriggerRule[]> => {
+    return apiFetch<BuzzWorkflowTriggerRule[]>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/workflow-triggers`
+    );
+  },
+
+  createBuzzWorkflowTriggerRule: async (
+    adapterId: string,
+    input: BuzzWorkflowTriggerRuleInput
+  ): Promise<BuzzWorkflowTriggerRule> => {
+    return apiFetch<BuzzWorkflowTriggerRule>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/workflow-triggers`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+
+  disableBuzzWorkflowTriggerRule: async (
+    adapterId: string,
+    ruleId: string
+  ): Promise<BuzzWorkflowTriggerRule> => {
+    return apiFetch<BuzzWorkflowTriggerRule>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/workflow-triggers/${encodeURIComponent(ruleId)}/disable`,
+      { method: 'POST' }
+    );
+  },
+
+  buzzWorkflowTriggerAudits: async (
+    adapterId: string,
+    limit = 100
+  ): Promise<BuzzWorkflowTriggerAudit[]> => {
+    return apiFetch<BuzzWorkflowTriggerAudit[]>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/workflow-trigger-audits?limit=${limit}`
     );
   },
 

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added allowlisted Buzz root-message workflow triggers with bounded predicates,
+  provider-neutral pre-dispatch hooks, durable causal keys, replay and echo
+  suppression, restart reconciliation, API configuration, and audit history
+  (#911).
 - Added the provider-neutral `runtime-hook/v1` in-process hook bus with bounded
   envelopes, deterministic scope ordering, explicit blocking pre-events,
   passive post-events, timeout/reentrancy protection, side-effect-free dry-run,
