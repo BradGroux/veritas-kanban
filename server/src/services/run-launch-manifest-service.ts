@@ -6,6 +6,7 @@ import type {
   RunLaunchInstructionReference,
   RunLaunchManifest,
   RunLaunchManifestBlocker,
+  RunLaunchCredentialPlan,
   RunLaunchManifestDriftResult,
   RunLaunchManifestInstructionKind,
   RunLaunchManifestOrigin,
@@ -29,6 +30,7 @@ import {
   digestRunLaunchValue,
 } from '../utils/run-launch-manifest-digest.js';
 import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
+import { compileProviderLaunchCredentialPlan } from './provider-launch-credential-plan-service.js';
 
 export interface RunLaunchManifestInstructionInput {
   id: string;
@@ -77,6 +79,7 @@ const MATERIAL_SECTIONS: Array<keyof RunLaunchManifest> = [
   'instructions',
   'workspace',
   'runtime',
+  'credentials',
   'tools',
   'permissions',
   'resources',
@@ -145,11 +148,19 @@ export class RunLaunchManifestService {
         .sort((left, right) => left.id.localeCompare(right.id)),
       warnings: uniqueSorted(input.sandboxPolicy.warnings.map(sanitizeProviderRuntimeDiagnostic)),
     };
+    const runtime = normalizeRuntime(input.runtime);
+    const credentials = compileProviderLaunchCredentialPlan({
+      provider: providerRuntime.provider,
+      providerRuntimeManifest: providerRuntime,
+      runtime,
+      sandbox: input.sandboxPolicy,
+    });
     const blockers = collectBlockers({
       input,
       tools,
       permissions,
       resources,
+      credentials,
       providerRequirements,
       requiredHealthChecks,
       satisfiedHealthChecks,
@@ -233,7 +244,8 @@ export class RunLaunchManifestService {
         baseResolutionSource:
           input.taskEnvelope.workspace.baseResolutionSource ?? 'legacy-launch-head',
       },
-      runtime: normalizeRuntime(input.runtime),
+      runtime,
+      credentials,
       tools,
       permissions,
       resources,
@@ -320,7 +332,9 @@ export function diffRunLaunchManifests(
             ? materialInstructions(parentManifest.instructions)
             : field === 'runtime'
               ? materialRuntime(parentManifest)
-              : parentManifest[field];
+              : field === 'credentials'
+                ? materialCredentials(parentManifest)
+                : parentManifest[field];
     const afterValue =
       field === 'taskEnvelope'
         ? {
@@ -336,7 +350,9 @@ export function diffRunLaunchManifests(
             ? materialInstructions(currentManifest.instructions)
             : field === 'runtime'
               ? materialRuntime(currentManifest)
-              : currentManifest[field];
+              : field === 'credentials'
+                ? materialCredentials(currentManifest)
+                : currentManifest[field];
     const beforeDigest = digestRunLaunchValue(beforeValue);
     const afterDigest = digestRunLaunchValue(afterValue);
     return beforeDigest === afterDigest ? [] : [{ field, beforeDigest, afterDigest }];
@@ -371,6 +387,18 @@ function materialRuntime(manifest: RunLaunchManifest): RunLaunchRuntime {
       )
     ),
   };
+}
+
+function materialCredentials(
+  manifest: RunLaunchManifest
+): Omit<RunLaunchCredentialPlan, 'digest' | 'providerRuntimeManifestDigest'> | undefined {
+  if (!manifest.credentials) return undefined;
+  const {
+    digest: _digest,
+    providerRuntimeManifestDigest: _providerRuntimeManifestDigest,
+    ...material
+  } = manifest.credentials;
+  return material;
 }
 
 function normalizeRuntime(runtime: RunLaunchRuntime): RunLaunchRuntime {
@@ -419,6 +447,7 @@ function collectBlockers({
   tools,
   permissions,
   resources,
+  credentials,
   providerRequirements,
   requiredHealthChecks,
   satisfiedHealthChecks,
@@ -427,6 +456,7 @@ function collectBlockers({
   tools: RunLaunchTools;
   permissions: RunLaunchPermissions;
   resources: RunLaunchResources;
+  credentials: RunLaunchCredentialPlan;
   providerRequirements: RunLaunchManifest['providerRequirements'];
   requiredHealthChecks: string[];
   satisfiedHealthChecks: Set<string>;
@@ -435,6 +465,14 @@ function collectBlockers({
   const add = (code: string, field: string, detail: string, remediation: string): void => {
     blockers.push({ code, field, detail, remediation });
   };
+  if (credentials.brokerState === 'blocked') {
+    add(
+      'credential-boundary-unavailable',
+      'credentials',
+      'Task integration credentials do not have an accepted brokered dispatch boundary.',
+      'Select a credential-free preset until a controlled tool or egress boundary is configured.'
+    );
+  }
   if (
     tools.enforcement !== 'enforced' &&
     (tools.allowed.length > 0 || tools.denied.length > 0 || tools.policyIds.length > 0)

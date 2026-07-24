@@ -636,6 +636,14 @@ tool boundary are complete. Model-provider boot authentication and explicit
 `env-passthrough` compatibility remain separate, high-risk paths and are never
 labeled as brokered. See [Credential Broker](CREDENTIAL-BROKER.md).
 
+New launches persist `run-launch-credential-plan/v1` evidence. The plan
+classifies known provider boot keys, task integration definition IDs, and
+unknown credential-like environment passthrough; binds the classification to
+the provider runtime manifest and probe revision; and contains no values. Task
+integration references remain blocked until a controlled tool or egress
+boundary proves non-bypassable delivery. A provider-native boot key is reported
+as provider-required authentication, not as `credential.broker` support.
+
 ## Agent Profile Packages
 
 Use **Settings -> Agents -> Agent Profile Packages** or `vk profiles` to import reusable YAML/JSON packages that sit above provider profiles. Provider profiles still own low-level command, args, and availability. Profile packages add portable launch metadata:

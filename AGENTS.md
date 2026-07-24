@@ -131,6 +131,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   whose built-in type and command both identify `codex` or `hermes` may infer a
   provider during migration; provider-less or profile/adapter-mismatched records
   fail closed before an attempt is created.
+- Classify launch credentials through `run-launch-credential-plan/v1`.
+  Provider boot authentication, task integration definition IDs, and explicit
+  high-risk environment passthrough are separate classes. Task integration
+  credentials fail closed until an accepted tool or egress boundary proves
+  brokered, non-bypassable delivery.
 - Persist `run-supervisor/v1` before provider dispatch. Restart recovery must
   validate the exact runtime, task-envelope, launch-manifest, worktree, host,
   lease, and process/session identity; replay only after the durable event
