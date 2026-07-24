@@ -61,7 +61,28 @@ const mocks = vi.hoisted(() => ({
   validateSandboxPolicy: vi.fn(),
   providerRuntimeManifests: [] as Array<Record<string, unknown>>,
   additionalAgentHosts: [] as Array<Record<string, unknown>>,
+  buzzDefinitions: vi.fn(),
+  buzzDefinitionLinks: vi.fn(),
+  previewBuzzDefinition: vi.fn(),
+  importBuzzDefinition: vi.fn(),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      integrations: {
+        ...actual.api.integrations,
+        buzzDefinitions: mocks.buzzDefinitions,
+        buzzDefinitionLinks: mocks.buzzDefinitionLinks,
+        previewBuzzDefinition: mocks.previewBuzzDefinition,
+        importBuzzDefinition: mocks.importBuzzDefinition,
+      },
+    },
+  };
+});
 
 vi.mock('@/hooks/useConfig', () => ({
   useConfig: () => ({
@@ -478,6 +499,79 @@ describe('Agents settings Mantine migration', () => {
       effective: { sandboxMode: 'workspace-write', networkAccessEnabled: false },
       unsupportedRules: [],
     });
+    mocks.buzzDefinitions.mockResolvedValue({
+      adapterId: 'buzz-default',
+      relay: 'https://relay.example.test',
+      community: 'relay.example.test',
+      definitions: [
+        {
+          type: 'persona',
+          displayName: 'Buzz Reviewer',
+          authorPubkey: 'a'.repeat(64),
+          kind: 30_175,
+          dTag: 'reviewer',
+          eventId: 'b'.repeat(64),
+          createdAt: 1_784_848_400,
+          contentHash: 'c'.repeat(64),
+          community: 'relay.example.test',
+          compatibility: 'compatible',
+        },
+      ],
+      rejectedCount: 1,
+    });
+    mocks.buzzDefinitionLinks.mockResolvedValue([
+      {
+        targetType: 'profile',
+        targetId: 'buzz-existing',
+        coordinate: { authorPubkey: 'a'.repeat(64), kind: 30_175, dTag: 'existing' },
+        status: 'changed',
+        linkedEventId: 'd'.repeat(64),
+        currentEventId: 'e'.repeat(64),
+      },
+    ]);
+    mocks.previewBuzzDefinition.mockResolvedValue({
+      definition: {
+        type: 'persona',
+        displayName: 'Buzz Reviewer',
+        authorPubkey: 'a'.repeat(64),
+        kind: 30_175,
+        dTag: 'reviewer',
+        eventId: 'b'.repeat(64),
+        createdAt: 1_784_848_400,
+        contentHash: 'c'.repeat(64),
+        community: 'relay.example.test',
+        compatibility: 'compatible',
+      },
+      action: 'create',
+      targetId: 'buzz-reviewer',
+      changed: true,
+      diff: [
+        {
+          field: 'displayName',
+          change: 'add',
+          afterSummary: 'Buzz Reviewer',
+        },
+      ],
+      fieldReport: [
+        {
+          field: 'display_name',
+          disposition: 'mapped',
+          detail: 'Mapped to profile displayName.',
+        },
+        {
+          field: 'provider',
+          disposition: 'source-only',
+          detail: 'Retained as a declared source preference, not active configuration.',
+        },
+      ],
+      collisions: [],
+      unresolvedPersonaIds: [],
+    });
+    mocks.importBuzzDefinition.mockResolvedValue({
+      status: 'created',
+      definition: { eventId: 'b'.repeat(64) },
+      profile: { id: 'buzz-reviewer', enabled: false },
+    });
   });
 
   afterEach(() => {
@@ -764,5 +858,91 @@ describe('Agents settings Mantine migration', () => {
       taskId: 'task_123',
       profileId: 'qa-reviewer',
     });
+  });
+
+  it('previews and confirms a disabled Buzz persona import with field dispositions', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentsTab />);
+
+    expect(await screen.findByText('Buzz Persona and Team Definitions')).toBeDefined();
+    await user.click(screen.getByRole('combobox', { name: 'Definition' }));
+    await user.click(
+      await screen.findByRole('option', { name: 'persona: Buzz Reviewer (reviewer)' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(await screen.findByText('Mapped to profile displayName.')).toBeDefined();
+    expect(screen.getByText('Proposed changes')).toBeDefined();
+    expect(
+      screen.getByText('Retained as a declared source preference, not active configuration.')
+    ).toBeDefined();
+    expect(screen.getByText('buzz-existing: changed')).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Confirm create' }));
+
+    await waitFor(() =>
+      expect(mocks.importBuzzDefinition).toHaveBeenCalledWith(
+        'buzz-default',
+        expect.objectContaining({
+          action: 'create',
+          targetId: 'buzz-reviewer',
+          expectedEventId: 'b'.repeat(64),
+        })
+      )
+    );
+  });
+
+  it('blocks a Buzz team import while same-author personas remain unresolved', async () => {
+    const user = userEvent.setup();
+    mocks.buzzDefinitions.mockResolvedValueOnce({
+      adapterId: 'buzz-default',
+      relay: 'https://relay.example.test',
+      community: 'relay.example.test',
+      definitions: [
+        {
+          type: 'team',
+          displayName: 'Delivery Team',
+          authorPubkey: 'a'.repeat(64),
+          kind: 30_176,
+          dTag: 'delivery',
+          eventId: 'f'.repeat(64),
+          createdAt: 1_784_848_400,
+          contentHash: '1'.repeat(64),
+          community: 'relay.example.test',
+          compatibility: 'compatible',
+        },
+      ],
+      rejectedCount: 0,
+    });
+    mocks.previewBuzzDefinition.mockResolvedValueOnce({
+      definition: {
+        type: 'team',
+        displayName: 'Delivery Team',
+        authorPubkey: 'a'.repeat(64),
+        kind: 30_176,
+        dTag: 'delivery',
+        eventId: 'f'.repeat(64),
+        createdAt: 1_784_848_400,
+        contentHash: '1'.repeat(64),
+        community: 'relay.example.test',
+        compatibility: 'compatible',
+      },
+      action: 'create',
+      targetId: 'buzz-team-delivery',
+      changed: true,
+      diff: [],
+      fieldReport: [],
+      collisions: [],
+      unresolvedPersonaIds: ['builder'],
+    });
+    renderWithProviders(<AgentsTab />);
+    await user.click(await screen.findByRole('combobox', { name: 'Definition' }));
+    await user.click(await screen.findByRole('option', { name: 'team: Delivery Team (delivery)' }));
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(await screen.findByText('Unresolved personas: builder')).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: 'Confirm create' }).getAttribute('disabled')
+    ).not.toBeNull();
+    expect(mocks.importBuzzDefinition).not.toHaveBeenCalled();
   });
 });

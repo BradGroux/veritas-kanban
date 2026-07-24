@@ -81,6 +81,44 @@ export class SqliteSettingsRepository implements SettingsRepository {
       .run(APP_CONFIG_KEY, documentJson, now, now);
   }
 
+  mutateConfig<T>(mutator: (config: AppConfig) => { config: AppConfig; result: T }): {
+    config: AppConfig;
+    result: T;
+  } {
+    const connection = this.database.getConnection();
+    connection.exec('BEGIN IMMEDIATE');
+    try {
+      const row = connection
+        .prepare('SELECT document_json FROM app_config_documents WHERE key = ?')
+        .get(APP_CONFIG_KEY) as ConfigRow | undefined;
+      const current = row
+        ? this.normalize(JSON.parse(row.document_json) as AppConfig)
+        : this.normalize(cloneJson(this.options.defaultConfig));
+      const mutation = mutator(cloneJson(current));
+      const normalized = this.normalize(mutation.config);
+      if (hasDangerousKeys(normalized)) {
+        throw new Error('Invalid input: dangerous keys detected');
+      }
+      const now = new Date().toISOString();
+      connection
+        .prepare(
+          `
+            INSERT INTO app_config_documents (key, document_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+              document_json = excluded.document_json,
+              updated_at = excluded.updated_at
+          `
+        )
+        .run(APP_CONFIG_KEY, JSON.stringify(normalized), now, now);
+      connection.exec('COMMIT');
+      return { config: normalized, result: mutation.result };
+    } catch (error) {
+      connection.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   private normalize(config: AppConfig): AppConfig {
     return this.options.normalizeConfig ? this.options.normalizeConfig(config) : config;
   }

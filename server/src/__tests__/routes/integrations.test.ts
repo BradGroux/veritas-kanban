@@ -29,6 +29,15 @@ const { mockCommunicationAdapters, mockBroadcastSquadMessage } = vi.hoisted(() =
   mockBroadcastSquadMessage: vi.fn(),
 }));
 
+const { mockBuzzDefinitions } = vi.hoisted(() => ({
+  mockBuzzDefinitions: {
+    listDefinitions: vi.fn(),
+    linkedStatus: vi.fn(),
+    preview: vi.fn(),
+    importDefinition: vi.fn(),
+  },
+}));
+
 vi.mock('node:dns/promises', () => ({
   lookup: mockLookup,
 }));
@@ -60,6 +69,10 @@ vi.mock('../../services/communication-adapter-service.js', () => ({
 
 vi.mock('../../services/broadcast-service.js', () => ({
   broadcastSquadMessage: mockBroadcastSquadMessage,
+}));
+
+vi.mock('../../services/buzz-definition-import-service.js', () => ({
+  getBuzzDefinitionImportService: () => mockBuzzDefinitions,
 }));
 
 import { integrationsRoutes } from '../../routes/integrations.js';
@@ -133,6 +146,14 @@ describe('integrations routes', () => {
       createdAt: '2026-07-23T20:00:00.000Z',
       updatedAt: '2026-07-23T20:01:00.000Z',
     });
+    mockBuzzDefinitions.listDefinitions.mockResolvedValue({
+      adapterId: 'buzz-default',
+      relay: 'https://relay.example.test',
+      community: 'relay.example.test',
+      definitions: [],
+      rejectedCount: 0,
+    });
+    mockBuzzDefinitions.linkedStatus.mockResolvedValue([]);
     mockCommunicationAdapters.send.mockResolvedValue({
       delivery: {
         id: 'comm_1',
@@ -487,6 +508,109 @@ describe('integrations routes', () => {
       channelId,
       'operator'
     );
+  });
+
+  it('lists, previews, and imports Buzz definitions through explicit actions', async () => {
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+    });
+    const definition = {
+      type: 'persona',
+      displayName: 'Reviewer',
+      authorPubkey: 'a'.repeat(64),
+      kind: 30_175,
+      dTag: 'reviewer',
+      eventId: 'b'.repeat(64),
+      createdAt: 1_784_848_400,
+      contentHash: 'c'.repeat(64),
+      community: 'relay.example.test',
+      compatibility: 'compatible',
+    };
+    mockBuzzDefinitions.listDefinitions.mockResolvedValueOnce({
+      adapterId: 'buzz-default',
+      relay: 'https://relay.example.test',
+      community: 'relay.example.test',
+      definitions: [definition],
+      rejectedCount: 0,
+    });
+    mockBuzzDefinitions.preview.mockResolvedValueOnce({
+      definition,
+      action: 'create',
+      targetId: 'buzz-reviewer',
+      changed: true,
+      diff: [],
+      fieldReport: [],
+      collisions: [],
+      unresolvedPersonaIds: [],
+    });
+    mockBuzzDefinitions.importDefinition.mockResolvedValueOnce({
+      status: 'created',
+      definition,
+      profile: { id: 'buzz-reviewer', enabled: false },
+    });
+
+    const listed = await request(app).get(
+      '/api/integrations/communication/adapters/buzz-default/buzz/definitions'
+    );
+    expect(listed.status).toBe(200);
+    expect(listed.body.definitions).toEqual([definition]);
+
+    const input = {
+      coordinate: {
+        authorPubkey: definition.authorPubkey,
+        kind: definition.kind,
+        dTag: definition.dTag,
+      },
+      action: 'create',
+      targetId: 'buzz-reviewer',
+    };
+    const previewed = await request(app)
+      .post('/api/integrations/communication/adapters/buzz-default/buzz/definitions/preview')
+      .send(input);
+    expect(previewed.status).toBe(200);
+    expect(mockBuzzDefinitions.preview).toHaveBeenCalledWith('buzz-default', input);
+
+    const imported = await request(app)
+      .post('/api/integrations/communication/adapters/buzz-default/buzz/definitions/import')
+      .send({ ...input, expectedEventId: definition.eventId });
+    expect(imported.status).toBe(201);
+    expect(imported.body).toMatchObject({
+      status: 'created',
+      profile: { id: 'buzz-reviewer', enabled: false },
+    });
+  });
+
+  it('maps stale Buzz definition imports to a conflict response', async () => {
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+    });
+    mockBuzzDefinitions.importDefinition.mockRejectedValueOnce(
+      new Error('Local target changed after preview; preview the import again')
+    );
+    const response = await request(app)
+      .post('/api/integrations/communication/adapters/buzz-default/buzz/definitions/import')
+      .send({
+        coordinate: {
+          authorPubkey: 'a'.repeat(64),
+          kind: 30_175,
+          dTag: 'reviewer',
+        },
+        action: 'refresh',
+        targetId: 'buzz-reviewer',
+        expectedEventId: 'b'.repeat(64),
+        expectedLocalRevision: 'c'.repeat(64),
+      });
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('changed after preview'),
+    });
   });
 
   it('returns deterministic client errors for invalid and conflicting Buzz mappings', async () => {

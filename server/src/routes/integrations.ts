@@ -32,12 +32,19 @@ import { getOutboundIntegrationService } from '../services/outbound-integration-
 import { externalTrackerRoutes } from './external-trackers.js';
 import { safeFetch } from '../utils/url-validation.js';
 import { createLogger } from '../lib/logger.js';
+import { getBuzzDefinitionImportService } from '../services/buzz-definition-import-service.js';
+import {
+  BuzzDefinitionImportBodySchema,
+  BuzzDefinitionPreviewBodySchema,
+} from '../schemas/buzz-definition-schemas.js';
+import type { BuzzDefinitionImportInput, BuzzDefinitionPreviewInput } from '@veritas-kanban/shared';
 
 const log = createLogger('integrations');
 const router = Router();
 const configService = new ConfigService();
 const outboundIntegrations = getOutboundIntegrationService();
 const communicationAdapters = getCommunicationAdapterService();
+const buzzDefinitions = () => getBuzzDefinitionImportService();
 
 const SERVICE_NAMES = ['supabase', 'openpanel', 'n8n', 'plane', 'appsmith'] as const;
 type ServiceName = (typeof SERVICE_NAMES)[number];
@@ -261,6 +268,73 @@ router.get(
     const adapterId = adapterIdParam(req.params.adapterId);
     await ensureAdapterExists(adapterId);
     res.json(await communicationAdapters.listBuzzChannelMappings(adapterId));
+  })
+);
+
+// GET /api/integrations/communication/adapters/:adapterId/buzz/definitions
+router.get(
+  '/communication/adapters/:adapterId/buzz/definitions',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    res.json(await buzzDefinitions().listDefinitions(adapterId));
+  })
+);
+
+// GET /api/integrations/communication/adapters/:adapterId/buzz/definitions/links
+router.get(
+  '/communication/adapters/:adapterId/buzz/definitions/links',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    res.json(await buzzDefinitions().linkedStatus(adapterId));
+  })
+);
+
+// POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/preview
+router.post(
+  '/communication/adapters/:adapterId/buzz/definitions/preview',
+  validate({ body: BuzzDefinitionPreviewBodySchema }),
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    const input = req.validated?.body as BuzzDefinitionPreviewInput;
+    try {
+      res.json(await buzzDefinitions().preview(adapterId, input));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Buzz definition preview failed';
+      if (message.includes('not found')) throw new NotFoundError(message);
+      throw new BadRequestError(message);
+    }
+  })
+);
+
+// POST /api/integrations/communication/adapters/:adapterId/buzz/definitions/import
+router.post(
+  '/communication/adapters/:adapterId/buzz/definitions/import',
+  validate({ body: BuzzDefinitionImportBodySchema }),
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    const input = req.validated?.body as BuzzDefinitionImportInput;
+    const actor = (req as AuthenticatedRequest).auth?.keyName ?? 'system';
+    try {
+      const result = await buzzDefinitions().importDefinition(adapterId, input, actor);
+      res.status(result.status === 'created' ? 201 : 200).json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Buzz definition import failed';
+      if (
+        message.includes('changed after preview') ||
+        message.includes('collision') ||
+        message.includes('unresolved') ||
+        message.includes('link target') ||
+        message.includes('refresh target')
+      ) {
+        throw new ConflictError(message);
+      }
+      if (message.includes('not found')) throw new NotFoundError(message);
+      throw new BadRequestError(message);
+    }
   })
 );
 

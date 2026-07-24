@@ -506,6 +506,7 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 - **OpenClaw Direct gateway wake** — Optional real-time Squad Chat events pushed to OpenClaw gateway for agent orchestration
 - **Human reply adapters** — Configure Teams reply posture, run health checks and test sends, store external thread mappings, and ingest audited human replies back into the correct Squad Chat thread
 - **Buzz channel bridge** — Map a Buzz community channel to Squad Chat, publish and ingest signed roots/replies exactly once, retain source author/timestamp/deep links, resume through a durable cursor with overlap dedupe, and reconcile ambiguous sends before retry
+- **Buzz persona/team import** — List signature-verified NIP-33 persona and team heads, preview mapped/source-only/ignored/rejected fields, resolve collisions explicitly, and create, link, or refresh disabled profile/roster materializations with provenance and optimistic local revisions
 - **Searchable history** — Browse and search past squad chat messages
 
 ### API Endpoints
@@ -523,6 +524,9 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 | `/api/integrations/communication/adapters/:adapterId/replies`                  | POST   | Ingest an external human reply into Squad Chat    |
 | `/api/integrations/communication/adapters/:adapterId/send`                     | POST   | Publish a mapped Teams/Buzz communication message |
 | `/api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId` | PUT    | Map a Buzz channel to Squad Chat                  |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions`         | GET    | List validated Buzz persona/team heads            |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/preview` | POST   | Preview field mappings, diffs, and collisions     |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/import`  | POST   | Explicitly create, link, refresh, or skip import  |
 
 ---
 
@@ -1228,6 +1232,7 @@ Notification and broadcast features provide local visibility and optional delive
 - **External delivery boundary** — Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled
 - **Human reply adapter health** — Settings -> Notifications shows Teams reply posture, redacted webhook state, recent delivery audit, test send, and disconnect controls
 - **Buzz communication adapter** — Reference-only relay setup verifies community identity, NIP-98 authentication, membership, and read capability before enabling signed root/reply delivery, supervised subscriptions, durable cursor replay, loop prevention, and delivery-unknown reconciliation
+- **Buzz public definitions** — One-way, operator-confirmed persona/team materialization keeps source preferences as metadata, requires same-author team references, creates disabled local objects, preserves local-only fields on refresh, and never launches a process or writes back
 
 ### API Endpoints
 

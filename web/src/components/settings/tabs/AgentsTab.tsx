@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActionIcon,
   Alert,
@@ -69,6 +70,8 @@ import type {
   AgentBudgetLimits,
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
+  BuzzDefinitionAction,
+  BuzzDefinitionPreview,
   SandboxPolicyDryRunResult,
   SandboxPolicyPreset,
   ProviderRuntimeManifest,
@@ -80,6 +83,7 @@ import type {
   ContextProviderPostureStatus,
   ContextProviderHealthResponse,
 } from '@/lib/api';
+import { api } from '@/lib/api';
 import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
@@ -233,6 +237,8 @@ export function AgentsTab() {
         isLoading={isAgentProfilesLoading}
       />
 
+      <BuzzDefinitionImportSection />
+
       <CodexHealthPanel
         health={codexHealth}
         isFetching={isCodexHealthFetching}
@@ -304,6 +310,334 @@ export function AgentsTab() {
 
       {/* Agent Routing Rules */}
       <RoutingRulesSection agents={config?.agents || []} />
+    </div>
+  );
+}
+
+const BUZZ_DEFINITION_ADAPTER_ID = 'buzz-default';
+
+function BuzzDefinitionImportSection() {
+  const queryClient = useQueryClient();
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [action, setAction] = useState<BuzzDefinitionAction>('create');
+  const [targetId, setTargetId] = useState('');
+  const [preview, setPreview] = useState<BuzzDefinitionPreview | null>(null);
+  const definitionsQuery = useQuery({
+    queryKey: ['integrations', 'communication', 'buzz-definitions', BUZZ_DEFINITION_ADAPTER_ID],
+    queryFn: () => api.integrations.buzzDefinitions(BUZZ_DEFINITION_ADAPTER_ID),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const linksQuery = useQuery({
+    queryKey: [
+      'integrations',
+      'communication',
+      'buzz-definition-links',
+      BUZZ_DEFINITION_ADAPTER_ID,
+    ],
+    queryFn: () => api.integrations.buzzDefinitionLinks(BUZZ_DEFINITION_ADAPTER_ID),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const selected = definitionsQuery.data?.definitions.find(
+    (definition) => definition.eventId === selectedEventId
+  );
+  const previewMutation = useMutation({
+    mutationFn: () => {
+      if (!selected) throw new Error('Select a Buzz definition first');
+      return api.integrations.previewBuzzDefinition(BUZZ_DEFINITION_ADAPTER_ID, {
+        coordinate: {
+          authorPubkey: selected.authorPubkey,
+          kind: selected.kind,
+          dTag: selected.dTag,
+        },
+        action,
+        targetId: targetId.trim() || undefined,
+      });
+    },
+    onSuccess: setPreview,
+  });
+  const importMutation = useMutation({
+    mutationFn: () => {
+      if (!preview) throw new Error('Preview the Buzz definition first');
+      return api.integrations.importBuzzDefinition(BUZZ_DEFINITION_ADAPTER_ID, {
+        coordinate: {
+          authorPubkey: preview.definition.authorPubkey,
+          kind: preview.definition.kind,
+          dTag: preview.definition.dTag,
+        },
+        action: preview.action,
+        targetId: preview.targetId,
+        expectedEventId: preview.definition.eventId,
+        expectedLocalRevision: preview.expectedLocalRevision,
+      });
+    },
+    onSuccess: async () => {
+      setPreview(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['config'] }),
+        queryClient.invalidateQueries({ queryKey: ['config', 'agent-profiles'] }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            'integrations',
+            'communication',
+            'buzz-definitions',
+            BUZZ_DEFINITION_ADAPTER_ID,
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            'integrations',
+            'communication',
+            'buzz-definition-links',
+            BUZZ_DEFINITION_ADAPTER_ID,
+          ],
+        }),
+      ]);
+    },
+  });
+  const resetPreview = () => {
+    setPreview(null);
+    previewMutation.reset();
+    importMutation.reset();
+  };
+  const error = previewMutation.error ?? importMutation.error;
+  const blocked = Boolean(
+    preview &&
+    preview.action !== 'skip' &&
+    (preview.collisions.length || preview.unresolvedPersonaIds.length)
+  );
+
+  return (
+    <div className="rounded-md border bg-card p-3 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Buzz Persona and Team Definitions</h3>
+          <p className="text-xs text-muted-foreground">
+            One-way import from the configured signed Buzz connection. Imports never start, enable,
+            or reroute an agent.
+          </p>
+        </div>
+        <Button
+          size="xs"
+          variant="outline"
+          leftSection={<RefreshCw className="h-3.5 w-3.5" />}
+          loading={definitionsQuery.isFetching}
+          onClick={() => {
+            resetPreview();
+            void definitionsQuery.refetch();
+            void linksQuery.refetch();
+          }}
+        >
+          Refresh Sources
+        </Button>
+      </div>
+
+      {definitionsQuery.error ? (
+        <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+          Configure and verify Buzz under Notifications before importing definitions.{' '}
+          {definitionsQuery.error.message}
+        </Alert>
+      ) : (
+        <>
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_minmax(180px,260px)_auto]">
+            <Select
+              label="Definition"
+              placeholder={
+                definitionsQuery.isLoading
+                  ? 'Loading Buzz definitions...'
+                  : 'Select persona or team'
+              }
+              value={selectedEventId}
+              onChange={(value) => {
+                setSelectedEventId(value);
+                resetPreview();
+              }}
+              data={(definitionsQuery.data?.definitions ?? []).map((definition) => ({
+                value: definition.eventId,
+                label: `${definition.type}: ${definition.displayName} (${definition.dTag})${
+                  definition.compatibility === 'rejected' ? ' [rejected]' : ''
+                }`,
+              }))}
+              searchable
+              disabled={definitionsQuery.isLoading}
+            />
+            <Select
+              label="Action"
+              value={action}
+              onChange={(value) => {
+                const next = (value as BuzzDefinitionAction) ?? 'create';
+                setAction(next);
+                if (next === 'create' || next === 'skip') setTargetId('');
+                resetPreview();
+              }}
+              data={[
+                { value: 'create', label: 'Create' },
+                { value: 'link', label: 'Link existing' },
+                { value: 'refresh', label: 'Refresh linked' },
+                { value: 'skip', label: 'Skip' },
+              ]}
+              allowDeselect={false}
+            />
+            <TextInput
+              label="Target ID"
+              value={targetId}
+              onChange={(event) => {
+                setTargetId(event.currentTarget.value);
+                resetPreview();
+              }}
+              placeholder="Deterministic when omitted"
+              disabled={action === 'create' || action === 'skip'}
+            />
+            <Button
+              className="self-end"
+              variant="outline"
+              onClick={() => previewMutation.mutate()}
+              loading={previewMutation.isPending}
+              disabled={!selected}
+            >
+              Preview
+            </Button>
+          </div>
+
+          {definitionsQuery.data && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>{definitionsQuery.data.definitions.length} validated heads</span>
+              <span>•</span>
+              <span>{definitionsQuery.data.rejectedCount} rejected records</span>
+              <span>•</span>
+              <span>{definitionsQuery.data.community}</span>
+            </div>
+          )}
+
+          {preview && (
+            <div className="rounded-md border bg-background/70 p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="light"
+                  color={preview.definition.type === 'persona' ? 'blue' : 'teal'}
+                >
+                  {preview.definition.type}
+                </Badge>
+                <Text size="sm" fw={600}>
+                  {preview.definition.displayName}
+                </Text>
+                <Badge variant="outline">{preview.action}</Badge>
+                <Badge
+                  variant="light"
+                  color={preview.definition.compatibility === 'compatible' ? 'green' : 'red'}
+                >
+                  {preview.definition.compatibility}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {preview.definition.authorPubkey.slice(0, 12)}… / {preview.definition.dTag}
+                </span>
+              </div>
+              <div className="grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                <div>Community: {preview.definition.community}</div>
+                <div>
+                  Created: {new Date(preview.definition.createdAt * 1_000).toLocaleString()}
+                </div>
+                <div>Event: {preview.definition.eventId.slice(0, 16)}…</div>
+                <div>Content SHA-256: {preview.definition.contentHash.slice(0, 16)}…</div>
+              </div>
+
+              {blocked && (
+                <Alert color="red" icon={<ShieldAlert className="h-4 w-4" />}>
+                  Resolve every collision and unresolved same-author persona before importing.
+                  {preview.collisions.map((collision) => (
+                    <div key={`${collision.field}:${collision.value}`}>
+                      {collision.field}: {collision.detail}
+                    </div>
+                  ))}
+                  {preview.unresolvedPersonaIds.length > 0 && (
+                    <div>Unresolved personas: {preview.unresolvedPersonaIds.join(', ')}</div>
+                  )}
+                </Alert>
+              )}
+
+              {preview.diff.length > 0 && (
+                <div className="rounded border p-2" aria-label="Buzz definition proposed changes">
+                  <div className="mb-1 text-xs font-medium">Proposed changes</div>
+                  <div className="space-y-1">
+                    {preview.diff.map((entry) => (
+                      <div key={entry.field} className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{entry.field}</span>{' '}
+                        {entry.change}: {entry.beforeSummary ?? 'not set'} →{' '}
+                        {entry.afterSummary ?? 'not set'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-2 md:grid-cols-2">
+                {preview.fieldReport.map((field) => (
+                  <div
+                    key={field.field}
+                    className="flex items-start justify-between gap-2 rounded border p-2"
+                  >
+                    <div>
+                      <div className="text-xs font-medium">{field.field}</div>
+                      <div className="text-xs text-muted-foreground">{field.detail}</div>
+                    </div>
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color={
+                        field.disposition === 'mapped'
+                          ? 'green'
+                          : field.disposition === 'rejected' || field.disposition === 'conflict'
+                            ? 'red'
+                            : 'gray'
+                      }
+                    >
+                      {field.disposition}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  size="xs"
+                  onClick={() => importMutation.mutate()}
+                  loading={importMutation.isPending}
+                  disabled={blocked}
+                >
+                  {preview.action === 'skip' ? 'Confirm Skip' : `Confirm ${preview.action}`}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {linksQuery.data && linksQuery.data.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="Linked Buzz source status">
+              {linksQuery.data.map((link) => (
+                <Badge
+                  key={`${link.targetType}:${link.targetId}`}
+                  variant="light"
+                  color={
+                    link.status === 'current'
+                      ? 'green'
+                      : link.status === 'changed'
+                        ? 'yellow'
+                        : 'red'
+                  }
+                >
+                  {link.targetId}: {link.status}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {error && (
+        <Alert color="red" icon={<AlertCircle className="h-4 w-4" />}>
+          {error.message}
+        </Alert>
+      )}
     </div>
   );
 }

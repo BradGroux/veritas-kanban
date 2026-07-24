@@ -1,4 +1,5 @@
 import type { AgentType, TaskPriority, TaskType } from './task.types.js';
+import type { BuzzDefinitionLink } from './buzz-definition.types.js';
 
 export type TeamRosterFormat = 'json' | 'yaml';
 export type TeamRosterMemberStatus = 'enabled' | 'disabled';
@@ -42,6 +43,7 @@ export interface TeamRosterManifestMetadata {
   source?: string;
   importedAt?: string;
   updatedAt?: string;
+  buzz?: BuzzDefinitionLink;
 }
 
 export interface TeamRosterManifest {

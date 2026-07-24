@@ -28,6 +28,8 @@ export const BUZZ_SUBSCRIBED_KINDS = [
 ] as const;
 
 const MAX_EVENT_BYTES = 256 * 1024;
+const MAX_QUERY_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_QUERY_RESULTS = 200;
 const MAX_MESSAGE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const EVENT_ID_PATTERN = /^[a-f0-9]{64}$/;
@@ -51,6 +53,12 @@ export interface BuzzSubmitResult {
   status: 'accepted' | 'rejected' | 'delivery_unknown';
   eventId: string;
   detail?: string;
+}
+
+export interface BuzzEventQueryFilter {
+  kinds: number[];
+  authors?: string[];
+  limit: number;
 }
 
 export interface BuzzInboundEvent {
@@ -389,6 +397,38 @@ export class BuzzCommunicationService {
     } catch {
       return undefined;
     }
+  }
+
+  async queryEvents(config: BuzzProbeConfig, filters: BuzzEventQueryFilter[]): Promise<unknown[]> {
+    if (
+      filters.length < 1 ||
+      filters.length > 4 ||
+      filters.some(
+        (filter) =>
+          filter.kinds.length < 1 ||
+          filter.kinds.length > 4 ||
+          filter.kinds.some((kind) => ![30_175, 30_176].includes(kind)) ||
+          !Number.isInteger(filter.limit) ||
+          filter.limit < 1 ||
+          filter.limit > MAX_QUERY_RESULTS ||
+          filter.authors?.some((author) => !EVENT_ID_PATTERN.test(author))
+      )
+    ) {
+      throw new Error('Buzz event query is outside the allowed definition bounds');
+    }
+    const endpoints = normalizeBuzzEndpoints(config);
+    const response = await this.signedRequest(
+      config,
+      `${endpoints.httpUrl}/query`,
+      JSON.stringify(filters)
+    );
+    if (!response) throw new Error('Buzz definition query was blocked by outbound network policy');
+    if (!response.ok) throw new Error(`Buzz definition query returned HTTP ${response.status}`);
+    const parsed = JSON.parse(await readBoundedBody(response, MAX_QUERY_RESPONSE_BYTES)) as unknown;
+    if (!Array.isArray(parsed) || parsed.length > MAX_QUERY_RESULTS) {
+      throw new Error('Buzz definition query returned an invalid or oversized result set');
+    }
+    return parsed;
   }
 
   async resolveCredentials(
