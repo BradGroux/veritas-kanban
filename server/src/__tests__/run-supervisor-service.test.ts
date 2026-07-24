@@ -27,6 +27,7 @@ const SHA_C = `sha256:${'c'.repeat(64)}`;
 const HOST_A = '1'.repeat(64);
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   for (const service of services.splice(0)) service.dispose();
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
@@ -133,6 +134,21 @@ function recoveryBindings() {
 }
 
 describe('RunSupervisorService', () => {
+  it('defers the default SQLite repository until storage bootstrap completes', () => {
+    vi.stubEnv('VERITAS_STORAGE', 'sqlite');
+
+    expect(() => {
+      services.push(
+        new RunSupervisorService({
+          hostId: HOST_A,
+          ownerId: 'bootstrap-owner',
+          processId: 101,
+          heartbeatMs: 60_000,
+        })
+      );
+    }).not.toThrow();
+  });
+
   it('persists exact bindings, process control, event cursor, budget, and an idempotent terminal state', async () => {
     const repository = new InMemoryRunSupervisorRepository();
     const supervisor = service(repository);

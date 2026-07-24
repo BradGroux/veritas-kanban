@@ -98,7 +98,7 @@ function defaultRepository(): RunSupervisorRepository {
 export class RunSupervisorService {
   readonly hostId: string;
   readonly ownerId: string;
-  private readonly repository: RunSupervisorRepository;
+  private readonly repositoryOverride?: RunSupervisorRepository;
   private readonly now: () => Date;
   private readonly processId: number;
   private readonly leaseMs: number;
@@ -113,7 +113,7 @@ export class RunSupervisorService {
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(options: RunSupervisorServiceOptions = {}) {
-    this.repository = options.repository ?? defaultRepository();
+    this.repositoryOverride = options.repository;
     this.now = options.now ?? (() => new Date());
     this.processId = options.processId ?? process.pid;
     this.leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
@@ -124,6 +124,10 @@ export class RunSupervisorService {
     this.processProbe = options.processProbe ?? defaultProcessProbe;
     this.signalProcess = options.signalProcess ?? signalProcessGroup;
     this.sessionProbe = options.sessionProbe;
+  }
+
+  private get repository(): RunSupervisorRepository {
+    return this.repositoryOverride ?? defaultRepository();
   }
 
   async register(input: RegisterRunSupervisorInput): Promise<RunSupervisorRecord> {
