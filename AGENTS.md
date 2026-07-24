@@ -81,6 +81,18 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 ---
 
+## GitHub workflow
+
+- Use the authenticated GitHub CLI (`gh`) as the default interface for GitHub issues, pull
+  requests, releases, workflow runs, and API calls.
+- Use `git` for local repository operations and `gh` for GitHub-hosted state.
+- Do not loop through alternate connectors or permission paths while `gh` is authenticated and
+  can perform the operation.
+- Fall back only when `gh` is unavailable or cannot support the required operation. Report the
+  exact blocker before changing paths.
+
+---
+
 ## Architecture rules
 
 ### Server (Express + TypeScript)
