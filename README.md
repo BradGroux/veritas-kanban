@@ -715,7 +715,9 @@ vk agents:pending
 ### Codex + HermesAgent
 
 - Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when Codex should implement, review, or delegate Veritas tasks.
-- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex, Ollama, LM Studio, provider-specific routing, or sandbox presets in the web app or macOS app.
+- Use the [Agent Providers guide](docs/AGENT-PROVIDERS.md) when enabling Codex,
+  ACP-compatible agents, Ollama, LM Studio, provider-specific routing, or
+  sandbox presets in the web app or macOS app.
 - Use the [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) when routing work through the HermesAgent roster, enforcing QA evidence, or creating GitHub-backed task templates.
 - Configure Codex MCP access with the [MCP Server Guide](docs/mcp/README.md#codex) so Codex reads and updates Veritas through typed tools instead of one-off HTTP calls.
 

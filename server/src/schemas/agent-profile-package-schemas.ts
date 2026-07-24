@@ -30,6 +30,7 @@ export const AgentProfileRuntimeSchema = z
         'codex-sdk',
         'codex-app-server',
         'claude-code',
+        'acp-stdio',
         'hermes-cli',
         'codex-cloud',
         'ollama-local',

@@ -2363,7 +2363,7 @@ controls:
     "providerRuntime": {
       "digest": "sha256:...",
       "provider": "codex-cli",
-      "probeRevision": 9
+      "probeRevision": 10
     },
     "runtime": {
       "command": "codex",

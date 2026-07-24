@@ -210,6 +210,54 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'Claude Code currently receives only explicitly allowlisted environment authentication; brokered handles remain gated by issue #932.'
     ),
   }),
+  'acp-stdio': definition('acp-stdio', 'ACP stdio', 'acp/v1', {
+    ...COMMON_SUPPORTED,
+    ...NOT_YET_IMPLEMENTED,
+    'run.stop': supported(
+      'The adapter sends session/cancel and closes the supervised ACP process with a bounded kill fallback.'
+    ),
+    'run.streaming': supported(
+      'ACP session/update notifications stream into the causal run journal.'
+    ),
+    'run.structured-events': supported(
+      'The adapter validates stable ACP v1 JSON-RPC lifecycle records.'
+    ),
+    'run.follow-up': advisory(
+      'Follow-up requires the runtime to negotiate session/resume or session/load.'
+    ),
+    'run.interrupt': supported('The adapter sends session/cancel for the exact ACP session.'),
+    'run.resume': advisory(
+      'Resume requires the runtime to negotiate session/resume or session/load.'
+    ),
+    'run.fork': advisory('Fork requires the runtime to negotiate experimental session/fork.'),
+    'run.close': advisory('Close requires the runtime to negotiate session/close.'),
+    'run.approvals': supported(
+      'ACP session/request_permission is bound to the durable approval broker.'
+    ),
+    'tool.calls': supported('ACP tool_call and tool_call_update records are journaled.'),
+    'tool.mcp': supported(
+      'An immutable all-allow run catalog is mapped into ACP session setup; partial native catalogs fail closed.'
+    ),
+    'output.structured': advisory(
+      'ACP v1 uses structured transport records, but caller output-schema enforcement is not exposed.'
+    ),
+    'artifact.write': advisory(
+      'ACP tool locations and file updates are recorded, but artifact semantics remain agent-dependent.'
+    ),
+    'workspace.worktrees': supported('The ACP process runs in the assigned task worktree.'),
+    'filesystem.read': advisory(
+      'The agent receives the task worktree; filesystem enforcement remains runtime-dependent.'
+    ),
+    'filesystem.write': advisory(
+      'The agent receives the task worktree; filesystem enforcement remains runtime-dependent.'
+    ),
+    'environment.allowlist': supported(
+      'The ACP process receives an explicit environment allowlist.'
+    ),
+    'credential.broker': unsupported(
+      'ACP provider boot and task credentials remain unbrokered until issue #932.'
+    ),
+  }),
   'hermes-cli': definition('hermes-cli', 'Hermes Agent', 'hermes-one-shot/v1', {
     ...COMMON_SUPPORTED,
     ...CLI_SANDBOX,

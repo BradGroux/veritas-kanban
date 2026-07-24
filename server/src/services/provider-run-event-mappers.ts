@@ -257,12 +257,31 @@ const OPENCLAW_MAPPER: ProviderRunEventMapper = {
   },
 };
 
+const ACP_MAPPER: ProviderRunEventMapper = {
+  mapStream(stream, content) {
+    return {
+      kind: stream === 'stdout' ? 'stream.stdout' : 'stream.stderr',
+      payload: { stream, content },
+    };
+  },
+  mapEvent(providerType, event, summary) {
+    const identity = eventIdentity(event);
+    return {
+      ...identity,
+      kind: itemKind(providerType, event),
+      dedupeKey: providerDedupeKey('acp-stdio', providerType, identity.providerEventId),
+      payload: { providerType, summary, raw: event },
+    };
+  },
+};
+
 const MAPPERS: Record<ExecutableAgentProvider, ProviderRunEventMapper> = {
   openclaw: OPENCLAW_MAPPER,
   'codex-cli': codexMapper('codex-cli'),
   'codex-sdk': codexMapper('codex-sdk'),
   'codex-app-server': codexMapper('codex-app-server'),
   'claude-code': CLAUDE_CODE_MAPPER,
+  'acp-stdio': ACP_MAPPER,
   'hermes-cli': HERMES_MAPPER,
 };
 

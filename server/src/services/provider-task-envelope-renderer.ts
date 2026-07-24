@@ -127,6 +127,28 @@ export function renderClaudeCodeTaskEnvelope(
   });
 }
 
+export function renderAcpStdioTaskEnvelope(
+  input: ProviderTaskEnvelopeRenderInput
+): ProviderTaskEnvelopeTransport {
+  assertEnvelopeTransport(input.taskEnvelope, 'acp-stdio');
+  return immutableTransport({
+    schemaVersion: PROVIDER_TASK_ENVELOPE_TRANSPORT_SCHEMA_VERSION,
+    provider: 'acp-stdio',
+    taskEnvelopeDigest: input.taskEnvelope.digest,
+    callbackPosture: 'harness-owned',
+    completionNormalization: 'harness',
+    content: renderEnvelopeContent(
+      'ACP stdio',
+      input,
+      renderHarnessOwnedCompletion(
+        'ACP session stream',
+        'Return the final response through ACP session/update and session/prompt records captured by Veritas.',
+        'ACP JSON-RPC records'
+      )
+    ),
+  });
+}
+
 export function renderHermesTaskEnvelope(
   input: ProviderTaskEnvelopeRenderInput
 ): ProviderTaskEnvelopeTransport {

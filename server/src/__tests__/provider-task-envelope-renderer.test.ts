@@ -6,6 +6,7 @@ import {
   type CompletionEvidenceSource,
 } from '../services/task-envelope-service.js';
 import {
+  renderAcpStdioTaskEnvelope,
   renderClaudeCodeTaskEnvelope,
   renderCodexAppServerTaskEnvelope,
   renderCodexCliTaskEnvelope,
@@ -210,6 +211,23 @@ describe('provider task-envelope renderers', () => {
     );
     expect(transport.content).not.toContain('/api/agents/task_transport/complete');
     expect(transport.content).toMatchSnapshot();
+  });
+
+  it('renders a callback-free ACP session transport', async () => {
+    const taskEnvelope = await envelope('acp-stdio', 'required');
+
+    const transport = renderAcpStdioTaskEnvelope({ taskEnvelope });
+
+    expect(transport).toMatchObject({
+      provider: 'acp-stdio',
+      callbackPosture: 'harness-owned',
+      completionNormalization: 'harness',
+    });
+    expect(transport.content).toContain('## Completion (ACP session stream)');
+    expect(transport.content).toContain(
+      'Return the final response through ACP session/update and session/prompt records captured by Veritas.'
+    );
+    expect(transport.content).not.toContain('/api/agents/task_transport/complete');
   });
 
   it('renders a callback-free Hermes scripted transport', async () => {

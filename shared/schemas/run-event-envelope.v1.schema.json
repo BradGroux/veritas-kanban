@@ -115,6 +115,7 @@
             "codex-sdk",
             "codex-app-server",
             "claude-code",
+            "acp-stdio",
             "hermes-cli",
             "operator",
             "system"
