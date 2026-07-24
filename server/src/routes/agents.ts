@@ -163,6 +163,11 @@ const conversationTurnSchema = z
   })
   .strict();
 
+const conversationFreshSchema = conversationTurnSchema
+  .omit({ sourceAttemptId: true, forkTurnId: true })
+  .extend({ agent: AgentTypeSchema.optional() })
+  .strict();
+
 const conversationControlSchema = runControlSchema.strict();
 
 const reportTokensSchema = z.object({
@@ -363,6 +368,32 @@ router.post(
       expectedAttemptId: attemptId,
     });
     res.json(delivery);
+  })
+);
+
+// POST /api/agents/:taskId/conversation/fresh - Start a provider-neutral first turn.
+router.post(
+  '/:taskId/conversation/fresh',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    let body: z.infer<typeof conversationFreshSchema>;
+    try {
+      body = conversationFreshSchema.parse(req.body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    const status = await clawdbotAgentService.startAgent(
+      req.params.taskId as string,
+      body.agent as AgentType | undefined,
+      {
+        ...conversationStartOptions(body),
+        conversation: { mode: 'fresh', intent: 'fresh', message: body.message },
+      }
+    );
+    res.status(201).json(status);
   })
 );
 
@@ -659,7 +690,7 @@ function parseConversationSteer(input: unknown): z.infer<typeof conversationStee
 }
 
 function conversationStartOptions(
-  body: z.infer<typeof conversationTurnSchema>
+  body: z.infer<typeof conversationTurnSchema> | z.infer<typeof conversationFreshSchema>
 ): Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> {
   return {
     profileId: body.profileId,

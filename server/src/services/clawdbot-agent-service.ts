@@ -1305,7 +1305,12 @@ export class ClawdbotAgentService {
     });
     const providerTransport =
       conversationRequest.mode === 'fresh'
-        ? taskTransport
+        ? conversationRequest.message
+          ? {
+              ...taskTransport,
+              content: `${taskTransport.content}\n\n## Operator turn\n\n${conversationRequest.message}`,
+            }
+          : taskTransport
         : {
             ...taskTransport,
             content: renderConversationTurn(
@@ -8241,7 +8246,12 @@ export class ClawdbotAgentService {
       ) {
         throw new ConflictError('Fresh conversation launch cannot reference prior history.');
       }
-      return { mode: 'fresh', intent: 'fresh' };
+      const message = request?.message?.trim();
+      return {
+        mode: 'fresh',
+        intent: 'fresh',
+        ...(message ? { message } : {}),
+      };
     }
     const intent = request.intent ?? request.mode;
     if (

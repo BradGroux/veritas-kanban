@@ -458,6 +458,8 @@ Manage AI agents on code tasks.
 | `vk agent:compact <id> --attempt <id>`                                        | Compact a supported provider conversation                 |
 | `vk agent:archive <id> --attempt <id>`                                        | Archive a supported provider conversation                 |
 | `vk agent:close <id> --attempt <id>`                                          | Close a supported provider conversation                   |
+| `vk acp status --json`                                                        | Check ACP server-view API and permission readiness        |
+| `vk acp serve --stdio [--task <id>]`                                          | Expose a Veritas-managed task to an ACP v1 client         |
 | `vk agents:pending`                                                           | List pending agent requests                               |
 | `vk agents:status <id>`                                                       | Check agent running status                                |
 | `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)        |

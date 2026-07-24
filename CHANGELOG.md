@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `vk acp serve --stdio` and `vk acp status --json` to expose a
+  task-bound, provider-neutral ACP v1 server view over Veritas-managed
+  conversations. Fresh prompts retain the immutable task envelope, reconnect
+  replays the causal run journal by cursor, permission requests use the durable
+  approval broker, cancellation interrupts instead of stopping the task, and
+  disconnect leaves the supervised run active. Client-owned MCP catalogs and
+  mismatched worktrees fail closed (#960).
 - Added a disabled-by-default Grok Build profile under the generic ACP
   provider, pinned to released `v0.2.111` build `94172f2aa4e5`. Veritas now
   compiles a dedicated no-leader stdio launch, accepts only bounded model,

@@ -240,6 +240,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   Build `v0.2.111` build `94172f2aa4e5`, launches `grok agent --no-leader
 stdio`, and rejects approval bypass, reauthentication, leader, plugin,
   endpoint, prompt, and resume argument injection.
+- `vk acp serve --stdio` exposes one Veritas-managed task as an ACP v1 server
+  view for editors and other ACP clients. Bind with `--task` or require
+  `_meta["veritas/taskId"]` on `session/new`; client-owned MCP catalogs fail
+  closed.
+- ACP client disconnect never stops the durable Veritas run. Reconnect with
+  `session/load` and `_meta["veritas/afterSequence"]`; cancellation uses the
+  conversation interrupt path, not task termination.
 - See `docs/AGENT-PROVIDERS.md` § ACP stdio agent provider.
 
 ---

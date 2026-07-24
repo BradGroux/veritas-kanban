@@ -90,6 +90,32 @@ describe('CLI API permission preflight', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://vk.test/api/auth/context');
   });
 
+  it('requires agent write permission to start a fresh conversation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        role: 'read-only',
+        isLocalhost: false,
+        permissions: ['agent:read'],
+      })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const api = createGuardedApiClient('http://vk.test', 'reader-key');
+
+    await expect(
+      api('/api/agents/task_1/conversation/fresh', {
+        method: 'POST',
+        body: JSON.stringify({ message: 'blocked' }),
+      })
+    ).rejects.toMatchObject({
+      required: ['agent:write'],
+      path: '/api/agents/task_1/conversation/fresh',
+      method: 'POST',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('requires task write permission for delegated workspace intake', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

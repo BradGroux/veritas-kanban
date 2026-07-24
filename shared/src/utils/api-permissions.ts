@@ -188,7 +188,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       },
       {
         methods: ['POST'],
-        path: /^\/[^/]+\/conversation\/(resume|follow-up|fork|interrupt|compact|archive|close)\/?$/,
+        path: /^\/[^/]+\/conversation\/(fresh|resume|follow-up|fork|interrupt|compact|archive|close)\/?$/,
         permissions: 'agent:write',
       },
     ],
