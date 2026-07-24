@@ -10,6 +10,7 @@ export default defineConfig({
       __VERITAS_BUILD_SHA__: JSON.stringify(
         process.env.VERITAS_BUILD_SHA ?? process.env.GITHUB_SHA ?? ''
       ),
+      __VERITAS_RELEASE_CHANNEL__: JSON.stringify(process.env.VERITAS_UPDATE_CHANNEL ?? ''),
     },
     build: {
       // Vite 8 builds with Rolldown. Electron Vite 5 still places its built-in

@@ -5,6 +5,7 @@ import type { DesktopAppInfo } from './types.js';
 import { resolveDesktopUpdateChannel } from './updates.js';
 
 declare const __VERITAS_BUILD_SHA__: string | undefined;
+declare const __VERITAS_RELEASE_CHANNEL__: string | undefined;
 
 export interface DesktopAppInfoOverrides {
   platform?: NodeJS.Platform;
@@ -17,6 +18,12 @@ export interface DesktopAppInfoOverrides {
 function embeddedBuildIdentity(): string | null {
   const value = typeof __VERITAS_BUILD_SHA__ === 'string' ? __VERITAS_BUILD_SHA__ : undefined;
   return normalizeBuildIdentity(value);
+}
+
+function embeddedReleaseChannel(): string | undefined {
+  return typeof __VERITAS_RELEASE_CHANNEL__ === 'string' && __VERITAS_RELEASE_CHANNEL__.trim()
+    ? __VERITAS_RELEASE_CHANNEL__
+    : undefined;
 }
 
 export function normalizeBuildIdentity(value: string | undefined | null): string | null {
@@ -52,7 +59,7 @@ export function createDesktopAppInfo(
     version,
     buildIdentity,
     channel: resolveDesktopUpdateChannel(
-      overrides.requestedChannel ?? process.env.VERITAS_UPDATE_CHANNEL,
+      overrides.requestedChannel ?? embeddedReleaseChannel() ?? process.env.VERITAS_UPDATE_CHANNEL,
       version,
       packaged
     ),
