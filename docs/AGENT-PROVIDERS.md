@@ -15,6 +15,16 @@ Fresh v5 installs use OpenAI Codex as the default agent:
 
 Existing configs keep the user's chosen default agent. Missing built-in profiles are added during config normalization without overwriting customized commands, arguments, or enabled states.
 
+## Buzz communication harness
+
+Buzz is integrated as a `buzz` communication adapter, not as an
+`AgentProvider`. Settings and `vk doctor` can verify its relay/community
+identity, NIP-98 signing identity, relay membership, read capabilities, tested
+release contract, and optional local command versions without sending a
+message. Veritas does not route task execution through Buzz or start
+`buzz-acp`/`buzz-agent` in this slice. See
+[Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
+
 ## Harness Support Profiles And Tiers
 
 Every configured agent is normalized to a `harness-support-profile/v1` contract.

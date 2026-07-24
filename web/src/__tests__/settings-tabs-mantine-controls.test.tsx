@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BoardTab } from '@/components/settings/tabs/BoardTab';
 import { EnforcementTab } from '@/components/settings/tabs/EnforcementTab';
 import { NotificationsTab } from '@/components/settings/tabs/NotificationsTab';
@@ -92,17 +93,93 @@ const mocks = vi.hoisted(() => ({
           'Adapter can send through the configured delivery path and receive replies through the ingest API.',
       },
     },
+    {
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+      deliveryMode: 'manual',
+      replyMode: 'ingest-api',
+      destinationType: 'channel',
+      relayHttpUrl: 'https://relay.example.test',
+      relayWebSocketUrl: 'wss://relay.example.test',
+      expectedCommunity: 'relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      publicKeyFingerprint: 'abc123abc123',
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      authTagConfigured: false,
+      hasCredential: true,
+      createdAt: '2026-07-23T18:00:00.000Z',
+      updatedAt: '2026-07-23T18:00:00.000Z',
+      lastHealth: {
+        adapterId: 'buzz-default',
+        status: 'healthy',
+        configured: true,
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: '2026-07-23T18:00:00.000Z',
+        detail: 'Buzz relay and read capabilities are compatible.',
+        reasonCode: 'ok',
+      },
+    },
   ]),
-  communicationHealth: vi.fn(async () => ({
-    adapterId: 'msteams-default',
-    status: 'ok',
-    configured: true,
-    canSend: true,
-    canReceiveReplies: true,
-    checkedAt: '2026-06-04T08:00:00.000Z',
-    detail:
-      'Adapter can send through the configured delivery path and receive replies through the ingest API.',
-  })),
+  communicationHealth: vi.fn(async (adapterId: string) =>
+    adapterId === 'buzz-default'
+      ? {
+          adapterId: 'buzz-default',
+          status: 'healthy',
+          configured: true,
+          canSend: false,
+          canReceiveReplies: false,
+          checkedAt: '2026-07-23T18:00:00.000Z',
+          detail: 'Buzz relay and read capabilities are compatible.',
+          reasonCode: 'ok',
+          buzz: {
+            schemaVersion: 'buzz-compatibility/v1',
+            probeRevision: 1,
+            testedRelease: '0.4.24',
+            testedCommit: '710ed9fff57878a1d69f809b80a6ee0416c53fc4',
+            status: 'healthy',
+            reasonCode: 'ok',
+            detail: 'compatible',
+            configuredRelayHttpUrl: 'https://relay.example.test',
+            resolvedRelayHttpUrl: 'https://relay.example.test',
+            resolvedRelayWebSocketUrl: 'wss://relay.example.test',
+            expectedCommunity: 'relay.example.test',
+            observedCommunity: 'relay.example.test',
+            publicKeyFingerprint: 'abc123abc123',
+            checks: {
+              relayIdentity: 'verified',
+              communityBinding: 'verified',
+              configuredIdentity: 'verified',
+              authentication: 'verified',
+              membership: 'verified',
+              channelRead: 'verified',
+              messageRead: 'verified',
+            },
+            commands: [
+              {
+                command: 'buzz',
+                executable: 'buzz',
+                available: false,
+                detail: 'not found',
+              },
+            ],
+            evidenceKey: 'safe-evidence',
+            checkedAt: '2026-07-23T18:00:00.000Z',
+          },
+        }
+      : {
+          adapterId: 'msteams-default',
+          status: 'ok',
+          configured: true,
+          canSend: true,
+          canReceiveReplies: true,
+          checkedAt: '2026-06-04T08:00:00.000Z',
+          detail:
+            'Adapter can send through the configured delivery path and receive replies through the ingest API.',
+        }
+  ),
   communicationDeliveries: vi.fn(async () => [
     {
       id: 'comm_1',
@@ -297,6 +374,19 @@ describe('Settings tab Mantine controls', () => {
     expect(await screen.findByText('Communication Health')).toBeDefined();
     expect(screen.getByText('Local Squad Chat')).toBeDefined();
     expect(screen.getByText('Human Reply Adapter')).toBeDefined();
+    expect(screen.getByText('Buzz Connection')).toBeDefined();
+    expect(screen.getByLabelText(/Relay HTTP URL/)).toBeDefined();
+    expect(screen.getByLabelText(/Relay WebSocket URL/)).toBeDefined();
+    expect(screen.getByLabelText(/Expected community/)).toBeDefined();
+    expect(screen.getByLabelText(/Public key/)).toBeDefined();
+    expect(screen.getByLabelText(/Signing key reference/)).toBeDefined();
+    expect(screen.getByText('Signing reference:').parentElement?.textContent).toContain(
+      'configured'
+    );
+    expect(await screen.findByText('Buzz 0.4.24, probe 1')).toBeDefined();
+    expect(screen.getByText('Compatibility chain')).toBeDefined();
+    expect(screen.getByText('Community binding')).toBeDefined();
+    expect(screen.queryByText(/nsec1/)).toBeNull();
     expect(screen.getAllByText('Squad Chat Webhook').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Visually verified: not recorded in VK/).length).toBeGreaterThan(0);
     expect(screen.getByText('X-VK-Signature')).toBeDefined();
@@ -316,6 +406,47 @@ describe('Settings tab Mantine controls', () => {
     expect(mocks.debouncedUpdate).toHaveBeenCalledWith({
       notifications: { channel: '19:updated@thread.tacv2' },
     });
+  });
+
+  it('shows unconfigured Buzz placeholders and preserves keyboard field order', async () => {
+    mocks.communicationAdapters.mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationsTab />);
+
+    expect((await screen.findAllByText('not configured')).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Signing reference:').parentElement?.textContent).toContain(
+      'not configured'
+    );
+    const relayHttp = screen.getByRole('textbox', { name: /Relay HTTP URL/ });
+    relayHttp.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: /Relay WebSocket URL/ })
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: /Expected community/ })
+    );
+  });
+
+  it('shows Buzz failure status and visible remediation', async () => {
+    mocks.communicationHealth.mockResolvedValueOnce({
+      adapterId: 'buzz-default',
+      status: 'not_member',
+      configured: true,
+      canSend: false,
+      canReceiveReplies: false,
+      checkedAt: '2026-07-23T18:00:00.000Z',
+      detail: 'Buzz authenticated the identity but denied relay membership.',
+      reasonCode: 'relay_membership_required',
+      remediation: 'Add the public identity as a relay member.',
+    } as unknown as Awaited<ReturnType<typeof mocks.communicationHealth>>);
+    renderWithProviders(<NotificationsTab />);
+
+    expect(await screen.findByText('not_member')).toBeDefined();
+    expect(
+      screen.getByText('relay_membership_required: Add the public identity as a relay member.')
+    ).toBeDefined();
   });
 
   it('renders Enforcement ceremony and agent selection through direct Mantine Select', async () => {

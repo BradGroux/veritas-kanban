@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import type {
@@ -16,6 +15,12 @@ import type {
   CommunicationThreadMapping,
   SquadMessage,
 } from '@veritas-kanban/shared';
+import {
+  BUZZ_COMPATIBILITY_SCHEMA_VERSION,
+  BUZZ_PROBE_REVISION,
+  BUZZ_TESTED_COMMIT,
+  BUZZ_TESTED_RELEASE,
+} from '@veritas-kanban/shared';
 import { auditLog, type AuditEvent } from './audit-service.js';
 import { getChatService, type ChatService } from './chat-service.js';
 import {
@@ -26,6 +31,18 @@ import { withFileLock } from './file-lock.js';
 import { redactString } from '../lib/redact.js';
 import { ensureWithinBase, sanitizeCommentText, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { atomicWriteFile, mkdir, readFile } from '../storage/fs-helpers.js';
+import {
+  BuzzCompatibilityService,
+  fingerprintBuzzPublicKey,
+  normalizeBuzzEndpoints,
+  type BuzzProbeConfig,
+  type NormalizedBuzzEndpoints,
+} from './buzz-compatibility-service.js';
+import {
+  buzzAdapterConfigSchema,
+  type BuzzAdapterConfig,
+} from '../schemas/communication-adapter-schemas.js';
 
 const DEFAULT_ADAPTER_ID = 'msteams-default';
 const MAX_DELIVERIES = 500;
@@ -33,6 +50,7 @@ const MAX_MESSAGE_LENGTH = 4000;
 
 interface InternalCommunicationAdapterRecord extends CommunicationAdapterRecord {
   webhookUrlRaw?: string;
+  buzzConfigKey?: string;
 }
 
 interface CommunicationAdapterState {
@@ -49,6 +67,7 @@ export interface CommunicationAdapterServiceOptions {
   persist?: boolean;
   chatService?: ChatService;
   outboundIntegrations?: OutboundIntegrationService;
+  buzzCompatibility?: BuzzCompatibilityService;
   audit?: (event: AuditEvent) => Promise<void>;
 }
 
@@ -56,9 +75,96 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function trimOrUndefined(value?: string): string | undefined {
+function trimOrUndefined(value?: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+interface ValidatedBuzzAdapterConfig {
+  config: BuzzAdapterConfig;
+  endpoints: NormalizedBuzzEndpoints;
+  probeConfig: BuzzProbeConfig;
+  configKey: string;
+}
+
+function buzzConfigKey(config: BuzzProbeConfig, endpoints: NormalizedBuzzEndpoints): string {
+  return JSON.stringify({
+    probeRevision: BUZZ_PROBE_REVISION,
+    testedRelease: BUZZ_TESTED_RELEASE,
+    testedCommit: BUZZ_TESTED_COMMIT,
+    relayHttpUrl: endpoints.httpUrl,
+    relayWebSocketUrl: endpoints.webSocketUrl,
+    expectedCommunity: endpoints.expectedCommunity,
+    publicKey: config.publicKey,
+    credentialRef: config.credentialRef,
+    authTagRef: config.authTagRef,
+    allowLocalhost: Boolean(config.allowLocalhost),
+    allowPrivateNetwork: Boolean(config.allowPrivateNetwork),
+    command: config.command,
+  });
+}
+
+function validateStoredBuzzConfig(
+  adapter: InternalCommunicationAdapterRecord
+): ValidatedBuzzAdapterConfig | null {
+  const parsed = buzzAdapterConfigSchema.safeParse({
+    kind: 'buzz',
+    displayName: adapter.displayName,
+    enabled: adapter.enabled,
+    relayHttpUrl: adapter.relayHttpUrl,
+    relayWebSocketUrl: adapter.relayWebSocketUrl,
+    expectedCommunity: adapter.expectedCommunity,
+    publicKey: adapter.publicKey,
+    credentialRef: adapter.credentialRef,
+    authTagRef: adapter.authTagRef,
+    allowLocalhost: adapter.allowLocalhost,
+    allowPrivateNetwork: adapter.allowPrivateNetwork,
+    command: adapter.command,
+  });
+  if (!parsed.success) return null;
+
+  try {
+    const endpoints = normalizeBuzzEndpoints({
+      relayHttpUrl: parsed.data.relayHttpUrl,
+      relayWebSocketUrl: parsed.data.relayWebSocketUrl ?? undefined,
+      expectedCommunity: parsed.data.expectedCommunity ?? undefined,
+    });
+    const probeConfig: BuzzProbeConfig = {
+      enabled: parsed.data.enabled ?? true,
+      relayHttpUrl: parsed.data.relayHttpUrl,
+      relayWebSocketUrl: parsed.data.relayWebSocketUrl ?? undefined,
+      expectedCommunity: parsed.data.expectedCommunity ?? undefined,
+      publicKey: parsed.data.publicKey.toLowerCase(),
+      credentialRef: parsed.data.credentialRef,
+      authTagRef: parsed.data.authTagRef ?? undefined,
+      allowLocalhost: parsed.data.allowLocalhost,
+      allowPrivateNetwork: parsed.data.allowPrivateNetwork,
+      command: parsed.data.command ?? undefined,
+    };
+    return {
+      config: parsed.data,
+      endpoints,
+      probeConfig,
+      configKey: buzzConfigKey(probeConfig, endpoints),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isCurrentBuzzCompatibility(
+  adapter: InternalCommunicationAdapterRecord,
+  validated: ValidatedBuzzAdapterConfig
+): boolean {
+  const compatibility = adapter.compatibility;
+  return Boolean(
+    compatibility &&
+    compatibility.schemaVersion === BUZZ_COMPATIBILITY_SCHEMA_VERSION &&
+    compatibility.probeRevision === BUZZ_PROBE_REVISION &&
+    compatibility.testedRelease === BUZZ_TESTED_RELEASE &&
+    compatibility.testedCommit === BUZZ_TESTED_COMMIT &&
+    adapter.buzzConfigKey === validated.configKey
+  );
 }
 
 function sanitizeUrl(url?: string): string | undefined {
@@ -124,6 +230,7 @@ export class CommunicationAdapterService {
   private readonly persist: boolean;
   private readonly chatService: ChatService;
   private readonly outboundIntegrations: OutboundIntegrationService;
+  private readonly buzzCompatibility: BuzzCompatibilityService;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private loaded = false;
   private state: CommunicationAdapterState = this.emptyState();
@@ -133,6 +240,7 @@ export class CommunicationAdapterService {
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.chatService = options.chatService || getChatService();
     this.outboundIntegrations = options.outboundIntegrations || getOutboundIntegrationService();
+    this.buzzCompatibility = options.buzzCompatibility || new BuzzCompatibilityService();
     this.audit = options.audit || auditLog;
   }
 
@@ -158,11 +266,20 @@ export class CommunicationAdapterService {
 
     const timestamp = nowIso();
     const existing = this.state.adapters[adapterId];
+    const kind = input.kind ?? existing?.kind ?? 'msteams';
+    if (existing && input.kind && input.kind !== existing.kind) {
+      throw new Error('Communication adapter kind cannot be changed after creation');
+    }
+    if (kind === 'buzz') {
+      const validated = buzzAdapterConfigSchema.parse({ ...input, kind: 'buzz' });
+      return this.configureBuzzAdapter(adapterId, validated, existing, timestamp);
+    }
+
     const rawWebhook =
       input.webhookUrl !== undefined ? trimOrUndefined(input.webhookUrl) : existing?.webhookUrlRaw;
     const adapter: InternalCommunicationAdapterRecord = {
       id: adapterId,
-      kind: input.kind ?? existing?.kind ?? 'msteams',
+      kind,
       displayName: trimOrUndefined(input.displayName) ?? existing?.displayName ?? 'Microsoft Teams',
       enabled: input.enabled ?? existing?.enabled ?? true,
       deliveryMode: input.deliveryMode ?? existing?.deliveryMode ?? 'manual',
@@ -201,12 +318,18 @@ export class CommunicationAdapterService {
     const disconnected: InternalCommunicationAdapterRecord = {
       ...adapter,
       enabled: false,
-      webhookUrl: undefined,
-      webhookUrlRaw: undefined,
-      webhookUrlConfigured: false,
-      webhookUrlRedacted: false,
-      hasCredential: false,
+      ...(adapter.kind === 'msteams'
+        ? {
+            webhookUrl: undefined,
+            webhookUrlRaw: undefined,
+            webhookUrlConfigured: false,
+            webhookUrlRedacted: false,
+            hasCredential: false,
+          }
+        : {}),
       updatedAt: timestamp,
+      lastHealth: undefined,
+      compatibility: undefined,
     };
     this.state.adapters[adapterId] = disconnected;
     const delivery = this.recordDelivery({
@@ -223,6 +346,9 @@ export class CommunicationAdapterService {
     validatePathSegment(adapterId);
     await this.ensureLoaded();
     const adapter = this.requireAdapter(adapterId);
+    if (adapter.kind === 'buzz') {
+      return this.checkBuzzHealth(adapter);
+    }
     const configured = this.hasDestination(adapter);
     const health: CommunicationAdapterHealth = {
       adapterId,
@@ -253,6 +379,33 @@ export class CommunicationAdapterService {
     validatePathSegment(adapterId);
     await this.ensureLoaded();
     const adapter = this.requireAdapter(adapterId);
+    if (adapter.kind === 'buzz') {
+      const timestamp = nowIso();
+      const target = normalizeTarget(input.target);
+      const mapping: CommunicationThreadMapping = {
+        id: `map_${nanoid(10)}`,
+        adapterId,
+        externalThreadId:
+          trimOrUndefined(input.externalThreadId) ?? this.buildExternalThreadId(adapterId, target),
+        externalUrl: sanitizeUrl(input.externalUrl),
+        target,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        createdBy: trimOrUndefined(input.actor),
+      };
+      const delivery = this.recordDelivery({
+        adapterId,
+        operation: 'send',
+        status: 'blocked',
+        target: mapping.target,
+        externalThreadId: mapping.externalThreadId,
+        actor: input.actor,
+        error: 'Buzz message delivery is not implemented by the connection diagnostic adapter.',
+      });
+      await this.saveState();
+      await this.auditDelivery(delivery);
+      return { delivery, mapping };
+    }
     const target = normalizeTarget(input.target);
     const externalThreadId =
       trimOrUndefined(input.externalThreadId) ?? this.buildExternalThreadId(adapterId, target);
@@ -294,6 +447,31 @@ export class CommunicationAdapterService {
     const externalThreadId = trimOrUndefined(input.externalThreadId);
     if (!externalThreadId) {
       throw new Error('externalThreadId is required');
+    }
+    if (adapter.kind === 'buzz') {
+      const timestamp = nowIso();
+      const mapping: CommunicationThreadMapping = {
+        id: `map_${nanoid(10)}`,
+        adapterId,
+        externalThreadId,
+        externalUrl: sanitizeUrl(input.externalUrl),
+        target: normalizeTarget(input.target ?? { kind: 'squad' }),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        createdBy: trimOrUndefined(input.actor),
+      };
+      const delivery = this.recordDelivery({
+        adapterId,
+        operation: 'reply-ingest',
+        status: 'blocked',
+        target: mapping.target,
+        externalThreadId,
+        actor: input.actor,
+        error: 'Buzz reply ingestion is not implemented by the connection diagnostic adapter.',
+      });
+      await this.saveState();
+      await this.auditDelivery(delivery);
+      return { delivery, mapping, squadMessageId: '' };
     }
 
     const existing = this.findMapping(adapterId, externalThreadId);
@@ -412,12 +590,15 @@ export class CommunicationAdapterService {
   ): Promise<{ delivery: CommunicationDeliveryAudit; replies: [] }> {
     validatePathSegment(adapterId);
     await this.ensureLoaded();
-    this.requireAdapter(adapterId);
+    const adapter = this.requireAdapter(adapterId);
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'poll',
       status: 'skipped',
-      error: 'Reply polling is adapter-defined; this adapter uses the ingest API.',
+      error:
+        adapter.kind === 'buzz'
+          ? 'Buzz reply polling is not implemented by the connection diagnostic adapter.'
+          : 'Reply polling is adapter-defined; this adapter uses the ingest API.',
     });
     await this.saveState();
     await this.auditDelivery(delivery);
@@ -559,6 +740,7 @@ export class CommunicationAdapterService {
   }
 
   private hasDestination(adapter: InternalCommunicationAdapterRecord): boolean {
+    if (adapter.kind === 'buzz') return false;
     if (adapter.deliveryMode === 'webhook') {
       return Boolean(adapter.webhookUrlRaw);
     }
@@ -577,7 +759,56 @@ export class CommunicationAdapterService {
   }
 
   private publicAdapter(adapter: InternalCommunicationAdapterRecord): CommunicationAdapterRecord {
-    const { webhookUrlRaw: _webhookUrlRaw, ...publicRecord } = adapter;
+    if (adapter.kind === 'buzz') {
+      const validated = validateStoredBuzzConfig(adapter);
+      if (!validated) {
+        return {
+          id: adapter.id,
+          kind: 'buzz',
+          displayName: 'Buzz',
+          enabled: false,
+          deliveryMode: 'manual',
+          replyMode: 'ingest-api',
+          destinationType: 'channel',
+          hasCredential: false,
+          createdAt: adapter.createdAt,
+          updatedAt: adapter.updatedAt,
+        };
+      }
+      const config = validated.config;
+      return {
+        id: adapter.id,
+        kind: 'buzz',
+        displayName: config.displayName ?? 'Buzz',
+        enabled: config.enabled ?? true,
+        deliveryMode: 'manual',
+        replyMode: 'ingest-api',
+        destinationType: 'channel',
+        hasCredential: true,
+        relayHttpUrl: config.relayHttpUrl,
+        relayWebSocketUrl: config.relayWebSocketUrl ?? undefined,
+        expectedCommunity: config.expectedCommunity ?? undefined,
+        publicKey: config.publicKey.toLowerCase(),
+        publicKeyFingerprint: fingerprintBuzzPublicKey(config.publicKey),
+        credentialRef: config.credentialRef,
+        authTagRef: config.authTagRef ?? undefined,
+        authTagConfigured: Boolean(config.authTagRef),
+        allowLocalhost: config.allowLocalhost,
+        allowPrivateNetwork: config.allowPrivateNetwork,
+        command: config.command ?? undefined,
+        compatibility: isCurrentBuzzCompatibility(adapter, validated)
+          ? adapter.compatibility
+          : undefined,
+        lastHealth: isCurrentBuzzCompatibility(adapter, validated) ? adapter.lastHealth : undefined,
+        createdAt: adapter.createdAt,
+        updatedAt: adapter.updatedAt,
+      };
+    }
+    const {
+      webhookUrlRaw: _webhookUrlRaw,
+      buzzConfigKey: _buzzConfigKey,
+      ...publicRecord
+    } = adapter;
     return {
       ...publicRecord,
       webhookUrl: adapter.webhookUrlRaw ? sanitizeUrl(adapter.webhookUrlRaw) : undefined,
@@ -594,9 +825,9 @@ export class CommunicationAdapterService {
       return;
     }
 
-    await fs.mkdir(this.storageDir, { recursive: true });
+    await mkdir(this.storageDir, { recursive: true });
     try {
-      const raw = await fs.readFile(this.statePath, 'utf-8');
+      const raw = await readFile(this.statePath, 'utf-8');
       const parsed = JSON.parse(raw) as Partial<CommunicationAdapterState>;
       this.state = {
         version: 1,
@@ -627,9 +858,9 @@ export class CommunicationAdapterService {
   private async saveState(): Promise<void> {
     this.state.updatedAt = nowIso();
     if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
+    await mkdir(this.storageDir, { recursive: true });
     await withFileLock(this.statePath, async () => {
-      await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8');
+      await atomicWriteFile(this.statePath, JSON.stringify(this.state, null, 2));
     });
   }
 
@@ -684,6 +915,198 @@ export class CommunicationAdapterService {
         error: delivery.error,
       },
     });
+  }
+
+  private async configureBuzzAdapter(
+    adapterId: string,
+    input: BuzzAdapterConfig,
+    existing: InternalCommunicationAdapterRecord | undefined,
+    timestamp: string
+  ): Promise<CommunicationAdapterRecord> {
+    const relayHttpUrl = trimOrUndefined(input.relayHttpUrl) ?? existing?.relayHttpUrl;
+    const publicKey = (trimOrUndefined(input.publicKey) ?? existing?.publicKey)?.toLowerCase();
+    const credentialRef = trimOrUndefined(input.credentialRef) ?? existing?.credentialRef;
+    if (!relayHttpUrl || !publicKey || !credentialRef) {
+      throw new Error('Buzz relayHttpUrl, publicKey, and credentialRef are required');
+    }
+    const relayWebSocketUrl =
+      input.relayWebSocketUrl !== undefined
+        ? trimOrUndefined(input.relayWebSocketUrl)
+        : existing?.relayWebSocketUrl;
+    const expectedCommunity =
+      input.expectedCommunity !== undefined
+        ? trimOrUndefined(input.expectedCommunity)
+        : existing?.expectedCommunity;
+    const authTagRef =
+      input.authTagRef !== undefined ? trimOrUndefined(input.authTagRef) : existing?.authTagRef;
+    const endpoints = normalizeBuzzEndpoints({
+      relayHttpUrl,
+      relayWebSocketUrl,
+      expectedCommunity,
+    });
+    const command = input.command !== undefined ? input.command : existing?.command;
+    const allowLocalhost = input.allowLocalhost ?? existing?.allowLocalhost ?? false;
+    const allowPrivateNetwork = input.allowPrivateNetwork ?? existing?.allowPrivateNetwork ?? false;
+    const probeConfig: BuzzProbeConfig = {
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      relayHttpUrl: endpoints.configuredHttpUrl.trim(),
+      relayWebSocketUrl: endpoints.configuredWebSocketUrl?.trim(),
+      expectedCommunity,
+      publicKey,
+      credentialRef,
+      authTagRef,
+      allowLocalhost,
+      allowPrivateNetwork,
+      command: command ?? undefined,
+    };
+    const nextBuzzConfigKey = buzzConfigKey(probeConfig, endpoints);
+    const evidenceIsCurrent =
+      existing?.buzzConfigKey === nextBuzzConfigKey &&
+      existing.compatibility?.probeRevision === BUZZ_PROBE_REVISION &&
+      existing.compatibility.testedRelease === BUZZ_TESTED_RELEASE &&
+      existing.compatibility.testedCommit === BUZZ_TESTED_COMMIT;
+    const adapter: InternalCommunicationAdapterRecord = {
+      id: adapterId,
+      kind: 'buzz',
+      displayName: trimOrUndefined(input.displayName) ?? existing?.displayName ?? 'Buzz',
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      deliveryMode: 'manual',
+      replyMode: 'ingest-api',
+      destinationType: 'channel',
+      hasCredential: true,
+      relayHttpUrl: probeConfig.relayHttpUrl,
+      relayWebSocketUrl: probeConfig.relayWebSocketUrl,
+      expectedCommunity,
+      publicKey,
+      publicKeyFingerprint: fingerprintBuzzPublicKey(publicKey),
+      credentialRef,
+      authTagRef,
+      authTagConfigured: Boolean(authTagRef),
+      allowLocalhost,
+      allowPrivateNetwork,
+      command: command ?? undefined,
+      buzzConfigKey: nextBuzzConfigKey,
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+      lastHealth: evidenceIsCurrent ? existing?.lastHealth : undefined,
+      compatibility: evidenceIsCurrent ? existing?.compatibility : undefined,
+    };
+
+    this.state.adapters[adapterId] = adapter;
+    const delivery = this.recordDelivery({
+      adapterId,
+      operation: 'configure',
+      status: 'success',
+    });
+    await this.saveState();
+    await this.auditAdapter('communication_adapter.configured', adapter, delivery);
+    return this.publicAdapter(adapter);
+  }
+
+  private async checkBuzzHealth(
+    adapter: InternalCommunicationAdapterRecord
+  ): Promise<CommunicationAdapterHealth> {
+    const validated = validateStoredBuzzConfig(adapter);
+    if (!validated) {
+      const health: CommunicationAdapterHealth = {
+        adapterId: adapter.id,
+        status: 'misconfigured',
+        configured: false,
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: nowIso(),
+        detail: 'The persisted Buzz configuration is invalid and was quarantined.',
+        reasonCode: 'configuration_invalid',
+        remediation: 'Resave a complete reference-only Buzz connection configuration.',
+      };
+      adapter.enabled = false;
+      adapter.command = undefined;
+      adapter.lastHealth = health;
+      adapter.compatibility = undefined;
+      adapter.updatedAt = health.checkedAt;
+      this.recordDelivery({
+        adapterId: adapter.id,
+        operation: 'health',
+        status: 'failed',
+        error: health.detail,
+      });
+      await this.saveState();
+      return health;
+    }
+
+    if (!validated.probeConfig.enabled) {
+      const health: CommunicationAdapterHealth = {
+        adapterId: adapter.id,
+        status: 'disabled',
+        configured: Boolean(adapter.relayHttpUrl && adapter.publicKey && adapter.credentialRef),
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: nowIso(),
+        detail: 'Buzz adapter is disabled. Configuration references are retained.',
+        reasonCode: 'adapter_disabled',
+        remediation: 'Enable the adapter to run a read-only compatibility probe.',
+      };
+      adapter.lastHealth = health;
+      adapter.compatibility = undefined;
+      adapter.updatedAt = health.checkedAt;
+      this.recordDelivery({
+        adapterId: adapter.id,
+        operation: 'health',
+        status: 'skipped',
+      });
+      await this.saveState();
+      return health;
+    }
+
+    if (!adapter.relayHttpUrl || !adapter.publicKey || !adapter.credentialRef) {
+      const health: CommunicationAdapterHealth = {
+        adapterId: adapter.id,
+        status: 'misconfigured',
+        configured: false,
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: nowIso(),
+        detail: 'Buzz relay URL, public key, or credential reference is missing.',
+        reasonCode: 'configuration_missing',
+        remediation: 'Save a complete reference-only Buzz connection configuration.',
+      };
+      adapter.lastHealth = health;
+      adapter.compatibility = undefined;
+      adapter.updatedAt = health.checkedAt;
+      this.recordDelivery({
+        adapterId: adapter.id,
+        operation: 'health',
+        status: 'failed',
+        error: health.detail,
+      });
+      await this.saveState();
+      return health;
+    }
+
+    const compatibility = await this.buzzCompatibility.probe(validated.probeConfig);
+    const health: CommunicationAdapterHealth = {
+      adapterId: adapter.id,
+      status: compatibility.status,
+      configured: true,
+      canSend: false,
+      canReceiveReplies: false,
+      checkedAt: compatibility.checkedAt,
+      detail: compatibility.detail,
+      reasonCode: compatibility.reasonCode,
+      remediation: compatibility.remediation,
+      buzz: compatibility,
+    };
+    adapter.compatibility = compatibility;
+    adapter.lastHealth = health;
+    adapter.updatedAt = health.checkedAt;
+    this.recordDelivery({
+      adapterId: adapter.id,
+      operation: 'health',
+      status: compatibility.status === 'healthy' ? 'success' : 'failed',
+      error: compatibility.status === 'healthy' ? undefined : compatibility.detail,
+    });
+    await this.saveState();
+    return health;
   }
 }
 

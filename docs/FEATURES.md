@@ -1224,6 +1224,7 @@ Notification and broadcast features provide local visibility and optional delive
 - **Broadcast messages** — Durable system-wide messages at `/api/broadcasts` with `info`, `action-required`, and `urgent` priorities
 - **External delivery boundary** — Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled
 - **Human reply adapter health** — Settings -> Notifications shows Teams reply posture, redacted webhook state, recent delivery audit, test send, and disconnect controls
+- **Buzz compatibility diagnostics** — Reference-only Buzz relay setup verifies host-derived community identity, NIP-98 authentication, relay membership, channel/message read capability, tested release evidence, and optional command versions without sending a message
 
 ### API Endpoints
 

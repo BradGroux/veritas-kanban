@@ -10,11 +10,12 @@ vi.mock('node:dns/promises', () => ({
 import { safeFetch, validateWebhookUrl } from '../utils/url-validation.js';
 
 async function listenLocalServer(
-  handler: Parameters<typeof createServer>[0]
+  handler: Parameters<typeof createServer>[0],
+  host = '127.0.0.1'
 ): Promise<{ server: Server; port: number }> {
   const server = createServer(handler);
   await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, host, resolve);
   });
   const address = server.address();
   if (!address || typeof address === 'string') {
@@ -77,6 +78,28 @@ describe('url validation', () => {
     }
   });
 
+  it('connects to an explicitly allowed bracketed IPv6 loopback address', async () => {
+    const { server, port } = await listenLocalServer((req, res) => {
+      expect(req.headers.host).toBe(`[::1]:${port}`);
+      res.writeHead(202, { 'content-type': 'text/plain' });
+      res.end('accepted-ipv6');
+    }, '::1');
+
+    try {
+      const response = await safeFetch(
+        `http://[::1]:${port}/hook`,
+        { method: 'POST', body: 'payload' },
+        { allowHttp: true, allowLocalhost: true }
+      );
+
+      expect(response?.status).toBe(202);
+      await expect(response?.text()).resolves.toBe('accepted-ipv6');
+      expect(mockLookup).not.toHaveBeenCalled();
+    } finally {
+      await closeServer(server);
+    }
+  });
+
   it.each(['10.0.0.1', '172.16.0.1', '192.168.0.1'])(
     'does not treat allowLocalhost as private-network approval for %s',
     async (address) => {
@@ -104,6 +127,58 @@ describe('url validation', () => {
       })
     ).resolves.toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it.each(['10.0.0.1', '172.16.0.1', '192.168.0.1', '[fd00::1]'])(
+    'allows only private network classes through the narrow private-network option for %s',
+    (address) => {
+      expect(
+        validateWebhookUrl(`https://${address}/hook`, {
+          allowPrivateNetwork: true,
+          logFailures: false,
+        }).valid
+      ).toBe(true);
+    }
+  );
+
+  it.each([
+    '169.254.170.2',
+    '100.64.0.1',
+    '[fe80::1]',
+    '[fe90::1]',
+    '[fea0::1]',
+    '[febf::1]',
+    '[::ffff:a9fe:a9fe]',
+  ])(
+    'keeps link-local and CGNAT destinations blocked under private-network approval for %s',
+    (address) => {
+      expect(
+        validateWebhookUrl(`https://${address}/hook`, {
+          allowPrivateNetwork: true,
+          logFailures: false,
+        }).valid
+      ).toBe(false);
+    }
+  );
+
+  it.each([
+    ['[::ffff:7f00:1]', { allowLocalhost: true }],
+    ['[::ffff:a00:1]', { allowPrivateNetwork: true }],
+  ])('requires the matching opt-in for IPv4-mapped IPv6 destination %s', (address, allowance) => {
+    const url = `http://${address}/hook`;
+    expect(validateWebhookUrl(url, { allowHttp: true, logFailures: false }).valid).toBe(false);
+    expect(
+      validateWebhookUrl(url, { allowHttp: true, logFailures: false, ...allowance }).valid
+    ).toBe(true);
+  });
+
+  it('blocks deprecated IPv4-compatible IPv6 local addresses', () => {
+    expect(
+      validateWebhookUrl('http://[::7f00:1]/hook', {
+        allowHttp: true,
+        logFailures: false,
+      }).valid
+    ).toBe(false);
   });
 
   it('pins outbound fetches to the validated DNS answer', async () => {

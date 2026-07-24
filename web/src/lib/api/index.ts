@@ -100,6 +100,7 @@ export type {
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,
+  CommunicationAdapterTestResult,
   CommunicationDeliveryAudit,
   CommunicationReplyIngestInput,
   CommunicationReplyIngestResult,

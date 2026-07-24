@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { ConfigService } from '../services/config-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
+import { validate } from '../middleware/validate.js';
 import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { CoolifyServiceConfig, CoolifyServicesConfig } from '@veritas-kanban/shared';
 import { broadcastSquadMessage } from '../services/broadcast-service.js';
@@ -18,6 +19,10 @@ import {
   DEFAULT_ADAPTER_ID,
   getCommunicationAdapterService,
 } from '../services/communication-adapter-service.js';
+import {
+  communicationAdapterConfigSchema,
+  type CommunicationAdapterConfig,
+} from '../schemas/communication-adapter-schemas.js';
 import { getOutboundIntegrationService } from '../services/outbound-integration-service.js';
 import { externalTrackerRoutes } from './external-trackers.js';
 import { safeFetch } from '../utils/url-validation.js';
@@ -52,20 +57,6 @@ const replyTargetSchema = z.object({
   runId: z.string().optional(),
   approvalId: z.string().optional(),
   notificationId: z.string().optional(),
-});
-
-const adapterConfigSchema = z.object({
-  kind: z.enum(['msteams']).optional(),
-  displayName: z.string().optional(),
-  enabled: z.boolean().optional(),
-  deliveryMode: z.enum(['manual', 'webhook']).optional(),
-  destinationType: z.enum(['channel', 'direct']).optional(),
-  tenantId: z.string().optional(),
-  teamId: z.string().optional(),
-  channelId: z.string().optional(),
-  chatId: z.string().optional(),
-  webhookUrl: z.string().optional(),
-  credential: z.string().optional(),
 });
 
 const sendSchema = z.object({
@@ -271,9 +262,10 @@ router.get(
 // PUT /api/integrations/communication/adapters/:adapterId
 router.put(
   '/communication/adapters/:adapterId',
+  validate({ body: communicationAdapterConfigSchema }),
   asyncHandler(async (req, res) => {
     const adapterId = adapterIdParam(req.params.adapterId);
-    const input = adapterConfigSchema.parse(req.body);
+    const input = req.validated?.body as CommunicationAdapterConfig;
     res.json(await communicationAdapters.configureAdapter(adapterId, input));
   })
 );
@@ -294,6 +286,11 @@ router.post(
   asyncHandler(async (req, res) => {
     const adapterId = adapterIdParam(req.params.adapterId);
     await ensureAdapterExists(adapterId);
+    const adapter = await communicationAdapters.getAdapter(adapterId);
+    if (adapter?.kind === 'buzz') {
+      res.json(await communicationAdapters.checkHealth(adapterId));
+      return;
+    }
     const message =
       typeof req.body?.message === 'string' && req.body.message.trim()
         ? req.body.message

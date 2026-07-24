@@ -729,9 +729,11 @@ Search returns redacted snippets only. Mention notifications link back to the sq
 
 ### Communication Adapters
 
-Bidirectional human reply adapters live under integrations. The first adapter
-contract is provider-neutral with Microsoft Teams posture fields and a local
-ingest API. It stores external thread mappings separately from message content.
+Communication adapters live under integrations. Microsoft Teams provides the
+existing human reply/send posture. Buzz provides a reference-only connection
+configuration and read-only relay compatibility probe. It does not send or
+subscribe to messages in this slice. External thread mappings remain separate
+from message content.
 
 ```
 GET  /api/integrations/communication/adapters
@@ -772,6 +774,41 @@ the normal chat service, and broadcasts it to connected clients.
 Responses never return credentials or raw webhook query strings. Redacted
 posture appears as `webhookUrlConfigured`, `webhookUrlRedacted`, and
 `hasCredential`.
+
+**Buzz configure body**:
+
+```json
+{
+  "kind": "buzz",
+  "displayName": "Buzz",
+  "enabled": true,
+  "relayHttpUrl": "https://community.example.com",
+  "relayWebSocketUrl": "wss://community.example.com",
+  "expectedCommunity": "community.example.com",
+  "publicKey": "<64-hex-public-key>",
+  "credentialRef": "env:BUZZ_PRIVATE_KEY",
+  "authTagRef": "env:BUZZ_AUTH_TAG",
+  "allowLocalhost": false,
+  "allowPrivateNetwork": false,
+  "command": {
+    "executable": "buzz",
+    "args": []
+  }
+}
+```
+
+Buzz rejects raw credentials, URL userinfo/query/fragment components, and
+credential-like command arguments. Health returns an exact status and
+`reasonCode`, redacted configured/resolved endpoints, expected/observed
+community, public-key fingerprint, tested Buzz release/commit, probe revision,
+relay contract, independent verification checks, and optional command
+diagnostics. `POST .../buzz-default/test` runs the same read-only probe;
+`canSend` and `canReceiveReplies` remain `false`. See
+[Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
+
+Send `null` for `relayWebSocketUrl`, `expectedCommunity`, `authTagRef`, or
+`command` to clear that optional setting. Omitting one preserves its current
+value.
 
 **Reply ingest body**:
 

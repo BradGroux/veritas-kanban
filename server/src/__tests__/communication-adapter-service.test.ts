@@ -5,6 +5,7 @@ import path from 'path';
 import type { ChatService } from '../services/chat-service.js';
 import type { OutboundIntegrationService } from '../services/outbound-integration-service.js';
 import { CommunicationAdapterService } from '../services/communication-adapter-service.js';
+import type { BuzzCompatibilityService } from '../services/buzz-compatibility-service.js';
 
 describe('CommunicationAdapterService', () => {
   let tmpDir: string;
@@ -179,5 +180,223 @@ describe('CommunicationAdapterService', () => {
     expect(result.squadMessageId).toBe('');
     expect(chatService.sendSquadMessage).not.toHaveBeenCalled();
     expect(await service.listMappings('msteams-default')).toEqual([]);
+  });
+
+  it('stores only Buzz secret references and returns exact probe health', async () => {
+    const buzzCompatibility = {
+      probe: vi.fn().mockResolvedValue({
+        schemaVersion: 'buzz-compatibility/v1',
+        probeRevision: 1,
+        testedRelease: '0.4.24',
+        testedCommit: '710ed9fff57878a1d69f809b80a6ee0416c53fc4',
+        status: 'healthy',
+        reasonCode: 'ok',
+        detail: 'Buzz relay and read capabilities are compatible.',
+        configuredRelayHttpUrl: 'https://relay.example.test',
+        resolvedRelayHttpUrl: 'https://relay.example.test',
+        resolvedRelayWebSocketUrl: 'wss://relay.example.test',
+        expectedCommunity: 'relay.example.test',
+        observedCommunity: 'relay.example.test',
+        publicKeyFingerprint: 'abc123abc123',
+        checks: {
+          relayIdentity: 'verified',
+          communityBinding: 'verified',
+          configuredIdentity: 'verified',
+          authentication: 'verified',
+          membership: 'verified',
+          channelRead: 'verified',
+          messageRead: 'verified',
+        },
+        commands: [],
+        evidenceKey: 'evidence-key',
+        checkedAt: '2026-07-23T18:00:00.000Z',
+      }),
+    } as unknown as BuzzCompatibilityService;
+    service = new CommunicationAdapterService({
+      storageDir: tmpDir,
+      persist: true,
+      chatService: chatService as ChatService,
+      outboundIntegrations: outboundIntegrations as OutboundIntegrationService,
+      buzzCompatibility,
+      audit,
+    });
+
+    const adapter = await service.configureAdapter('buzz-default', {
+      kind: 'buzz',
+      enabled: true,
+      relayHttpUrl: 'https://relay.example.test',
+      expectedCommunity: 'relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      authTagRef: 'env:BUZZ_AUTH_TAG',
+    });
+    const health = await service.checkHealth('buzz-default');
+    const persisted = await fs.readFile(path.join(tmpDir, 'state.json'), 'utf-8');
+
+    expect(adapter).toMatchObject({
+      kind: 'buzz',
+      relayHttpUrl: 'https://relay.example.test',
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      authTagConfigured: true,
+      hasCredential: true,
+    });
+    expect(adapter.relayWebSocketUrl).toBeUndefined();
+    expect(health).toMatchObject({
+      status: 'healthy',
+      reasonCode: 'ok',
+      canSend: false,
+      canReceiveReplies: false,
+    });
+    expect(persisted).toContain('env:BUZZ_PRIVATE_KEY');
+    expect(persisted).not.toContain('nsec');
+    expect(persisted).not.toContain('raw-access-token');
+
+    const cleared = await service.configureAdapter('buzz-default', {
+      kind: 'buzz',
+      relayHttpUrl: 'https://relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      relayWebSocketUrl: null,
+      expectedCommunity: null,
+      authTagRef: null,
+      command: null,
+    });
+    expect(cleared).toMatchObject({
+      authTagConfigured: false,
+    });
+    expect(cleared.relayWebSocketUrl).toBeUndefined();
+    expect(cleared.expectedCommunity).toBeUndefined();
+    expect(cleared.authTagRef).toBeUndefined();
+    expect(cleared.command).toBeUndefined();
+  });
+
+  it('quarantines an invalid persisted Buzz command before it can execute', async () => {
+    await service.configureAdapter('buzz-default', {
+      kind: 'buzz',
+      enabled: true,
+      relayHttpUrl: 'https://relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+      command: { executable: '/opt/buzz/bin/buzz-agent', args: ['--profile', 'safe'] },
+    });
+    const statePath = path.join(tmpDir, 'state.json');
+    const persisted = JSON.parse(await fs.readFile(statePath, 'utf8'));
+    persisted.adapters['buzz-default'].command = {
+      executable: '/bin/sh',
+      args: ['-c', 'echo unsafe'],
+    };
+    await fs.writeFile(statePath, JSON.stringify(persisted));
+
+    const probe = vi.fn();
+    const reloaded = new CommunicationAdapterService({
+      storageDir: tmpDir,
+      persist: true,
+      chatService: chatService as ChatService,
+      outboundIntegrations: outboundIntegrations as OutboundIntegrationService,
+      buzzCompatibility: { probe } as unknown as BuzzCompatibilityService,
+      audit,
+    });
+
+    expect(await reloaded.getAdapter('buzz-default')).toMatchObject({
+      kind: 'buzz',
+      enabled: false,
+      hasCredential: false,
+    });
+    expect((await reloaded.getAdapter('buzz-default'))?.command).toBeUndefined();
+    expect(await reloaded.checkHealth('buzz-default')).toMatchObject({
+      status: 'misconfigured',
+      reasonCode: 'configuration_invalid',
+    });
+    expect(probe).not.toHaveBeenCalled();
+    expect(await fs.readFile(statePath, 'utf8')).not.toContain('/bin/sh');
+  });
+
+  it('invalidates persisted Buzz compatibility from an older probe contract', async () => {
+    const buzzCompatibility = {
+      probe: vi.fn().mockResolvedValue({
+        schemaVersion: 'buzz-compatibility/v1',
+        probeRevision: 1,
+        testedRelease: '0.4.24',
+        testedCommit: '710ed9fff57878a1d69f809b80a6ee0416c53fc4',
+        status: 'healthy',
+        reasonCode: 'ok',
+        detail: 'compatible',
+        configuredRelayHttpUrl: 'https://relay.example.test',
+        publicKeyFingerprint: 'abc123abc123',
+        checks: {
+          relayIdentity: 'verified',
+          communityBinding: 'verified',
+          configuredIdentity: 'verified',
+          authentication: 'verified',
+          membership: 'verified',
+          channelRead: 'verified',
+          messageRead: 'verified',
+        },
+        commands: [],
+        evidenceKey: 'evidence-key',
+        checkedAt: '2026-07-23T18:00:00.000Z',
+      }),
+    } as unknown as BuzzCompatibilityService;
+    const configured = new CommunicationAdapterService({
+      storageDir: tmpDir,
+      persist: true,
+      chatService: chatService as ChatService,
+      outboundIntegrations: outboundIntegrations as OutboundIntegrationService,
+      buzzCompatibility,
+      audit,
+    });
+    await configured.configureAdapter('buzz-default', {
+      kind: 'buzz',
+      relayHttpUrl: 'https://relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+    });
+    await configured.checkHealth('buzz-default');
+
+    const statePath = path.join(tmpDir, 'state.json');
+    const persisted = JSON.parse(await fs.readFile(statePath, 'utf8'));
+    persisted.adapters['buzz-default'].compatibility.probeRevision = 0;
+    await fs.writeFile(statePath, JSON.stringify(persisted));
+
+    const reloaded = new CommunicationAdapterService({
+      storageDir: tmpDir,
+      persist: true,
+      chatService: chatService as ChatService,
+      outboundIntegrations: outboundIntegrations as OutboundIntegrationService,
+      audit,
+    });
+    const adapter = await reloaded.getAdapter('buzz-default');
+    expect(adapter?.compatibility).toBeUndefined();
+    expect(adapter?.lastHealth).toBeUndefined();
+  });
+
+  it('fails closed for Buzz sends while leaving Microsoft Teams behavior intact', async () => {
+    await service.configureAdapter('buzz-default', {
+      kind: 'buzz',
+      enabled: true,
+      relayHttpUrl: 'https://relay.example.test',
+      publicKey: 'ab'.repeat(32),
+      credentialRef: 'env:BUZZ_PRIVATE_KEY',
+    });
+
+    const result = await service.send('buzz-default', {
+      target: { kind: 'squad', squadMessageId: 'message-1' },
+      message: 'must not leave Veritas',
+    });
+
+    expect(result.delivery).toMatchObject({
+      operation: 'send',
+      status: 'blocked',
+      error: expect.stringContaining('not implemented'),
+    });
+    expect(await service.listMappings('buzz-default')).toEqual([]);
+
+    const poll = await service.pollReplies('buzz-default');
+    expect(poll.delivery).toMatchObject({
+      operation: 'poll',
+      status: 'skipped',
+      error: expect.stringContaining('Buzz reply polling is not implemented'),
+    });
+    expect(outboundIntegrations.deliver).not.toHaveBeenCalled();
   });
 });

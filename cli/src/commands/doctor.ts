@@ -5,7 +5,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { API_BASE, buildApiHeaders } from '../utils/api.js';
-import type { HarnessSupportStatus } from '@veritas-kanban/shared';
+import type { CommunicationAdapterHealth, HarnessSupportStatus } from '@veritas-kanban/shared';
 
 const execFileAsync = promisify(execFile);
 const CRITICAL_STATUSES = new Set<DoctorCheck['id']>([
@@ -16,6 +16,7 @@ const CRITICAL_STATUSES = new Set<DoctorCheck['id']>([
   'agents',
   'harness-support',
   'routing',
+  'buzz',
 ]);
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skip';
@@ -540,6 +541,53 @@ function buildCodexCheck(health: CodexHealthResponse | null): DoctorCheck {
   );
 }
 
+function buildBuzzCheck(
+  health: CommunicationAdapterHealth | null,
+  responseStatus: number
+): DoctorCheck {
+  if (!health) {
+    if (responseStatus === 404) {
+      return check('buzz', 'Buzz compatibility', 'skip', 'Buzz is not configured');
+    }
+    return check(
+      'buzz',
+      'Buzz compatibility',
+      'warn',
+      'Buzz compatibility diagnostics are unavailable',
+      { status: responseStatus },
+      'Verify settings-read permission and the communication adapter API.'
+    );
+  }
+
+  const details = {
+    status: health.status,
+    reasonCode: health.reasonCode,
+    configured: health.configured,
+    canSend: health.canSend,
+    canReceiveReplies: health.canReceiveReplies,
+    checkedAt: health.checkedAt,
+    expectedCommunity: health.buzz?.expectedCommunity,
+    observedCommunity: health.buzz?.observedCommunity,
+    publicKeyFingerprint: health.buzz?.publicKeyFingerprint,
+    testedRelease: health.buzz?.testedRelease,
+    testedCommit: health.buzz?.testedCommit,
+    probeRevision: health.buzz?.probeRevision,
+    commands: health.buzz?.commands,
+    buzz: health.buzz,
+  };
+
+  if (health.status === 'disabled') {
+    return check('buzz', 'Buzz compatibility', 'skip', health.detail, details, health.remediation);
+  }
+  if (health.status === 'healthy') {
+    return check('buzz', 'Buzz compatibility', 'pass', health.detail, details);
+  }
+  if (health.status === 'degraded' || health.status === 'warning') {
+    return check('buzz', 'Buzz compatibility', 'warn', health.detail, details, health.remediation);
+  }
+  return check('buzz', 'Buzz compatibility', 'fail', health.detail, details, health.remediation);
+}
+
 function buildHarnessSupportCheck(statuses: HarnessSupportStatus[] | null): DoctorCheck {
   if (!statuses) {
     return check(
@@ -809,6 +857,13 @@ export async function runDoctorChecks(
       '/api/settings/codex/health'
     );
     checks.push(buildCodexCheck(codexHealth.ok ? codexHealth.data : null));
+
+    const buzzHealth = await requestJson<CommunicationAdapterHealth>(
+      deps,
+      options,
+      '/api/integrations/communication/adapters/buzz-default/health'
+    );
+    checks.push(buildBuzzCheck(buzzHealth.ok ? buzzHealth.data : null, buzzHealth.status));
   } else {
     checks.push(
       check('api-auth', 'API authentication', 'skip', 'Skipped because API is unreachable')
@@ -825,6 +880,7 @@ export async function runDoctorChecks(
     checks.push(
       check('harness-support', 'Harness support', 'skip', 'Skipped because API is unreachable')
     );
+    checks.push(check('buzz', 'Buzz compatibility', 'skip', 'Skipped because API is unreachable'));
   }
 
   const agentResult = await buildAgentCheck(deps, agents);

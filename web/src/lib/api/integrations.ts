@@ -3,6 +3,7 @@ import type {
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,
+  CommunicationAdapterTestResult,
   CommunicationDeliveryAudit,
   CommunicationReplyIngestInput,
   CommunicationReplyIngestResult,
@@ -111,8 +112,8 @@ export const integrationsApi = {
   testCommunicationAdapter: async (
     adapterId: string,
     message?: string
-  ): Promise<CommunicationSendResult> => {
-    return apiFetch<CommunicationSendResult>(
+  ): Promise<CommunicationAdapterTestResult> => {
+    return apiFetch<CommunicationAdapterTestResult>(
       `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/test`,
       {
         method: 'POST',

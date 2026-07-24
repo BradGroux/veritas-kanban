@@ -14,7 +14,7 @@
 import { lookup } from 'node:dns/promises';
 import { request as httpRequest, type IncomingHttpHeaders, type RequestOptions } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { Readable } from 'node:stream';
 import { createLogger } from '../lib/logger.js';
 
@@ -54,6 +54,33 @@ const BLOCKED_IPV4_RANGES: Array<{
   // Carrier-grade NAT (100.64.0.0/10)
   { start: 0x64400000, end: 0x647fffff, name: 'cgnat', addressClass: 'cgnat' },
 ];
+
+function ipv4BlockList(subnets: Array<[address: string, prefix: number]>): BlockList {
+  const blockList = new BlockList();
+  for (const [address, prefix] of subnets) {
+    blockList.addSubnet(address, prefix, 'ipv4');
+  }
+  return blockList;
+}
+
+const MAPPED_IPV4_LOCAL = ipv4BlockList([
+  ['0.0.0.0', 32],
+  ['127.0.0.0', 8],
+]);
+const MAPPED_IPV4_PRIVATE = ipv4BlockList([
+  ['10.0.0.0', 8],
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+]);
+const MAPPED_IPV4_LINK_LOCAL = ipv4BlockList([['169.254.0.0', 16]]);
+const MAPPED_IPV4_CGNAT = ipv4BlockList([['100.64.0.0', 10]]);
+
+const IPV6_LOCAL = new BlockList();
+IPV6_LOCAL.addSubnet('::', 96, 'ipv6');
+const IPV6_LINK_LOCAL = new BlockList();
+IPV6_LINK_LOCAL.addSubnet('fe80::', 10, 'ipv6');
+const IPV6_UNIQUE_LOCAL = new BlockList();
+IPV6_UNIQUE_LOCAL.addSubnet('fc00::', 7, 'ipv6');
 
 /**
  * Convert IPv4 address string to 32-bit integer
@@ -97,26 +124,25 @@ function isBlockedIPv4(ip: string): BlockedAddressCheck {
  * Check if a hostname is a blocked IPv6 address
  */
 function isBlockedIPv6(host: string): BlockedAddressCheck {
-  const normalized = host.toLowerCase();
+  const normalized = unbracketHostname(host).toLowerCase();
 
-  // Loopback
-  if (normalized === '::1' || normalized === '[::1]') {
-    return { blocked: true, reason: 'IPv6 loopback', addressClass: 'local' };
+  if (IPV6_LOCAL.check(normalized, 'ipv6') || MAPPED_IPV4_LOCAL.check(normalized, 'ipv6')) {
+    return { blocked: true, reason: 'IPv6 local address', addressClass: 'local' };
   }
-
-  // Link-local (fe80::/10)
-  if (normalized.startsWith('fe8') || normalized.startsWith('[fe8')) {
+  if (
+    IPV6_LINK_LOCAL.check(normalized, 'ipv6') ||
+    MAPPED_IPV4_LINK_LOCAL.check(normalized, 'ipv6')
+  ) {
     return { blocked: true, reason: 'IPv6 link-local', addressClass: 'link-local' };
   }
-
-  // Unique local (fc00::/7)
-  if (
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd') ||
-    normalized.startsWith('[fc') ||
-    normalized.startsWith('[fd')
-  ) {
+  if (IPV6_UNIQUE_LOCAL.check(normalized, 'ipv6')) {
     return { blocked: true, reason: 'IPv6 unique-local', addressClass: 'unique-local' };
+  }
+  if (MAPPED_IPV4_PRIVATE.check(normalized, 'ipv6')) {
+    return { blocked: true, reason: 'IPv4-mapped private address', addressClass: 'private' };
+  }
+  if (MAPPED_IPV4_CGNAT.check(normalized, 'ipv6')) {
+    return { blocked: true, reason: 'IPv4-mapped CGNAT address', addressClass: 'cgnat' };
   }
 
   return { blocked: false };
@@ -129,7 +155,13 @@ function isAllowedBlockedAddress(check: BlockedAddressCheck, opts: UrlValidation
   if (opts.allowPrivateIp) {
     return true;
   }
-  return Boolean(opts.allowLocalhost && check.addressClass === 'local');
+  if (opts.allowLocalhost && check.addressClass === 'local') {
+    return true;
+  }
+  return Boolean(
+    opts.allowPrivateNetwork &&
+    (check.addressClass === 'private' || check.addressClass === 'unique-local')
+  );
 }
 
 function isBlockedIpAddress(address: string, opts: UrlValidationOptions): BlockedAddressCheck {
@@ -163,6 +195,10 @@ function isLocalhostHostname(hostname: string): boolean {
   );
 }
 
+function unbracketHostname(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+}
+
 // ─── URL Validation ────────────────────────────────────────────────────────
 
 export interface UrlValidationResult {
@@ -187,6 +223,8 @@ export interface UrlValidationOptions {
   allowLocalhost?: boolean;
   /** Allow private IP ranges (default: false) */
   allowPrivateIp?: boolean;
+  /** Allow RFC1918/ULA networks while continuing to block link-local and CGNAT ranges */
+  allowPrivateNetwork?: boolean;
   /** Log validation failures (default: true) */
   logFailures?: boolean;
 }
@@ -195,6 +233,7 @@ const DEFAULT_OPTIONS: UrlValidationOptions = {
   allowHttp: process.env.NODE_ENV === 'development',
   allowLocalhost: process.env.NODE_ENV === 'development',
   allowPrivateIp: false,
+  allowPrivateNetwork: false,
   logFailures: true,
 };
 
@@ -290,7 +329,7 @@ async function validateResolvedHostname(
   parsed: URL,
   opts: UrlValidationOptions
 ): Promise<ResolvedUrlValidationResult> {
-  const hostname = parsed.hostname;
+  const hostname = unbracketHostname(parsed.hostname);
   const directIpFamily = isIP(hostname);
 
   if (directIpFamily === 4 || directIpFamily === 6) {
@@ -407,9 +446,10 @@ async function fetchPinnedUrl(
     cb(null, resolvedAddress.address, resolvedAddress.family);
   };
   const requestBody = await bodyFromInit(init?.body ?? undefined);
+  const requestHostname = unbracketHostname(parsed.hostname);
   const requestOptions: RequestOptions & { servername?: string } = {
     protocol: parsed.protocol,
-    hostname: parsed.hostname,
+    hostname: requestHostname,
     port: parsed.port || undefined,
     path: `${parsed.pathname}${parsed.search}`,
     method: init?.method ?? 'GET',
@@ -419,7 +459,7 @@ async function fetchPinnedUrl(
   };
 
   if (parsed.protocol === 'https:') {
-    requestOptions.servername = parsed.hostname;
+    requestOptions.servername = isIP(requestHostname) ? undefined : requestHostname;
   }
 
   const request = parsed.protocol === 'https:' ? httpsRequest : httpRequest;

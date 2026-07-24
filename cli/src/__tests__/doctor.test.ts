@@ -71,6 +71,10 @@ const baseRoutes: Record<string, Response> = {
     cli: { installed: true, authenticated: true },
     recommendations: [],
   }),
+  '/api/integrations/communication/adapters/buzz-default/health': jsonResponse(
+    { error: 'not found' },
+    404
+  ),
 };
 
 describe('vk doctor', () => {
@@ -248,6 +252,123 @@ describe('vk doctor', () => {
     expect(serialized).toContain('[redacted path]');
     expect(report.checks.find((check) => check.id === 'notifications')).toMatchObject({
       status: 'warn',
+    });
+  });
+
+  it('reports exact Buzz health in human and JSON output', async () => {
+    const routes = {
+      ...baseRoutes,
+      '/api/integrations/communication/adapters/buzz-default/health': jsonResponse({
+        adapterId: 'buzz-default',
+        status: 'healthy',
+        configured: true,
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: '2026-07-23T18:00:00.000Z',
+        detail:
+          'Buzz relay identity, configured signing identity, membership posture, and read capabilities are compatible.',
+        reasonCode: 'ok',
+        buzz: {
+          schemaVersion: 'buzz-compatibility/v1',
+          probeRevision: 1,
+          testedRelease: '0.4.24',
+          testedCommit: '710ed9fff57878a1d69f809b80a6ee0416c53fc4',
+          status: 'healthy',
+          reasonCode: 'ok',
+          detail: 'compatible',
+          configuredRelayHttpUrl: 'https://relay.example.test',
+          resolvedRelayHttpUrl: 'https://relay.example.test',
+          resolvedRelayWebSocketUrl: 'wss://relay.example.test',
+          expectedCommunity: 'relay.example.test',
+          observedCommunity: 'relay.example.test',
+          publicKeyFingerprint: 'abc123abc123',
+          checks: {
+            relayIdentity: 'verified',
+            communityBinding: 'verified',
+            configuredIdentity: 'verified',
+            authentication: 'verified',
+            membership: 'verified',
+            channelRead: 'verified',
+            messageRead: 'verified',
+          },
+          commands: [],
+          evidenceKey: 'safe-evidence',
+          checkedAt: '2026-07-23T18:00:00.000Z',
+        },
+      }),
+    };
+
+    const report = await runDoctorChecks(
+      { apiBase: 'http://vk.test', cwd: '/repo', timeoutMs: 1000 },
+      {
+        fetch: doctorFetch(routes),
+        env: {},
+        findProjectRoot: async () => '/repo',
+        countPromptTemplateFiles: async () => 1,
+        resolveCommand: async (command) =>
+          command === 'vk' ? '/repo/cli/dist/index.js' : `/usr/bin/${command}`,
+        now: () => new Date('2026-07-23T18:00:00.000Z'),
+      }
+    );
+
+    expect(report.checks.find((check) => check.id === 'buzz')).toMatchObject({
+      status: 'pass',
+      details: {
+        status: 'healthy',
+        reasonCode: 'ok',
+        expectedCommunity: 'relay.example.test',
+        observedCommunity: 'relay.example.test',
+        publicKeyFingerprint: 'abc123abc123',
+        testedRelease: '0.4.24',
+        buzz: {
+          checks: {
+            channelRead: 'verified',
+            messageRead: 'verified',
+          },
+          evidenceKey: 'safe-evidence',
+        },
+      },
+    });
+    expect(formatDoctorReport(report)).toContain('[PASS] Buzz compatibility');
+  });
+
+  it('fails doctor for an enabled Buzz membership denial with remediation', async () => {
+    const routes = {
+      ...baseRoutes,
+      '/api/integrations/communication/adapters/buzz-default/health': jsonResponse({
+        adapterId: 'buzz-default',
+        status: 'not_member',
+        configured: true,
+        canSend: false,
+        canReceiveReplies: false,
+        checkedAt: '2026-07-23T18:00:00.000Z',
+        detail: 'Buzz authenticated the identity but denied relay membership.',
+        reasonCode: 'relay_membership_required',
+        remediation: 'Add the public identity as a relay member.',
+      }),
+    };
+
+    const report = await runDoctorChecks(
+      { apiBase: 'http://vk.test', cwd: '/repo', timeoutMs: 1000 },
+      {
+        fetch: doctorFetch(routes),
+        env: {},
+        findProjectRoot: async () => '/repo',
+        countPromptTemplateFiles: async () => 1,
+        resolveCommand: async (command) =>
+          command === 'vk' ? '/repo/cli/dist/index.js' : `/usr/bin/${command}`,
+        now: () => new Date('2026-07-23T18:00:00.000Z'),
+      }
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.checks.find((check) => check.id === 'buzz')).toMatchObject({
+      status: 'fail',
+      details: {
+        status: 'not_member',
+        reasonCode: 'relay_membership_required',
+      },
+      remediation: 'Add the public identity as a relay member.',
     });
   });
 });
