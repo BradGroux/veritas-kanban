@@ -1,3 +1,4 @@
+import process from 'node:process';
 import readline from 'node:readline';
 
 // Stable ACP v1 fixture aligned with @agentclientprotocol/sdk 1.3.0.
