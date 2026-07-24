@@ -13,6 +13,7 @@ import type {
 
 export interface ConfigureDesktopMenuOptions {
   dispatch(command: DesktopCommandName): void;
+  copyVersionInfo(): void;
   status: DesktopStatusSnapshot;
   updateStatus?: DesktopUpdateStatus;
 }
@@ -38,6 +39,13 @@ export function createDesktopMenuTemplate(
     {
       label: 'Veritas Kanban',
       submenu: [
+        { role: 'about', label: 'About Veritas Kanban' },
+        { type: 'separator' },
+        {
+          label: 'Copy Version Information',
+          click: () => options.copyVersionInfo(),
+        },
+        { type: 'separator' },
         command('open-onboarding'),
         command('open-settings'),
         command('communication-health'),

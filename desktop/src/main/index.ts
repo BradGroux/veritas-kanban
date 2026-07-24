@@ -21,6 +21,11 @@ import {
   resolveDesktopUpdateChannel,
 } from './updates.js';
 import {
+  createDesktopAboutPanelOptions,
+  createDesktopAppInfo,
+  formatDesktopVersionInfo,
+} from './version-info.js';
+import {
   DESKTOP_BRIDGE_EVENTS,
   redactDesktopBridgeValue,
   type DesktopUpdateStatus,
@@ -174,9 +179,11 @@ function refreshDesktopMenu(): void {
     return;
   }
 
+  const appInfo = createDesktopAppInfo(app.getVersion(), launchPackaged);
   configureDesktopMenu({
     status: runtime.snapshot(),
     updateStatus: updateService?.snapshot(),
+    copyVersionInfo: () => clipboard.writeText(formatDesktopVersionInfo(appInfo)),
     dispatch: (command) => {
       if (commandDispatcher) {
         dispatchDesktopMenuCommand(commandDispatcher, command);
@@ -186,10 +193,11 @@ function refreshDesktopMenu(): void {
 }
 
 function updateServiceFallback(packaged: boolean): DesktopUpdateStatus {
+  const appInfo = createDesktopAppInfo(app.getVersion(), packaged);
   return {
     state: 'unsupported',
-    currentVersion: app.getVersion(),
-    channel: packaged ? 'stable' : 'dev',
+    currentVersion: appInfo.version,
+    channel: appInfo.channel,
     checkedAt: new Date().toISOString(),
     detail: 'Updater service is not initialized.',
   };
@@ -200,6 +208,8 @@ async function boot(): Promise<void> {
   app.setAppUserModelId(DESKTOP_APP_ID);
 
   const packaged = launchPackaged;
+  const appInfo = createDesktopAppInfo(app.getVersion(), packaged);
+  app.setAboutPanelOptions(createDesktopAboutPanelOptions(appInfo));
   const repoRoot = launchRepoRoot;
   const profile = launchProfile;
   const workspace = launchWorkspace;

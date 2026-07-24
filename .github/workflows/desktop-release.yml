@@ -24,6 +24,7 @@ concurrency:
 
 env:
   NODE_VERSION: '22'
+  VERITAS_BUILD_SHA: ${{ github.sha }}
   VERITAS_UPDATE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
 
 jobs:
