@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Established one bounded, keyboard-focusable scroll owner for task drawers and
   shared overlays, kept drawer chrome fixed, and made task description editors
   taller and vertically resizable (#935).
+- Preserved in-app route origins, scroll positions, and task return paths across
+  full-page navigation, added browser Back and `Cmd+[` support, and made direct
+  links fall back safely to Board (#937).
 
 ## [6.0.0] - 2026-07-24
 

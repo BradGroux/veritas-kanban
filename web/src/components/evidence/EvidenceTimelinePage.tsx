@@ -14,7 +14,7 @@ export function EvidenceTimelinePage({ onBack, onTaskClick }: EvidenceTimelinePa
         <div className="flex min-w-0 items-start gap-4">
           <Button variant="subtle" size="sm" onClick={onBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Board
+            Back
           </Button>
           <div className="min-w-0">
             <Group gap="xs" wrap="wrap">

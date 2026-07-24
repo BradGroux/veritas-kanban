@@ -84,7 +84,7 @@ function runSessionShareIdFromLocation(): string | null {
 
 /** Renders the current view (board, activity feed, or backlog). */
 function MainContent() {
-  const { view, setView, navigateToTask } = useView();
+  const { view, goBack, navigateToTask } = useView();
   const runSessionShareId = runSessionShareIdFromLocation();
 
   if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
@@ -100,7 +100,7 @@ function MainContent() {
   const ViewComponent = LAZY_VIEW_COMPONENTS[view];
   return (
     <Suspense fallback={<ViewLoading view={view} />}>
-      <ViewComponent onBack={() => setView('board')} onTaskClick={navigateToTask} />
+      <ViewComponent onBack={goBack} onTaskClick={navigateToTask} />
     </Suspense>
   );
 }

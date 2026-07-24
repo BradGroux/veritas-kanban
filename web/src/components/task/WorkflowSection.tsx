@@ -7,7 +7,7 @@
  * - Shows active runs for this task
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { API_BASE } from '@/lib/config';
 import { Badge, Button, Group, Loader, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
@@ -38,6 +38,15 @@ interface WorkflowRun {
   status: 'pending' | 'running' | 'blocked' | 'completed' | 'failed';
   currentStep?: string;
   startedAt: string;
+}
+
+const TASK_WORKFLOW_HISTORY_KEY = 'veritasTaskWorkflow';
+
+function workflowHistoryId(): string | null {
+  const state = window.history.state;
+  if (!state || typeof state !== 'object') return null;
+  const workflowId = (state as Record<string, unknown>)[TASK_WORKFLOW_HISTORY_KEY];
+  return typeof workflowId === 'string' ? workflowId : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -134,10 +143,46 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
   const [isStarting, setIsStarting] = useState<string | null>(null);
+  const ownsHistoryEntryRef = useRef(false);
   const { toast } = useToast();
   const { hasPermission } = useIdentity();
   const isMobile = useMediaQuery('(max-width: 767px)', false);
   const canExecuteWorkflows = hasPermission('workflow:execute');
+  const historyId = `${task.id}:workflow`;
+
+  useEffect(() => {
+    if (!open) return;
+    if (workflowHistoryId() !== historyId) {
+      const nextState = {
+        ...(window.history.state && typeof window.history.state === 'object'
+          ? window.history.state
+          : {}),
+        [TASK_WORKFLOW_HISTORY_KEY]: historyId,
+      };
+      window.history.pushState(
+        nextState,
+        '',
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    }
+    ownsHistoryEntryRef.current = true;
+
+    const handlePopState = () => {
+      if (!ownsHistoryEntryRef.current || workflowHistoryId() === historyId) return;
+      ownsHistoryEntryRef.current = false;
+      onOpenChange(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [historyId, onOpenChange, open]);
+
+  const handleClose = () => {
+    if (ownsHistoryEntryRef.current && workflowHistoryId() === historyId) {
+      window.history.back();
+      return;
+    }
+    onOpenChange(false);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -239,7 +284,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   return (
     <Modal
       opened={open}
-      onClose={() => onOpenChange(false)}
+      onClose={handleClose}
       title="Run Workflow"
       centered
       size="xl"

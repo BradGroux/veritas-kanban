@@ -5,11 +5,13 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, cleanup, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient } from '@tanstack/react-query';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { createMockTask, renderWithProviders } from './test-utils';
 import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings, type Task } from '@veritas-kanban/shared';
 import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
+import { ViewProvider } from '@/contexts/ViewContext';
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -124,18 +126,25 @@ vi.mock('@/components/board/KanbanColumn', () => ({
     title,
     tasks,
     canChangeStatus,
+    onTaskClick,
   }: {
     id: string;
     title: string;
     tasks: Task[];
     canChangeStatus?: boolean;
+    onTaskClick?: (task: Task) => void;
   }) => (
     <div data-testid={`column-${id}`} data-can-change-status={String(canChangeStatus)}>
       <h2>{title}</h2>
       {tasks.map((t: Task) => (
-        <div key={t.id} data-testid={`task-${t.id}`}>
+        <button
+          type="button"
+          key={t.id}
+          data-testid={`task-${t.id}`}
+          onClick={() => onTaskClick?.(t)}
+        >
           {t.title}
-        </div>
+        </button>
       ))}
     </div>
   ),
@@ -146,7 +155,22 @@ vi.mock('@/components/board/BoardLoadingSkeleton', () => ({
 }));
 
 vi.mock('@/components/task/TaskDetailPanel', () => ({
-  TaskDetailPanel: () => null,
+  TaskDetailPanel: ({
+    task,
+    open,
+    onOpenChange,
+  }: {
+    task: Task | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }) =>
+    open && task ? (
+      <div role="dialog" aria-label={`Task details: ${task.title}`}>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Close task details
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/board/FilterBar', async () => {
@@ -194,6 +218,18 @@ function renderBoard() {
     defaultOptions: { queries: { retry: false } },
   });
   return renderWithProviders(<KanbanBoard />, { queryClient });
+}
+
+function renderBoardWithView() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderWithProviders(
+    <ViewProvider>
+      <KanbanBoard />
+    </ViewProvider>,
+    { queryClient }
+  );
 }
 
 function renderDesktopBoard() {
@@ -272,6 +308,29 @@ describe('KanbanBoard', () => {
     expect(screen.getByTestId('task-k1')).toBeDefined();
     expect(screen.getByTestId('task-k2')).toBeDefined();
     expect(screen.getByTestId('task-k3')).toBeDefined();
+  });
+
+  it('uses browser history to close a task back to the same Board state', async () => {
+    const user = userEvent.setup();
+    mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+    renderBoardWithView();
+    const boardState = window.history.state;
+
+    await user.click(screen.getByTestId('task-k1'));
+
+    expect(window.history.state.veritasTaskDetail).toBe('k1');
+    expect(await screen.findByRole('dialog', { name: 'Task details: Todo Task' })).toBeDefined();
+
+    vi.spyOn(window.history, 'back').mockImplementation(() => {
+      window.history.replaceState(boardState, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: boardState }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Close task details' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Task details: Todo Task' })).toBeNull();
+      expect(window.location.pathname).toBe('/');
+    });
   });
 
   it('renders column titles', () => {

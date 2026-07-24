@@ -345,12 +345,7 @@ export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <ActionIcon
-          variant="subtle"
-          onClick={onBack}
-          title="Back to board"
-          aria-label="Back to board"
-        >
+        <ActionIcon variant="subtle" onClick={onBack} title="Back" aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </ActionIcon>
         <div className="flex items-center gap-2">
