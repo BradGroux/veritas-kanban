@@ -81,6 +81,7 @@ export interface TaskAttempt {
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: import('./run-launch-manifest.types.js').RunLaunchManifestDriftResult;
   completionResult?: import('./task-envelope.types.js').CompletionResult;
+  conversation?: import('./conversation-lifecycle.types.js').ConversationLifecycleRecord;
 }
 
 export interface Subtask {

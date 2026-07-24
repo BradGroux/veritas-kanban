@@ -16,6 +16,7 @@ import { normalizeHarnessSupportProfile } from '../services/harness-support-prof
 import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
 
 const THREAD_ID = '019f8f31-b3e2-7240-8108-1e389af04f0e';
+const FORK_THREAD_ID = '019f8f31-b3e2-7240-8108-1e389af04f10';
 const TURN_ID = '019f8f31-b3e2-7240-8108-1e389af04f0f';
 
 function initializeResult() {
@@ -27,7 +28,7 @@ function initializeResult() {
   };
 }
 
-function threadStartResult() {
+function threadStartResult(threadId = THREAD_ID) {
   return {
     approvalPolicy: 'never',
     approvalsReviewer: 'user',
@@ -40,10 +41,10 @@ function threadStartResult() {
       createdAt: 1,
       cwd: '/tmp/worktree',
       ephemeral: false,
-      id: THREAD_ID,
+      id: threadId,
       modelProvider: 'openai',
       preview: 'test prompt',
-      sessionId: THREAD_ID,
+      sessionId: threadId,
       source: 'appServer',
       status: { type: 'idle' },
       turns: [],
@@ -116,7 +117,12 @@ describe('Codex app-server v2 provider', () => {
     expect(CODEX_APP_SERVER_OUTBOUND_METHODS).toEqual([
       'initialize',
       'thread/start',
+      'thread/resume',
+      'thread/fork',
+      'thread/compact/start',
+      'thread/archive',
       'turn/start',
+      'turn/steer',
       'turn/interrupt',
     ]);
     expect(isCodexAppServerOutboundMethod('thread/shellCommand')).toBe(false);
@@ -235,6 +241,79 @@ describe('Codex app-server v2 provider', () => {
       client.acceptRecord({ id: 2, result: { thread: { id: THREAD_ID } } })
     ).rejects.toThrow('pinned v0.145.0 schema');
     await rejectedThread;
+  });
+
+  it('uses exact native resume, fork, steer, compact, and archive controls', async () => {
+    const writes: string[] = [];
+    const client = await initializeClient(writes);
+
+    const resume = client.resumeThread({
+      threadId: THREAD_ID,
+      cwd: '/tmp/worktree',
+      model: 'gpt-5.6',
+      sandboxMode: 'workspace-write',
+    });
+    expect(parseLastWrite(writes)).toMatchObject({
+      id: 2,
+      method: 'thread/resume',
+      params: {
+        threadId: THREAD_ID,
+        cwd: '/tmp/worktree',
+        excludeTurns: true,
+      },
+    });
+    await client.acceptRecord({ id: 2, result: threadStartResult() });
+    await expect(resume).resolves.toBe(THREAD_ID);
+
+    const fork = client.forkThread({
+      threadId: THREAD_ID,
+      lastTurnId: TURN_ID,
+      cwd: '/tmp/worktree-child',
+      sandboxMode: 'workspace-write',
+    });
+    expect(parseLastWrite(writes)).toMatchObject({
+      id: 3,
+      method: 'thread/fork',
+      params: {
+        threadId: THREAD_ID,
+        lastTurnId: TURN_ID,
+        deferGoalContinuation: true,
+        excludeTurns: true,
+      },
+    });
+    await client.acceptRecord({ id: 3, result: threadStartResult(FORK_THREAD_ID) });
+    await expect(fork).resolves.toBe(FORK_THREAD_ID);
+
+    const steer = client.steer(FORK_THREAD_ID, TURN_ID, 'Check the focused regression.');
+    expect(parseLastWrite(writes)).toEqual({
+      id: 4,
+      method: 'turn/steer',
+      params: {
+        threadId: FORK_THREAD_ID,
+        expectedTurnId: TURN_ID,
+        input: [{ type: 'text', text: 'Check the focused regression.' }],
+      },
+    });
+    await client.acceptRecord({ id: 4, result: { turnId: TURN_ID } });
+    await expect(steer).resolves.toBe(TURN_ID);
+
+    const compact = client.compact(FORK_THREAD_ID);
+    expect(parseLastWrite(writes)).toEqual({
+      id: 5,
+      method: 'thread/compact/start',
+      params: { threadId: FORK_THREAD_ID },
+    });
+    await client.acceptRecord({ id: 5, result: {} });
+    await expect(compact).resolves.toBeUndefined();
+
+    const archive = client.archive(FORK_THREAD_ID);
+    expect(parseLastWrite(writes)).toEqual({
+      id: 6,
+      method: 'thread/archive',
+      params: { threadId: FORK_THREAD_ID },
+    });
+    await client.acceptRecord({ id: 6, result: {} });
+    await expect(archive).resolves.toBeUndefined();
   });
 
   it('retries overload responses with a bounded deterministic budget', async () => {
@@ -488,7 +567,11 @@ describe('Codex app-server v2 provider', () => {
     );
     expect(adapter.capabilities.find(({ id }) => id === 'run.start')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.interrupt')?.state).toBe('supported');
-    expect(adapter.capabilities.find(({ id }) => id === 'run.resume')?.state).toBe('unsupported');
+    expect(adapter.capabilities.find(({ id }) => id === 'run.follow-up')?.state).toBe('supported');
+    expect(adapter.capabilities.find(({ id }) => id === 'run.steer')?.state).toBe('supported');
+    expect(adapter.capabilities.find(({ id }) => id === 'run.resume')?.state).toBe('supported');
+    expect(adapter.capabilities.find(({ id }) => id === 'run.fork')?.state).toBe('supported');
+    expect(adapter.capabilities.find(({ id }) => id === 'run.compact')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.approvals')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'tool.mcp')?.state).toBe('unsupported');
   });

@@ -181,6 +181,16 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/[^/]+\/launch-preview\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
       { methods: ['POST'], path: /^\/[^/]+\/message\/?$/, permissions: 'task:write' },
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/conversation\/steer\/?$/,
+        permissions: 'task:write',
+      },
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/conversation\/(resume|follow-up|fork|interrupt|compact|archive|close)\/?$/,
+        permissions: 'agent:write',
+      },
     ],
   },
   {

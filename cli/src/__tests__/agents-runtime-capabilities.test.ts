@@ -119,6 +119,54 @@ describe('vk agent runtime capability controls', () => {
     });
   });
 
+  it('starts a native history fork from an explicit source attempt and turn', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:fork',
+        'task_1',
+        '--source-attempt',
+        'attempt_parent',
+        '--message',
+        'Explore the alternate fix',
+        '--fork-turn',
+        'turn_7',
+        '--require-capability',
+        'tool.mcp',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/conversation/fork', {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceAttemptId: 'attempt_parent',
+        message: 'Explore the alternate fix',
+        forkTurnId: 'turn_7',
+        requiredRuntimeCapabilities: ['tool.mcp'],
+      }),
+    });
+  });
+
+  it('binds compact controls to the exact active attempt', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(['agent:compact', 'task_1', '--attempt', 'attempt_1', '--json'], {
+      from: 'user',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/conversation/compact', {
+      method: 'POST',
+      body: JSON.stringify({ attemptId: 'attempt_1' }),
+    });
+  });
+
   it('forwards attempt and manifest provenance when completing a run', async () => {
     const program = new Command();
     program.exitOverride();

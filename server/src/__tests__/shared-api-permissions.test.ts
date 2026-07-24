@@ -19,6 +19,29 @@ describe('shared API permission metadata', () => {
     ).toEqual(['agent:read']);
   });
 
+  it('separates conversation steering from lifecycle mutation authority', () => {
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/conversation/steer', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['task:write']);
+    for (const action of [
+      'resume',
+      'follow-up',
+      'fork',
+      'interrupt',
+      'compact',
+      'archive',
+      'close',
+    ]) {
+      expect(
+        getApiPermissionRequirement(`/api/v1/agents/task_1/conversation/${action}`, {
+          method: 'POST',
+        }).permissions
+      ).toEqual(['agent:write']);
+    }
+  });
+
   it('requires workflow execution for Codex review diff posts', () => {
     expect(
       getApiPermissionRequirement('/api/diff/task_1/codex-review', { method: 'POST' }).permissions

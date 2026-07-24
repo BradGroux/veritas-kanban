@@ -51,6 +51,7 @@ import {
 import type { ThreadEvent } from '@openai/codex-sdk';
 import {
   evaluateTaskReadiness,
+  CONVERSATION_LIFECYCLE_SCHEMA_VERSION,
   EXECUTABLE_AGENT_PROVIDERS,
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
 } from '@veritas-kanban/shared';
@@ -102,6 +103,9 @@ import type {
   RunSupervisorRecord,
   RunSupervisorRecoveryRecord,
   RunSupervisorRecoveryOperation,
+  ConversationLaunchRequest,
+  ConversationLifecycleRecord,
+  ConversationLifecycleResult,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -179,6 +183,10 @@ import {
   type RunApprovalBrokerService,
 } from './run-approval-broker-service.js';
 import { getRunSupervisorService, type RunSupervisorService } from './run-supervisor-service.js';
+import {
+  ConversationLifecycleService,
+  type ConversationSource,
+} from './conversation-lifecycle-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -205,6 +213,7 @@ export interface AgentProviderStartContext {
   attempt: TaskAttempt;
   sandboxPolicy?: SandboxPolicyDryRunResult;
   runLaunchManifest: RunLaunchManifest;
+  conversation: ConversationLifecycleRecord;
 }
 
 export interface AgentProviderStopContext {
@@ -242,6 +251,7 @@ export interface AgentStatus {
   runLaunchManifest: RunLaunchManifest;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -259,6 +269,7 @@ export interface AgentStartOptions {
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
   parentAttemptId?: string;
+  conversation?: ConversationLaunchRequest;
 }
 
 export interface AgentMessageOptions {
@@ -273,10 +284,7 @@ export interface AgentCompletionProvenance {
   terminalSource?: TaskTerminalSource;
 }
 
-export interface AgentMessageDelivery {
-  delivered: boolean;
-  note: string;
-}
+export type AgentMessageDelivery = ConversationLifecycleResult;
 
 export interface CredentialLeaseLifecycle {
   revokeRun(request: CredentialRunRevocationRequest): Promise<number>;
@@ -311,6 +319,7 @@ interface PendingAgent {
   runLaunchManifestTraceId: string;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  conversation: ConversationLifecycleRecord;
   supervisorId?: string;
   recoveredControl?: boolean;
   threadId?: string;
@@ -318,6 +327,9 @@ interface PendingAgent {
   process?: ChildProcessWithoutNullStreams;
   codexAppServerControl?: {
     interrupt(): Promise<void>;
+    steer(message: string): Promise<string>;
+    compact(): Promise<void>;
+    archive(): Promise<void>;
     close(): void;
   };
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
@@ -408,6 +420,7 @@ export class ClawdbotAgentService {
   private runEvents: RunEventJournalService;
   private approvalBroker: RunApprovalBrokerService;
   private runSupervisor: RunSupervisorService;
+  private conversationLifecycle: ConversationLifecycleService;
   private logsDir: string;
 
   constructor(
@@ -420,7 +433,8 @@ export class ClawdbotAgentService {
     worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>,
     runEvents: RunEventJournalService = getRunEventJournalService(),
     approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService(),
-    runSupervisor: RunSupervisorService = getRunSupervisorService()
+    runSupervisor: RunSupervisorService = getRunSupervisorService(),
+    conversationLifecycle = new ConversationLifecycleService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -440,6 +454,7 @@ export class ClawdbotAgentService {
     this.runEvents = runEvents;
     this.approvalBroker = approvalBroker;
     this.runSupervisor = runSupervisor;
+    this.conversationLifecycle = conversationLifecycle;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -698,6 +713,7 @@ export class ClawdbotAgentService {
         : supervisor.control.kind === 'local-process'
           ? supervisor.control.sessionId
           : undefined;
+    const recoveredConversation = this.conversationLifecycle.recover(attempt, sessionId);
     const pending: PendingAgent = {
       taskId: task.id,
       attemptId: attempt.id,
@@ -716,6 +732,7 @@ export class ClawdbotAgentService {
         attempt.runLaunchManifestTraceId ?? `run-supervisor:${supervisor.id}`,
       runLaunchParentAttemptId: attempt.runLaunchParentAttemptId,
       runLaunchManifestDrift: attempt.runLaunchManifestDrift,
+      conversation: recoveredConversation,
       supervisorId: supervisor.id,
       recoveredControl: true,
       threadId: attempt.threadId ?? sessionId,
@@ -1040,6 +1057,15 @@ export class ClawdbotAgentService {
       throw new Error('Task must have an active worktree to start an agent');
     }
 
+    const conversationRequest = this.normalizeConversationLaunch(options.conversation);
+    const conversationSource =
+      conversationRequest.mode === 'fresh'
+        ? undefined
+        : this.conversationLifecycle.source(
+            await this.findAttempt(conversationRequest.sourceAttemptId as string),
+            conversationRequest.mode
+          );
+
     // Check if agent already running for this task
     if (pendingAgents.has(taskId)) {
       throw new ConflictError('An agent is already running for this task');
@@ -1142,7 +1168,10 @@ export class ClawdbotAgentService {
     const requiredRuntimeCapabilities = this.resolveLaunchRuntimeCapabilities(
       profileLaunch,
       budgetPolicy,
-      options.requiredRuntimeCapabilities
+      [
+        ...(options.requiredRuntimeCapabilities ?? []),
+        ...conversationLaunchCapabilities(conversationRequest.mode),
+      ]
     );
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId:
@@ -1208,10 +1237,22 @@ export class ClawdbotAgentService {
       profileInstructions: profileLaunch?.instructions,
       checkpoint: task.checkpoint,
     });
+    const providerTransport =
+      conversationRequest.mode === 'fresh'
+        ? taskTransport
+        : {
+            ...taskTransport,
+            content: renderConversationTurn(
+              conversationRequest.mode,
+              conversationSource as ConversationSource,
+              conversationRequest.message as string,
+              conversationRequest.forkTurnId
+            ),
+          };
     const runLaunchManifest = await this.compileRunLaunchManifest({
       task,
       taskEnvelope,
-      taskTransport,
+      taskTransport: providerTransport,
       attemptId,
       startedAt,
       logPath,
@@ -1233,7 +1274,10 @@ export class ClawdbotAgentService {
       budgetSources,
       options,
     });
-    const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
+    const parentAttempt = await this.resolveParentAttempt(
+      task,
+      conversationSource?.attempt.id ?? options.parentAttemptId
+    );
     const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
       ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
       : undefined;
@@ -1268,6 +1312,20 @@ export class ClawdbotAgentService {
       },
     });
     this.runLaunchManifests.assertEnforceable(runLaunchManifest);
+    if (conversationSource && conversationRequest.mode !== 'fresh') {
+      this.conversationLifecycle.assertCompatible(
+        conversationSource,
+        runLaunchManifest,
+        taskEnvelope,
+        conversationRequest.mode
+      );
+    }
+    const conversation = this.conversationLifecycle.create(
+      conversationRequest.mode,
+      conversationSource,
+      conversationRequest.forkTurnId,
+      conversationRequest.intent
+    );
 
     // Create event emitter for status updates
     const emitter = new EventEmitter();
@@ -1289,6 +1347,7 @@ export class ClawdbotAgentService {
       runLaunchManifestTraceId: runLaunchTrace.id,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      conversation,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -1308,7 +1367,7 @@ export class ClawdbotAgentService {
       logPath,
       task,
       agent,
-      taskTransport.content,
+      providerTransport.content,
       providerRuntimeManifest,
       taskEnvelope,
       runLaunchManifest
@@ -1331,6 +1390,7 @@ export class ClawdbotAgentService {
       runLaunchManifestTraceId: runLaunchTrace.id,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      conversation,
     };
 
     const usesManagedWorktree = Boolean(task.git.worktreeManifestId && task.git.worktreeLeaseId);
@@ -1405,7 +1465,7 @@ export class ClawdbotAgentService {
       await this.taskService.patchTaskAttempt(taskId, attemptId, {
         runSupervisorId: supervisorId,
       });
-      await this.appendRunEvent(
+      const startedEvent = await this.appendRunEvent(
         taskId,
         attemptId,
         'run.started',
@@ -1422,6 +1482,32 @@ export class ClawdbotAgentService {
           agent,
           model: launchAgentConfig?.model,
           dedupeKey: 'run.started',
+        }
+      );
+      await this.appendRunEvent(
+        taskId,
+        attemptId,
+        conversation.intent === 'fresh'
+          ? 'conversation.started'
+          : conversation.intent === 'resume'
+            ? 'conversation.resumed'
+            : conversation.intent === 'follow-up'
+              ? 'conversation.followed-up'
+              : 'conversation.forked',
+        {
+          mode: conversation.mode,
+          intent: conversation.intent,
+          parentAttemptId: conversation.parentAttemptId,
+          parentConversationId: conversation.parentConversationId,
+          forkTurnId: conversation.forkTurnId,
+        },
+        {
+          provider,
+          adapter: adapter.id,
+          agent,
+          model: launchAgentConfig?.model,
+          causalEventId: startedEvent.eventId,
+          dedupeKey: `conversation.${conversation.mode}`,
         }
       );
 
@@ -1457,7 +1543,7 @@ export class ClawdbotAgentService {
       await adapter.start({
         task,
         agentConfig: launchAgentConfig,
-        transport: taskTransport,
+        transport: providerTransport,
         logPath,
         attemptId,
         startedAt,
@@ -1465,6 +1551,7 @@ export class ClawdbotAgentService {
         attempt,
         sandboxPolicy: sandboxPolicy.result,
         runLaunchManifest,
+        conversation,
       });
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
@@ -1554,6 +1641,7 @@ export class ClawdbotAgentService {
       runLaunchManifest,
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
+      conversation,
       controls: providerRuntimeControls(providerRuntimeManifest),
     };
   }
@@ -2288,6 +2376,7 @@ export class ClawdbotAgentService {
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
+          conversation: pending.conversation,
           completionResult,
         };
         return (pending.preparedCompletion = {
@@ -2575,22 +2664,7 @@ export class ClawdbotAgentService {
 
     await this.finalizePendingAgent(taskId, pending, async () => {
       await this.assertPendingRunControl(taskId, pending, 'stop');
-      if (pending.recoveredControl && pending.supervisorId) {
-        const supervisor = await this.runSupervisor.get(pending.supervisorId);
-        if (supervisor.control.kind === 'local-process') {
-          await this.runSupervisor.stopLocalProcess(pending.supervisorId);
-        } else {
-          await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
-        }
-      } else {
-        await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
-        if (pending.supervisorId) {
-          const supervisor = await this.runSupervisor.get(pending.supervisorId);
-          if (supervisor.control.kind === 'local-process') {
-            await this.runSupervisor.stopLocalProcess(pending.supervisorId);
-          }
-        }
-      }
+      await this.stopPendingProvider(pending);
       await this.appendRunEvent(
         taskId,
         pending.attemptId,
@@ -2618,6 +2692,31 @@ export class ClawdbotAgentService {
         error: 'Stopped by user',
       };
     });
+  }
+
+  private async stopPendingProvider(pending: PendingAgent): Promise<void> {
+    if (pending.recoveredControl && pending.supervisorId) {
+      const supervisor = await this.runSupervisor.get(pending.supervisorId);
+      if (supervisor.control.kind === 'local-process') {
+        await this.runSupervisor.stopLocalProcess(pending.supervisorId);
+      } else {
+        await this.resolveProviderAdapter(pending.provider).stop({
+          taskId: pending.taskId,
+          pending,
+        });
+      }
+      return;
+    }
+
+    await this.resolveProviderAdapter(pending.provider).stop({
+      taskId: pending.taskId,
+      pending,
+    });
+    if (!pending.supervisorId) return;
+    const supervisor = await this.runSupervisor.get(pending.supervisorId);
+    if (supervisor.control.kind === 'local-process') {
+      await this.runSupervisor.stopLocalProcess(pending.supervisorId);
+    }
   }
 
   async sendMessage(
@@ -2674,22 +2773,279 @@ export class ClawdbotAgentService {
       model: pending.model,
     });
 
-    if (pending.provider === 'codex-app-server') {
+    if (pending.provider === 'codex-app-server' && pending.codexAppServerControl) {
+      const turnId = await pending.codexAppServerControl.steer(content);
+      const conversation = await this.recordConversationIdentity(taskId, pending.attemptId, {
+        turnId,
+      });
+      await this.appendRunEvent(
+        taskId,
+        pending.attemptId,
+        'conversation.steered',
+        {
+          actor,
+          conversationId: conversation.conversationId,
+          turnId,
+        },
+        {
+          provider: pending.provider,
+          adapter: pending.provider,
+          agent: pending.agent,
+          model: pending.model,
+          causalEventId: journalEvent.eventId,
+          dedupeKey: `conversation.steered:${journalEvent.eventId}`,
+        }
+      );
       return {
-        delivered: false,
-        note: 'Codex app-server steering remains disabled until provider-neutral lifecycle controls are active.',
+        action: 'steer',
+        taskId,
+        attemptId: pending.attemptId,
+        delivered: true,
+        note: 'Message delivered through provider-native turn steering.',
+        conversation,
       };
     }
 
-    if (pending.process?.stdin?.writable) {
-      pending.process.stdin.write(`${content}\n`);
-      return { delivered: true, note: 'Message written to provider stdin.' };
-    }
-
     return {
+      action: 'steer',
+      taskId,
+      attemptId: pending.attemptId,
       delivered: false,
-      note: 'Provider does not expose interactive stdin; message was recorded and streamed.',
+      note: 'Provider does not expose a verified native steering control; message was recorded only.',
+      conversation: pending.conversation,
     };
+  }
+
+  async resumeConversation(
+    taskId: string,
+    sourceAttemptId: string,
+    message: string,
+    options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
+  ): Promise<AgentStatus> {
+    const source = this.conversationLifecycle.source(
+      await this.findAttempt(sourceAttemptId),
+      'resume'
+    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: { mode: 'resume', intent: 'resume', sourceAttemptId, message },
+    });
+  }
+
+  async followUpConversation(
+    taskId: string,
+    sourceAttemptId: string,
+    message: string,
+    options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
+  ): Promise<AgentStatus> {
+    const source = this.conversationLifecycle.source(
+      await this.findAttempt(sourceAttemptId),
+      'resume'
+    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: {
+        mode: 'resume',
+        intent: 'follow-up',
+        sourceAttemptId,
+        message,
+      },
+    });
+  }
+
+  async forkConversation(
+    taskId: string,
+    sourceAttemptId: string,
+    message: string,
+    forkTurnId?: string,
+    options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
+  ): Promise<AgentStatus> {
+    const source = this.conversationLifecycle.source(
+      await this.findAttempt(sourceAttemptId),
+      'fork'
+    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: {
+        mode: 'fork',
+        intent: 'fork',
+        sourceAttemptId,
+        message,
+        ...(forkTurnId ? { forkTurnId } : {}),
+      },
+    });
+  }
+
+  async compactConversation(
+    taskId: string,
+    attemptId: string,
+    actor = 'operator'
+  ): Promise<ConversationLifecycleResult> {
+    const pending = this.assertPendingConversation(taskId, attemptId);
+    await this.assertPendingRunControl(taskId, pending, 'compact');
+    if (!pending.codexAppServerControl) {
+      throw new ConflictError('The active provider has no native compaction control.');
+    }
+    await pending.codexAppServerControl.compact();
+    const conversation = await this.transitionPendingConversation(taskId, pending, 'compacted');
+    await this.recordConversationControlEvent(taskId, pending, 'compact', actor, conversation);
+    return {
+      action: 'compact',
+      taskId,
+      attemptId,
+      delivered: true,
+      note: 'Provider-native conversation compaction started.',
+      conversation,
+    };
+  }
+
+  async archiveConversation(
+    taskId: string,
+    attemptId: string,
+    actor = 'operator'
+  ): Promise<ConversationLifecycleResult> {
+    const pending = this.assertPendingConversation(taskId, attemptId);
+    let conversation = pending.conversation;
+    await this.finalizePendingAgent(taskId, pending, async () => {
+      await this.assertPendingRunControl(taskId, pending, 'archive');
+      if (!pending.codexAppServerControl) {
+        throw new ConflictError('The active provider has no native archive control.');
+      }
+      await pending.codexAppServerControl.archive();
+      conversation = await this.transitionPendingConversation(taskId, pending, 'archived');
+      await this.recordConversationControlEvent(taskId, pending, 'archive', actor, conversation);
+      pending.codexAppServerControl.close();
+      return {
+        status: 'interrupted',
+        terminalSource: 'operator-interruption',
+        error: 'Conversation archived by operator',
+      };
+    });
+    return {
+      action: 'archive',
+      taskId,
+      attemptId,
+      delivered: true,
+      note: 'Provider-native conversation archive completed.',
+      conversation,
+    };
+  }
+
+  async closeConversation(
+    taskId: string,
+    attemptId: string,
+    actor = 'operator'
+  ): Promise<ConversationLifecycleResult> {
+    const pending = this.assertPendingConversation(taskId, attemptId);
+    let conversation = pending.conversation;
+    await this.finalizePendingAgent(taskId, pending, async () => {
+      await this.assertPendingRunControl(taskId, pending, 'close');
+      await pending.codexAppServerControl?.interrupt();
+      conversation = await this.transitionPendingConversation(taskId, pending, 'closed');
+      await this.recordConversationControlEvent(taskId, pending, 'close', actor, conversation);
+      pending.codexAppServerControl?.close();
+      return {
+        status: 'interrupted',
+        terminalSource: 'operator-interruption',
+        error: 'Conversation closed by operator',
+      };
+    });
+    return {
+      action: 'close',
+      taskId,
+      attemptId,
+      delivered: true,
+      note: 'Conversation closed and any active provider turn was interrupted.',
+      conversation,
+    };
+  }
+
+  async interruptConversation(
+    taskId: string,
+    attemptId: string,
+    actor = 'operator'
+  ): Promise<ConversationLifecycleResult> {
+    const pending = this.assertPendingConversation(taskId, attemptId);
+    const conversation = pending.conversation;
+    await this.finalizePendingAgent(taskId, pending, async () => {
+      await this.assertPendingRunControl(taskId, pending, 'interrupt');
+      await this.stopPendingProvider(pending);
+      await this.recordConversationControlEvent(taskId, pending, 'interrupt', actor, conversation);
+      return {
+        status: 'interrupted',
+        terminalSource: 'operator-interruption',
+        error: 'Conversation interrupted by operator',
+      };
+    });
+    return {
+      action: 'interrupt',
+      taskId,
+      attemptId,
+      delivered: true,
+      note: 'Provider turn interrupted.',
+      conversation,
+    };
+  }
+
+  private assertPendingConversation(taskId: string, attemptId: string): PendingAgent {
+    const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Conversation control does not match the active attempt.', {
+        taskId,
+        requestedAttemptId: attemptId,
+        activeAttemptId: pending?.attemptId,
+      });
+    }
+    return pending;
+  }
+
+  private async transitionPendingConversation(
+    taskId: string,
+    pending: PendingAgent,
+    state: 'compacted' | 'archived' | 'closed'
+  ): Promise<ConversationLifecycleRecord> {
+    const conversation = this.conversationLifecycle.transition(pending.conversation, state);
+    pending.conversation = conversation;
+    await this.taskService.patchTaskAttempt(taskId, pending.attemptId, { conversation });
+    return conversation;
+  }
+
+  private async recordConversationControlEvent(
+    taskId: string,
+    pending: PendingAgent,
+    action: 'interrupt' | 'compact' | 'archive' | 'close',
+    actor: string,
+    conversation: ConversationLifecycleRecord
+  ): Promise<void> {
+    const event = await this.appendRunEvent(
+      taskId,
+      pending.attemptId,
+      action === 'interrupt'
+        ? 'conversation.interrupted'
+        : action === 'compact'
+          ? 'conversation.compacted'
+          : action === 'archive'
+            ? 'conversation.archived'
+            : 'conversation.closed',
+      {
+        action,
+        actor: actor.trim() || 'operator',
+        conversationId: conversation.conversationId,
+        turnId: conversation.currentTurnId,
+        state: conversation.state,
+      },
+      {
+        provider: 'operator',
+        adapter: 'veritas-conversation-lifecycle',
+        agent: pending.agent,
+        model: pending.model,
+        dedupeKey: `conversation.${action}:${conversation.updatedAt}`,
+      }
+    );
+    this.emitJournalOutput(event);
   }
 
   async recordBudgetUsage(
@@ -3324,6 +3680,9 @@ export class ClawdbotAgentService {
         await this.taskService.patchTaskAttempt(task.id, attemptId, {
           sessionKey: result.sessionKey,
         });
+        await this.recordConversationIdentity(task.id, attemptId, {
+          conversationId: result.sessionKey,
+        });
         void this.recordAgentStarted(
           task,
           attemptId,
@@ -3638,6 +3997,28 @@ export class ClawdbotAgentService {
         if (!threadId || !turnId || terminalResult) return;
         await rpcClient.interrupt(threadId, turnId);
       },
+      steer: async (message) => {
+        if (!threadId || !turnId || terminalResult) {
+          throw new ConflictError('Codex app-server has no steerable active turn.');
+        }
+        const steeredTurnId = await rpcClient.steer(threadId, turnId, message);
+        if (steeredTurnId !== turnId) {
+          throw new ConflictError('Codex app-server steering changed the active turn identity.');
+        }
+        return steeredTurnId;
+      },
+      compact: async () => {
+        if (!threadId || !turnId || terminalResult) {
+          throw new ConflictError('Codex app-server has no active conversation to compact.');
+        }
+        await rpcClient.compact(threadId);
+      },
+      archive: async () => {
+        if (!threadId) {
+          throw new ConflictError('Codex app-server has no conversation to archive.');
+        }
+        await rpcClient.archive(threadId);
+      },
       close: () => requestGracefulClose('Codex app-server attempt was stopped.'),
     };
 
@@ -3717,6 +4098,21 @@ export class ClawdbotAgentService {
       );
       if (classified.summary) finalSummary = classified.summary;
       if (classified.usage) tokenUsage = classified.usage;
+      if (classified.sessionId || classified.turnId || classified.itemId) {
+        await this.recordConversationIdentity(task.id, attemptId, {
+          conversationId: classified.sessionId,
+          turnId: classified.turnId,
+          itemId: classified.itemId,
+        });
+      }
+      if (classified.usage) {
+        await this.recordConversationContext(
+          task.id,
+          attemptId,
+          classified.usage.totalTokens,
+          classified.usage.modelContextWindow
+        );
+      }
       if (classified.terminal) {
         terminalResult = classified.terminal;
         requestGracefulClose('Codex app-server turn reached a terminal state.');
@@ -3820,13 +4216,32 @@ export class ClawdbotAgentService {
           agentConfig
         );
         await rpcClient.initialize();
-        threadId = await rpcClient.startThread({
+        const threadInput = {
           cwd: worktreePath,
           model: agentConfig?.model,
           sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+        };
+        threadId =
+          pending.conversation.mode === 'resume'
+            ? await rpcClient.resumeThread({
+                ...threadInput,
+                threadId: requireConversationId(pending.conversation, 'Codex app-server resume'),
+              })
+            : pending.conversation.mode === 'fork'
+              ? await rpcClient.forkThread({
+                  ...threadInput,
+                  threadId: requireParentConversationId(
+                    pending.conversation,
+                    'Codex app-server fork'
+                  ),
+                  ...(pending.conversation.forkTurnId
+                    ? { lastTurnId: pending.conversation.forkTurnId }
+                    : {}),
+                })
+              : await rpcClient.startThread(threadInput);
+        await this.recordConversationIdentity(task.id, attemptId, {
+          conversationId: threadId,
         });
-        pending.threadId = threadId;
-        await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId });
         if (pending.supervisorId) {
           await this.runSupervisor.checkpoint(pending.supervisorId, {
             sessionId: threadId,
@@ -3839,6 +4254,7 @@ export class ClawdbotAgentService {
           cwd: worktreePath,
           model: agentConfig?.model,
         });
+        await this.recordConversationIdentity(task.id, attemptId, { turnId });
         await this.appendLog(
           logPath,
           `\n## Codex app-server Session\n\n**Thread:** ${threadId}\n**Turn:** ${turnId}\n`
@@ -4226,11 +4642,31 @@ export class ClawdbotAgentService {
     const effectivePrompt = repositoryInstructions
       ? `${prompt}\n\n# Repository Instructions\n\n${repositoryInstructions}`
       : prompt;
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Claude Code launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
     const command = agentConfig?.command || 'claude';
     const args = buildClaudeCodeArgs({
       prompt: effectivePrompt,
       model: agentConfig?.model,
       extraArgs: agentConfig?.args,
+      ...(pending.conversation.mode === 'resume'
+        ? {
+            resumeSessionId: requireConversationId(pending.conversation, 'Claude Code resume'),
+          }
+        : pending.conversation.mode === 'fork'
+          ? {
+              resumeSessionId: requireParentConversationId(
+                pending.conversation,
+                'Claude Code fork'
+              ),
+              forkSession: true,
+            }
+          : {}),
       sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
       networkAccessEnabled: sandboxPolicy?.effective.networkAccessEnabled ?? true,
       maxBudgetUsd: runLaunchManifest.budget.enabled
@@ -4254,13 +4690,6 @@ export class ClawdbotAgentService {
       agentConfig
     );
 
-    const pending = pendingAgents.get(task.id);
-    if (!pending || pending.attemptId !== attemptId) {
-      throw new ConflictError('Claude Code launch was cancelled before process spawn.', {
-        taskId: task.id,
-        attemptId,
-      });
-    }
     const child = spawn(command, args, {
       cwd: worktreePath,
       env: buildSafeClaudeCodeEnv(process.env, sandboxPolicy?.effective.envPassthrough),
@@ -4300,7 +4729,10 @@ export class ClawdbotAgentService {
         logPath
       );
       if (classified.summary) finalSummary = classified.summary;
-      if (classified.usage) tokenUsage = classified.usage;
+      if (classified.usage) {
+        tokenUsage = classified.usage;
+        await this.recordConversationContext(task.id, attemptId, classified.usage.totalTokens);
+      }
       if (classified.terminal) terminalResult = classified.terminal;
       if (classified.sessionId && classified.sessionId !== recordedSessionId) {
         recordedSessionId = classified.sessionId;
@@ -4641,15 +5073,7 @@ export class ClawdbotAgentService {
     attemptId: string,
     sessionId: string
   ): Promise<void> {
-    const pending = pendingAgents.get(task.id);
-    if (pending && pending.attemptId === attemptId) pending.threadId = sessionId;
-    await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId: sessionId });
-    if (pending?.supervisorId && pending.attemptId === attemptId) {
-      await this.runSupervisor.checkpoint(pending.supervisorId, {
-        sessionId,
-        threadId: sessionId,
-      });
-    }
+    await this.recordConversationIdentity(task.id, attemptId, { conversationId: sessionId });
   }
 
   private async startHermesCli(
@@ -4843,23 +5267,28 @@ export class ClawdbotAgentService {
       throw new Error('Task worktree path is required for Codex CLI');
     }
 
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Codex CLI launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
     const command = agentConfig?.command || 'codex';
-    const args = this.buildCodexArgs(agentConfig, prompt, logPath, attemptId, sandboxPolicy);
+    const args = this.buildCodexArgs(
+      agentConfig,
+      prompt,
+      logPath,
+      attemptId,
+      sandboxPolicy,
+      pending.conversation
+    );
     const child = spawn(command, args, {
       cwd: worktreePath,
       env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
       shell: false,
       detached: process.platform !== 'win32',
     });
-
-    const pending = pendingAgents.get(task.id);
-    if (!pending || pending.attemptId !== attemptId) {
-      child.kill('SIGTERM');
-      throw new ConflictError('Codex CLI launch was cancelled before process spawn.', {
-        taskId: task.id,
-        attemptId,
-      });
-    }
     pending.process = child;
     await this.attachSpawnedProcess(pending, child);
 
@@ -5051,7 +5480,8 @@ export class ClawdbotAgentService {
     prompt: string,
     logPath: string,
     attemptId: string,
-    sandboxPolicy?: SandboxPolicyDryRunResult
+    sandboxPolicy?: SandboxPolicyDryRunResult,
+    conversation?: ConversationLifecycleRecord
   ): string[] {
     const configured = agentConfig?.args?.length ? [...agentConfig.args] : ['exec'];
     const args = configured.includes('exec') ? configured : ['exec', ...configured];
@@ -5066,7 +5496,14 @@ export class ClawdbotAgentService {
     if (!args.includes('--output-last-message')) {
       args.push('--output-last-message', this.getCodexFinalPath(logPath, attemptId));
     }
-    args.push(prompt);
+    if (conversation?.mode === 'resume') {
+      if (!conversation.conversationId) {
+        throw new ConflictError('Codex CLI resume requires an exact conversation ID.');
+      }
+      args.push('resume', conversation.conversationId, prompt);
+    } else {
+      args.push(prompt);
+    }
     return args;
   }
 
@@ -5097,11 +5534,30 @@ export class ClawdbotAgentService {
       env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
     });
 
-    const thread = codex.startThread({
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Codex SDK launch was cancelled before thread creation.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
+    const threadSettings = {
       workingDirectory: worktreePath,
       ...this.buildCodexSdkThreadSettings(sandboxPolicy),
       model: agentConfig?.model,
-    });
+    };
+    const thread =
+      pending.conversation.mode === 'resume'
+        ? codex.resumeThread(
+            requireConversationId(pending.conversation, 'Codex SDK resume'),
+            threadSettings
+          )
+        : codex.startThread(threadSettings);
+    if (pending.conversation.mode === 'resume') {
+      await this.recordConversationIdentity(task.id, attemptId, {
+        conversationId: requireConversationId(pending.conversation, 'Codex SDK resume'),
+      });
+    }
 
     await this.appendLog(
       logPath,
@@ -5145,6 +5601,11 @@ export class ClawdbotAgentService {
     }
 
     if (tokenUsage) {
+      await this.recordConversationContext(
+        task.id,
+        attemptId,
+        tokenUsage.totalTokens ?? tokenUsage.inputTokens + tokenUsage.outputTokens
+      );
       await this.assertRunControl(task.id, 'token-usage', attemptId);
       await getTelemetryService().emit<TokenTelemetryEvent>({
         type: 'run.tokens',
@@ -5879,12 +6340,58 @@ export class ClawdbotAgentService {
   }
 
   private async recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void> {
-    const pending = pendingAgents.get(task.id);
-    if (pending) {
-      pending.threadId = threadId;
-    }
+    await this.recordConversationIdentity(task.id, attemptId, { conversationId: threadId });
+  }
 
-    await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId });
+  private async recordConversationIdentity(
+    taskId: string,
+    attemptId: string,
+    identity: { conversationId?: string; turnId?: string; itemId?: string }
+  ): Promise<ConversationLifecycleRecord> {
+    const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Conversation identity no longer matches the active attempt.', {
+        taskId,
+        attemptId,
+      });
+    }
+    const conversation = this.conversationLifecycle.bind(pending.conversation, identity);
+    pending.conversation = conversation;
+    if (identity.conversationId) pending.threadId = identity.conversationId;
+    await this.taskService.patchTaskAttempt(taskId, attemptId, {
+      ...(identity.conversationId ? { threadId: identity.conversationId } : {}),
+      conversation,
+    });
+    if (pending.supervisorId) {
+      await this.runSupervisor.checkpoint(pending.supervisorId, {
+        sessionId: conversation.conversationId,
+        threadId: conversation.conversationId,
+      });
+    }
+    return conversation;
+  }
+
+  private async recordConversationContext(
+    taskId: string,
+    attemptId: string,
+    usedTokens: number,
+    limitTokens?: number
+  ): Promise<ConversationLifecycleRecord> {
+    const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Conversation context no longer matches the active attempt.', {
+        taskId,
+        attemptId,
+      });
+    }
+    const conversation = this.conversationLifecycle.recordContext(
+      pending.conversation,
+      usedTokens,
+      limitTokens
+    );
+    pending.conversation = conversation;
+    await this.taskService.patchTaskAttempt(taskId, attemptId, { conversation });
+    return conversation;
   }
 
   private extractCodexSummary(event: unknown): string | undefined {
@@ -6005,6 +6512,7 @@ export class ClawdbotAgentService {
       runLaunchManifest: pending.runLaunchManifest,
       runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
       runLaunchManifestDrift: pending.runLaunchManifestDrift,
+      conversation: pending.conversation,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
   }
@@ -6269,7 +6777,8 @@ export class ClawdbotAgentService {
       input.logPath,
       input.attemptId,
       input.sandboxPolicy,
-      input.budgetPolicy
+      input.budgetPolicy,
+      input.options.conversation
     );
     const worktreePath = input.task.git?.worktreePath
       ? this.expandPath(input.task.git.worktreePath)
@@ -6875,7 +7384,8 @@ export class ClawdbotAgentService {
     logPath: string,
     attemptId: string,
     sandboxPolicy: SandboxPolicyDryRunResult,
-    budgetPolicy?: AgentBudgetPolicy
+    budgetPolicy?: AgentBudgetPolicy,
+    conversationRequest?: ConversationLaunchRequest
   ): RunLaunchRuntime {
     const environment = this.buildRunLaunchEnvironment(provider, sandboxPolicy);
     const runtimeBase = {
@@ -6889,9 +7399,14 @@ export class ClawdbotAgentService {
       return {
         ...runtimeBase,
         command: agentConfig?.command || 'codex',
-        args: this.buildCodexArgs(agentConfig, '<prompt>', logPath, attemptId, sandboxPolicy).map(
-          (argument) => (argument === finalPath ? '<run-log>/final-message.md' : argument)
-        ),
+        args: this.buildCodexArgs(
+          agentConfig,
+          '<prompt>',
+          logPath,
+          attemptId,
+          sandboxPolicy,
+          manifestConversation(conversationRequest)
+        ).map((argument) => (argument === finalPath ? '<run-log>/final-message.md' : argument)),
       };
     }
     if (provider === 'codex-sdk') {
@@ -6901,7 +7416,8 @@ export class ClawdbotAgentService {
         ...runtimeBase,
         command: sdkExecutable.manifestCommand,
         args: [
-          'startThread',
+          conversationRequest?.mode === 'resume' ? 'resumeThread' : 'startThread',
+          ...(conversationRequest?.mode === 'resume' ? ['<source-conversation>'] : []),
           `skipGitRepoCheck=${threadSettings.skipGitRepoCheck}`,
           `sandboxMode=${threadSettings.sandboxMode}`,
           `approvalPolicy=${threadSettings.approvalPolicy}`,
@@ -6926,6 +7442,11 @@ export class ClawdbotAgentService {
           prompt: '<prompt>',
           model: agentConfig?.model,
           extraArgs: agentConfig?.args,
+          ...(conversationRequest?.mode === 'resume'
+            ? { resumeSessionId: '<source-conversation>' }
+            : conversationRequest?.mode === 'fork'
+              ? { resumeSessionId: '<source-conversation>', forkSession: true }
+              : {}),
           sandboxMode: sandboxPolicy.effective.sandboxMode,
           networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
           maxBudgetUsd: budgetPolicy?.enabled ? budgetPolicy.limits?.costUsd : undefined,
@@ -7111,12 +7632,7 @@ export class ClawdbotAgentService {
     const currentTaskParent = [task.attempt, ...(task.attempts ?? [])]
       .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
       .find((attempt) => attempt.id === parentAttemptId);
-    const parent =
-      currentTaskParent ??
-      (await this.taskService.listTasks())
-        .flatMap((candidate) => [candidate.attempt, ...(candidate.attempts ?? [])])
-        .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
-        .find((attempt) => attempt.id === parentAttemptId);
+    const parent = currentTaskParent ?? (await this.findAttempt(parentAttemptId));
     if (!parent) {
       throw new ConflictError('Parent attempt was not found for launch-manifest comparison.', {
         parentAttemptId,
@@ -7128,6 +7644,61 @@ export class ClawdbotAgentService {
       });
     }
     return parent as TaskAttempt & { runLaunchManifest: RunLaunchManifest };
+  }
+
+  private async findAttempt(attemptId: string): Promise<TaskAttempt | undefined> {
+    return (await this.taskService.listTasks())
+      .flatMap((candidate) => [candidate.attempt, ...(candidate.attempts ?? [])])
+      .filter((attempt): attempt is TaskAttempt => Boolean(attempt))
+      .find((attempt) => attempt.id === attemptId);
+  }
+
+  private normalizeConversationLaunch(
+    request: ConversationLaunchRequest | undefined
+  ): ConversationLaunchRequest & { mode: 'fresh' | 'resume' | 'fork' } {
+    if (!request || request.mode === 'fresh') {
+      if (
+        request?.sourceAttemptId ||
+        request?.forkTurnId ||
+        (request?.intent && request.intent !== 'fresh')
+      ) {
+        throw new ConflictError('Fresh conversation launch cannot reference prior history.');
+      }
+      return { mode: 'fresh', intent: 'fresh' };
+    }
+    const intent = request.intent ?? request.mode;
+    if (
+      (request.mode === 'resume' && !['resume', 'follow-up'].includes(intent)) ||
+      (request.mode === 'fork' && intent !== 'fork')
+    ) {
+      throw new ConflictError(
+        `Conversation ${intent} is incompatible with ${request.mode} launch mode.`
+      );
+    }
+    const sourceAttemptId = request.sourceAttemptId?.trim();
+    const message = request.message?.trim();
+    if (!sourceAttemptId || sourceAttemptId.length > 120) {
+      throw new ConflictError(`Conversation ${request.mode} requires a valid source attempt ID.`);
+    }
+    if (!message || Buffer.byteLength(message, 'utf8') > 20_000) {
+      throw new ConflictError(
+        `Conversation ${request.mode} requires a non-empty follow-up message of at most 20,000 bytes.`
+      );
+    }
+    if (request.mode === 'resume' && request.forkTurnId) {
+      throw new ConflictError('Conversation resume cannot specify a fork turn.');
+    }
+    const forkTurnId = request.forkTurnId?.trim();
+    if (forkTurnId && forkTurnId.length > 240) {
+      throw new ConflictError('Conversation fork turn ID exceeds the supported limit.');
+    }
+    return {
+      mode: request.mode,
+      intent,
+      sourceAttemptId,
+      message,
+      ...(forkTurnId ? { forkTurnId } : {}),
+    };
   }
 
   private async initLogFile(
@@ -7199,6 +7770,63 @@ export const clawdbotAgentService = new ClawdbotAgentService(
     revokeRun: (request) => getCredentialBrokerService().revokeRun(request),
   }
 );
+
+function conversationLaunchCapabilities(
+  mode: 'fresh' | 'resume' | 'fork'
+): ProviderRuntimeCapabilityId[] {
+  if (mode === 'fresh') return [];
+  return mode === 'resume' ? ['run.resume', 'run.follow-up'] : ['run.fork', 'run.follow-up'];
+}
+
+function manifestConversation(
+  request: ConversationLaunchRequest | undefined
+): ConversationLifecycleRecord | undefined {
+  if (!request || request.mode === 'fresh') return undefined;
+  const timestamp = '1970-01-01T00:00:00.000Z';
+  return {
+    schemaVersion: CONVERSATION_LIFECYCLE_SCHEMA_VERSION,
+    mode: request.mode,
+    intent: request.intent ?? request.mode,
+    ...(request.mode === 'resume' ? { conversationId: '<source-conversation>' } : {}),
+    ...(request.mode === 'fork' ? { parentConversationId: '<source-conversation>' } : {}),
+    state: 'active',
+    contextWindow: { posture: 'unknown', measuredAt: timestamp },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function requireConversationId(record: ConversationLifecycleRecord, action: string): string {
+  if (!record.conversationId) {
+    throw new ConflictError(`${action} requires a durable conversation ID.`);
+  }
+  return record.conversationId;
+}
+
+function requireParentConversationId(record: ConversationLifecycleRecord, action: string): string {
+  if (!record.parentConversationId) {
+    throw new ConflictError(`${action} requires a durable parent conversation ID.`);
+  }
+  return record.parentConversationId;
+}
+
+function renderConversationTurn(
+  mode: 'resume' | 'fork',
+  source: ConversationSource,
+  message: string,
+  forkTurnId?: string
+): string {
+  return `# Conversation ${mode === 'resume' ? 'Follow-Up' : 'Fork'}
+
+- Lifecycle: \`${CONVERSATION_LIFECYCLE_SCHEMA_VERSION}\`
+- Source attempt: \`${source.attempt.id}\`
+- Source conversation: \`${source.conversationId}\`
+${forkTurnId ? `- Fork through turn: \`${forkTurnId}\`\n` : ''}
+## Operator Input
+
+${message}
+`;
+}
 
 function taskStatusForCompletion(status: TaskCompletionStatus): 'done' | 'blocked' | 'in-progress' {
   if (status === 'success') return 'done';

@@ -21,9 +21,14 @@ import serverNotificationSchema from '../contracts/codex-app-server-v0.145.0/Ser
 import serverRequestSchema from '../contracts/codex-app-server-v0.145.0/ServerRequest.json' with { type: 'json' };
 import toolRequestUserInputResponseSchema from '../contracts/codex-app-server-v0.145.0/ToolRequestUserInputResponse.json' with { type: 'json' };
 import initializeResponseSchema from '../contracts/codex-app-server-v0.145.0/v1/InitializeResponse.json' with { type: 'json' };
+import threadArchiveResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadArchiveResponse.json' with { type: 'json' };
+import threadCompactStartResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadCompactStartResponse.json' with { type: 'json' };
+import threadForkResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadForkResponse.json' with { type: 'json' };
+import threadResumeResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadResumeResponse.json' with { type: 'json' };
 import threadStartResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadStartResponse.json' with { type: 'json' };
 import turnInterruptResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/TurnInterruptResponse.json' with { type: 'json' };
 import turnStartResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/TurnStartResponse.json' with { type: 'json' };
+import turnSteerResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/TurnSteerResponse.json' with { type: 'json' };
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
 
 export const CODEX_APP_SERVER_CERTIFIED_VERSION = 'codex-cli 0.145.0';
@@ -43,7 +48,12 @@ const MAX_IDENTIFIER_LENGTH = 256;
 export const CODEX_APP_SERVER_OUTBOUND_METHODS = [
   'initialize',
   'thread/start',
+  'thread/resume',
+  'thread/fork',
+  'thread/compact/start',
+  'thread/archive',
   'turn/start',
+  'turn/steer',
   'turn/interrupt',
 ] as const;
 
@@ -64,7 +74,12 @@ const validateJsonRpcError = ajv.compile(jsonRpcErrorSchema as object);
 const responseValidators: Record<CodexAppServerOutboundMethod, ValidateFunction<unknown>> = {
   initialize: ajv.compile(initializeResponseSchema as object),
   'thread/start': ajv.compile(threadStartResponseSchema as object),
+  'thread/resume': ajv.compile(threadResumeResponseSchema as object),
+  'thread/fork': ajv.compile(threadForkResponseSchema as object),
+  'thread/compact/start': ajv.compile(threadCompactStartResponseSchema as object),
+  'thread/archive': ajv.compile(threadArchiveResponseSchema as object),
   'turn/start': ajv.compile(turnStartResponseSchema as object),
+  'turn/steer': ajv.compile(turnSteerResponseSchema as object),
   'turn/interrupt': ajv.compile(turnInterruptResponseSchema as object),
 };
 const serverRequestResponseValidators: Partial<Record<string, ValidateFunction<unknown>>> = {
@@ -94,10 +109,19 @@ export interface CodexAppServerTurnInput {
   model?: string;
 }
 
+export interface CodexAppServerResumeInput extends CodexAppServerThreadInput {
+  threadId: string;
+}
+
+export interface CodexAppServerForkInput extends CodexAppServerResumeInput {
+  lastTurnId?: string;
+}
+
 export interface CodexAppServerUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  modelContextWindow?: number;
 }
 
 export interface CodexAppServerTerminalResult {
@@ -249,6 +273,7 @@ export function classifyCodexAppServerNotification(
   const turn = recordValue(params.turn);
   const tokenUsage = recordValue(params.tokenUsage);
   const totalUsage = recordValue(tokenUsage?.total);
+  const modelContextWindow = boundedNumber(tokenUsage?.modelContextWindow);
   const turnStatus = stringValue(turn?.status);
   const turnError = recordValue(turn?.error);
   const summary = boundedSummary(
@@ -262,6 +287,7 @@ export function classifyCodexAppServerNotification(
           inputTokens: boundedNumber(totalUsage.inputTokens) ?? 0,
           outputTokens: boundedNumber(totalUsage.outputTokens) ?? 0,
           totalTokens: boundedNumber(totalUsage.totalTokens) ?? 0,
+          ...(modelContextWindow && modelContextWindow > 0 ? { modelContextWindow } : {}),
         }
       : undefined;
   const terminal =
@@ -333,6 +359,48 @@ export class CodexAppServerRpcClient {
     return requiredNestedIdentifier(result, 'thread', 'id', 'Codex app-server thread/start');
   }
 
+  async resumeThread(input: CodexAppServerResumeInput): Promise<string> {
+    this.assertInitialized();
+    const threadId = requiredIdentifier(input.threadId, 'Codex app-server thread ID');
+    const result = await this.request('thread/resume', {
+      threadId,
+      cwd: input.cwd,
+      approvalPolicy: 'on-request',
+      approvalsReviewer: 'user',
+      sandbox: input.sandboxMode,
+      ...(input.model?.trim() ? { model: input.model.trim() } : {}),
+      excludeTurns: true,
+    });
+    const resumed = requiredNestedIdentifier(
+      result,
+      'thread',
+      'id',
+      'Codex app-server thread/resume'
+    );
+    if (resumed !== threadId) {
+      throw new Error('Codex app-server resumed a different thread than requested.');
+    }
+    return resumed;
+  }
+
+  async forkThread(input: CodexAppServerForkInput): Promise<string> {
+    this.assertInitialized();
+    const result = await this.request('thread/fork', {
+      threadId: requiredIdentifier(input.threadId, 'Codex app-server parent thread ID'),
+      cwd: input.cwd,
+      approvalPolicy: 'on-request',
+      approvalsReviewer: 'user',
+      sandbox: input.sandboxMode,
+      ...(input.model?.trim() ? { model: input.model.trim() } : {}),
+      ...(input.lastTurnId
+        ? { lastTurnId: requiredIdentifier(input.lastTurnId, 'Codex app-server fork turn ID') }
+        : {}),
+      excludeTurns: true,
+      deferGoalContinuation: true,
+    });
+    return requiredNestedIdentifier(result, 'thread', 'id', 'Codex app-server thread/fork');
+  }
+
   async startTurn(input: CodexAppServerTurnInput): Promise<string> {
     this.assertInitialized();
     const result = await this.request('turn/start', {
@@ -351,6 +419,32 @@ export class CodexAppServerRpcClient {
     await this.request('turn/interrupt', {
       threadId: requiredIdentifier(threadId, 'Codex app-server thread ID'),
       turnId: requiredIdentifier(turnId, 'Codex app-server turn ID'),
+    });
+  }
+
+  async steer(threadId: string, turnId: string, prompt: string): Promise<string> {
+    this.assertInitialized();
+    const text = prompt.trim();
+    if (!text) throw new Error('Codex app-server steering input cannot be empty.');
+    const result = await this.request('turn/steer', {
+      threadId: requiredIdentifier(threadId, 'Codex app-server thread ID'),
+      expectedTurnId: requiredIdentifier(turnId, 'Codex app-server turn ID'),
+      input: [{ type: 'text', text }],
+    });
+    return requiredIdentifier(recordValue(result)?.turnId, 'Codex app-server steered turn ID');
+  }
+
+  async compact(threadId: string): Promise<void> {
+    this.assertInitialized();
+    await this.request('thread/compact/start', {
+      threadId: requiredIdentifier(threadId, 'Codex app-server thread ID'),
+    });
+  }
+
+  async archive(threadId: string): Promise<void> {
+    this.assertInitialized();
+    await this.request('thread/archive', {
+      threadId: requiredIdentifier(threadId, 'Codex app-server thread ID'),
     });
   }
 

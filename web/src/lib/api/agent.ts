@@ -9,6 +9,8 @@ import type {
   AgentRoutingConfig,
   RoutingResult,
   AgentBudgetPolicy,
+  ConversationLifecycleRecord,
+  ConversationLifecycleResult,
   ProviderRuntimeManifest,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeControlSet,
@@ -35,6 +37,18 @@ export interface StartAgentRequest {
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
   parentAttemptId?: string;
+}
+
+export interface ConversationTurnRequest {
+  sourceAttemptId: string;
+  message: string;
+  forkTurnId?: string;
+  profileId?: string;
+  overrideReason?: string;
+  sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+  commitPolicy?: TaskCommitPolicy;
 }
 
 export const worktreeApi = {
@@ -120,12 +134,108 @@ export const agentApi = {
     });
   },
 
-  sendMessage: async (taskId: string, attemptId: string, message: string): Promise<void> => {
-    return apiFetch<void>(`${API_BASE}/agents/${taskId}/message`, {
+  sendMessage: async (
+    taskId: string,
+    attemptId: string,
+    message: string
+  ): Promise<ConversationLifecycleResult> => {
+    return apiFetch<ConversationLifecycleResult>(
+      `${API_BASE}/agents/${taskId}/conversation/steer`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId, message }),
+      }
+    );
+  },
+
+  resumeConversation: async (
+    taskId: string,
+    request: ConversationTurnRequest
+  ): Promise<AgentStatus> => {
+    return apiFetch<AgentStatus>(`${API_BASE}/agents/${taskId}/conversation/resume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ attemptId, message }),
+      body: JSON.stringify(request),
     });
+  },
+
+  followUpConversation: async (
+    taskId: string,
+    request: ConversationTurnRequest
+  ): Promise<AgentStatus> => {
+    return apiFetch<AgentStatus>(`${API_BASE}/agents/${taskId}/conversation/follow-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  },
+
+  forkConversation: async (
+    taskId: string,
+    request: ConversationTurnRequest
+  ): Promise<AgentStatus> => {
+    return apiFetch<AgentStatus>(`${API_BASE}/agents/${taskId}/conversation/fork`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  },
+
+  interruptConversation: async (
+    taskId: string,
+    attemptId: string
+  ): Promise<ConversationLifecycleResult> => {
+    return apiFetch<ConversationLifecycleResult>(
+      `${API_BASE}/agents/${taskId}/conversation/interrupt`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId }),
+      }
+    );
+  },
+
+  compactConversation: async (
+    taskId: string,
+    attemptId: string
+  ): Promise<ConversationLifecycleResult> => {
+    return apiFetch<ConversationLifecycleResult>(
+      `${API_BASE}/agents/${taskId}/conversation/compact`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId }),
+      }
+    );
+  },
+
+  archiveConversation: async (
+    taskId: string,
+    attemptId: string
+  ): Promise<ConversationLifecycleResult> => {
+    return apiFetch<ConversationLifecycleResult>(
+      `${API_BASE}/agents/${taskId}/conversation/archive`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId }),
+      }
+    );
+  },
+
+  closeConversation: async (
+    taskId: string,
+    attemptId: string
+  ): Promise<ConversationLifecycleResult> => {
+    return apiFetch<ConversationLifecycleResult>(
+      `${API_BASE}/agents/${taskId}/conversation/close`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId }),
+      }
+    );
   },
 
   stop: async (taskId: string, attemptId: string): Promise<void> => {
@@ -298,6 +408,7 @@ export interface AgentStatus {
   runLaunchManifest: RunLaunchManifest;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
 }
 
@@ -316,6 +427,7 @@ export interface AgentStatusResponse {
   runLaunchManifest?: RunLaunchManifest;
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
+  conversation?: ConversationLifecycleRecord;
   controls?: ProviderRuntimeControlSet;
 }
 

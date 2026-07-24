@@ -9,12 +9,138 @@ import type {
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
   AgentProfileValidationResult,
+  ConversationLifecycleRecord,
+  ConversationLifecycleResult,
   RunLaunchManifestPreview,
 } from '@veritas-kanban/shared';
+
+type ConversationTurnAction = 'resume' | 'follow-up' | 'fork';
+type ConversationControlAction = 'interrupt' | 'compact' | 'archive' | 'close';
+
+interface ConversationTurnOptions {
+  sourceAttempt: string;
+  message: string;
+  forkTurn?: string;
+  profile?: string;
+  requireCapability?: string[];
+  commitPolicy?: string;
+  json?: boolean;
+}
+
+interface ConversationControlOptions {
+  attempt: string;
+  json?: boolean;
+}
 
 function inferProfileFormat(filePath: string): AgentProfilePackageFormat {
   const extension = path.extname(filePath).toLowerCase();
   return extension === '.json' ? 'json' : 'yaml';
+}
+
+async function resolveTaskId(id: string): Promise<string> {
+  const task = await findTask(id);
+  if (!task) throw new Error(`Task not found: ${id}`);
+  return task.id;
+}
+
+function printConversationResult(
+  action: string,
+  result: {
+    attemptId: string;
+    delivered?: boolean;
+    note?: string;
+    conversation?: ConversationLifecycleRecord;
+  },
+  json?: boolean
+): void {
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(chalk.green(`✓ Conversation ${action}`));
+  console.log(chalk.dim(`Attempt ID: ${result.attemptId}`));
+  if (result.conversation?.conversationId) {
+    console.log(chalk.dim(`Conversation ID: ${result.conversation.conversationId}`));
+  }
+  if (result.note) console.log(chalk.dim(result.note));
+}
+
+function registerConversationTurnCommand(
+  program: Command,
+  action: ConversationTurnAction,
+  description: string
+): void {
+  const command = program
+    .command(`agent:${action} <id>`)
+    .description(description)
+    .requiredOption('--source-attempt <attemptId>', 'Terminal attempt with durable conversation')
+    .requiredOption('-m, --message <text>', 'Prompt for the new turn')
+    .option('-p, --profile <profileId>', 'Agent profile package to launch')
+    .option(
+      '--require-capability <capabilities...>',
+      'Require provider runtime capabilities before launch'
+    )
+    .option(
+      '--commit-policy <policy>',
+      'Commit policy for this run (forbidden, allowed, or required)'
+    )
+    .option('--json', 'Output as JSON');
+
+  if (action === 'fork') {
+    command.option('--fork-turn <turnId>', 'Provider turn boundary to fork from');
+  }
+
+  command.action(async (id: string, options: ConversationTurnOptions) => {
+    try {
+      const taskId = await resolveTaskId(id);
+      const result = await api<{
+        attemptId: string;
+        conversation?: ConversationLifecycleRecord;
+      }>(`/api/agents/${taskId}/conversation/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceAttemptId: options.sourceAttempt,
+          message: options.message,
+          ...(action === 'fork' && options.forkTurn ? { forkTurnId: options.forkTurn } : {}),
+          profileId: options.profile,
+          requiredRuntimeCapabilities: options.requireCapability,
+          commitPolicy: options.commitPolicy,
+        }),
+      });
+      printConversationResult(action, result, options.json);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${(err as Error).message}`));
+      process.exit(1);
+    }
+  });
+}
+
+function registerConversationControlCommand(
+  program: Command,
+  action: ConversationControlAction,
+  description: string
+): void {
+  program
+    .command(`agent:${action} <id>`)
+    .description(description)
+    .requiredOption('--attempt <attemptId>', 'Exact active attempt ID')
+    .option('--json', 'Output as JSON')
+    .action(async (id: string, options: ConversationControlOptions) => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const result = await api<ConversationLifecycleResult>(
+          `/api/agents/${taskId}/conversation/${action}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ attemptId: options.attempt }),
+          }
+        );
+        printConversationResult(action, result, options.json);
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
 }
 
 export function registerAgentCommands(program: Command): void {
@@ -292,6 +418,70 @@ export function registerAgentCommands(program: Command): void {
         process.exit(1);
       }
     });
+
+  registerConversationTurnCommand(
+    program,
+    'resume',
+    'Resume a terminal provider conversation without replaying prior prompts'
+  );
+  registerConversationTurnCommand(
+    program,
+    'follow-up',
+    'Start a provider-native follow-up turn from a terminal attempt'
+  );
+  registerConversationTurnCommand(
+    program,
+    'fork',
+    'Fork provider-native history from a terminal attempt'
+  );
+
+  program
+    .command('agent:steer <id>')
+    .description('Steer the exact active provider turn')
+    .requiredOption('--attempt <attemptId>', 'Exact active attempt ID')
+    .requiredOption('-m, --message <text>', 'Steering message')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        id: string,
+        options: ConversationControlOptions & { message: string }
+      ): Promise<void> => {
+        try {
+          const taskId = await resolveTaskId(id);
+          const result = await api<ConversationLifecycleResult>(
+            `/api/agents/${taskId}/conversation/steer`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                attemptId: options.attempt,
+                message: options.message,
+              }),
+            }
+          );
+          printConversationResult('steered', result, options.json);
+        } catch (err) {
+          console.error(chalk.red(`Error: ${(err as Error).message}`));
+          process.exit(1);
+        }
+      }
+    );
+
+  registerConversationControlCommand(
+    program,
+    'interrupt',
+    'Interrupt the exact active provider turn'
+  );
+  registerConversationControlCommand(
+    program,
+    'compact',
+    'Compact the active provider conversation'
+  );
+  registerConversationControlCommand(
+    program,
+    'archive',
+    'Archive the active provider conversation'
+  );
+  registerConversationControlCommand(program, 'close', 'Close the active provider conversation');
 
   // Get pending agent requests (for Veritas to process)
   program

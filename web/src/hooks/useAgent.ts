@@ -8,11 +8,13 @@ import type {
   AgentHealthClassificationResponse,
   AgentHostPreviewRequest,
   AgentType,
+  ConversationLifecycleResult,
   ProviderRuntimeCapabilityId,
   RunApprovalDecisionInput,
   RunApprovalRequest,
   TaskCommitPolicy,
 } from '@veritas-kanban/shared';
+import type { ConversationTurnRequest } from '@/lib/api/agent';
 
 export interface StartAgentInput {
   taskId: string;
@@ -94,6 +96,69 @@ export function useSendMessage() {
       attemptId: string;
       message: string;
     }) => api.agent.sendMessage(taskId, attemptId, message),
+  });
+}
+
+function invalidateConversationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  taskId: string
+): void {
+  queryClient.invalidateQueries({ queryKey: ['agent', 'status', taskId] });
+  queryClient.invalidateQueries({ queryKey: ['agent', 'attempts', taskId] });
+  queryClient.invalidateQueries({ queryKey: ['tasks'] });
+}
+
+export function useResumeConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, request }: { taskId: string; request: ConversationTurnRequest }) =>
+      api.agent.resumeConversation(taskId, request),
+    onSuccess: (_, { taskId }) => invalidateConversationQueries(queryClient, taskId),
+  });
+}
+
+export function useFollowUpConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, request }: { taskId: string; request: ConversationTurnRequest }) =>
+      api.agent.followUpConversation(taskId, request),
+    onSuccess: (_, { taskId }) => invalidateConversationQueries(queryClient, taskId),
+  });
+}
+
+export function useForkConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, request }: { taskId: string; request: ConversationTurnRequest }) =>
+      api.agent.forkConversation(taskId, request),
+    onSuccess: (_, { taskId }) => invalidateConversationQueries(queryClient, taskId),
+  });
+}
+
+type ConversationControlAction = 'interrupt' | 'compact' | 'archive' | 'close';
+
+export function useConversationControl(action: ConversationControlAction) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      attemptId,
+    }: {
+      taskId: string;
+      attemptId: string;
+    }): Promise<ConversationLifecycleResult> => {
+      if (action === 'interrupt') {
+        return api.agent.interruptConversation(taskId, attemptId);
+      }
+      if (action === 'compact') {
+        return api.agent.compactConversation(taskId, attemptId);
+      }
+      if (action === 'archive') {
+        return api.agent.archiveConversation(taskId, attemptId);
+      }
+      return api.agent.closeConversation(taskId, attemptId);
+    },
+    onSuccess: (_, { taskId }) => invalidateConversationQueries(queryClient, taskId),
   });
 }
 

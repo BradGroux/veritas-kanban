@@ -108,6 +108,8 @@ export interface ClaudeCodeLaunchInput {
   prompt: string;
   model?: string;
   extraArgs?: string[];
+  resumeSessionId?: string;
+  forkSession?: boolean;
   sandboxMode: SandboxPolicyDryRunResult['effective']['sandboxMode'];
   networkAccessEnabled: boolean;
   maxBudgetUsd?: number;
@@ -239,8 +241,23 @@ export function buildClaudeCodeArgs(input: ClaudeCodeLaunchInput): string[] {
     args.push('--max-budget-usd', String(input.maxBudgetUsd));
   }
   if (input.model?.trim()) args.push('--model', input.model.trim());
+  if (input.resumeSessionId) {
+    const sessionId = validatedSessionId(input.resumeSessionId);
+    args.push('--resume', sessionId);
+    if (input.forkSession) args.push('--fork-session');
+  } else if (input.forkSession) {
+    throw new Error('Claude Code session fork requires an exact source session ID.');
+  }
   args.push(input.prompt);
   return args;
+}
+
+function validatedSessionId(value: string): string {
+  const sessionId = value.trim();
+  if (!sessionId || sessionId.startsWith('-') || Buffer.byteLength(sessionId, 'utf8') > 240) {
+    throw new Error('Claude Code session ID is invalid.');
+  }
+  return sessionId;
 }
 
 function normalizeExtraArgs(args: string[]): string[] {

@@ -623,6 +623,10 @@ vk profiles list                 # List reusable agent profile packages
 vk profiles validate ./agent.yml # Validate a package before import
 vk profiles import ./agent.yml   # Import or replace a package
 vk start <task> --profile <id>   # Launch a task with a profile package
+vk agent:resume <task> --source-attempt <id> -m "Continue the work"
+vk agent:fork <task> --source-attempt <id> --fork-turn <id> -m "Try another path"
+vk agent:steer <task> --attempt <id> -m "Use the smaller fix"
+vk agent:compact <task> --attempt <id>
 ```
 
 ### Utilities

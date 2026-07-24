@@ -652,6 +652,70 @@
       "denialReason": "Stopping an agent requires task read and task write access."
     },
     {
+      "id": "cli:agents:agent:resume",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Resuming a provider conversation requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:follow-up",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Starting a follow-up turn requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:fork",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Forking provider history requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:steer",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Steering an active provider turn requires task read and task write access."
+    },
+    {
+      "id": "cli:agents:agent:interrupt",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Interrupting an active provider turn requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:compact",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Compacting a provider conversation requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:archive",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Archiving a provider conversation requires task read and agent write access."
+    },
+    {
+      "id": "cli:agents:agent:close",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "agent:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Closing a provider conversation requires task read and agent write access."
+    },
+    {
       "id": "cli:agents:profiles",
       "kind": "cli",
       "classification": "authenticated-read",
@@ -714,6 +778,14 @@
       "permissions": ["agent:read"],
       "source": "cli/src/commands/agents.ts",
       "denialReason": "Agent request status requires agent read access."
+    },
+    {
+      "id": "mcp:control_agent_conversation",
+      "kind": "mcp-tool",
+      "classification": "agent-scoped",
+      "permissions": ["agent:write", "task:write"],
+      "source": "mcp/src/tools/agents.ts",
+      "denialReason": "Conversation lifecycle controls require agent or task write access according to the selected action."
     },
     {
       "id": "cli:automation:automation:pending",
