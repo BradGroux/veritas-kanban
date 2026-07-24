@@ -124,6 +124,14 @@
       "denialReason": "Agent status subscription confirmations are only sent after agent read authorization."
     },
     {
+      "id": "websocket:agent:event",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/server.ts",
+      "denialReason": "Durable agent event subscriptions require task read access."
+    },
+    {
       "id": "websocket:agent:output",
       "kind": "websocket",
       "classification": "authenticated-read",
