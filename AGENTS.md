@@ -255,6 +255,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   Build `v0.2.111` build `94172f2aa4e5`, launches `grok agent --no-leader
 stdio`, and rejects approval bypass, reauthentication, leader, plugin,
   endpoint, prompt, and resume argument injection.
+- Harness certification uses `harness-conformance-suite/v1`; run the committed
+  mock lane with `pnpm --filter @veritas-kanban/server exec tsx
+src/scripts/run-harness-conformance.ts -- --suite <suite.json>
+--observations <observations.json>`. Credential-gated lanes require explicit
+  opt-in and never commit raw provider output or secrets.
 - `vk acp serve --stdio` exposes one Veritas-managed task as an ACP v1 server
   view for editors and other ACP clients. Bind with `--task` or require
   `_meta["veritas/taskId"]` on `session/new`; client-owned MCP catalogs fail

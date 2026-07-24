@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `harness-conformance-suite/v1` and a deterministic runner for seeded,
+  repeated provider/model/profile/policy/sandbox comparisons. Explicit
+  assertions cover outcomes, files, tools, approvals, network, policy,
+  completion, and capability evidence; normalized results aggregate pass rate,
+  variance, latency, tokens, cost, retries, failure classes, immutable evidence
+  references, and versioned baseline regressions. A credential-free recorded
+  mock command provides the CI/local foundation while credential-gated lanes
+  require explicit opt-in (#859).
 - Composed the pinned `buzz-agent` ACP profile with the system-owned
   `veritas-run` bridge. Buzz sessions now receive only that bridge for selected
   run tools, so catalog allow, deny, approval, attribution, and cleanup remain

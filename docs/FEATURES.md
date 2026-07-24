@@ -333,6 +333,11 @@ First-class support for autonomous coding agents.
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
+- **Harness conformance suites** — Versioned seeded scenarios compare
+  provider/model/profile/policy/sandbox combinations across repeated trials,
+  retain immutable launch/runtime/event evidence references, assert governed
+  outcomes, and fail CI or promotion on versioned pass-rate, variance, latency,
+  token, or cost regression
 - **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, ACP stdio, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions

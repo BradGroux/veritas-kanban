@@ -387,6 +387,16 @@ launch arguments are replaced with `[REDACTED]` before the profile is exposed
 or hashed, so rotating a secret cannot turn the profile digest into a secret
 oracle.
 
+Deterministic certification inputs use
+`harness-conformance-suite/v1`. The runner resets a seeded fixture before each
+trial, applies the same scenario across provider/model/profile/policy/sandbox
+combinations, and emits `harness-conformance-result/v1` with assertion,
+failure-class, pass-rate, variance, latency, token, cost, retry, baseline, and
+immutable evidence references. Run the credential-free recorded lane with the
+documented `run-harness-conformance.ts` command; credential-gated lanes require
+explicit opt-in.
+See [Harness Conformance v1](architecture/HARNESS-CONFORMANCE-V1.md).
+
 The live status projection uses five tiers:
 
 | Tier          | Meaning                                                                                                                      |
