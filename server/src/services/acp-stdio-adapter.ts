@@ -61,6 +61,133 @@ export const BUZZ_AGENT_ENVIRONMENT_KEYS = [
   'OPENAI_COMPAT_MODEL',
 ] as const;
 
+export const COPILOT_ACP_RUNTIME_PROFILE_ID = 'github-copilot-cli';
+export const COPILOT_ACP_RUNTIME_PROFILE_REVISION = 1;
+export const COPILOT_ACP_TESTED_RELEASE = 'v1.0.74';
+export const COPILOT_ACP_TESTED_COMMIT = '2b809c84e87dbcc88f897cb4f3fb97c43b77af95';
+export const COPILOT_ACP_VERSION = '1.0.74';
+export const COPILOT_ACP_CREDENTIAL_ENV_KEYS = [
+  'COPILOT_GITHUB_TOKEN',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+] as const;
+export const COPILOT_ACP_ENVIRONMENT_KEYS = [
+  'COPILOT_GH_HOST',
+  'COPILOT_HOME',
+  'COPILOT_OFFLINE',
+  'COPILOT_PROVIDER_AZURE_API_VERSION',
+  'COPILOT_PROVIDER_BASE_URL',
+  'COPILOT_PROVIDER_MAX_OUTPUT_TOKENS',
+  'COPILOT_PROVIDER_MAX_PROMPT_TOKENS',
+  'COPILOT_PROVIDER_MODEL_ID',
+  'COPILOT_PROVIDER_TRANSPORT',
+  'COPILOT_PROVIDER_TYPE',
+  'COPILOT_PROVIDER_WIRE_API',
+  'COPILOT_PROVIDER_WIRE_MODEL',
+  'GH_HOST',
+] as const;
+const COPILOT_ACP_SECRET_ENV_ARG = `--secret-env-vars=${COPILOT_ACP_CREDENTIAL_ENV_KEYS.join(',')}`;
+export const COPILOT_ACP_REQUIRED_ARGS = [
+  '--acp',
+  '--stdio',
+  '--no-auto-update',
+  '--no-remote',
+  '--no-remote-export',
+  '--disable-builtin-mcps',
+  '--no-custom-instructions',
+  '--no-ask-user',
+  '--no-experimental',
+  COPILOT_ACP_SECRET_ENV_ARG,
+] as const;
+const COPILOT_ACP_REPEATABLE_RESTRICTIVE_FLAGS = new Set([
+  '--available-tools',
+  '--deny-tool',
+  '--deny-url',
+  '--excluded-tools',
+]);
+const COPILOT_ACP_SINGLE_VALUE_FLAGS = new Set([
+  '--context',
+  '--effort',
+  '--max-ai-credits',
+  '--reasoning-effort',
+]);
+const COPILOT_ACP_EFFORT_LEVELS = new Set([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+
+export function buildCopilotAcpArgs(input: {
+  model?: string;
+  extraArgs?: readonly string[];
+}): string[] {
+  const args = [...COPILOT_ACP_REQUIRED_ARGS];
+  if (input.model !== undefined) {
+    const model = boundedCopilotArgumentValue('--model', input.model, 200);
+    args.push(`--model=${model}`);
+  }
+
+  const extraArgs = input.extraArgs ?? [];
+  const seenSingleValueFlags = new Set<string>();
+  for (let index = 0; index < extraArgs.length; index += 1) {
+    const raw = extraArgs[index]?.trim() ?? '';
+    const separator = raw.indexOf('=');
+    const flag = separator >= 0 ? raw.slice(0, separator) : raw;
+    const accepted =
+      COPILOT_ACP_REPEATABLE_RESTRICTIVE_FLAGS.has(flag) ||
+      COPILOT_ACP_SINGLE_VALUE_FLAGS.has(flag);
+    if (!accepted) {
+      throw new ConflictError('Copilot ACP launch argument is not governed by Veritas.', {
+        argument: sanitizeProviderRuntimeDiagnostic(raw),
+        remediation:
+          'Use the agent model field or the documented restrictive Copilot ACP profile arguments.',
+      });
+    }
+
+    let value = separator >= 0 ? raw.slice(separator + 1) : undefined;
+    if (value === undefined) {
+      index += 1;
+      value = extraArgs[index];
+    }
+    const normalizedValue = boundedCopilotArgumentValue(flag, value, 1_000);
+    const canonicalFlag = flag === '--reasoning-effort' ? '--effort' : flag;
+    if (COPILOT_ACP_SINGLE_VALUE_FLAGS.has(flag)) {
+      if (seenSingleValueFlags.has(canonicalFlag)) {
+        throw new ConflictError(`Copilot ACP ${canonicalFlag} may be configured only once.`);
+      }
+      seenSingleValueFlags.add(canonicalFlag);
+    }
+    if (canonicalFlag === '--effort' && !COPILOT_ACP_EFFORT_LEVELS.has(normalizedValue)) {
+      throw new ConflictError('Copilot ACP reasoning effort is outside the tested profile.', {
+        effort: normalizedValue,
+      });
+    }
+    if (
+      canonicalFlag === '--context' &&
+      normalizedValue !== 'default' &&
+      normalizedValue !== 'long_context'
+    ) {
+      throw new ConflictError('Copilot ACP context tier is outside the tested profile.', {
+        context: normalizedValue,
+      });
+    }
+    if (
+      canonicalFlag === '--max-ai-credits' &&
+      (!/^\d+$/.test(normalizedValue) || Number(normalizedValue) < 30)
+    ) {
+      throw new ConflictError('Copilot ACP max AI credits must be an integer of at least 30.');
+    }
+    args.push(`${canonicalFlag}=${normalizedValue}`);
+  }
+  return args;
+}
+
 export interface AcpStdioOpenOptions {
   command: string;
   args: string[];
@@ -343,11 +470,16 @@ function applyAcpRuntimeProfile(
   runtimeProfileId: string | undefined
 ): AcpRuntimeProbe {
   if (!runtimeProfileId || runtimeProfileId === 'acp-stdio') return probe;
-  if (runtimeProfileId !== BUZZ_AGENT_RUNTIME_PROFILE_ID) {
-    throw new ConflictError('Configured ACP runtime profile is not registered.', {
-      runtimeProfileId,
-    });
+  if (runtimeProfileId === BUZZ_AGENT_RUNTIME_PROFILE_ID) return applyBuzzRuntimeProfile(probe);
+  if (runtimeProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID) {
+    return applyCopilotRuntimeProfile(probe);
   }
+  throw new ConflictError('Configured ACP runtime profile is not registered.', {
+    runtimeProfileId,
+  });
+}
+
+function applyBuzzRuntimeProfile(probe: AcpRuntimeProbe): AcpRuntimeProbe {
   const failures = [
     ...(probe.agentInfo.name !== 'buzz-agent'
       ? [`Expected agentInfo.name buzz-agent, received ${probe.agentInfo.name}.`]
@@ -369,7 +501,7 @@ function applyAcpRuntimeProfile(
   ];
   if (failures.length > 0) {
     throw new ConflictError('Buzz ACP runtime is outside the tested compatibility profile.', {
-      runtimeProfileId,
+      runtimeProfileId: BUZZ_AGENT_RUNTIME_PROFILE_ID,
       testedRelease: BUZZ_AGENT_TESTED_RELEASE,
       testedCommit: BUZZ_AGENT_TESTED_COMMIT,
       failures,
@@ -396,6 +528,82 @@ function applyAcpRuntimeProfile(
       digest: `sha256:${createHash('sha256').update(stableJson(payload)).digest('hex')}`,
     },
   };
+}
+
+function applyCopilotRuntimeProfile(probe: AcpRuntimeProbe): AcpRuntimeProbe {
+  const failures = [
+    ...(probe.agentInfo.name !== 'Copilot'
+      ? [`Expected agentInfo.name Copilot, received ${probe.agentInfo.name}.`]
+      : []),
+    ...(probe.agentInfo.version !== COPILOT_ACP_VERSION
+      ? [
+          `Expected Copilot ACP version ${COPILOT_ACP_VERSION}, received ${
+            probe.agentInfo.version ?? 'unknown'
+          }.`,
+        ]
+      : []),
+    ...(probe.capabilities.loadSession === true
+      ? []
+      : ['The tested Copilot profile requires loadSession: true.']),
+    ...(probe.capabilities.mcpCapabilities?.http === true &&
+    probe.capabilities.mcpCapabilities?.sse === true
+      ? []
+      : ['The tested Copilot profile requires HTTP and SSE MCP capability evidence.']),
+    ...(probe.capabilities.promptCapabilities?.image === true &&
+    probe.capabilities.promptCapabilities?.embeddedContext === true
+      ? []
+      : ['The tested Copilot profile requires image and embedded-context prompt capabilities.']),
+    ...(probe.capabilities.sessionCapabilities?.list
+      ? []
+      : ['The tested Copilot profile requires session listing capability evidence.']),
+  ];
+  if (failures.length > 0) {
+    throw new ConflictError('Copilot ACP runtime is outside the tested compatibility profile.', {
+      runtimeProfileId: COPILOT_ACP_RUNTIME_PROFILE_ID,
+      testedRelease: COPILOT_ACP_TESTED_RELEASE,
+      testedCommit: COPILOT_ACP_TESTED_COMMIT,
+      failures,
+    });
+  }
+  const payload = {
+    schemaVersion: ACP_RUNTIME_PROFILE_SCHEMA_VERSION,
+    id: COPILOT_ACP_RUNTIME_PROFILE_ID,
+    revision: COPILOT_ACP_RUNTIME_PROFILE_REVISION,
+    testedRelease: COPILOT_ACP_TESTED_RELEASE,
+    testedCommit: COPILOT_ACP_TESTED_COMMIT,
+    limitations: [
+      'public-preview-acp',
+      'process-wide-tool-and-effort-policy',
+      'provider-managed-authentication-not-probed',
+      'partial-public-source',
+      'release-tag-provenance-mismatch',
+      'inherited-copilot-home',
+      'veritas-stdio-transport-only',
+    ],
+  };
+  return {
+    ...probe,
+    runtimeProfile: {
+      ...payload,
+      digest: `sha256:${createHash('sha256').update(stableJson(payload)).digest('hex')}`,
+    },
+  };
+}
+
+function boundedCopilotArgumentValue(
+  flag: string,
+  value: string | undefined,
+  maxLength: number
+): string {
+  const normalized = value?.trim() ?? '';
+  const containsControlCharacter = [...normalized].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 31 || codePoint === 127;
+  });
+  if (!normalized || normalized.length > maxLength || containsControlCharacter) {
+    throw new ConflictError(`Copilot ACP ${flag} requires a bounded non-empty value.`);
+  }
+  return normalized;
 }
 
 function parseSessionNotification(value: unknown): AcpSessionNotification {

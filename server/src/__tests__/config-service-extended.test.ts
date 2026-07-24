@@ -56,11 +56,14 @@ describe('ConfigService', () => {
           }),
           expect.objectContaining({
             type: 'copilot',
+            provider: 'acp-stdio',
+            args: [],
             supportProfile: expect.objectContaining({
               schemaVersion: 'harness-support-profile/v1',
               id: 'github-copilot-cli',
+              adapterId: 'acp-stdio',
               transport: 'acp',
-              supportTier: 'unsupported',
+              supportTier: 'configured',
             }),
           }),
           expect.objectContaining({
@@ -117,7 +120,7 @@ describe('ConfigService', () => {
       const expectedSupport = [
         ['claude-code', 'claude-code', 'configured'],
         ['amp', undefined, 'unsupported'],
-        ['copilot', undefined, 'unsupported'],
+        ['copilot', 'acp-stdio', 'configured'],
         ['gemini', undefined, 'unsupported'],
         ['codex', 'codex-cli', 'configured'],
         ['codex-sdk', 'codex-sdk', 'configured'],
@@ -221,11 +224,12 @@ describe('ConfigService', () => {
     });
 
     it.each([
-      ['codex', 'codex', 'codex-cli'],
-      ['hermes', 'hermes', 'hermes-cli'],
+      ['codex', 'codex', 'codex-cli', []],
+      ['hermes', 'hermes', 'hermes-cli', []],
+      ['copilot', 'copilot', 'acp-stdio', ['-p']],
     ] as const)(
       'migrates known provider-less %s records to the explicit %s adapter',
-      async (type, command, provider) => {
+      async (type, command, provider, args) => {
         await fs.writeFile(
           configFile,
           JSON.stringify({
@@ -235,7 +239,7 @@ describe('ConfigService', () => {
                 type,
                 name: type,
                 command,
-                args: [],
+                args,
                 enabled: true,
               },
             ],
@@ -246,6 +250,7 @@ describe('ConfigService', () => {
         const config = await service.getConfig();
         expect(config.agents.find((agent) => agent.type === type)).toMatchObject({
           provider,
+          args: [],
           supportProfile: {
             adapterId: provider,
             supportTier: 'configured',

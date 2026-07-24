@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   BUZZ_AGENT_TESTED_COMMIT,
   BUZZ_AGENT_TESTED_RELEASE,
+  buildCopilotAcpArgs,
+  COPILOT_ACP_REQUIRED_ARGS,
+  COPILOT_ACP_RUNTIME_PROFILE_ID,
+  COPILOT_ACP_TESTED_COMMIT,
+  COPILOT_ACP_TESTED_RELEASE,
   openAcpStdio,
   probeAcpStdioRuntime,
 } from '../services/acp-stdio-adapter.js';
@@ -57,7 +62,7 @@ describe('ACP v1 stdio provider adapter', () => {
       protocolVersion: 'acp/v1',
       providerVersion: 'VK ACP fixture 1.3.0',
       providerBuild: expect.stringMatching(/^acp-v1:sha256:[a-f0-9]{64}$/),
-      probeRevision: 11,
+      probeRevision: 12,
     });
     expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
       'supported'
@@ -108,7 +113,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'buzz-agent 0.1.0',
       providerBuild: expect.stringMatching(/profile:buzz-agent@1:sha256:/),
-      probeRevision: 11,
+      probeRevision: 12,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(BUZZ_AGENT_TESTED_RELEASE),
@@ -137,17 +142,21 @@ describe('ACP v1 stdio provider adapter', () => {
   });
 
   it('uses ACP initialize instead of a hanging buzz-agent --version health probe', async () => {
-    const runCommand = vi.fn(async (command: string) => {
-      if (command === 'which') return { stdout: '/usr/local/bin/buzz-agent\n', stderr: '' };
-      throw new Error(`Unexpected command: ${command}`);
-    });
-    const health = await new AgentHealthService(runCommand).checkAgent({
+    const agent = {
       type: 'buzz-agent',
       name: 'Buzz Agent',
       command: 'buzz-agent',
       args: [],
       enabled: true,
-      provider: 'acp-stdio',
+      provider: 'acp-stdio' as const,
+    };
+    const runCommand = vi.fn(async (command: string) => {
+      if (command === 'which') return { stdout: '/usr/local/bin/buzz-agent\n', stderr: '' };
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    const health = await new AgentHealthService(runCommand).checkAgent({
+      ...agent,
+      supportProfile: normalizeHarnessSupportProfile(agent),
     });
 
     expect(health).toMatchObject({
@@ -157,6 +166,166 @@ describe('ACP v1 stdio provider adapter', () => {
       healthy: true,
     });
     expect(runCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('recognizes the pinned Copilot CLI profile through the generic ACP provider', async () => {
+    const agent = {
+      type: 'copilot',
+      name: 'GitHub Copilot CLI',
+      command: FIXTURE_PATH,
+      args: ['--effort=high', '--deny-url=example.invalid'],
+      enabled: true,
+      provider: 'acp-stdio' as const,
+      model: 'gpt-5.6-sol',
+    };
+    const supportProfile = normalizeHarnessSupportProfile(agent);
+    expect(supportProfile).toMatchObject({
+      id: COPILOT_ACP_RUNTIME_PROFILE_ID,
+      adapterId: 'acp-stdio',
+      transport: 'acp',
+      authentication: { kind: 'provider-managed', nonMutating: true },
+      compatibility: { testedVersions: ['Copilot 1.0.74'] },
+      launch: {
+        args: expect.arrayContaining([
+          '--acp',
+          '--stdio',
+          '--no-auto-update',
+          '--disable-builtin-mcps',
+          '--model=gpt-5.6-sol',
+          '--effort=high',
+          '--deny-url=example.invalid',
+        ]),
+      },
+    });
+
+    const service = new ClawdbotAgentService({
+      async checkAgent() {
+        return {
+          type: agent.type,
+          name: agent.name,
+          enabled: true,
+          configured: true,
+          command: agent.command,
+          executableFound: true,
+          executablePath: agent.command,
+          providerVersion: 'GitHub Copilot CLI 1.0.74',
+          providerVersionSource: 'copilot --version',
+          authenticated: null,
+          healthy: true,
+          checkedAt: '2026-07-24T12:00:00.000Z',
+        };
+      },
+    });
+    const manifest = await service.probeProviderRuntime(agent);
+
+    expect(manifest).toMatchObject({
+      provider: 'acp-stdio',
+      adapter: 'acp-stdio',
+      providerVersion: 'Copilot 1.0.74',
+      providerBuild: expect.stringMatching(/profile:github-copilot-cli@1:sha256:/),
+      probeRevision: 12,
+      probe: {
+        diagnostics: expect.arrayContaining([
+          expect.stringContaining(COPILOT_ACP_TESTED_RELEASE),
+          expect.stringContaining(COPILOT_ACP_TESTED_COMMIT),
+          expect.stringContaining('public-preview-acp'),
+        ]),
+      },
+    });
+    expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
+      'supported'
+    );
+  });
+
+  it('uses the safe Copilot version probe without attempting authentication', async () => {
+    const agent = {
+      type: 'copilot',
+      name: 'GitHub Copilot CLI',
+      command: 'copilot',
+      args: [],
+      enabled: true,
+      provider: 'acp-stdio' as const,
+    };
+    const runCommand = vi.fn(async (command: string, args: string[]) => {
+      if (command === 'which') return { stdout: '/usr/local/bin/copilot\n', stderr: '' };
+      if (command === 'copilot' && args.join(' ') === '--version') {
+        return { stdout: 'GitHub Copilot CLI 1.0.74\n', stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
+    });
+    const health = await new AgentHealthService(runCommand).checkAgent({
+      ...agent,
+      supportProfile: normalizeHarnessSupportProfile(agent),
+    });
+
+    expect(health).toMatchObject({
+      executableFound: true,
+      providerVersion: 'GitHub Copilot CLI 1.0.74',
+      providerVersionSource: 'copilot --version',
+      authenticated: null,
+      healthy: true,
+    });
+    expect(runCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails Copilot identity, version, and capability drift closed', async () => {
+    for (const mode of [
+      'copilot-wrong-name',
+      'copilot-wrong-version',
+      'copilot-wrong-capabilities',
+    ]) {
+      await expect(
+        probeAcpStdioRuntime({
+          ...options(mode),
+          runtimeProfileId: COPILOT_ACP_RUNTIME_PROFILE_ID,
+        })
+      ).rejects.toThrow(/outside the tested compatibility profile/i);
+    }
+  });
+
+  it('compiles only the tested Copilot process-wide policy arguments', () => {
+    expect(
+      buildCopilotAcpArgs({
+        model: 'gpt-5.6-sol',
+        extraArgs: [
+          '--reasoning-effort',
+          'xhigh',
+          '--available-tools=view,bash',
+          '--excluded-tools=write',
+          '--deny-tool=bash(rm)',
+          '--deny-url',
+          'example.invalid',
+          '--context=long_context',
+          '--max-ai-credits=30',
+        ],
+      })
+    ).toEqual([
+      ...COPILOT_ACP_REQUIRED_ARGS,
+      '--model=gpt-5.6-sol',
+      '--effort=xhigh',
+      '--available-tools=view,bash',
+      '--excluded-tools=write',
+      '--deny-tool=bash(rm)',
+      '--deny-url=example.invalid',
+      '--context=long_context',
+      '--max-ai-credits=30',
+    ]);
+
+    for (const argument of [
+      '-p',
+      '--allow-all',
+      '--allow-all-tools',
+      '--allow-url=example.com',
+      '--port=3000',
+      '--remote',
+      '--plugin-dir=/tmp/plugin',
+      '--additional-mcp-config={}',
+      '--resume=session',
+    ]) {
+      expect(() => buildCopilotAcpArgs({ extraArgs: [argument] })).toThrow(
+        /not governed by Veritas/i
+      );
+    }
   });
 
   it('negotiates, prompts, streams tool updates, and resolves permission requests', async () => {

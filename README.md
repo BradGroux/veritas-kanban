@@ -253,6 +253,9 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Buzz Agent ACP profile** — Generic ACP execution with pinned Buzz v0.4.24
   identity/capability evidence, safe environment allowlists, and honest
   no-resume and stdio-only MCP posture
+- **GitHub Copilot CLI ACP profile** — Generic ACP execution with a system-owned
+  stdio/public-preview launch baseline, exact v1.0.74 compatibility evidence,
+  bounded restrictive process policy, and honest source/authentication limits
 - **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status
 - **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators
 - **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips
