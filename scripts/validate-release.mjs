@@ -296,6 +296,77 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizeReleaseBody(value) {
+  return value.replace(/\r\n?/g, '\n').trim();
+}
+
+function releaseBodyFormattingIssues(value) {
+  const issues = [];
+
+  if (value.includes('\r')) {
+    issues.push('contains carriage-return characters');
+  }
+
+  const lines = value.replace(/\r\n?/g, '\n').split('\n');
+  let inFence = false;
+  let previousBlockLine;
+
+  for (const [index, line] of lines.entries()) {
+    const lineNumber = index + 1;
+    const trimmed = line.trim();
+    const trimmedStart = line.trimStart();
+
+    if (/^```/.test(trimmedStart)) {
+      inFence = !inFence;
+      previousBlockLine = undefined;
+      continue;
+    }
+
+    if (inFence) continue;
+
+    if (trimmed.length === 0) {
+      previousBlockLine = undefined;
+      continue;
+    }
+
+    if (/\s{2}$/.test(line)) {
+      issues.push(`line ${lineNumber} uses a Markdown hard break`);
+    }
+
+    if (/<br\s*\/?>/i.test(line)) {
+      issues.push(`line ${lineNumber} contains an explicit HTML line break`);
+    }
+
+    if (/\\[rn](?:\\[rn])?/.test(line)) {
+      issues.push(`line ${lineNumber} contains a literal escaped line break`);
+    }
+
+    const blockLine = {
+      lineNumber,
+      listItem: /^\s*(?:[-*+]|\d+\.)\s+/.test(line),
+      tableRow: /^\s*\|.*\|\s*$/.test(line),
+    };
+
+    if (
+      previousBlockLine &&
+      !(previousBlockLine.listItem && blockLine.listItem) &&
+      !(previousBlockLine.tableRow && blockLine.tableRow)
+    ) {
+      issues.push(
+        `lines ${previousBlockLine.lineNumber}-${lineNumber} are not separated by a blank line`
+      );
+    }
+
+    previousBlockLine = blockLine;
+  }
+
+  if (inFence) {
+    issues.push('contains an unclosed fenced code block');
+  }
+
+  return issues;
+}
+
 function parseGithubRepo(repositoryUrl) {
   if (!repositoryUrl) return undefined;
 
@@ -321,6 +392,10 @@ async function main() {
   const rootPackage = packages.find((pkg) => pkg.label === 'root').json;
   const expectedVersion = options.version ?? rootPackage.version;
   const requiredReleaseDocs = releaseDocsForVersion(expectedVersion);
+  const releaseBodyFile = `docs/releases/v${expectedVersion}.md`;
+  const releaseBodyExists = await exists(releaseBodyFile);
+  const releaseBody = releaseBodyExists ? await readText(releaseBodyFile) : '';
+  const releaseBodyIssues = releaseBodyExists ? releaseBodyFormattingIssues(releaseBody) : [];
 
   check(
     'Release version is valid semver',
@@ -331,6 +406,13 @@ async function main() {
   for (const packageFile of requiredFiles) {
     check(`Required file exists: ${packageFile}`, await exists(packageFile));
   }
+
+  check('Reviewed GitHub release body exists', releaseBodyExists, releaseBodyFile);
+  check(
+    'GitHub release body uses full-width Markdown blocks',
+    releaseBodyExists && releaseBodyIssues.length === 0,
+    releaseBodyIssues.slice(0, 3).join('; ') || releaseBodyFile
+  );
 
   for (const pkg of packages) {
     check(
@@ -443,7 +525,7 @@ async function main() {
         '--repo',
         repo,
         '--json',
-        'isDraft,isPrerelease,name,tagName,url',
+        'body,isDraft,isPrerelease,name,tagName,url',
       ]);
 
       if (release.ok) {
@@ -457,6 +539,12 @@ async function main() {
           `GitHub release is published: ${tagName}`,
           releaseJson.isDraft === false,
           releaseJson.isDraft ? 'draft release' : 'published'
+        );
+        check(
+          `GitHub release body matches ${releaseBodyFile}`,
+          releaseBodyExists &&
+            normalizeReleaseBody(releaseJson.body ?? '') === normalizeReleaseBody(releaseBody),
+          releaseBodyFile
         );
       } else {
         fail(`GitHub release exists: ${tagName}`, release.stderr || 'gh release view failed');

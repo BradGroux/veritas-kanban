@@ -1,79 +1,76 @@
-Veritas Kanban 6.0.1 is the first supported stable v6 release. It adds
-first-class Buzz integration and gives Grok Build, OpenAI Codex, Claude Code,
-and GitHub Copilot CLI the same evidence-backed task, worktree, tool, approval,
-credential, event, and completion boundaries.
+# Veritas Kanban 6.0.2 Release Notes
 
-> Veritas Kanban 6.0.0 remains available as a quarantined prerelease. Install
-> 6.0.1 or newer.
+Veritas Kanban 6.0.2 is a desktop recovery and supportability hotfix for the
+first stable v6 line. It prevents Chat from trapping the application window,
+adds authoritative native version/build information, and keeps verification
+focused between release milestones.
 
-## Highlights
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.0.2
+> supersedes 6.0.1 as the supported stable v6 release.
 
-### One control plane for agent harnesses
+## Desktop Recovery Hotfix
 
-- Buzz Agent, Grok Build, and GitHub Copilot CLI run through the shared ACP v1
-  adapter.
-- OpenAI Codex supports CLI, SDK, and the richer app-server JSON-RPC lifecycle.
-- Claude Code runs through a supervised bare-mode stream.
-- Hermes and OpenClaw retain their supported one-shot and gateway transports.
-- Settings, API diagnostics, telemetry, dispatch, and `vk doctor --json` now
+### Chat stays inside the application shell
+
+Board Chat and Squad Chat now open in a right-side Workbench dock by default.
+The same active conversation can switch between Right and Bottom without
+remounting. The dock clamps its width or height to the live viewport, owns its
+scrolling, and cannot move or cover the entire application shell.
+
+Close, Escape, browser Back, and Reset Layout all return to a visible board and
+restore focus. Invalid or obsolete persisted dimensions recover to the safe
+right-dock default on startup
+([#1004](https://github.com/BradGroux/veritas-kanban/issues/1004)).
+
+### Native About and offline support information
+
+The desktop application now exposes **About Veritas Kanban** and **Copy Version
+Information** in its native application menu. Both use Electron's authoritative
+application record and include:
+
+- application name and identifier;
+- exact semantic version;
+- embedded release commit/build identity;
+- stable, beta, or development channel;
+- operating system version and architecture; and
+- packaged versus development state.
+
+The native About panel, copied support text, desktop bridge, and updater
+fallback all consume the same record. Operators can capture exact diagnostics
+without opening Settings, the renderer, or a network connection
+([#1005](https://github.com/BradGroux/veritas-kanban/issues/1005)).
+
+### Proportional CI verification
+
+CI now selects documentation-only, focused, or full verification from the
+reviewed change range. Ordinary code changes run affected Vitest coverage;
+high-risk, shared, storage, manifest, and release changes retain the full gate.
+A successful reviewed full-suite head can be reused after merge only when it is
+an ancestor of the resulting commit. Scheduled and explicit release gates
+remain authoritative
+([#1000](https://github.com/BradGroux/veritas-kanban/issues/1000)).
+
+## Harness Support
+
+The v6 harness control plane and compatibility claims introduced in 6.0.1 are
+unchanged:
+
+- Buzz Agent, Grok Build, and GitHub Copilot CLI use the shared ACP v1 adapter.
+- OpenAI Codex supports CLI, SDK, and app-server lifecycles.
+- Claude Code uses a supervised bare-mode stream.
+- Hermes and OpenClaw retain their one-shot and gateway transports.
+- Settings, API diagnostics, telemetry, dispatch, and `vk doctor --json`
   report the same support tier and redacted readiness evidence.
 
-Equal footing does not mean pretending every provider has the same features.
+Equal footing does not pretend every provider supports the same controls.
 Veritas probes the installed version and capabilities, persists that evidence,
-and blocks unsupported resume, tool, approval, sandbox, or completion behavior
-before an attempt starts.
+and blocks unsupported lifecycle, tool, approval, sandbox, or completion
+behavior before attempt creation.
 
-### First-class Buzz support
+Buzz communication remains separate from task authority. The relay transports
+signed messages; Veritas owns tasks, attempts, tools, approvals, and completion.
 
-- Connect a pinned Buzz community channel to Squad Chat.
-- Import signed public persona and team definitions as disabled profiles.
-- Run `buzz-agent` through ACP with exact version and capability checks.
-- Expose only the selected run-scoped Veritas tools.
-- Trigger allowlisted Veritas workflows from Buzz root messages with durable
-  replay protection.
-
-Buzz relay delivery remains a communication path. Veritas remains the authority
-for tasks, attempts, tools, approvals, and completion.
-
-### Safer, recoverable runs
-
-- Every run records its task envelope, launch policy, worktree baseline,
-  provider runtime evidence, causal events, approvals, tool catalog, and
-  completion evidence.
-- Restart and reconnect logic verifies ownership before resuming work, avoiding
-  silent duplicate runs.
-- Provider build or capability drift invalidates old certification.
-- Credential-bearing tools use one-shot, exact-action leases instead of
-  exposing raw secrets to provider configuration or logs.
-- The desktop updater rejects older release metadata instead of offering a
-  downgrade.
-
-## Stabilization fixes in 6.0.1
-
-- Chat is a reversible desktop panel with visible close, Escape, browser Back,
-  startup-state recovery, and native layout reset
-  ([#945](https://github.com/BradGroux/veritas-kanban/issues/945)).
-- Task drawers, shared overlays, Archive cards, scoring pages, and the template
-  editor have reachable scrolling and resizing
-  ([#935](https://github.com/BradGroux/veritas-kanban/issues/935),
-  [#938](https://github.com/BradGroux/veritas-kanban/issues/938),
-  [#939](https://github.com/BradGroux/veritas-kanban/issues/939),
-  [#941](https://github.com/BradGroux/veritas-kanban/issues/941)).
-- Workflow actions handle omitted collections and recoverable load failures
-  instead of crashing task detail
-  ([#936](https://github.com/BradGroux/veritas-kanban/issues/936)).
-- Full-page views, task detail, and nested Workflow overlays preserve their
-  actual route origin, browser history, keyboard Back behavior, and scroll
-  position ([#937](https://github.com/BradGroux/veritas-kanban/issues/937)).
-- New scoring profiles open as visible, validated drafts
-  ([#943](https://github.com/BradGroux/veritas-kanban/issues/943)).
-- Operations Digest reconciles board inventory with windowed events and exposes
-  source IDs and metadata-quality findings
-  ([#944](https://github.com/BradGroux/veritas-kanban/issues/944)).
-- The packaged desktop consistently reports its real application version
-  ([#986](https://github.com/BradGroux/veritas-kanban/issues/986)).
-
-## Install or upgrade
+## Install Or Upgrade
 
 ### Homebrew
 
@@ -82,7 +79,7 @@ brew update
 brew upgrade --cask bradgroux/tap/veritas-kanban
 ```
 
-For a first install:
+For a first installation:
 
 ```bash
 brew install --cask bradgroux/tap/veritas-kanban
@@ -91,35 +88,37 @@ brew install --cask bradgroux/tap/veritas-kanban
 ### Direct download
 
 Download the signed and notarized macOS arm64 DMG or ZIP from the
-[v6.0.1 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.1).
+[v6.0.2 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.2).
 
-Back up the current workspace before upgrading. Keep the v5.2.5 backup until
-the v6 runtime is accepted. If rollback requires an older schema, restore the
-pre-upgrade backup instead of opening newer data with an incompatible binary.
-Follow the
-[v6 upgrade and administration guide](https://github.com/BradGroux/veritas-kanban/blob/v6.0.1/docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md)
-for the complete migration, remote-access, validation, and rollback procedure.
+Back up the current workspace before upgrading. Keep the backup until the new
+runtime is accepted. Follow the
+[v6 upgrade and administration guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md) for
+exact readiness, data-preservation, diagnostics, and rollback procedures.
 
-## Important behavior changes
+## Breaking Changes And Migration Warnings
 
-- Provider-less or adapter/profile-mismatched records no longer fall through to
+- Version 6.0.2 does not add a new data-schema migration over 6.0.1.
+- Do not install the quarantined 6.0.0 prerelease.
+- Provider-less or adapter/profile-mismatched records do not fall through to
   OpenClaw.
 - Unknown or changed provider builds lose certification until current probes
   and deterministic fixtures pass.
-- Claude Code no longer launches with `--dangerously-skip-permissions`.
-- Credential-bound MCP servers are not copied into provider-native
-  configuration. They are available only through the mediated run bridge.
-- Conversation controls appear only when the selected provider proves it
-  supports them.
+- Claude Code does not launch with `--dangerously-skip-permissions`.
+- Credential-bound MCP servers are available only through the mediated
+  run-scoped bridge.
 - The public REST API remains mounted at `v1`; the v6 product version does not
   rename API routes.
 
-## Known limitations
+Upgrade from v5.2.5 only after a governed backup. If rollback requires an older
+schema, restore the stopped-writer pre-upgrade backup instead of opening newer
+data with an incompatible binary.
+
+## Known Limitations
 
 - Buzz Agent sessions are in-memory and do not support session load/resume.
   Buzz files, reactions, forums, DMs, and destructive edit/delete projection
   are not bridged.
-- GitHub Copilot CLI ACP is public preview.
+- GitHub Copilot CLI ACP remains public preview.
 - Grok Build's stable artifact self-reports alpha and cannot be fully traced to
   the current public source tree.
 - Claude Code's complete CLI implementation is not public, so certification is
@@ -129,14 +128,31 @@ for the complete migration, remote-access, validation, and rollback procedure.
 - Deterministic compatibility does not prove provider authentication,
   subscription availability, quota, or live inference.
 
-## Documentation and evidence
+## Release Artifacts
 
-- [Agent guide and reusable `AGENTS.md` template](https://github.com/BradGroux/veritas-kanban/blob/main/docs/AGENTS-TEMPLATE.md)
-- [Agent provider setup and operations](https://github.com/BradGroux/veritas-kanban/blob/v6.0.1/docs/AGENT-PROVIDERS.md)
-- [Harness compatibility matrix](https://github.com/BradGroux/veritas-kanban/blob/v6.0.1/docs/HARNESS-COMPATIBILITY.md)
-- [Buzz integration guide](https://github.com/BradGroux/veritas-kanban/blob/v6.0.1/docs/BUZZ-INTEGRATION.md)
-- [v6 runtime architecture](https://github.com/BradGroux/veritas-kanban/blob/v6.0.1/docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
-- [Release evidence packet](https://github.com/BradGroux/veritas-kanban/blob/main/docs/V6-RC-EVIDENCE-PACKET.md)
-- [Release tracker #924](https://github.com/BradGroux/veritas-kanban/issues/924)
+The supported stable desktop release publishes these assets from the annotated
+`v6.0.2` tag:
+
+- signed and notarized `Veritas-Kanban-6.0.2-mac-arm64.dmg`;
+- signed and notarized `Veritas-Kanban-6.0.2-mac-arm64.zip`;
+- DMG and ZIP blockmaps;
+- SHA-256 sidecars; and
+- `latest-mac.yml` updater metadata.
+
+Linux and Windows builds are verification previews, not stable signed
+distribution artifacts. Exact byte sizes, GitHub digests, signature,
+Gatekeeper, stapling, updater, and downloaded-app evidence are recorded in the
+[v6 release candidate evidence packet](V6-RC-EVIDENCE-PACKET.md).
+
+## Documentation And Evidence
+
+- [Agent guide and reusable `AGENTS.md` template](AGENTS-TEMPLATE.md)
+- [Agent provider setup and operations](AGENT-PROVIDERS.md)
+- [Harness compatibility matrix](HARNESS-COMPATIBILITY.md)
+- [Buzz integration guide](BUZZ-INTEGRATION.md)
+- [v6 runtime architecture](architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
+- [v6 compatibility and release policy](V6-COMPATIBILITY-AND-RELEASE-POLICY.md)
+- [v6 GA checklist](V6-GA-CHECKLIST.md)
+- [Release issue #1010](https://github.com/BradGroux/veritas-kanban/issues/1010)
 - [Buzz epic #904](https://github.com/BradGroux/veritas-kanban/issues/904)
 - [Equal-footing harness epic #915](https://github.com/BradGroux/veritas-kanban/issues/915)

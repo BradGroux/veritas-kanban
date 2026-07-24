@@ -1,14 +1,36 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
 This packet retains the historical evidence for the quarantined Veritas Kanban
-6.0.0 prerelease and records the 6.0.1 stabilization release. It separates
-merged implementation, deterministic conformance, live provider evidence,
-local runtime proof, signed publication, and Homebrew availability.
+6.0.0 prerelease and the 6.0.1 stabilization release, then records the 6.0.2
+desktop recovery hotfix. It separates merged implementation, deterministic
+conformance, local runtime proof, signed publication, and Homebrew availability.
 
-Veritas Kanban 6.0.1 is the first supported stable v6 release. Do not use
-6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.0.2 supersedes 6.0.1 as the supported stable v6 release. Do
+not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
+Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
+
+## 6.0.2 Desktop Recovery Candidate
+
+| Field               | Value                                                                                                                                                                                                                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version     | 6.0.2                                                                                                                                                                                                                                                                      |
+| Release tracker     | [#1010](https://github.com/BradGroux/veritas-kanban/issues/1010)                                                                                                                                                                                                           |
+| Source branch       | `release/v6.0.2-1010`                                                                                                                                                                                                                                                      |
+| Source baseline     | `2f18229ff24153ef33b5a21de21f0befb94d8a08`, the merged #1005 main commit with green CI and cross-platform unsigned desktop artifacts                                                                                                                                       |
+| Included issues     | [#1000](https://github.com/BradGroux/veritas-kanban/issues/1000), [#1004](https://github.com/BradGroux/veritas-kanban/issues/1004), [#1005](https://github.com/BradGroux/veritas-kanban/issues/1005), and [#1010](https://github.com/BradGroux/veritas-kanban/issues/1010) |
+| Source verification | Focused tests and rendered smoke per fix; reviewed full workspace evidence on the exact #1005 merge ancestry; one milestone release validation gate                                                                                                                        |
+| Signed runtime gate | Exact 6.0.2 equality across bundle, health, updater, native About, copied support text, and desktop bridge; Right/Bottom Chat recovery at the minimum supported window; bounded task; clean quit                                                                           |
+| Distribution gate   | Annotated tag, reviewed full-width GitHub release body, signed/notarized DMG and ZIP, updater metadata, independent digests, GitHub release validation, and verified Homebrew cask                                                                                         |
+
+### 6.0.2 issue traceability
+
+| Issue                                                            | Pull request                                                   | Outcome                                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [#1000](https://github.com/BradGroux/veritas-kanban/issues/1000) | [#1003](https://github.com/BradGroux/veritas-kanban/pull/1003) | Deterministic documentation, focused, and full CI test scope                                             |
+| [#1004](https://github.com/BradGroux/veritas-kanban/issues/1004) | [#1008](https://github.com/BradGroux/veritas-kanban/pull/1008) | Bounded right/bottom Chat dock with complete visible recovery paths                                      |
+| [#1005](https://github.com/BradGroux/veritas-kanban/issues/1005) | [#1009](https://github.com/BradGroux/veritas-kanban/pull/1009) | Authoritative native version/build/channel/OS/architecture record and offline copy action                |
+| [#1010](https://github.com/BradGroux/veritas-kanban/issues/1010) | Pending                                                        | Version, documentation, release body, signed publication, downloaded-app verification, and Homebrew gate |
 
 ## 6.0.1 Stabilization Candidate
 
@@ -299,9 +321,10 @@ and Homebrew availability are independent gates.
 - Buzz Agent does not resume in-memory sessions; Buzz communication does not
   project files, reactions, forums, DMs, or destructive edit/delete behavior.
 - [Packaged desktop version reporting](https://github.com/BradGroux/veritas-kanban/issues/986)
-  is fixed in the 6.0.1 source candidate. Exact equality across the downloaded
-  bundle, health endpoint, updater metadata, and desktop bridge remains a
-  signed-publication gate.
+  landed in 6.0.1; [native build and support information](https://github.com/BradGroux/veritas-kanban/issues/1005)
+  is added in 6.0.2. Exact equality across the downloaded bundle, health
+  endpoint, updater metadata, native About, copied support text, and desktop
+  bridge remains a signed-publication gate.
 - Linux and Windows desktop packages remain unsigned previews.
 - Provider and Buzz Settings screenshots were captured from the isolated
   profile. No public-safe active approval existed, so approval visual evidence

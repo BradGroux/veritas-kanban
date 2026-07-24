@@ -1,6 +1,6 @@
 # Veritas Kanban — API Reference
 
-**Version**: 6.0.1
+**Version**: 6.0.2
 **Last Updated**: 2026-07-24
 **Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
@@ -1463,7 +1463,7 @@ POST /api/run-sessions/run_share_abc/approvals
   "note": "Use the release branch.",
   "responseData": {
     "answers": {
-      "branch": { "answers": ["release/v6.0.1"] }
+      "branch": { "answers": ["release/v6.0.2"] }
     }
   }
 }
