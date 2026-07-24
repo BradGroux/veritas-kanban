@@ -1,5 +1,8 @@
 # v5 Compatibility And Release Policy
 
+> Historical v5 policy. Current compatibility and release policy is in
+> [v6 Compatibility And Release Policy](V6-COMPATIBILITY-AND-RELEASE-POLICY.md).
+
 This document defines the v5 release compatibility contract across the desktop
 app, bundled server, SQLite schema, CLI, MCP, mobile/PWA clients, workflow
 engine, WebSocket sync, migration tooling, and updater metadata.

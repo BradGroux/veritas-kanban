@@ -4,7 +4,7 @@
 > Claude-specific lessons, cross-model review workflow, and common mistakes caught by previous
 > Claude runs. Do not duplicate `AGENTS.md` content here.
 >
-> **Last updated:** 2026-07-10 (v2.1.0 — converted to supplement)  
+> **Last updated:** 2026-07-24 (v6.0.0 release freshness)
 > **Freshness check:** Update after mistakes; review monthly.
 
 ---

@@ -1,6 +1,9 @@
 # Veritas Kanban v5 GA Checklist
 
-v5.0.0 stable is published. The current source line is v5.2.5, including the
+> Historical v5 checklist. Current release gates are in
+> [v6 GA Checklist](V6-GA-CHECKLIST.md).
+
+v5.0.0 stable was published and the final v5 source line is v5.2.5, including the
 post-v5.1 backlog train, the July 2026 desktop and responsive UI audit, the
 runtime security artifact gate, draggable startup/auth surfaces, and the
 non-destructive existing-desktop-data setup path. This checklist remains the
@@ -8,7 +11,7 @@ operator reference for release-gate review, follow-up evidence debt, and future
 v5 patch candidates. The GitHub release and release issues remain the source of
 scheduling truth.
 
-For future candidates, use
+For retained v5 candidate evidence, use
 [v5 Release Candidate Evidence Packet](V5-RC-EVIDENCE-PACKET.md) as the single
 evidence target. The packet is the place to link command output, workflow runs,
 signed artifact URLs, checksums, notarization proof, load results, mobile/PWA

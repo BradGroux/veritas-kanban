@@ -142,7 +142,8 @@ async function checkFeatureWrapperImports() {
 
 async function checkDocsLinks() {
   const readme = await readFile(path.join(rootDir, 'README.md'), 'utf8');
-  const checklist = await readFile(path.join(rootDir, 'docs/V5-GA-CHECKLIST.md'), 'utf8');
+  const checklistPath = 'docs/V6-GA-CHECKLIST.md';
+  const checklist = await readFile(path.join(rootDir, checklistPath), 'utf8');
   const requiredChecklistMarkers = [
     'Mantine component-system cleanup gate',
     'pnpm qa:mantine',
@@ -152,17 +153,17 @@ async function checkDocsLinks() {
   ];
   const missingMarkers = requiredChecklistMarkers.filter((marker) => !checklist.includes(marker));
 
-  if (!readme.includes('docs/V5-GA-CHECKLIST.md')) {
-    fail('v5 GA checklist link', 'README.md does not link docs/V5-GA-CHECKLIST.md.');
+  if (!readme.includes(checklistPath)) {
+    fail('v6 GA checklist link', `README.md does not link ${checklistPath}.`);
     return;
   }
 
   if (missingMarkers.length > 0) {
-    fail('v5 GA checklist content', missingMarkers.join('\n'));
+    fail('v6 GA checklist content', missingMarkers.join('\n'));
     return;
   }
 
-  pass('v5 GA checklist content', 'Mantine cleanup gate is represented in the v5 GA checklist.');
+  pass('v6 GA checklist content', 'Mantine cleanup gate is represented in the v6 GA checklist.');
 }
 
 function assetStats(buffer) {

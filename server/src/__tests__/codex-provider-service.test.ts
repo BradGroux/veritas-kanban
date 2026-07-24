@@ -138,6 +138,7 @@ import type {
   PrepareRunToolCatalogInput,
   ToolControlPlaneService,
 } from '../services/tool-control-plane-service.js';
+import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -1542,7 +1543,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockUpdateTask).not.toHaveBeenCalled();
   });
 
-  it('compiles transient preview and durable start tool catalogs before launch enforcement', async () => {
+  it('compiles transient preview and durable start tool catalogs before enforced launch', async () => {
     mockGetConfig.mockResolvedValue({
       agents: [
         {
@@ -1570,27 +1571,35 @@ describe('ClawdbotAgentService Codex providers', () => {
         },
       ],
     });
-    const prepareRunCatalog = vi.fn(async (input: PrepareRunToolCatalogInput) => ({
-      schemaVersion: 'run-tool-catalog/v1' as const,
-      taskId: input.taskId,
-      attemptId: input.attemptId,
-      provider: input.provider,
-      providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
-      taskEnvelopeDigest: input.taskEnvelopeDigest,
-      entries: [],
-      createdAt: '2026-07-24T12:00:00.000Z',
-      digest: `sha256:${'c'.repeat(64)}`,
-    }));
+    const catalogDigests: string[] = [];
+    const prepareRunCatalog = vi.fn(async (input: PrepareRunToolCatalogInput) => {
+      const catalog = {
+        schemaVersion: 'run-tool-catalog/v1' as const,
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        provider: input.provider,
+        providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
+        taskEnvelopeDigest: input.taskEnvelopeDigest,
+        entries: [],
+        createdAt: '2026-07-24T12:00:00.000Z',
+        digest: '',
+      };
+      catalog.digest = calculateRunToolCatalogDigest(catalog);
+      catalogDigests.push(catalog.digest);
+      return catalog;
+    });
     const toolControlPlane = {
       prepareRunCatalog,
       environmentKeys: vi.fn(async () => []),
     } as unknown as ToolControlPlaneService;
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
     const service = testableService(tmpDir, undefined, undefined, toolControlPlane);
 
     const preview = await service.previewAgentLaunch(task.id, undefined, {
       profileId: 'mcp-reviewer',
     });
-    expect(preview.manifest.tools.catalogDigest).toBe(`sha256:${'c'.repeat(64)}`);
+    expect(preview.manifest.tools.catalogDigest).toBe(catalogDigests[0]);
     expect(prepareRunCatalog).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -1600,9 +1609,8 @@ describe('ClawdbotAgentService Codex providers', () => {
       })
     );
 
-    await expect(
-      service.startAgent(task.id, undefined, { profileId: 'mcp-reviewer' })
-    ).rejects.toThrow(/cannot be enforced/i);
+    const active = await service.startAgent(task.id, undefined, { profileId: 'mcp-reviewer' });
+    expect(active.runLaunchManifest.tools.catalogDigest).toBe(catalogDigests[1]);
     expect(prepareRunCatalog).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -1612,8 +1620,9 @@ describe('ClawdbotAgentService Codex providers', () => {
       })
     );
     expect(prepareRunCatalog.mock.calls[1]?.[0]).not.toHaveProperty('persist');
-    expect(mockSpawn).not.toHaveBeenCalled();
-    expect(task.attempt).toBeUndefined();
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(task.attempt).toMatchObject({ id: active.attemptId, status: 'running' });
+    await service.stopAgent(task.id, active.attemptId);
   });
 
   it('fails before attempt mutation when profile tool restrictions cannot be enforced', async () => {

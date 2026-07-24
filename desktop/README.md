@@ -1,6 +1,6 @@
 # Veritas Kanban Desktop
 
-This package is the v5 native desktop scaffold. It uses Electron with
+This package is the v6 native desktop application. It uses Electron with
 electron-vite, starts the existing Veritas server as the local backend, and
 loads the existing web UI.
 
@@ -28,7 +28,7 @@ can be tested without reusing the default development home.
   work.
 - The renderer uses the existing Veritas web app and has no Node, filesystem,
   process, or secret access.
-- The preload bridge exposes only typed desktop operations. The current v5
+- The preload bridge exposes only typed desktop operations. The current v6
   contract covers app/setup diagnostics, local server lifecycle, connection
   validation, update status, native command dispatch, upload/import picking,
   diagnostics bundles, notification actions, work product export, external URL
@@ -37,7 +37,7 @@ can be tested without reusing the default development home.
   desktop bridge contract module so main and preload cannot drift silently.
 - Dangerous bridge methods require typed request objects and contract validators
   before native execution. Unsupported native features return explicit
-  placeholder results until their dedicated v5 issues implement the backing
+  placeholder results until their dedicated roadmap issues implement the backing
   behavior.
 - Fresh packaged installs store desktop data below the OS app data directory
   returned by Electron `app.getPath('userData')`, then under
@@ -97,7 +97,7 @@ metadata, and platform smoke steps are documented in
 `desktop:package:mac:unsigned` script for Mac release validation. The
 `desktop:package:linux:unsigned` and `desktop:package:windows:unsigned` scripts
 produce preview-only, non-GA artifacts for post-GA readiness checks. Use
-`desktop:release:mac` only for v5 GA; use `desktop:release:linux` or
+`desktop:release:mac` for stable macOS releases; use `desktop:release:linux` or
 `desktop:release:windows` only after the platform release prerequisites in the
 release guide are promoted.
 

@@ -65,7 +65,7 @@ tail -n 80 "$HOME/Library/Application Support/@veritas-kanban/desktop/profiles/d
   exact-version readiness succeeds.
 
 The complete data-preserving procedure is in
-[Routine Mac Desktop Upgrade](V5-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade).
+[Routine Mac Desktop Upgrade](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade).
 
 ---
 

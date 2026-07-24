@@ -6,7 +6,7 @@ Veritas works as a board without any agent runner. When you do enable agents, pr
 
 ## Defaults
 
-Fresh v5 installs use OpenAI Codex as the default agent:
+Fresh v6 installs use OpenAI Codex as the default agent:
 
 - `codex` is enabled by default and uses `codex exec --sandbox workspace-write --json`.
 - `codex-sdk`, `codex-app-server`, `claude-code`, `copilot`, `acp-stdio`, and
@@ -220,8 +220,10 @@ Run-scoped MCP definitions are translated into ACP session configuration.
 Native injection is allowed only when every discovered tool on a selected
 server has an `allow` decision. ACP v1 cannot express per-tool deny or approval
 rules, so a partial catalog fails closed instead of exposing extra tools.
-Credential-bound server definitions remain blocked until brokered delivery
-lands in #962.
+Credential-bound native server definitions remain omitted. Selected
+credential-bound tools use the system-owned `veritas-run` bridge, which binds
+an opaque in-memory handle to the exact run catalog and consumes one-shot
+credential leases only inside the mediated downstream call.
 
 ### Expose Veritas sessions to ACP clients
 

@@ -1,5 +1,8 @@
 # v5 Release Evidence Packets
 
+> Historical v5 evidence. Current release evidence is in
+> [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
+
 ## v5.2.5 Release Evidence Packet
 
 This section records the desktop existing-data upgrade fix, migration runbook,

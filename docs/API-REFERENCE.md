@@ -1,6 +1,6 @@
 # Veritas Kanban — API Reference
 
-**Version**: 5.2.5
+**Version**: 6.0.0
 **Last Updated**: 2026-07-23
 **Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
@@ -2954,9 +2954,9 @@ credential material. Binary views and buffers are not valid callback results.
 The initial local source resolves an environment key at use time. This is a
 compatibility source, not a replacement for a production secret manager.
 Definitions using an unavailable external source remain metadata-only and
-leases fail closed. Required brokered sandbox presets remain blocked until a
-provider and controlled network or tool boundary report supported,
-non-bypassable evidence.
+leases fail closed. Required brokered sandbox presets compile only when the
+selected provider and immutable run catalog prove the system-owned tool bridge
+or another reviewed non-bypassable boundary. Uncovered references still block.
 
 Run completion retries revocation on duplicate terminal delivery. Startup and
 one-minute periodic reconciliation expire, block, or revoke invalid leases.

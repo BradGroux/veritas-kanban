@@ -21,13 +21,13 @@ AI agents rely on documentation to understand context, conventions, and constrai
 
 Every project should maintain these files:
 
-| File                     | Purpose                                | Update Cadence                |
-| ------------------------ | -------------------------------------- | ----------------------------- |
-| `CLAUDE.md`              | Agent rules, patterns, lessons learned | After every mistake/discovery |
-| `AGENTS.md`              | Agent personality, escalation rules    | When workflow changes         |
-| `docs/BEST-PRACTICES.md` | Team patterns and anti-patterns        | Monthly or after post-mortems |
-| `prompt-registry/*.md`   | Workflow prompts                       | When prompts drift or improve |
-| `README.md`              | Project overview, quick start          | After major releases          |
+| File                     | Purpose                                | Update Cadence                       |
+| ------------------------ | -------------------------------------- | ------------------------------------ |
+| `AGENTS.md`              | Canonical agent rules and architecture | After toolchain/architecture changes |
+| `CLAUDE.md`              | Claude-specific supplement             | When Claude behavior differs         |
+| `docs/BEST-PRACTICES.md` | Team patterns and anti-patterns        | Monthly or after post-mortems        |
+| `prompt-registry/*.md`   | Workflow prompts                       | When prompts drift or improve        |
+| `README.md`              | Project overview, quick start          | After major releases                 |
 
 ### Optional Model-Specific Files
 
@@ -43,9 +43,11 @@ Every project should maintain these files:
 
 Update docs **within the same session** when:
 
-1. **A bug was caused by missing context** — Add the context to CLAUDE.md
+1. **A bug was caused by missing context** — Add durable shared context to
+   `AGENTS.md`, or a harness-specific supplement when it truly differs
 2. **Cross-model review catches a pattern** — Document the pattern
-3. **A workaround is discovered** — Add to Troubleshooting or CLAUDE.md
+3. **A workaround is discovered** — Add it to Troubleshooting or the nearest
+   applicable instruction file
 4. **API behavior changes** — Update relevant docs
 
 ### Scheduled Updates

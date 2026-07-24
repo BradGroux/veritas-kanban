@@ -18,7 +18,7 @@ let mcpTaskId;
 function usage() {
   console.log(`Usage: pnpm smoke:cli-mcp -- [options]
 
-Runs v5 release-candidate CLI and MCP compatibility checks. Local version/build
+Runs v6 release-candidate CLI and MCP compatibility checks. Local version/build
 checks always run. Live read/write smoke runs when a write-capable scoped API
 key is available.
 
@@ -295,7 +295,7 @@ async function runCliSmoke(options) {
   const listBody = parseJson(list.stdout || '[]', 'CLI read smoke returned JSON');
   check('CLI read smoke returned an array', Array.isArray(listBody));
 
-  const title = `v5 CLI compatibility smoke ${Date.now()}`;
+  const title = `v6 CLI compatibility smoke ${Date.now()}`;
   const create = await runCommand(
     process.execPath,
     [
@@ -307,7 +307,7 @@ async function runCliSmoke(options) {
       '--priority',
       'low',
       '--description',
-      'Temporary task created by v5 CLI compatibility smoke.',
+      'Temporary task created by v6 CLI compatibility smoke.',
       '--json',
     ],
     options
@@ -401,7 +401,7 @@ async function runMcpSmoke(options) {
   );
   check('MCP list_tasks returned an array', Array.isArray(listTasks));
 
-  const title = `v5 MCP compatibility smoke ${Date.now()}`;
+  const title = `v6 MCP compatibility smoke ${Date.now()}`;
   const createResult = assertJsonRpcResult(
     await mcpRequest(
       {
@@ -414,7 +414,7 @@ async function runMcpSmoke(options) {
             title,
             type: 'automation',
             priority: 'low',
-            description: 'Temporary task created by v5 MCP compatibility smoke.',
+            description: 'Temporary task created by v6 MCP compatibility smoke.',
           },
         },
       },

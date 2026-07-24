@@ -320,7 +320,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     expect(completionResult?.idempotencyKey).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
-  it('defers an envelope-backed OpenClaw attempt to its authoritative callback after restart', async () => {
+  it('interrupts a callback-era OpenClaw attempt without durable supervisor bindings', async () => {
     const evidence: CompletionEvidenceSource = {
       captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
         capturedAt,
@@ -380,6 +380,21 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
 
     await service.reconcileRunningAttempts();
 
-    expect(mockUpdateTask).not.toHaveBeenCalled();
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      runningTask.id,
+      expect.objectContaining({
+        status: 'in-progress',
+        attempt: expect.objectContaining({
+          id: runningAttempt.id,
+          status: 'failed',
+          completionResult: expect.objectContaining({
+            status: 'interrupted',
+            terminalSource: 'operator-interruption',
+            summary:
+              'Legacy running attempt has no durable supervisor bindings and cannot be recovered safely.',
+          }),
+        }),
+      })
+    );
   });
 });

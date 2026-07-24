@@ -58,6 +58,7 @@ When a doc is older than the current version, it may need review.
 
 | Date       | Scope                                                               | Agent   |
 | ---------- | ------------------------------------------------------------------- | ------- |
+| 2026-07-24 | v6.0.0 harness, Buzz, release, upgrade, compatibility, and evidence | Release |
 | 2026-07-12 | v5.2.2 UI-audit fixes, release gates, desktop state, and evidence   | Release |
 | 2026-06-05 | v5.0.0 stable release docs, install paths, release assets, RC notes | Codex   |
 | 2026-03-25 | Full v3→v4 version references, governance docs, CHANGELOG, examples | VERITAS |
@@ -100,9 +101,11 @@ curl -X POST /api/hooks -d '{
 }'
 ```
 
-## Repo Rules (CLAUDE.md Equivalent)
+## Repo Rules
 
-VK's `docs/AGENTS-TEMPLATE.md` serves as the agent instruction file. Key rules:
+The root `AGENTS.md` is canonical. `docs/AGENTS-TEMPLATE.md` is the reusable
+project template, and harness-specific files only supplement the canonical
+rules. Key rules:
 
 1. **Always update docs alongside code** — no code-only PRs for user-facing changes
 2. **Use freshness headers** — every doc starts with `<!-- doc-freshness: ... -->`
