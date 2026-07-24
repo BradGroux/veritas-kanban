@@ -555,7 +555,7 @@ After restarting, confirm that Veritas Kanban was successfully discovered and al
 openclaw mcp list
 
 # Expected output should include:
-# veritas-kanban | 36 tools | http://localhost:3001
+# veritas-kanban | 41 tools | http://localhost:3001
 
 # View available tools from Veritas Kanban
 openclaw mcp tools veritas-kanban
@@ -571,7 +571,7 @@ openclaw mcp describe veritas-kanban vk_list_tasks
 - Build the MCP server if missing: `cd mcp && pnpm build`
 - Check OpenClaw logs for startup errors: `~/.openclaw/logs/mcp.log`
 
-**If the tool count is wrong (not 36 tools):**
+**If the tool count is wrong (not 41 tools):**
 
 - MCP server may have started but failed to initialize properly
 - Check VK API is accessible: `curl http://localhost:3001/api/health`

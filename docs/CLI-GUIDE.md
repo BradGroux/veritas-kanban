@@ -639,6 +639,26 @@ drift degrade the profile and block dispatch. `codex-cli`, `codex-sdk`, and
 `codex-app-server` are reported as separate profiles with separate capability
 manifests.
 
+### Run-scoped Tool Servers
+
+| Command                                                           | Description                                      |
+| ----------------------------------------------------------------- | ------------------------------------------------ |
+| `vk tool-servers list [--json]`                                   | List registered definitions                      |
+| `vk tool-servers get <id> --json`                                 | Read one definition                              |
+| `vk tool-servers create <definition.json>`                        | Create a validated definition                    |
+| `vk tool-servers update <id> <definition.json>`                   | Replace a definition                             |
+| `vk tool-servers delete <id>`                                     | Delete a definition                              |
+| `vk tool-servers enable <id>` / `disable <id>`                    | Change launch eligibility                        |
+| `vk tool-servers version <id> <version>`                          | Change version identity and invalidate discovery |
+| `vk tool-servers discover <id> [--force] [--json]`                | Refresh version-bound discovery                  |
+| `vk tool-servers catalog <taskId> <attemptId> --json`             | Read an immutable run catalog                    |
+| `vk tool-servers call <taskId> <attemptId> <serverId> <tool> ...` | Invoke through policy, approval, and event gates |
+
+Calls require `--arguments '<json-object>'`. Use a stable `--operation-id`
+when retrying transport failures. If the tool requires approval, the command
+returns the exact approval identity; retry with `--approval-id` after that
+request is approved. The `tools` command is an alias for `tool-servers`.
+
 ---
 
 ## Workflow Commands Deep Dive

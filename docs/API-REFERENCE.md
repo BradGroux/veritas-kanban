@@ -49,17 +49,18 @@
 36. [Error Learning](#error-learning)
 37. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
 38. [External Tracker Introspection](#external-tracker-introspection)
-39. [Tool Policies](#tool-policies)
-40. [Watcher Continuation Policies](#watcher-continuation-policies)
-41. [Traces](#traces)
-42. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-43. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-44. [Audit](#audit)
-45. [Maintenance Center](#maintenance-center-apiv1maintenance)
-46. [Common Workflows](#common-workflows)
-47. [Versioning & Deprecation](#versioning--deprecation)
-48. [Rate Limits](#rate-limits)
-49. [Additional Endpoint Groups](#additional-endpoint-groups)
+39. [Run-scoped Tool Control Plane](#run-scoped-tool-control-plane)
+40. [Tool Policies](#tool-policies)
+41. [Watcher Continuation Policies](#watcher-continuation-policies)
+42. [Traces](#traces)
+43. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+44. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+45. [Audit](#audit)
+46. [Maintenance Center](#maintenance-center-apiv1maintenance)
+47. [Common Workflows](#common-workflows)
+48. [Versioning & Deprecation](#versioning--deprecation)
+49. [Rate Limits](#rate-limits)
+50. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2302,9 +2303,11 @@ trace before provider dispatch. Named tool/MCP/permission restrictions and
 required profile health checks block launch when the adapter cannot enforce
 them explicitly.
 
-Current task adapters reject every non-empty named-tool or MCP catalog. The
-run-scoped tool-server control plane tracked in #857 owns positive catalog
-injection; prompt text is never accepted as equivalent enforcement.
+Codex app-server and Claude Code accept a positive MCP catalog through native,
+run-scoped configuration. Other task adapters reject non-empty MCP selections.
+Approval-required tools are omitted from native provider configuration and use
+the mediated tool-call API below. Prompt text is never accepted as equivalent
+enforcement.
 
 ### Conversation Lifecycle
 
@@ -2360,7 +2363,7 @@ controls:
     "providerRuntime": {
       "digest": "sha256:...",
       "provider": "codex-cli",
-      "probeRevision": 8
+      "probeRevision": 9
     },
     "runtime": {
       "command": "codex",
@@ -3737,6 +3740,72 @@ Set `embed` to `false` to run only `qmd update`.
 
 ---
 
+## Run-scoped Tool Control Plane
+
+The canonical endpoints are mounted at `/api/v1/tool-servers`; `/api/tool-servers`
+is the compatibility alias. Definitions and discovery require settings or
+administrator authority. Run catalogs require agent read authority, and
+mediated calls require agent write authority.
+
+| Method   | Path                                                   | Description                                      |
+| -------- | ------------------------------------------------------ | ------------------------------------------------ |
+| `GET`    | `/api/v1/tool-servers`                                 | List definitions                                 |
+| `POST`   | `/api/v1/tool-servers`                                 | Create a validated definition                    |
+| `GET`    | `/api/v1/tool-servers/:id`                             | Read a definition                                |
+| `PUT`    | `/api/v1/tool-servers/:id`                             | Replace a definition                             |
+| `DELETE` | `/api/v1/tool-servers/:id`                             | Delete a definition                              |
+| `POST`   | `/api/v1/tool-servers/:id/discover`                    | Discover tools, optionally bypassing cache       |
+| `GET`    | `/api/v1/tool-servers/runs/:taskId/:attemptId/catalog` | Read the immutable catalog for an attempt        |
+| `POST`   | `/api/v1/tool-servers/call`                            | Invoke one cataloged tool through Veritas policy |
+
+Create and update bodies use `tool-server-definition/v1` input fields:
+
+```json
+{
+  "id": "project-tools",
+  "version": "1.4.0",
+  "displayName": "Project tools",
+  "enabled": true,
+  "transport": {
+    "kind": "stdio",
+    "command": "/opt/project-tools",
+    "args": ["serve"],
+    "environmentKeys": [],
+    "credentialReferences": []
+  },
+  "requirement": "required",
+  "startupTimeoutMs": 10000,
+  "toolTimeoutMs": 30000,
+  "allowedTools": ["read", "search"],
+  "deniedTools": [],
+  "approvalRequiredTools": ["search"],
+  "approvalMode": "never"
+}
+```
+
+Discovery is cached by the exact definition digest, which includes server
+identity and version. A changed definition invalidates that cache. Every launch
+still checks startup, protocol, and the runtime-reported version before reusing
+cached schemas. Required discovery failures block launch; optional failures
+appear as degraded catalog entries. The launch manifest stores the resulting
+catalog digest before provider dispatch.
+
+`POST /api/v1/tool-servers/call` requires the exact active task and attempt,
+the same catalog digest stored in launch evidence, a stable `operationId`, and
+arguments that match the discovered JSON Schema. Denied tools fail before
+dispatch. Approval-required tools create or reuse an exact-action
+`run-approval/v1` request and return its identity until approved. Successful
+and failed dispatches append bounded, redacted causal events, and an operation
+ID cannot dispatch twice.
+
+Raw environment and credential values are never stored in a definition,
+catalog, event, or launch manifest. Credential-reference definitions,
+header-bound definitions, and credential-like environment keys remain
+fail-closed until the provider launch credential broker is available.
+See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
+
+---
+
 ## Tool Policies
 
 Role-based tool access restrictions — control which tools each agent role can use.
@@ -4100,6 +4169,7 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/delegation`                | Task delegation                                                          |
 | `/api/workflows`                 | Workflow engine ([details](API-WORKFLOWS.md))                            |
 | `/api/ceremonies`                | Design-review and failure-retrospective requirements                     |
+| `/api/tool-servers`              | Run-scoped MCP and tool-server definitions, catalogs, and calls          |
 | `/api/tool-policies`             | Tool access policies                                                     |
 | `/api/sandbox-policies`          | Agent sandbox policy presets                                             |
 | `/api/integrations`              | External integrations, outbound delivery audit, and human reply adapters |

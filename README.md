@@ -92,7 +92,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
-- [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 36 tools, architecture, tool catalog, security model, and read/write smoke checks.
+- [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 41 tools, architecture, tool catalog, security model, and read/write smoke checks.
 - [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed runtime manifests, Codex and Hermes execution, optional model profiles, routing, and host behavior.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
@@ -203,7 +203,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ### 🔌 Optional Integration Surfaces
 
-- **MCP Server** — 36 tools across 8 categories via Model Context Protocol
+- **MCP Server** — 41 tools across 9 categories via Model Context Protocol
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 
@@ -336,7 +336,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 #### Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — 36 tools across 8 categories via Model Context Protocol
+- **MCP Server** — 41 tools across 9 categories via Model Context Protocol
 - **Codex MCP setup** — documented `codex mcp add veritas-kanban` setup for local and API-key-backed deployments
 - **Notifications** — Teams integration for task updates
 
@@ -374,7 +374,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 | **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
 | **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
 | **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
-| **MCP server**                  |             ✅ 36 tools             |              ❌              |          ❌           |
+| **MCP server**                  |             ✅ 41 tools             |              ❌              |          ❌           |
 | **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
 | **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
 | **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
@@ -510,6 +510,8 @@ vk doctor --json                 # Support-safe JSON report
 vk snapshot --format markdown    # Redacted runtime support snapshot
 vk prompts import prompt-registry --dry-run
 vk sqlite journal status --json  # Journal maintenance and override posture
+vk tool-servers list --json      # Registered run-scoped MCP servers
+vk tool-servers discover <id>    # Refresh version-bound tool discovery
 ```
 
 Validates Node version, server health, API auth, and optionally creates a welcome task to get you started.
@@ -721,7 +723,7 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-Optional. The MCP server exposes 36 tools across 8 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects) via [Model Context Protocol](https://modelcontextprotocol.io/). Skip this for board-only use.
+Optional. The MCP server exposes 41 tools across 9 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects, and run-scoped tool control) via [Model Context Protocol](https://modelcontextprotocol.io/). Skip this for board-only use.
 
 **→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, read/write smoke checks, and troubleshooting.
 
@@ -755,7 +757,7 @@ Verify discovery with `openclaw mcp list`. See [Troubleshooting](docs/TROUBLESHO
 **Troubleshooting MCP connection issues:**
 
 - **Always restart the MCP client after MCP config changes** — MCP servers are discovered at startup
-- **Verify tools are available:** Run `openclaw mcp list` to confirm 36 Veritas Kanban tools appear
+- **Verify tools are available:** Run `openclaw mcp list` to confirm 41 Veritas Kanban tools appear
 - **When reporting issues, provide:**
   - OpenClaw version (`openclaw --version`)
   - VK version and health (`curl http://localhost:3001/api/health`)

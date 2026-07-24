@@ -337,6 +337,37 @@ describe('RunLaunchManifestService', () => {
     );
   });
 
+  it('requires immutable catalog evidence for enforced MCP selections', () => {
+    const missing = new RunLaunchManifestService().compile(
+      input({
+        tools: {
+          allowed: ['veritas/get_task'],
+          denied: [],
+          policyIds: [],
+          mcpServers: ['veritas'],
+          enforcement: 'enforced',
+        },
+      })
+    );
+    expect(missing.enforcement.blockers).toContainEqual(
+      expect.objectContaining({ code: 'tool-catalog-missing' })
+    );
+
+    const catalogued = new RunLaunchManifestService().compile(
+      input({
+        tools: {
+          allowed: ['veritas/get_task'],
+          denied: [],
+          policyIds: [],
+          mcpServers: ['veritas'],
+          catalogDigest: `sha256:${'c'.repeat(64)}`,
+          enforcement: 'enforced',
+        },
+      })
+    );
+    expect(catalogued.enforcement.enforceable).toBe(true);
+  });
+
   it('surfaces unsupported provider capability requirements as preview blockers', () => {
     const manifest = new RunLaunchManifestService().compile(
       input({

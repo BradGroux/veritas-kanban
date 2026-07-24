@@ -136,6 +136,16 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   lease, and process/session identity; replay only after the durable event
   cursor; and record a typed recovery action instead of starting duplicate work
   or signaling an unverified process.
+- Resolve selected MCP servers through `tool-server-definition/v1` and persist
+  an immutable `run-tool-catalog/v1` before provider dispatch. Required
+  discovery failures block launch; optional failures remain visible and
+  audited.
+- Native provider configuration may expose only tools with an `allow`
+  decision. Approval-required tools must use the Veritas-mediated
+  `call_run_tool` path so the exact action hash is approved before dispatch.
+- Tool-server environment values and credential values are never persisted.
+  Credential-bound tool definitions remain fail-closed until the provider
+  launch credential broker is active.
 
 ---
 
@@ -172,6 +182,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   strict stdio for one task-bound thread and turn.
 - App-server launch arguments are system-owned. Inherited MCP servers, hooks,
   plugins, apps, browser/computer tools, and remote control remain disabled.
+  Selected run-scoped MCP servers are injected only through the immutable
+  catalog's thread configuration.
 - App-server consumes only the checked-in v0.145.0 schemas and exposes
   `initialize`, thread start/resume/fork/compact/archive, and turn
   start/steer/interrupt. `thread/shellCommand` is never reachable.
@@ -196,7 +208,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   usage, cost, and result records into `run-event/v1`.
 - Resume uses the exact persisted session through system-owned `--resume`.
   Native history fork adds `--fork-session`; caller-supplied lifecycle flags
-  remain prohibited. MCP injection remains fail-closed.
+  remain prohibited. Run-scoped MCP uses a system-owned strict config and
+  exposes only catalog tools with an `allow` decision.
 - The shared approval broker is available, but Claude stays on static
   `dontAsk` permissions until its adapter exposes a pinned interactive
   request/response contract.

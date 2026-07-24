@@ -100,6 +100,7 @@ export interface CodexAppServerThreadInput {
   cwd: string;
   model?: string;
   sandboxMode: SandboxPolicyDryRunResult['effective']['sandboxMode'];
+  mcpServers?: Record<string, unknown>;
 }
 
 export interface CodexAppServerTurnInput {
@@ -354,6 +355,7 @@ export class CodexAppServerRpcClient {
       sandbox: input.sandboxMode,
       serviceName: 'veritas-kanban',
       sessionStartSource: 'startup',
+      ...(input.mcpServers ? { config: { mcp_servers: input.mcpServers } } : {}),
       ...(input.model?.trim() ? { model: input.model.trim() } : {}),
     });
     return requiredNestedIdentifier(result, 'thread', 'id', 'Codex app-server thread/start');
@@ -368,6 +370,7 @@ export class CodexAppServerRpcClient {
       approvalPolicy: 'on-request',
       approvalsReviewer: 'user',
       sandbox: input.sandboxMode,
+      ...(input.mcpServers ? { config: { mcp_servers: input.mcpServers } } : {}),
       ...(input.model?.trim() ? { model: input.model.trim() } : {}),
       excludeTurns: true,
     });
@@ -391,6 +394,7 @@ export class CodexAppServerRpcClient {
       approvalPolicy: 'on-request',
       approvalsReviewer: 'user',
       sandbox: input.sandboxMode,
+      ...(input.mcpServers ? { config: { mcp_servers: input.mcpServers } } : {}),
       ...(input.model?.trim() ? { model: input.model.trim() } : {}),
       ...(input.lastTurnId
         ? { lastTurnId: requiredIdentifier(input.lastTurnId, 'Codex app-server fork turn ID') }

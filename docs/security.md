@@ -190,6 +190,40 @@ evidence. The source event ID and optimistic local revision are checked again
 inside the authoritative JSON-file lock or SQLite transaction before mutation.
 Source removal never deletes local materializations.
 
+## Run-scoped Tool Control Plane
+
+Tool-server definitions are administrator-controlled and schema validated.
+Transport arguments are arrays executed without a shell, HTTP URLs cannot
+contain userinfo, query strings, or fragments, and environment/header fields
+store key names only. Raw environment and credential values are excluded from
+definitions, discovery records, run catalogs, launch manifests, logs, and
+events. Credential-like environment keys, explicit broker references, and HTTP
+header references fail closed until brokered provider launch handles are
+available.
+
+Discovery schemas and all tool inputs and results have bounded byte and item
+limits. Discovery is bound to the exact definition digest so identity or
+version drift invalidates cached evidence. Required failures block launch;
+optional failures remain visible as degraded catalog entries. An immutable
+catalog binds task, attempt, provider-runtime digest, task-envelope digest,
+definition digest, discovery digest, and each per-tool policy decision.
+
+Native provider configuration exposes only `allow` decisions. Denied and
+approval-required tools remain disabled. The mediated call route requires
+`agent:write`, the exact active running attempt, and a catalog digest matching
+the persisted launch manifest. Approval-required calls bind the server, tool,
+arguments, catalog digest, and operation ID to `run-approval/v1`; a changed,
+expired, rejected, or stale decision fails closed.
+
+Each invocation validates arguments against the discovered JSON Schema,
+dispatches once per stable operation ID, and records bounded redacted
+`tool.started`, `tool.completed`, or causal `run.error` events. Run completion
+closes supervised bridge sessions. Credential-bound definitions remain
+unavailable until the provider launch credential broker can resolve run-scoped
+handles without persisting values.
+
+See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
+
 ## Provider Runtime Capability Enforcement
 
 Provider runtime manifests are authorization evidence, not display metadata.

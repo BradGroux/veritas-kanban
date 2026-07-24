@@ -40,6 +40,9 @@ import type {
   RunSupervisorCompareAndSetResult,
   RunSupervisorListQuery,
   RunSupervisorRecord,
+  RunToolCatalog,
+  ToolServerDefinition,
+  ToolServerDiscovery,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -374,6 +377,21 @@ export interface RunSupervisorRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Run-scoped Tool Control Plane Repository
+// ---------------------------------------------------------------------------
+
+export interface ToolControlPlaneRepository {
+  listDefinitions(): Promise<ToolServerDefinition[]>;
+  getDefinition(id: string): Promise<ToolServerDefinition | null>;
+  saveDefinition(definition: ToolServerDefinition): Promise<ToolServerDefinition>;
+  deleteDefinition(id: string): Promise<boolean>;
+  getDiscovery(definitionDigest: string): Promise<ToolServerDiscovery | null>;
+  saveDiscovery(discovery: ToolServerDiscovery): Promise<ToolServerDiscovery>;
+  getRunCatalog(taskId: string, attemptId: string): Promise<RunToolCatalog | null>;
+  saveRunCatalog(catalog: RunToolCatalog): Promise<RunToolCatalog>;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 
@@ -389,6 +407,7 @@ export interface StorageProvider {
   readonly runEvents: RunEventRepository;
   readonly runApprovals: RunApprovalRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly toolControlPlane: ToolControlPlaneRepository;
   readonly setupContext?: SetupContextRepository;
 
   /** One-time startup hook (create dirs, open connections, etc.). */

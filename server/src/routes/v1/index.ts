@@ -52,6 +52,7 @@ import {
   taskCommentAccess,
   taskReadAccess,
   telemetryAccess,
+  toolControlPlaneAccess,
   transcriptAccess,
   watcherPolicyAccess,
   workflowAccess,
@@ -144,6 +145,7 @@ import { runApprovalRoutes } from '../run-approvals.js';
 import { workspaceCapabilityRoutes } from '../workspace-capabilities.js';
 import { schedulerRoutes } from '../scheduler.js';
 import { queueMonitorRoutes } from '../queue-monitors.js';
+import { toolControlPlaneRoutes } from '../tool-control-plane.js';
 
 const v1Router: IRouter = Router();
 
@@ -246,6 +248,7 @@ v1Router.use('/tool-policies', policyAccess, toolPolicyRoutes);
 v1Router.use('/policies', policyAccess, policyRoutes);
 v1Router.use('/sandbox-policies', sandboxPolicyAccess, sandboxPolicyRoutes);
 v1Router.use('/credential-broker', adminAccess, credentialBrokerRoutes);
+v1Router.use('/tool-servers', toolControlPlaneAccess, toolControlPlaneRoutes);
 v1Router.use('/skills/capabilities', skillCapabilityAccess, skillCapabilityRoutes);
 v1Router.use('/skills/security', skillSecurityAccess, skillSecurityRoutes);
 v1Router.use('/integrations', integrationsAccess, integrationsRoutes);

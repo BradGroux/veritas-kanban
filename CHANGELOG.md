@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the `tool-server-definition/v1`, `tool-server-discovery/v1`, and
+  `run-tool-catalog/v1` control-plane contracts with file and SQLite
+  persistence, version-bound discovery caching, required and optional server
+  posture, per-run allow/deny/approval decisions, bounded supervised stdio and
+  Streamable HTTP invocation, causal replay-safe events, REST/CLI/MCP operator
+  surfaces, and native run-scoped MCP injection for Codex app-server and
+  Claude Code. Credential-bound definitions remain fail-closed until the
+  provider launch credential broker lands (#857).
 - Added `conversation-lifecycle/v1` with durable provider conversation, turn,
   item, parent, and fork identities; launch-manifest and worktree compatibility
   checks; context-window posture; causal lifecycle events; attributed REST,

@@ -184,6 +184,12 @@ describe('Codex app-server v2 provider', () => {
       cwd: '/tmp/worktree',
       model: 'gpt-5.6',
       sandboxMode: 'workspace-write',
+      mcpServers: {
+        veritas: {
+          command: '/usr/bin/node',
+          args: ['/opt/veritas/mcp.js'],
+        },
+      },
     });
     expect(JSON.parse(writes[2]!)).toMatchObject({
       id: 2,
@@ -193,6 +199,14 @@ describe('Codex app-server v2 provider', () => {
         model: 'gpt-5.6',
         sandbox: 'workspace-write',
         approvalPolicy: 'on-request',
+        config: {
+          mcp_servers: {
+            veritas: {
+              command: '/usr/bin/node',
+              args: ['/opt/veritas/mcp.js'],
+            },
+          },
+        },
       },
     });
     await client.acceptRecord({ id: 2, result: threadStartResult() });
@@ -573,7 +587,7 @@ describe('Codex app-server v2 provider', () => {
     expect(adapter.capabilities.find(({ id }) => id === 'run.fork')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.compact')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.approvals')?.state).toBe('supported');
-    expect(adapter.capabilities.find(({ id }) => id === 'tool.mcp')?.state).toBe('unsupported');
+    expect(adapter.capabilities.find(({ id }) => id === 'tool.mcp')?.state).toBe('supported');
   });
 
   it('publishes the same safe environment baseline used by the app-server process', () => {
