@@ -236,6 +236,10 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - The built-in `copilot` profile remains provider `acp-stdio`, pins Copilot CLI
   `v1.0.74`, owns the stdio safety argv, rejects broad allow/remote/TCP/config
   injection, and records public-preview plus incomplete-source limitations.
+- The built-in `grok-build` profile remains provider `acp-stdio`, pins Grok
+  Build `v0.2.111` build `94172f2aa4e5`, launches `grok agent --no-leader
+stdio`, and rejects approval bypass, reauthentication, leader, plugin,
+  endpoint, prompt, and resume argument injection.
 - See `docs/AGENT-PROVIDERS.md` § ACP stdio agent provider.
 
 ---

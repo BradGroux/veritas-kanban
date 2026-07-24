@@ -106,6 +106,14 @@ const DEFAULT_CONFIG: AppConfig = {
       provider: 'acp-stdio',
     },
     {
+      type: 'grok-build',
+      name: 'Grok Build',
+      command: 'grok',
+      args: [],
+      enabled: false,
+      provider: 'acp-stdio',
+    },
+    {
       type: 'ollama-local',
       name: 'Ollama Local',
       command: 'ollama',

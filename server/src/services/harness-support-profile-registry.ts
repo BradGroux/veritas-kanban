@@ -25,11 +25,17 @@ import {
   BUZZ_AGENT_ENVIRONMENT_KEYS,
   BUZZ_AGENT_TESTED_RELEASE,
   buildCopilotAcpArgs,
+  buildGrokBuildAcpArgs,
   COPILOT_ACP_CREDENTIAL_ENV_KEYS,
   COPILOT_ACP_ENVIRONMENT_KEYS,
   COPILOT_ACP_RUNTIME_PROFILE_ID,
   COPILOT_ACP_TESTED_RELEASE,
   COPILOT_ACP_VERSION,
+  GROK_BUILD_ACP_VERSION,
+  GROK_BUILD_CREDENTIAL_ENV_KEYS,
+  GROK_BUILD_ENVIRONMENT_KEYS,
+  GROK_BUILD_RUNTIME_PROFILE_ID,
+  GROK_BUILD_TESTED_RELEASE,
 } from './acp-stdio-adapter.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
@@ -147,6 +153,22 @@ const DEFINITIONS: Record<string, ProfileDefinition> = {
     'process-text',
     'No executable Gemini CLI adapter is registered.'
   ),
+  'grok-build': {
+    id: GROK_BUILD_RUNTIME_PROFILE_ID,
+    displayName: 'Grok Build',
+    adapterId: 'acp-stdio',
+    transport: 'acp',
+    auth: { kind: 'provider-managed' },
+    environmentAllowlist: [...GROK_BUILD_ENVIRONMENT_KEYS],
+    credentialAllowlist: [...GROK_BUILD_CREDENTIAL_ENV_KEYS],
+    testedVersions: [`Grok Build ${GROK_BUILD_ACP_VERSION}`],
+    documentationUrl: '/docs/AGENT-PROVIDERS.md#grok-build-acp',
+    remediation: [
+      `Install Grok Build ${GROK_BUILD_TESTED_RELEASE} and authenticate with \`grok login\` or XAI_API_KEY.`,
+      'Remove approval bypass, reauthentication, leader, plugin, endpoint, prompt, resume, and arbitrary profile launch arguments.',
+      'Veritas owns the ACP stdio and isolated process baseline; the tested stable artifact currently self-reports an alpha channel.',
+    ],
+  },
   codex: executable(
     'openai-codex-cli',
     'OpenAI Codex CLI',
@@ -302,6 +324,21 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     } catch (error) {
       providerLaunchError =
         error instanceof Error ? error.message : 'Copilot ACP launch configuration is unsafe.';
+    }
+  }
+  if (
+    definition.id === GROK_BUILD_RUNTIME_PROFILE_ID &&
+    definition.adapterId === 'acp-stdio' &&
+    !unsafeLaunchConfiguration
+  ) {
+    try {
+      normalizedProviderArgs = buildGrokBuildAcpArgs({
+        model: agent.model,
+        extraArgs: agent.args,
+      });
+    } catch (error) {
+      providerLaunchError =
+        error instanceof Error ? error.message : 'Grok Build ACP launch configuration is unsafe.';
     }
   }
   const executable = {

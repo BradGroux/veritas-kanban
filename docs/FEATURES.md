@@ -424,7 +424,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 12,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 13,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this

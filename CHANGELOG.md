@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a disabled-by-default Grok Build profile under the generic ACP
+  provider, pinned to released `v0.2.111` build `94172f2aa4e5`. Veritas now
+  compiles a dedicated no-leader stdio launch, accepts only bounded model,
+  effort, deny, tool, sandbox, and feature-disable controls, classifies Grok
+  boot credentials separately from task credentials, and validates the exact
+  version, capability, and xAI extension handshake. Unknown builds, approval
+  bypass, reauthentication, leader/plugin/endpoint injection, and source
+  provenance claims fail closed. Provider probe evidence advances to revision
+  13 (#920).
 - Added a disabled-by-default GitHub Copilot CLI profile under the generic ACP
   provider, pinned to the `Copilot 1.0.74` public-preview handshake. Veritas
   now owns a safe stdio baseline, compiles bounded restrictive model/effort/
