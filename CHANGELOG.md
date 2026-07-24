@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the provider-neutral `runtime-hook/v1` in-process hook bus with bounded
+  envelopes, deterministic scope ordering, explicit blocking pre-events,
+  passive post-events, timeout/reentrancy protection, side-effect-free dry-run,
+  and causal run-journal evidence. External executable and HTTP handlers remain
+  fail closed pending their sandbox and egress boundaries (#874).
 - Added `harness-compatibility-matrix/v1` for Buzz, Grok Build, OpenAI Codex
   app-server, Claude Code, and GitHub Copilot CLI. One reviewed record now
   drives exact builds, source caveats, capability and fixture digests,

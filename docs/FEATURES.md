@@ -296,6 +296,7 @@ First-class support for autonomous coding agents.
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
 - **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, ACP stdio, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
+- **Provider-neutral runtime hooks** — Trusted in-process features can register bounded `runtime-hook/v1` pre-dispatch decisions and passive post-event observations with deterministic scope ordering, timeouts, reentrancy protection, dry-run, and causal evidence; arbitrary executable and HTTP handlers remain unsupported
 - **Provider-native approval broker** — Provider requests pause on an exact action hash, persist a bounded workspace-scoped review record, and resume only after an authenticated compare-and-set approve/reject decision; expiry, interruption, cancellation, stale evidence, changed arguments, and duplicate decisions fail closed
 - **Run-scoped tool control plane** — Versioned MCP definitions and discovery,
   immutable per-attempt catalogs, required and optional server posture,

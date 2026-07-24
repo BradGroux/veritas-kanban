@@ -265,6 +265,10 @@ src/scripts/run-harness-conformance.ts -- --suite <suite.json>
   `docs/HARNESS-COMPATIBILITY.md` must use the reviewed profile capability
   digest, fixture revision, invalidation policy, and source caveats rather than
   defining provider-specific tiers.
+- Runtime extensions use the in-process `runtime-hook/v1` bus. Only documented
+  pre-events may deny, post-events remain passive, and arbitrary executable or
+  HTTP handlers stay unsupported until their filesystem and egress boundaries
+  are enforceable. See `docs/architecture/RUNTIME-HOOK-V1.md`.
 - `vk acp serve --stdio` exposes one Veritas-managed task as an ACP v1 server
   view for editors and other ACP clients. Bind with `--task` or require
   `_meta["veritas/taskId"]` on `session/new`; client-owned MCP catalogs fail
