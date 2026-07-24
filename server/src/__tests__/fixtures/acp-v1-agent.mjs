@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process';
+import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 
 // Stable ACP v1 fixture aligned with @agentclientprotocol/sdk 1.3.0.
@@ -14,6 +15,7 @@ const grokMode = mode.startsWith('grok');
 const lines = readline.createInterface({ input: process.stdin });
 let activeSessionId;
 let pendingPromptId;
+let bridgeEvidence;
 
 function send(record) {
   process.stdout.write(`${JSON.stringify(record)}\n`);
@@ -23,7 +25,79 @@ function result(id, value = {}) {
   send({ jsonrpc: '2.0', id, result: value });
 }
 
-lines.on('line', (line) => {
+async function exerciseRunToolBridge(server) {
+  const environment = Object.fromEntries(
+    (server.env ?? []).map((entry) => [entry.name, entry.value])
+  );
+  const child = spawn(server.command, server.args ?? [], {
+    env: { ...process.env, ...environment },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const output = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+  const pending = new Map();
+  output.on('line', (line) => {
+    const record = JSON.parse(line);
+    pending.get(record.id)?.(record);
+    pending.delete(record.id);
+  });
+  let id = 0;
+  const rpc = (method, params) =>
+    new Promise((resolve) => {
+      id += 1;
+      pending.set(id, resolve);
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+
+  try {
+    await rpc('initialize', { protocolVersion: '2025-06-18' });
+    const listed = await rpc('tools/list', {});
+    const catalog = await rpc('tools/call', {
+      name: 'get_run_tool_catalog',
+      arguments: {},
+    });
+    const allowed = await rpc('tools/call', {
+      name: 'call_run_tool',
+      arguments: {
+        serverId: 'veritas',
+        tool: 'read_task',
+        arguments: { task: 'selected' },
+        operationId: 'buzz-read-1',
+      },
+    });
+    const denied = await rpc('tools/call', {
+      name: 'call_run_tool',
+      arguments: {
+        serverId: 'veritas',
+        tool: 'delete_task',
+        arguments: { task: 'unrelated' },
+        operationId: 'buzz-denied-1',
+      },
+    });
+    const approved = await rpc('tools/call', {
+      name: 'call_run_tool',
+      arguments: {
+        serverId: 'veritas',
+        tool: 'update_task',
+        arguments: { task: 'selected', status: 'done' },
+        operationId: 'buzz-write-1',
+        approvalId: 'approval-buzz-write-1',
+      },
+    });
+    return {
+      serverCount: 1,
+      toolNames: listed.result.tools.map((tool) => tool.name),
+      catalogVisible: Boolean(catalog.result),
+      allowed: Boolean(allowed.result),
+      denied: Boolean(denied.error),
+      approved: Boolean(approved.result),
+    };
+  } finally {
+    child.stdin.end();
+    await new Promise((resolve) => child.once('close', resolve));
+  }
+}
+
+lines.on('line', async (line) => {
   const record = JSON.parse(line);
   if (record.method === 'initialize') {
     if (mode === 'malformed') {
@@ -116,6 +190,30 @@ lines.on('line', (line) => {
   }
   if (record.method === 'session/new') {
     activeSessionId = 'session-new';
+    if (mode === 'buzz-bridge') {
+      const servers = record.params.mcpServers ?? [];
+      if (servers.length !== 1 || servers[0].name !== 'Veritas run tools') {
+        send({
+          jsonrpc: '2.0',
+          id: record.id,
+          error: { code: -32602, message: 'Buzz expected exactly one Veritas run tool bridge.' },
+        });
+        return;
+      }
+      try {
+        bridgeEvidence = await exerciseRunToolBridge(servers[0]);
+      } catch (error) {
+        send({
+          jsonrpc: '2.0',
+          id: record.id,
+          error: {
+            code: -32603,
+            message: error instanceof Error ? error.message : 'Buzz bridge fixture failed.',
+          },
+        });
+        return;
+      }
+    }
     result(record.id, { sessionId: activeSessionId });
     return;
   }
@@ -143,10 +241,18 @@ lines.on('line', (line) => {
         sessionId: updateSessionId,
         update: {
           sessionUpdate: 'agent_message_chunk',
-          content: { type: 'text', text: 'ACP fixture response.' },
+          content: {
+            type: 'text',
+            text: mode === 'buzz-bridge' ? JSON.stringify(bridgeEvidence) : 'ACP fixture response.',
+          },
         },
       },
     });
+    if (mode === 'buzz-bridge') {
+      result(pendingPromptId, { stopReason: 'end_turn' });
+      pendingPromptId = undefined;
+      return;
+    }
     if (mode === 'cancel') return;
     send({
       jsonrpc: '2.0',

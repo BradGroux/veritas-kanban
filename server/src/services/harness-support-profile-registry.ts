@@ -82,6 +82,7 @@ interface ProfileDefinition {
   testedVersions?: string[];
   documentationUrl: string;
   remediation: string[];
+  toolCatalogDelivery?: 'native' | 'veritas-bridge';
 }
 
 interface RedactedLaunchArgs {
@@ -109,6 +110,7 @@ const DEFINITIONS: Record<string, ProfileDefinition> = {
     versionArgs: [],
     testedVersions: [`buzz-agent ${BUZZ_AGENT_ACP_VERSION}`],
     documentationUrl: '/docs/AGENT-PROVIDERS.md#buzz-agent-acp',
+    toolCatalogDelivery: 'veritas-bridge',
     remediation: [
       `Install buzz-agent from Buzz ${BUZZ_AGENT_TESTED_RELEASE}; Veritas does not install Buzz or Rust.`,
       'Set BUZZ_AGENT_PROVIDER and the matching model and authentication environment keys, then run `vk doctor`.',
@@ -271,6 +273,10 @@ const PROVIDER_DEFINITIONS: Record<string, ProfileDefinition> = {
   'hermes-cli': DEFINITIONS.hermes,
 };
 
+export function harnessToolCatalogDelivery(profileId: string): 'native' | 'veritas-bridge' {
+  return DEFINITIONS[profileId]?.toolCatalogDelivery ?? 'native';
+}
+
 export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSupportProfile {
   const definition =
     DEFINITIONS[agent.type] ??
@@ -373,6 +379,7 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     authentication,
     platforms: ALL_PLATFORMS,
     launch,
+    toolCatalogDelivery: harnessToolCatalogDelivery(definition.id),
   });
   const unsafeConfigurationReason =
     'Credential material is not allowed in harness launch commands or arguments.';

@@ -65,7 +65,7 @@ Readiness runs bounded `claude --version`, `claude auth status`, and
 `claude agents --json` probes without a shell. The auth status probe is useful
 diagnostic evidence, but only the explicit bare-mode environment satisfies
 launch authentication. The runtime profile requires an exact
-`2.1.218 (Claude Code)` version match and probe revision 13; version or build
+`2.1.218 (Claude Code)` version match and probe revision 14; version or build
 drift invalidates conformance evidence.
 
 Claude's stream is consumed as bounded JSONL. Partial text/thinking, tool
@@ -192,7 +192,7 @@ starts it without a shell in the assigned task worktree.
 Before changing attempt state, Veritas starts a bounded probe process and sends
 ACP `initialize` with protocol version `1`. The returned agent name, version,
 capabilities, and a deterministic capability digest become
-`provider-runtime-manifest/v1` evidence at probe revision 13. Launch starts a
+`provider-runtime-manifest/v1` evidence at probe revision 14. Launch starts a
 fresh process and rejects capability drift before opening or prompting a
 session.
 
@@ -270,6 +270,14 @@ message/tool updates, and stdio MCP. It reports in-memory sessions, no
 `session/load`, no HTTP/SSE MCP, and non-streaming LLM calls truthfully. Resume
 therefore fails closed. `buzz-acp` is the inverse relay-side ACP client and is
 never accepted by this profile.
+
+When a run selects tools, the profile receives exactly one system-owned
+`veritas-run` stdio MCP descriptor. The opaque handle is bound to the task,
+attempt, immutable catalog, launch manifest, and lifecycle. Buzz reads the
+selected catalog and makes allowed or approval-backed calls through that
+bridge; unrelated or denied tools are absent or rejected. Native MCP
+definitions, task credential values, the global Veritas MCP inventory, and
+HTTP/SSE fallback are never injected.
 
 Veritas does not install Buzz or Rust. Build or install `buzz-agent`, then
 configure `BUZZ_AGENT_PROVIDER` plus the matching model and authentication
@@ -440,8 +448,10 @@ Capability states describe behavior that the current adapter actually proves.
 They do not imply that adjacent roadmap work already exists. For example,
 provider-neutral controls remain unsupported or unknown for an adapter until
 the runtime exposes a verified native operation. MCP governance is supported
-only for Codex app-server and Claude Code through the immutable run catalog;
-other task adapters fail closed on a positive MCP selection.
+through the system-owned run bridge for Codex CLI, Codex SDK, Codex app-server,
+Claude Code, and ACP stdio. All-allow native catalogs remain available where
+the adapter can enforce them; Hermes and OpenClaw fail closed when a selected
+catalog requires the bridge.
 
 One evaluator maps those capabilities to launch and run controls. Agent starts
 always require `run.start`, `run.status`, `run.logs`, `run.complete`, and

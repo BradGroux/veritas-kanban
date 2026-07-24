@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -21,10 +23,19 @@ import {
 } from '../services/acp-stdio-adapter.js';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import { AgentHealthService } from '../services/agent-health-service.js';
-import { normalizeHarnessSupportProfile } from '../services/harness-support-profile-registry.js';
+import {
+  harnessToolCatalogDelivery,
+  normalizeHarnessSupportProfile,
+} from '../services/harness-support-profile-registry.js';
 import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
+import { RunToolBridgeService } from '../services/run-tool-bridge-service.js';
 
 const FIXTURE_PATH = fileURLToPath(new URL('./fixtures/acp-v1-agent.mjs', import.meta.url));
+const BRIDGE_RUNTIME_PATH = fileURLToPath(
+  new URL('../../runtime/run-tool-bridge.mjs', import.meta.url)
+);
+const BRIDGE_HANDLE = `vkbridge_${'b'.repeat(43)}`;
+const DIGEST = `sha256:${'a'.repeat(64)}`;
 
 function options(mode = 'complete') {
   return {
@@ -69,7 +80,7 @@ describe('ACP v1 stdio provider adapter', () => {
       protocolVersion: 'acp/v1',
       providerVersion: 'VK ACP fixture 1.3.0',
       providerBuild: expect.stringMatching(/^acp-v1:sha256:[a-f0-9]{64}$/),
-      probeRevision: 13,
+      probeRevision: 14,
     });
     expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
       'supported'
@@ -96,6 +107,8 @@ describe('ACP v1 stdio provider adapter', () => {
       executable: { versionArgs: [] },
       compatibility: { testedVersions: ['buzz-agent 0.1.0'] },
     });
+    expect(harnessToolCatalogDelivery(supportProfile.id)).toBe('veritas-bridge');
+    expect(harnessToolCatalogDelivery(COPILOT_ACP_RUNTIME_PROFILE_ID)).toBe('native');
 
     const service = new ClawdbotAgentService({
       async checkAgent() {
@@ -120,7 +133,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'buzz-agent 0.1.0',
       providerBuild: expect.stringMatching(/profile:buzz-agent@1:sha256:/),
-      probeRevision: 13,
+      probeRevision: 14,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(BUZZ_AGENT_TESTED_RELEASE),
@@ -146,6 +159,119 @@ describe('ACP v1 stdio provider adapter', () => {
         runtimeProfileId: 'buzz-agent',
       })
     ).rejects.toThrow(/outside the tested compatibility profile/i);
+  });
+
+  it('composes Buzz ACP with only the run-scoped Veritas bridge', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const api = createServer((request, response) => {
+      let body = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => {
+        body += chunk;
+      });
+      request.on('end', () => {
+        response.setHeader('content-type', 'application/json');
+        if (request.url?.endsWith('/catalog')) {
+          response.end(
+            JSON.stringify({
+              digest: DIGEST,
+              entries: [
+                {
+                  serverId: 'veritas',
+                  tools: [
+                    { name: 'read_task', decision: 'allow' },
+                    { name: 'update_task', decision: 'approval' },
+                  ],
+                },
+              ],
+            })
+          );
+          return;
+        }
+        const call = JSON.parse(body) as Record<string, unknown>;
+        calls.push(call);
+        if (call.tool === 'delete_task') {
+          response.statusCode = 403;
+          response.end(JSON.stringify({ error: { message: 'Tool denied by immutable catalog.' } }));
+          return;
+        }
+        response.end(JSON.stringify({ success: true, operationId: call.operationId }));
+      });
+    });
+    await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
+    const port = (api.address() as AddressInfo).port;
+    const bridge = new RunToolBridgeService({
+      apiUrl: `http://127.0.0.1:${port}`,
+      entrypoint: BRIDGE_RUNTIME_PATH,
+      randomHandle: () => BRIDGE_HANDLE,
+    });
+    const launch = bridge.issue({
+      taskId: 'task-buzz',
+      attemptId: 'attempt-buzz',
+      catalogDigest: DIGEST,
+      runLaunchManifestDigest: `sha256:${'b'.repeat(64)}`,
+    });
+    const messages: string[] = [];
+    const control = await openAcpStdio({
+      ...options('buzz-bridge'),
+      onNotification(notification) {
+        if (
+          notification.update.sessionUpdate === 'agent_message_chunk' &&
+          notification.update.content.type === 'text'
+        ) {
+          messages.push(notification.update.content.text);
+        }
+      },
+    });
+
+    try {
+      await expect(
+        control.openSession({
+          mode: 'fresh',
+          cwd: process.cwd(),
+          mcpServers: [bridge.acpServer(launch)],
+        })
+      ).resolves.toBe('session-new');
+      await expect(control.prompt('Use only the selected Veritas tools.')).resolves.toEqual({
+        stopReason: 'end_turn',
+      });
+      expect(JSON.parse(messages[0])).toEqual({
+        serverCount: 1,
+        toolNames: ['get_run_tool_catalog', 'call_run_tool'],
+        catalogVisible: true,
+        allowed: true,
+        denied: true,
+        approved: true,
+      });
+      expect(calls).toEqual([
+        {
+          serverId: 'veritas',
+          tool: 'read_task',
+          arguments: { task: 'selected' },
+          operationId: 'buzz-read-1',
+        },
+        {
+          serverId: 'veritas',
+          tool: 'delete_task',
+          arguments: { task: 'unrelated' },
+          operationId: 'buzz-denied-1',
+        },
+        {
+          serverId: 'veritas',
+          tool: 'update_task',
+          arguments: { task: 'selected', status: 'done' },
+          operationId: 'buzz-write-1',
+          approvalId: 'approval-buzz-write-1',
+        },
+      ]);
+    } finally {
+      await control.close();
+      await new Promise<void>((resolve, reject) =>
+        api.close((error) => (error ? reject(error) : resolve()))
+      );
+    }
+    expect(bridge.revokeRun('task-buzz', 'attempt-buzz')).toBe(1);
+    expect(() => bridge.authorize(launch.handle, 'catalog.read')).toThrow(/stale or revoked/);
   });
 
   it('uses ACP initialize instead of a hanging buzz-agent --version health probe', async () => {
@@ -230,7 +356,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'Copilot 1.0.74',
       providerBuild: expect.stringMatching(/profile:github-copilot-cli@1:sha256:/),
-      probeRevision: 13,
+      probeRevision: 14,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(COPILOT_ACP_TESTED_RELEASE),
@@ -389,7 +515,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: `Grok Build ${GROK_BUILD_ACP_VERSION}`,
       providerBuild: expect.stringMatching(/profile:grok-build@1:sha256:/),
-      probeRevision: 13,
+      probeRevision: 14,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(GROK_BUILD_TESTED_RELEASE),
@@ -653,6 +779,24 @@ describe('ACP v1 stdio provider adapter', () => {
     expect(state('run.streaming')).toBe('supported');
     expect(state('run.approvals')).toBe('supported');
     expect(state('tool.mcp')).toBe('supported');
-    expect(state('credential.broker')).toBe('unsupported');
+    expect(state('credential.broker')).toBe('supported');
+  });
+
+  it('reports the shared bridge capabilities for every supported executable adapter', () => {
+    for (const provider of [
+      'codex-cli',
+      'codex-sdk',
+      'codex-app-server',
+      'claude-code',
+      'acp-stdio',
+    ] as const) {
+      const capabilities = getProviderRuntimeAdapterDefinition(provider).capabilities;
+      expect(capabilities.find((item) => item.id === 'tool.mcp')?.state, provider).toBe(
+        'supported'
+      );
+      expect(capabilities.find((item) => item.id === 'credential.broker')?.state, provider).toBe(
+        'supported'
+      );
+    }
   });
 });

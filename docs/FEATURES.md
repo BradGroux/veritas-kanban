@@ -321,7 +321,8 @@ First-class support for autonomous coding agents.
   the generic ACP provider, pins Buzz v0.4.24 compatibility evidence, exposes
   only its tested configuration and boot-authentication environment keys, and
   reports no persistent session loading or network MCP instead of inventing
-  capabilities
+  capabilities; selected run tools arrive only through the opaque
+  system-owned `veritas-run` bridge
 - **GitHub Copilot CLI ACP profile** — A disabled-by-default `copilot` runtime
   uses the generic ACP provider with a system-owned stdio/public-preview
   baseline, exact v1.0.74 handshake evidence, bounded restrictive process
@@ -356,9 +357,9 @@ persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
   `mcp_servers`; Claude Code receives it through `--strict-mcp-config` and an
   exact MCP `--allowedTools` list.
 - ACP stdio sessions receive a native catalog only when every discovered tool
-  is allowed; partial catalogs fail closed because ACP v1 has no per-tool
-  filtering contract. Other providers reject a positive MCP catalog until they
-  have a conforming adapter.
+  is allowed. Bridge-only profiles such as `buzz-agent` receive exactly one
+  system-owned `veritas-run` descriptor so partial and approval-backed catalogs
+  stay mediated; other partial native catalogs fail closed.
 - Profile-wide named-tool policies still fail closed when a provider cannot
   constrain its built-in tools alongside MCP; prompt instructions do not count
   as enforcement.
@@ -437,7 +438,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 13,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 14,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this

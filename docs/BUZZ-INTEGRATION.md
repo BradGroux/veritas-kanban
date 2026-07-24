@@ -14,6 +14,10 @@ roster members. Definition import is data-only and never starts a process.
 Task execution is a separate seam. A disabled-by-default `buzz-agent`
 configuration uses provider `acp-stdio` and the generic ACP client. It never
 turns relay delivery into task completion and never launches `buzz-acp`.
+Selected task tools are exposed only through the provider-neutral
+`veritas-run` bridge, with an opaque task/attempt/catalog/manifest binding;
+native server credentials and the global Veritas MCP inventory are not passed
+to Buzz.
 See [Buzz Agent ACP](AGENT-PROVIDERS.md#buzz-agent-acp).
 
 ## Supported contract
