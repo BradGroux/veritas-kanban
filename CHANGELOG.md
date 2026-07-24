@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserved in-app route origins, scroll positions, and task return paths across
   full-page navigation, added browser Back and `Cmd+[` support, and made direct
   links fall back safely to Board (#937).
+- Reconciled Operations Digest totals with board inventory, exposed auditable
+  inclusion and exclusion reasons plus metadata quality findings, bounded
+  observed wall time to the selected window, and documented current-state
+  versus windowed metrics (#944).
 
 ## [6.0.0] - 2026-07-24
 

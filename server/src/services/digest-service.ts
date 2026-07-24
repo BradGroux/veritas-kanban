@@ -147,6 +147,14 @@ export interface AgentOperationsDigest {
   };
   generatedAt: string;
   hasActivity: boolean;
+  filters: {
+    project?: string;
+    repo?: string;
+    cwd?: string;
+  };
+  inventory: AgentOperationsInventory;
+  dataQuality: AgentOperationsDataQualityIssue[];
+  semantics: AgentOperationsSemantics;
   groups: AgentOperationsDigestGroup[];
   totals: AgentOperationsDigestGroup['totals'] & {
     openApprovals: number;
@@ -159,6 +167,40 @@ export interface AgentOperationsDigest {
   };
 }
 
+export type AgentOperationsExclusionReason =
+  'filterMismatch' | 'status' | 'timeWindow' | 'missingSourceMetadata';
+
+export interface AgentOperationsInventory {
+  totalBoardTasks: number;
+  matchingFilters: number;
+  includedTasks: number;
+  excludedTasks: number;
+  excludedBy: Record<AgentOperationsExclusionReason, number>;
+  sourceLinks: {
+    includedTasks: AgentOperationsSourceLink[];
+    excludedBy: Record<AgentOperationsExclusionReason, AgentOperationsSourceLink[]>;
+  };
+}
+
+export interface AgentOperationsDataQualityIssue {
+  code: 'unknown-project' | 'unknown-repository' | 'missing-cwd';
+  label: string;
+  count: number;
+  sourceLinks: AgentOperationsSourceLink[];
+}
+
+export interface AgentOperationsSemantics {
+  active: string;
+  blocked: string;
+  stuck: string;
+  completed: string;
+  failed: string;
+  runs: string;
+  activeTime: string;
+  observedWallTime: string;
+  tokenCost: string;
+}
+
 export interface DigestMarkdownMessage {
   markdown: string;
   isEmpty: boolean;
@@ -168,6 +210,22 @@ const DEFAULT_OPERATIONS_WINDOW_HOURS = 24;
 const MAX_OPERATIONS_WINDOW_HOURS = 24 * 30;
 const STUCK_TASK_MS = 2 * 60 * 60 * 1000;
 const MONITOR_PROJECT = 'operations';
+const OPERATIONS_SEMANTICS: AgentOperationsSemantics = {
+  active: 'Current snapshot: tasks whose current status is in-progress.',
+  blocked: 'Current snapshot: tasks whose current status is blocked.',
+  stuck:
+    'Current snapshot subset of active tasks whose task updated timestamp is at least 2 hours before the window end.',
+  completed: 'Tasks whose current status is done and whose updated timestamp is inside the window.',
+  failed:
+    'Unique terminal run attempts inside the window that ended unsuccessfully or have an error event without a completion event.',
+  runs: 'Unique terminal run attempts inside the window, deduplicated by attempt ID when available and otherwise by event ID.',
+  activeTime:
+    'Sum of positive durationMs values from unique completed run events inside the window.',
+  observedWallTime:
+    'Elapsed span between the earliest and latest included signals inside the window for each source group; it is not task age.',
+  tokenCost:
+    'Sum of positive reported token-event cost values inside the window; no cost is inferred when telemetry omits it.',
+};
 
 /**
  * Service for generating daily digest summaries
@@ -315,6 +373,12 @@ export class DigestService {
     const monitorById = new Map(queueMonitorList.monitors.map((monitor) => [monitor.id, monitor]));
     const groups = new Map<string, AgentOperationsDigestGroup>();
     const signalTimesByGroup = new Map<string, number[]>();
+    const inventory = emptyOperationsInventory(tasks.length);
+    const dataQualityLinks = {
+      unknownProject: [] as AgentOperationsSourceLink[],
+      unknownRepository: [] as AgentOperationsSourceLink[],
+      missingCwd: [] as AgentOperationsSourceLink[],
+    };
 
     const getGroup = (project: string | undefined, repo: string | undefined, cwd?: string) => {
       const normalizedProject = project || 'unassigned';
@@ -349,15 +413,39 @@ export class DigestService {
 
     const recordSignal = (group: AgentOperationsDigestGroup, timestamp?: string) => {
       const parsed = timestamp ? Date.parse(timestamp) : Number.NaN;
-      if (Number.isFinite(parsed)) {
+      if (
+        Number.isFinite(parsed) &&
+        parsed >= Date.parse(period.start) &&
+        parsed <= Date.parse(period.end)
+      ) {
         signalTimesByGroup.get(group.key)?.push(parsed);
       }
     };
 
     for (const task of tasks) {
-      if (!matchesOperationsFilters(taskOperationsContext(task), filters)) continue;
-      const group = getGroup(task.project, task.git?.repo, task.git?.worktreePath);
       const taskLink = taskSourceLink(task);
+      const context = taskOperationsContext(task);
+      const missingRequiredMetadata = missingRequiredOperationsMetadata(context, filters);
+      if (missingRequiredMetadata) {
+        recordInventoryExclusion(inventory, 'missingSourceMetadata', taskLink);
+        continue;
+      }
+      if (!matchesOperationsFilters(context, filters)) {
+        recordInventoryExclusion(inventory, 'filterMismatch', taskLink);
+        continue;
+      }
+      inventory.matchingFilters++;
+      recordTaskDataQuality(task, taskLink, dataQualityLinks);
+
+      const inclusion = taskInventoryInclusion(task, period);
+      if (inclusion !== 'included') {
+        recordInventoryExclusion(inventory, inclusion, taskLink);
+        continue;
+      }
+      inventory.includedTasks++;
+      pushUnique(inventory.sourceLinks.includedTasks, taskLink);
+
+      const group = getGroup(task.project, task.git?.repo, task.git?.worktreePath);
 
       if (task.status === 'in-progress') {
         group.totals.active++;
@@ -384,6 +472,14 @@ export class DigestService {
       }
     }
 
+    const completedRunKeys = new Set(
+      events
+        .filter((event): event is RunTelemetryEvent => event.type === 'run.completed')
+        .map(runIdentity)
+    );
+    const countedRunKeys = new Set<string>();
+    const countedTokenEventIds = new Set<string>();
+
     for (const event of events) {
       const task = event.taskId ? taskById.get(event.taskId) : undefined;
       if (
@@ -403,10 +499,13 @@ export class DigestService {
         task?.git?.repo,
         task?.git?.worktreePath
       );
-      recordSignal(group, event.timestamp);
 
       if (event.type === 'run.completed') {
         const runEvent = event as RunTelemetryEvent;
+        const runKey = runIdentity(runEvent);
+        if (countedRunKeys.has(runKey)) continue;
+        countedRunKeys.add(runKey);
+        recordSignal(group, event.timestamp);
         group.totals.runs++;
         group.totals.activeTimeMs += positiveNumber(runEvent.durationMs);
         if (isRunSuccess(runEvent)) {
@@ -421,6 +520,10 @@ export class DigestService {
 
       if (event.type === 'run.error') {
         const runEvent = event as RunTelemetryEvent;
+        const runKey = runIdentity(runEvent);
+        if (completedRunKeys.has(runKey) || countedRunKeys.has(runKey)) continue;
+        countedRunKeys.add(runKey);
+        recordSignal(group, event.timestamp);
         group.totals.runs++;
         group.totals.failed++;
         const failure = runFailureLink(runEvent);
@@ -430,6 +533,9 @@ export class DigestService {
 
       if (event.type === 'run.tokens') {
         const tokenEvent = event as TokenTelemetryEvent;
+        if (countedTokenEventIds.has(tokenEvent.id)) continue;
+        countedTokenEventIds.add(tokenEvent.id);
+        recordSignal(group, event.timestamp);
         group.totals.inputTokens += positiveNumber(tokenEvent.inputTokens);
         group.totals.outputTokens += positiveNumber(tokenEvent.outputTokens);
         group.totals.totalTokens +=
@@ -470,7 +576,6 @@ export class DigestService {
       group.totals.wallTimeMs = observedWallTime(signals);
       group.topPlanCompletions = group.topPlanCompletions.slice(0, 5);
       group.notableFailures = group.notableFailures.slice(0, 5);
-      group.openApprovals = group.openApprovals.slice(0, 10);
       group.queueMonitors = group.queueMonitors.slice(0, 10);
     }
 
@@ -478,11 +583,20 @@ export class DigestService {
       .filter((group) => groupHasActivity(group))
       .sort((a, b) => groupActivityRank(b) - groupActivityRank(a) || a.key.localeCompare(b.key));
     const totals = rollupOperationsTotals(sortedGroups);
+    const dataQuality = operationsDataQualityIssues(dataQualityLinks);
 
     return {
       period,
       generatedAt: new Date().toISOString(),
-      hasActivity: sortedGroups.length > 0,
+      hasActivity: sortedGroups.length > 0 || inventory.totalBoardTasks > 0,
+      filters: {
+        project: filters.project,
+        repo: filters.repo,
+        cwd: filters.cwd,
+      },
+      inventory,
+      dataQuality,
+      semantics: OPERATIONS_SEMANTICS,
       groups: sortedGroups,
       totals,
       refresh: {
@@ -506,7 +620,19 @@ export class DigestService {
     lines.push('');
     lines.push(`Window: ${digest.period.start} to ${digest.period.end}`);
     lines.push(
+      `Scope: project=${digest.filters.project ?? 'all'}, repo=${digest.filters.repo ?? 'all'}, cwd=${digest.filters.cwd ?? 'all'}`
+    );
+    lines.push(
+      `Inventory: ${digest.inventory.totalBoardTasks} board tasks, ${digest.inventory.matchingFilters} match filters, ${digest.inventory.includedTasks} included, ${digest.inventory.excludedTasks} excluded`
+    );
+    lines.push(
+      `Excluded: ${digest.inventory.excludedBy.filterMismatch} filter mismatch, ${digest.inventory.excludedBy.status} status, ${digest.inventory.excludedBy.timeWindow} time window, ${digest.inventory.excludedBy.missingSourceMetadata} missing source metadata`
+    );
+    lines.push(
       `Totals: ${digest.totals.active} active, ${digest.totals.blocked} blocked, ${digest.totals.stuck} stuck, ${digest.totals.completed} completed, ${digest.totals.failed} failed`
+    );
+    lines.push(
+      'Semantics: active, blocked, and stuck are current task state; completed, failed, runs, tokens, and observed wall time are windowed.'
     );
     if (digest.totals.totalTokens > 0) {
       lines.push(
@@ -515,13 +641,21 @@ export class DigestService {
     }
     lines.push('');
 
-    for (const group of digest.groups.slice(0, 10)) {
+    if (digest.dataQuality.length > 0) {
+      lines.push('## Data quality');
+      for (const issue of digest.dataQuality) {
+        lines.push(`- ${issue.label}: ${issue.count} task${issue.count === 1 ? '' : 's'}`);
+      }
+      lines.push('');
+    }
+
+    for (const group of digest.groups) {
       lines.push(`## ${group.project} / ${group.repo}${group.cwd ? ` / ${group.cwd}` : ''}`);
       lines.push(
         `- Counts: ${group.totals.active} active, ${group.totals.blocked} blocked, ${group.totals.stuck} stuck, ${group.totals.completed} completed, ${group.totals.failed} failed`
       );
       lines.push(
-        `- Runtime: ${formatDurationMs(group.totals.activeTimeMs)} active, ${formatDurationMs(group.totals.wallTimeMs)} observed wall`
+        `- Runtime: ${formatDurationMs(group.totals.activeTimeMs)} completed-run time, ${formatDurationMs(group.totals.wallTimeMs)} observed in-window wall`
       );
       if (group.totals.totalTokens > 0) {
         lines.push(
@@ -725,6 +859,102 @@ function emptyOperationsTotals(): AgentOperationsDigestGroup['totals'] {
   };
 }
 
+function emptyOperationsInventory(totalBoardTasks: number): AgentOperationsInventory {
+  return {
+    totalBoardTasks,
+    matchingFilters: 0,
+    includedTasks: 0,
+    excludedTasks: 0,
+    excludedBy: {
+      filterMismatch: 0,
+      status: 0,
+      timeWindow: 0,
+      missingSourceMetadata: 0,
+    },
+    sourceLinks: {
+      includedTasks: [],
+      excludedBy: {
+        filterMismatch: [],
+        status: [],
+        timeWindow: [],
+        missingSourceMetadata: [],
+      },
+    },
+  };
+}
+
+function recordInventoryExclusion(
+  inventory: AgentOperationsInventory,
+  reason: AgentOperationsExclusionReason,
+  task: AgentOperationsSourceLink
+) {
+  inventory.excludedTasks++;
+  inventory.excludedBy[reason]++;
+  pushUnique(inventory.sourceLinks.excludedBy[reason], task);
+}
+
+function taskInventoryInclusion(
+  task: Task,
+  period: AgentOperationsDigest['period']
+): 'included' | 'status' | 'timeWindow' {
+  if (task.status === 'in-progress' || task.status === 'blocked') return 'included';
+  if (task.status === 'done') {
+    return inPeriod(task.updated, period.start, period.end) ? 'included' : 'timeWindow';
+  }
+  return 'status';
+}
+
+function missingRequiredOperationsMetadata(
+  candidate: { project?: string; repo?: string; cwd?: string },
+  filters: AgentOperationsDigestOptions
+): boolean {
+  return Boolean(
+    (filters.project && !normalizeOptionalFilter(candidate.project)) ||
+    (filters.repo && !normalizeOptionalFilter(candidate.repo)) ||
+    (filters.cwd && !normalizeOptionalFilter(candidate.cwd))
+  );
+}
+
+function recordTaskDataQuality(
+  task: Task,
+  taskLink: AgentOperationsSourceLink,
+  links: {
+    unknownProject: AgentOperationsSourceLink[];
+    unknownRepository: AgentOperationsSourceLink[];
+    missingCwd: AgentOperationsSourceLink[];
+  }
+) {
+  if (!normalizeOptionalFilter(task.project)) pushUnique(links.unknownProject, taskLink);
+  if (!normalizeOptionalFilter(task.git?.repo)) pushUnique(links.unknownRepository, taskLink);
+  if (!normalizeOptionalFilter(task.git?.worktreePath)) pushUnique(links.missingCwd, taskLink);
+}
+
+function operationsDataQualityIssues(links: {
+  unknownProject: AgentOperationsSourceLink[];
+  unknownRepository: AgentOperationsSourceLink[];
+  missingCwd: AgentOperationsSourceLink[];
+}): AgentOperationsDataQualityIssue[] {
+  return [
+    {
+      code: 'unknown-project' as const,
+      label: 'Tasks grouped under unassigned project',
+      sourceLinks: links.unknownProject,
+    },
+    {
+      code: 'unknown-repository' as const,
+      label: 'Tasks grouped under unknown repository',
+      sourceLinks: links.unknownRepository,
+    },
+    {
+      code: 'missing-cwd' as const,
+      label: 'Tasks missing CWD/worktree metadata',
+      sourceLinks: links.missingCwd,
+    },
+  ]
+    .filter((issue) => issue.sourceLinks.length > 0)
+    .map((issue) => ({ ...issue, count: issue.sourceLinks.length }));
+}
+
 function groupHasActivity(group: AgentOperationsDigestGroup): boolean {
   return (
     groupActivityRank(group) > 0 ||
@@ -893,7 +1123,16 @@ function queueMonitorSourceLink(event: QueueMonitorEvent): AgentOperationsQueueM
 }
 
 function inPeriod(timestamp: string, start: string, end: string): boolean {
-  return timestamp >= start && timestamp <= end;
+  const value = Date.parse(timestamp);
+  const periodStart = Date.parse(start);
+  const periodEnd = Date.parse(end);
+  return (
+    Number.isFinite(value) &&
+    Number.isFinite(periodStart) &&
+    Number.isFinite(periodEnd) &&
+    value >= periodStart &&
+    value <= periodEnd
+  );
 }
 
 function positiveNumber(value: number | undefined): number {
@@ -904,6 +1143,10 @@ function isRunSuccess(event: RunTelemetryEvent): boolean {
   return (
     event.success === true || (event as unknown as Record<string, unknown>).status === 'success'
   );
+}
+
+function runIdentity(event: RunTelemetryEvent): string {
+  return event.attemptId ?? event.id;
 }
 
 function observedWallTime(timestamps: number[]): number {

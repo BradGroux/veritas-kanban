@@ -287,6 +287,40 @@ function makeOperationsDigest(): AgentOperationsDigest {
     },
     generatedAt: '2026-06-05T09:00:00.000Z',
     hasActivity: true,
+    filters: {},
+    inventory: {
+      totalBoardTasks: 8,
+      matchingFilters: 8,
+      includedTasks: 8,
+      excludedTasks: 0,
+      excludedBy: {
+        filterMismatch: 0,
+        status: 0,
+        timeWindow: 0,
+        missingSourceMetadata: 0,
+      },
+      sourceLinks: {
+        includedTasks: [],
+        excludedBy: {
+          filterMismatch: [],
+          status: [],
+          timeWindow: [],
+          missingSourceMetadata: [],
+        },
+      },
+    },
+    dataQuality: [],
+    semantics: {
+      active: 'Current snapshot active tasks.',
+      blocked: 'Current snapshot blocked tasks.',
+      stuck: 'Current snapshot stuck tasks.',
+      completed: 'Windowed completed tasks.',
+      failed: 'Windowed failed runs.',
+      runs: 'Windowed unique runs.',
+      activeTime: 'Windowed completed run duration.',
+      observedWallTime: 'Windowed signal span.',
+      tokenCost: 'Windowed reported cost.',
+    },
     groups: [
       {
         key: 'platform::veritas-kanban::/worktrees/veritas',

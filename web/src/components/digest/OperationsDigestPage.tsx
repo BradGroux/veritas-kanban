@@ -308,12 +308,39 @@ export function OperationsDigestPage({ onBack, onTaskClick }: OperationsDigestPa
         </Alert>
       ) : null}
 
+      {digest ? <InventoryReconciliation digest={digest} onOpenSources={openSources} /> : null}
+
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <Metric label="Active" value={digest?.totals.active} tone="green" />
-        <Metric label="Blocked" value={digest?.totals.blocked} tone="orange" />
-        <Metric label="Stuck" value={digest?.totals.stuck} tone="yellow" />
-        <Metric label="Completed" value={digest?.totals.completed} tone="blue" />
-        <Metric label="Failed" value={digest?.totals.failed} tone="red" />
+        <Metric
+          label="Active now"
+          value={digest?.totals.active}
+          tone="green"
+          description={digest?.semantics.active}
+        />
+        <Metric
+          label="Blocked now"
+          value={digest?.totals.blocked}
+          tone="orange"
+          description={digest?.semantics.blocked}
+        />
+        <Metric
+          label="Stuck now"
+          value={digest?.totals.stuck}
+          tone="yellow"
+          description={digest?.semantics.stuck}
+        />
+        <Metric
+          label="Completed in window"
+          value={digest?.totals.completed}
+          tone="blue"
+          description={digest?.semantics.completed}
+        />
+        <Metric
+          label="Failed in window"
+          value={digest?.totals.failed}
+          tone="red"
+          description={digest?.semantics.failed}
+        />
         <Metric label="Open approvals" value={digest?.totals.openApprovals} tone="violet" />
       </section>
 
@@ -463,17 +490,100 @@ function Metric({
   label,
   value,
   tone,
+  description,
 }: {
   label: string;
   value?: number;
   tone: 'green' | 'orange' | 'yellow' | 'blue' | 'red' | 'violet';
+  description?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4" title={description}>
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tabular-nums">{formatNumber(value ?? 0)}</div>
       <div className={cn('mt-3 h-1 rounded-full', toneClass(tone))} />
     </div>
+  );
+}
+
+function InventoryReconciliation({
+  digest,
+  onOpenSources,
+}: {
+  digest: AgentOperationsDigest;
+  onOpenSources: (items: AgentOperationsSourceLink[]) => void;
+}) {
+  const inventory = digest.inventory;
+  return (
+    <section className="rounded-lg border bg-card p-4" aria-labelledby="inventory-heading">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 id="inventory-heading" className="text-lg font-semibold">
+            Board Inventory Reconciliation
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {formatNumber(inventory.totalBoardTasks)} total board tasks,{' '}
+            {formatNumber(inventory.matchingFilters)} match the selected source filters,{' '}
+            {formatNumber(inventory.includedTasks)} included and{' '}
+            {formatNumber(inventory.excludedTasks)} excluded.
+          </p>
+        </div>
+        <Group gap="xs" wrap="wrap">
+          <SourceButton
+            label="Included"
+            count={inventory.includedTasks}
+            items={inventory.sourceLinks.includedTasks}
+            onOpenSources={onOpenSources}
+          />
+          <SourceButton
+            label="Filter mismatch"
+            count={inventory.excludedBy.filterMismatch}
+            items={inventory.sourceLinks.excludedBy.filterMismatch}
+            onOpenSources={onOpenSources}
+          />
+          <SourceButton
+            label="Status"
+            count={inventory.excludedBy.status}
+            items={inventory.sourceLinks.excludedBy.status}
+            onOpenSources={onOpenSources}
+          />
+          <SourceButton
+            label="Outside window"
+            count={inventory.excludedBy.timeWindow}
+            items={inventory.sourceLinks.excludedBy.timeWindow}
+            onOpenSources={onOpenSources}
+          />
+          <SourceButton
+            label="Missing metadata"
+            count={inventory.excludedBy.missingSourceMetadata}
+            items={inventory.sourceLinks.excludedBy.missingSourceMetadata}
+            onOpenSources={onOpenSources}
+          />
+        </Group>
+      </div>
+
+      {digest.dataQuality.length > 0 ? (
+        <Alert
+          mt="md"
+          color="yellow"
+          variant="light"
+          icon={<AlertTriangle className="h-4 w-4" />}
+          title="Source metadata needs attention"
+        >
+          <Group gap="xs" wrap="wrap">
+            {digest.dataQuality.map((issue) => (
+              <SourceButton
+                key={issue.code}
+                label={issue.label}
+                count={issue.count}
+                items={issue.sourceLinks}
+                onOpenSources={onOpenSources}
+              />
+            ))}
+          </Group>
+        </Alert>
+      ) : null}
+    </section>
   );
 }
 
@@ -493,9 +603,9 @@ function DigestGroupCard({
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold">{heading}</h3>
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <span>{formatNumber(totals.runs)} runs</span>
-            <span>{formatDuration(totals.activeTimeMs)} active</span>
-            <span>{formatDuration(totals.wallTimeMs)} observed</span>
+            <span>{formatNumber(totals.runs)} windowed runs</span>
+            <span>{formatDuration(totals.activeTimeMs)} run time</span>
+            <span>{formatDuration(totals.wallTimeMs)} observed in window</span>
             <span>{formatNumber(totals.totalTokens)} tokens</span>
             <span>${totals.tokenCost.toFixed(4)}</span>
           </div>
@@ -712,6 +822,15 @@ function digestSnapshotMetadata(
     runs: digest.totals.runs,
     totalTokens: digest.totals.totalTokens,
     tokenCost: digest.totals.tokenCost,
+    totalBoardTasks: digest.inventory.totalBoardTasks,
+    matchingFilters: digest.inventory.matchingFilters,
+    includedTasks: digest.inventory.includedTasks,
+    excludedTasks: digest.inventory.excludedTasks,
+    excludedFilterMismatch: digest.inventory.excludedBy.filterMismatch,
+    excludedStatus: digest.inventory.excludedBy.status,
+    excludedTimeWindow: digest.inventory.excludedBy.timeWindow,
+    excludedMissingSourceMetadata: digest.inventory.excludedBy.missingSourceMetadata,
+    dataQualityIssues: digest.dataQuality.length,
     project: filters.project ?? null,
     repo: filters.repo ?? null,
     cwd: filters.cwd ?? null,
