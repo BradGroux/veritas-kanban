@@ -5,7 +5,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 ## Prerequisites
 
 - **Node.js** 22 or later
-- **pnpm** 9+ (package manager)
+- **pnpm** 11+ (package manager)
 
 ## Development Setup
 
@@ -73,13 +73,16 @@ veritas-kanban/
 
 2. Make your changes — write code, add tests, update docs.
 
-3. Run type checking, linting, and tests before committing:
+3. Run type checking, linting, and focused tests before committing:
 
    ```bash
    pnpm typecheck
    pnpm lint
-   pnpm test
+   pnpm --filter @veritas-kanban/server exec vitest run src/path/to/changed.test.ts
    ```
+
+   Use `pnpm test` at integration or release milestones, or when the change
+   affects shared foundations broadly enough that focused selection is unsafe.
 
 4. Commit using [conventional commits](#commit-conventions).
 
@@ -247,7 +250,9 @@ docs: update README with deployment instructions
 2. **Branch naming:** Use descriptive names like `feat/task-filters`, `fix/login-redirect`, `docs/api-reference`.
 3. **Open a PR** against `main`.
 4. **Fill out the PR template** — describe changes, link related issues, include screenshots for UI changes.
-5. **Ensure CI passes** — all checks must be green.
+5. **Ensure the PR CI tier passes** — all checks started for the pull request
+   must be green. Full workspace and packaging evidence runs after merge, on
+   explicit dispatch, or when the `ci:full` label is applied.
 6. **Request review** — a maintainer will review and may request changes.
 7. **Address feedback** — push additional commits as needed.
 8. **Merge** — once approved, a maintainer will merge.
@@ -291,6 +296,24 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 
 - Write tests for new features and bug fixes.
 - Ensure existing tests pass before submitting.
+
+### CI tiers
+
+| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Pull request                                                                                                | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Static gates, full build, and only test files added or changed by the pull request |
+| Pull request with `ci:full`                                                                                 | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and dual-storage parity         |
+| Push to `main`, nightly 08:00 UTC, or manual `CI` dispatch                                                  | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                             |
+| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                           |
+
+Release validation remains the final authority: clean-clone build, full unit
+and integration suites, applicable E2E, and signed artifact verification.
+
+The operational target for the default pull-request tier is under 15 minutes,
+with no desktop packaging. This is a target rather than an SLA; dependency
+installation and hosted-runner availability still vary. Behavior changes
+should include a focused test change so the pull-request selector executes
+relevant coverage.
 
 ## Questions?
 

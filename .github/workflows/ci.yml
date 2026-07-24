@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -49,9 +53,84 @@ jobs:
       - name: Type check all packages
         run: pnpm typecheck
 
-  # ─── Workspace Unit Tests ────────────────────────────────────────
+  # ─── Changed PR Tests ────────────────────────────────────────────
+  test-changed:
+    name: Changed Tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared test dependency
+        run: pnpm --filter @veritas-kanban/shared build
+
+      - name: Run changed workspace tests
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          selected_count=0
+          for package_name in server web cli mcp; do
+            package_tests=()
+            while IFS= read -r test_file; do
+              package_tests+=("${test_file#"$package_name/"}")
+            done < <(
+              git diff --name-only --diff-filter=ACMR "$BASE_SHA...HEAD" |
+                grep -E "^${package_name}/.*\\.(test|spec)\\.[cm]?[jt]sx?$" || true
+            )
+            if (( ${#package_tests[@]} > 0 )); then
+              for test_file in "${package_tests[@]}"; do
+                pnpm --filter "@veritas-kanban/${package_name}" exec vitest run \
+                  --passWithNoTests \
+                  "$test_file"
+                selected_count=$((selected_count + 1))
+              done
+            fi
+          done
+          if (( selected_count == 0 )); then
+            echo "No changed server, web, CLI, or MCP test files."
+          fi
+
+      - name: Run changed desktop tests
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          desktop_tests=()
+          while IFS= read -r test_file; do
+            desktop_tests+=("$test_file")
+          done < <(
+            git diff --name-only --diff-filter=ACMR "$BASE_SHA...HEAD" |
+              grep -E '^desktop/.*\.(test|spec)\.[cm]?[jt]sx?$' |
+              sed 's#^desktop/##' || true
+          )
+          if (( ${#desktop_tests[@]} == 0 )); then
+            echo "No changed desktop test files."
+          else
+            for test_file in "${desktop_tests[@]}"; do
+              pnpm --filter @veritas-kanban/desktop exec vitest run \
+                --config vitest.config.ts \
+                --passWithNoTests \
+                "$test_file"
+            done
+          fi
+
+  # ─── Full Workspace Unit Tests ───────────────────────────────────
   test-workspace:
     name: Workspace Unit Tests
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
