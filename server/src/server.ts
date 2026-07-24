@@ -81,6 +81,7 @@ import { startAfterInitialization } from './utils/startup-gate.js';
 import { getCommunicationAdapterService } from './services/communication-adapter-service.js';
 import { getRunEventJournalService } from './services/run-event-journal-service.js';
 import { getToolControlPlaneService } from './services/tool-control-plane-service.js';
+import { runToolBridgeRoutes } from './routes/run-tool-bridge.js';
 
 const log = createLogger('server');
 
@@ -416,6 +417,10 @@ app.use('/api', apiRateLimit);
 
 // Unauthenticated webhook routes (registered BEFORE authenticate middleware)
 app.use('/api/webhook', webhookN8nRouter);
+
+// Opaque run-scoped authority. This route is intentionally outside broad API
+// authentication and exposes only the immutable catalog and mediated tool call.
+app.use('/api/run-tool-bridge', runToolBridgeRoutes);
 
 // Apply authentication to all API routes (except /api/auth which is handled above)
 app.use('/api', authenticate);

@@ -213,6 +213,13 @@ import {
   getToolControlPlaneService,
   type ToolControlPlaneService,
 } from './tool-control-plane-service.js';
+import {
+  getRunToolBridgeService,
+  RUN_TOOL_BRIDGE_ENV_KEY,
+  RUN_TOOL_BRIDGE_SERVER_ID,
+  type RunToolBridgeLaunch,
+  type RunToolBridgeService,
+} from './run-tool-bridge-service.js';
 import { getToolPolicyService } from './tool-policy-service.js';
 const log = createLogger('clawdbot-agent-service');
 
@@ -361,6 +368,7 @@ interface PendingAgent {
     close(): void;
   };
   acpControl?: AcpStdioControl;
+  runToolBridge?: RunToolBridgeLaunch;
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
@@ -451,6 +459,7 @@ export class ClawdbotAgentService {
   private runSupervisor: RunSupervisorService;
   private conversationLifecycle: ConversationLifecycleService;
   private toolControlPlane: ToolControlPlaneService;
+  private runToolBridge: RunToolBridgeService;
   private logsDir: string;
 
   constructor(
@@ -465,7 +474,8 @@ export class ClawdbotAgentService {
     approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService(),
     runSupervisor: RunSupervisorService = getRunSupervisorService(),
     conversationLifecycle = new ConversationLifecycleService(),
-    toolControlPlane: ToolControlPlaneService = getToolControlPlaneService()
+    toolControlPlane: ToolControlPlaneService = getToolControlPlaneService(),
+    runToolBridge: RunToolBridgeService = getRunToolBridgeService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -487,6 +497,7 @@ export class ClawdbotAgentService {
     this.runSupervisor = runSupervisor;
     this.conversationLifecycle = conversationLifecycle;
     this.toolControlPlane = toolControlPlane;
+    this.runToolBridge = runToolBridge;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -1398,7 +1409,6 @@ export class ClawdbotAgentService {
       conversationRequest.forkTurnId,
       conversationRequest.intent
     );
-
     // Create event emitter for status updates
     const emitter = new EventEmitter();
 
@@ -1481,6 +1491,19 @@ export class ClawdbotAgentService {
       task = claimedTask;
     }
     try {
+      const pending = pendingAgents.get(taskId);
+      if (!pending || pending.attemptId !== attemptId) {
+        throw new ConflictError('Run launch no longer matches the pending attempt.');
+      }
+      pending.runToolBridge =
+        runToolCatalog && this.runToolBridge.requiresBridge(runToolCatalog)
+          ? this.runToolBridge.issue({
+              taskId,
+              attemptId,
+              catalogDigest: runToolCatalog.digest,
+              runLaunchManifestDigest: runLaunchManifest.digest,
+            })
+          : undefined;
       await this.taskService.updateTask(taskId, {
         status: 'in-progress',
         attempt,
@@ -1488,6 +1511,7 @@ export class ClawdbotAgentService {
       });
     } catch (error) {
       pendingAgents.delete(taskId);
+      this.runToolBridge.revokeRun(taskId, attemptId);
       if (usesManagedWorktree) {
         await this.worktrees.releaseOwnership(taskId, attemptId).catch((releaseError) => {
           log.error(
@@ -2645,12 +2669,16 @@ export class ClawdbotAgentService {
         : status === 'interrupted'
           ? 'run-interrupted'
           : 'run-failed';
-    await this.credentialLeases.revokeRun({
-      taskId,
-      attemptId,
-      ...(runLaunchManifestDigest ? { runLaunchManifestDigest } : {}),
-      reason,
-    });
+    try {
+      await this.credentialLeases.revokeRun({
+        taskId,
+        attemptId,
+        ...(runLaunchManifestDigest ? { runLaunchManifestDigest } : {}),
+        reason,
+      });
+    } finally {
+      this.runToolBridge.revokeRun(taskId, attemptId);
+    }
   }
 
   private async persistPendingCompletion(
@@ -3506,7 +3534,8 @@ export class ClawdbotAgentService {
             attemptId,
             startedAt,
             emitter,
-            sandboxPolicy
+            sandboxPolicy,
+            runLaunchManifest
           );
         },
         stop: ({ pending }) => {
@@ -3546,7 +3575,8 @@ export class ClawdbotAgentService {
             startedAt,
             emitter,
             abortController,
-            sandboxPolicy
+            sandboxPolicy,
+            runLaunchManifest
           ).catch(async (error: unknown) => {
             const current = pendingAgents.get(task.id);
             if (!current || current.attemptId !== attemptId) return;
@@ -4070,6 +4100,9 @@ export class ClawdbotAgentService {
       throw new ConflictError('ACP run tool catalog does not match launch evidence.');
     }
     const mcpServers = runToolCatalog ? await this.toolControlPlane.acpConfig(runToolCatalog) : [];
+    if (pending.runToolBridge) {
+      mcpServers.push(this.runToolBridge.acpServer(pending.runToolBridge));
+    }
     const toolEnvironmentKeys = runToolCatalog
       ? await this.toolControlPlane.environmentKeys(runToolCatalog)
       : [];
@@ -4322,15 +4355,25 @@ export class ClawdbotAgentService {
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Codex app-server');
     }
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Codex app-server launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
     const runToolCatalog = runLaunchManifest.tools.catalogDigest
       ? await this.toolControlPlane.getRunCatalog(task.id, attemptId)
       : undefined;
     if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
       throw new ConflictError('Run tool catalog does not match launch evidence.');
     }
-    const mcpServers = runToolCatalog
+    const mcpServers: Record<string, unknown> = runToolCatalog
       ? await this.toolControlPlane.providerConfig(runToolCatalog)
-      : undefined;
+      : {};
+    if (pending.runToolBridge) {
+      mcpServers[RUN_TOOL_BRIDGE_SERVER_ID] = this.runToolBridge.codexServer(pending.runToolBridge);
+    }
     const toolEnvironmentKeys = runToolCatalog
       ? await this.toolControlPlane.environmentKeys(runToolCatalog)
       : [];
@@ -4338,21 +4381,16 @@ export class ClawdbotAgentService {
     const args = buildCodexAppServerArgs(agentConfig?.args);
     const child = spawn(command, args, {
       cwd: worktreePath,
-      env: buildSafeCodexAppServerEnv(process.env, [
-        ...(sandboxPolicy?.effective.envPassthrough ?? []),
-        ...toolEnvironmentKeys,
-      ]),
+      env: this.runToolBridge.launchEnvironment(
+        buildSafeCodexAppServerEnv(process.env, [
+          ...(sandboxPolicy?.effective.envPassthrough ?? []),
+          ...toolEnvironmentKeys,
+        ]),
+        pending.runToolBridge
+      ),
       shell: false,
       detached: process.platform !== 'win32',
     });
-    const pending = pendingAgents.get(task.id);
-    if (!pending || pending.attemptId !== attemptId) {
-      child.kill('SIGTERM');
-      throw new ConflictError('Codex app-server launch was cancelled before process spawn.', {
-        taskId: task.id,
-        attemptId,
-      });
-    }
     pending.process = child;
     await this.attachSpawnedProcess(pending, child);
 
@@ -5128,9 +5166,26 @@ export class ClawdbotAgentService {
     if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
       throw new ConflictError('Run tool catalog does not match launch evidence.');
     }
-    const claudeMcp = runToolCatalog
+    let claudeMcp = runToolCatalog
       ? await this.toolControlPlane.claudeConfig(runToolCatalog)
       : undefined;
+    if (pending.runToolBridge) {
+      const bridgeMcp = this.runToolBridge.claudeServer(pending.runToolBridge);
+      const nativeServers =
+        claudeMcp?.config.mcpServers &&
+        typeof claudeMcp.config.mcpServers === 'object' &&
+        !Array.isArray(claudeMcp.config.mcpServers)
+          ? (claudeMcp.config.mcpServers as Record<string, unknown>)
+          : {};
+      const bridgeServers = bridgeMcp.config.mcpServers as Record<string, unknown>;
+      claudeMcp = {
+        config: { mcpServers: { ...nativeServers, ...bridgeServers } },
+        allowedToolNames: [
+          ...(claudeMcp?.allowedToolNames ?? []),
+          ...bridgeMcp.allowedToolNames,
+        ].sort(),
+      };
+    }
     const toolEnvironmentKeys = runToolCatalog
       ? await this.toolControlPlane.environmentKeys(runToolCatalog)
       : [];
@@ -5761,7 +5816,8 @@ export class ClawdbotAgentService {
     attemptId: string,
     startedAt: string,
     emitter: EventEmitter,
-    sandboxPolicy: SandboxPolicyDryRunResult | undefined
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined,
+    runLaunchManifest: RunLaunchManifest
   ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
@@ -5775,6 +5831,9 @@ export class ClawdbotAgentService {
         attemptId,
       });
     }
+    if (pending.runLaunchManifest.digest !== runLaunchManifest.digest) {
+      throw new ConflictError('Codex CLI bridge launch evidence changed before dispatch.');
+    }
     const command = agentConfig?.command || 'codex';
     const args = this.buildCodexArgs(
       agentConfig,
@@ -5782,11 +5841,15 @@ export class ClawdbotAgentService {
       logPath,
       attemptId,
       sandboxPolicy,
-      pending.conversation
+      pending.conversation,
+      pending.runToolBridge ? this.runToolBridge.codexCliOverride(pending.runToolBridge) : undefined
     );
     const child = spawn(command, args, {
       cwd: worktreePath,
-      env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      env: this.runToolBridge.launchEnvironment(
+        buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+        pending.runToolBridge
+      ),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -5982,7 +6045,8 @@ export class ClawdbotAgentService {
     logPath: string,
     attemptId: string,
     sandboxPolicy?: SandboxPolicyDryRunResult,
-    conversation?: ConversationLifecycleRecord
+    conversation?: ConversationLifecycleRecord,
+    runToolBridgeOverride?: string
   ): string[] {
     const configured = agentConfig?.args?.length ? [...agentConfig.args] : ['exec'];
     const args = configured.includes('exec') ? configured : ['exec', ...configured];
@@ -5997,6 +6061,7 @@ export class ClawdbotAgentService {
     if (!args.includes('--output-last-message')) {
       args.push('--output-last-message', this.getCodexFinalPath(logPath, attemptId));
     }
+    if (runToolBridgeOverride) args.push('-c', runToolBridgeOverride);
     if (conversation?.mode === 'resume') {
       if (!conversation.conversationId) {
         throw new ConflictError('Codex CLI resume requires an exact conversation ID.');
@@ -6021,19 +6086,13 @@ export class ClawdbotAgentService {
     startedAt: string,
     emitter: EventEmitter,
     abortController: AbortController,
-    sandboxPolicy: SandboxPolicyDryRunResult | undefined
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined,
+    runLaunchManifest: RunLaunchManifest
   ): Promise<void> {
     const worktreePath = this.expandPath(task.git?.worktreePath || '');
     if (!worktreePath) {
       throw new Error('Task worktree path is required for Codex SDK');
     }
-
-    const sdkExecutable = this.resolveCodexSdkExecutable(agentConfig);
-    const { Codex } = await import('@openai/codex-sdk');
-    const codex = new Codex({
-      codexPathOverride: sdkExecutable.codexPathOverride,
-      env: buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
-    });
 
     const pending = pendingAgents.get(task.id);
     if (!pending || pending.attemptId !== attemptId) {
@@ -6042,6 +6101,25 @@ export class ClawdbotAgentService {
         attemptId,
       });
     }
+    if (pending.runLaunchManifest.digest !== runLaunchManifest.digest) {
+      throw new ConflictError('Codex SDK bridge launch evidence changed before dispatch.');
+    }
+    const sdkExecutable = this.resolveCodexSdkExecutable(agentConfig);
+    const { Codex } = await import('@openai/codex-sdk');
+    const codex = new Codex({
+      codexPathOverride: sdkExecutable.codexPathOverride,
+      env: this.runToolBridge.launchEnvironment(
+        buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+        pending.runToolBridge
+      ),
+      ...(pending.runToolBridge
+        ? {
+            config: this.runToolBridge.codexConfig(pending.runToolBridge) as NonNullable<
+              ConstructorParameters<typeof Codex>[0]
+            >['config'],
+          }
+        : {}),
+    });
     const threadSettings = {
       workingDirectory: worktreePath,
       ...this.buildCodexSdkThreadSettings(sandboxPolicy),
@@ -7289,6 +7367,10 @@ export class ClawdbotAgentService {
         ...new Set([
           ...runtime.environmentKeys,
           ...(await this.toolControlPlane.environmentKeys(input.runToolCatalog)),
+          ...(this.runToolBridge.requiresBridge(input.runToolCatalog) &&
+          this.runToolBridge.support(input.provider).injection === 'codex-config'
+            ? [RUN_TOOL_BRIDGE_ENV_KEY]
+            : []),
         ]),
       ].sort();
       if (input.provider === 'claude-code') {

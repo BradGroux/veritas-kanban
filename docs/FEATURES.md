@@ -377,6 +377,10 @@ persists an immutable `run-tool-catalog/v1` digest in the launch manifest.
   server-owned launch manifest, deliver values only inside one-shot downstream
   sessions, and reject replay, drift, approval mismatch, source failure, or
   credential-bearing results.
+- Credential-bound runs inject the same narrow `veritas-run` MCP bridge into
+  Codex CLI/SDK, Codex app-server, Claude Code, and ACP stdio. The bridge
+  carries an opaque run handle, never a task credential. Hermes and OpenClaw
+  fail closed until their certified transports can enforce this contract.
 
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 

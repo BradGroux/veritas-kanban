@@ -77,15 +77,18 @@ export default [
     },
   },
 
-  // Node release/maintenance scripts
+  // Node release/maintenance scripts and dependency-free runtime assets
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'server/runtime/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
+        Buffer: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
         process: 'readonly',
+        URL: 'readonly',
       },
     },
   },

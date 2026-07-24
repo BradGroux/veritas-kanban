@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the system-owned `veritas-run` MCP bridge for credential-bound tools.
+  Opaque, in-memory authority binds the exact task, attempt, catalog, launch
+  manifest, and two allowed bridge methods. Codex CLI/SDK, Codex app-server,
+  Claude Code, and ACP stdio inject the same narrow bridge; Hermes and OpenClaw
+  fail closed before dispatch when a credential-bound catalog is selected
+  (#970).
 - Added exact-action credential lease consumption to mediated run-tool calls.
   The server binds each operation to the active launch manifest, catalog,
   server, tool, arguments digest, approval, and operation ID; resolves values
@@ -38,8 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   definitions, exact source targets, and immutable definition/scope digests.
   Discovery strips source environment and header values, native provider
   configuration omits credential-bound servers, covered launch references
-  report a tool-control-plane boundary, and uncovered, drifted, or invoked
-  references remain fail closed pending exact-action lease consumption (#968).
+  report a tool-control-plane boundary, and uncovered or drifted references
+  remain fail closed (#968).
 - Added `vk acp serve --stdio` and `vk acp status --json` to expose a
   task-bound, provider-neutral ACP v1 server view over Veritas-managed
   conversations. Fresh prompts retain the immutable task envelope, reconnect

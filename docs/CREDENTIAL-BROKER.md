@@ -19,9 +19,11 @@ The v6 foundation includes:
 
 The tool control plane compiles value-free credential boundary evidence into a
 run catalog and consumes leases only inside mediated tool calls. A handle in a
-prompt or provider environment is still not a security boundary:
-credential-bound native server injection remains omitted, and automatic
-system-owned provider bridge injection is tracked by #970.
+prompt or provider environment is not itself a credential boundary:
+credential-bound native server injection remains omitted. A system-owned
+`veritas-run` MCP bridge receives only an opaque, in-memory authority bound to
+the exact task, attempt, catalog, launch manifest, and catalog/call methods.
+The provider never receives the task credential value.
 
 ## Credential classes
 
