@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a first-class Codex app-server v2 task adapter pinned to
+  `codex-cli 0.145.0` and upstream commit
+  `25af12f7e61572b0bc18ddb1008be543b91519b0`. Veritas now owns a strict-stdio,
+  no-shell launch, validates checked-in exact-version JSON Schemas, persists
+  one task-bound thread and turn, streams item/usage/completion events into the
+  causal journal, supports cooperative `turn/interrupt`, and retries only
+  bounded overload `-32001` responses. Inherited MCP, hooks, plugins, apps,
+  browser/computer tools, elicitation, remote control, and unsandboxed
+  `thread/shellCommand` remain structurally disabled; approval, lifecycle, and
+  reattachment controls fail closed until their provider-neutral brokers land
+  (#921).
 - Added a first-class Claude Code v2.1.218 task adapter with a reproducible
   no-shell bare-mode launch, static sandbox-derived permissions, explicit
   environment authentication with provider credentials scrubbed from tool
@@ -29,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not landed yet. Legacy provider-less Claude records migrate only when command
   identity matches, and the old permission-bypass default is removed (#916).
 - Added `run-event/v1`, a provider-neutral causal event journal for OpenClaw,
-  Codex CLI, Codex SDK, and Hermes. Provider mappers now durably append bounded,
+  Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes. Provider
+  mappers now durably append bounded,
   redacted, deduplicated lifecycle, message, reasoning, command, file, tool,
   approval, artifact, usage, error, and unknown events before projecting them
   into legacy logs, traces, telemetry, budgets, and live output. File and SQLite
@@ -87,12 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   persistence, and completion-packet links to the exact launch and provider
   capability evidence (#854).
 - Added immutable provider-owned task-envelope transports for OpenClaw, Codex
-  CLI, Codex SDK, and Hermes. Each renderer binds the exact envelope and runtime
-  identity, commit policy, bounded attributed profile/checkpoint context,
-  workspace baseline, verification gates, and completion evidence to the
-  launched request. OpenClaw alone receives a completion callback; process and
-  stream providers return terminal output through harness-owned capture, and
-  mismatched provider/adapter identities fail closed (#892).
+  CLI, Codex SDK, Codex app-server, Claude Code, and Hermes. Each renderer
+  binds the exact envelope and runtime identity, commit policy, bounded
+  attributed profile/checkpoint context, workspace baseline, verification
+  gates, and completion evidence to the launched request. OpenClaw alone
+  receives a completion callback; process and stream providers return terminal
+  output through harness-owned capture, and mismatched provider/adapter
+  identities fail closed (#892).
 - Added digest-bound, idempotent `completion-result/v1` persistence for process,
   stream, callback, remote-session, and operator-interruption terminal paths.
   Provider claims are bounded, redacted, and untrusted while harness evidence

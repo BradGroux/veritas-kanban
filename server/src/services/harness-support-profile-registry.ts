@@ -15,6 +15,10 @@ import {
   CLAUDE_CODE_CREDENTIAL_ENV_KEYS,
   CLAUDE_CODE_ENVIRONMENT_KEYS,
 } from './claude-code-adapter.js';
+import {
+  buildCodexAppServerArgs,
+  CODEX_APP_SERVER_CERTIFIED_VERSION,
+} from './codex-app-server-adapter.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
 const INVALIDATION_KEYS: HarnessSupportProfile['compatibility']['invalidateOn'] = [
@@ -118,6 +122,27 @@ const DEFINITIONS: Record<string, ProfileDefinition> = {
     ['CODEX_API_KEY', 'OPENAI_API_KEY'],
     ['CODEX_HOME', 'OPENAI_BASE_URL', 'OPENAI_ORG_ID', 'OPENAI_ORGANIZATION', 'OPENAI_PROJECT']
   ),
+  'codex-app-server': {
+    id: 'openai-codex-app-server',
+    displayName: 'OpenAI Codex app-server',
+    adapterId: 'codex-app-server',
+    transport: 'app-server',
+    auth: { kind: 'command', commandArgs: ['login', 'status'] },
+    environmentAllowlist: [
+      'CODEX_HOME',
+      'OPENAI_BASE_URL',
+      'OPENAI_ORG_ID',
+      'OPENAI_ORGANIZATION',
+      'OPENAI_PROJECT',
+    ],
+    credentialAllowlist: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
+    testedVersions: [CODEX_APP_SERVER_CERTIFIED_VERSION],
+    documentationUrl: '/docs/AGENT-PROVIDERS.md#openai-codex-app-server-v01450',
+    remediation: [
+      'Install Codex CLI v0.145.0 and run `codex login status`.',
+      'Remove custom app-server arguments; Veritas owns the strict stdio launch contract.',
+    ],
+  },
   'codex-cloud': unsupported(
     'openai-codex-cloud',
     'OpenAI Codex Cloud',
@@ -172,6 +197,7 @@ const PROVIDER_DEFINITIONS: Record<string, ProfileDefinition> = {
   ),
   'codex-cli': DEFINITIONS.codex,
   'codex-sdk': DEFINITIONS['codex-sdk'],
+  'codex-app-server': DEFINITIONS['codex-app-server'],
   'claude-code': DEFINITIONS['claude-code'],
   'hermes-cli': DEFINITIONS.hermes,
 };
@@ -208,6 +234,14 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
         error instanceof Error ? error.message : 'Claude Code launch configuration is unsafe.';
     }
   }
+  if (definition.adapterId === 'codex-app-server' && !unsafeLaunchConfiguration) {
+    try {
+      normalizedProviderArgs = buildCodexAppServerArgs(agent.args);
+    } catch (error) {
+      providerLaunchError =
+        error instanceof Error ? error.message : 'Codex app-server launch configuration is unsafe.';
+    }
+  }
   const executable = {
     command: redactedCommand.command,
     versionArgs: ['--version'],
@@ -223,7 +257,8 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     environmentAllowlist: [
       ...(definition.transport === 'process-jsonl' ||
       definition.transport === 'process-text' ||
-      definition.transport === 'sdk'
+      definition.transport === 'sdk' ||
+      definition.transport === 'app-server'
         ? PROCESS_ENVIRONMENT_ALLOWLIST
         : []),
       ...(definition.environmentAllowlist ?? []),

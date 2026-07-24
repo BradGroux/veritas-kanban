@@ -255,6 +255,143 @@ function createControllableChild() {
   return child;
 }
 
+function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdin: PassThrough;
+    stdout: PassThrough;
+    stderr: PassThrough;
+    pid: number;
+    killed: boolean;
+    exitCode: number | null;
+    signalCode: NodeJS.Signals | null;
+    kill: ReturnType<typeof vi.fn>;
+  };
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.pid = 54321;
+  child.killed = false;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.kill = vi.fn((signal: NodeJS.Signals = 'SIGTERM') => {
+    if (child.exitCode != null || child.signalCode != null) return false;
+    child.killed = true;
+    child.signalCode = signal;
+    queueMicrotask(() => child.emit('close', null, signal));
+    return true;
+  });
+
+  let inputBuffer = '';
+  child.stdin.setEncoding('utf8');
+  child.stdin.on('data', (chunk: string) => {
+    inputBuffer += chunk;
+    const lines = inputBuffer.split(/\r?\n/);
+    inputBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const request = JSON.parse(line) as Record<string, unknown>;
+      received.push(request);
+      const id = request.id;
+      if (request.method === 'initialize') {
+        child.stdout.write(
+          `${JSON.stringify({
+            id,
+            result: {
+              codexHome: '/tmp/codex-home',
+              platformFamily: 'unix',
+              platformOs: 'macos',
+              userAgent: 'codex-cli 0.145.0',
+            },
+          })}\n`
+        );
+      } else if (request.method === 'thread/start') {
+        child.stdout.write(
+          `${JSON.stringify({
+            id,
+            result: {
+              approvalPolicy: 'never',
+              approvalsReviewer: 'user',
+              cwd: tmpPath(request, 'params', 'cwd'),
+              model: 'gpt-5.6',
+              modelProvider: 'openai',
+              sandbox: { type: 'workspaceWrite', networkAccess: false, writableRoots: [] },
+              thread: {
+                cliVersion: '0.145.0',
+                createdAt: 1,
+                cwd: tmpPath(request, 'params', 'cwd'),
+                ephemeral: false,
+                id: 'thread-app-server-fixture',
+                modelProvider: 'openai',
+                preview: 'fixture',
+                sessionId: 'thread-app-server-fixture',
+                source: 'appServer',
+                status: { type: 'idle' },
+                turns: [],
+                updatedAt: 1,
+              },
+            },
+          })}\n`
+        );
+      } else if (request.method === 'turn/start') {
+        const tokenUsage = {
+          cachedInputTokens: 0,
+          inputTokens: 11,
+          outputTokens: 4,
+          reasoningOutputTokens: 0,
+          totalTokens: 15,
+        };
+        child.stdout.write(
+          [
+            JSON.stringify({
+              id,
+              result: {
+                turn: { id: 'turn-app-server-fixture', items: [], status: 'inProgress' },
+              },
+            }),
+            JSON.stringify({
+              method: 'item/agentMessage/delta',
+              params: {
+                threadId: 'thread-app-server-fixture',
+                turnId: 'turn-app-server-fixture',
+                itemId: 'message-app-server-fixture',
+                delta: 'app-server completed',
+              },
+            }),
+            JSON.stringify({
+              method: 'thread/tokenUsage/updated',
+              params: {
+                threadId: 'thread-app-server-fixture',
+                turnId: 'turn-app-server-fixture',
+                tokenUsage: { last: tokenUsage, total: tokenUsage },
+              },
+            }),
+            JSON.stringify({
+              method: 'turn/completed',
+              params: {
+                threadId: 'thread-app-server-fixture',
+                turn: { id: 'turn-app-server-fixture', items: [], status: 'completed' },
+              },
+            }),
+          ].join('\n') + '\n'
+        );
+      }
+    }
+  });
+  child.stdin.once('finish', () => {
+    child.stdout.end();
+    child.exitCode = 0;
+    queueMicrotask(() => child.emit('close', 0, null));
+  });
+  return child;
+}
+
+function tmpPath(record: Record<string, unknown>, parent: string, child: string): string {
+  const nested = record[parent];
+  if (!nested || typeof nested !== 'object' || Array.isArray(nested)) return '/tmp/worktree';
+  const value = (nested as Record<string, unknown>)[child];
+  return typeof value === 'string' ? value : '/tmp/worktree';
+}
+
 async function waitFor(assertion: () => void | Promise<void>): Promise<void> {
   const started = Date.now();
   let lastError: unknown;
@@ -563,6 +700,118 @@ describe('ClawdbotAgentService Codex providers', () => {
           provider: 'codex-cli',
           model: 'gpt-5.5',
         })
+      );
+    }
+  );
+
+  it(
+    'runs the Codex app-server adapter through a pinned JSON-RPC lifecycle',
+    { timeout: 20_000 },
+    async () => {
+      const received: Array<Record<string, unknown>> = [];
+      const child = createFakeCodexAppServerChild(received);
+      mockSpawn.mockReturnValue(child);
+      mockGetConfig.mockResolvedValue({
+        agents: [
+          {
+            type: 'codex-app-server',
+            name: 'OpenAI Codex app-server',
+            command: 'codex',
+            args: [],
+            enabled: true,
+            provider: 'codex-app-server',
+            model: 'gpt-5.6',
+          },
+        ],
+      });
+      mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+        type: agent.type,
+        name: agent.name,
+        enabled: agent.enabled,
+        configured: true,
+        command: agent.command,
+        executableFound: true,
+        executablePath: '/opt/homebrew/bin/codex',
+        providerVersion: 'codex-cli 0.145.0',
+        providerVersionSource: 'codex --version',
+        authenticated: true,
+        healthy: true,
+        checkedAt: '2026-07-23T00:00:00.000Z',
+      }));
+      const service = testableService(tmpDir);
+
+      const status = await service.startAgent(task.id, 'codex-app-server');
+
+      expect(status.provider).toBe('codex-app-server');
+      expect(status.providerRuntimeManifest).toMatchObject({
+        provider: 'codex-app-server',
+        providerVersion: 'codex-cli 0.145.0',
+        providerBuild: expect.stringContaining(
+          'openai/codex@25af12f7e61572b0bc18ddb1008be543b91519b0'
+        ),
+        protocolVersion: 'codex-app-server-jsonrpc/v2',
+      });
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'codex',
+        [
+          'app-server',
+          '--stdio',
+          '--strict-config',
+          '-c',
+          'mcp_servers={}',
+          '-c',
+          'hooks={}',
+          '--disable',
+          'plugins',
+          '--disable',
+          'apps',
+          '--disable',
+          'in_app_browser',
+          '--disable',
+          'computer_use',
+          '--disable',
+          'tool_call_mcp_elicitation',
+        ],
+        expect.objectContaining({ cwd: tmpDir, shell: false })
+      );
+      expect(mockSpawn.mock.calls[0]?.[2]?.env).toMatchObject({
+        CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED: '1',
+      });
+
+      await waitFor(async () => {
+        expect(await service.getAgentStatus(task.id)).toBeNull();
+      });
+      expect(received.map(({ method }) => method)).toEqual([
+        'initialize',
+        'initialized',
+        'thread/start',
+        'turn/start',
+      ]);
+      expect(received.find(({ method }) => method === 'thread/start')).toMatchObject({
+        params: {
+          cwd: tmpDir,
+          model: 'gpt-5.6',
+          sandbox: 'workspace-write',
+          approvalPolicy: 'never',
+        },
+      });
+      expect(task.attempt).toMatchObject({
+        provider: 'codex-app-server',
+        status: 'complete',
+        threadId: 'thread-app-server-fixture',
+      });
+      expect(mockTelemetryEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'run.tokens',
+          inputTokens: 11,
+          outputTokens: 4,
+          totalTokens: 15,
+          model: 'gpt-5.6',
+        })
+      );
+      expect(mockUpdateTask).toHaveBeenCalledWith(
+        task.id,
+        expect.objectContaining({ status: 'done' })
       );
     }
   );

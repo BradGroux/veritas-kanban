@@ -617,6 +617,13 @@ successful interactive OAuth status is diagnostic only because Veritas
 launches Claude Code with `--bare`; configure an explicit supported
 environment credential before enabling the profile.
 
+For Codex app-server, doctor requires the exact `codex-cli 0.145.0` executable,
+`codex login status`, the system-owned strict-stdio launch contract, and the
+current provider build/probe evidence. Custom app-server arguments or version
+drift degrade the profile and block dispatch. `codex-cli`, `codex-sdk`, and
+`codex-app-server` are reported as separate profiles with separate capability
+manifests.
+
 ---
 
 ## Workflow Commands Deep Dive

@@ -113,12 +113,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - All cross-package types live in `shared/src/types/`.
 - `AgentProvider` union is the single definition consumed by both server and web.
   **Currently supported providers:**
-  `openclaw` | `codex-cli` | `codex-sdk` | `codex-cloud` | `claude-code` | `hermes-cli` |
-  `ollama-local` | `ollama-cloud` | `lm-studio-local` | `custom`
+  `openclaw` | `codex-cli` | `codex-sdk` | `codex-app-server` | `codex-cloud` |
+  `claude-code` | `hermes-cli` | `ollama-local` | `ollama-cloud` |
+  `lm-studio-local` | `custom`
 - Executable task adapters are currently `openclaw`, `codex-cli`, `codex-sdk`,
-  `claude-code`, and `hermes-cli`. Explicitly configured providers outside
-  that set must fail closed; never route them through an implicit OpenClaw
-  fallback.
+  `codex-app-server`, `claude-code`, and `hermes-cli`. Explicitly configured
+  providers outside that set must fail closed; never route them through an
+  implicit OpenClaw fallback.
 - Probe and persist `provider-runtime-manifest/v1` before mutating attempt state.
   New runtime controls must use the persisted evidence instead of provider-name
   checks, and provider version/build changes must invalidate cached conformance.
@@ -162,6 +163,14 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 - `codex-cli`: `codex exec --sandbox workspace-write --json`
 - `codex-sdk`: programmatic SDK, requires `@openai/codex-sdk`
+- `codex-app-server`: pinned to `codex-cli 0.145.0`; supervised JSON-RPC v2 over
+  strict stdio for one task-bound thread and turn.
+- App-server launch arguments are system-owned. Inherited MCP servers, hooks,
+  plugins, apps, browser/computer tools, elicitation, and remote control are
+  disabled until their run-scoped brokers land.
+- App-server consumes only the checked-in v0.145.0 schemas and exposes
+  `initialize`, `thread/start`, `turn/start`, and `turn/interrupt`.
+  `thread/shellCommand` is never reachable.
 - Auth: `codex login status` / `OPENAI_API_KEY`
 
 ### Claude Code (v2.1.218)

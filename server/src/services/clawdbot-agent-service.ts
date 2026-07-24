@@ -41,6 +41,7 @@ import {
 import {
   renderCodexCliTaskEnvelope,
   renderCodexSdkTaskEnvelope,
+  renderCodexAppServerTaskEnvelope,
   renderClaudeCodeTaskEnvelope,
   renderHermesTaskEnvelope,
   renderOpenClawTaskEnvelope,
@@ -157,6 +158,18 @@ import {
   type ClaudeCodeTerminalResult,
   type ClaudeCodeUsage,
 } from './claude-code-adapter.js';
+import {
+  buildCodexAppServerArgs,
+  buildSafeCodexAppServerEnv,
+  CODEX_APP_SERVER_CERTIFIED_BUILD,
+  CODEX_APP_SERVER_MAX_RECORD_BYTES,
+  classifyCodexAppServerNotification,
+  CodexAppServerRpcClient,
+  parseCodexAppServerLine,
+  type CodexAppServerClassification,
+  type CodexAppServerTerminalResult,
+  type CodexAppServerUsage,
+} from './codex-app-server-adapter.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -292,6 +305,10 @@ interface PendingAgent {
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
+  codexAppServerControl?: {
+    interrupt(): Promise<void>;
+    close(): void;
+  };
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
@@ -2178,6 +2195,13 @@ export class ClawdbotAgentService {
       model: pending.model,
     });
 
+    if (pending.provider === 'codex-app-server') {
+      return {
+        delivered: false,
+        note: 'Codex app-server steering remains disabled until provider-neutral lifecycle controls are active.',
+      };
+    }
+
     if (pending.process?.stdin?.writable) {
       pending.process.stdin.write(`${content}\n`);
       return { delivered: true, note: 'Message written to provider stdin.' };
@@ -2414,6 +2438,7 @@ export class ClawdbotAgentService {
         agentConfig.provider === 'openclaw' ||
         agentConfig.provider === 'codex-sdk' ||
         agentConfig.provider === 'codex-cli' ||
+        agentConfig.provider === 'codex-app-server' ||
         agentConfig.provider === 'claude-code' ||
         agentConfig.provider === 'hermes-cli'
       ) {
@@ -2428,6 +2453,11 @@ export class ClawdbotAgentService {
           }
         );
       }
+    } else if (
+      agent === 'codex-app-server' &&
+      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'codex'
+    ) {
+      provider = 'codex-app-server';
     } else if (
       agent === 'claude-code' &&
       path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'claude'
@@ -2638,6 +2668,57 @@ export class ClawdbotAgentService {
         },
         stop: ({ pending }) => {
           pending.abortController?.abort();
+        },
+      };
+    }
+
+    if (provider === 'codex-app-server') {
+      return {
+        id: definition.id,
+        label: definition.label,
+        renderTaskEnvelope: renderCodexAppServerTaskEnvelope,
+        probe,
+        runEventMapper: getProviderRunEventMapper(provider),
+        start: ({
+          task,
+          agentConfig,
+          transport,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+          runLaunchManifest,
+        }) => {
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
+          this.startCodexAppServer(
+            task,
+            agentConfig,
+            transport.content,
+            logPath,
+            attemptId,
+            startedAt,
+            emitter,
+            sandboxPolicy,
+            runLaunchManifest
+          );
+        },
+        stop: async ({ pending }) => {
+          try {
+            await pending.codexAppServerControl?.interrupt();
+          } catch (error) {
+            log.warn(
+              { err: error, taskId: pending.taskId },
+              'Codex app-server cooperative interrupt failed; closing the supervised process'
+            );
+          }
+          pending.codexAppServerControl?.close();
+          const child = pending.process;
+          if (!child || child.exitCode != null || child.signalCode != null) return;
+          const forcedStop = setTimeout(() => {
+            if (child.exitCode == null && child.signalCode == null) child.kill('SIGKILL');
+          }, 5_000);
+          child.once('close', () => clearTimeout(forcedStop));
         },
       };
     }
@@ -2858,7 +2939,9 @@ export class ClawdbotAgentService {
     const providerBuild =
       provider === 'codex-sdk' && context.health.providerVersion
         ? `codex-cli:${context.health.providerVersion}`
-        : undefined;
+        : provider === 'codex-app-server'
+          ? CODEX_APP_SERVER_CERTIFIED_BUILD
+          : undefined;
     const diagnostics: string[] = [...(context.health.diagnostics ?? [])];
 
     if (!providerVersion) {
@@ -2897,6 +2980,613 @@ export class ClawdbotAgentService {
       },
       capabilities: definition.capabilities,
     };
+  }
+
+  private startCodexAppServer(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    startedAt: string,
+    emitter: EventEmitter,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined,
+    runLaunchManifest: RunLaunchManifest
+  ): void {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath) {
+      throw new Error('Task worktree path is required for Codex app-server');
+    }
+    const command = agentConfig?.command || 'codex';
+    const args = buildCodexAppServerArgs(agentConfig?.args);
+    const child = spawn(command, args, {
+      cwd: worktreePath,
+      env: buildSafeCodexAppServerEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      shell: false,
+    });
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      child.kill('SIGTERM');
+      throw new ConflictError('Codex app-server launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
+    pending.process = child;
+
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    let finalSummary = '';
+    let terminalResult: CodexAppServerTerminalResult | undefined;
+    let tokenUsage: CodexAppServerUsage | undefined;
+    let threadId: string | undefined;
+    let turnId: string | undefined;
+    let eventProcessing = Promise.resolve();
+    let eventProcessingError: Error | undefined;
+    let launchError: Error | undefined;
+    let runtimeTimedOut = false;
+    let gracefulCloseTimer: NodeJS.Timeout | undefined;
+    const runtimeSeconds = runLaunchManifest.budget.enabled
+      ? runLaunchManifest.budget.limits?.runtimeSeconds
+      : undefined;
+    if (
+      runtimeSeconds !== undefined &&
+      runtimeSeconds > 0 &&
+      !Number.isSafeInteger(runtimeSeconds * 1_000)
+    ) {
+      child.kill('SIGTERM');
+      throw new Error('Codex app-server runtime budget exceeds the supported timer range.');
+    }
+
+    const enqueueEventProcessing = (work: () => Promise<void>) => {
+      eventProcessing = eventProcessing.then(async () => {
+        if (eventProcessingError) return;
+        try {
+          await work();
+        } catch (error) {
+          eventProcessingError =
+            error instanceof Error ? error : new Error('Provider event ingestion failed closed.');
+          rpcClient.close(eventProcessingError);
+          child.kill('SIGTERM');
+        }
+      });
+    };
+
+    const rpcClient = new CodexAppServerRpcClient({
+      write(line) {
+        if (!child.stdin.writable) {
+          throw new Error('Codex app-server stdin is not writable.');
+        }
+        child.stdin.write(line);
+      },
+      onOverloadRetry: (method, retryAttempt, delayMs) => {
+        enqueueEventProcessing(async () => {
+          const event = await this.appendRunEvent(
+            task.id,
+            attemptId,
+            'progress',
+            {
+              summary: `Codex app-server overloaded during ${method}; retry ${retryAttempt} scheduled in ${delayMs}ms.`,
+              method,
+              retryAttempt,
+              delayMs,
+            },
+            {
+              provider: 'codex-app-server',
+              adapter: 'codex-app-server',
+              agent: agentConfig?.type || 'codex-app-server',
+              model: agentConfig?.model,
+              dedupeKey: `codex-app-server.overload:${method}:${retryAttempt}`,
+            }
+          );
+          this.emitJournalOutput(event);
+        });
+      },
+    });
+
+    const requestGracefulClose = () => {
+      rpcClient.close(new Error('Codex app-server connection is closing.'));
+      if (child.stdin.writable) child.stdin.end();
+      if (gracefulCloseTimer || child.exitCode != null || child.signalCode != null) return;
+      gracefulCloseTimer = setTimeout(() => {
+        if (child.exitCode == null && child.signalCode == null) child.kill('SIGTERM');
+      }, 5_000);
+    };
+
+    pending.codexAppServerControl = {
+      interrupt: async () => {
+        if (!threadId || !turnId || terminalResult) return;
+        await rpcClient.interrupt(threadId, turnId);
+      },
+      close: requestGracefulClose,
+    };
+
+    const processLine = async (line: string) => {
+      const record = parseCodexAppServerLine(line);
+      const inbound = await rpcClient.acceptRecord(record);
+      if (inbound.kind === 'response') return;
+      if (inbound.kind === 'server-request') {
+        await this.handleCodexAppServerDeniedRequest(
+          inbound.method,
+          inbound.record,
+          task,
+          attemptId,
+          agentConfig,
+          logPath
+        );
+        return;
+      }
+      const classified = await this.handleCodexAppServerNotification(
+        inbound.record,
+        task,
+        attemptId,
+        agentConfig,
+        logPath
+      );
+      if (classified.summary) finalSummary = classified.summary;
+      if (classified.usage) tokenUsage = classified.usage;
+      if (classified.terminal) {
+        terminalResult = classified.terminal;
+        requestGracefulClose();
+      }
+    };
+
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (chunk: string) => {
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        await this.recordStreamChunk(
+          task,
+          attemptId,
+          agentConfig,
+          'codex-app-server',
+          'stdout',
+          chunk
+        );
+        stdoutBuffer += chunk;
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() || '';
+        if (Buffer.byteLength(stdoutBuffer, 'utf8') > CODEX_APP_SERVER_MAX_RECORD_BYTES) {
+          throw new Error('Codex app-server record exceeded the 4 MiB safety limit.');
+        }
+        for (const line of lines) {
+          if (line.trim()) await processLine(line);
+        }
+      });
+    });
+
+    child.stderr.setEncoding('utf-8');
+    child.stderr.on('data', (chunk: string) => {
+      const accumulated = Buffer.from(`${stderrBuffer}${chunk}`, 'utf8');
+      stderrBuffer =
+        accumulated.byteLength > CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES
+          ? accumulated
+              .subarray(accumulated.byteLength - CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES)
+              .toString('utf8')
+          : accumulated.toString('utf8');
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        await this.recordStreamChunk(
+          task,
+          attemptId,
+          agentConfig,
+          'codex-app-server',
+          'stderr',
+          chunk
+        );
+        await this.appendLog(
+          logPath,
+          `\n### stderr\n\n\`\`\`\n${this.redactTraceText(chunk.trimEnd())}\n\`\`\`\n`
+        );
+      });
+    });
+
+    child.on('error', (error) => {
+      launchError = error;
+      rpcClient.close(error);
+      enqueueEventProcessing(async () => {
+        const message = this.redactTraceText(error.message);
+        const event = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'process' },
+          {
+            provider: 'codex-app-server',
+            adapter: 'codex-app-server',
+            agent: agentConfig?.type || 'codex-app-server',
+            model: agentConfig?.model,
+          }
+        );
+        this.emitJournalOutput(event);
+        if (emitter.listenerCount('error') > 0) emitter.emit('error', error);
+      });
+    });
+
+    void this.appendLog(
+      logPath,
+      `\n## Codex app-server\n\n**Command:** \`${[command, ...args].join(
+        ' '
+      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** strict stdio with inherited MCP, hooks, plugins, apps, and remote control disabled\n\n`
+    );
+
+    void (async () => {
+      try {
+        await this.recordAgentStarted(
+          task,
+          attemptId,
+          agentConfig?.type || 'codex-app-server',
+          'codex-app-server',
+          agentConfig
+        );
+        await rpcClient.initialize();
+        threadId = await rpcClient.startThread({
+          cwd: worktreePath,
+          model: agentConfig?.model,
+          sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+        });
+        pending.threadId = threadId;
+        await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId });
+        turnId = await rpcClient.startTurn({
+          threadId,
+          prompt,
+          cwd: worktreePath,
+          model: agentConfig?.model,
+        });
+        await this.appendLog(
+          logPath,
+          `\n## Codex app-server Session\n\n**Thread:** ${threadId}\n**Turn:** ${turnId}\n`
+        );
+      } catch (error) {
+        launchError =
+          error instanceof Error ? error : new Error('Codex app-server launch failed closed.');
+        rpcClient.close(launchError);
+        child.kill('SIGTERM');
+      }
+    })();
+
+    let runtimeTimer: NodeJS.Timeout | undefined;
+    let remainingRuntimeMs =
+      runtimeSeconds && runtimeSeconds > 0 ? runtimeSeconds * 1_000 : undefined;
+    const onRuntimeTimeout = () => {
+      runtimeTimedOut = true;
+      enqueueEventProcessing(async () => {
+        const message = `Codex app-server runtime limit exceeded after ${runtimeSeconds} seconds.`;
+        const event = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'timeout' },
+          {
+            provider: 'codex-app-server',
+            adapter: 'codex-app-server',
+            agent: agentConfig?.type || 'codex-app-server',
+            model: agentConfig?.model,
+            dedupeKey: 'codex-app-server.runtime-timeout',
+          }
+        );
+        this.emitJournalOutput(event);
+      });
+      void pending.codexAppServerControl
+        ?.interrupt()
+        .catch((error) => {
+          log.warn(
+            { err: error, taskId: task.id, attemptId },
+            'Codex app-server runtime interrupt failed; closing the supervised process'
+          );
+        })
+        .finally(requestGracefulClose);
+    };
+    const scheduleRuntimeTimer = () => {
+      if (remainingRuntimeMs === undefined) return;
+      const delay = Math.min(remainingRuntimeMs, 2_147_483_647);
+      runtimeTimer = setTimeout(() => {
+        remainingRuntimeMs = Math.max(0, (remainingRuntimeMs ?? 0) - delay);
+        if (remainingRuntimeMs > 0) scheduleRuntimeTimer();
+        else onRuntimeTimeout();
+      }, delay);
+    };
+    if (remainingRuntimeMs !== undefined) scheduleRuntimeTimer();
+
+    child.on('close', (code, signal) => {
+      if (runtimeTimer) clearTimeout(runtimeTimer);
+      if (gracefulCloseTimer) clearTimeout(gracefulCloseTimer);
+      if (pendingAgents.get(task.id) !== pending || pending.attemptId !== attemptId) return;
+      void this.finalizePendingAgent(task.id, pending, async () => {
+        await eventProcessing;
+        if (stdoutBuffer.trim() && !eventProcessingError) {
+          try {
+            await processLine(stdoutBuffer);
+          } catch (error) {
+            eventProcessingError =
+              error instanceof Error
+                ? error
+                : new Error('Codex app-server final stream record failed.');
+          }
+        }
+        rpcClient.close();
+
+        const timeoutError = runtimeTimedOut
+          ? `Codex app-server runtime limit exceeded after ${runtimeSeconds} seconds.`
+          : undefined;
+        const succeeded =
+          !runtimeTimedOut &&
+          !eventProcessingError &&
+          !launchError &&
+          terminalResult?.success === true;
+        const processError =
+          signal && !terminalResult
+            ? `Codex app-server terminated by signal ${signal}.`
+            : code !== 0 && !terminalResult
+              ? `Codex app-server exited with code ${code ?? 'unknown'}.`
+              : undefined;
+        const missingTerminalError =
+          !terminalResult && !processError
+            ? 'Codex app-server stream ended without an authoritative turn/completed notification.'
+            : undefined;
+        const error =
+          timeoutError ??
+          eventProcessingError?.message ??
+          launchError?.message ??
+          terminalResult?.error ??
+          processError ??
+          missingTerminalError;
+        const summary =
+          finalSummary ||
+          error ||
+          (succeeded ? 'Codex app-server completed.' : this.redactTraceText(stderrBuffer.trim()));
+
+        if (tokenUsage && !eventProcessingError) {
+          await this.assertRunControl(task.id, 'token-usage', attemptId);
+          await getTelemetryService().emit<TokenTelemetryEvent>({
+            type: 'run.tokens',
+            taskId: task.id,
+            attemptId,
+            agent: agentConfig?.type || 'codex-app-server',
+            project: task.project,
+            inputTokens: tokenUsage.inputTokens,
+            outputTokens: tokenUsage.outputTokens,
+            totalTokens: tokenUsage.totalTokens,
+            model: agentConfig?.model,
+          });
+          await this.evaluatePendingBudget(
+            task.id,
+            attemptId,
+            {
+              inputTokens: tokenUsage.inputTokens,
+              outputTokens: tokenUsage.outputTokens,
+              totalTokens: tokenUsage.totalTokens,
+            },
+            'agent.tokens',
+            false
+          );
+        }
+
+        await this.appendLog(
+          logPath,
+          `\n## Codex app-server Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${
+            signal ?? 'none'
+          }\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n**Thread:** ${
+            threadId ?? 'not reported'
+          }\n**Turn:** ${turnId ?? 'not reported'}\n**Result:** ${
+            terminalResult?.status ?? 'missing'
+          }\n`
+        );
+        this.recordTraceStep(attemptId, succeeded ? 'finalize' : 'error', {
+          eventType: 'run.finalizing',
+          exitCode: code,
+          signal,
+          success: succeeded,
+          terminalStatus: terminalResult?.status,
+          sessionId: threadId,
+          turnId,
+          provider: 'codex-app-server',
+          agent: agentConfig?.type || 'codex-app-server',
+          model: agentConfig?.model,
+        });
+        return {
+          success: succeeded,
+          terminalSource: 'stream',
+          summary,
+          error: succeeded ? undefined : error,
+        };
+      }).catch((error) => {
+        if (pendingAgents.get(task.id) !== pending) return;
+        log.error({ err: error, taskId: task.id }, 'Failed to finalize Codex app-server attempt');
+      });
+    });
+  }
+
+  private async handleCodexAppServerNotification(
+    record: Record<string, unknown>,
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    logPath: string
+  ): Promise<CodexAppServerClassification> {
+    const rawClassification = classifyCodexAppServerNotification(record);
+    const classified: CodexAppServerClassification = {
+      ...rawClassification,
+      ...(rawClassification.summary
+        ? { summary: this.redactTraceText(rawClassification.summary) }
+        : {}),
+      ...(rawClassification.terminal?.error
+        ? {
+            terminal: {
+              ...rawClassification.terminal,
+              error: this.redactTraceText(rawClassification.terminal.error),
+            },
+          }
+        : {}),
+    };
+    const agent = agentConfig?.type || 'codex-app-server';
+    const journalEvent = await this.appendMappedProviderEvent(
+      task,
+      attemptId,
+      agentConfig,
+      'codex-app-server',
+      this.resolveProviderAdapter('codex-app-server').runEventMapper.mapEvent(
+        classified.providerType,
+        recordValueForProvider(record, 'params'),
+        classified.summary
+      )
+    );
+    this.emitJournalOutput(journalEvent);
+    if (classified.usage) {
+      await this.appendRunEvent(
+        task.id,
+        attemptId,
+        'usage.updated',
+        {
+          inputTokens: classified.usage.inputTokens,
+          outputTokens: classified.usage.outputTokens,
+          totalTokens: classified.usage.totalTokens,
+          model: agentConfig?.model,
+        },
+        {
+          provider: 'codex-app-server',
+          adapter: 'codex-app-server',
+          agent,
+          model: agentConfig?.model,
+          causalEventId: journalEvent.eventId,
+          dedupeKey: `${journalEvent.eventId}:usage`,
+        }
+      );
+    }
+    this.recordTraceStep(
+      attemptId,
+      classified.providerType.includes('delta')
+        ? 'stream'
+        : classified.terminal?.success
+          ? 'complete'
+          : classified.terminal
+            ? 'error'
+            : classified.providerType.includes('started')
+              ? 'execute'
+              : 'stream',
+      {
+        provider: 'codex-app-server',
+        eventType: classified.providerType,
+        summary: classified.summary,
+        files: classified.files,
+        sessionId: classified.sessionId,
+        turnId: classified.turnId,
+        itemId: classified.itemId,
+        inputTokens: classified.usage?.inputTokens,
+        outputTokens: classified.usage?.outputTokens,
+        totalTokens: classified.usage?.totalTokens,
+        model: agentConfig?.model,
+      }
+    );
+    if (isCodexAppServerToolStart(record)) {
+      await this.assertRunControl(task.id, 'tool-calls', attemptId);
+      await this.evaluatePendingBudget(task.id, attemptId, { toolCalls: 1 }, 'agent.tool', true);
+    }
+    if (classified.files.length > 0) {
+      await this.attachProviderDeliverables(
+        task,
+        attemptId,
+        agent,
+        'codex-app-server',
+        'Codex app-server',
+        classified.files
+      );
+    }
+    if (
+      classified.providerType.startsWith('item/') ||
+      classified.providerType.startsWith('turn/') ||
+      classified.terminal
+    ) {
+      await activityService.logActivity(
+        'agent_event',
+        task.id,
+        task.title,
+        {
+          attemptId,
+          provider: 'codex-app-server',
+          eventType: classified.providerType,
+          summary: classified.summary,
+        },
+        agent
+      );
+    }
+    await this.appendLog(
+      logPath,
+      `\n### ${classified.providerType}\n\n${
+        classified.summary ? `${this.redactTraceText(classified.summary)}\n\n` : ''
+      }<details><summary>Raw event</summary>\n\n\`\`\`json\n${this.redactTraceText(
+        JSON.stringify(journalEvent.payload.raw ?? {}, null, 2)
+      )}\n\`\`\`\n\n</details>\n`
+    );
+    return classified;
+  }
+
+  private async handleCodexAppServerDeniedRequest(
+    method: string,
+    record: Record<string, unknown>,
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    logPath: string
+  ): Promise<void> {
+    const agent = agentConfig?.type || 'codex-app-server';
+    const summary = `Denied provider request ${method}; the required Veritas broker is unavailable.`;
+    const requested = await this.appendMappedProviderEvent(
+      task,
+      attemptId,
+      agentConfig,
+      'codex-app-server',
+      this.resolveProviderAdapter('codex-app-server').runEventMapper.mapEvent(
+        method,
+        recordValueForProvider(record, 'params'),
+        summary
+      )
+    );
+    this.emitJournalOutput(requested);
+    const resolved = await this.appendRunEvent(
+      task.id,
+      attemptId,
+      'approval.resolved',
+      {
+        summary,
+        method,
+        decision: 'denied',
+      },
+      {
+        provider: 'codex-app-server',
+        adapter: 'codex-app-server',
+        agent,
+        model: agentConfig?.model,
+        causalEventId: requested.eventId,
+        dedupeKey: `${requested.eventId}:denied`,
+      }
+    );
+    this.emitJournalOutput(resolved);
+    this.recordTraceStep(attemptId, 'error', {
+      provider: 'codex-app-server',
+      eventType: method,
+      summary,
+      agent,
+      model: agentConfig?.model,
+    });
+    await activityService.logActivity(
+      'agent_event',
+      task.id,
+      task.title,
+      {
+        attemptId,
+        provider: 'codex-app-server',
+        eventType: method,
+        decision: 'denied',
+      },
+      agent
+    );
+    await this.appendLog(
+      logPath,
+      `\n### ${method}\n\n${summary}\n\n<details><summary>Raw request</summary>\n\n\`\`\`json\n${this.redactTraceText(
+        JSON.stringify(requested.payload.raw ?? {}, null, 2)
+      )}\n\`\`\`\n\n</details>\n`
+    );
   }
 
   private async startClaudeCode(
@@ -4130,11 +4820,13 @@ export class ClawdbotAgentService {
           ? 'codex-sdk:workspace-write:approval-never'
           : provider === 'codex-cli'
             ? 'codex-cli:workspace-write'
-            : provider === 'claude-code'
-              ? 'claude-code:static-permissions'
-              : provider === 'hermes-cli'
-                ? 'hermes-cli:workspace-write'
-                : 'openclaw:delegated',
+            : provider === 'codex-app-server'
+              ? 'codex-app-server:strict-config:approval-never'
+              : provider === 'claude-code'
+                ? 'claude-code:static-permissions'
+                : provider === 'hermes-cli'
+                  ? 'hermes-cli:workspace-write'
+                  : 'openclaw:delegated',
       provider,
       model: agentConfig?.model,
       taskType: task.type,
@@ -5008,7 +5700,9 @@ export class ClawdbotAgentService {
             : 0,
     };
     const sandboxAffectsRuntimeArgs =
-      input.provider === 'codex-cli' || input.provider === 'codex-sdk';
+      input.provider === 'codex-cli' ||
+      input.provider === 'codex-sdk' ||
+      input.provider === 'codex-app-server';
     const sandboxAffectsEnvironment =
       input.provider !== 'openclaw' && input.sandboxPolicy.effective.envPassthrough.length > 0;
     const sandboxAffectsCredentials =
@@ -5575,6 +6269,13 @@ export class ClawdbotAgentService {
         ],
       };
     }
+    if (provider === 'codex-app-server') {
+      return {
+        ...runtimeBase,
+        command: agentConfig?.command || 'codex',
+        args: buildCodexAppServerArgs(agentConfig?.args),
+      };
+    }
     if (provider === 'claude-code') {
       return {
         ...runtimeBase,
@@ -5659,9 +6360,11 @@ export class ClawdbotAgentService {
     provider: ExecutableAgentProvider,
     sandboxPolicy: SandboxPolicyDryRunResult
   ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'> {
-    if (provider === 'codex-cli' || provider === 'codex-sdk') {
+    if (provider === 'codex-cli' || provider === 'codex-sdk' || provider === 'codex-app-server') {
       const environmentKeys = Object.keys(
-        buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
+        provider === 'codex-app-server'
+          ? buildSafeCodexAppServerEnv(process.env, sandboxPolicy.effective.envPassthrough)
+          : buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
       );
       return {
         environmentKeys,
@@ -5877,4 +6580,27 @@ function mergeThresholdEvents(
     byKey.set(`${event.metric}:${event.threshold}:${event.action}`, event);
   }
   return Array.from(byKey.values());
+}
+
+function recordValueForProvider(
+  record: Record<string, unknown>,
+  key: string
+): Record<string, unknown> {
+  const value = record[key];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function isCodexAppServerToolStart(record: Record<string, unknown>): boolean {
+  if (record.method !== 'item/started') return false;
+  const params = recordValueForProvider(record, 'params');
+  const item = recordValueForProvider(params, 'item');
+  return [
+    'commandExecution',
+    'mcpToolCall',
+    'dynamicToolCall',
+    'collabAgentToolCall',
+    'webSearch',
+  ].includes(typeof item.type === 'string' ? item.type : '');
 }
