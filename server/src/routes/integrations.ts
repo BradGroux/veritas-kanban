@@ -38,6 +38,8 @@ import {
   BuzzDefinitionPreviewBodySchema,
 } from '../schemas/buzz-definition-schemas.js';
 import type { BuzzDefinitionImportInput, BuzzDefinitionPreviewInput } from '@veritas-kanban/shared';
+import type { BuzzWorkflowTriggerRuleInput } from '@veritas-kanban/shared';
+import { assertWorkflowPermission } from '../middleware/workflow-auth.js';
 
 const log = createLogger('integrations');
 const router = Router();
@@ -96,6 +98,19 @@ const buzzChannelMappingSchema = z.object({
   actor: z.string().trim().min(1).max(200).optional(),
 });
 const buzzChannelIdSchema = z.uuid();
+const buzzWorkflowTriggerRuleSchema = z
+  .object({
+    mappingId: z.string().trim().min(1).max(160),
+    workflowId: z.string().trim().min(1).max(160),
+    enabled: z.boolean().optional(),
+    authorPubkey: z
+      .string()
+      .trim()
+      .regex(/^[a-f0-9]{64}$/i)
+      .optional(),
+    contentIncludes: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
 
 function adapterIdParam(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value : DEFAULT_ADAPTER_ID;
@@ -382,6 +397,62 @@ router.post(
       if (message.includes('not found')) throw new NotFoundError(message);
       throw error;
     }
+  })
+);
+
+// GET /api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers
+router.get(
+  '/communication/adapters/:adapterId/buzz/workflow-triggers',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    res.json(await communicationAdapters.listBuzzWorkflowTriggerRules(adapterId));
+  })
+);
+
+// POST /api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers
+router.post(
+  '/communication/adapters/:adapterId/buzz/workflow-triggers',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    const input = buzzWorkflowTriggerRuleSchema.parse(req.body) as BuzzWorkflowTriggerRuleInput;
+    const actor = req.auth?.userId || req.auth?.keyName || 'unknown';
+    await assertWorkflowPermission(input.workflowId, actor, 'execute');
+    res
+      .status(201)
+      .json(await communicationAdapters.createBuzzWorkflowTriggerRule(adapterId, input, actor));
+  })
+);
+
+// POST /api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers/:ruleId/disable
+router.post(
+  '/communication/adapters/:adapterId/buzz/workflow-triggers/:ruleId/disable',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    const ruleId = typeof req.params.ruleId === 'string' ? req.params.ruleId : '';
+    if (!ruleId) throw new BadRequestError('Buzz workflow trigger rule ID is required');
+    try {
+      res.json(await communicationAdapters.disableBuzzWorkflowTriggerRule(adapterId, ruleId));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Buzz workflow trigger update failed';
+      if (message.includes('not found')) throw new NotFoundError(message);
+      throw error;
+    }
+  })
+);
+
+// GET /api/integrations/communication/adapters/:adapterId/buzz/workflow-trigger-audits
+router.get(
+  '/communication/adapters/:adapterId/buzz/workflow-trigger-audits',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    const requested = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+    res.json(
+      await communicationAdapters.listBuzzWorkflowTriggerAudits(
+        adapterId,
+        Number.isFinite(requested) ? requested : 100
+      )
+    );
   })
 );
 

@@ -7,6 +7,7 @@ import type { ChatService } from '../services/chat-service.js';
 import type { OutboundIntegrationService } from '../services/outbound-integration-service.js';
 import type { BuzzCompatibilityService } from '../services/buzz-compatibility-service.js';
 import type { BuzzCommunicationService } from '../services/buzz-communication-service.js';
+import type { BuzzWorkflowTriggerService } from '../services/buzz-workflow-trigger-service.js';
 import {
   BUZZ_DELETE_KIND,
   BUZZ_EDIT_KIND,
@@ -86,6 +87,7 @@ describe('Buzz communication adapter', () => {
     eventExists: ReturnType<typeof vi.fn>;
   };
   let workerFactory: FakeWorkerFactory;
+  let buzzWorkflowTriggers: { processEvent: ReturnType<typeof vi.fn> };
   let service: CommunicationAdapterService;
 
   function event(input: {
@@ -162,6 +164,7 @@ describe('Buzz communication adapter', () => {
       eventExists: vi.fn(),
     };
     workerFactory = new FakeWorkerFactory();
+    buzzWorkflowTriggers = { processEvent: vi.fn().mockResolvedValue([]) };
     const options: CommunicationAdapterServiceOptions = {
       storageDir: temporaryDirectory,
       persist: true,
@@ -174,6 +177,7 @@ describe('Buzz communication adapter', () => {
       } as unknown as BuzzCompatibilityService,
       buzzCommunication: buzzCommunication as unknown as BuzzCommunicationService,
       buzzWorkerFactory: workerFactory,
+      buzzWorkflowTriggers: buzzWorkflowTriggers as unknown as BuzzWorkflowTriggerService,
       audit: vi.fn().mockResolvedValue(undefined),
     };
     service = new CommunicationAdapterService(options);
@@ -371,6 +375,15 @@ describe('Buzz communication adapter', () => {
     });
     expect(duplicate.status).toBe('replayed');
     expect(chatService.sendSquadMessage).toHaveBeenCalledTimes(2);
+    expect(buzzWorkflowTriggers.processEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adapterId: ADAPTER_ID,
+        mapping,
+        eventId: root.id,
+        content: 'root',
+        rootEventId: undefined,
+      })
+    );
     expect(chatService.sendSquadMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({

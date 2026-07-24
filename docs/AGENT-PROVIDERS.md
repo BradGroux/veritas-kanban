@@ -375,6 +375,23 @@ message. Task execution through the separately configured `buzz-agent` ACP
 profile remains independent of relay delivery and never starts `buzz-acp`. See
 [Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
 
+An operator can bind one active Buzz channel mapping to one Veritas workflow
+with a `buzz-workflow-trigger/v1` rule. The first supported event is a root
+`message.posted`; replies, adapter-originated echoes, disabled rules, and
+predicate mismatches never launch a run. Each accepted event is journaled
+before dispatch with the causal key
+`buzz:{community}:{eventId}:{ruleId}`. Replays return the existing run, and
+restart recovery reconciles an accepted journal entry against workflow run
+context before attempting dispatch again. The provider-neutral
+`workflow.pre-external-trigger` runtime hook remains the policy boundary.
+
+Rules and their bounded audit history are available under
+`/api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers`
+and
+`/api/integrations/communication/adapters/:adapterId/buzz/workflow-trigger-audits`.
+Rule creation requires both integration settings write access and execute
+permission on the destination workflow.
+
 ## Harness Support Profiles And Tiers
 
 Every configured agent is normalized to a `harness-support-profile/v1` contract.

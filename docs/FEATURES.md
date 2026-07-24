@@ -629,27 +629,30 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 - **OpenClaw Direct gateway wake** — Optional real-time Squad Chat events pushed to OpenClaw gateway for agent orchestration
 - **Human reply adapters** — Configure Teams reply posture, run health checks and test sends, store external thread mappings, and ingest audited human replies back into the correct Squad Chat thread
 - **Buzz channel bridge** — Map a Buzz community channel to Squad Chat, publish and ingest signed roots/replies exactly once, retain source author/timestamp/deep links, resume through a durable cursor with overlap dedupe, and reconcile ambiguous sends before retry
+- **Buzz workflow trigger** — Bind an allowlisted mapped-channel root message to one workflow with bounded author/content predicates, a durable causal key, provider-neutral pre-dispatch hooks, replay/echo suppression, and restart reconciliation
 - **Buzz persona/team import** — List signature-verified NIP-33 persona and team heads, preview mapped/source-only/ignored/rejected fields, resolve collisions explicitly, and create, link, or refresh disabled profile/roster materializations with provenance and optimistic local revisions
 - **Searchable history** — Browse and search past squad chat messages
 
 ### API Endpoints
 
-| Endpoint                                                                       | Method | Description                                       |
-| ------------------------------------------------------------------------------ | ------ | ------------------------------------------------- |
-| `/api/chat/squad`                                                              | POST   | Send a squad chat message                         |
-| `/api/chat/squad`                                                              | GET    | Retrieve squad chat history                       |
-| `/api/chat/squad/search`                                                       | GET    | Search redacted snippets                          |
-| `/api/chat/squad/unread`                                                       | GET    | Get actor-scoped unread state                     |
-| `/api/chat/squad/read`                                                         | POST   | Mark messages read for an actor                   |
-| `/api/chat/squad/:messageId/thread`                                            | GET    | Read a compact thread                             |
-| `/api/chat/squad/:messageId/pin`                                               | POST   | Pin/unpin or mark/unmark a decision               |
-| `/api/chat/squad/:messageId/react`                                             | POST   | Add a lightweight reaction or acknowledgement     |
-| `/api/integrations/communication/adapters/:adapterId/replies`                  | POST   | Ingest an external human reply into Squad Chat    |
-| `/api/integrations/communication/adapters/:adapterId/send`                     | POST   | Publish a mapped Teams/Buzz communication message |
-| `/api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId` | PUT    | Map a Buzz channel to Squad Chat                  |
-| `/api/integrations/communication/adapters/:adapterId/buzz/definitions`         | GET    | List validated Buzz persona/team heads            |
-| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/preview` | POST   | Preview field mappings, diffs, and collisions     |
-| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/import`  | POST   | Explicitly create, link, refresh, or skip import  |
+| Endpoint                                                                           | Method   | Description                                       |
+| ---------------------------------------------------------------------------------- | -------- | ------------------------------------------------- |
+| `/api/chat/squad`                                                                  | POST     | Send a squad chat message                         |
+| `/api/chat/squad`                                                                  | GET      | Retrieve squad chat history                       |
+| `/api/chat/squad/search`                                                           | GET      | Search redacted snippets                          |
+| `/api/chat/squad/unread`                                                           | GET      | Get actor-scoped unread state                     |
+| `/api/chat/squad/read`                                                             | POST     | Mark messages read for an actor                   |
+| `/api/chat/squad/:messageId/thread`                                                | GET      | Read a compact thread                             |
+| `/api/chat/squad/:messageId/pin`                                                   | POST     | Pin/unpin or mark/unmark a decision               |
+| `/api/chat/squad/:messageId/react`                                                 | POST     | Add a lightweight reaction or acknowledgement     |
+| `/api/integrations/communication/adapters/:adapterId/replies`                      | POST     | Ingest an external human reply into Squad Chat    |
+| `/api/integrations/communication/adapters/:adapterId/send`                         | POST     | Publish a mapped Teams/Buzz communication message |
+| `/api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId`     | PUT      | Map a Buzz channel to Squad Chat                  |
+| `/api/integrations/communication/adapters/:adapterId/buzz/workflow-triggers`       | GET/POST | List or create root-message workflow rules        |
+| `/api/integrations/communication/adapters/:adapterId/buzz/workflow-trigger-audits` | GET      | Read bounded trigger disposition history          |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions`             | GET      | List validated Buzz persona/team heads            |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/preview`     | POST     | Preview field mappings, diffs, and collisions     |
+| `/api/integrations/communication/adapters/:adapterId/buzz/definitions/import`      | POST     | Explicitly create, link, refresh, or skip import  |
 
 ---
 
