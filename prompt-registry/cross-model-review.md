@@ -1,8 +1,10 @@
 # Cross-Model Code Review Prompt
 
-Use this for the mandatory opposite-model review gate.
+Use this when a task or configured governance policy explicitly requires an
+opposite-model review.
 
-**Rule:** If Claude wrote it, GPT reviews. If GPT wrote it, Claude reviews.
+This prompt is optional unless the task, issue owner, release owner, or review
+gate says otherwise.
 
 ---
 

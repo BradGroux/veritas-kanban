@@ -1,225 +1,279 @@
-# AGENTS.md Template — Veritas Kanban Self-Reporting Protocol
+# Agent Guide and `AGENTS.md` Template
 
-Use this template for agents that integrate with Veritas Kanban. Copy it into your agent's workspace and fill in the sections.
+Use this guide when an agent needs to work through Veritas Kanban. Start by
+choosing the correct integration mode. Managed harnesses and external
+self-reporting agents have different lifecycle responsibilities.
 
----
+## Choose the integration mode
 
+| Mode                          | Use it when                                                                                     | Who owns task lifecycle         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------- |
+| Managed harness               | VK launches Buzz Agent, Grok Build, Codex, Claude Code, GitHub Copilot CLI, Hermes, or OpenClaw | VK and the selected adapter     |
+| External self-reporting agent | A separate process registers itself and calls VK APIs directly                                  | The external agent              |
+| Unmanaged MCP client          | An assistant only needs typed VK tools and is not being launched as the task runner             | The MCP client and its operator |
+
+Do not combine the managed and self-reporting paths. A managed run must not
+register itself, send heartbeats, call start/complete endpoints, emit duplicate
+telemetry, or run `vk begin`/`vk done`. VK already created the attempt and owns
+its terminal state.
+
+## Shared protocol for managed harnesses
+
+Every managed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, and
+OpenClaw run follows this contract:
+
+1. Treat the Veritas task envelope as the authority for the objective,
+   acceptance criteria, constraints, worktree, side effects, commit policy,
+   expected outputs, verification gates, and completion evidence.
+2. Read repository instructions available in the assigned worktree, including
+   `AGENTS.md` and any harness-specific supplement that the adapter exposes.
+3. Work only in the assigned worktree. Preserve files that existed at launch
+   unless the task explicitly authorizes changing them.
+4. Use only the tools and MCP servers in the run-scoped catalog. Prefer the
+   provided VK tools over ad hoc HTTP calls.
+5. Never copy credentials into commands, prompts, files, comments, logs, or
+   final output. Use only the brokered references and provider boot
+   authentication supplied by VK.
+6. Record durable findings through an available task comment or artifact tool
+   when they affect later work. If no such tool is available, include the
+   finding in the final response.
+7. Run the smallest verification that proves the requested change. Do not run
+   a full repository suite unless the task or release gate requires it.
+8. Return a concise final response with the outcome, files or artifacts
+   changed, checks run, remaining risks, and blockers. The harness converts its
+   native terminal result into VK completion evidence.
+
+### Copy-ready project instruction
+
+Add this block to a repository's canonical `AGENTS.md` when VK manages its
+agents:
+
+```md
+## Veritas Kanban managed-run protocol
+
+When Veritas Kanban launches this work:
+
+1. Treat the supplied task envelope as authoritative.
+2. Work only in the assigned worktree and obey its commit policy.
+3. Use only the run-scoped tools and credentials supplied by Veritas.
+4. Do not register, heartbeat, start, complete, or emit telemetry manually.
+5. Do not call `vk begin` or `vk done`; Veritas already owns the attempt.
+6. Run focused verification that matches the requested change.
+7. Return the outcome, changed files or artifacts, checks, risks, and blockers
+   through the harness's normal final response.
+```
+
+## How each managed harness receives VK context
+
+| Harness                         | VK transport                              | Agent-facing behavior                                                                                                                        |
+| ------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Buzz Agent                      | ACP v1 stdio                              | Receives the immutable task envelope and selected run tools through the ACP session. Session load/resume is unavailable.                     |
+| Grok Build                      | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog in a dedicated `grok agent --no-leader ... stdio` process.                         |
+| GitHub Copilot CLI              | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog with remote, plugins, custom instructions, and experimental features disabled.     |
+| OpenAI Codex CLI/SDK/app-server | Native process, SDK, or app-server stream | Receives the task envelope plus supported run-scoped MCP configuration. The adapter owns terminal capture.                                   |
+| Claude Code                     | Supervised bare-mode stream               | Receives the task envelope and an explicit run-scoped MCP configuration. It does not inherit arbitrary local plugins, hooks, or MCP servers. |
+| Hermes                          | Supervised one-shot process               | Reads `AGENTS.md` from the assigned worktree and returns scripted stdout. Resume is unavailable.                                             |
+| OpenClaw                        | Gateway tool invocation                   | Receives the task request through the configured gateway and reports through the attempt-bound callback.                                     |
+
+The current support tier is determined by runtime evidence, not this table.
+Before enabling a profile, the operator must run:
+
+```bash
+vk doctor --json
+```
+
+See [Agent Providers](AGENT-PROVIDERS.md) and
+[Harness Compatibility](HARNESS-COMPATIBILITY.md) for tested versions,
+capabilities, authentication, sandbox behavior, limitations, and recovery.
+
+## Run-scoped VK tools
+
+Managed adapters receive only the catalog selected for that attempt:
+
+- A tool with an `allow` decision may be injected natively when the transport
+  can enforce the exact catalog.
+- An approval-backed or credential-bound tool is available only through the
+  system-owned `veritas-run` bridge.
+- Tools absent from the catalog are not authorized.
+- If a required tool is missing or rejected, report the blocker. Do not install
+  another MCP server, inherit a global configuration, or fall back to raw
+  credentials.
+
+Managed agents do not need a separate global VK MCP configuration. The adapter
+injects the permitted run-scoped view when supported. The global MCP setup
+below is for unmanaged clients.
+
+## External self-reporting agents
+
+Use this path only when VK does not launch the process through a built-in
+adapter.
+
+### Reusable `AGENTS.md` template
+
+```md
 # AGENTS.md
 
 ## Identity
 
-- **Agent ID:** `my-agent-id` _(unique, lowercase, dashes)_
-- **Name:** My Agent
-- **Model:** anthropic/claude-sonnet-4-5
-- **Provider:** anthropic
-- **Version:** 1.0.0
+- Agent ID: `my-agent-id`
+- Name: My Agent
+- Model: provider/model
+- Provider: external
+- Version: 1.0.0
 
 ## Capabilities
 
-List what this agent can do. Used for task routing.
+- `code`: Write, review, and refactor code
+- `research`: Research and analysis
+- `review`: Code review and validation
+- `documentation`: Write and maintain documentation
 
-- `code` — Write, review, and refactor code
-- `research` — Deep web research and analysis
-- `review` — Code review and PR feedback
-- `deploy` — CI/CD and deployment operations
-- `documentation` — Write and maintain docs
+## Veritas Kanban external-agent protocol
 
-## Registration
+1. Register on startup and send a heartbeat every two to three minutes.
+2. Treat VK as the source of truth for task and attempt state.
+3. Start work through the documented task API and retain the returned attempt
+   and runtime-manifest identities.
+4. Work only inside the assigned repository/worktree boundary.
+5. Emit progress, token, and completion data once. Do not duplicate events.
+6. On completion, report the final outcome, verification evidence, and the
+   exact attempt/runtime identities expected by VK.
+7. Deregister cleanly on shutdown.
+```
 
-On startup, register with Veritas Kanban:
+### Authentication
+
+Set the VK endpoint and an agent-role API key outside source control:
 
 ```bash
-curl -X POST http://localhost:3001/api/agents/register \
-  -H 'Content-Type: application/json' \
-  -d '{
+export VK_API_URL=http://localhost:3001
+export VK_API_KEY=your-agent-api-key
+```
+
+Every protected example below assumes:
+
+```bash
+-H "X-API-Key: ${VK_API_KEY}"
+```
+
+### Registration
+
+```bash
+curl -X POST "${VK_API_URL}/api/agents/register" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${VK_API_KEY}" \
+  --data '{
     "id": "my-agent-id",
     "name": "My Agent",
-    "model": "anthropic/claude-sonnet-4-5",
-    "provider": "anthropic",
+    "model": "provider/model",
+    "provider": "external",
     "capabilities": [
       {"name": "code", "description": "Write and review code"},
-      {"name": "research", "description": "Deep research and analysis"}
+      {"name": "research", "description": "Research and analysis"}
     ],
     "version": "1.0.0"
   }'
 ```
 
-## Heartbeat
-
-Send periodic heartbeats to stay registered (every 2-3 minutes):
+### Heartbeat
 
 ```bash
-curl -X POST http://localhost:3001/api/agents/register/my-agent-id/heartbeat \
-  -H 'Content-Type: application/json' \
-  -d '{
+curl -X POST "${VK_API_URL}/api/agents/register/my-agent-id/heartbeat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${VK_API_KEY}" \
+  --data '{
     "status": "busy",
     "currentTaskId": "task_20260205_abc123",
     "currentTaskTitle": "Implement feature X"
   }'
 ```
 
-### Status Values
+Valid states are `online`, `busy`, `idle`, and `offline`. VK marks an agent
+offline after its configured heartbeat timeout.
 
-| Status    | Meaning                                                |
-| --------- | ------------------------------------------------------ |
-| `online`  | Agent is available for work                            |
-| `busy`    | Agent is actively working on a task                    |
-| `idle`    | Agent is running but not doing anything                |
-| `offline` | Agent hasn't sent a heartbeat in 5+ minutes (auto-set) |
+### Task lifecycle
 
-## Deregistration
+For an external agent:
 
-On shutdown, deregister cleanly:
+1. Send a busy heartbeat with `currentTaskId`.
+2. Call `POST /api/agents/:taskId/start`.
+3. Retain the returned `attemptId` and provider-runtime manifest digest.
+4. Report token usage to `POST /api/agents/:taskId/tokens` with the active
+   attempt.
+5. Complete through `POST /api/agents/:taskId/complete` with the same attempt
+   and runtime-manifest digest.
+6. Send an idle heartbeat and clear the current task.
 
-```bash
-curl -X DELETE http://localhost:3001/api/agents/register/my-agent-id
-```
+Use the exact request and response schemas in
+[API Reference](API-REFERENCE.md). Do not guess field names from these summary
+steps.
 
-## Discovery
+### Telemetry
 
-### List all agents
-
-```bash
-curl http://localhost:3001/api/agents/register
-```
-
-### Filter by status
+Managed runs project `run.started`, `run.completed`, and provider-reported token
+events automatically. External agents must emit them once:
 
 ```bash
-curl http://localhost:3001/api/agents/register?status=online
+curl -X POST "${VK_API_URL}/api/telemetry/events" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${VK_API_KEY}" \
+  --data '{"type":"run.started","taskId":"<TASK_ID>","agent":"my-agent-id"}'
+
+curl -X POST "${VK_API_URL}/api/telemetry/events" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ${VK_API_KEY}" \
+  --data '{"type":"run.completed","taskId":"<TASK_ID>","agent":"my-agent-id","durationMs":<MS>,"success":true}'
 ```
 
-### Filter by capability
+Do not manually emit these events for a managed provider run.
+
+### Deregistration
 
 ```bash
-curl http://localhost:3001/api/agents/register?capability=code
+curl -X DELETE "${VK_API_URL}/api/agents/register/my-agent-id" \
+  -H "X-API-Key: ${VK_API_KEY}"
 ```
 
-### Find agents for a capability
+## Unmanaged MCP clients
 
-```bash
-curl http://localhost:3001/api/agents/register/capabilities/research
+Use the VK MCP server when an assistant needs typed board tools but is not the
+managed task runner.
+
+Generic stdio configuration:
+
+```json
+{
+  "mcpServers": {
+    "veritas-kanban": {
+      "command": "node",
+      "args": ["/absolute/path/to/veritas-kanban/mcp/dist/index.js"],
+      "env": {
+        "VK_API_URL": "http://localhost:3001",
+        "VK_API_KEY": "your-agent-api-key"
+      }
+    }
+  }
+}
 ```
 
-### Registry stats
-
-```bash
-curl http://localhost:3001/api/agents/register/stats
-```
-
-## Task Integration
-
-For an externally registered agent that is not launched by a built-in v6
-provider adapter:
-
-1. Send heartbeat with `status: "busy"` and `currentTaskId`
-2. Use existing task APIs: `POST /api/agents/:taskId/start`
-3. Report tokens: `POST /api/agents/:taskId/tokens` with the active `attemptId`
-4. Complete: `POST /api/agents/:taskId/complete` with the active `attemptId` and
-   `providerRuntimeManifestDigest` returned by the start/status response
-5. Send heartbeat with `status: "idle"` and clear task
-
-Managed Buzz, Grok Build, Codex, Claude Code, GitHub Copilot CLI, Hermes, and
-OpenClaw runs must not emulate these callbacks. Their selected adapter owns the
-task envelope, launch manifest, run supervision, causal events, approvals,
-tools, credentials, lifecycle, and authoritative completion result. Run
-`vk doctor --json` and use [Agent Providers](AGENT-PROVIDERS.md) before enabling
-a harness profile.
-
-## OpenAI Codex Notes
-
-When this template is used by Codex, add these project-specific instructions:
-
-```md
-## Veritas Kanban Protocol
-
-When working on Veritas Kanban tasks:
-
-1. Treat Veritas Kanban as the source of truth for task state.
-2. Before implementation, inspect the task, acceptance criteria, worktree, and related docs.
-3. Move the task to `in-progress` and ensure an attempt is tracked.
-4. Keep notes in task comments or progress files when findings affect future work.
-5. Run relevant tests/checks before completion.
-6. Report final summary, files changed, tests run, risks, and follow-ups.
-7. For code changes, request cross-model review before final completion.
-8. Use the Veritas MCP server when available instead of ad hoc HTTP calls.
-
-For OpenAI product/API questions, use the OpenAI developer documentation MCP server first.
-```
-
-Recommended Codex MCP setup:
+Codex CLI configuration:
 
 ```bash
 codex mcp add veritas-kanban \
   --env VK_API_URL=http://localhost:3001 \
+  --env VK_API_KEY=your-agent-api-key \
   -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
-
-codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
 ```
 
-See [SOP-codex-integration.md](SOP-codex-integration.md) for the full Codex workflow.
+Restart the MCP client after changing its configuration. Verify read and write
+permissions with the smoke procedure in the
+[MCP Server Guide](mcp/README.md).
 
-## Telemetry Emission For External Agents
+## References
 
-The dashboard's **Success Rate**, **Token Usage**, and **Average Run Duration**
-graphs require `run.*` telemetry events. Managed v6 provider runs project these
-from the causal event and completion contracts. Only an externally registered
-agent operating outside a built-in adapter must emit them manually.
-
-> Do not double-report managed provider runs. Manual events are for the
-> external self-reporting path only.
-
-### When Starting a Task
-
-```bash
-curl -X POST http://localhost:3001/api/telemetry/events \
-  -H "Content-Type: application/json" \
-  -d '{"type":"run.started","taskId":"<TASK_ID>","agent":"my-agent-id"}'
-```
-
-### When Completing a Task
-
-```bash
-# Report run result (success or failure)
-curl -X POST http://localhost:3001/api/telemetry/events \
-  -H "Content-Type: application/json" \
-  -d '{"type":"run.completed","taskId":"<TASK_ID>","agent":"my-agent-id","durationMs":<MS>,"success":true}'
-
-# Report token usage (powers Token Usage + Monthly Budget)
-curl -X POST http://localhost:3001/api/telemetry/events \
-  -H "Content-Type: application/json" \
-  -d '{"type":"run.tokens","taskId":"<TASK_ID>","agent":"my-agent-id","model":"<MODEL>","inputTokens":<N>,"outputTokens":<N>,"cacheTokens":<N>,"cost":<N>}'
-```
-
-### On Failure
-
-```bash
-curl -X POST http://localhost:3001/api/telemetry/events \
-  -H "Content-Type: application/json" \
-  -d '{"type":"run.completed","taskId":"<TASK_ID>","agent":"my-agent-id","durationMs":<MS>,"success":false}'
-```
-
-### What's auto-captured vs. manual
-
-| Event Type            | Managed adapter                       | External self-reporting agent |
-| --------------------- | ------------------------------------- | ----------------------------- |
-| `task.created`        | VK server                             | VK server                     |
-| `task.status_changed` | VK server                             | VK server                     |
-| `task.archived`       | VK server                             | VK server                     |
-| `run.started`         | Automatic                             | Agent must POST               |
-| `run.completed`       | Automatic                             | Agent must POST               |
-| `run.tokens`          | Automatic when provider reports usage | Agent must POST               |
-
-## Multi-Agent Coordination
-
-The registry enables agents to discover each other:
-
-```bash
-# Find who can help with code review
-curl http://localhost:3001/api/agents/register/capabilities/review
-
-# Check if a specific agent is available
-curl http://localhost:3001/api/agents/register/codex-1
-```
-
-This is the foundation for multi-agent task assignment (#29) and @mention notifications (#30).
+- [Agent Providers](AGENT-PROVIDERS.md)
+- [Harness Compatibility](HARNESS-COMPATIBILITY.md)
+- [Buzz Integration](BUZZ-INTEGRATION.md)
+- [MCP Server Guide](mcp/README.md)
+- [CLI Guide](CLI-GUIDE.md)
+- [API Reference](API-REFERENCE.md)

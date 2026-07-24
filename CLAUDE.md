@@ -1,10 +1,10 @@
 # CLAUDE.md — Claude-Specific Supplement for Veritas Kanban
 
 > **Canonical instructions are in `AGENTS.md`.** Read that file first. This supplement contains
-> Claude-specific lessons, cross-model review workflow, and common mistakes caught by previous
-> Claude runs. Do not duplicate `AGENTS.md` content here.
+> Claude-specific lessons and common mistakes caught by previous Claude runs. Do not duplicate
+> `AGENTS.md` content here.
 >
-> **Last updated:** 2026-07-24 (v6.0.0 release freshness)
+> **Last updated:** 2026-07-24 (v6.0.1 release freshness)
 > **Freshness check:** Update after mistakes; review monthly.
 
 ---
@@ -16,14 +16,8 @@ that was previously embedded here. The fields updated from their stale v2.0 valu
 
 - **pnpm:** was `9+` → now `≥ 11.0.0` (pinned `pnpm@11.1.1`)
 - **Node:** was `22+` → now `≥ 22.22.1`
-- **Providers:** `hermes-cli` added; OpenClaw gateway dispatch documented
-
----
-
-## Cross-model review workflow
-
-Claude writes code → GPT reviews before merge. GPT writes code → Claude reviews.
-See `prompt-registry/cross-model-review.md` for the prompt template.
+- **Providers:** managed Buzz, Grok Build, Codex, Claude Code, Copilot CLI,
+  Hermes, and OpenClaw contracts are documented in `AGENTS.md`
 
 ---
 
@@ -62,7 +56,7 @@ See `prompt-registry/cross-model-review.md` for the prompt template.
 ## When to update this file
 
 - After a mistake that a rule would have prevented.
-- After a cross-model review catches something systemic.
+- After any review catches a systemic pattern worth preserving.
 - Monthly freshness review.
 
 ---

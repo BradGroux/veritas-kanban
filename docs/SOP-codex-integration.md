@@ -11,7 +11,7 @@ Use this playbook when Veritas Kanban delegates work to OpenAI Codex. v4.3 inclu
 | **Human / PM**           | Defines task scope, confirms Codex mode, reviews outputs, approves final merge.   |
 | **Veritas Orchestrator** | Creates worktree, selects provider, starts attempt, tracks status/logs/telemetry. |
 | **Codex Worker**         | Implements, tests, reports final summary, and leaves useful run evidence.         |
-| **Reviewer Agent**       | Performs cross-model review when Codex authored code or reviewed another agent.   |
+| **Reviewer Agent**       | Performs an independent review when the task or governance policy requires one.   |
 
 ---
 
@@ -31,16 +31,16 @@ Default for v4.3 is **Codex CLI**. Use **Codex SDK** when a task needs a durable
 
 ## Lifecycle Overview
 
-| Stage        | Action                                                                 | Required? |
-| ------------ | ---------------------------------------------------------------------- | --------- |
-| 0. Configure | Add Codex agent profile and verify `codex` install/auth.               | Yes       |
-| 1. Prepare   | Create or verify task worktree; render task prompt.                    | Yes       |
-| 2. Start     | Veritas starts provider attempt and marks task `in-progress`.          | Yes       |
-| 3. Run       | Codex executes with scoped prompt and emits progress/log events.       | Yes       |
-| 4. Observe   | Veritas maps JSONL/SDK events into attempt logs, activity, telemetry.  | Yes       |
-| 5. Complete  | Veritas records final summary, deliverables, usage, and task outcome.  | Yes       |
-| 6. Review    | Opposite-model review runs for code or high-risk changes.              | For code  |
-| 7. Close     | Human or automation approves, merges, archives, or creates follow-ups. | Yes       |
+| Stage        | Action                                                                  | Required?   |
+| ------------ | ----------------------------------------------------------------------- | ----------- |
+| 0. Configure | Add Codex agent profile and verify `codex` install/auth.                | Yes         |
+| 1. Prepare   | Create or verify task worktree; render task prompt.                     | Yes         |
+| 2. Start     | Veritas starts provider attempt and marks task `in-progress`.           | Yes         |
+| 3. Run       | Codex executes with scoped prompt and emits progress/log events.        | Yes         |
+| 4. Observe   | Veritas maps JSONL/SDK events into attempt logs, activity, telemetry.   | Yes         |
+| 5. Complete  | Veritas records final summary, deliverables, usage, and task outcome.   | Yes         |
+| 6. Review    | Independent review runs when required by the task or governance policy. | Conditional |
+| 7. Close     | Human or automation approves, merges, archives, or creates follow-ups.  | Yes         |
 
 ---
 
@@ -95,7 +95,8 @@ redacted governance trace.
    - `error`
 6. Append human-readable attempt logs.
 7. Preserve final response as the completion summary.
-8. Emit telemetry and token usage when available.
+8. Let Veritas project lifecycle telemetry and provider-reported token usage;
+   do not emit duplicate events from the managed Codex run.
 
 ---
 
@@ -214,25 +215,23 @@ codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
 
 ---
 
-## AGENTS.md Codex Snippet
+## AGENTS.md managed-run snippet
 
-Add this to a repository where Codex will work with Veritas:
+Use the harness-neutral managed-run block from
+[AGENTS-TEMPLATE.md](AGENTS-TEMPLATE.md). Codex does not need a separate VK
+lifecycle protocol:
 
 ```md
-## Veritas Kanban Protocol
+## Veritas Kanban managed-run protocol
 
-When working on Veritas Kanban tasks:
-
-1. Treat Veritas Kanban as the source of truth for task state.
-2. Before implementation, inspect the task, acceptance criteria, worktree, and related docs.
-3. Move the task to `in-progress` and ensure an attempt is tracked.
-4. Keep notes in task comments or progress files when findings affect future work.
-5. Run relevant tests/checks before completion.
-6. Report final summary, files changed, tests run, risks, and follow-ups.
-7. For code changes, request cross-model review before final completion.
-8. Use the Veritas MCP server when available instead of ad hoc HTTP calls.
-
-For OpenAI product/API questions, use the OpenAI developer documentation MCP server first.
+1. Treat the supplied task envelope as authoritative.
+2. Work only in the assigned worktree and obey its commit policy.
+3. Use only the run-scoped tools and credentials supplied by Veritas.
+4. Do not register, heartbeat, start, complete, or emit telemetry manually.
+5. Do not call `vk begin` or `vk done`; Veritas already owns the attempt.
+6. Run focused verification that matches the requested change.
+7. Return the outcome, changed files or artifacts, checks, risks, and blockers
+   through the normal Codex final response.
 ```
 
 ---
@@ -255,16 +254,14 @@ If `autoTelemetry` is enabled, avoid double-emitting lifecycle events. Token usa
 
 ---
 
-## Review Rules
+## Optional review rules
 
-| Author       | Reviewer Recommendation                            |
-| ------------ | -------------------------------------------------- |
-| Codex        | Claude, Gemini, or another non-Codex reviewer      |
-| Claude       | Codex review or GPT-family reviewer                |
-| Human        | Codex review for complex code or high-risk changes |
-| Codex review | Human adjudicates blocking findings                |
+Independent review is not a default completion gate. Enable it only when the
+task, configured review gate, issue owner, or release owner requires it.
 
-Follow [SOP-cross-model-code-review.md](SOP-cross-model-code-review.md) for scoring, findings, and final gate handling.
+When required, follow
+[SOP-cross-model-code-review.md](SOP-cross-model-code-review.md) for scoring,
+findings, and final gate handling.
 
 ---
 

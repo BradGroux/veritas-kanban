@@ -1,18 +1,23 @@
 # SOP: Agent Task Workflow (Create → Work → Complete)
 
-Use this playbook anytime an agent (human or LLM) takes a task from **todo** to **done**. It standardizes status changes, time tracking, summaries, and ensures telemetry stays usable.
+Use this playbook when a human or external self-reporting agent takes a task
+from **todo** to **done**. It standardizes status changes, time tracking,
+summaries, and telemetry.
 
-This SOP assumes an agent or human is already doing the work. Veritas Kanban can create agent requests and track status, but it does not execute model work unless a runner/provider such as OpenClaw, Codex CLI/SDK, Codex Cloud, or a custom process is configured.
+> Managed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, and
+> OpenClaw runs do not call `vk begin`, `vk done`, lifecycle endpoints, or
+> telemetry APIs. VK and the selected adapter own those transitions. Managed
+> agents follow the shared protocol in [AGENTS-TEMPLATE.md](AGENTS-TEMPLATE.md).
 
 ---
 
 ## Roles
 
-| Role               | Responsibilities                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| **Human / PM**     | Defines clear task + acceptance criteria, reviews results, enforces cross-model review. |
-| **Worker Agent**   | Picks up a task, updates status/time, posts results, flags blockers.                    |
-| **Reviewer Agent** | Opposite-model reviewer for code or high-risk work (see Cross-Model SOP).               |
+| Role               | Responsibilities                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| **Human / PM**     | Defines clear task and acceptance criteria, reviews results, and sets any required review policy. |
+| **Worker Agent**   | Picks up a task, updates status/time, posts results, and flags blockers.                          |
+| **Reviewer Agent** | Performs an independent review when the task or configured policy requires it.                    |
 
 ---
 
@@ -25,7 +30,7 @@ This SOP assumes an agent or human is already doing the work. Veritas Kanban can
 | 2. Work     | Agent executes subtasks; marks subtasks complete as it goes.                                      | ✅          |
 | 3. Update   | Post intermediate comment(s) or blockers; set status `blocked` if waiting on human.               | As needed   |
 | 4. Complete | Stop timer, set status `done`, provide completion summary + attachments, capture lessons learned. | ✅          |
-| 5. Review   | Trigger cross-model review if code touched or risk level ≥ medium.                                | ✅ for code |
+| 5. Review   | Run an independent or cross-model review when the task or governance policy requires it.          | Conditional |
 
 ---
 
@@ -193,7 +198,8 @@ URL: http://localhost:3000/task/<ID>
    - Stop timer + set status done (vk done <id> "summary").
    - Attach deliverables / link to repo.
    - Fill the lessons learned field if anything should go into AGENTS/CLAUDE.
-5. If you touched code, queue cross-model review task before marking done.
+5. If the task or configured governance policy requires independent review,
+   queue the review before marking done.
 ```
 
 Store this under `prompt-registry/agent-task-workflow.md` so every agent run is consistent.
@@ -240,11 +246,11 @@ System events render as divider lines in the UI — visually distinct from regul
 
 ## Escalation
 
-| Situation               | Action                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| Blocked > 15 minutes    | Set status `blocked`, leave blocker comment, ping PM.                           |
-| Time tracking forgotten | Start timer immediately, add manual entry for elapsed time with reason.         |
-| Reviewer disagrees      | Re-open task, create subtasks for fixes, keep cross-model reviewer in the loop. |
+| Situation               | Action                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| Blocked > 15 minutes    | Set status `blocked`, leave blocker comment, ping PM.                             |
+| Time tracking forgotten | Start timer immediately, add manual entry for elapsed time with reason.           |
+| Reviewer disagrees      | Re-open task, create subtasks for fixes, and keep the assigned reviewer informed. |
 
 ---
 

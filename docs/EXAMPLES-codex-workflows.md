@@ -41,9 +41,9 @@ Use these recipes as starting points for v4.3 OpenAI Codex workflows in Veritas 
    - test command output
    - task comment or deliverable listing changed files
 
-6. Review:
-   - Create a cross-model review task.
-   - Assign it to a non-Codex reviewer.
+6. Optional review:
+   - If the task or governance policy requires independent review, create a
+     review task and assign it to the requested reviewer.
 
 ---
 

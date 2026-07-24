@@ -23,9 +23,11 @@ When you ask “Hey Veritas, can you be the PM for this sprint and assign sub-ag
    - Spawn worker agent with clear instructions + acceptance criteria.
 4. **Track**:
    - Update Agent Status panel using `vk agent sub-agent <count>`.
-   - Make sure each worker uses `vk begin/done` so timers stay accurate.
+   - Managed workers rely on VK-owned attempt timing. Only human or external
+     self-reporting workers use `vk begin`/`vk done`.
 5. **Review**:
-   - Run cross-model review before marking tasks done.
+   - Run independent or cross-model review only when required by the task or
+     configured governance policy.
    - Request fixes via subtasks or comments.
 6. **Report**:
    - Post updates in task comments and daily standups (`vk summary standup --text`).
@@ -40,11 +42,11 @@ Task: <ID> — <Title>
 Context: <link to research/requirements>
 Deliverable: <clear definition of done>
 Steps:
-1. Run vk begin <id>.
+1. Treat the Veritas task envelope as authoritative.
 2. Complete subtasks in order. Leave notes if deviations occur.
-3. If blocked, set status blocked + explain.
-4. On completion, vk done <id> "summary".
-5. Request cross-model review by creating task <new id> tagged review.
+3. If blocked, report the blocker through an available VK tool or final output.
+4. Return a concise completion summary through the native harness result.
+5. Request an independent review only when the task or policy requires it.
 Uploads: <where to store artifacts>
 ```
 
@@ -116,8 +118,8 @@ See [SQUAD-CHAT-PROTOCOL.md](SQUAD-CHAT-PROTOCOL.md) for full details.
 1. **Human**: `sessions_spawn` Opus with task “Be PM for US-1600”.
 2. **Opus (PM)**: Reads sprint tasks, assigns `US-1601` to itself (docs) and `US-1602` to Codex.
 3. **Opus**: Runs `vk agent sub-agent 1` to show a worker is active.
-4. **Opus**: Spawns Codex worker with handoff template; instructs to run `vk begin task_...` etc.
-5. **Codex**: Executes, posts completion summary, requests cross-model review from Claude.
+4. **Opus**: Spawns the Codex worker with the managed-run handoff template.
+5. **Codex**: Executes and returns its completion summary through the managed run.
 6. **Opus**: Reviews, marks done, updates sprint recap comment.
 7. **Opus**: Sets agent status back to idle once all workers complete (`vk agent idle`).
 
