@@ -48,6 +48,82 @@ const digest: AgentOperationsDigest = {
   },
   generatedAt: '2026-06-05T00:01:00.000Z',
   hasActivity: true,
+  filters: {},
+  inventory: {
+    totalBoardTasks: 8,
+    matchingFilters: 6,
+    includedTasks: 4,
+    excludedTasks: 4,
+    excludedBy: {
+      filterMismatch: 2,
+      status: 1,
+      timeWindow: 1,
+      missingSourceMetadata: 0,
+    },
+    sourceLinks: {
+      includedTasks: [
+        {
+          kind: 'task',
+          id: 'task_active',
+          label: 'Active task',
+          taskId: 'task_active',
+        },
+      ],
+      excludedBy: {
+        filterMismatch: [
+          {
+            kind: 'task',
+            id: 'task_other',
+            label: 'Other task',
+            taskId: 'task_other',
+          },
+        ],
+        status: [
+          {
+            kind: 'task',
+            id: 'task_todo',
+            label: 'Todo task',
+            taskId: 'task_todo',
+          },
+        ],
+        timeWindow: [
+          {
+            kind: 'task',
+            id: 'task_old_done',
+            label: 'Old done task',
+            taskId: 'task_old_done',
+          },
+        ],
+        missingSourceMetadata: [],
+      },
+    },
+  },
+  dataQuality: [
+    {
+      code: 'unknown-repository',
+      label: 'Tasks grouped under unknown repository',
+      count: 1,
+      sourceLinks: [
+        {
+          kind: 'task',
+          id: 'task_unknown',
+          label: 'Unknown repository task',
+          taskId: 'task_unknown',
+        },
+      ],
+    },
+  ],
+  semantics: {
+    active: 'Current snapshot active.',
+    blocked: 'Current snapshot blocked.',
+    stuck: 'Current snapshot stuck.',
+    completed: 'Completed inside the window.',
+    failed: 'Failed inside the window.',
+    runs: 'Unique terminal runs.',
+    activeTime: 'Completed run duration.',
+    observedWallTime: 'Signals inside the window.',
+    tokenCost: 'Reported token cost.',
+  },
   totals: {
     active: 1,
     blocked: 1,
@@ -242,6 +318,13 @@ describe('OperationsDigestPage', () => {
     expect(screen.getByText('platform / veritas-kanban / /worktrees/platform')).toBeDefined();
     expect(screen.getByText('Daily Delivery')).toBeDefined();
     expect(screen.getByText('Configured')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Board Inventory Reconciliation' })).toBeDefined();
+    expect(screen.getByText(/8 total board tasks/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /Outside window: 1/i })).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: /Tasks grouped under unknown repository: 1/i })
+    ).toBeDefined();
+    expect(screen.getByText('Completed in window')).toBeDefined();
     expect(screen.getByTestId('markdown').textContent).toContain('Agent Operations Digest');
     expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThan(4);
     expect(container.querySelector('[data-slot="button"]')).toBeNull();

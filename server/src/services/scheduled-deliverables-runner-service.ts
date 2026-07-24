@@ -242,6 +242,15 @@ function operationsDigestMetadata(
     runs: digest.totals.runs,
     openApprovals: digest.totals.openApprovals,
     totalTokens: digest.totals.totalTokens,
+    totalBoardTasks: digest.inventory.totalBoardTasks,
+    matchingFilters: digest.inventory.matchingFilters,
+    includedTasks: digest.inventory.includedTasks,
+    excludedTasks: digest.inventory.excludedTasks,
+    excludedFilterMismatch: digest.inventory.excludedBy.filterMismatch,
+    excludedStatus: digest.inventory.excludedBy.status,
+    excludedTimeWindow: digest.inventory.excludedBy.timeWindow,
+    excludedMissingSourceMetadata: digest.inventory.excludedBy.missingSourceMetadata,
+    dataQualityIssues: digest.dataQuality.length,
     markdownBytes: message.markdown?.length ?? 0,
   };
 }

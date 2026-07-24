@@ -263,6 +263,139 @@ describe('DigestService', () => {
         action: 'push_branch',
       });
       expect(digest.totals.openApprovals).toBe(1);
+      expect(digest.inventory).toMatchObject({
+        totalBoardTasks: 3,
+        matchingFilters: 3,
+        includedTasks: 3,
+        excludedTasks: 0,
+      });
+      expect(digest.totals.active + digest.totals.blocked + digest.totals.completed).toBe(
+        digest.inventory.includedTasks
+      );
+      expect(digest.semantics.observedWallTime).toContain('inside the window');
+    });
+
+    it('reconciles old tasks, current state, windowed activity, metadata gaps, and duplicate runs', async () => {
+      const makeTask = (
+        id: string,
+        status: Task['status'],
+        updated: string,
+        overrides: Partial<Task> = {}
+      ): Task => ({
+        id,
+        title: id,
+        description: id,
+        type: 'feature',
+        status,
+        priority: 'medium',
+        project: 'platform',
+        created: '2026-06-01T00:00:00.000Z',
+        updated,
+        git: {
+          repo: 'veritas-kanban',
+          branch: `test/${id}`,
+          baseBranch: 'main',
+          worktreePath: '/worktrees/platform',
+        },
+        ...overrides,
+      });
+      const tasks = [
+        makeTask('task_old_active', 'in-progress', '2026-05-01T00:00:00.000Z'),
+        makeTask('task_recent_blocked', 'blocked', '2026-06-04T10:00:00.000Z'),
+        makeTask('task_recent_done', 'done', '2026-06-04T11:00:00.000Z'),
+        makeTask('task_old_done', 'done', '2026-05-01T00:00:00.000Z'),
+        makeTask('task_todo', 'todo', '2026-06-04T11:15:00.000Z'),
+        makeTask('task_unknown', 'in-progress', '2026-06-04T09:00:00.000Z', {
+          project: undefined,
+          git: undefined,
+        }),
+      ];
+      const telemetry = {
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            id: 'run_error_duplicate',
+            type: 'run.error',
+            timestamp: '2026-06-04T10:30:00.000Z',
+            taskId: 'task_old_active',
+            agent: 'codex',
+            success: false,
+            error: 'Intermediate error',
+            attemptId: 'attempt_shared',
+          } satisfies RunTelemetryEvent,
+          {
+            id: 'run_complete',
+            type: 'run.completed',
+            timestamp: '2026-06-04T11:30:00.000Z',
+            taskId: 'task_old_active',
+            agent: 'codex',
+            success: true,
+            durationMs: 120_000,
+            attemptId: 'attempt_shared',
+          } satisfies RunTelemetryEvent,
+          {
+            id: 'tokens_1',
+            type: 'run.tokens',
+            timestamp: '2026-06-04T11:45:00.000Z',
+            taskId: 'task_old_active',
+            agent: 'codex',
+            inputTokens: 40,
+            outputTokens: 10,
+            totalTokens: 50,
+            cost: 0.005,
+          } satisfies TokenTelemetryEvent,
+        ]),
+      };
+      const taskService = { listTasks: vi.fn().mockResolvedValue(tasks) };
+      const serviceOverrides = service as unknown as {
+        telemetry: typeof telemetry;
+        taskService: typeof taskService;
+      };
+      serviceOverrides.telemetry = telemetry;
+      serviceOverrides.taskService = taskService;
+
+      const digest = await service.generateOperationsDigest({
+        from: '2026-06-04T00:00:00.000Z',
+        to: '2026-06-04T12:00:00.000Z',
+      });
+      const markdown = service.formatOperationsDigestMarkdown(digest).markdown;
+
+      expect(digest.inventory).toMatchObject({
+        totalBoardTasks: 6,
+        matchingFilters: 6,
+        includedTasks: 4,
+        excludedTasks: 2,
+        excludedBy: {
+          filterMismatch: 0,
+          status: 1,
+          timeWindow: 1,
+          missingSourceMetadata: 0,
+        },
+      });
+      expect(digest.totals).toMatchObject({
+        active: 2,
+        blocked: 1,
+        stuck: 2,
+        completed: 1,
+        failed: 0,
+        runs: 1,
+        activeTimeMs: 120_000,
+        totalTokens: 50,
+      });
+      expect(digest.totals.wallTimeMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000);
+      expect(digest.dataQuality.map((issue) => issue.code)).toEqual([
+        'unknown-project',
+        'unknown-repository',
+        'missing-cwd',
+      ]);
+      expect(
+        digest.dataQuality.find((issue) => issue.code === 'unknown-repository')?.sourceLinks[0]?.id
+      ).toBe('task_unknown');
+      expect(digest.inventory.sourceLinks.excludedBy.timeWindow[0]?.id).toBe('task_old_done');
+      expect(markdown).toContain(
+        'Inventory: 6 board tasks, 6 match filters, 4 included, 2 excluded'
+      );
+      expect(markdown).toContain('Semantics: active, blocked, and stuck are current task state');
+      expect(markdown).toContain('Data quality');
     });
 
     it('includes queue monitor activity and skipped reasons', async () => {
@@ -338,6 +471,10 @@ describe('DigestService', () => {
       const tasks = [
         makeTask('task_match', 'veritas-kanban', '/worktrees/platform'),
         makeTask('task_other', 'other-repo', '/worktrees/other'),
+        {
+          ...makeTask('task_missing', 'placeholder', '/worktrees/missing'),
+          git: undefined,
+        },
       ];
       const telemetry = {
         getEvents: vi.fn().mockResolvedValue([
@@ -394,6 +531,19 @@ describe('DigestService', () => {
       expect(digest.groups[0].sourceLinks.activeTasks).toHaveLength(1);
       expect(digest.groups[0].sourceLinks.tokenEvents[0]?.id).toBe('tokens_match');
       expect(digest.totals.totalTokens).toBe(40);
+      expect(digest.inventory).toMatchObject({
+        totalBoardTasks: 3,
+        matchingFilters: 1,
+        includedTasks: 1,
+        excludedTasks: 2,
+        excludedBy: {
+          filterMismatch: 1,
+          missingSourceMetadata: 1,
+        },
+      });
+      expect(digest.inventory.sourceLinks.excludedBy.missingSourceMetadata[0]?.id).toBe(
+        'task_missing'
+      );
     });
   });
 

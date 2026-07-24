@@ -75,6 +75,39 @@ export interface AgentOperationsDigest {
   };
   generatedAt: string;
   hasActivity: boolean;
+  filters: {
+    project?: string;
+    repo?: string;
+    cwd?: string;
+  };
+  inventory: {
+    totalBoardTasks: number;
+    matchingFilters: number;
+    includedTasks: number;
+    excludedTasks: number;
+    excludedBy: Record<AgentOperationsExclusionReason, number>;
+    sourceLinks: {
+      includedTasks: AgentOperationsSourceLink[];
+      excludedBy: Record<AgentOperationsExclusionReason, AgentOperationsSourceLink[]>;
+    };
+  };
+  dataQuality: Array<{
+    code: 'unknown-project' | 'unknown-repository' | 'missing-cwd';
+    label: string;
+    count: number;
+    sourceLinks: AgentOperationsSourceLink[];
+  }>;
+  semantics: {
+    active: string;
+    blocked: string;
+    stuck: string;
+    completed: string;
+    failed: string;
+    runs: string;
+    activeTime: string;
+    observedWallTime: string;
+    tokenCost: string;
+  };
   groups: AgentOperationsDigestGroup[];
   totals: AgentOperationsDigestGroup['totals'] & {
     openApprovals: number;
@@ -86,6 +119,9 @@ export interface AgentOperationsDigest {
     narrative: 'deterministic-only';
   };
 }
+
+export type AgentOperationsExclusionReason =
+  'filterMismatch' | 'status' | 'timeWindow' | 'missingSourceMetadata';
 
 export interface AgentOperationsMarkdown {
   isEmpty: boolean;

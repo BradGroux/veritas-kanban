@@ -1675,6 +1675,10 @@ New endpoints for advanced metrics and visualization (v1.6):
 - **Status timeline** — Daily Activity (75%) + Recent Status Changes (25%) side-by-side layout
 - **Section collapsing** — Dashboard sections apply `overflow-hidden` only when collapsed
 - **Daily digest** — Summary of the day's activity: tasks completed/created, agent runs, token usage, failures and issues
+- **Reconciled Operations Digest** — Current active/blocked/stuck state is
+  labeled separately from windowed completions, runs, tokens, and observed
+  runtime; board inventory, exclusion reasons, source IDs, and unknown metadata
+  findings make every headline count auditable
 - **Task-level metrics** — Per-task panel showing attempt history, token counts, duration, cost, and status timeline
 - **Export dialog** — Export dashboard data for external analysis
 

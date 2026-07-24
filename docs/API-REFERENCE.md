@@ -1880,6 +1880,32 @@ Runs all due standard schedules and refuses overlapping due-run passes.
 
 ---
 
+## Operations Digest
+
+`GET /api/digest/operations` returns the deterministic operations source bundle.
+Use `hours`, `from`, `to`, `project`, `repo`, and `cwd` to scope both JSON and
+Markdown output. `format=markdown` returns the briefing generated from the same
+filtered bundle.
+
+The response distinguishes two time models:
+
+- `active`, `blocked`, and `stuck` are current task-state snapshots. `stuck` is
+  the active subset whose task `updated` timestamp is at least two hours before
+  the selected window end.
+- `completed`, `failed`, `runs`, token usage/cost, active runtime, and observed
+  wall time are restricted to the selected window. Observed wall time is the
+  span between included signals, never task age.
+
+`inventory` reconciles all board tasks into included tasks or one mutually
+exclusive exclusion reason: filter mismatch, current status, time window, or
+missing metadata required by a selected filter. Every count includes task
+source IDs. `dataQuality` separately identifies matching tasks grouped under an
+unassigned project, unknown repository, or missing CWD so operators can drill
+into incomplete records. Run counts are deduplicated by attempt ID when
+available, otherwise by event ID.
+
+---
+
 ## Queue Intake Monitors
 
 Scan bounded GitHub issue and PR queues, build candidate packets, and gate assign/execute actions through policy, budget, sandbox, auth, and workflow preflight checks.
