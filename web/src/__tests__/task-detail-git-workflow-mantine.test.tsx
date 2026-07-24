@@ -407,6 +407,45 @@ describe('task detail Git and workflow Mantine migration', () => {
     });
   });
 
+  it('normalizes omitted workflow collections instead of crashing the task action', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/workflows')) {
+        return createJsonResponse([
+          {
+            id: 'workflow-empty',
+            name: 'Empty Workflow',
+            version: 1,
+            description: 'Definition has no agents or steps yet',
+          },
+        ]);
+      }
+      if (url.includes('/workflows/launch-recommendations')) {
+        return createJsonResponse({ recommendations: [] });
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({}),
+        text: vi.fn().mockResolvedValue(''),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithProviders(
+      <WorkflowSection
+        task={createMockTask({ id: 'task-without-workflow-run' })}
+        open
+        onOpenChange={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Empty Workflow')).toBeDefined();
+    expect(screen.getByText('0 agents')).toBeDefined();
+    expect(screen.getByText('0 steps')).toBeDefined();
+    expect(screen.queryByText('This section encountered an error')).toBeNull();
+  });
+
   it('renders run mode and QA gate controls through direct Mantine primitives', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();

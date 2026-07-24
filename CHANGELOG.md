@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Back now close it, obsolete persisted panel visibility is discarded, compact
   window heights preserve the application shell, and the native Navigate menu
   can reset layout state without deleting application data (#945).
+- Normalized omitted workflow and run collections in the task Workflow action,
+  preventing undefined length crashes and providing a recoverable load error
+  with Retry instead of replacing the task surface with an error boundary
+  (#936).
 
 ## [6.0.0] - 2026-07-24
 
