@@ -291,9 +291,26 @@ export class TaskEnvelopeService {
           input.task.project?.trim() || input.task.git?.repo || input.task.id
         ),
         worktreeId: input.task.id,
+        ...(input.task.git?.worktreeManifestId
+          ? { worktreeManifestId: input.task.git.worktreeManifestId }
+          : {}),
+        ...(input.task.git?.worktreeLeaseId
+          ? { ownershipLeaseId: input.task.git.worktreeLeaseId }
+          : {}),
+        ...(input.task.git?.worktreeManifestId && input.task.git.worktreeLeaseId
+          ? { ownershipAttemptId: input.attemptId }
+          : input.task.git?.worktreeLeaseOwnerAttemptId
+            ? { ownershipAttemptId: input.task.git.worktreeLeaseOwnerAttemptId }
+            : {}),
         repo: input.task.git?.repo || 'unknown',
         branch: input.task.git?.branch || 'unknown',
         baseBranch: input.task.git?.baseBranch || 'unknown',
+        ...(input.task.git?.worktreeBaseCommit
+          ? { resolvedBaseCommit: input.task.git.worktreeBaseCommit }
+          : {}),
+        ...(input.task.git?.worktreeBaseSource
+          ? { baseResolutionSource: input.task.git.worktreeBaseSource }
+          : {}),
         worktreePath: input.worktreePath,
         baseline,
       },

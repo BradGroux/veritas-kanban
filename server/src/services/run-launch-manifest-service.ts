@@ -75,6 +75,7 @@ const MATERIAL_SECTIONS: Array<keyof RunLaunchManifest> = [
   'profile',
   'readiness',
   'instructions',
+  'workspace',
   'runtime',
   'tools',
   'permissions',
@@ -212,6 +213,26 @@ export class RunLaunchManifestService {
           : {}),
       },
       instructions,
+      workspace: {
+        worktreeId: input.taskEnvelope.workspace.worktreeId,
+        ...(input.taskEnvelope.workspace.worktreeManifestId
+          ? { worktreeManifestId: input.taskEnvelope.workspace.worktreeManifestId }
+          : {}),
+        ...(input.taskEnvelope.workspace.ownershipLeaseId
+          ? { ownershipLeaseId: input.taskEnvelope.workspace.ownershipLeaseId }
+          : {}),
+        ...(input.taskEnvelope.workspace.ownershipAttemptId
+          ? { ownershipAttemptId: input.taskEnvelope.workspace.ownershipAttemptId }
+          : {}),
+        repo: input.taskEnvelope.workspace.repo,
+        branch: input.taskEnvelope.workspace.branch,
+        baseBranch: input.taskEnvelope.workspace.baseBranch,
+        resolvedBaseCommit:
+          input.taskEnvelope.workspace.resolvedBaseCommit ??
+          input.taskEnvelope.workspace.baseline.headSha,
+        baseResolutionSource:
+          input.taskEnvelope.workspace.baseResolutionSource ?? 'legacy-launch-head',
+      },
       runtime: normalizeRuntime(input.runtime),
       tools,
       permissions,

@@ -187,9 +187,9 @@ export type {
   AgentOutput,
   GlobalAgentStatus,
   ActiveAgentInfo,
-  WorktreeInfo,
   PreviewServer,
 } from './agent';
+export type { WorktreeInfo } from '@veritas-kanban/shared';
 
 export type {
   FileChange,

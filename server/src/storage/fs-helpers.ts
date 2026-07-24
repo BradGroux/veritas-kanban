@@ -71,6 +71,7 @@ export const createWriteStream = fs.createWriteStream;
 export const mkdir = mkdirAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;
+export const realpath = fs.promises.realpath;
 export const rename = renameAsync;
 export const rm = rmAsync;
 export const unlink = unlinkAsync;

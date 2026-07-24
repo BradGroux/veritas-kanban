@@ -388,13 +388,65 @@ Returns enriched context for agent consumption (task + dependencies + observatio
 ### Worktree (Git)
 
 ```
-POST   /api/tasks/:id/worktree        # Create worktree branch
-GET    /api/tasks/:id/worktree         # Get worktree status
-DELETE /api/tasks/:id/worktree         # Remove worktree
-POST   /api/tasks/:id/worktree/rebase  # Rebase worktree
-POST   /api/tasks/:id/worktree/merge   # Merge worktree
-GET    /api/tasks/:id/worktree/open    # Open in editor
+GET    /api/tasks/worktrees/cleanup-preview     # Preview expired cleanup candidates
+POST   /api/tasks/:id/worktree                  # Resolve base and create worktree
+POST   /api/tasks/:id/worktree/adopt            # Admin: validate and adopt a legacy worktree
+GET    /api/tasks/:id/worktree                   # Get status and manifest evidence
+GET    /api/tasks/:id/worktree/cleanup-preview   # Preview destructive-operation safety
+DELETE /api/tasks/:id/worktree                   # Remove worktree when safe
+POST   /api/tasks/:id/worktree/rebase            # Fetch and rebase onto an exact commit
+POST   /api/tasks/:id/worktree/merge             # Integrate without changing primary checkout
+GET    /api/tasks/:id/worktree/open              # Open in editor
 ```
+
+Creation fetches the configured base from `origin`, resolves the exact commit,
+and persists `worktree-manifest/v1` before Git mutates the repository. A fetch
+failure returns `409`. Offline creation requires an explicit acknowledgement:
+
+```json
+{
+  "allowStaleBase": true,
+  "staleBaseAcknowledgement": {
+    "reason": "Operator confirmed the repository is intentionally offline."
+  }
+}
+```
+
+The response includes the manifest ID, ownership lease, exact base commit and
+source, lifecycle state, remote freshness, ahead/behind counts, and cleanup
+preview. Agent launch claims the same lease for the exact attempt; the task
+envelope and run launch manifest retain the manifest, lease, attempt, and base
+commit references.
+
+Deletion is preview-first. Active attempts cannot be overridden. Dirty,
+untracked, unpushed, unmerged, or externally held worktrees require
+`force=true` plus a reason, which is persisted in the manifest:
+
+```text
+DELETE /api/tasks/:id/worktree?force=true&reason=Operator%20accepted%20the%20risk
+```
+
+Safe cleanup remains available with `task:write`, but a forced cleanup requires
+`admin:manage`. An unavailable external-process inspection is incomplete
+evidence and therefore also requires an admin override. An unexpired attempt
+lease, active run, branch mismatch, or manifest mismatch cannot be overridden.
+
+Pre-6.0 tasks that have a `git.worktreePath` but no manifest are not silently
+trusted. An admin can call `POST /api/tasks/:id/worktree/adopt`; Veritas requires
+an exact registered path and branch, matching common Git directory and remote
+fingerprint, a unique cross-task allocation, and a freshly resolved remote base
+that is proven to be an ancestor of the legacy HEAD before creating the
+manifest. The baseline source is recorded as `legacy-adopted`, not as original
+creation provenance. Local tracked and untracked changes are preserved and
+appear in cleanup preview.
+
+Merge creates a detached integration worktree from the latest exact remote
+base, merges the task branch there, and pushes `HEAD` to the base without
+force. It never checks out, pulls, stages, commits, or otherwise changes the
+configured primary checkout. Interrupted create, rebase, push, and cleanup
+states remain recorded with a recoverable error and path. Restart recovery
+reconciles persisted preparing, merging, pushing, integrated, rebasing, and
+cleanup states against Git and the fetched remote before resuming.
 
 ### Apply Template
 

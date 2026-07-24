@@ -106,6 +106,19 @@ export interface RunLaunchRuntime {
   credentialReferences: string[];
 }
 
+export interface RunLaunchWorkspace {
+  worktreeId: string;
+  worktreeManifestId?: string;
+  ownershipLeaseId?: string;
+  ownershipAttemptId?: string;
+  repo: string;
+  branch: string;
+  baseBranch: string;
+  resolvedBaseCommit: string;
+  baseResolutionSource:
+    import('./worktree-manifest.types.js').WorktreeBaseSource | 'legacy-launch-head';
+}
+
 export interface RunLaunchTools {
   allowed: string[];
   denied: string[];
@@ -191,6 +204,8 @@ export interface RunLaunchManifest {
   profile?: RunLaunchProfileReference;
   readiness: RunLaunchReadiness;
   instructions: RunLaunchInstructionReference[];
+  /** Present on newly compiled manifests; absent only on pre-6.0 legacy records. */
+  workspace?: RunLaunchWorkspace;
   runtime: RunLaunchRuntime;
   tools: RunLaunchTools;
   permissions: RunLaunchPermissions;

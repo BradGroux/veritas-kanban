@@ -76,9 +76,17 @@ export const TaskEnvelopeSchema = z
       .object({
         workspaceId: idSchema,
         worktreeId: idSchema,
+        worktreeManifestId: idSchema.optional(),
+        ownershipLeaseId: idSchema.optional(),
+        ownershipAttemptId: idSchema.optional(),
         repo: shortTextSchema,
         branch: shortTextSchema,
         baseBranch: shortTextSchema,
+        resolvedBaseCommit: z
+          .string()
+          .regex(/^[a-f0-9]{40,64}$/)
+          .optional(),
+        baseResolutionSource: z.enum(['remote', 'local-stale', 'legacy-adopted']).optional(),
         worktreePath: pathSchema,
         baseline: z
           .object({

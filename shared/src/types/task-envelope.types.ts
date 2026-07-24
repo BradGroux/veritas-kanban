@@ -115,9 +115,14 @@ export interface TaskEnvelopeAttempt {
 export interface TaskEnvelopeWorkspace {
   workspaceId: string;
   worktreeId: string;
+  worktreeManifestId?: string;
+  ownershipLeaseId?: string;
+  ownershipAttemptId?: string;
   repo: string;
   branch: string;
   baseBranch: string;
+  resolvedBaseCommit?: string;
+  baseResolutionSource?: import('./worktree-manifest.types.js').WorktreeBaseSource;
   worktreePath: string;
   baseline: TaskLaunchBaseline;
 }

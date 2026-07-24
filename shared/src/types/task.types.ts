@@ -42,6 +42,16 @@ export interface TaskGit {
   branch: string;
   baseBranch: string;
   worktreePath?: string;
+  /** System-owned reference to the durable worktree allocation record. */
+  worktreeManifestId?: string;
+  /** Exact commit used to create or most recently rebase the task worktree. */
+  worktreeBaseCommit?: string;
+  /** Whether the exact base came from the remote or an acknowledged stale local ref. */
+  worktreeBaseSource?: import('./worktree-manifest.types.js').WorktreeBaseSource;
+  /** Opaque ownership lease identifier. */
+  worktreeLeaseId?: string;
+  /** Attempt currently bound to the ownership lease, when a run has claimed it. */
+  worktreeLeaseOwnerAttemptId?: string;
   prUrl?: string;
   prNumber?: number;
 }

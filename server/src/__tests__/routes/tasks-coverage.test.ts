@@ -31,6 +31,9 @@ const {
     rebaseWorktree: vi.fn(),
     mergeWorktree: vi.fn(),
     openInVSCode: vi.fn(),
+    previewCleanup: vi.fn(),
+    previewCleanupCandidates: vi.fn(),
+    adoptLegacyWorktree: vi.fn(),
   },
   mockBlockingService: {
     getBlockingStatus: vi.fn(),
@@ -101,6 +104,16 @@ describe('Tasks Routes (actual module)', () => {
     vi.clearAllMocks();
     app = express();
     app.use(express.json());
+    app.use((req, _res, next) => {
+      if (req.query.force === 'true' || req.path.endsWith('/worktree/adopt')) {
+        (req as import('../../middleware/auth.js').AuthenticatedRequest).auth = {
+          role: 'admin',
+          isLocalhost: true,
+          permissions: ['*'],
+        };
+      }
+      next();
+    });
     app.use('/api/tasks', taskRoutes);
     app.use(errorHandler);
   });
@@ -492,6 +505,31 @@ describe('Tasks Routes (actual module)', () => {
       mockWorktreeService.createWorktree.mockResolvedValue({ path: '/tmp/wt', branch: 'task/t1' });
       const res = await request(app).post('/api/tasks/t1/worktree');
       expect(res.status).toBe(201);
+      expect(mockWorktreeService.createWorktree).toHaveBeenCalledWith('t1', {});
+    });
+
+    it('POST requires a reasoned stale-base acknowledgement', async () => {
+      const invalid = await request(app)
+        .post('/api/tasks/t1/worktree')
+        .send({ allowStaleBase: true });
+      expect(invalid.status).toBe(400);
+
+      mockWorktreeService.createWorktree.mockResolvedValue({ path: '/tmp/wt' });
+      const valid = await request(app)
+        .post('/api/tasks/t1/worktree')
+        .send({
+          allowStaleBase: true,
+          staleBaseAcknowledgement: { reason: 'Confirmed offline maintenance.' },
+        });
+
+      expect(valid.status).toBe(201);
+      expect(mockWorktreeService.createWorktree).toHaveBeenCalledWith('t1', {
+        allowStaleBase: true,
+        staleBaseAcknowledgement: {
+          reason: 'Confirmed offline maintenance.',
+          actor: 'system:unknown',
+        },
+      });
     });
 
     it('GET should get worktree status', async () => {
@@ -504,13 +542,72 @@ describe('Tasks Routes (actual module)', () => {
       mockWorktreeService.deleteWorktree.mockResolvedValue(undefined);
       const res = await request(app).delete('/api/tasks/t1/worktree');
       expect(res.status).toBe(204);
+      expect(mockWorktreeService.deleteWorktree).toHaveBeenCalledWith('t1', {
+        force: false,
+        reason: undefined,
+        actor: 'system:unknown',
+      });
     });
 
-    it('DELETE with force=true should force delete', async () => {
+    it('DELETE with force=true requires and records an explicit reason', async () => {
       mockWorktreeService.deleteWorktree.mockResolvedValue(undefined);
-      const res = await request(app).delete('/api/tasks/t1/worktree?force=true');
+      const rejected = await request(app).delete('/api/tasks/t1/worktree?force=true');
+      expect(rejected.status).toBe(400);
+
+      const res = await request(app)
+        .delete('/api/tasks/t1/worktree')
+        .query({ force: 'true', reason: 'Operator inspected and accepted the risk.' });
       expect(res.status).toBe(204);
-      expect(mockWorktreeService.deleteWorktree).toHaveBeenCalledWith('t1', true);
+      expect(mockWorktreeService.deleteWorktree).toHaveBeenCalledWith('t1', {
+        force: true,
+        reason: 'Operator inspected and accepted the risk.',
+        actor: 'service:unknown',
+      });
+    });
+
+    it('requires admin permission for reasoned cleanup overrides', async () => {
+      const agentApp = express();
+      agentApp.use(express.json());
+      agentApp.use((req, _res, next) => {
+        (req as import('../../middleware/auth.js').AuthenticatedRequest).auth = {
+          role: 'agent',
+          isLocalhost: false,
+          permissions: ['task:write'],
+        };
+        next();
+      });
+      agentApp.use('/api/tasks', taskRoutes);
+      agentApp.use(errorHandler);
+
+      const res = await request(agentApp)
+        .delete('/api/tasks/t1/worktree')
+        .query({ force: 'true', reason: 'Agent attempts to bypass safety.' });
+
+      expect(res.status).toBe(403);
+      expect(mockWorktreeService.deleteWorktree).not.toHaveBeenCalled();
+    });
+
+    it('adopts a validated legacy worktree through an admin-only endpoint', async () => {
+      mockWorktreeService.adoptLegacyWorktree.mockResolvedValue({
+        path: '/tmp/legacy-worktree',
+      });
+
+      const res = await request(app).post('/api/tasks/t1/worktree/adopt');
+
+      expect(res.status).toBe(201);
+      expect(mockWorktreeService.adoptLegacyWorktree).toHaveBeenCalledWith('t1');
+    });
+
+    it('GET cleanup previews should remain read-only', async () => {
+      mockWorktreeService.previewCleanup.mockResolvedValue({ eligible: false });
+      mockWorktreeService.previewCleanupCandidates.mockResolvedValue([{ taskId: 't1' }]);
+
+      const taskPreview = await request(app).get('/api/tasks/t1/worktree/cleanup-preview');
+      const stalePreview = await request(app).get('/api/tasks/worktrees/cleanup-preview');
+
+      expect(taskPreview.status).toBe(200);
+      expect(stalePreview.status).toBe(200);
+      expect(mockWorktreeService.deleteWorktree).not.toHaveBeenCalled();
     });
 
     it('POST /rebase should rebase', async () => {
@@ -520,7 +617,10 @@ describe('Tasks Routes (actual module)', () => {
     });
 
     it('POST /merge should merge', async () => {
-      mockWorktreeService.mergeWorktree.mockResolvedValue(undefined);
+      mockWorktreeService.mergeWorktree.mockResolvedValue({
+        merged: true,
+        targetCommit: 'a'.repeat(40),
+      });
       const res = await request(app).post('/api/tasks/t1/worktree/merge');
       expect(res.status).toBe(200);
       expect(res.body.merged).toBe(true);

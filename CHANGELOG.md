@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added transactional, remote-safe worktree lifecycle management with
+  versioned manifests, exact fetched base commits, reasoned offline fallback,
+  task/attempt ownership leases, active-run locks, recovery states, and
+  preview-first stale cleanup. Dirty, untracked, unpushed, unmerged, and
+  externally held worktrees now require an admin-audited override. Attempt
+  leases use exclusive claims, legacy worktrees have a validated adoption path,
+  and restart recovery reconciles partial rebase, integration, push, and
+  cleanup states. Integration uses a dedicated temporary worktree and
+  non-force push without mutating the primary checkout. Task envelopes and run
+  launch manifests bind the exact worktree allocation and base evidence (#858).
 - Added the versioned credential-definition and run-bound lease core with
   metadata-only admin APIs, canonical definition/scope/action fingerprints,
   opaque hashed handles, exact launch-manifest and action binding, atomic TTL

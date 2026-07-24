@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   useGitHubStatus: vi.fn(),
   useConflictStatus: vi.fn(),
   createWorktreeMutate: vi.fn(),
+  adoptWorktreeMutate: vi.fn(),
   deleteWorktreeMutate: vi.fn(),
   rebaseWorktreeMutate: vi.fn(),
   mergeWorktreeMutate: vi.fn(),
@@ -38,6 +39,11 @@ vi.mock('@/hooks/useWorktree', () => ({
   useWorktreeStatus: mocks.useWorktreeStatus,
   useCreateWorktree: () => ({
     mutate: mocks.createWorktreeMutate,
+    isPending: false,
+    error: null,
+  }),
+  useAdoptWorktree: () => ({
+    mutate: mocks.adoptWorktreeMutate,
     isPending: false,
     error: null,
   }),
@@ -108,9 +114,24 @@ describe('task detail Git and workflow Mantine migration', () => {
         path: '/tmp/veritas-worktree',
         branch: 'feature/mantine-git',
         baseBranch: 'main',
+        baseCommit: 'a'.repeat(40),
+        baseSource: 'remote',
+        manifestId: 'worktree-mantine',
+        remoteState: { stale: false, fetchedAt: '2026-07-23T20:00:00.000Z' },
         aheadBehind: { ahead: 2, behind: 1 },
         hasChanges: false,
         changedFiles: 0,
+        cleanupPreview: {
+          eligible: false,
+          requiresOverride: true,
+          blockedReasons: [
+            {
+              code: 'unmerged',
+              message: 'The worktree HEAD is not merged into the remote base.',
+              overrideable: true,
+            },
+          ],
+        },
       },
       isLoading: false,
       error: null,
@@ -175,6 +196,8 @@ describe('task detail Git and workflow Mantine migration', () => {
         baseBranch: 'main',
         branch: 'feature/mantine-git',
         worktreePath: '/tmp/veritas-worktree',
+        worktreeManifestId: 'worktree-mantine',
+        worktreeLeaseId: 'lease-mantine',
       },
     });
 
@@ -184,6 +207,7 @@ describe('task detail Git and workflow Mantine migration', () => {
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
     expect(container.querySelector('.mantine-Button-root')).toBeDefined();
     expect(container.querySelector('.mantine-Code-root')).toBeDefined();
+    expect(screen.getByText(/Base a{12} from remote; manifest worktree-mantine/)).toBeDefined();
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
 
@@ -212,6 +236,61 @@ describe('task detail Git and workflow Mantine migration', () => {
       '_blank',
       'noopener,noreferrer'
     );
+  });
+
+  it('requires an explicit reason before overriding cleanup hazards', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-cleanup',
+      git: {
+        repo: 'veritas',
+        baseBranch: 'main',
+        branch: 'feature/mantine-git',
+        worktreePath: '/tmp/veritas-worktree',
+        worktreeManifestId: 'worktree-mantine',
+        worktreeLeaseId: 'lease-mantine',
+      },
+    });
+
+    renderWithProviders(<WorktreeStatus task={task} />);
+    await user.click(screen.getByRole('button', { name: 'Delete Worktree' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete worktree?' });
+    const deleteButton = within(dialog).getByRole('button', { name: 'Delete' });
+
+    expect(within(dialog).getByText(/not merged into the remote base/)).toBeDefined();
+    expect((deleteButton as HTMLButtonElement).disabled).toBe(true);
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Override reason' }),
+      'Operator reviewed and accepted the retained branch risk.'
+    );
+    await user.click(deleteButton);
+
+    expect(mocks.deleteWorktreeMutate).toHaveBeenCalledWith({
+      taskId: 'task-cleanup',
+      force: true,
+      reason: 'Operator reviewed and accepted the retained branch risk.',
+    });
+  });
+
+  it('offers admin adoption for a pre-6.0 worktree without running status actions', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-legacy-worktree',
+      git: {
+        repo: 'veritas',
+        baseBranch: 'main',
+        branch: 'feature/legacy',
+        worktreePath: '/tmp/legacy-worktree',
+      },
+    });
+
+    renderWithProviders(<WorktreeStatus task={task} />);
+
+    expect(screen.getByText('Legacy worktree needs adoption')).toBeDefined();
+    expect(screen.getByText(/Local changes are preserved/)).toBeDefined();
+    expect(mocks.useWorktreeStatus).toHaveBeenCalledWith('task-legacy-worktree', false);
+    await user.click(screen.getByRole('button', { name: 'Adopt existing worktree' }));
+    expect(mocks.adoptWorktreeMutate).toHaveBeenCalledWith('task-legacy-worktree');
   });
 
   it('renders workflow runs through direct Mantine modal controls and starts a run', async () => {

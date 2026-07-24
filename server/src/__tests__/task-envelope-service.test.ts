@@ -71,6 +71,11 @@ function task(): Task {
       branch: 'feat/task-envelope',
       baseBranch: 'main',
       worktreePath: '/tmp/veritas-kanban-task',
+      worktreeManifestId: 'manifest-task-envelope',
+      worktreeBaseCommit: 'd'.repeat(40),
+      worktreeBaseSource: 'remote',
+      worktreeLeaseId: 'lease-task-envelope',
+      worktreeLeaseOwnerAttemptId: 'attempt_contract',
     },
     subtasks: [
       {
@@ -180,6 +185,13 @@ describe('TaskEnvelopeService', () => {
 
     expect(result.schemaVersion).toBe(TASK_ENVELOPE_SCHEMA_VERSION);
     expect(result.workspace.baseline).toEqual(baseline);
+    expect(result.workspace).toMatchObject({
+      worktreeManifestId: 'manifest-task-envelope',
+      ownershipLeaseId: 'lease-task-envelope',
+      ownershipAttemptId: 'attempt_contract',
+      resolvedBaseCommit: 'd'.repeat(40),
+      baseResolutionSource: 'remote',
+    });
     expect(result.subject.acceptanceCriteria).toEqual(['The envelope is versioned.']);
     expect(result.subject.background).toContain('Existing callbacks must remain readable.');
     expect(result.allowedSideEffects.map((item) => item.kind)).toEqual([

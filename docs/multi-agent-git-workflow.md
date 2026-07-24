@@ -1,128 +1,173 @@
-# Multi-Agent Git Workflow Guide
+# Multi-Agent Git Worktree Workflow
 
-> Lessons learned from the VK v2.0 sprint where multiple AI agents worked on the same repository simultaneously.
+Veritas assigns each code task a dedicated Git branch, worktree, ownership
+lease, and durable lifecycle manifest. The primary checkout is operator-owned;
+task creation, integration, and cleanup must not switch its branch or change
+its files.
 
-## The Problem: Branch Collisions
+## Why Worktrees Are Required
 
-When you spawn multiple sub-agents (via `sessions_spawn` or similar) and they all work on the same git repository, they share a **single working directory**. This causes:
+Multiple agents in one working directory share a checkout and index. A branch
+switch, staged file, reset, or incomplete edit from one run can affect every
+other run. Separate worktrees provide each task with:
 
-1. **Branch stomping**: Agent A creates `feat/task-a`, Agent B creates `feat/task-b`, but `git checkout` in Agent B switches the entire working directory — Agent A's uncommitted changes are now on the wrong branch or lost.
-2. **Mixed commits**: Both agents stage and commit files. Pre-commit hooks run against ALL staged files, including the other agent's work. Lint/typecheck failures from incomplete work block commits.
-3. **Merge confusion**: Changes from different features end up interleaved in the same branch history.
+- an isolated working directory and index
+- a unique branch and path
+- an exact, recorded base commit
+- task and attempt ownership
+- independently inspectable changes and recovery state
 
-### Real Example
+Sequential execution is still appropriate for overlapping tasks, but it is not
+a substitute for isolation.
 
-During the v2.0 sprint, two Sonnet sub-agents were spawned in parallel:
-- **Sonnet-1**: `feat/markdown-rendering-63` (frontend React work)
-- **Sonnet-2**: `feat/cli-usage-reporting-50` (CLI TypeScript work)
+## Veritas-Managed Creation
 
-Both worked in `~/Projects/veritas-kanban`. Sonnet-2's CLI changes ended up staged alongside Sonnet-1's React changes. The pre-commit hook tried to lint `MarkdownText.tsx` (Sonnet-1's file) during Sonnet-2's commit and failed because the file wasn't complete yet.
+Create worktrees from the task Git tab or API:
 
-## Solutions
+```http
+POST /api/tasks/:id/worktree
+Content-Type: application/json
 
-### Option 1: Sequential Execution (Simplest)
-
-Run sub-agents one at a time on the same repo. Each agent:
-1. Creates a feature branch
-2. Does its work
-3. Commits and merges to main
-4. Main agent spawns the next sub-agent
-
-**Pros**: No conflicts, no complexity
-**Cons**: Slower (no parallelism)
-
-**Best for**: Small teams, tasks that touch overlapping files
-
-### Option 2: Git Worktrees (Recommended for Parallel)
-
-Git worktrees let you have multiple working directories for the same repo, each on a different branch:
-
-```bash
-# Create worktrees for each agent
-git worktree add ../vk-agent-1 -b feat/task-a
-git worktree add ../vk-agent-2 -b feat/task-b
-
-# Each sub-agent works in its own directory
-# Agent 1 → ~/Projects/vk-agent-1/
-# Agent 2 → ~/Projects/vk-agent-2/
-
-# After work is done, merge from the main repo
-cd ~/Projects/veritas-kanban
-git merge feat/task-a
-git merge feat/task-b
-
-# Clean up
-git worktree remove ../vk-agent-1
-git worktree remove ../vk-agent-2
+{}
 ```
 
-**Pros**: True parallelism, no branch conflicts, each agent has isolated workspace
-**Cons**: More setup, disk space, orchestrator must manage worktree lifecycle
+Veritas validates the configured repository and branch names, fetches the base
+branch from `origin`, resolves its exact commit, checks all active manifests and
+registered Git worktrees for branch/path collisions, and persists
+`worktree-manifest/v1` before `git worktree add` runs.
 
-**Best for**: Large sprints, independent features, CI/CD parallel builds
+Fetch errors are not ignored. When remote access is intentionally unavailable,
+an operator may acknowledge the risk:
 
-### Option 3: Orchestrator Does Heavy Lifting, Delegates Light Tasks
-
-The orchestrator (main agent) works directly on the repo for complex tasks. Sub-agents handle:
-- Independent research (no git needed)
-- Documentation writing (separate files)
-- Code review (read-only)
-- Tasks in different repos
-
-**Pros**: Minimal coordination overhead
-**Cons**: Limited parallelism on same repo
-
-**Best for**: Mixed workloads where some tasks don't need the repo
-
-## Sub-Agent Task Template
-
-When spawning a sub-agent that touches a git repo, include these instructions:
-
-```
-## Git Rules
-1. Create your feature branch: `git checkout -b feat/your-branch`
-2. Work ONLY in your branch
-3. Before committing: run secret scan on ALL changed files
-4. Use `--no-verify` if pre-commit hooks fail on other agents' files
-5. After committing, switch back to main: `git checkout main`
-6. Do NOT modify files outside your feature scope
+```json
+{
+  "allowStaleBase": true,
+  "staleBaseAcknowledgement": {
+    "reason": "Operator confirmed offline maintenance mode."
+  }
+}
 ```
 
-## Pre-Commit Hook Handling
+The manifest records the local commit, failed-fetch diagnostic, reason, actor,
+and timestamp. Do not use stale-base mode merely to bypass a remote error.
 
-VK uses `lint-staged` which runs ESLint on all staged files. When multiple agents stage files:
+### Adopting pre-6.0 worktrees
 
-- **Problem**: Agent A's half-written file fails Agent B's lint check
-- **Fix**: Use `git commit --no-verify` when you've verified your own files are clean
-- **Better fix**: Use worktrees so each agent has its own staging area
+Existing tasks with a worktree path but no manifest require explicit admin
+adoption:
 
-## Secret Scanning
-
-**MANDATORY before every commit**, regardless of agent:
-
-```bash
-grep -rn "password\|secret\|token\|apiKey\|appPassword\|sk-\|pplx-\|xai-" <changed-files>
+```http
+POST /api/tasks/:id/worktree/adopt
 ```
 
-Filter out false positives (variable names like `tokenProvider`, `inputTokens`, etc.) but NEVER skip the scan.
+Veritas verifies the registered path, branch, common Git directory, redacted
+remote identity, cross-task uniqueness, exact remote base, and current status
+before persisting ownership. The fetched base must be an ancestor of the legacy
+HEAD and is labeled `legacy-adopted`, so adoption evidence is not confused with
+the unknown original creation base. Veritas does not remove or rewrite local
+changes.
 
-## Orchestrator Checklist
+## Launch Ownership
 
-When managing a multi-agent sprint:
+When an agent starts, the new attempt claims and renews the worktree lease. The
+task envelope and run launch manifest record:
 
-- [ ] Decide: sequential or parallel?
-- [ ] If parallel: set up worktrees before spawning
-- [ ] Give each agent a clear branch name convention
-- [ ] Include git rules in every sub-agent task prompt
-- [ ] After each agent finishes: review, secret scan, merge to main
-- [ ] Clean up feature branches and worktrees
-- [ ] Run full test suite after all merges
+- worktree manifest ID
+- ownership lease ID
+- owning attempt ID
+- repository, branch, and base branch
+- exact resolved base commit
+- remote or acknowledged-local resolution source
+- launch HEAD and pre-existing file fingerprints
 
-## Lessons Learned
+Lease claims are compare-and-claim operations. A second live attempt cannot
+replace an unexpired owner, terminal attempts release ownership, and a claim
+that occurs immediately before attempt persistence still locks cleanup. An
+active or pending attempt locks rebase, integration, and cleanup, including
+forced cleanup.
 
-1. **"Mental notes" don't work for stateless agents** — write everything to files
-2. **Pre-commit hooks are global** — they see ALL staged files, not just yours
-3. **Branch names must be unique** — two agents creating `feat/my-feature` = disaster
-4. **Orchestrator must verify merges** — sub-agents can't see each other's work
-5. **Sequential is faster than fixing parallel mistakes** — when in doubt, go serial
-6. **Secret scans are non-negotiable** — one leaked key = delete git history (expensive)
+## Integration
+
+The Merge action does not check out the base branch in the primary repository.
+Veritas:
+
+1. Requires a clean task worktree and no active run.
+2. Fetches and resolves the latest remote base commit.
+3. Creates a detached worktree under
+   `.veritas-kanban/worktrees/.integration/`.
+4. Merges the task branch there with a merge commit.
+5. Pushes `HEAD` to the remote base without force.
+6. Fetches and verifies the resulting remote commit.
+7. Removes the integration and source worktrees when cleanup remains safe.
+8. Marks the task done.
+
+If merge or push fails, the integration path, commit, stage, and bounded error
+remain in the manifest. A clean failed-push worktree can be retried. Conflicts
+or a newly advanced remote base require inspection and resolution in the
+recorded integration worktree before retrying.
+
+## Cleanup
+
+Preview cleanup before removing anything:
+
+```http
+GET /api/tasks/:id/worktree/cleanup-preview
+GET /api/tasks/worktrees/cleanup-preview
+```
+
+The task endpoint evaluates one worktree. The collection endpoint lists
+expired-lease candidates without deleting them.
+
+Cleanup blocks when Veritas finds:
+
+- an active or pending attempt
+- a task/manifest or branch mismatch
+- tracked staged or unstaged changes
+- untracked files
+- commits not reachable from the remote base
+- a HEAD not merged into the remote base
+- a known external process hold
+- an unavailable external-hold probe, missing path, or other incomplete safety
+  evidence
+
+An active run, unexpired attempt lease, branch mismatch, or manifest mismatch
+is not overrideable. Other findings require `admin:manage`, `force=true`, and
+an explicit reason:
+
+```http
+DELETE /api/tasks/:id/worktree?force=true&reason=Operator%20accepted%20the%20risk
+```
+
+The branch is retained. The override reason, actor, time, and bypassed checks
+are appended to the manifest. A clean status alone never proves that a
+worktree is pushed, merged, unowned, or safe to remove.
+
+## Recovery
+
+Lifecycle state is durable:
+
+| Failure point       | Recorded state                                  | Recovery                                                                  |
+| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| Worktree creation   | exact base, branch, path, `creation: failed`    | Retry creation; Veritas adopts only an unambiguous partial branch/path    |
+| Task metadata write | Git worktree and `creation: ready`              | Retry creation to reconcile the task reference                            |
+| Rebase              | target exact base and `rebase: rebasing/failed` | Retry; Veritas aborts partial Git state and reapplies the recorded intent |
+| Integration prepare | integration path/base and `preparing`           | Retry; Veritas validates or recreates the detached worktree               |
+| Integration merge   | integration path and `merging` or merge error   | Retry; completed merges are recognized, partial merges are aborted        |
+| Integration push    | integration HEAD and `pushing` or push error    | Retry; Veritas first checks whether the commit already reached remote     |
+| Cleanup             | path and `cleanup: failed` or `blocked`         | Retry; a post-removal task-write failure reconciles without re-deleting   |
+
+Repository allocation locks serialize cross-task branch/path reservation.
+Worktree manifest lock files are ownership records. Veritas never guesses that
+a stale-looking lock is abandoned. Confirm that no Veritas process owns the
+lock before removing it manually.
+
+## Operator Checklist
+
+- Give every code task a unique branch.
+- Create or reconcile the worktree before starting an agent.
+- Treat the recorded worktree path as the run boundary.
+- Stop the run before rebase, integration, or cleanup.
+- Review the cleanup preview and preserve ambiguous work.
+- Prefer pull-request review when repository policy requires it.
+- Never force-push as part of automated integration.
+- Keep `.veritas-kanban/worktree-manifests/` in runtime backups.

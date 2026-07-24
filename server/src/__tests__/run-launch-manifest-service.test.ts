@@ -41,9 +41,14 @@ const taskEnvelope: TaskEnvelope = {
   workspace: {
     workspaceId: 'workspace-854',
     worktreeId: 'worktree-854',
+    worktreeManifestId: 'manifest-854',
+    ownershipLeaseId: 'lease-854',
+    ownershipAttemptId: 'attempt-854',
     repo: 'BradGroux/veritas-kanban',
     branch: 'feat/run-launch-manifest-854',
     baseBranch: 'main',
+    resolvedBaseCommit: 'b'.repeat(40),
+    baseResolutionSource: 'remote',
     worktreePath: '/workspace/veritas-kanban',
     baseline: {
       capturedAt: '2026-07-23T20:00:00.000Z',
@@ -254,6 +259,17 @@ describe('RunLaunchManifestService', () => {
         digest: expect.stringMatching(/^sha256:/),
         provider: 'codex-cli',
         probeRevision: expect.any(Number),
+      },
+      workspace: {
+        worktreeId: 'worktree-854',
+        worktreeManifestId: 'manifest-854',
+        ownershipLeaseId: 'lease-854',
+        ownershipAttemptId: 'attempt-854',
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/run-launch-manifest-854',
+        baseBranch: 'main',
+        resolvedBaseCommit: 'b'.repeat(40),
+        baseResolutionSource: 'remote',
       },
       enforcement: {
         enforceable: true,

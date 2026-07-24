@@ -29,6 +29,11 @@ export type {
 } from './interfaces.js';
 export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
 export {
+  FileWorktreeManifestRepository,
+  InMemoryWorktreeManifestRepository,
+  type WorktreeManifestRepository,
+} from './worktree-manifest-repository.js';
+export {
   FileStorageProvider,
   FileTaskRepository,
   FileSettingsRepository,

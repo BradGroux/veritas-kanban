@@ -253,8 +253,12 @@ Create reusable templates for consistent task creation. Added in v1.6.
 
 Integrated git workflow from branch creation to merge.
 
-- **Git worktree integration** — Create isolated worktrees per task, tied to dedicated branches
-- **Worktree status** — See active worktree path, branch, and base branch in the Git tab
+- **Transactional Git worktrees** — Persist a versioned allocation and ownership lease before creating an isolated task worktree
+- **Exact remote bases** — Fetch and record the resolved base commit; offline fallback requires a reasoned stale-base acknowledgement
+- **Worktree status** — See path, branch, exact base, remote freshness, lifecycle state, and cleanup hazards in the Git tab
+- **Primary-checkout-safe integration** — Merge and push from a dedicated temporary integration worktree without switching or pulling the primary checkout
+- **Preview-first cleanup** — Block active runs and require audited overrides for dirty, untracked, unpushed, unmerged, or externally held worktrees
+- **Recoverable lifecycle state** — Keep partial create, rebase, push, and cleanup failures visible in `worktree-manifest/v1`
 - **Git selection form** — Configure repository, branch name, and base branch when setting up a worktree
 - **Diff viewer** — Unified diff view with file tree navigation, hunk-by-hunk display, and line numbers
 - **File tree** — Collapsible file tree showing changed files with add/modify/delete indicators

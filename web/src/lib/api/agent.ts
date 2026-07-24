@@ -18,6 +18,11 @@ import type {
   RunLaunchManifest,
   RunLaunchManifestDriftResult,
   RunLaunchManifestPreview,
+  WorktreeInfo,
+  WorktreeCleanupPreview,
+  WorktreeIntegrationResult,
+  CreateWorktreeRequest,
+  DeleteWorktreeRequest,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -33,8 +38,16 @@ export interface StartAgentRequest {
 }
 
 export const worktreeApi = {
-  create: async (taskId: string): Promise<WorktreeInfo> => {
+  create: async (taskId: string, request: CreateWorktreeRequest = {}): Promise<WorktreeInfo> => {
     return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  },
+
+  adopt: async (taskId: string): Promise<WorktreeInfo> => {
+    return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree/adopt`, {
       method: 'POST',
     });
   },
@@ -43,8 +56,19 @@ export const worktreeApi = {
     return apiFetch<WorktreeInfo>(`${API_BASE}/tasks/${taskId}/worktree`);
   },
 
-  delete: async (taskId: string, force: boolean = false): Promise<void> => {
-    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/worktree?force=${force}`, {
+  cleanupPreview: async (taskId: string): Promise<WorktreeCleanupPreview> => {
+    return apiFetch<WorktreeCleanupPreview>(`${API_BASE}/tasks/${taskId}/worktree/cleanup-preview`);
+  },
+
+  cleanupCandidates: async (): Promise<WorktreeCleanupPreview[]> => {
+    return apiFetch<WorktreeCleanupPreview[]>(`${API_BASE}/tasks/worktrees/cleanup-preview`);
+  },
+
+  delete: async (taskId: string, request: DeleteWorktreeRequest = {}): Promise<void> => {
+    const query = new URLSearchParams();
+    query.set('force', String(request.force === true));
+    if (request.reason) query.set('reason', request.reason);
+    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/worktree?${query.toString()}`, {
       method: 'DELETE',
     });
   },
@@ -55,8 +79,8 @@ export const worktreeApi = {
     });
   },
 
-  merge: async (taskId: string): Promise<void> => {
-    return apiFetch<void>(`${API_BASE}/tasks/${taskId}/worktree/merge`, {
+  merge: async (taskId: string): Promise<WorktreeIntegrationResult> => {
+    return apiFetch<WorktreeIntegrationResult>(`${API_BASE}/tasks/${taskId}/worktree/merge`, {
       method: 'POST',
     });
   },
@@ -318,18 +342,6 @@ export interface GlobalAgentStatus {
   activeAgents: ActiveAgentInfo[];
   lastUpdated: string;
   error?: string;
-}
-
-export interface WorktreeInfo {
-  path: string;
-  branch: string;
-  baseBranch: string;
-  aheadBehind: {
-    ahead: number;
-    behind: number;
-  };
-  hasChanges: boolean;
-  changedFiles: number;
 }
 
 export interface PreviewServer {

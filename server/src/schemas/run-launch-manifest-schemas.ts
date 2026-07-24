@@ -125,6 +125,25 @@ export const RunLaunchManifestSchema = z
           .strict()
       )
       .max(128),
+    workspace: z
+      .object({
+        worktreeId: identifierSchema,
+        worktreeManifestId: identifierSchema.optional(),
+        ownershipLeaseId: identifierSchema.optional(),
+        ownershipAttemptId: identifierSchema.optional(),
+        repo: identifierSchema,
+        branch: identifierSchema,
+        baseBranch: identifierSchema,
+        resolvedBaseCommit: z.string().regex(/^[a-f0-9]{40,64}$/),
+        baseResolutionSource: z.enum([
+          'remote',
+          'local-stale',
+          'legacy-adopted',
+          'legacy-launch-head',
+        ]),
+      })
+      .strict()
+      .optional(),
     runtime: z
       .object({
         model: z.string().trim().min(1).max(200).optional(),

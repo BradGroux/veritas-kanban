@@ -1,4 +1,4 @@
-import { Router, type Response, type Router as RouterType } from 'express';
+import { Router, type NextFunction, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getTaskService } from '../services/task-service.js';
 import { WorktreeService } from '../services/worktree-service.js';
@@ -20,7 +20,7 @@ import { sendPaginated } from '../middleware/response-envelope.js';
 import { setLastModified } from '../middleware/cache-control.js';
 import { sanitizeTaskFields } from '../utils/sanitize.js';
 import { auditLog } from '../services/audit-service.js';
-import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { authorizePermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 import { TaskExecutionPolicySchema } from '../schemas/task-envelope-schemas.js';
@@ -31,6 +31,18 @@ const worktreeService = new WorktreeService();
 const blockingService = getBlockingService();
 const delegationService = getDelegationService();
 const progressService = getProgressService();
+
+function requireAdminForCleanupOverride(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (req.query.force !== 'true') {
+    next();
+    return;
+  }
+  authorizePermission('admin:manage')(req, res, next);
+}
 
 function attachTaskIdentityDiagnostics(res: Response, diagnostics: TaskIdentityDiagnostics): void {
   if (!diagnostics.hasConflicts) return;
@@ -96,6 +108,63 @@ const attemptSchema = z
     completionResult: z.never().optional(),
   })
   .optional();
+
+const createWorktreeRequestSchema = z
+  .object({
+    allowStaleBase: z.boolean().optional(),
+    staleBaseAcknowledgement: z
+      .object({
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .strict()
+      .optional(),
+    leaseSeconds: z
+      .number()
+      .int()
+      .min(60)
+      .max(365 * 24 * 60 * 60)
+      .optional(),
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.allowStaleBase && !request.staleBaseAcknowledgement) {
+      context.addIssue({
+        code: 'custom',
+        path: ['staleBaseAcknowledgement'],
+        message: 'A reason is required when allowStaleBase is true.',
+      });
+    }
+  });
+
+const deleteWorktreeRequestSchema = z
+  .object({
+    force: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => value === 'true'),
+    reason: z.string().trim().min(1).max(1000).optional(),
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.force && !request.reason) {
+      context.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: 'An explicit reason is required when force=true.',
+      });
+    }
+  });
+
+function parseWorktreeRequest<T>(schema: z.ZodType<T>, input: unknown): T {
+  try {
+    return schema.parse(input);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ValidationError('Validation failed', error.issues);
+    }
+    throw error;
+  }
+}
 
 const automationSchema = z
   .object({
@@ -888,11 +957,40 @@ router.delete(
 
 // === Worktree Routes ===
 
+// GET /api/tasks/worktrees/cleanup-preview - Preview stale cleanup candidates
+router.get(
+  '/worktrees/cleanup-preview',
+  asyncHandler(async (_req, res) => {
+    res.json(await worktreeService.previewCleanupCandidates());
+  })
+);
+
+// POST /api/tasks/:id/worktree/adopt - Adopt a validated pre-6.0 worktree
+router.post(
+  '/:id/worktree/adopt',
+  authorizePermission('admin:manage'),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await worktreeService.adoptLegacyWorktree(req.params.id as string));
+  })
+);
+
 // POST /api/tasks/:id/worktree - Create worktree
 router.post(
   '/:id/worktree',
   asyncHandler(async (req, res) => {
-    const worktree = await worktreeService.createWorktree(req.params.id as string);
+    const request = parseWorktreeRequest(createWorktreeRequestSchema, req.body ?? {});
+    const actor = actorFromRequest(req as AuthenticatedRequest);
+    const worktree = await worktreeService.createWorktree(req.params.id as string, {
+      ...request,
+      ...(request.staleBaseAcknowledgement
+        ? {
+            staleBaseAcknowledgement: {
+              ...request.staleBaseAcknowledgement,
+              actor,
+            },
+          }
+        : {}),
+    });
     res.status(201).json(worktree);
   })
 );
@@ -906,12 +1004,27 @@ router.get(
   })
 );
 
+// GET /api/tasks/:id/worktree/cleanup-preview - Preview cleanup safety
+router.get(
+  '/:id/worktree/cleanup-preview',
+  asyncHandler(async (req, res) => {
+    res.json(await worktreeService.previewCleanup(req.params.id as string));
+  })
+);
+
 // DELETE /api/tasks/:id/worktree - Delete worktree
 router.delete(
   '/:id/worktree',
+  requireAdminForCleanupOverride,
   asyncHandler(async (req, res) => {
-    const force = req.query.force === 'true';
-    await worktreeService.deleteWorktree(req.params.id as string, force);
+    const request = parseWorktreeRequest(deleteWorktreeRequestSchema, {
+      force: typeof req.query.force === 'string' ? req.query.force : undefined,
+      reason: typeof req.query.reason === 'string' ? req.query.reason : undefined,
+    });
+    await worktreeService.deleteWorktree(req.params.id as string, {
+      ...request,
+      actor: actorFromRequest(req as AuthenticatedRequest),
+    });
     res.status(204).send();
   })
 );
@@ -929,8 +1042,7 @@ router.post(
 router.post(
   '/:id/worktree/merge',
   asyncHandler(async (req, res) => {
-    await worktreeService.mergeWorktree(req.params.id as string);
-    res.json({ merged: true });
+    res.json(await worktreeService.mergeWorktree(req.params.id as string));
   })
 );
 

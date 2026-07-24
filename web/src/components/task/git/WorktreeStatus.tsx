@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Code, Group, Modal, Stack, Text } from '@mantine/core';
+import { Alert, Badge, Button, Code, Group, Modal, Stack, Text, Textarea } from '@mantine/core';
 import {
   useWorktreeStatus,
   useCreateWorktree,
+  useAdoptWorktree,
   useDeleteWorktree,
   useRebaseWorktree,
   useMergeWorktree,
@@ -33,12 +34,14 @@ interface WorktreeStatusProps {
 
 export function WorktreeStatus({ task }: WorktreeStatusProps) {
   const hasWorktree = !!task.git?.worktreePath;
+  const hasManagedWorktree = hasWorktree && !!task.git?.worktreeManifestId;
   const hasPR = !!task.git?.prUrl;
-  const { data: status, isLoading, error } = useWorktreeStatus(task.id, hasWorktree);
+  const { data: status, isLoading, error } = useWorktreeStatus(task.id, hasManagedWorktree);
   const { data: ghStatus } = useGitHubStatus();
   const { data: conflictStatus } = useConflictStatus(hasWorktree ? task.id : undefined);
 
   const createWorktree = useCreateWorktree();
+  const adoptWorktree = useAdoptWorktree();
   const deleteWorktree = useDeleteWorktree();
   const rebaseWorktree = useRebaseWorktree();
   const mergeWorktree = useMergeWorktree();
@@ -48,6 +51,8 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [cleanupOverrideReason, setCleanupOverrideReason] = useState('');
+  const [staleBaseReason, setStaleBaseReason] = useState('');
 
   const handleOpenInVSCode = () => {
     if (task.git?.worktreePath) {
@@ -85,11 +90,76 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
           Create Worktree
         </Button>
         {createWorktree.error && (
-          <Text size="xs" c="red">
-            {(createWorktree.error as Error).message}
-          </Text>
+          <>
+            <Text size="xs" c="red">
+              {(createWorktree.error as Error).message}
+            </Text>
+            {(createWorktree.error as Error).message.includes('stale-base acknowledgement') && (
+              <Stack gap="xs">
+                <Textarea
+                  label="Offline base acknowledgement"
+                  description="The exact local base commit and this reason will be persisted."
+                  value={staleBaseReason}
+                  onChange={(event) => setStaleBaseReason(event.currentTarget.value)}
+                  minRows={2}
+                />
+                <Button
+                  variant="outline"
+                  color="orange"
+                  disabled={staleBaseReason.trim().length === 0 || createWorktree.isPending}
+                  onClick={() =>
+                    createWorktree.mutate({
+                      taskId: task.id,
+                      request: {
+                        allowStaleBase: true,
+                        staleBaseAcknowledgement: { reason: staleBaseReason.trim() },
+                      },
+                    })
+                  }
+                >
+                  Retry with acknowledged local base
+                </Button>
+              </Stack>
+            )}
+          </>
         )}
       </Stack>
+    );
+  }
+
+  if (!hasManagedWorktree) {
+    return (
+      <Alert
+        className="mt-3"
+        color="orange"
+        icon={<AlertTriangle className="h-5 w-5" />}
+        title="Legacy worktree needs adoption"
+      >
+        <Stack gap="xs">
+          <Text size="sm">
+            This pre-6.0 worktree has no durable ownership manifest. An administrator must validate
+            its repository, branch, path, remote base, and current status before agent launch or
+            lifecycle actions can continue. Local changes are preserved.
+          </Text>
+          <Code className="truncate" color="dark">
+            {task.git.worktreePath}
+          </Code>
+          <Button
+            variant="outline"
+            color="orange"
+            size="xs"
+            onClick={() => adoptWorktree.mutate(task.id)}
+            disabled={adoptWorktree.isPending}
+          >
+            {adoptWorktree.isPending ? 'Validating...' : 'Adopt existing worktree'}
+          </Button>
+          {adoptWorktree.error && (
+            <Text size="xs" c="red">
+              {(adoptWorktree.error as Error).message}
+            </Text>
+          )}
+        </Stack>
+      </Alert>
     );
   }
 
@@ -121,6 +191,19 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
   return (
     <Stack gap="sm" className="mt-3 border-t pt-3">
       {/* Conflict warning banner */}
+      {status?.remoteState?.stale && status.baseCommit && (
+        <Alert
+          color="orange"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title="Stale base acknowledged"
+        >
+          <Text size="xs">
+            This worktree was created from an explicitly acknowledged local base because the remote
+            fetch failed. Exact base: {status.baseCommit.slice(0, 12)}.
+          </Text>
+        </Alert>
+      )}
+
       {conflictStatus?.hasConflicts && (
         <Alert
           color="yellow"
@@ -271,6 +354,12 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
       <Code className="truncate" color="dark">
         {task.git.worktreePath}
       </Code>
+      {status?.baseCommit && status.baseSource && status.manifestId && (
+        <Text size="xs" c="dimmed">
+          Base {status.baseCommit.slice(0, 12)} from {status.baseSource}; manifest{' '}
+          {status.manifestId}
+        </Text>
+      )}
 
       {/* Conflict Resolver */}
       <ConflictResolver
@@ -291,7 +380,8 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             This will merge {task.git?.branch} into {task.git?.baseBranch}, push to remote, delete
-            the worktree, and mark the task as Done.
+            the worktree, and mark the task as Done. Integration runs in a dedicated temporary
+            worktree and does not change your primary checkout.
           </Text>
           <Group justify="flex-end" gap="xs">
             <Button variant="default" onClick={() => setMergeDialogOpen(false)}>
@@ -319,10 +409,29 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            {status?.hasChanges
-              ? 'Warning: This worktree has uncommitted changes that will be lost.'
-              : 'This will remove the worktree but keep the branch.'}
+            This will remove the worktree but keep the branch.
           </Text>
+          {(status?.cleanupPreview?.blockedReasons.length ?? 0) > 0 && (
+            <Alert color="red" title="Cleanup is blocked">
+              <Stack gap={4}>
+                {status?.cleanupPreview?.blockedReasons.map((reason) => (
+                  <Text size="xs" key={reason.code}>
+                    {reason.message}
+                  </Text>
+                ))}
+              </Stack>
+            </Alert>
+          )}
+          {status?.cleanupPreview?.requiresOverride && (
+            <Textarea
+              label="Override reason"
+              description="This reason is stored in the worktree manifest."
+              value={cleanupOverrideReason}
+              onChange={(event) => setCleanupOverrideReason(event.currentTarget.value)}
+              minRows={2}
+              required
+            />
+          )}
           <Group justify="flex-end" gap="xs">
             <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
@@ -332,10 +441,21 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
               onClick={() => {
                 deleteWorktree.mutate({
                   taskId: task.id,
-                  force: status?.hasChanges,
+                  force: (status?.cleanupPreview?.blockedReasons.length ?? 0) > 0,
+                  reason: status?.cleanupPreview?.requiresOverride
+                    ? cleanupOverrideReason.trim()
+                    : undefined,
                 });
                 setDeleteDialogOpen(false);
+                setCleanupOverrideReason('');
               }}
+              disabled={
+                Boolean(
+                  status?.cleanupPreview?.blockedReasons.some((reason) => !reason.overrideable)
+                ) ||
+                (Boolean(status?.cleanupPreview?.requiresOverride) &&
+                  cleanupOverrideReason.trim().length === 0)
+              }
             >
               Delete
             </Button>

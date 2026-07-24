@@ -94,6 +94,21 @@ agent routing and permission checks require `agent:read`; approval requests
 require `task:write`; approval review, routing configuration, and permission
 elevation require `admin:manage`.
 
+Worktree mutations are fail-closed around repository ownership. Creation
+records a credential-redacted repository fingerprint, exact base commit,
+unique path/branch, and ownership lease before running `git worktree add`.
+Active attempts lock rebase, integration, and cleanup. Cleanup inspects tracked
+changes, untracked files, commits not reachable from the remote base, merge
+reachability, and external process holds. An unavailable hold probe is treated
+as incomplete evidence, not a clean result. Overrideable findings require
+`admin:manage` plus an explicit actor-attributed reason in the durable manifest;
+active runs, unexpired attempt leases, branch mismatches, and manifest
+mismatches cannot be overridden. Integration resume revalidates path
+containment, registered-worktree identity, common Git directory, and
+credential-redacted remote identity before any push. Integration uses a
+detached temporary worktree and a non-force push, so the configured primary
+checkout is not mutated.
+
 ### v5 Auth Context
 
 Authenticated REST requests and WebSocket connections now carry a shared auth

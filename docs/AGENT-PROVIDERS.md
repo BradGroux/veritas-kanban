@@ -131,6 +131,14 @@ worktree-content SHA-256. Capture retries when HEAD, status, or fingerprints
 move and fails closed after three unstable attempts, so later completion
 evidence cannot claim pre-existing changes.
 
+Worktrees created by Veritas also carry a durable `worktree-manifest/v1`
+allocation. Before dispatch, the attempt claims its ownership lease. The task
+envelope and run launch manifest bind the worktree manifest ID, lease ID,
+owning attempt, exact resolved base commit, and whether that base came from a
+successful remote fetch or an explicit stale-local acknowledgement. Legacy
+worktrees remain readable, but their launch manifests identify the launch HEAD
+as legacy evidence instead of presenting it as a remotely resolved base.
+
 Commit behavior is explicit instead of implied by a shared prompt:
 
 - `forbidden` does not authorize a commit.

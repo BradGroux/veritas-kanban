@@ -606,16 +606,17 @@ wscat -c "ws://localhost:3001/ws?api_key=<api-key>"
 
 ### Where Data Lives
 
-| Path                              | Contents                                               |
-| --------------------------------- | ------------------------------------------------------ |
-| `tasks/active/`                   | Active task markdown files (YAML frontmatter + body)   |
-| `tasks/archive/`                  | Archived task markdown files                           |
-| `.veritas-kanban/`                | Internal config, logs, worktrees, agent requests       |
-| `.veritas-kanban/config.json`     | Application settings                                   |
-| `.veritas-kanban/security.json`   | JWT secret (if not using `VERITAS_JWT_SECRET` env var) |
-| `.veritas-kanban/logs/`           | Application logs                                       |
-| `.veritas-kanban/worktrees/`      | Git worktree metadata                                  |
-| `.veritas-kanban/agent-requests/` | Pending AI agent requests                              |
+| Path                                  | Contents                                                           |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `tasks/active/`                       | Active task markdown files (YAML frontmatter + body)               |
+| `tasks/archive/`                      | Archived task markdown files                                       |
+| `.veritas-kanban/`                    | Internal config, logs, worktrees, agent requests                   |
+| `.veritas-kanban/config.json`         | Application settings                                               |
+| `.veritas-kanban/security.json`       | JWT secret (if not using `VERITAS_JWT_SECRET` env var)             |
+| `.veritas-kanban/logs/`               | Application logs                                                   |
+| `.veritas-kanban/worktrees/`          | Task and temporary integration worktree directories                |
+| `.veritas-kanban/worktree-manifests/` | Durable worktree ownership, base, lifecycle, and override evidence |
+| `.veritas-kanban/agent-requests/`     | Pending AI agent requests                                          |
 
 In Docker, the `DATA_DIR` environment variable maps to `/app/data` by default inside the container.
 

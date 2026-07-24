@@ -129,6 +129,7 @@ import {
   type ProviderTerminalClaim,
 } from './provider-completion-service.js';
 import { getCredentialBrokerService } from './credential-broker-service.js';
+import { WorktreeService } from './worktree-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -339,6 +340,7 @@ export class ClawdbotAgentService {
   private providerCompletions: ProviderCompletionService;
   private credentialLeases: CredentialLeaseLifecycle;
   private workspaceFiles: WorkspaceFileRepository;
+  private worktrees: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>;
   private logsDir: string;
 
   constructor(
@@ -347,7 +349,8 @@ export class ClawdbotAgentService {
     taskEnvelopes = new TaskEnvelopeService(),
     workspaceFiles: WorkspaceFileRepository = new LocalWorkspaceFileRepository(),
     providerCompletions = new ProviderCompletionService(),
-    credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE
+    credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE,
+    worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -358,6 +361,12 @@ export class ClawdbotAgentService {
     this.providerCompletions = providerCompletions;
     this.credentialLeases = credentialLeases;
     this.workspaceFiles = workspaceFiles;
+    this.worktrees =
+      worktrees ??
+      new WorktreeService({
+        taskService: this.taskService,
+        configService: this.configService,
+      });
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -665,7 +674,7 @@ export class ClawdbotAgentService {
     options: AgentStartOptions = {}
   ): Promise<AgentStatus> {
     // Get task
-    const task = await this.taskService.getTask(taskId);
+    let task = await this.taskService.getTask(taskId);
     if (!task) {
       throw new Error(`Task "${taskId}" not found`);
     }
@@ -815,6 +824,9 @@ export class ClawdbotAgentService {
     // Create attempt
     const attemptId = `attempt_${nanoid(8)}`;
     const startedAt = new Date().toISOString();
+    if (!task.git?.worktreePath) {
+      throw new Error(`Task "${taskId}" lost its worktree allocation before launch`);
+    }
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const worktreePath = this.expandPath(task.git.worktreePath);
     const commitPolicy = resolveTaskCommitPolicy({
@@ -968,11 +980,39 @@ export class ClawdbotAgentService {
       runLaunchManifestDrift,
     };
 
-    await this.taskService.updateTask(taskId, {
-      status: 'in-progress',
-      attempt,
-      attempts: task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
-    });
+    const usesManagedWorktree = Boolean(task.git.worktreeManifestId && task.git.worktreeLeaseId);
+    if (usesManagedWorktree) {
+      try {
+        await this.worktrees.claimOwnership(taskId, attemptId);
+      } catch (error) {
+        pendingAgents.delete(taskId);
+        throw error;
+      }
+      const claimedTask = await this.taskService.getTask(taskId);
+      if (!claimedTask) {
+        await this.worktrees.releaseOwnership(taskId, attemptId);
+        throw new Error(`Task "${taskId}" disappeared while claiming its worktree`);
+      }
+      task = claimedTask;
+    }
+    try {
+      await this.taskService.updateTask(taskId, {
+        status: 'in-progress',
+        attempt,
+        attempts: task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
+      });
+    } catch (error) {
+      pendingAgents.delete(taskId);
+      if (usesManagedWorktree) {
+        await this.worktrees.releaseOwnership(taskId, attemptId).catch((releaseError) => {
+          log.error(
+            { err: releaseError, taskId, attemptId },
+            '[ClawdbotAgent] Failed to release worktree ownership after launch persistence failed'
+          );
+        });
+      }
+      throw error;
+    }
 
     if (profileLaunch) {
       await activityService.logActivity(
@@ -1461,6 +1501,14 @@ export class ClawdbotAgentService {
       completionResult.status,
       attempt.runLaunchManifest?.digest
     );
+    if (attempt.taskEnvelope.workspace.worktreeManifestId) {
+      await this.worktrees.releaseOwnership(task.id, attempt.id).catch((error) => {
+        log.error(
+          { err: error, taskId: task.id, attemptId: attempt.id },
+          '[ClawdbotAgent] Failed to release worktree ownership after restarted completion'
+        );
+      });
+    }
 
     log.info(
       { taskId: task.id, attemptId: attempt.id, terminalSource: claim.terminalSource },
@@ -1646,6 +1694,13 @@ export class ClawdbotAgentService {
     const completionStepType = successful ? 'complete' : 'error';
     const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
     const postCommitEffects: Array<[string, () => void | Promise<void>]> = [
+      [
+        'release worktree ownership',
+        () =>
+          pending.taskEnvelope.workspace.worktreeManifestId
+            ? this.worktrees.releaseOwnership(taskId, pending.attemptId)
+            : undefined,
+      ],
       [
         'revoke run credential leases',
         () =>
@@ -4419,6 +4474,12 @@ export class ClawdbotAgentService {
             },
           ]
         : []),
+      {
+        field: 'workspace',
+        scope: 'task-envelope',
+        source: 'task-envelope:worktree-allocation',
+        precedence: 100,
+      },
       {
         field: 'requiredHealthChecks',
         scope: profile ? 'agent-profile' : 'system-default',

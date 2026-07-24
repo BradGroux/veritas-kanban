@@ -96,6 +96,13 @@ rules:
   telemetry ranges, notifications, and workflow snapshots
 - require explicit confirmation for destructive cleanup
 - preserve active worktrees and current run state by default
+- treat `.veritas-kanban/worktree-manifests/*.json` as ownership and recovery
+  records, not disposable cache; a clean worktree is not proof that it is
+  pushed, merged, unowned, or safe to remove
+- preview stale worktree candidates before removal and retain the exact blocked
+  reasons; only reasoned overrides may bypass dirty, untracked, unpushed,
+  unmerged, or external-hold checks, while an active run remains
+  non-overrideable
 - preserve credential broker state during general runtime cleanup; revoke active
   leases before intentional broker-state removal
 - emit audit/activity records for admin cleanup, export, import, restore, and
