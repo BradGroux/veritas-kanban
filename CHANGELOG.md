@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of expanding through the package test wrapper, and job summaries retain exact
   range and selection evidence (#1000).
 
+### Fixed
+
+- Replaced the desktop-only bottom Chat surface with a bounded dock that opens on
+  the right by default and can switch between Right and Bottom without remounting
+  the active conversation. Both dimensions are clamped against the live viewport,
+  chat scrolling cannot move the application shell, wheel input cannot resize the
+  dock, and Close, Escape, Back, or Reset Layout always preserve a visible board
+  and restore focus (#1004).
+
 ## [6.0.1] - 2026-07-24
 
 Veritas Kanban 6.0.1 is the first supported stable v6 release. It supersedes

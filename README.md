@@ -170,6 +170,10 @@ Spawn autonomous coding agents on tasks when you choose to connect an agent runn
 
 ![Resizable Workbench panel](docs/assets/v5/v5-workbench-panel.png)
 
+Desktop Board Chat and Squad Chat open in a bounded right-side Workbench dock by
+default. Switch to Bottom when vertical space is preferable; both orientations
+keep the board, header, close control, and keyboard recovery paths reachable.
+
 ![Squad Chat threaded coordination](docs/assets/v5/v5-squad-chat-threaded-coordination.png)
 
 ### 🧭 Veritas Cutover + Hermes Support

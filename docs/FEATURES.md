@@ -117,9 +117,9 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter
 - **Dark/light mode** — Ships dark by default with a toggle in Settings → General → Appearance; persists to localStorage; inline script in `index.html` prevents flash of wrong theme on load
 - **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
-- **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and left/right/bottom panel controls shared by the web and macOS app shells
+- **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and bounded left/right/chat dock controls shared by the web and macOS app shells
 - **Mobile shell controls** — Compact navigation uses bounded labels and full accessible names; Board Chat stays fixed above the bottom navigation and device safe area
-- **Resizable Workbench** — Board Chat and Squad Chat live in a collapsible bottom panel that can be resized vertically for longer chat sessions
+- **Resizable Workbench** — Board Chat and Squad Chat open in a right dock by default, can switch to Bottom without losing the active conversation, and clamp their width or height to keep the application shell recoverable
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle
 - **Keyboard shortcuts** — Navigate tasks (j/k, arrows), open (Enter), close (Esc), create (c), move to column (1-4), help (?)
 - **Loading skeleton** — Shimmer placeholders while the board loads
@@ -620,7 +620,7 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 | ![v5 Squad Chat coordination](assets/v5/v5-squad-chat-threaded-coordination.png) | ![v5 Squad Chat human reply adapter](assets/v5/v5-squad-chat-human-reply-adapter.png) |
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
-- **Resizable Workbench panel** — Board Chat and Squad Chat share the bottom Workbench surface, which can be collapsed or resized vertically instead of floating off-screen
+- **Resizable Workbench dock** — Board Chat and Squad Chat share one dock that defaults Right, optionally moves to Bottom, isolates chat scrolling, and keeps Close, Escape, Back, and Reset Layout recovery available
 - **Local shared log** — Squad Chat stores and streams messages; it does not wake or reply through an external agent unless a webhook, OpenClaw Direct path, or orchestrator is configured
 - **Threaded coordination** — Reply-to links render compact threads for long multi-agent runs
 - **Unread and mentions** — Per-actor unread state persists across refreshes, and mentions create local notifications linked back to messages

@@ -116,7 +116,7 @@ function DesktopAwareAppShell({
   showDesktopOnboarding: boolean;
   setShowDesktopOnboarding: (open: boolean) => void;
 }) {
-  const { isDesktopClient, bottomPanel } = useDesktopShell();
+  const { isDesktopClient, bottomPanel, dockPosition } = useDesktopShell();
 
   return (
     <Box className="desktop-app-shell min-h-screen bg-background">
@@ -128,23 +128,28 @@ function DesktopAwareAppShell({
       <Suspense fallback={null}>
         <PwaStatusBanner sessionExpiry={authStatus?.sessionExpiry} onRefreshAuth={refreshStatus} />
       </Suspense>
-      <div className="desktop-workbench">
-        <DesktopLeftSidebar />
-        <Box
-          component="main"
-          id="main-content"
-          px={isDesktopClient ? 'md' : { base: 'md', md: '3.5rem' }}
-          pt={isDesktopClient ? 'md' : 'lg'}
-          pb={bottomPanel ? 'md' : isDesktopClient ? 'lg' : { base: '6rem', md: 'lg' }}
-          tabIndex={-1}
-          className="desktop-main-content"
-        >
-          <ErrorBoundary level="section">
-            <MainContent />
-          </ErrorBoundary>
-        </Box>
+      <div
+        className="desktop-workbench-container"
+        data-dock-position={bottomPanel ? dockPosition : undefined}
+      >
+        <div className="desktop-workbench">
+          <DesktopLeftSidebar />
+          <Box
+            component="main"
+            id="main-content"
+            px={isDesktopClient ? 'md' : { base: 'md', md: '3.5rem' }}
+            pt={isDesktopClient ? 'md' : 'lg'}
+            pb={bottomPanel ? 'md' : isDesktopClient ? 'lg' : { base: '6rem', md: 'lg' }}
+            tabIndex={-1}
+            className="desktop-main-content"
+          >
+            <ErrorBoundary level="section">
+              <MainContent />
+            </ErrorBoundary>
+          </Box>
+        </div>
+        <DesktopBottomPanel />
       </div>
-      <DesktopBottomPanel />
       <Toaster />
       <CommandPalette />
       {!isDesktopClient && !bottomPanel && (
