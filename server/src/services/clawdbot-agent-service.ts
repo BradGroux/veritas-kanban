@@ -199,9 +199,12 @@ import {
   type ConversationSource,
 } from './conversation-lifecycle-service.js';
 import {
+  assertGrokBuildVersionEvidence,
   buildCopilotAcpArgs,
+  buildGrokBuildAcpArgs,
   buildSafeAcpEnv,
   COPILOT_ACP_RUNTIME_PROFILE_ID,
+  GROK_BUILD_RUNTIME_PROFILE_ID,
   openAcpStdio,
   probeAcpStdioRuntime,
   type AcpStdioControl,
@@ -3911,6 +3914,9 @@ export class ClawdbotAgentService {
       throw new ConflictError('ACP runtime probe requires an explicit agent configuration.');
     }
     const supportProfile = normalizeHarnessSupportProfile(agentConfig);
+    if (supportProfile.id === GROK_BUILD_RUNTIME_PROFILE_ID) {
+      assertGrokBuildVersionEvidence(context.health.providerVersion);
+    }
     const args = this.buildAcpProviderArgs(agentConfig, supportProfile.id);
     const runtime = await probeAcpStdioRuntime({
       command: agentConfig.command,
@@ -8145,12 +8151,19 @@ export class ClawdbotAgentService {
   }
 
   private buildAcpProviderArgs(agentConfig: AgentConfig, supportProfileId?: string): string[] {
-    return supportProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID
-      ? buildCopilotAcpArgs({
-          model: agentConfig.model,
-          extraArgs: agentConfig.args,
-        })
-      : [...agentConfig.args];
+    if (supportProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID) {
+      return buildCopilotAcpArgs({
+        model: agentConfig.model,
+        extraArgs: agentConfig.args,
+      });
+    }
+    if (supportProfileId === GROK_BUILD_RUNTIME_PROFILE_ID) {
+      return buildGrokBuildAcpArgs({
+        model: agentConfig.model,
+        extraArgs: agentConfig.args,
+      });
+    }
+    return [...agentConfig.args];
   }
 
   private firstConfiguredEnvironmentKey(keys: string[]): string | undefined {

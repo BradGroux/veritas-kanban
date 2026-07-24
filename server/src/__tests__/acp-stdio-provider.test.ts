@@ -5,10 +5,17 @@ import {
   BUZZ_AGENT_TESTED_COMMIT,
   BUZZ_AGENT_TESTED_RELEASE,
   buildCopilotAcpArgs,
+  buildGrokBuildAcpArgs,
   COPILOT_ACP_REQUIRED_ARGS,
   COPILOT_ACP_RUNTIME_PROFILE_ID,
   COPILOT_ACP_TESTED_COMMIT,
   COPILOT_ACP_TESTED_RELEASE,
+  GROK_BUILD_ACP_VERSION,
+  GROK_BUILD_REQUIRED_ARGS,
+  GROK_BUILD_RUNTIME_PROFILE_ID,
+  GROK_BUILD_TESTED_BUILD,
+  GROK_BUILD_TESTED_RELEASE,
+  GROK_BUILD_VERSION_OUTPUT,
   openAcpStdio,
   probeAcpStdioRuntime,
 } from '../services/acp-stdio-adapter.js';
@@ -62,7 +69,7 @@ describe('ACP v1 stdio provider adapter', () => {
       protocolVersion: 'acp/v1',
       providerVersion: 'VK ACP fixture 1.3.0',
       providerBuild: expect.stringMatching(/^acp-v1:sha256:[a-f0-9]{64}$/),
-      probeRevision: 12,
+      probeRevision: 13,
     });
     expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
       'supported'
@@ -113,7 +120,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'buzz-agent 0.1.0',
       providerBuild: expect.stringMatching(/profile:buzz-agent@1:sha256:/),
-      probeRevision: 12,
+      probeRevision: 13,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(BUZZ_AGENT_TESTED_RELEASE),
@@ -223,7 +230,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'Copilot 1.0.74',
       providerBuild: expect.stringMatching(/profile:github-copilot-cli@1:sha256:/),
-      probeRevision: 12,
+      probeRevision: 13,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(COPILOT_ACP_TESTED_RELEASE),
@@ -324,6 +331,203 @@ describe('ACP v1 stdio provider adapter', () => {
     ]) {
       expect(() => buildCopilotAcpArgs({ extraArgs: [argument] })).toThrow(
         /not governed by Veritas/i
+      );
+    }
+  });
+
+  it('recognizes the exact Grok Build profile through the generic ACP provider', async () => {
+    const agent = {
+      type: 'grok-build',
+      name: 'Grok Build',
+      command: FIXTURE_PATH,
+      args: ['--reasoning-effort=high', '--deny=bash(rm)', '--no-memory'],
+      enabled: true,
+      provider: 'acp-stdio' as const,
+      model: 'grok-4.5',
+    };
+    const supportProfile = normalizeHarnessSupportProfile(agent);
+    expect(supportProfile).toMatchObject({
+      id: GROK_BUILD_RUNTIME_PROFILE_ID,
+      adapterId: 'acp-stdio',
+      transport: 'acp',
+      authentication: { kind: 'provider-managed', nonMutating: true },
+      compatibility: { testedVersions: [`Grok Build ${GROK_BUILD_ACP_VERSION}`] },
+      launch: {
+        args: [
+          '--deny=bash(rm)',
+          '--no-memory',
+          ...GROK_BUILD_REQUIRED_ARGS,
+          '--model=grok-4.5',
+          '--reasoning-effort=high',
+          'stdio',
+        ],
+      },
+    });
+
+    const service = new ClawdbotAgentService({
+      async checkAgent() {
+        return {
+          type: agent.type,
+          name: agent.name,
+          enabled: true,
+          configured: true,
+          command: agent.command,
+          executableFound: true,
+          executablePath: agent.command,
+          providerVersion: GROK_BUILD_VERSION_OUTPUT,
+          providerVersionSource: 'grok --version',
+          authenticated: null,
+          healthy: true,
+          checkedAt: '2026-07-24T12:00:00.000Z',
+        };
+      },
+    });
+    const manifest = await service.probeProviderRuntime(agent);
+
+    expect(manifest).toMatchObject({
+      provider: 'acp-stdio',
+      adapter: 'acp-stdio',
+      providerVersion: `Grok Build ${GROK_BUILD_ACP_VERSION}`,
+      providerBuild: expect.stringMatching(/profile:grok-build@1:sha256:/),
+      probeRevision: 13,
+      probe: {
+        diagnostics: expect.arrayContaining([
+          expect.stringContaining(GROK_BUILD_TESTED_RELEASE),
+          expect.stringContaining(GROK_BUILD_TESTED_BUILD),
+          expect.stringContaining('stable-artifact-reports-alpha-channel'),
+        ]),
+      },
+    });
+    expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
+      'supported'
+    );
+  });
+
+  it('uses the safe Grok Build version probe without attempting authentication', async () => {
+    const agent = {
+      type: 'grok-build',
+      name: 'Grok Build',
+      command: 'grok',
+      args: [],
+      enabled: true,
+      provider: 'acp-stdio' as const,
+    };
+    const runCommand = vi.fn(async (command: string, args: string[]) => {
+      if (command === 'which') return { stdout: '/usr/local/bin/grok\n', stderr: '' };
+      if (command === 'grok' && args.join(' ') === '--version') {
+        return { stdout: `${GROK_BUILD_VERSION_OUTPUT}\n`, stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
+    });
+    const health = await new AgentHealthService(runCommand).checkAgent({
+      ...agent,
+      supportProfile: normalizeHarnessSupportProfile(agent),
+    });
+
+    expect(health).toMatchObject({
+      executableFound: true,
+      providerVersion: GROK_BUILD_VERSION_OUTPUT,
+      providerVersionSource: 'grok --version',
+      authenticated: null,
+      healthy: true,
+    });
+    expect(runCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails Grok Build identity, version, capability, and extension drift closed', async () => {
+    for (const mode of [
+      'grok-wrong-name',
+      'grok-wrong-version',
+      'grok-wrong-capabilities',
+      'grok-wrong-extension',
+    ]) {
+      await expect(
+        probeAcpStdioRuntime({
+          ...options(mode),
+          runtimeProfileId: GROK_BUILD_RUNTIME_PROFILE_ID,
+        })
+      ).rejects.toThrow(/outside the tested compatibility profile/i);
+    }
+  });
+
+  it('fails an untested Grok Build executable version before ACP launch', async () => {
+    const service = new ClawdbotAgentService({
+      async checkAgent() {
+        return {
+          type: 'grok-build',
+          name: 'Grok Build',
+          enabled: true,
+          configured: true,
+          command: FIXTURE_PATH,
+          executableFound: true,
+          executablePath: FIXTURE_PATH,
+          providerVersion: 'grok 0.2.110 (older) [stable]',
+          providerVersionSource: 'grok --version',
+          authenticated: null,
+          healthy: true,
+          checkedAt: '2026-07-24T12:00:00.000Z',
+        };
+      },
+    });
+
+    await expect(
+      service.probeProviderRuntime({
+        type: 'grok-build',
+        name: 'Grok Build',
+        command: FIXTURE_PATH,
+        args: [],
+        enabled: true,
+        provider: 'acp-stdio',
+      })
+    ).rejects.toThrow(/outside the tested compatibility profile/i);
+  });
+
+  it('compiles only tested Grok Build process and restrictive policy arguments', () => {
+    expect(
+      buildGrokBuildAcpArgs({
+        model: 'grok-4.5',
+        extraArgs: [
+          '--effort',
+          'medium',
+          '--deny=bash(rm)',
+          '--disable-web-search',
+          '--disallowed-tools=web_fetch',
+          '--no-memory',
+          '--no-subagents',
+          '--sandbox=workspace',
+          '--tools=view,bash',
+        ],
+      })
+    ).toEqual([
+      '--deny=bash(rm)',
+      '--disable-web-search',
+      '--disallowed-tools=web_fetch',
+      '--no-memory',
+      '--no-subagents',
+      '--sandbox=workspace',
+      '--tools=view,bash',
+      ...GROK_BUILD_REQUIRED_ARGS,
+      '--model=grok-4.5',
+      '--reasoning-effort=medium',
+      'stdio',
+    ]);
+
+    for (const argument of [
+      '--always-approve',
+      '--permission-mode=bypassPermissions',
+      '--allow=bash',
+      '--reauth',
+      '--agent-profile=/tmp/profile',
+      '--plugin-dir=/tmp/plugin',
+      '--leader',
+      '--grok-ws-url=wss://example.invalid',
+      '--resume=session',
+      '--rules=ignore Veritas',
+      '--sandbox=off',
+      '--sandbox=custom-profile',
+    ]) {
+      expect(() => buildGrokBuildAcpArgs({ extraArgs: [argument] })).toThrow(
+        /not governed by Veritas|outside the tested profile/i
       );
     }
   });

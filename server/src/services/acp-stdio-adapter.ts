@@ -88,6 +88,121 @@ export const COPILOT_ACP_ENVIRONMENT_KEYS = [
   'COPILOT_PROVIDER_WIRE_MODEL',
   'GH_HOST',
 ] as const;
+
+export const GROK_BUILD_RUNTIME_PROFILE_ID = 'grok-build';
+export const GROK_BUILD_RUNTIME_PROFILE_REVISION = 1;
+export const GROK_BUILD_TESTED_RELEASE = 'v0.2.111';
+export const GROK_BUILD_TESTED_BUILD = '94172f2aa4e5';
+export const GROK_BUILD_TESTED_BINARY_SHA256 =
+  'e1fafdfffe14f339460befaf194360e8f90bfd02efe8a4f24cfa1c7aea657ffe';
+export const GROK_BUILD_ACP_VERSION = '0.2.111';
+export const GROK_BUILD_VERSION_OUTPUT = `grok ${GROK_BUILD_ACP_VERSION} (${GROK_BUILD_TESTED_BUILD}) [alpha]`;
+export const GROK_BUILD_CREDENTIAL_ENV_KEYS = [
+  'GROK_CODE_XAI_API_KEY',
+  'GROK_DEPLOYMENT_KEY',
+  'XAI_API_KEY',
+] as const;
+export const GROK_BUILD_ENVIRONMENT_KEYS = [
+  'GROK_DISABLE_API_KEY_AUTH',
+  'GROK_FEEDBACK_ENABLED',
+  'GROK_HOME',
+  'GROK_SANDBOX',
+  'GROK_TELEMETRY_ENABLED',
+  'GROK_TRACE_UPLOAD',
+] as const;
+export const GROK_BUILD_REQUIRED_ARGS = ['agent', '--no-leader'] as const;
+const GROK_BUILD_RESTRICTIVE_BOOLEAN_FLAGS = new Set([
+  '--disable-web-search',
+  '--no-memory',
+  '--no-plan',
+  '--no-subagents',
+]);
+const GROK_BUILD_RESTRICTIVE_REPEATABLE_FLAGS = new Set(['--deny']);
+const GROK_BUILD_RESTRICTIVE_SINGLE_VALUE_FLAGS = new Set([
+  '--disallowed-tools',
+  '--sandbox',
+  '--tools',
+]);
+const GROK_BUILD_SANDBOX_PROFILES = new Set(['read-only', 'strict', 'workspace']);
+const GROK_BUILD_EFFORT_FLAGS = new Set(['--effort', '--reasoning-effort']);
+const GROK_BUILD_EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
+
+export function buildGrokBuildAcpArgs(input: {
+  model?: string;
+  extraArgs?: readonly string[];
+}): string[] {
+  const globalArgs: string[] = [];
+  const agentArgs: string[] = ['--no-leader'];
+  if (input.model !== undefined) {
+    agentArgs.push(`--model=${boundedGrokBuildArgumentValue('--model', input.model, 200)}`);
+  }
+
+  const extraArgs = input.extraArgs ?? [];
+  const seenSingleValueFlags = new Set<string>();
+  for (let index = 0; index < extraArgs.length; index += 1) {
+    const raw = extraArgs[index]?.trim() ?? '';
+    const separator = raw.indexOf('=');
+    const flag = separator >= 0 ? raw.slice(0, separator) : raw;
+    if (GROK_BUILD_RESTRICTIVE_BOOLEAN_FLAGS.has(flag)) {
+      if (separator >= 0 || seenSingleValueFlags.has(flag)) {
+        throw new ConflictError(`Grok Build ACP ${flag} may be configured only once.`);
+      }
+      seenSingleValueFlags.add(flag);
+      globalArgs.push(flag);
+      continue;
+    }
+
+    const isEffort = GROK_BUILD_EFFORT_FLAGS.has(flag);
+    const accepted =
+      isEffort ||
+      GROK_BUILD_RESTRICTIVE_REPEATABLE_FLAGS.has(flag) ||
+      GROK_BUILD_RESTRICTIVE_SINGLE_VALUE_FLAGS.has(flag);
+    if (!accepted) {
+      throw new ConflictError('Grok Build ACP launch argument is not governed by Veritas.', {
+        argument: sanitizeProviderRuntimeDiagnostic(raw),
+        remediation:
+          'Use the agent model field or the documented restrictive Grok Build ACP profile arguments.',
+      });
+    }
+
+    let value = separator >= 0 ? raw.slice(separator + 1) : undefined;
+    if (value === undefined) {
+      index += 1;
+      value = extraArgs[index];
+    }
+    const normalizedValue = boundedGrokBuildArgumentValue(flag, value, 1_000);
+    const canonicalFlag = isEffort ? '--reasoning-effort' : flag;
+    if (isEffort || GROK_BUILD_RESTRICTIVE_SINGLE_VALUE_FLAGS.has(flag)) {
+      if (seenSingleValueFlags.has(canonicalFlag)) {
+        throw new ConflictError(`Grok Build ACP ${canonicalFlag} may be configured only once.`);
+      }
+      seenSingleValueFlags.add(canonicalFlag);
+    }
+    if (isEffort && !GROK_BUILD_EFFORT_LEVELS.has(normalizedValue)) {
+      throw new ConflictError('Grok Build ACP reasoning effort is outside the tested profile.', {
+        effort: normalizedValue,
+      });
+    }
+    if (canonicalFlag === '--sandbox' && !GROK_BUILD_SANDBOX_PROFILES.has(normalizedValue)) {
+      throw new ConflictError('Grok Build ACP sandbox is outside the tested profile.', {
+        sandbox: normalizedValue,
+      });
+    }
+    const target = isEffort ? agentArgs : globalArgs;
+    target.push(`${canonicalFlag}=${normalizedValue}`);
+  }
+  return [...globalArgs, ...GROK_BUILD_REQUIRED_ARGS, ...agentArgs.slice(1), 'stdio'];
+}
+
+export function assertGrokBuildVersionEvidence(version: string | undefined): void {
+  if (version?.trim() === GROK_BUILD_VERSION_OUTPUT) return;
+  throw new ConflictError('Grok Build executable is outside the tested compatibility profile.', {
+    expected: GROK_BUILD_VERSION_OUTPUT,
+    received: sanitizeProviderRuntimeDiagnostic(version?.trim() || 'unknown'),
+    remediation: `Install Grok Build ${GROK_BUILD_TESTED_RELEASE}, then run \`vk doctor\`.`,
+  });
+}
+
 const COPILOT_ACP_SECRET_ENV_ARG = `--secret-env-vars=${COPILOT_ACP_CREDENTIAL_ENV_KEYS.join(',')}`;
 export const COPILOT_ACP_REQUIRED_ARGS = [
   '--acp',
@@ -327,7 +442,7 @@ class AcpStdioConnection implements AcpStdioControl {
         ACP_STARTUP_TIMEOUT_MS
       );
       const probe = applyAcpRuntimeProfile(
-        parseInitializeResponse(initialized, path.basename(command)),
+        parseInitializeResponse(initialized, path.basename(command), options.runtimeProfileId),
         options.runtimeProfileId
       );
       return new AcpStdioConnection(child, peer, probe, options);
@@ -438,7 +553,11 @@ class AcpStdioConnection implements AcpStdioControl {
   }
 }
 
-function parseInitializeResponse(value: unknown, fallbackName: string): AcpRuntimeProbe {
+function parseInitializeResponse(
+  value: unknown,
+  fallbackName: string,
+  runtimeProfileId?: string
+): AcpRuntimeProbe {
   const record = requiredRecord(value, 'ACP initialize response');
   if (record.protocolVersion !== ACP_PROTOCOL_VERSION) {
     throw new ConflictError('ACP agent selected an unsupported protocol version.', {
@@ -448,13 +567,23 @@ function parseInitializeResponse(value: unknown, fallbackName: string): AcpRunti
   }
   const capabilities = optionalRecord(record.agentCapabilities) as AcpAgentCapabilities;
   const agentInfoRecord = optionalRecord(record.agentInfo);
+  const extensionMetadata = optionalRecord(record._meta);
+  const grokBuildExtension =
+    runtimeProfileId === GROK_BUILD_RUNTIME_PROFILE_ID &&
+    extensionMetadata.grokShell === true &&
+    optionalString(extensionMetadata.agentVersion)
+      ? {
+          name: 'Grok Build',
+          version: optionalString(extensionMetadata.agentVersion),
+        }
+      : undefined;
   const agentInfo = {
-    name: optionalString(agentInfoRecord.name) ?? fallbackName,
+    name: optionalString(agentInfoRecord.name) ?? grokBuildExtension?.name ?? fallbackName,
     ...(optionalString(agentInfoRecord.title)
       ? { title: optionalString(agentInfoRecord.title) }
       : {}),
-    ...(optionalString(agentInfoRecord.version)
-      ? { version: optionalString(agentInfoRecord.version) }
+    ...((optionalString(agentInfoRecord.version) ?? grokBuildExtension?.version)
+      ? { version: optionalString(agentInfoRecord.version) ?? grokBuildExtension?.version }
       : {}),
   };
   return {
@@ -473,6 +602,9 @@ function applyAcpRuntimeProfile(
   if (runtimeProfileId === BUZZ_AGENT_RUNTIME_PROFILE_ID) return applyBuzzRuntimeProfile(probe);
   if (runtimeProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID) {
     return applyCopilotRuntimeProfile(probe);
+  }
+  if (runtimeProfileId === GROK_BUILD_RUNTIME_PROFILE_ID) {
+    return applyGrokBuildRuntimeProfile(probe);
   }
   throw new ConflictError('Configured ACP runtime profile is not registered.', {
     runtimeProfileId,
@@ -590,6 +722,72 @@ function applyCopilotRuntimeProfile(probe: AcpRuntimeProbe): AcpRuntimeProbe {
   };
 }
 
+function applyGrokBuildRuntimeProfile(probe: AcpRuntimeProbe): AcpRuntimeProbe {
+  const extensionMetadata = optionalRecord(probe.capabilities._meta);
+  const failures = [
+    ...(probe.agentInfo.name !== 'Grok Build'
+      ? [`Expected Grok Build ACP identity, received ${probe.agentInfo.name}.`]
+      : []),
+    ...(probe.agentInfo.version !== GROK_BUILD_ACP_VERSION
+      ? [
+          `Expected Grok Build ACP version ${GROK_BUILD_ACP_VERSION}, received ${
+            probe.agentInfo.version ?? 'unknown'
+          }.`,
+        ]
+      : []),
+    ...(probe.capabilities.loadSession === true
+      ? []
+      : ['The tested Grok Build profile requires loadSession: true.']),
+    ...(probe.capabilities.mcpCapabilities?.http === true &&
+    probe.capabilities.mcpCapabilities?.sse === true
+      ? []
+      : ['The tested Grok Build profile requires HTTP and SSE MCP capability evidence.']),
+    ...(probe.capabilities.promptCapabilities?.image === false &&
+    probe.capabilities.promptCapabilities?.embeddedContext === true
+      ? []
+      : [
+          'The tested Grok Build profile requires image: false and embeddedContext: true prompt capability evidence.',
+        ]),
+    ...(extensionMetadata['x.ai/fs_notify'] === true
+      ? []
+      : ['The tested Grok Build profile requires negotiated x.ai/fs_notify extension evidence.']),
+    ...(optionalRecord(extensionMetadata['x.ai/capabilities']).toolOverrides
+      ? []
+      : ['The tested Grok Build profile requires negotiated x.ai/capabilities evidence.']),
+  ];
+  if (failures.length > 0) {
+    throw new ConflictError('Grok Build ACP runtime is outside the tested compatibility profile.', {
+      runtimeProfileId: GROK_BUILD_RUNTIME_PROFILE_ID,
+      testedRelease: GROK_BUILD_TESTED_RELEASE,
+      testedBuild: GROK_BUILD_TESTED_BUILD,
+      failures,
+    });
+  }
+  const payload = {
+    schemaVersion: ACP_RUNTIME_PROFILE_SCHEMA_VERSION,
+    id: GROK_BUILD_RUNTIME_PROFILE_ID,
+    revision: GROK_BUILD_RUNTIME_PROFILE_REVISION,
+    testedRelease: GROK_BUILD_TESTED_RELEASE,
+    testedCommit: GROK_BUILD_TESTED_BUILD,
+    limitations: [
+      'provider-managed-authentication-not-probed',
+      'inherited-grok-home',
+      'no-acp-image-input',
+      'xai-extensions-version-gated',
+      'public-source-not-binary-provenance',
+      'stable-artifact-reports-alpha-channel',
+      'veritas-stdio-transport-only',
+    ],
+  };
+  return {
+    ...probe,
+    runtimeProfile: {
+      ...payload,
+      digest: `sha256:${createHash('sha256').update(stableJson(payload)).digest('hex')}`,
+    },
+  };
+}
+
 function boundedCopilotArgumentValue(
   flag: string,
   value: string | undefined,
@@ -602,6 +800,22 @@ function boundedCopilotArgumentValue(
   });
   if (!normalized || normalized.length > maxLength || containsControlCharacter) {
     throw new ConflictError(`Copilot ACP ${flag} requires a bounded non-empty value.`);
+  }
+  return normalized;
+}
+
+function boundedGrokBuildArgumentValue(
+  flag: string,
+  value: string | undefined,
+  maxLength: number
+): string {
+  const normalized = value?.trim() ?? '';
+  const containsControlCharacter = [...normalized].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 31 || codePoint === 127;
+  });
+  if (!normalized || normalized.length > maxLength || containsControlCharacter) {
+    throw new ConflictError(`Grok Build ACP ${flag} requires a bounded non-empty value.`);
   }
   return normalized;
 }

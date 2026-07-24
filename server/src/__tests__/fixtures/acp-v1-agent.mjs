@@ -3,9 +3,14 @@ import process from 'node:process';
 import readline from 'node:readline';
 
 // Stable ACP v1 fixture aligned with @agentclientprotocol/sdk 1.3.0.
-const mode = process.argv.includes('--acp') ? 'copilot' : (process.argv[2] ?? 'complete');
+const mode = process.argv.includes('--acp')
+  ? 'copilot'
+  : process.argv.includes('--no-leader') && process.argv.includes('stdio')
+    ? 'grok'
+    : (process.argv[2] ?? 'complete');
 const buzzMode = mode.startsWith('buzz');
 const copilotMode = mode.startsWith('copilot');
+const grokMode = mode.startsWith('grok');
 const lines = readline.createInterface({ input: process.stdin });
 let activeSessionId;
 let pendingPromptId;
@@ -27,49 +32,85 @@ lines.on('line', (line) => {
     }
     result(record.id, {
       protocolVersion: 1,
-      agentCapabilities: copilotMode
-        ? mode === 'copilot-wrong-capabilities'
+      agentCapabilities: grokMode
+        ? mode === 'grok-wrong-capabilities'
           ? {
               loadSession: false,
-              promptCapabilities: { image: false, audio: false, embeddedContext: false },
+              promptCapabilities: { image: true, audio: false, embeddedContext: false },
               mcpCapabilities: { http: false, sse: false },
               sessionCapabilities: {},
             }
           : {
               loadSession: true,
-              promptCapabilities: { image: true, audio: false, embeddedContext: true },
+              promptCapabilities: { image: false, audio: false, embeddedContext: true },
               mcpCapabilities: { http: true, sse: true },
-              sessionCapabilities: { list: {} },
+              sessionCapabilities: {},
+              _meta: {
+                'x.ai/fs_notify': mode !== 'grok-wrong-extension',
+                'x.ai/capabilities': {
+                  toolOverrides: {
+                    x_keyword_search: true,
+                  },
+                },
+              },
             }
-        : buzzMode
-          ? {
-              loadSession: false,
-              promptCapabilities: { image: false, audio: false, embeddedContext: false },
-              mcpCapabilities: { http: false, sse: false },
-            }
-          : mode === 'no-resume'
-            ? { loadSession: false, sessionCapabilities: {} }
+        : copilotMode
+          ? mode === 'copilot-wrong-capabilities'
+            ? {
+                loadSession: false,
+                promptCapabilities: { image: false, audio: false, embeddedContext: false },
+                mcpCapabilities: { http: false, sse: false },
+                sessionCapabilities: {},
+              }
             : {
                 loadSession: true,
+                promptCapabilities: { image: true, audio: false, embeddedContext: true },
                 mcpCapabilities: { http: true, sse: true },
-                sessionCapabilities: { resume: {}, fork: {}, close: {} },
-              },
+                sessionCapabilities: { list: {} },
+              }
+          : buzzMode
+            ? {
+                loadSession: false,
+                promptCapabilities: { image: false, audio: false, embeddedContext: false },
+                mcpCapabilities: { http: false, sse: false },
+              }
+            : mode === 'no-resume'
+              ? { loadSession: false, sessionCapabilities: {} }
+              : {
+                  loadSession: true,
+                  mcpCapabilities: { http: true, sse: true },
+                  sessionCapabilities: { resume: {}, fork: {}, close: {} },
+                },
       ...(mode === 'no-info'
         ? {}
         : {
-            agentInfo: copilotMode
-              ? {
-                  name: mode === 'copilot-wrong-name' ? 'copilot-cli' : 'Copilot',
-                  title: 'Copilot',
-                  version: mode === 'copilot-wrong-version' ? '1.0.75' : '1.0.74',
-                }
-              : buzzMode
-                ? {
-                    name: mode === 'buzz-wrong-name' ? 'buzz-acp' : 'buzz-agent',
-                    version: mode === 'buzz-wrong-version' ? '0.2.0' : '0.1.0',
-                  }
-                : { name: 'VK ACP fixture', version: '1.3.0' },
+            ...(grokMode && mode !== 'grok-wrong-name'
+              ? {}
+              : {
+                  agentInfo: copilotMode
+                    ? {
+                        name: mode === 'copilot-wrong-name' ? 'copilot-cli' : 'Copilot',
+                        title: 'Copilot',
+                        version: mode === 'copilot-wrong-version' ? '1.0.75' : '1.0.74',
+                      }
+                    : buzzMode
+                      ? {
+                          name: mode === 'buzz-wrong-name' ? 'buzz-acp' : 'buzz-agent',
+                          version: mode === 'buzz-wrong-version' ? '0.2.0' : '0.1.0',
+                        }
+                      : grokMode
+                        ? { name: 'grok', version: '0.2.111' }
+                        : { name: 'VK ACP fixture', version: '1.3.0' },
+                }),
           }),
+      ...(grokMode
+        ? {
+            _meta: {
+              grokShell: true,
+              agentVersion: mode === 'grok-wrong-version' ? '0.2.112' : '0.2.111',
+            },
+          }
+        : {}),
     });
     return;
   }

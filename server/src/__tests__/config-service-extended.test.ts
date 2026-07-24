@@ -113,6 +113,19 @@ describe('ConfigService', () => {
             provider: 'lm-studio-local',
             enabled: false,
           }),
+          expect.objectContaining({
+            type: 'grok-build',
+            name: 'Grok Build',
+            command: 'grok',
+            provider: 'acp-stdio',
+            args: [],
+            enabled: false,
+            supportProfile: expect.objectContaining({
+              id: 'grok-build',
+              adapterId: 'acp-stdio',
+              transport: 'acp',
+            }),
+          }),
         ])
       );
       expect(config.defaultAgent).toBe('codex');
@@ -129,6 +142,7 @@ describe('ConfigService', () => {
         ['ollama-local', undefined, 'unsupported'],
         ['ollama-cloud', undefined, 'unsupported'],
         ['lm-studio-local', undefined, 'unsupported'],
+        ['grok-build', 'acp-stdio', 'configured'],
       ] as const;
       for (const [type, adapterId, supportTier] of expectedSupport) {
         expect(config.agents.find((agent) => agent.type === type)?.supportProfile).toMatchObject({
@@ -218,6 +232,11 @@ describe('ConfigService', () => {
             type: 'lm-studio-local',
             command: 'lms',
             provider: 'lm-studio-local',
+          }),
+          expect.objectContaining({
+            type: 'grok-build',
+            command: 'grok',
+            provider: 'acp-stdio',
           }),
         ])
       );

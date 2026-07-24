@@ -13,6 +13,8 @@ import {
   BUZZ_AGENT_RUNTIME_PROFILE_ID,
   COPILOT_ACP_CREDENTIAL_ENV_KEYS,
   COPILOT_ACP_RUNTIME_PROFILE_ID,
+  GROK_BUILD_CREDENTIAL_ENV_KEYS,
+  GROK_BUILD_RUNTIME_PROFILE_ID,
 } from './acp-stdio-adapter.js';
 
 const CREDENTIAL_ENV_KEY_PATTERN =
@@ -47,6 +49,9 @@ export function compileProviderLaunchCredentialPlan(input: {
       : []),
     ...(input.harnessProfileId === COPILOT_ACP_RUNTIME_PROFILE_ID
       ? COPILOT_ACP_CREDENTIAL_ENV_KEYS
+      : []),
+    ...(input.harnessProfileId === GROK_BUILD_RUNTIME_PROFILE_ID
+      ? GROK_BUILD_CREDENTIAL_ENV_KEYS
       : []),
   ]);
   const taskReferences = new Set(input.sandbox.effective.credentialRefs);

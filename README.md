@@ -115,6 +115,9 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Buzz Integration](docs/BUZZ-INTEGRATION.md) — signed Squad Chat bridging,
   explicit persona/team import, and a separate disabled-by-default
   `buzz-agent` profile under the generic ACP provider.
+- [Agent Providers](docs/AGENT-PROVIDERS.md#grok-build-acp) — exact-version
+  Grok Build, GitHub Copilot CLI, Buzz Agent, Claude Code, and Codex runtime
+  setup, safety policy, and known limitations.
 - [Sprint Planning SOP](docs/SOP-sprint-planning.md) — epic → sprint → task breakdown.
 - [Multi-Agent Orchestration](docs/SOP-multi-agent-orchestration.md) — PM + worker handoffs.
 - [Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — enforce Claude ↔ GPT reviews.

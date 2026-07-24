@@ -119,6 +119,7 @@ describe('provider launch credential plan', () => {
     for (const [harnessProfileId, key] of [
       ['buzz-agent', 'OPENAI_COMPAT_API_KEY'],
       ['github-copilot-cli', 'COPILOT_GITHUB_TOKEN'],
+      ['grok-build', 'XAI_API_KEY'],
     ] as const) {
       const plan = compileProviderLaunchCredentialPlan({
         provider: 'acp-stdio',

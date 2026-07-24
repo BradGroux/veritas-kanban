@@ -65,7 +65,7 @@ Readiness runs bounded `claude --version`, `claude auth status`, and
 `claude agents --json` probes without a shell. The auth status probe is useful
 diagnostic evidence, but only the explicit bare-mode environment satisfies
 launch authentication. The runtime profile requires an exact
-`2.1.218 (Claude Code)` version match and probe revision 12; version or build
+`2.1.218 (Claude Code)` version match and probe revision 13; version or build
 drift invalidates conformance evidence.
 
 Claude's stream is consumed as bounded JSONL. Partial text/thinking, tool
@@ -192,7 +192,7 @@ starts it without a shell in the assigned task worktree.
 Before changing attempt state, Veritas starts a bounded probe process and sends
 ACP `initialize` with protocol version `1`. The returned agent name, version,
 capabilities, and a deterministic capability digest become
-`provider-runtime-manifest/v1` evidence at probe revision 12. Launch starts a
+`provider-runtime-manifest/v1` evidence at probe revision 13. Launch starts a
 fresh process and rejects capability drift before opening or prompting a
 session.
 
@@ -289,6 +289,45 @@ records that provenance mismatch as a limitation and certifies the exact
 release/version/handshake contract, not unprovable binary-to-source lineage.
 Provider-managed `COPILOT_HOME` is inherited for login state, so the profile
 also reports that it is not a fully isolated bare configuration.
+
+### Grok Build ACP
+
+`grok-build` is a built-in, disabled-by-default runtime profile under
+`acp-stdio`. Veritas tests the released Grok Build `v0.2.111` executable,
+which reports `grok 0.2.111 (94172f2aa4e5) [alpha]` and advertises
+`agentVersion: 0.2.111` in its ACP initialize metadata. The profile requires
+session loading, HTTP/SSE MCP, embedded-context input, no ACP image input, and
+the negotiated `x.ai/fs_notify` and `x.ai/capabilities` extensions.
+
+Veritas owns this process baseline:
+
+```text
+grok [restrictive global policy] agent --no-leader \
+  [--model=<model>] [--reasoning-effort=low|medium|high] stdio
+```
+
+The optional global policy accepts only bounded deny rules, tool allow/removal
+lists, sandbox selection, and feature-disable flags. Approval bypass,
+reauthentication, shared-leader attachment, plugin/profile injection, endpoint
+overrides, prompts, worktree creation, and resume flags fail closed before an
+attempt is created. Veritas starts a dedicated process in the assigned
+worktree and owns session creation or loading through ACP.
+
+Authentication is provider-managed. `grok --version` is the only readiness
+probe; it does not authenticate or consume inference. Existing login state is
+read through `GROK_HOME`, or operators can provide the allowlisted
+`XAI_API_KEY`, legacy `GROK_CODE_XAI_API_KEY`, or `GROK_DEPLOYMENT_KEY` boot
+credential. These remain provider authentication, not task credentials.
+
+The exact macOS arm64 release artifact tested on 2026-07-24 has SHA-256
+`e1fafdfffe14f339460befaf194360e8f90bfd02efe8a4f24cfa1c7aea657ffe`.
+The stable channel currently serves an artifact that self-reports `[alpha]`.
+The reported build `94172f2aa4e5` is not present in the public repository, and
+the current public source snapshot is newer than the release artifact.
+Veritas records both provenance limits and certifies the exact executable
+version/build/handshake contract instead of claiming an unprovable source
+mapping. Other platform artifacts must report the same pinned version/build;
+the macOS arm64 artifact is the credential-free smoke baseline.
 
 ## Buzz communication harness
 
