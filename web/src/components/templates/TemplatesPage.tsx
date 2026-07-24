@@ -118,7 +118,7 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
               variant="subtle"
               color="gray"
               onClick={onBack}
-              aria-label="Back to board"
+              aria-label="Back"
             >
               <ArrowLeft className="h-4 w-4" />
             </ActionIcon>

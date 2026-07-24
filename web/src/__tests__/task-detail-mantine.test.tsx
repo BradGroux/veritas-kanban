@@ -148,7 +148,8 @@ vi.mock('@/components/task/TaskMetricsPanel', () => ({
 }));
 
 vi.mock('@/components/task/WorkflowSection', () => ({
-  WorkflowSection: () => null,
+  WorkflowSection: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Run Workflow" /> : null,
 }));
 
 vi.mock('@/components/evidence/EvidenceTimelinePanel', () => ({
@@ -266,6 +267,19 @@ describe('task detail Mantine migration', () => {
     expect(textarea.className).toContain('resize-y');
     expect((textarea as HTMLTextAreaElement).style.minHeight).toBe('180px');
     expect((textarea as HTMLTextAreaElement).style.resize).toBe('vertical');
+  });
+
+  it('keeps the task drawer open when Escape belongs to a nested Workflow dialog', async () => {
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    await user.click(screen.getByRole('button', { name: 'Workflow' }));
+    expect(screen.getByRole('dialog', { name: 'Run Workflow' })).toBeDefined();
+
+    fireEvent.keyDown(screen.getByTestId('task-detail-panel'), { key: 'Escape' });
+
+    expect(mocks.onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('task-detail-panel')).toBeDefined();
   });
 
   it('keeps title editing and progress tab behavior wired after the migration', async () => {

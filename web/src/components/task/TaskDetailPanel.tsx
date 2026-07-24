@@ -72,16 +72,17 @@ export function TaskDetailPanel({
   const lastDefaultedTaskIdRef = useRef<string | undefined>(undefined);
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
+  const nestedOverlayOpen = previewOpen || applyTemplateOpen || taskChatOpen || workflowOpen;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
+      if (e.key === 'Escape' && open && !nestedOverlayOpen) {
         onOpenChange(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onOpenChange]);
+  }, [nestedOverlayOpen, open, onOpenChange]);
 
   const isCodeTask = localTask?.type === 'code';
   const hasWorktree = !!localTask?.git?.worktreePath;
@@ -187,7 +188,7 @@ export function TaskDetailPanel({
   return (
     <>
       <Drawer.Root
-        closeOnEscape
+        closeOnEscape={!nestedOverlayOpen}
         lockScroll
         onClose={() => onOpenChange(false)}
         opened={open}

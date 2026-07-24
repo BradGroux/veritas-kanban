@@ -94,6 +94,7 @@ function createJsonResponse(data: unknown, ok = true) {
 describe('task detail Git and workflow Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useConfig.mockReturnValue({
       data: {
@@ -147,6 +148,7 @@ describe('task detail Git and workflow Mantine migration', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    window.history.replaceState({}, '', '/');
   });
 
   it('renders Git selection through direct Mantine controls and keeps task Git updates wired', async () => {
@@ -444,6 +446,27 @@ describe('task detail Git and workflow Mantine migration', () => {
     expect(screen.getByText('0 agents')).toBeDefined();
     expect(screen.getByText('0 steps')).toBeDefined();
     expect(screen.queryByText('This section encountered an error')).toBeNull();
+  });
+
+  it('uses browser Back to close Workflow and preserve the originating task route', async () => {
+    const onOpenChange = vi.fn();
+    const task = createMockTask({ id: 'task-workflow-history' });
+    const taskState = { veritasTaskDetail: task.id };
+    window.history.replaceState(taskState, '', '/?q=release');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createJsonResponse([])));
+
+    renderWithProviders(<WorkflowSection task={task} open onOpenChange={onOpenChange} />);
+
+    await waitFor(() => {
+      expect(window.history.state.veritasTaskWorkflow).toBe(`${task.id}:workflow`);
+    });
+    window.history.replaceState(taskState, '', '/?q=release');
+    window.dispatchEvent(new PopStateEvent('popstate', { state: taskState }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('?q=release');
+    expect(window.history.state.veritasTaskDetail).toBe(task.id);
   });
 
   it('renders run mode and QA gate controls through direct Mantine primitives', async () => {

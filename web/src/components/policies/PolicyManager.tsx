@@ -505,7 +505,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
       <div className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <ActionIcon variant="subtle" onClick={onBack} aria-label="Back to board">
+            <ActionIcon variant="subtle" onClick={onBack} aria-label="Back">
               <ArrowLeft className="h-4 w-4" />
             </ActionIcon>
             <div>

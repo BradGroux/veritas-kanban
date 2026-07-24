@@ -47,6 +47,39 @@ import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPan
 import { useDesktopShell } from '@/components/layout/DesktopShellContext';
 import { cn } from '@/lib/utils';
 
+const TASK_DETAIL_HISTORY_KEY = 'veritasTaskDetail';
+
+function taskIdFromHistory(): string | null {
+  const state = window.history.state;
+  if (!state || typeof state !== 'object') return null;
+  const taskId = (state as Record<string, unknown>)[TASK_DETAIL_HISTORY_KEY];
+  return typeof taskId === 'string' ? taskId : null;
+}
+
+function currentViewHasOrigin(): boolean {
+  const navigation = window.history.state?.veritasKanbanNavigation;
+  return Boolean(
+    navigation &&
+    typeof navigation === 'object' &&
+    typeof (navigation as Record<string, unknown>).originView === 'string'
+  );
+}
+
+function markTaskInHistory(taskId: string, replaceCurrent = false) {
+  const nextState = {
+    ...(window.history.state && typeof window.history.state === 'object'
+      ? window.history.state
+      : {}),
+    [TASK_DETAIL_HISTORY_KEY]: taskId,
+  };
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (replaceCurrent || taskIdFromHistory()) {
+    window.history.replaceState(nextState, '', currentUrl);
+  } else {
+    window.history.pushState(nextState, '', currentUrl);
+  }
+}
+
 // Lazy-load Dashboard so board startup does not include dashboard-heavy code paths.
 const Dashboard = lazy(() =>
   import('@/components/dashboard/Dashboard').then((mod) => ({
@@ -109,7 +142,7 @@ export function KanbanBoard() {
 
   const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
   const { isSelecting, toggleSelecting } = useBulkActions();
-  const { pendingTaskId, pendingTaskTarget, clearPendingTask } = useView();
+  const { pendingTaskId, pendingTaskTarget, clearPendingTask, returnFromTask } = useView();
 
   const matchingSavedView = useMemo(
     () => findBoardSavedViewByFilters(savedViews, filters),
@@ -223,6 +256,7 @@ export function KanbanBoard() {
       // Try local task list first
       const localTask = tasks?.find((t) => t.id === pendingTaskId);
       if (localTask) {
+        markTaskInHistory(localTask.id, currentViewHasOrigin());
         setDetailPanelMounted(true);
         setDetailNavigationTarget(pendingTaskTarget);
         setSelectedTask(localTask);
@@ -236,19 +270,33 @@ export function KanbanBoard() {
         const { api } = await import('@/lib/api');
         const fetchedTask = await api.tasks.get(pendingTaskId);
         if (fetchedTask) {
+          markTaskInHistory(fetchedTask.id, currentViewHasOrigin());
           setDetailPanelMounted(true);
           setDetailNavigationTarget(pendingTaskTarget);
           setSelectedTask(fetchedTask);
           setDetailOpen(true);
+          clearPendingTask();
+          return;
         }
       } catch {
-        // Task no longer exists — ignore silently
+        // Return to the originating view when the task no longer exists.
       }
       clearPendingTask();
+      returnFromTask();
     };
 
     openPendingTask();
-  }, [pendingTaskId, pendingTaskTarget, tasks, clearPendingTask]);
+  }, [pendingTaskId, pendingTaskTarget, tasks, clearPendingTask, returnFromTask]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!detailOpen || taskIdFromHistory() === selectedTask?.id) return;
+      setDetailOpen(false);
+      setTimeout(() => setSelectedTask(null), 200);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [detailOpen, selectedTask?.id]);
 
   // Apply the configured default saved view only when the current URL has no board filters.
   useEffect(() => {
@@ -319,6 +367,7 @@ export function KanbanBoard() {
 
   // Handler for opening a task
   const handleTaskClick = useCallback((task: Task, target?: TaskDetailNavigationTarget) => {
+    markTaskInHistory(task.id);
     setDetailPanelMounted(true);
     setDetailNavigationTarget(target ?? null);
     setSelectedTask(task);
@@ -440,10 +489,15 @@ export function KanbanBoard() {
   });
 
   const handleDetailClose = (open: boolean) => {
+    if (!open && selectedTask?.id && taskIdFromHistory() === selectedTask.id) {
+      window.history.back();
+      return;
+    }
     setDetailOpen(open);
     if (!open) {
       // Small delay to allow animation to complete
       setTimeout(() => setSelectedTask(null), 200);
+      returnFromTask();
     }
   };
 

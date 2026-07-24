@@ -134,7 +134,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
             leftSection={<ArrowLeft className="h-4 w-4" />}
             onClick={onBack}
           >
-            Back to Board
+            Back
           </Button>
           <Title order={1} className="text-2xl">
             Workflows

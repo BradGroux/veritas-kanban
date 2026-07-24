@@ -190,7 +190,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         <Group gap="md" wrap="wrap">
           <Button variant="subtle" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Board
+            Back
           </Button>
           <Text component="h1" size="xl" fw={700} lh={1.1} m={0}>
             Archive

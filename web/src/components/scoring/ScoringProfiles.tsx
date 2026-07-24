@@ -356,7 +356,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
               miw={48}
               variant="subtle"
               onClick={handleBackToBoard}
-              aria-label="Back to board"
+              aria-label="Back"
             >
               <ArrowLeft className="h-4 w-4" />
             </ActionIcon>
