@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded the template editor into a responsive authoring surface with one
   bounded scroll region, fixed actions, a resizable Markdown editor, inline
   validation, and unsaved-change protection (#941).
+- Made first-run setup version-neutral and sourced desktop bridge version
+  reporting from Electron's packaged application metadata (#986).
 
 ## [6.0.0] - 2026-07-24
 

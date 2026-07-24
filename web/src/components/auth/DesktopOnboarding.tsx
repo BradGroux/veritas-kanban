@@ -375,7 +375,7 @@ export function DesktopOnboardingPanel({
       <section className="min-w-0 space-y-5">
         <div className="space-y-3">
           <Badge variant="outline" color="cyan" tt="none">
-            v5 Desktop Setup
+            Desktop Setup
           </Badge>
           <div className="space-y-2">
             <h1

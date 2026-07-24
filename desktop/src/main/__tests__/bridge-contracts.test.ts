@@ -93,7 +93,7 @@ function shell(): Shell {
 }
 
 function handlers(): DesktopBridgeHandlerMap {
-  return createDesktopBridgeHandlers(runtime(), shell(), false);
+  return createDesktopBridgeHandlers(runtime(), shell(), false, '6.0.1');
 }
 
 describe('desktop bridge contracts', () => {
@@ -124,12 +124,22 @@ describe('desktop bridge contracts', () => {
       }),
     } as unknown as IpcMain;
 
-    registerDesktopBridge(ipcMain, runtime(), shell(), false);
+    registerDesktopBridge(ipcMain, runtime(), shell(), false, '6.0.1');
 
     expect([...registered.keys()].sort()).toEqual(
       DESKTOP_BRIDGE_METHOD_NAMES.map((method) => DESKTOP_BRIDGE_METHODS[method].channel).sort()
     );
     expect(registered.size).toBe(DESKTOP_BRIDGE_METHOD_NAMES.length);
+  });
+
+  it('reports the Electron application version through the desktop bridge', () => {
+    const bridgeHandlers = createDesktopBridgeHandlers(runtime(), shell(), true, '6.0.1');
+
+    expect(bridgeHandlers.getAppInfo(undefined)).toMatchObject({
+      name: 'Veritas Kanban',
+      version: '6.0.1',
+      packaged: true,
+    });
   });
 
   it('keeps the preload API method list aligned to invoke and event contracts', () => {
@@ -172,7 +182,8 @@ describe('desktop bridge contracts', () => {
     const bridgeHandlers: DesktopBridgeHandlerMap = createDesktopBridgeHandlers(
       runtime(),
       fakeShell,
-      false
+      false,
+      '6.0.1'
     );
 
     await expect(
@@ -193,7 +204,7 @@ describe('desktop bridge contracts', () => {
 
   it('validates restart confirmation before restarting the local server', async () => {
     const fakeRuntime = runtime();
-    const bridgeHandlers = createDesktopBridgeHandlers(fakeRuntime, shell(), false);
+    const bridgeHandlers = createDesktopBridgeHandlers(fakeRuntime, shell(), false, '6.0.1');
 
     expect(() => bridgeHandlers.restartLocalServer({ confirmation: 'restart' } as never)).toThrow(
       'explicit restart confirmation'

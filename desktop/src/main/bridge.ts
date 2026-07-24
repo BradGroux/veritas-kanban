@@ -204,6 +204,7 @@ export function createDesktopBridgeHandlers(
   runtime: DesktopRuntime,
   shell: Shell,
   packaged: boolean,
+  appVersion: string,
   commandDispatcher?: DesktopCommandDispatcher,
   updateService?: DesktopUpdateService,
   windowControls?: DesktopWindowControls
@@ -211,7 +212,7 @@ export function createDesktopBridgeHandlers(
   const appInfo = (): DesktopAppInfo => ({
     name: DESKTOP_APP_NAME,
     appId: DESKTOP_APP_ID,
-    version: process.env.npm_package_version || '0.0.0',
+    version: appVersion,
     platform: process.platform,
     packaged,
   });
@@ -304,6 +305,7 @@ export function registerDesktopBridge(
   runtime: DesktopRuntime,
   shell: Shell,
   packaged: boolean,
+  appVersion: string,
   commandDispatcher?: DesktopCommandDispatcher,
   updateService?: DesktopUpdateService,
   windowControls?: DesktopWindowControls
@@ -312,6 +314,7 @@ export function registerDesktopBridge(
     runtime,
     shell,
     packaged,
+    appVersion,
     commandDispatcher,
     updateService,
     windowControls
