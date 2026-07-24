@@ -141,7 +141,10 @@ import {
 } from './provider-runtime-control-service.js';
 import { resolveTaskCommitPolicy, TaskEnvelopeService } from './task-envelope-service.js';
 import { evaluateHarnessSupportStatus } from './harness-support-service.js';
-import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
+import {
+  harnessToolCatalogDelivery,
+  normalizeHarnessSupportProfile,
+} from './harness-support-profile-registry.js';
 import { RunLaunchManifestService, diffRunLaunchManifests } from './run-launch-manifest-service.js';
 import {
   parseCompletionResultForEnvelope,
@@ -1495,8 +1498,13 @@ export class ClawdbotAgentService {
       if (!pending || pending.attemptId !== attemptId) {
         throw new ConflictError('Run launch no longer matches the pending attempt.');
       }
+      const toolCatalogDelivery = launchAgentConfig
+        ? harnessToolCatalogDelivery(normalizeHarnessSupportProfile(launchAgentConfig).id)
+        : 'native';
       pending.runToolBridge =
-        runToolCatalog && this.runToolBridge.requiresBridge(runToolCatalog)
+        runToolCatalog &&
+        (toolCatalogDelivery === 'veritas-bridge' ||
+          this.runToolBridge.requiresBridge(runToolCatalog))
           ? this.runToolBridge.issue({
               taskId,
               attemptId,
@@ -4099,13 +4107,19 @@ export class ClawdbotAgentService {
     if (runToolCatalog && runToolCatalog.digest !== runLaunchManifest.tools.catalogDigest) {
       throw new ConflictError('ACP run tool catalog does not match launch evidence.');
     }
-    const mcpServers = runToolCatalog ? await this.toolControlPlane.acpConfig(runToolCatalog) : [];
+    const bridgeOnly = harnessToolCatalogDelivery(supportProfile.id) === 'veritas-bridge';
+    if (bridgeOnly && runToolCatalog && !pending.runToolBridge) {
+      throw new ConflictError('ACP profile requires the Veritas run tool bridge.');
+    }
+    const mcpServers =
+      runToolCatalog && !bridgeOnly ? await this.toolControlPlane.acpConfig(runToolCatalog) : [];
     if (pending.runToolBridge) {
       mcpServers.push(this.runToolBridge.acpServer(pending.runToolBridge));
     }
-    const toolEnvironmentKeys = runToolCatalog
-      ? await this.toolControlPlane.environmentKeys(runToolCatalog)
-      : [];
+    const toolEnvironmentKeys =
+      runToolCatalog && !bridgeOnly
+        ? await this.toolControlPlane.environmentKeys(runToolCatalog)
+        : [];
     const approvalAbort = new AbortController();
     pending.abortController = approvalAbort;
     let activeSessionId: string | undefined;
@@ -7330,6 +7344,9 @@ export class ClawdbotAgentService {
     runToolCatalog?: RunToolCatalog;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
+    const toolCatalogDelivery = input.launchAgentConfig
+      ? harnessToolCatalogDelivery(normalizeHarnessSupportProfile(input.launchAgentConfig).id)
+      : 'native';
     const hasToolRestrictions =
       (profile?.tools?.allowed?.length ?? 0) > 0 ||
       (profile?.policy?.toolPolicyIds?.length ?? 0) > 0;
@@ -7366,8 +7383,11 @@ export class ClawdbotAgentService {
       runtime.environmentKeys = [
         ...new Set([
           ...runtime.environmentKeys,
-          ...(await this.toolControlPlane.environmentKeys(input.runToolCatalog)),
-          ...(this.runToolBridge.requiresBridge(input.runToolCatalog) &&
+          ...(toolCatalogDelivery === 'native'
+            ? await this.toolControlPlane.environmentKeys(input.runToolCatalog)
+            : []),
+          ...((toolCatalogDelivery === 'veritas-bridge' ||
+            this.runToolBridge.requiresBridge(input.runToolCatalog)) &&
           this.runToolBridge.support(input.provider).injection === 'codex-config'
             ? [RUN_TOOL_BRIDGE_ENV_KEY]
             : []),

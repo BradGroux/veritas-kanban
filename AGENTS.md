@@ -240,10 +240,14 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - `session/update` records enter the causal run journal.
   `session/request_permission` uses the durable approval broker.
 - Only immutable all-allow MCP server catalogs can be passed natively because
-  ACP v1 has no per-tool allowlist. Partial catalogs fail closed.
+  ACP v1 has no per-tool allowlist. Profiles may explicitly require the
+  system-owned `veritas-run` bridge for mediated catalogs; otherwise partial
+  native catalogs fail closed.
 - The built-in `buzz-agent` profile remains provider `acp-stdio`, pins Buzz
   `v0.4.24` at commit `710ed9fff57878a1d69f809b80a6ee0416c53fc4`, and rejects
-  `buzz-acp`, version drift, session loading, and network MCP claims.
+  `buzz-acp`, version drift, session loading, and network MCP claims. Selected
+  run tools are delivered only through the opaque, attempt-bound
+  `veritas-run` bridge.
 - The built-in `copilot` profile remains provider `acp-stdio`, pins Copilot CLI
   `v1.0.74`, owns the stdio safety argv, rejects broad allow/remote/TCP/config
   injection, and records public-preview plus incomplete-source limitations.

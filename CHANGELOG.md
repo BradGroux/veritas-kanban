@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Composed the pinned `buzz-agent` ACP profile with the system-owned
+  `veritas-run` bridge. Buzz sessions now receive only that bridge for selected
+  run tools, so catalog allow, deny, approval, attribution, and cleanup remain
+  under the provider-neutral control plane without native server credentials
+  or a Buzz-specific MCP implementation. Provider capability evidence advances
+  to probe revision 14 (#909).
 - Added the system-owned `veritas-run` MCP bridge for credential-bound tools.
   Opaque, in-memory authority binds the exact task, attempt, catalog, launch
   manifest, and two allowed bridge methods. Codex CLI/SDK, Codex app-server,

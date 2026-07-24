@@ -56,12 +56,18 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'run.interrupt': advisory('Process termination is available; semantic interrupt is not.'),
     'run.resume': supported('Codex CLI resumes a persisted session by its exact ID.'),
     'tool.calls': supported('Codex tool events are parsed and recorded.'),
+    'tool.mcp': supported(
+      'The system-owned run bridge is injected through a required Codex MCP config override.'
+    ),
     'output.structured': advisory(
       'Structured events are available without output-schema enforcement.'
     ),
     'usage.tokens': supported('Codex token usage events are parsed and persisted.'),
     'artifact.write': supported('Codex file events create task deliverable records.'),
     'workspace.worktrees': supported('Codex runs with the task worktree as its working directory.'),
+    'credential.broker': supported(
+      'Task credentials remain inside mediated bridge calls; the Codex process receives only an opaque run handle.'
+    ),
   }),
   'codex-sdk': definition('codex-sdk', 'Codex SDK', 'openai-codex-sdk/v1', {
     ...COMMON_SUPPORTED,
@@ -74,6 +80,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'run.interrupt': advisory('Abort is available; semantic interrupt is not wired.'),
     'run.resume': supported('The SDK resumes a persisted thread by its exact ID.'),
     'tool.calls': supported('Codex SDK tool events are parsed and recorded.'),
+    'tool.mcp': supported(
+      'The SDK receives the system-owned run bridge through its thread-scoped Codex configuration.'
+    ),
     'output.structured': advisory('Typed events are available without output-schema enforcement.'),
     'usage.tokens': supported('Codex SDK token usage events are parsed and persisted.'),
     'artifact.write': supported('Codex SDK file events create task deliverable records.'),
@@ -81,6 +90,9 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'network.disable': supported('The SDK sandbox can disable network access.'),
     'network.block-private': supported('Disabling network access blocks private network ranges.'),
     'network.block-metadata': supported('Disabling network access blocks metadata endpoints.'),
+    'credential.broker': supported(
+      'Task credentials remain inside mediated bridge calls; the SDK process receives only an opaque run handle.'
+    ),
   }),
   'codex-app-server': definition(
     'codex-app-server',
@@ -132,7 +144,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
         'Command, file, tool, and item lifecycle notifications are journaled and budgeted.'
       ),
       'tool.mcp': supported(
-        'Only the immutable run-scoped MCP catalog is injected through thread configuration; inherited servers remain disabled.'
+        'The immutable catalog and system-owned run bridge are injected through thread configuration; inherited servers remain disabled.'
       ),
       'output.structured': advisory(
         'The transport is schema-validated JSON-RPC; caller output-schema enforcement is not yet exposed.'
@@ -147,8 +159,8 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'environment.allowlist': supported(
         'The adapter uses the safe Codex environment and forces remote-control disablement.'
       ),
-      'credential.broker': unsupported(
-        'Provider authentication uses the existing safe Codex environment until issue #932 migrates launches to brokered handles.'
+      'credential.broker': supported(
+        'Task credentials remain inside mediated bridge calls; app-server receives only an opaque run handle. Provider boot authentication stays separately allowlisted.'
       ),
     }
   ),
@@ -181,7 +193,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'Claude assistant tool-use and user tool-result records are journaled and budgeted.'
     ),
     'tool.mcp': supported(
-      'Strict MCP mode exposes only the immutable run-scoped catalog and its allowed tools.'
+      'Strict MCP mode exposes the immutable catalog plus the system-owned run bridge and no inherited servers.'
     ),
     'output.structured': advisory(
       'The adapter validates bounded JSONL stream records without enforcing a caller output schema.'
@@ -206,8 +218,8 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'environment.allowlist': supported(
       'The adapter constructs an explicit process environment allowlist.'
     ),
-    'credential.broker': unsupported(
-      'Claude Code currently receives only explicitly allowlisted environment authentication; brokered handles remain gated by issue #932.'
+    'credential.broker': supported(
+      'Task credentials remain inside mediated bridge calls; Claude receives only an opaque run handle. Provider boot authentication stays separately allowlisted.'
     ),
   }),
   'acp-stdio': definition('acp-stdio', 'ACP stdio', 'acp/v1', {
@@ -236,7 +248,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ),
     'tool.calls': supported('ACP tool_call and tool_call_update records are journaled.'),
     'tool.mcp': supported(
-      'An immutable all-allow run catalog is mapped into ACP session setup; partial native catalogs fail closed.'
+      'All-allow catalogs may map natively; bridge-only profiles and credential-bound catalogs receive the system-owned run bridge through session setup.'
     ),
     'output.structured': advisory(
       'ACP v1 uses structured transport records, but caller output-schema enforcement is not exposed.'
@@ -254,8 +266,8 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'environment.allowlist': supported(
       'The ACP process receives an explicit environment allowlist.'
     ),
-    'credential.broker': unsupported(
-      'ACP provider boot and task credentials remain unbrokered until issue #932.'
+    'credential.broker': supported(
+      'Task credentials remain inside mediated bridge calls; ACP agents receive only the run-scoped bridge descriptor. Provider boot authentication stays separately allowlisted.'
     ),
   }),
   'hermes-cli': definition('hermes-cli', 'Hermes Agent', 'hermes-one-shot/v1', {
