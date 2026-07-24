@@ -8,6 +8,7 @@ import {
   buildCodexAppServerArgs,
   buildSafeCodexAppServerEnv,
   classifyCodexAppServerNotification,
+  classifyCodexAppServerServerRequest,
   isCodexAppServerOutboundMethod,
   parseCodexAppServerLine,
 } from '../services/codex-app-server-adapter.js';
@@ -80,6 +81,12 @@ async function initializeClient(
   await client.acceptRecord({ id: 1, result: initializeResult() });
   await initialized;
   return client;
+}
+
+function parseLastWrite(writes: string[]): Record<string, unknown> {
+  const line = writes.at(-1);
+  if (!line) throw new Error('Expected the adapter to emit a JSON-RPC record.');
+  return JSON.parse(line) as Record<string, unknown>;
 }
 
 describe('Codex app-server v2 provider', () => {
@@ -179,7 +186,7 @@ describe('Codex app-server v2 provider', () => {
         cwd: '/tmp/worktree',
         model: 'gpt-5.6',
         sandbox: 'workspace-write',
-        approvalPolicy: 'never',
+        approvalPolicy: 'on-request',
       },
     });
     await client.acceptRecord({ id: 2, result: threadStartResult() });
@@ -196,7 +203,7 @@ describe('Codex app-server v2 provider', () => {
       params: {
         threadId: THREAD_ID,
         input: [{ type: 'text', text: 'Return only: ready' }],
-        approvalPolicy: 'never',
+        approvalPolicy: 'on-request',
       },
     });
     await client.acceptRecord({ id: 3, result: turnStartResult() });
@@ -262,10 +269,10 @@ describe('Codex app-server v2 provider', () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
-  it('denies provider approval and elicitation requests deterministically', async () => {
+  it('classifies provider approvals and responds only after a broker decision', async () => {
     const writes: string[] = [];
     const client = await initializeClient(writes);
-    const inbound = await client.acceptRecord({
+    const request = {
       id: 'approval-1',
       method: 'item/commandExecution/requestApproval',
       params: {
@@ -273,18 +280,127 @@ describe('Codex app-server v2 provider', () => {
         turnId: TURN_ID,
         itemId: 'item-1',
         startedAtMs: 1,
-        command: 'echo blocked',
+        command: 'git status',
+        cwd: '/tmp/worktree',
       },
-    });
+    };
+    const writesBeforeRequest = writes.length;
+    const inbound = await client.acceptRecord(request);
 
     expect(inbound).toMatchObject({
       kind: 'server-request',
       method: 'item/commandExecution/requestApproval',
-      denied: true,
     });
-    expect(JSON.parse(writes.at(-1)!)).toEqual({
+    expect(writes).toHaveLength(writesBeforeRequest);
+    expect(classifyCodexAppServerServerRequest(request)).toMatchObject({
+      requestKind: 'approval',
+      actionClass: 'shell',
+      action: 'Execute command: git status',
+      providerRequestId: 'string:approval-1',
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+      itemId: 'item-1',
+      workingDirectory: '/tmp/worktree',
+      riskClass: 'high',
+      mobileSafe: false,
+    });
+
+    client.respondToServerRequest(request, { status: 'approved' });
+    expect(parseLastWrite(writes)).toEqual({
       id: 'approval-1',
+      result: { decision: 'accept' },
+    });
+  });
+
+  it('returns schema-valid rejections, structured elicitation answers, and unsupported errors', async () => {
+    const writes: string[] = [];
+    const client = await initializeClient(writes);
+    const commandRequest = {
+      id: 'approval-reject',
+      method: 'item/commandExecution/requestApproval',
+      params: {
+        threadId: THREAD_ID,
+        turnId: TURN_ID,
+        itemId: 'item-command',
+        startedAtMs: 1,
+        command: 'git push',
+      },
+    };
+    await client.acceptRecord(commandRequest);
+    client.respondToServerRequest(commandRequest, {
+      status: 'rejected',
+      note: 'Remote mutation is outside the task scope.',
+    });
+    expect(parseLastWrite(writes)).toEqual({
+      id: 'approval-reject',
       result: { decision: 'decline' },
+    });
+
+    const questionRequest = {
+      id: 'question-1',
+      method: 'item/tool/requestUserInput',
+      params: {
+        threadId: THREAD_ID,
+        turnId: TURN_ID,
+        itemId: 'item-question',
+        questions: [
+          {
+            id: 'verification_gate',
+            header: 'Verification',
+            question: 'Which verification gate should run?',
+            options: [
+              {
+                label: 'Focused tests',
+                description: 'Run only the affected package tests.',
+              },
+            ],
+          },
+        ],
+      },
+    };
+    await client.acceptRecord(questionRequest);
+    expect(classifyCodexAppServerServerRequest(questionRequest)).toMatchObject({
+      requestKind: 'elicitation',
+      actionClass: 'elicitation',
+      mobileSafe: true,
+    });
+    client.respondToServerRequest(questionRequest, {
+      status: 'approved',
+      responseData: {
+        answers: {
+          verification_gate: { answers: ['Focused tests'] },
+        },
+      },
+    });
+    expect(parseLastWrite(writes)).toEqual({
+      id: 'question-1',
+      result: {
+        answers: {
+          verification_gate: { answers: ['Focused tests'] },
+        },
+      },
+    });
+
+    const unsupportedRequest = {
+      id: 'tool-call-1',
+      method: 'item/tool/call',
+      params: {
+        threadId: THREAD_ID,
+        turnId: TURN_ID,
+        callId: 'call-1',
+        tool: 'not-exposed',
+        arguments: {},
+      },
+    };
+    await client.acceptRecord(unsupportedRequest);
+    expect(classifyCodexAppServerServerRequest(unsupportedRequest)).toBeUndefined();
+    client.respondToServerRequest(unsupportedRequest);
+    expect(parseLastWrite(writes)).toEqual({
+      id: 'tool-call-1',
+      error: {
+        code: -32_602,
+        message: 'Veritas does not expose this provider-to-client method.',
+      },
     });
   });
 
@@ -373,9 +489,7 @@ describe('Codex app-server v2 provider', () => {
     expect(adapter.capabilities.find(({ id }) => id === 'run.start')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.interrupt')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'run.resume')?.state).toBe('unsupported');
-    expect(adapter.capabilities.find(({ id }) => id === 'run.approvals')?.state).toBe(
-      'unsupported'
-    );
+    expect(adapter.capabilities.find(({ id }) => id === 'run.approvals')?.state).toBe('supported');
     expect(adapter.capabilities.find(({ id }) => id === 'tool.mcp')?.state).toBe('unsupported');
   });
 

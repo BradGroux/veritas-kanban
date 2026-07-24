@@ -1136,6 +1136,44 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON run_events(workspace_id, received_at);
     `,
   },
+  {
+    version: 19,
+    name: '0019_run_approval_broker',
+    up: `
+      CREATE TABLE run_approvals (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        provider_request_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (
+          status IN ('pending', 'approved', 'rejected', 'expired', 'cancelled')
+        ),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        action_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        approval_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (workspace_id, task_id, attempt_id, provider, provider_request_id)
+      );
+
+      CREATE INDEX idx_run_approvals_workspace_status_created
+        ON run_approvals(workspace_id, status, created_at DESC);
+
+      CREATE INDEX idx_run_approvals_task_attempt_status
+        ON run_approvals(task_id, attempt_id, status, created_at DESC);
+
+      CREATE INDEX idx_run_approvals_agent_status
+        ON run_approvals(agent_id, status, created_at DESC);
+
+      CREATE INDEX idx_run_approvals_expiry
+        ON run_approvals(status, expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

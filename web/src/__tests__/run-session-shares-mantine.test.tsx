@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { RunSessionEvent, RunSessionShare } from '@veritas-kanban/shared';
+import type { RunApprovalRequest, RunSessionEvent, RunSessionShare } from '@veritas-kanban/shared';
 
 import {
   RunSessionShareView,
@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   forkMutateAsync: vi.fn(),
   useAgentStatus: vi.fn(),
   useAgentStream: vi.fn(),
+  usePendingAgentApprovals: vi.fn(),
   toast: vi.fn(),
   identity: {
     authContext: { clientMode: 'desktop' },
@@ -62,6 +63,7 @@ vi.mock('@/hooks/useRunSessions', () => ({
 vi.mock('@/hooks/useAgent', () => ({
   useAgentStatus: mocks.useAgentStatus,
   useAgentStream: mocks.useAgentStream,
+  usePendingAgentApprovals: mocks.usePendingAgentApprovals,
 }));
 
 vi.mock('@/hooks/useToast', () => ({
@@ -85,7 +87,7 @@ const baseShare: RunSessionShare = {
   createdBy: { id: 'user-1', label: 'Brad', workspaceId: 'local' },
   actorLabel: 'Reviewer',
   stablePath: '/runs/shared/run_share_721',
-  mobileSafeApprovalClasses: ['human-review'],
+  mobileSafeApprovalClasses: ['elicitation'],
   snapshot: {
     running: true,
     taskTitle: 'Shared live sessions',
@@ -96,6 +98,31 @@ const baseShare: RunSessionShare = {
     startedAt: '2026-06-18T10:00:00.000Z',
   },
   forkedTaskIds: [],
+};
+
+const pendingApproval: RunApprovalRequest = {
+  schemaVersion: 'run-approval/v1',
+  id: 'runapproval_mobile_safe1',
+  workspaceId: 'local',
+  taskId: baseShare.taskId,
+  attemptId: baseShare.sourceId,
+  provider: 'codex-app-server',
+  agentId: 'codex-app-server',
+  requestKind: 'elicitation',
+  actionClass: 'elicitation',
+  action: 'Choose the verification gate',
+  actionHash: 'a'.repeat(64),
+  details: 'Select the next bounded verification command.',
+  resourceScope: [],
+  riskClass: 'low',
+  evidenceRevision: 'provider-runtime-probe/v6',
+  providerRequestId: 'provider-mobile-safe-1',
+  mobileSafe: true,
+  status: 'pending',
+  revision: 1,
+  createdAt: '2026-06-18T10:01:30.000Z',
+  updatedAt: '2026-06-18T10:01:30.000Z',
+  expiresAt: '2026-06-18T10:06:30.000Z',
 };
 
 const event: RunSessionEvent = {
@@ -115,6 +142,10 @@ describe('run session share Mantine surfaces', () => {
     mocks.useRunSessions.mockReturnValue({ data: [baseShare], isLoading: false });
     mocks.useRunSession.mockReturnValue({ data: baseShare, isLoading: false, error: null });
     mocks.useRunSessionEvents.mockReturnValue({ data: [event], isLoading: false });
+    mocks.usePendingAgentApprovals.mockReturnValue({
+      data: [pendingApproval],
+      isLoading: false,
+    });
     mocks.useAgentStatus.mockReturnValue({
       data: {
         running: true,
@@ -159,7 +190,7 @@ describe('run session share Mantine surfaces', () => {
     mocks.approvalMutateAsync.mockResolvedValue({
       ...event,
       type: 'approval.responded',
-      actionClass: 'human-review',
+      actionClass: 'elicitation',
       approvalResponse: 'approved',
     });
     mocks.forkMutateAsync.mockResolvedValue({
@@ -184,7 +215,7 @@ describe('run session share Mantine surfaces', () => {
     expect(mocks.createShareMutateAsync).toHaveBeenCalledWith({
       taskId: 'task-721',
       permission: 'view',
-      mobileSafeApprovalClasses: ['human-review', 'task-comment', 'low-risk'],
+      mobileSafeApprovalClasses: ['elicitation'],
     });
 
     await user.click(screen.getByRole('button', { name: 'Co-drive' }));
@@ -230,18 +261,21 @@ describe('run session share Mantine surfaces', () => {
 
     expect(
       screen.getByText(
-        'Mobile clients can respond only to classes marked mobile-safe for this share.'
+        'Mobile decisions require both a mobile-safe provider request and an allowlisted action class for this share.'
       )
     ).toBeTruthy();
-    await user.type(screen.getByLabelText('Note'), 'Looks safe from mobile');
+    await user.type(screen.getByLabelText('Reviewer note'), 'Looks safe from mobile');
     await user.click(screen.getByRole('button', { name: 'Approve' }));
 
     await waitFor(() =>
       expect(mocks.approvalMutateAsync).toHaveBeenCalledWith({
         shareId: 'run_share_721',
         input: {
-          actionClass: 'human-review',
+          approvalId: pendingApproval.id,
+          actionClass: 'elicitation',
           response: 'approved',
+          expectedRevision: pendingApproval.revision,
+          expectedActionHash: pendingApproval.actionHash,
           note: 'Looks safe from mobile',
         },
       })

@@ -54,3 +54,4 @@ export * from './run-event.types.js';
 export * from './auth.types.js';
 export * from './credential-broker.types.js';
 export * from './worktree-manifest.types.js';
+export * from './run-approval.types.js';

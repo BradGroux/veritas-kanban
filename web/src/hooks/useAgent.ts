@@ -9,6 +9,8 @@ import type {
   AgentHostPreviewRequest,
   AgentType,
   ProviderRuntimeCapabilityId,
+  RunApprovalDecisionInput,
+  RunApprovalRequest,
   TaskCommitPolicy,
 } from '@veritas-kanban/shared';
 
@@ -23,17 +25,9 @@ export interface StartAgentInput {
   commitPolicy?: TaskCommitPolicy;
 }
 
-export interface AgentApprovalRequest {
-  id: string;
-  agentId: string;
-  action: string;
-  taskId?: string;
-  details?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  reviewedBy?: string;
+export type AgentApprovalRequest = RunApprovalRequest & {
   reviewedAt?: string;
-  createdAt: string;
-}
+};
 
 export const AGENT_STATUS_ACTIVE_REFETCH_MS = 2_000;
 export const AGENT_STATUS_IDLE_REFETCH_MS = 10_000;
@@ -136,18 +130,50 @@ export function useAgentLog(taskId: string | undefined, attemptId: string | unde
   });
 }
 
-export function usePendingAgentApprovals(agentId?: string) {
+export function usePendingAgentApprovals(agentId?: string, taskId?: string, attemptId?: string) {
   return useQuery({
-    queryKey: ['agent', 'permissions', 'approvals', agentId],
+    queryKey: ['agent', 'permissions', 'approvals', agentId, taskId, attemptId],
     queryFn: () => {
       const params = new URLSearchParams();
       if (agentId) params.set('agentId', agentId);
+      if (taskId) params.set('taskId', taskId);
+      if (attemptId) params.set('attemptId', attemptId);
       const query = params.toString();
-      return apiFetch<AgentApprovalRequest[]>(
-        `${API_BASE}/agents/permissions/approvals${query ? `?${query}` : ''}`
+      return apiFetch<RunApprovalRequest[]>(
+        `${API_BASE}/run-approvals?status=pending${query ? `&${query}` : ''}`
+      ).then((requests) =>
+        requests.map((request) => ({
+          ...request,
+          reviewedAt: request.resolution?.decidedAt,
+        }))
       );
     },
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useDecideRunApproval() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      approvalId,
+      decision,
+    }: {
+      approvalId: string;
+      decision: RunApprovalDecisionInput;
+    }) =>
+      apiFetch<RunApprovalRequest>(
+        `${API_BASE}/run-approvals/${encodeURIComponent(approvalId)}/decision`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(decision),
+        }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', 'permissions', 'approvals'] });
+    },
   });
 }
 

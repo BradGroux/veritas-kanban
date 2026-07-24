@@ -24,7 +24,12 @@ import {
   Share2,
   Users,
 } from 'lucide-react';
-import type { RunSessionPermission, RunSessionShare, Task } from '@veritas-kanban/shared';
+import type {
+  RunApprovalRequest,
+  RunSessionPermission,
+  RunSessionShare,
+  Task,
+} from '@veritas-kanban/shared';
 import {
   useCreateRunSessionShare,
   useForkRunSession,
@@ -37,7 +42,7 @@ import {
   useSendRunSessionMessage,
   useUpdateRunSessionShare,
 } from '@/hooks/useRunSessions';
-import { useAgentStatus, useAgentStream } from '@/hooks/useAgent';
+import { useAgentStatus, useAgentStream, usePendingAgentApprovals } from '@/hooks/useAgent';
 import { useToast } from '@/hooks/useToast';
 import { sanitizeText } from '@/lib/sanitize';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -88,7 +93,7 @@ export function RunSessionSharesSection({ task, isAgentRunning }: RunSessionShar
       const share = await createShare.mutateAsync({
         taskId: task.id,
         permission,
-        mobileSafeApprovalClasses: ['human-review', 'task-comment', 'low-risk'],
+        mobileSafeApprovalClasses: ['elicitation'],
       });
       toast({
         title: 'Shared run session created',
@@ -208,6 +213,11 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
   const { data: share, isLoading, error } = useRunSession(shareId);
   const { data: agentStatus, error: agentStatusError } = useAgentStatus(share?.taskId);
   const { data: events = [] } = useRunSessionEvents(shareId);
+  const { data: pendingApprovals = [] } = usePendingAgentApprovals(
+    undefined,
+    share?.taskId,
+    share?.sourceId
+  );
   const pinnedAttemptActive = Boolean(
     share && !agentStatusError && agentStatus?.running && agentStatus.attemptId === share.sourceId
   );
@@ -217,7 +227,6 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
   const forkSession = useForkRunSession();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
-  const [approvalClass, setApprovalClass] = useState('human-review');
   const [approvalNote, setApprovalNote] = useState('');
   const [forkTitle, setForkTitle] = useState('');
   useRunSessionEventStream(share?.taskId);
@@ -288,14 +297,23 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
     approvalControl?.reason ??
     'Validated provider approval evidence is not available for this run.';
 
-  const handleApproval = async (response: 'approved' | 'rejected') => {
-    if (!approvalControlAvailable) return;
+  const handleApproval = async (
+    approval: RunApprovalRequest,
+    response: 'approved' | 'rejected'
+  ) => {
+    const mobileSafe =
+      !mobileClient ||
+      (approval.mobileSafe && share.mobileSafeApprovalClasses.includes(approval.actionClass));
+    if (!approvalControlAvailable || !mobileSafe) return;
     try {
       await respondToApproval.mutateAsync({
         shareId: share.id,
         input: {
-          actionClass: approvalClass,
+          approvalId: approval.id,
+          actionClass: approval.actionClass,
           response,
+          expectedRevision: approval.revision,
+          expectedActionHash: approval.actionHash,
           note: approvalNote.trim() || undefined,
         },
       });
@@ -456,55 +474,105 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
             <Group gap="xs">
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
               <Text size="sm" fw={600}>
-                Approval Response
+                Pending Approvals
               </Text>
             </Group>
-            <Select
-              label="Action class"
-              size="xs"
-              value={approvalClass}
-              onChange={(value) => setApprovalClass(value || 'human-review')}
-              data={share.mobileSafeApprovalClasses.map((item) => ({ value: item, label: item }))}
-              checkIconPosition="right"
-              disabled={!approvalControlAvailable}
-            />
             {mobileClient && (
               <Text size="xs" c="dimmed">
-                Mobile clients can respond only to classes marked mobile-safe for this share.
+                Mobile decisions require both a mobile-safe provider request and an allowlisted
+                action class for this share.
               </Text>
             )}
-            <TextInput
-              label="Note"
-              size="xs"
-              value={approvalNote}
-              onChange={(event) => setApprovalNote(event.currentTarget.value)}
-              disabled={!approvalControlAvailable}
-            />
             {!approvalControlAvailable && (
               <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
                 Approval unavailable: {approvalControlReason}
               </Alert>
             )}
-            <Group gap="xs">
-              <Button
-                size="xs"
-                disabled={!approvalControlAvailable}
-                title={approvalControlAvailable ? 'Approve' : approvalControlReason}
-                onClick={() => handleApproval('approved')}
-              >
-                Approve
-              </Button>
-              <Button
-                size="xs"
-                color="red"
-                variant="light"
-                disabled={!approvalControlAvailable}
-                title={approvalControlAvailable ? 'Reject' : approvalControlReason}
-                onClick={() => handleApproval('rejected')}
-              >
-                Reject
-              </Button>
-            </Group>
+            {pendingApprovals.length === 0 ? (
+              <Text size="xs" c="dimmed">
+                No pending approval is bound to this run.
+              </Text>
+            ) : (
+              <>
+                <TextInput
+                  label="Reviewer note"
+                  size="xs"
+                  value={approvalNote}
+                  onChange={(event) => setApprovalNote(event.currentTarget.value)}
+                  disabled={!approvalControlAvailable}
+                />
+                {pendingApprovals.map((approval) => {
+                  const mobileDecisionSafe =
+                    !mobileClient ||
+                    (approval.mobileSafe &&
+                      share.mobileSafeApprovalClasses.includes(approval.actionClass));
+                  const unavailableReason = !approvalControlAvailable
+                    ? approvalControlReason
+                    : !mobileDecisionSafe
+                      ? 'This exact provider request is not mobile-safe for this share.'
+                      : undefined;
+                  return (
+                    <Paper key={approval.id} p="xs" radius="sm" withBorder>
+                      <Stack gap={6}>
+                        <Group justify="space-between" align="flex-start">
+                          <div>
+                            <Text size="sm" fw={600}>
+                              {approval.action}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {approval.provider} · {approval.actionClass} · {approval.riskClass}{' '}
+                              risk
+                            </Text>
+                          </div>
+                          <Badge color={approval.riskClass === 'critical' ? 'red' : 'orange'}>
+                            {approval.requestKind}
+                          </Badge>
+                        </Group>
+                        {approval.details && <Text size="xs">{approval.details}</Text>}
+                        {approval.workingDirectory && (
+                          <Text size="xs">
+                            Working directory: <Code>{approval.workingDirectory}</Code>
+                          </Text>
+                        )}
+                        {approval.resourceScope.map((resource) => (
+                          <Code key={resource} block>
+                            {resource}
+                          </Code>
+                        ))}
+                        <Code>{approval.actionHash}</Code>
+                        {!mobileDecisionSafe && (
+                          <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+                            This exact request cannot be decided from a mobile client.
+                          </Alert>
+                        )}
+                        <Group gap="xs">
+                          <Button
+                            size="xs"
+                            loading={respondToApproval.isPending}
+                            disabled={Boolean(unavailableReason)}
+                            title={unavailableReason || 'Approve this exact request'}
+                            onClick={() => handleApproval(approval, 'approved')}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="xs"
+                            color="red"
+                            variant="light"
+                            loading={respondToApproval.isPending}
+                            disabled={Boolean(unavailableReason)}
+                            title={unavailableReason || 'Reject this exact request'}
+                            onClick={() => handleApproval(approval, 'rejected')}
+                          >
+                            Reject
+                          </Button>
+                        </Group>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </>
+            )}
           </Stack>
         </Paper>
       )}

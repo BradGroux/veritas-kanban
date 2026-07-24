@@ -118,6 +118,7 @@ import type { ThreadEvent } from '@openai/codex-sdk';
 import type {
   AgentConfig,
   RunLaunchRuntime,
+  RunApprovalRequest,
   SandboxPolicyDryRunResult,
   Task,
 } from '@veritas-kanban/shared';
@@ -127,6 +128,10 @@ import {
   type CompletionEvidenceSource,
 } from '../services/task-envelope-service.js';
 import { ProviderCompletionService } from '../services/provider-completion-service.js';
+import type {
+  CreateRunApprovalRequestInput,
+  RunApprovalBrokerService,
+} from '../services/run-approval-broker-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -167,7 +172,8 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
 
 function testableService(
   tmpDir: string,
-  credentialLeases?: CredentialLeaseLifecycle
+  credentialLeases?: CredentialLeaseLifecycle,
+  approvalBroker?: RunApprovalBrokerService
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -177,7 +183,10 @@ function testableService(
     taskEnvelopes,
     undefined,
     new ProviderCompletionService(completionEvidence),
-    credentialLeases
+    credentialLeases,
+    undefined,
+    undefined,
+    approvalBroker
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -255,7 +264,10 @@ function createControllableChild() {
   return child;
 }
 
-function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>) {
+function createFakeCodexAppServerChild(
+  received: Array<Record<string, unknown>>,
+  options: { requestApproval?: boolean } = {}
+) {
   const child = new EventEmitter() as EventEmitter & {
     stdin: PassThrough;
     stdout: PassThrough;
@@ -280,6 +292,43 @@ function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>)
     queueMicrotask(() => child.emit('close', null, signal));
     return true;
   });
+  const writeCompletion = () => {
+    const tokenUsage = {
+      cachedInputTokens: 0,
+      inputTokens: 11,
+      outputTokens: 4,
+      reasoningOutputTokens: 0,
+      totalTokens: 15,
+    };
+    child.stdout.write(
+      [
+        JSON.stringify({
+          method: 'item/agentMessage/delta',
+          params: {
+            threadId: 'thread-app-server-fixture',
+            turnId: 'turn-app-server-fixture',
+            itemId: 'message-app-server-fixture',
+            delta: 'app-server completed',
+          },
+        }),
+        JSON.stringify({
+          method: 'thread/tokenUsage/updated',
+          params: {
+            threadId: 'thread-app-server-fixture',
+            turnId: 'turn-app-server-fixture',
+            tokenUsage: { last: tokenUsage, total: tokenUsage },
+          },
+        }),
+        JSON.stringify({
+          method: 'turn/completed',
+          params: {
+            threadId: 'thread-app-server-fixture',
+            turn: { id: 'turn-app-server-fixture', items: [], status: 'completed' },
+          },
+        }),
+      ].join('\n') + '\n'
+    );
+  };
 
   let inputBuffer = '';
   child.stdin.setEncoding('utf8');
@@ -292,7 +341,9 @@ function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>)
       const request = JSON.parse(line) as Record<string, unknown>;
       received.push(request);
       const id = request.id;
-      if (request.method === 'initialize') {
+      if (id === 'approval-app-server-fixture' && request.method === undefined) {
+        writeCompletion();
+      } else if (request.method === 'initialize') {
         child.stdout.write(
           `${JSON.stringify({
             id,
@@ -309,7 +360,7 @@ function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>)
           `${JSON.stringify({
             id,
             result: {
-              approvalPolicy: 'never',
+              approvalPolicy: 'on-request',
               approvalsReviewer: 'user',
               cwd: tmpPath(request, 'params', 'cwd'),
               model: 'gpt-5.6',
@@ -333,47 +384,33 @@ function createFakeCodexAppServerChild(received: Array<Record<string, unknown>>)
           })}\n`
         );
       } else if (request.method === 'turn/start') {
-        const tokenUsage = {
-          cachedInputTokens: 0,
-          inputTokens: 11,
-          outputTokens: 4,
-          reasoningOutputTokens: 0,
-          totalTokens: 15,
-        };
         child.stdout.write(
-          [
-            JSON.stringify({
-              id,
-              result: {
-                turn: { id: 'turn-app-server-fixture', items: [], status: 'inProgress' },
-              },
-            }),
-            JSON.stringify({
-              method: 'item/agentMessage/delta',
-              params: {
-                threadId: 'thread-app-server-fixture',
-                turnId: 'turn-app-server-fixture',
-                itemId: 'message-app-server-fixture',
-                delta: 'app-server completed',
-              },
-            }),
-            JSON.stringify({
-              method: 'thread/tokenUsage/updated',
-              params: {
-                threadId: 'thread-app-server-fixture',
-                turnId: 'turn-app-server-fixture',
-                tokenUsage: { last: tokenUsage, total: tokenUsage },
-              },
-            }),
-            JSON.stringify({
-              method: 'turn/completed',
-              params: {
-                threadId: 'thread-app-server-fixture',
-                turn: { id: 'turn-app-server-fixture', items: [], status: 'completed' },
-              },
-            }),
-          ].join('\n') + '\n'
+          `${JSON.stringify({
+            id,
+            result: {
+              turn: { id: 'turn-app-server-fixture', items: [], status: 'inProgress' },
+            },
+          })}\n`
         );
+        if (options.requestApproval) {
+          child.stdout.write(
+            `${JSON.stringify({
+              id: 'approval-app-server-fixture',
+              method: 'item/commandExecution/requestApproval',
+              params: {
+                threadId: 'thread-app-server-fixture',
+                turnId: 'turn-app-server-fixture',
+                itemId: 'command-app-server-fixture',
+                startedAtMs: 1,
+                command: 'pnpm test',
+                cwd: '/tmp/worktree',
+                reason: 'Run the verification gate.',
+              },
+            })}\n`
+          );
+        } else {
+          writeCompletion();
+        }
       }
     }
   });
@@ -792,7 +829,7 @@ describe('ClawdbotAgentService Codex providers', () => {
           cwd: tmpDir,
           model: 'gpt-5.6',
           sandbox: 'workspace-write',
-          approvalPolicy: 'never',
+          approvalPolicy: 'on-request',
         },
       });
       expect(task.attempt).toMatchObject({
@@ -813,6 +850,138 @@ describe('ClawdbotAgentService Codex providers', () => {
         task.id,
         expect.objectContaining({ status: 'done' })
       );
+    }
+  );
+
+  it(
+    'pauses a Codex app-server action until the correlated broker decision resumes it',
+    { timeout: 20_000 },
+    async () => {
+      const received: Array<Record<string, unknown>> = [];
+      const child = createFakeCodexAppServerChild(received, { requestApproval: true });
+      mockSpawn.mockReturnValue(child);
+      mockGetConfig.mockResolvedValue({
+        agents: [
+          {
+            type: 'codex-app-server',
+            name: 'OpenAI Codex app-server',
+            command: 'codex',
+            args: [],
+            enabled: true,
+            provider: 'codex-app-server',
+            model: 'gpt-5.6',
+          },
+        ],
+      });
+      mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+        type: agent.type,
+        name: agent.name,
+        enabled: agent.enabled,
+        configured: true,
+        command: agent.command,
+        executableFound: true,
+        executablePath: '/opt/homebrew/bin/codex',
+        providerVersion: 'codex-cli 0.145.0',
+        providerVersionSource: 'codex --version',
+        authenticated: true,
+        healthy: true,
+        checkedAt: '2026-07-23T00:00:00.000Z',
+      }));
+
+      let resolveDecision: ((value: { request: RunApprovalRequest }) => void) | undefined;
+      const decision = new Promise<{ request: RunApprovalRequest }>((resolve) => {
+        resolveDecision = resolve;
+      });
+      let pendingApproval: RunApprovalRequest | undefined;
+      const requestApproval = vi.fn(async (input: CreateRunApprovalRequestInput) => {
+        pendingApproval = {
+          schemaVersion: 'run-approval/v1',
+          id: 'runapproval_app_server1',
+          workspaceId: input.workspaceId,
+          taskId: input.taskId,
+          attemptId: input.attemptId,
+          provider: input.provider,
+          agentId: input.agentId,
+          requestKind: input.requestKind,
+          actionClass: input.actionClass,
+          action: input.action,
+          actionHash: 'a'.repeat(64),
+          details: input.details,
+          resourceScope: input.resourceScope,
+          workingDirectory: input.workingDirectory,
+          riskClass: input.riskClass,
+          policyReason: input.policyReason,
+          evidenceRevision: input.evidenceRevision,
+          providerRequestId: input.providerRequestId,
+          threadId: input.threadId,
+          turnId: input.turnId,
+          itemId: input.itemId,
+          mobileSafe: input.mobileSafe ?? false,
+          status: 'pending',
+          revision: 1,
+          createdAt: '2026-07-24T07:00:00.000Z',
+          updatedAt: '2026-07-24T07:00:00.000Z',
+          expiresAt: '2026-07-24T07:05:00.000Z',
+        };
+        return pendingApproval;
+      });
+      const approvalBroker = {
+        request: requestApproval,
+        awaitDecision: vi.fn(() => decision),
+        cancelAttempt: vi.fn(async () => []),
+      } as unknown as RunApprovalBrokerService;
+      const service = testableService(tmpDir, undefined, approvalBroker);
+
+      await service.startAgent(task.id, 'codex-app-server');
+      await waitFor(() => expect(requestApproval).toHaveBeenCalledOnce());
+      expect(requestApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: task.id,
+          provider: 'codex-app-server',
+          providerRequestId: 'string:approval-app-server-fixture',
+          actionClass: 'shell',
+          action: 'Execute command: pnpm test',
+          workingDirectory: '/tmp/worktree',
+        })
+      );
+      expect(
+        received.find(
+          (record) => record.id === 'approval-app-server-fixture' && record.method === undefined
+        )
+      ).toBeUndefined();
+
+      resolveDecision?.({
+        request: {
+          ...(pendingApproval as RunApprovalRequest),
+          status: 'approved',
+          revision: 2,
+          resolution: {
+            decision: 'approved',
+            actor: {
+              id: 'reviewer-1',
+              type: 'user',
+              authMethod: 'session',
+              authenticatedAt: '2026-07-24T07:00:30.000Z',
+              workspaceId: 'local',
+            },
+            decidedAt: '2026-07-24T07:00:30.000Z',
+          },
+        },
+      });
+
+      await waitFor(async () => expect(await service.getAgentStatus(task.id)).toBeNull());
+      expect(
+        received.find(
+          (record) => record.id === 'approval-app-server-fixture' && record.method === undefined
+        )
+      ).toEqual({
+        id: 'approval-app-server-fixture',
+        result: { decision: 'accept' },
+      });
+      expect(task.attempt).toMatchObject({
+        provider: 'codex-app-server',
+        status: 'complete',
+      });
     }
   );
 

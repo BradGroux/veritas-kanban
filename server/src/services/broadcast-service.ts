@@ -2,6 +2,7 @@ import type { WebSocketServer } from 'ws';
 import type {
   AnyTelemetryEvent,
   RunSessionEvent,
+  RunApprovalRequest,
   SquadMention,
   SquadMessage,
   SquadUnreadState,
@@ -114,12 +115,7 @@ function broadcastToClients(payload: string, options: WebSocketDeliveryOptions =
 }
 
 export type TaskChangeType =
-  | 'created'
-  | 'updated'
-  | 'deleted'
-  | 'archived'
-  | 'restored'
-  | 'reordered';
+  'created' | 'updated' | 'deleted' | 'archived' | 'restored' | 'reordered';
 
 export interface TaskChangeEvent {
   type: 'task:changed';
@@ -317,6 +313,32 @@ export function broadcastRunSessionEvent(
   const message: RunSessionBroadcastEvent = {
     type: 'run-session:event',
     event,
+    timestamp: new Date().toISOString(),
+    sequence: nextWebSocketEventSequence(),
+    workspaceId,
+  };
+
+  broadcastToClients(JSON.stringify(message), {
+    permissions: ['task:read'],
+    workspaceId,
+    channel: 'run-sessions',
+  });
+}
+
+export interface RunApprovalBroadcastEvent {
+  type: 'run-approval:changed';
+  approval: RunApprovalRequest;
+  timestamp: string;
+  sequence: number;
+  workspaceId: string;
+}
+
+export function broadcastRunApprovalChange(approval: RunApprovalRequest): void {
+  if (!wssRef) return;
+  const workspaceId = normalizeWorkspaceId(approval.workspaceId);
+  const message: RunApprovalBroadcastEvent = {
+    type: 'run-approval:changed',
+    approval,
     timestamp: new Date().toISOString(),
     sequence: nextWebSocketEventSequence(),
     workspaceId,

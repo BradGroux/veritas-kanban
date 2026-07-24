@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateRunSessionShareInput,
   ForkRunSessionInput,
+  RunApprovalRequest,
   RunSessionApprovalResponseInput,
   RunSessionEvent,
   RunSessionShareListFilters,
@@ -91,7 +92,10 @@ export function useRunSessionApprovalResponse() {
   return useMutation({
     mutationFn: ({ shareId, input }: { shareId: string; input: RunSessionApprovalResponseInput }) =>
       api.runSessions.respondToApproval(shareId, input),
-    onSuccess: (event) => invalidateRunSessionQueries(queryClient, event.taskId, event.shareId),
+    onSuccess: (event) => {
+      invalidateRunSessionQueries(queryClient, event.taskId, event.shareId);
+      queryClient.invalidateQueries({ queryKey: ['agent', 'permissions', 'approvals'] });
+    },
   });
 }
 
@@ -114,14 +118,27 @@ function isRunSessionEvent(message: WebSocketMessage): message is WebSocketMessa
   return message.type === 'run-session:event' && typeof message.event === 'object';
 }
 
+function isRunApprovalChange(message: WebSocketMessage): message is WebSocketMessage & {
+  type: 'run-approval:changed';
+  approval: RunApprovalRequest;
+} {
+  return message.type === 'run-approval:changed' && typeof message.approval === 'object';
+}
+
 export function useRunSessionEventStream(taskId?: string) {
   const queryClient = useQueryClient();
   const onMessage = useCallback(
     (message: WebSocketMessage) => {
-      if (!isRunSessionEvent(message)) return;
-      const event = message.event;
-      if (taskId && event.taskId !== taskId) return;
-      invalidateRunSessionQueries(queryClient, event.taskId, event.shareId);
+      if (isRunApprovalChange(message)) {
+        if (taskId && message.approval.taskId !== taskId) return;
+        queryClient.invalidateQueries({ queryKey: ['agent', 'permissions', 'approvals'] });
+        return;
+      }
+      if (isRunSessionEvent(message)) {
+        const event = message.event;
+        if (taskId && event.taskId !== taskId) return;
+        invalidateRunSessionQueries(queryClient, event.taskId, event.shareId);
+      }
     },
     [queryClient, taskId]
   );

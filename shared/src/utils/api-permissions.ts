@@ -362,6 +362,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
   },
   { prefix: '/api/decisions', read: 'task:read', write: 'task:write' },
   { prefix: '/api/run-sessions', read: 'task:read', write: 'task:write' },
+  {
+    prefix: '/api/run-approvals',
+    read: 'task:read',
+    write: 'admin:manage',
+  },
   { prefix: '/api/governance/traces', read: 'policy:read' },
   { prefix: '/api/feedback', read: 'report:read', write: 'comment:write' },
   {

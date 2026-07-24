@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a provider-native `run-approval/v1` broker with file and SQLite
+  persistence, exact action hashes, atomic compare-and-set decisions,
+  auth-derived reviewer identity, critical-action authentication freshness,
+  expiry/cancellation, mobile two-layer safety, causal audit correlation, REST
+  and WebSocket delivery, task and shared-run review surfaces, and
+  non-persisted elicitation response values. Codex app-server now pauses and resumes its exact
+  command, file, permission, tool-question, legacy exec/patch, and MCP
+  elicitation request through pinned v0.145.0 response schemas; stale, changed,
+  duplicate, interrupted, unsupported, and failed requests deny safely (#852).
 - Added a first-class Codex app-server v2 task adapter pinned to
   `codex-cli 0.145.0` and upstream commit
   `25af12f7e61572b0bc18ddb1008be543b91519b0`. Veritas now owns a strict-stdio,

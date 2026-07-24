@@ -29,36 +29,37 @@
 16. [Health](#health)
 17. [WebSocket](#websocket)
 18. [Shared Run Sessions](#shared-run-sessions)
-19. [Task Verification](#task-verification)
-20. [Task Comments](#task-comments)
-21. [Task Subtasks](#task-subtasks)
-22. [Task Deliverables](#task-deliverables)
-23. [Recurring Work Scheduler](#recurring-work-scheduler)
-24. [Queue Intake Monitors](#queue-intake-monitors)
-25. [Task Archive](#task-archive)
-26. [Attachments](#attachments)
-27. [Agent Permissions](#agent-permissions)
-28. [Agent Routing](#agent-routing)
-29. [Sandbox Policies](#sandbox-policies)
-30. [Shared Resources](#shared-resources)
-31. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-32. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-33. [Doc Freshness](#doc-freshness)
-34. [Cost Prediction](#cost-prediction)
-35. [Error Learning](#error-learning)
-36. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
-37. [External Tracker Introspection](#external-tracker-introspection)
-38. [Tool Policies](#tool-policies)
-39. [Watcher Continuation Policies](#watcher-continuation-policies)
-40. [Traces](#traces)
-41. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-42. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-43. [Audit](#audit)
-44. [Maintenance Center](#maintenance-center-apiv1maintenance)
-45. [Common Workflows](#common-workflows)
-46. [Versioning & Deprecation](#versioning--deprecation)
-47. [Rate Limits](#rate-limits)
-48. [Additional Endpoint Groups](#additional-endpoint-groups)
+19. [Run Approvals](#run-approvals)
+20. [Task Verification](#task-verification)
+21. [Task Comments](#task-comments)
+22. [Task Subtasks](#task-subtasks)
+23. [Task Deliverables](#task-deliverables)
+24. [Recurring Work Scheduler](#recurring-work-scheduler)
+25. [Queue Intake Monitors](#queue-intake-monitors)
+26. [Task Archive](#task-archive)
+27. [Attachments](#attachments)
+28. [Agent Permissions](#agent-permissions)
+29. [Agent Routing](#agent-routing)
+30. [Sandbox Policies](#sandbox-policies)
+31. [Shared Resources](#shared-resources)
+32. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+33. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+34. [Doc Freshness](#doc-freshness)
+35. [Cost Prediction](#cost-prediction)
+36. [Error Learning](#error-learning)
+37. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
+38. [External Tracker Introspection](#external-tracker-introspection)
+39. [Tool Policies](#tool-policies)
+40. [Watcher Continuation Policies](#watcher-continuation-policies)
+41. [Traces](#traces)
+42. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+43. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+44. [Audit](#audit)
+45. [Maintenance Center](#maintenance-center-apiv1maintenance)
+46. [Common Workflows](#common-workflows)
+47. [Versioning & Deprecation](#versioning--deprecation)
+48. [Rate Limits](#rate-limits)
+49. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -1403,7 +1404,7 @@ Mounted at `/api/run-sessions`.
 | `PATCH` | `/api/run-sessions/:id`           | Update permission, expiry, label, or mobile-safe classes. | `task:write` |
 | `POST`  | `/api/run-sessions/:id/revoke`    | Revoke a share.                                           | `task:write` |
 | `POST`  | `/api/run-sessions/:id/messages`  | Send an attributed co-drive message into the run.         | `task:write` |
-| `POST`  | `/api/run-sessions/:id/approvals` | Record an approval response.                              | `task:write` |
+| `POST`  | `/api/run-sessions/:id/approvals` | Resolve an exact pending provider request.                | `task:write` |
 | `POST`  | `/api/run-sessions/:id/fork`      | Create a linked fork task without mutating the parent.    | `task:write` |
 
 ### Create Share
@@ -1418,7 +1419,7 @@ POST /api/run-sessions
   "permission": "view",
   "expiresAt": "2026-06-19T10:00:00.000Z",
   "actorLabel": "Release reviewer",
-  "mobileSafeApprovalClasses": ["human-review", "task-comment", "low-risk"]
+  "mobileSafeApprovalClasses": ["elicitation"]
 }
 ```
 
@@ -1453,14 +1454,25 @@ POST /api/run-sessions/run_share_abc/approvals
 
 ```json
 {
-  "actionClass": "human-review",
+  "approvalId": "runapproval_cQBUv6oGPvQrBT9y8C14",
+  "actionClass": "elicitation",
   "response": "approved",
-  "note": "Diff and focused tests look safe from mobile."
+  "expectedRevision": 1,
+  "expectedActionHash": "c8a1f6f26c61b770694b5136f9a9ae9b08fd068cb8919ffebae4f2e88ec791f0",
+  "note": "Use the release branch.",
+  "responseData": {
+    "answers": {
+      "branch": { "answers": ["release/6.0.0"] }
+    }
+  }
 }
 ```
 
-Mobile/PWA clients can respond only to approval classes listed on the share.
-Unsafe approval classes fail closed with `403`.
+The response is delivered to the exact paused provider request only after the
+broker accepts the revision and action hash. Mobile/PWA clients require both an
+approval marked `mobileSafe` by the provider adapter and an action class listed
+on the share. Unsafe, stale, changed, expired, or already-resolved requests fail
+closed.
 
 ### Fork Session
 
@@ -1483,6 +1495,110 @@ local-only handles.
 
 Revoked and expired shares fail closed for reads, messages, approvals, and
 forks. Share lists are scoped to the current workspace.
+
+---
+
+## Run Approvals
+
+Durable provider-native approval and elicitation requests. Mounted at
+`/api/run-approvals`.
+
+| Method | Path                                      | Description                                                      | Permissions |
+| ------ | ----------------------------------------- | ---------------------------------------------------------------- | ----------- |
+| `GET`  | `/api/run-approvals`                      | List workspace requests; filter by status, task, attempt, agent. | `task:read` |
+| `GET`  | `/api/run-approvals/:approvalId`          | Read one workspace-scoped request.                               | `task:read` |
+| `POST` | `/api/run-approvals/:approvalId/decision` | Atomically approve or reject the exact pending request.          | `admin`     |
+
+Action classes are `tool`, `shell`, `filesystem`, `network`, `budget`,
+`workflow`, and `elicitation`. Status is `pending`, `approved`, `rejected`,
+`expired`, or `cancelled`.
+
+### List Pending Requests
+
+```http
+GET /api/run-approvals?status=pending&taskId=TASK-001&attemptId=attempt_001
+```
+
+```json
+[
+  {
+    "schemaVersion": "run-approval/v1",
+    "id": "runapproval_cQBUv6oGPvQrBT9y8C14",
+    "workspaceId": "local",
+    "taskId": "TASK-001",
+    "attemptId": "attempt_001",
+    "provider": "codex-app-server",
+    "agentId": "codex-app-server",
+    "requestKind": "approval",
+    "actionClass": "shell",
+    "action": "Execute command: pnpm test",
+    "actionHash": "c8a1f6f26c61b770694b5136f9a9ae9b08fd068cb8919ffebae4f2e88ec791f0",
+    "resourceScope": ["/workspace/veritas-kanban"],
+    "workingDirectory": "/workspace/veritas-kanban",
+    "riskClass": "high",
+    "evidenceRevision": "sha256:provider-runtime-manifest",
+    "providerRequestId": "string:approval-1",
+    "mobileSafe": false,
+    "status": "pending",
+    "revision": 1,
+    "createdAt": "2026-07-23T12:00:00.000Z",
+    "updatedAt": "2026-07-23T12:00:00.000Z",
+    "expiresAt": "2026-07-23T12:05:00.000Z"
+  }
+]
+```
+
+The exact provider arguments are hashed but are not persisted or sent to
+remote clients. Display text, bounded resource scope, working directory, risk,
+policy reason, runtime evidence revision, and expiry provide the review
+context. Secrets in displayed or persisted fields are redacted.
+Structured response values are delivered only to the waiting provider process;
+they are not persisted or broadcast. The durable resolution records only that
+a response payload was provided.
+
+### Decide a Request
+
+```http
+POST /api/run-approvals/runapproval_cQBUv6oGPvQrBT9y8C14/decision
+```
+
+```json
+{
+  "decision": "approved",
+  "expectedRevision": 1,
+  "expectedActionHash": "c8a1f6f26c61b770694b5136f9a9ae9b08fd068cb8919ffebae4f2e88ec791f0",
+  "note": "Focused command approved once."
+}
+```
+
+Reviewer identity and authentication time come from the verified request
+context; caller-supplied identity fields are rejected. Critical-risk decisions
+require authentication no older than five minutes. The transition is a single
+compare-and-set from `pending`. Duplicate, stale, out-of-order, changed-action,
+expired, and cancelled decisions return a conflict or authorization error and
+cannot resume the provider action.
+
+Each request and resolution is appended to `run-event/v1` with the same
+approval ID, action hash, and provider correlation ID. Attempt interruption or
+cancellation resolves every remaining pending request as `cancelled`.
+
+Subscribers to the `run-sessions` WebSocket channel receive
+`run-approval:changed` messages for requests in their workspace:
+
+```json
+{
+  "type": "run-approval:changed",
+  "approval": {
+    "id": "runapproval_cQBUv6oGPvQrBT9y8C14",
+    "taskId": "TASK-001",
+    "status": "approved",
+    "revision": 2
+  },
+  "workspaceId": "local",
+  "sequence": 43,
+  "timestamp": "2026-07-23T12:01:00.000Z"
+}
+```
 
 ---
 

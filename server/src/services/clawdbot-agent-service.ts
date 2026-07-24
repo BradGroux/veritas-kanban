@@ -164,12 +164,17 @@ import {
   CODEX_APP_SERVER_CERTIFIED_BUILD,
   CODEX_APP_SERVER_MAX_RECORD_BYTES,
   classifyCodexAppServerNotification,
+  classifyCodexAppServerServerRequest,
   CodexAppServerRpcClient,
   parseCodexAppServerLine,
   type CodexAppServerClassification,
   type CodexAppServerTerminalResult,
   type CodexAppServerUsage,
 } from './codex-app-server-adapter.js';
+import {
+  getRunApprovalBrokerService,
+  type RunApprovalBrokerService,
+} from './run-approval-broker-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -394,6 +399,7 @@ export class ClawdbotAgentService {
   private workspaceFiles: WorkspaceFileRepository;
   private worktrees: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>;
   private runEvents: RunEventJournalService;
+  private approvalBroker: RunApprovalBrokerService;
   private logsDir: string;
 
   constructor(
@@ -404,7 +410,8 @@ export class ClawdbotAgentService {
     providerCompletions = new ProviderCompletionService(),
     credentialLeases: CredentialLeaseLifecycle = NOOP_CREDENTIAL_LEASE_LIFECYCLE,
     worktrees?: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>,
-    runEvents: RunEventJournalService = getRunEventJournalService()
+    runEvents: RunEventJournalService = getRunEventJournalService(),
+    approvalBroker: RunApprovalBrokerService = getRunApprovalBrokerService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -422,6 +429,7 @@ export class ClawdbotAgentService {
         configService: this.configService,
       });
     this.runEvents = runEvents;
+    this.approvalBroker = approvalBroker;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -3026,6 +3034,9 @@ export class ClawdbotAgentService {
     let launchError: Error | undefined;
     let runtimeTimedOut = false;
     let gracefulCloseTimer: NodeJS.Timeout | undefined;
+    let gracefulCloseRequested = false;
+    const approvalBroker = this.approvalBroker;
+    const approvalTasks = new Set<Promise<void>>();
     const runtimeSeconds = runLaunchManifest.budget.enabled
       ? runLaunchManifest.budget.limits?.runtimeSeconds
       : undefined;
@@ -3046,6 +3057,14 @@ export class ClawdbotAgentService {
         } catch (error) {
           eventProcessingError =
             error instanceof Error ? error : new Error('Provider event ingestion failed closed.');
+          void approvalBroker
+            .cancelAttempt('local', task.id, attemptId, 'Codex app-server event ingestion failed.')
+            .catch((cancelError) => {
+              log.warn(
+                { err: cancelError, taskId: task.id, attemptId },
+                'Failed to cancel Codex app-server approvals after event ingestion failure'
+              );
+            });
           rpcClient.close(eventProcessingError);
           child.kill('SIGTERM');
         }
@@ -3084,7 +3103,7 @@ export class ClawdbotAgentService {
       },
     });
 
-    const requestGracefulClose = () => {
+    const closeConnection = () => {
       rpcClient.close(new Error('Codex app-server connection is closing.'));
       if (child.stdin.writable) child.stdin.end();
       if (gracefulCloseTimer || child.exitCode != null || child.signalCode != null) return;
@@ -3093,12 +3112,30 @@ export class ClawdbotAgentService {
       }, 5_000);
     };
 
+    const cancelAndDrainApprovals = async (reason: string) => {
+      await approvalBroker.cancelAttempt('local', task.id, attemptId, reason);
+      await Promise.allSettled([...approvalTasks]);
+    };
+
+    const requestGracefulClose = (reason = 'Codex app-server connection is closing.') => {
+      if (gracefulCloseRequested) return;
+      gracefulCloseRequested = true;
+      void cancelAndDrainApprovals(reason)
+        .catch((error) => {
+          log.warn(
+            { err: error, taskId: task.id, attemptId },
+            'Failed to drain Codex app-server approvals before close'
+          );
+        })
+        .finally(closeConnection);
+    };
+
     pending.codexAppServerControl = {
       interrupt: async () => {
         if (!threadId || !turnId || terminalResult) return;
         await rpcClient.interrupt(threadId, turnId);
       },
-      close: requestGracefulClose,
+      close: () => requestGracefulClose('Codex app-server attempt was stopped.'),
     };
 
     const processLine = async (line: string) => {
@@ -3106,14 +3143,66 @@ export class ClawdbotAgentService {
       const inbound = await rpcClient.acceptRecord(record);
       if (inbound.kind === 'response') return;
       if (inbound.kind === 'server-request') {
-        await this.handleCodexAppServerDeniedRequest(
-          inbound.method,
-          inbound.record,
-          task,
+        const brokerRequest = classifyCodexAppServerServerRequest(inbound.record);
+        if (!brokerRequest) {
+          rpcClient.respondToServerRequest(inbound.record);
+          await this.handleCodexAppServerDeniedRequest(
+            inbound.method,
+            inbound.record,
+            task,
+            attemptId,
+            agentConfig,
+            logPath
+          );
+          return;
+        }
+        const approval = await approvalBroker.request({
+          workspaceId: 'local',
+          taskId: task.id,
           attemptId,
-          agentConfig,
-          logPath
-        );
+          provider: 'codex-app-server',
+          agentId: agentConfig?.type || 'codex-app-server',
+          evidenceRevision: runLaunchManifest.providerRuntime.digest,
+          ...brokerRequest,
+        });
+        const approvalTask = (async () => {
+          const resolution = await approvalBroker.awaitDecision(approval.id);
+          if (resolution.request.status === 'pending') {
+            throw new Error('Run approval broker returned a pending decision.');
+          }
+          rpcClient.respondToServerRequest(inbound.record, {
+            status: resolution.request.status,
+            responseData: resolution.responseData,
+            note: resolution.request.resolution?.note,
+          });
+        })().catch((error) => {
+          log.error(
+            {
+              err: error,
+              taskId: task.id,
+              attemptId,
+              approvalId: approval.id,
+              providerRequestId: brokerRequest.providerRequestId,
+            },
+            'Codex app-server approval resolution failed closed'
+          );
+          try {
+            rpcClient.respondToServerRequest(inbound.record);
+          } catch (responseError) {
+            log.warn(
+              {
+                err: responseError,
+                taskId: task.id,
+                attemptId,
+                approvalId: approval.id,
+              },
+              'Failed to send the fail-closed Codex app-server approval response'
+            );
+          }
+          if (child.exitCode == null && child.signalCode == null) child.kill('SIGTERM');
+        });
+        approvalTasks.add(approvalTask);
+        void approvalTask.finally(() => approvalTasks.delete(approvalTask));
         return;
       }
       const classified = await this.handleCodexAppServerNotification(
@@ -3127,7 +3216,7 @@ export class ClawdbotAgentService {
       if (classified.usage) tokenUsage = classified.usage;
       if (classified.terminal) {
         terminalResult = classified.terminal;
-        requestGracefulClose();
+        requestGracefulClose('Codex app-server turn reached a terminal state.');
       }
     };
 
@@ -3184,6 +3273,14 @@ export class ClawdbotAgentService {
     child.on('error', (error) => {
       launchError = error;
       rpcClient.close(error);
+      void approvalBroker
+        .cancelAttempt('local', task.id, attemptId, 'Codex app-server process failed to launch.')
+        .catch((cancelError) => {
+          log.warn(
+            { err: cancelError, taskId: task.id, attemptId },
+            'Failed to cancel Codex app-server approvals after process error'
+          );
+        });
       enqueueEventProcessing(async () => {
         const message = this.redactTraceText(error.message);
         const event = await this.appendRunEvent(
@@ -3275,7 +3372,7 @@ export class ClawdbotAgentService {
             'Codex app-server runtime interrupt failed; closing the supervised process'
           );
         })
-        .finally(requestGracefulClose);
+        .finally(() => requestGracefulClose('Codex app-server runtime budget was exhausted.'));
     };
     const scheduleRuntimeTimer = () => {
       if (remainingRuntimeMs === undefined) return;
@@ -3304,6 +3401,7 @@ export class ClawdbotAgentService {
                 : new Error('Codex app-server final stream record failed.');
           }
         }
+        await cancelAndDrainApprovals('Codex app-server process exited.');
         rpcClient.close();
 
         const timeoutError = runtimeTimedOut

@@ -175,13 +175,28 @@ const driftAlerts = [
 
 const approvals = [
   {
-    id: 'approval-1',
+    schemaVersion: 'run-approval/v1' as const,
+    id: 'runapproval_attention_01',
+    workspaceId: 'local',
     agentId: 'amp',
-    action: 'push_branch',
+    attemptId: 'attempt-blocked',
+    provider: 'codex-app-server' as const,
+    requestKind: 'approval' as const,
+    actionClass: 'network' as const,
+    action: 'Push branch',
+    actionHash: 'b'.repeat(64),
     taskId: 'task-blocked',
     details: 'Needs approval to push branch',
+    resourceScope: ['github.com'],
+    riskClass: 'critical' as const,
+    evidenceRevision: 'provider-runtime-probe/v6',
+    providerRequestId: 'provider-approval-1',
+    mobileSafe: false,
     status: 'pending' as const,
+    revision: 1,
     createdAt: '2026-06-01T09:00:00Z',
+    updatedAt: '2026-06-01T09:00:00Z',
+    expiresAt: '2026-06-01T09:05:00Z',
   },
 ];
 

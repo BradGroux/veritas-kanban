@@ -12,6 +12,7 @@ import { SqliteTelemetryRepository } from './telemetry-repository.js';
 import { SqliteOperationalProvenanceRepository } from './provenance-repository.js';
 import { SqliteSetupContextRepository } from './setup-context-repository.js';
 import { SqliteRunEventRepository } from './run-event-repository.js';
+import { SqliteRunApprovalRepository } from './run-approval-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
 
 export interface SqliteStorageOptions {
@@ -31,6 +32,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly provenance: SqliteOperationalProvenanceRepository;
   readonly setupContext: SqliteSetupContextRepository;
   readonly runEvents: SqliteRunEventRepository;
+  readonly runApprovals: SqliteRunApprovalRepository;
 
   private readonly sqlite: SqliteDatabase;
 
@@ -51,6 +53,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.provenance = new SqliteOperationalProvenanceRepository(this.sqlite);
     this.setupContext = new SqliteSetupContextRepository(this.sqlite);
     this.runEvents = new SqliteRunEventRepository(this.sqlite);
+    this.runApprovals = new SqliteRunApprovalRepository(this.sqlite);
   }
 
   getDatabase(): SqliteDatabase {

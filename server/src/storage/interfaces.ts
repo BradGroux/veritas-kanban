@@ -32,6 +32,10 @@ import type {
   RunEventEnvelope,
   RunEventPage,
   RunEventQuery,
+  RunApprovalListQuery,
+  RunApprovalRequest,
+  RunApprovalTransitionInput,
+  RunApprovalTransitionResult,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -327,6 +331,27 @@ export interface RunEventRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Run Approval Repository
+// ---------------------------------------------------------------------------
+
+export interface RunApprovalRepository {
+  /** Persist a new pending approval. IDs are unique and never reused. */
+  create(request: RunApprovalRequest): Promise<RunApprovalRequest>;
+
+  /** Return one approval snapshot, or null when it does not exist. */
+  get(id: string): Promise<RunApprovalRequest | null>;
+
+  /** Query materialized approval snapshots. */
+  list(query: RunApprovalListQuery): Promise<RunApprovalRequest[]>;
+
+  /**
+   * Atomically transition one pending approval using revision and action-hash
+   * compare-and-set guards.
+   */
+  transition(input: RunApprovalTransitionInput): Promise<RunApprovalTransitionResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Storage Provider (top-level aggregate)
 // ---------------------------------------------------------------------------
 
@@ -340,6 +365,7 @@ export interface StorageProvider {
   readonly managedLists: ManagedListProvider;
   readonly telemetry: TelemetryRepository;
   readonly runEvents: RunEventRepository;
+  readonly runApprovals: RunApprovalRepository;
   readonly setupContext?: SetupContextRepository;
 
   /** One-time startup hook (create dirs, open connections, etc.). */

@@ -166,11 +166,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - `codex-app-server`: pinned to `codex-cli 0.145.0`; supervised JSON-RPC v2 over
   strict stdio for one task-bound thread and turn.
 - App-server launch arguments are system-owned. Inherited MCP servers, hooks,
-  plugins, apps, browser/computer tools, elicitation, and remote control are
-  disabled until their run-scoped brokers land.
+  plugins, apps, browser/computer tools, and remote control remain disabled.
 - App-server consumes only the checked-in v0.145.0 schemas and exposes
   `initialize`, `thread/start`, `turn/start`, and `turn/interrupt`.
   `thread/shellCommand` is never reachable.
+- App-server command, file, permission, tool-question, and elicitation requests
+  use `run-approval/v1`. Decisions must preserve the persisted revision and
+  exact action hash; interruption and cancellation invalidate pending requests.
 - Auth: `codex login status` / `OPENAI_API_KEY`
 
 ### Claude Code (v2.1.218)
@@ -183,8 +185,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - The terminal `result` record is authoritative. Veritas drains stdout after
   process close, persists `session_id`, and maps partial, hook, tool, subagent,
   usage, cost, and result records into `run-event/v1`.
-- Resume, fork, interactive approval, elicitation, and MCP injection remain
-  fail-closed until their provider-neutral brokers land.
+- Resume, fork, and MCP injection remain fail-closed. The shared approval broker
+  is available, but Claude stays on static `dontAsk` permissions until its
+  adapter exposes a pinned interactive request/response contract.
 
 ---
 
