@@ -137,6 +137,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   mediated invocation issues exact-action leases using the server-owned launch
   manifest digest. Credential-bound sessions are one-shot and raw values may
   exist only inside the controlled downstream dispatch callback.
+- Providers access credential-bound tools only through the system-owned
+  `veritas-run` MCP bridge and an opaque in-memory run handle. Codex CLI/SDK,
+  Codex app-server, Claude Code, and ACP stdio inject this shared contract;
+  Hermes and OpenClaw fail closed until their certified transports can enforce
+  it.
 - Classify launch credentials through `run-launch-credential-plan/v1`.
   Provider boot authentication, task integration definition IDs, and explicit
   high-risk environment passthrough are separate classes. Task integration

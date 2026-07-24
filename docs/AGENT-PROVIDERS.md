@@ -762,8 +762,12 @@ Credential-bound tool definitions compile only when enabled broker definitions,
 MCP scopes, source targets, and immutable catalog evidence match. They are
 omitted from native provider MCP configuration and provider environment
 passthrough. Mediated calls consume exact-action leases using the server-owned
-launch-manifest digest and one-shot downstream sessions. System-owned provider
-bridge injection remains under #970.
+launch-manifest digest and one-shot downstream sessions. The system-owned
+`veritas-run` MCP bridge exposes only catalog read and mediated call methods
+through an opaque, in-memory run handle. Codex CLI/SDK, Codex app-server,
+Claude Code, and ACP stdio inject it. Hermes and OpenClaw reject
+credential-bound launches because their certified transports cannot yet
+enforce the same bridge contract.
 Model-provider boot authentication and explicit `env-passthrough`
 compatibility remain separate, high-risk paths and are never labeled as
 brokered. See [Credential Broker](CREDENTIAL-BROKER.md).

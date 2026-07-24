@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import type {
   AgentBudgetPolicy,
+  ExecutableAgentProvider,
   HarnessSupportStatus,
   ProviderRuntimeManifest,
   RunLaunchInstructionReference,
@@ -34,6 +35,7 @@ import {
 import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
 import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import { compileProviderLaunchCredentialPlan } from './provider-launch-credential-plan-service.js';
+import { runToolBridgeSupport, runToolCatalogRequiresBridge } from './run-tool-bridge-service.js';
 
 export interface RunLaunchManifestInstructionInput {
   id: string;
@@ -513,6 +515,19 @@ function collectBlockers({
       'Task integration credentials do not have an accepted brokered dispatch boundary.',
       'Select a credential-free preset until a controlled tool or egress boundary is configured.'
     );
+  }
+  if (runToolCatalogRequiresBridge(input.runToolCatalog)) {
+    const support = runToolBridgeSupport(
+      input.providerRuntimeManifest.provider as ExecutableAgentProvider
+    );
+    if (!support.supported) {
+      add(
+        'run-tool-bridge-unavailable',
+        'tools.catalogDigest',
+        `Credential-bound tools require the system-owned Veritas bridge. ${support.reason}`,
+        'Select a provider with verified run-scoped MCP injection or use a credential-free tool preset.'
+      );
+    }
   }
   if (
     tools.enforcement !== 'enforced' &&

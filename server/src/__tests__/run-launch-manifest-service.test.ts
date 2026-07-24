@@ -449,6 +449,79 @@ describe('RunLaunchManifestService', () => {
     });
   });
 
+  it('fails closed when the selected provider cannot inject the run tool bridge', () => {
+    const hermesRuntime = providerRuntimeManifestFixture({
+      provider: 'hermes-cli',
+      providerVersion: 'hermes 2026.7.7.2',
+    });
+    const hermesEnvelope: TaskEnvelope = {
+      ...taskEnvelope,
+      launchManifest: {
+        schemaVersion: hermesRuntime.schemaVersion,
+        digest: hermesRuntime.digest,
+        provider: hermesRuntime.provider,
+        adapter: hermesRuntime.adapter,
+        protocolVersion: hermesRuntime.protocolVersion,
+      },
+    };
+    const catalogInput = {
+      ...brokeredCatalog(),
+      provider: 'hermes-cli' as const,
+      providerRuntimeManifestDigest: hermesRuntime.digest,
+    };
+    const runToolCatalog = {
+      ...catalogInput,
+      digest: calculateRunToolCatalogDigest(catalogInput),
+    };
+    const brokeredPolicy: SandboxPolicyDryRunResult = {
+      ...sandboxPolicy,
+      provider: 'hermes-cli',
+      preset: {
+        ...sandboxPolicy.preset,
+        credentials: { mode: 'brokered', brokerRefs: ['github-token'] },
+      },
+      effective: {
+        ...sandboxPolicy.effective,
+        credentialRefs: ['github-token'],
+      },
+    };
+    const manifest = new RunLaunchManifestService().compile(
+      input({
+        taskEnvelope: hermesEnvelope,
+        providerRuntimeManifest: hermesRuntime,
+        harnessSupport: {
+          ...harnessSupport,
+          agentType: 'hermes',
+          profileId: 'hermes-cli',
+          adapterId: 'hermes-cli',
+        },
+        sandboxPolicy: brokeredPolicy,
+        runToolCatalog,
+        tools: {
+          allowed: [],
+          denied: [],
+          policyIds: [],
+          mcpServers: ['github-tools'],
+          catalogDigest: runToolCatalog.digest,
+          enforcement: 'enforced',
+        },
+        runtime: {
+          ...input().runtime,
+          command: 'hermes',
+          credentialReferences: ['github-token'],
+        },
+      })
+    );
+
+    expect(manifest.credentials?.brokerState).toBe('supported');
+    expect(manifest.enforcement).toMatchObject({
+      enforceable: false,
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: 'run-tool-bridge-unavailable' }),
+      ]),
+    });
+  });
+
   it('fails closed for declared tools, MCP servers, permissions, and health checks without enforcement', () => {
     const manifest = new RunLaunchManifestService().compile(
       input({

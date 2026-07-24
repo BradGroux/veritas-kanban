@@ -3812,6 +3812,14 @@ MCP action and receive the active launch-manifest digest from the server, not
 the request body. Values are resolved only inside a one-shot downstream
 dispatch callback; replays, stale evidence, approval mismatch, unavailable
 sources, and credential-bearing results fail closed.
+
+Credential-bound provider runs receive a system-owned `veritas-run` stdio MCP
+bridge. Its opaque handle is accepted only by `GET
+/api/run-tool-bridge/catalog` and `POST /api/run-tool-bridge/call`. Those
+dedicated routes derive task, attempt, catalog, and manifest identity from the
+handle; callers cannot supply or override them. The handle grants no general
+Veritas API authority and is rejected after terminal lifecycle cleanup,
+expiration, or server restart.
 See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 
 ---

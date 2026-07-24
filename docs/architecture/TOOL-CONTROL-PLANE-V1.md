@@ -156,11 +156,25 @@ Approval-required definitions reuse the durable approval for the same
 operation and credential-action fingerprint. Replayed operations, caller
 manifest overrides, stale run bindings, changed definitions/scopes, mismatched
 approvals, unavailable sources, and credential-bearing results fail closed.
-System-owned provider bridge injection remains under #970.
+
+The system-owned `veritas-run` stdio MCP bridge exposes only catalog read and
+mediated call. Its opaque authority is held in memory and bound to the exact
+task, attempt, catalog, launch manifest, expiry, and allowed bridge methods.
+The dedicated HTTP surface derives run identity from that authority, so the
+provider cannot choose another task, attempt, catalog, or manifest.
+
+Codex CLI/SDK, Codex app-server, Claude Code, and ACP stdio inject this same
+bridge contract. Credential-bound native definitions remain omitted. Hermes
+and OpenClaw fail closed at manifest compilation because their certified
+transports cannot yet enforce system-owned bridge injection. Completion,
+failure, interruption, cancellation, expiry, or restart revokes or rejects the
+authority.
 
 ## Operator Surfaces
 
 - REST: `/api/v1/tool-servers`
+- Run bridge: `/api/run-tool-bridge/catalog` and
+  `/api/run-tool-bridge/call` (opaque run authority only)
 - CLI: `vk tool-servers` (alias `vk tools`)
 - MCP: `list_tool_servers`, `discover_tool_server`,
   `get_run_tool_catalog`, and `call_run_tool`
