@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `harness-compatibility-matrix/v1` for Buzz, Grok Build, OpenAI Codex
+  app-server, Claude Code, and GitHub Copilot CLI. One reviewed record now
+  drives exact builds, source caveats, capability and fixture digests,
+  invalidation policy, live support tiers, API, `vk doctor`, Settings, telemetry,
+  and operator guidance (#918).
 - Added `harness-conformance-suite/v1` and a deterministic runner for seeded,
   repeated provider/model/profile/policy/sandbox comparisons. Explicit
   assertions cover outcomes, files, tools, approvals, network, policy,

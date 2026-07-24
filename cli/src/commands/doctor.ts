@@ -5,7 +5,11 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { API_BASE, buildApiHeaders } from '../utils/api.js';
-import type { CommunicationAdapterHealth, HarnessSupportStatus } from '@veritas-kanban/shared';
+import type {
+  CommunicationAdapterHealth,
+  HarnessCompatibilityMatrix,
+  HarnessSupportStatus,
+} from '@veritas-kanban/shared';
 
 const execFileAsync = promisify(execFile);
 const CRITICAL_STATUSES = new Set<DoctorCheck['id']>([
@@ -652,6 +656,44 @@ function buildHarnessSupportCheck(statuses: HarnessSupportStatus[] | null): Doct
   );
 }
 
+function buildHarnessCompatibilityCheck(matrix: HarnessCompatibilityMatrix | null): DoctorCheck {
+  if (!matrix) {
+    return check(
+      'harness-compatibility',
+      'Harness compatibility',
+      'skip',
+      'Skipped because compatibility evidence was unavailable'
+    );
+  }
+  const stale = matrix.records.filter(
+    (record) => record.certification.status === 'failed' || record.certification.status === 'stale'
+  );
+  return check(
+    'harness-compatibility',
+    'Harness compatibility',
+    stale.length > 0 ? 'warn' : 'pass',
+    stale.length > 0
+      ? `${stale.length} reviewed harness certification record(s) are stale or failed`
+      : `${matrix.records.length} reviewed harness profiles share matrix ${matrix.digest.slice(0, 12)}`,
+    {
+      schemaVersion: matrix.schemaVersion,
+      digest: matrix.digest,
+      probeRevision: matrix.probeRevision,
+      records: matrix.records.map((record) => ({
+        profileId: record.profileId,
+        testedVersions: record.testedVersions,
+        testedBuilds: record.testedBuilds,
+        sourceAvailability: record.sourceAvailability,
+        certification: record.certification.status,
+        supportTier: record.supportStatus?.supportTier,
+      })),
+    },
+    stale.length > 0
+      ? 'Re-run the pinned deterministic fixtures before treating the affected builds as certified.'
+      : undefined
+  );
+}
+
 export async function runDoctorChecks(
   input: Partial<DoctorOptions> = {},
   depsInput: Partial<DoctorDependencies> = {}
@@ -745,6 +787,7 @@ export async function runDoctorChecks(
 
   let agents: AgentConfigResponse[] | null = null;
   let harnessSupport: HarnessSupportStatus[] | null = null;
+  let harnessCompatibility: HarnessCompatibilityMatrix | null = null;
   let routing: RoutingConfigResponse | null = null;
   let settings: FeatureSettingsResponse | null = null;
 
@@ -804,12 +847,15 @@ export async function runDoctorChecks(
     );
     agents = agentsResponse.ok ? agentsResponse.data : null;
 
-    const harnessSupportResponse = await requestJson<HarnessSupportStatus[]>(
+    const harnessCompatibilityResponse = await requestJson<HarnessCompatibilityMatrix>(
       deps,
       options,
-      '/api/config/agent-support'
+      '/api/config/harness-compatibility'
     );
-    harnessSupport = harnessSupportResponse.ok ? harnessSupportResponse.data : null;
+    harnessCompatibility = harnessCompatibilityResponse.ok
+      ? harnessCompatibilityResponse.data
+      : null;
+    harnessSupport = harnessCompatibility?.supportStatuses ?? null;
 
     const routingResponse = await requestJson<RoutingConfigResponse>(
       deps,
@@ -880,12 +926,23 @@ export async function runDoctorChecks(
     checks.push(
       check('harness-support', 'Harness support', 'skip', 'Skipped because API is unreachable')
     );
+    checks.push(
+      check(
+        'harness-compatibility',
+        'Harness compatibility',
+        'skip',
+        'Skipped because API is unreachable'
+      )
+    );
     checks.push(check('buzz', 'Buzz compatibility', 'skip', 'Skipped because API is unreachable'));
   }
 
   const agentResult = await buildAgentCheck(deps, agents);
   checks.push(agentResult.check);
-  if (apiReachable) checks.push(buildHarnessSupportCheck(harnessSupport));
+  if (apiReachable) {
+    checks.push(buildHarnessSupportCheck(harnessSupport));
+    checks.push(buildHarnessCompatibilityCheck(harnessCompatibility));
+  }
   checks.push(
     buildRoutingCheck(routing, agentResult.availableAgents, agentResult.configuredAgents)
   );

@@ -12,6 +12,7 @@ import type {
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
   AgentProfileValidationResult,
+  HarnessCompatibilityMatrix,
   HarnessSupportStatus,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
@@ -162,6 +163,10 @@ export const configApi = {
   },
 
   agents: {
+    compatibility: async (): Promise<HarnessCompatibilityMatrix> => {
+      return apiFetch<HarnessCompatibilityMatrix>(`${API_BASE}/config/harness-compatibility`);
+    },
+
     support: async (): Promise<HarnessSupportStatus[]> => {
       return apiFetch<HarnessSupportStatus[]>(`${API_BASE}/config/agent-support`);
     },

@@ -260,6 +260,11 @@ stdio`, and rejects approval bypass, reauthentication, leader, plugin,
 src/scripts/run-harness-conformance.ts -- --suite <suite.json>
 --observations <observations.json>`. Credential-gated lanes require explicit
   opt-in and never commit raw provider output or secrets.
+- Cross-harness compatibility is published as
+  `harness-compatibility-matrix/v1`. API, `vk doctor`, Settings, telemetry, and
+  `docs/HARNESS-COMPATIBILITY.md` must use the reviewed profile capability
+  digest, fixture revision, invalidation policy, and source caveats rather than
+  defining provider-specific tiers.
 - `vk acp serve --stdio` exposes one Veritas-managed task as an ACP v1 server
   view for editors and other ACP clients. Bind with `--task` or require
   `_meta["veritas/taskId"]` on `session/new`; client-owned MCP catalogs fail

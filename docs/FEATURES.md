@@ -333,6 +333,7 @@ First-class support for autonomous coding agents.
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
+- **Cross-harness compatibility matrix** — Buzz, Grok Build, OpenAI Codex app-server, Claude Code, and GitHub Copilot CLI publish exact reviewed builds, source-availability caveats, deterministic fixture identity, capability evidence, limitations, and live support tiers through one API record consumed by Settings, `vk doctor`, telemetry, and [operator guidance](HARNESS-COMPATIBILITY.md)
 - **Harness conformance suites** — Versioned seeded scenarios compare
   provider/model/profile/policy/sandbox combinations across repeated trials,
   retain immutable launch/runtime/event evidence references, assert governed

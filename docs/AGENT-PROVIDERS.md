@@ -407,11 +407,19 @@ The live status projection uses five tiers:
 | `degraded`    | The adapter exists, but installation, authentication, probe, compatibility, or certification evidence is unhealthy or stale. |
 | `unsupported` | The profile has no executable adapter or does not support the current platform.                                              |
 
-Settings -> Agents displays the same tier returned by
-`GET /api/config/agent-support`. `vk doctor` consumes that endpoint unchanged:
+Settings -> Agents displays the same tier returned in
+`GET /api/config/harness-compatibility`. `vk doctor` consumes that compatibility
+record unchanged:
 an enabled `degraded` or `unsupported` profile is a blocking failure, while an
 enabled `configured` profile is a warning until certification is current.
 Reasons and remediation are redacted before leaving the server.
+
+The reviewed builds, capability evidence, source-availability caveats, fixture
+identity, and tier definitions are documented in
+[Harness Compatibility](HARNESS-COMPATIBILITY.md). The legacy
+`GET /api/config/agent-support` endpoint remains available for API
+compatibility, but new operator surfaces use the matrix response so they cannot
+drift.
 
 Task start rechecks the normalized profile before attempt state is created. An
 explicit provider must match the profile's executable adapter. A display-only

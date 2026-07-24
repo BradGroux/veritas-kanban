@@ -67,6 +67,7 @@ export interface RunErrorEvent extends TelemetryEvent {
 
 export interface HarnessSupportTelemetry {
   profileId: string;
+  compatibilityDigest?: string;
   adapterId?: string;
   providerVersion?: string;
   providerBuild?: string;
