@@ -69,6 +69,7 @@ export function classifyCiTestScope({
   deletedFiles = [],
   reviewedFullSuite = false,
   reviewedPullRequest = '',
+  reviewedFullSuiteMode = '',
 }) {
   const files = normalizeFiles(changedFiles);
   const deleted = normalizeFiles(deletedFiles);
@@ -103,11 +104,15 @@ export function classifyCiTestScope({
 
   if (eventName === 'push' && reviewedFullSuite) {
     const prSuffix = reviewedPullRequest ? ` for PR #${reviewedPullRequest}` : '';
+    const evidence =
+      reviewedFullSuiteMode === 'identical-tree'
+        ? 'has the exact Git tree published by this squash merge'
+        : 'is an ancestor of this merge commit';
     return {
       scope: 'none',
       packages: [],
       files,
-      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and is an ancestor of this merge commit.`,
+      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and ${evidence}.`,
     };
   }
 
@@ -278,6 +283,7 @@ async function main() {
     labels: parseLabels(process.env.CI_PR_LABELS || '[]'),
     reviewedFullSuite: process.env.CI_REVIEWED_FULL === 'true',
     reviewedPullRequest: process.env.CI_REVIEWED_PR || '',
+    reviewedFullSuiteMode: process.env.CI_REVIEWED_MODE || '',
   };
 
   if (!input.eventName) {

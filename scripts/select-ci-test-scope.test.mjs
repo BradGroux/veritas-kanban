@@ -99,6 +99,21 @@ test('a successful reviewed full suite suppresses duplicate post-merge tests', (
 
   assert.equal(result.scope, 'none');
   assert.match(result.reason, /PR #1000/);
+  assert.match(result.reason, /ancestor/);
+});
+
+test('an exact reviewed tree suppresses duplicate tests after a squash merge', () => {
+  const result = classifyCiTestScope({
+    eventName: 'push',
+    reviewedFullSuite: true,
+    reviewedPullRequest: '1011',
+    reviewedFullSuiteMode: 'identical-tree',
+    changedFiles: ['.github/workflows/ci.yml'],
+  });
+
+  assert.equal(result.scope, 'none');
+  assert.match(result.reason, /PR #1011/);
+  assert.match(result.reason, /exact Git tree/);
 });
 
 test('ordinary post-merge pushes remain limited to affected packages', () => {
