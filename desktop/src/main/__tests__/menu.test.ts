@@ -43,7 +43,8 @@ function updateStatus(state: DesktopUpdateStatus['state']): DesktopUpdateStatus 
 describe('desktop native menu', () => {
   it('exposes common actions with keyboard shortcuts', () => {
     const dispatch = vi.fn();
-    const template = createDesktopMenuTemplate({ status: status(), dispatch });
+    const copyVersionInfo = vi.fn();
+    const template = createDesktopMenuTemplate({ status: status(), dispatch, copyVersionInfo });
     const labels = template.flatMap((item) =>
       Array.isArray(item.submenu) ? item.submenu.map((child) => child.label) : []
     );
@@ -56,6 +57,14 @@ describe('desktop native menu', () => {
     expect(labels).toContain('Restart Local Server');
     expect(labels).toContain('Reset Window Layout');
 
+    const appMenu = template.find((item) => item.label === 'Veritas Kanban');
+    const appItems = Array.isArray(appMenu?.submenu) ? appMenu.submenu : [];
+    expect(appItems[0]).toMatchObject({ role: 'about', label: 'About Veritas Kanban' });
+    expect(appItems[1]).toMatchObject({ type: 'separator' });
+    const copyVersion = appItems.find((item) => item.label === 'Copy Version Information');
+    copyVersion?.click?.(undefined as never, undefined as never, undefined as never);
+    expect(copyVersionInfo).toHaveBeenCalledOnce();
+
     const fileMenu = template.find((item) => item.label === 'File');
     const newTask = Array.isArray(fileMenu?.submenu)
       ? fileMenu.submenu.find((item) => item.label === 'New Task')
@@ -67,7 +76,11 @@ describe('desktop native menu', () => {
   });
 
   it('exposes the native edit menu so macOS text fields receive standard shortcuts', () => {
-    const template = createDesktopMenuTemplate({ status: status(), dispatch: vi.fn() });
+    const template = createDesktopMenuTemplate({
+      status: status(),
+      dispatch: vi.fn(),
+      copyVersionInfo: vi.fn(),
+    });
 
     expect(template.some((item) => item.role === 'editMenu')).toBe(true);
   });
@@ -76,6 +89,7 @@ describe('desktop native menu', () => {
     const desktopMenu = createDesktopMenuTemplate({
       status: status('failed'),
       dispatch: vi.fn(),
+      copyVersionInfo: vi.fn(),
     }).find((item) => item.label === 'Desktop');
     const externalTest = Array.isArray(desktopMenu?.submenu)
       ? desktopMenu.submenu.find((item) => item.label === 'Test External Delivery')
@@ -89,6 +103,7 @@ describe('desktop native menu', () => {
       status: status(),
       updateStatus: updateStatus('available'),
       dispatch: vi.fn(),
+      copyVersionInfo: vi.fn(),
     }).find((item) => item.label === 'Veritas Kanban');
     const downloadUpdate = Array.isArray(appMenu?.submenu)
       ? appMenu.submenu.find((item) => item.label === 'Download Update')

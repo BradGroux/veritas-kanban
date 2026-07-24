@@ -6,6 +6,11 @@ const electronRuntimeExternal = ['electron', /^electron\/.+/];
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      __VERITAS_BUILD_SHA__: JSON.stringify(
+        process.env.VERITAS_BUILD_SHA ?? process.env.GITHUB_SHA ?? ''
+      ),
+    },
     build: {
       // Vite 8 builds with Rolldown. Electron Vite 5 still places its built-in
       // runtime externals under rollupOptions, which Rolldown does not consume.

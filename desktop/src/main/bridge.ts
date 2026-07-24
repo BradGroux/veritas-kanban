@@ -2,11 +2,10 @@ import type { IpcMain, Shell } from 'electron';
 import { lookup } from 'node:dns/promises';
 import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
 
-import { DESKTOP_APP_ID, DESKTOP_APP_NAME } from './app-metadata.js';
 import type { DesktopCommandDispatcher } from './commands.js';
-import type { DesktopAppInfo } from './types.js';
 import type { DesktopRuntime } from './runtime.js';
 import type { DesktopUpdateService } from './updates.js';
+import { createDesktopAppInfo } from './version-info.js';
 import {
   createDesktopSetupDiagnostics,
   createDesktopSupportSnapshot,
@@ -209,13 +208,7 @@ export function createDesktopBridgeHandlers(
   updateService?: DesktopUpdateService,
   windowControls?: DesktopWindowControls
 ): DesktopBridgeHandlerMap {
-  const appInfo = (): DesktopAppInfo => ({
-    name: DESKTOP_APP_NAME,
-    appId: DESKTOP_APP_ID,
-    version: appVersion,
-    platform: process.platform,
-    packaged,
-  });
+  const appInfo = () => createDesktopAppInfo(appVersion, packaged);
 
   return {
     getAppInfo: appInfo,
@@ -244,7 +237,7 @@ export function createDesktopBridgeHandlers(
       updateService?.snapshot() ?? {
         state: 'unsupported',
         currentVersion: appInfo().version,
-        channel: packaged ? 'stable' : 'dev',
+        channel: appInfo().channel,
         checkedAt: new Date().toISOString(),
         detail: 'Updater service is not initialized.',
       },
@@ -324,8 +317,7 @@ export function registerDesktopBridge(
     const definition = DESKTOP_BRIDGE_METHODS[method];
     const handler = handlers[method] as (request: unknown) => MaybePromise<unknown>;
     const validator = DESKTOP_BRIDGE_METHOD_VALIDATORS[method] as
-      | ((payload: unknown) => unknown)
-      | undefined;
+      ((payload: unknown) => unknown) | undefined;
 
     ipcMain.handle(definition.channel, async (_event, request: unknown) => {
       try {

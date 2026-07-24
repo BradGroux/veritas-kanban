@@ -138,6 +138,9 @@ describe('desktop bridge contracts', () => {
     expect(bridgeHandlers.getAppInfo(undefined)).toMatchObject({
       name: 'Veritas Kanban',
       version: '6.0.1',
+      channel: 'stable',
+      arch: process.arch,
+      osVersion: expect.any(String),
       packaged: true,
     });
   });

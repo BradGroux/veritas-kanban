@@ -70,6 +70,10 @@ export interface DesktopAppInfo {
   name: string;
   appId: string;
   version: string;
+  buildIdentity: string | null;
+  channel: 'dev' | 'beta' | 'stable';
   platform: NodeJS.Platform;
+  arch: string;
+  osVersion: string;
   packaged: boolean;
 }
