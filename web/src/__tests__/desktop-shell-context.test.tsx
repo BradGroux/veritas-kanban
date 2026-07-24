@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
-  DEFAULT_BOTTOM_PANEL_HEIGHT,
+  DEFAULT_RIGHT_PANEL_WIDTH,
   DesktopShellProvider,
   useDesktopShell,
 } from '@/components/layout/DesktopShellContext';
@@ -16,9 +16,17 @@ function ShellProbe() {
       <output aria-label="left rail">{String(shell.leftRailOpen)}</output>
       <output aria-label="right rail">{String(shell.rightRailOpen)}</output>
       <output aria-label="bottom panel">{shell.bottomPanel ?? 'closed'}</output>
+      <output aria-label="dock position">{shell.dockPosition}</output>
       <output aria-label="bottom panel height">{shell.bottomPanelHeight}</output>
+      <output aria-label="right panel width">{shell.rightPanelWidth}</output>
       <button type="button" onClick={() => shell.openBottomPanel('board-chat')}>
         Open board chat
+      </button>
+      <button type="button" onClick={() => shell.setDockPosition('bottom')}>
+        Dock bottom
+      </button>
+      <button type="button" onClick={() => shell.setDockPosition('right')}>
+        Dock right
       </button>
       <button type="button" onClick={() => shell.setLeftRailOpen(false)}>
         Close left rail
@@ -51,6 +59,7 @@ describe('desktop shell recovery', () => {
     window.localStorage.clear();
     window.history.replaceState({}, '', '/');
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
     Object.defineProperty(window, 'veritasDesktop', {
       configurable: true,
       value: {
@@ -69,9 +78,11 @@ describe('desktop shell recovery', () => {
     menuListener = undefined;
   });
 
-  it('discards obsolete persisted panel visibility and clamps a stale height', () => {
+  it('defaults invalid and legacy layout state to a bounded right dock', () => {
     window.localStorage.setItem('veritas.desktop.bottomPanel', 'board-chat');
     window.localStorage.setItem('veritas.workbench.bottomPanelHeight', '9999');
+    window.localStorage.setItem('veritas.workbench.rightPanelWidth', '-20');
+    window.localStorage.setItem('veritas.workbench.dockPosition', 'full-window');
 
     render(
       <DesktopShellProvider>
@@ -80,11 +91,40 @@ describe('desktop shell recovery', () => {
     );
 
     expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
-    expect(screen.getByLabelText('bottom panel height').textContent).toBe('380');
+    expect(screen.getByLabelText('dock position').textContent).toBe('right');
+    expect(screen.getByLabelText('bottom panel height').textContent).toBe('280');
+    expect(screen.getByLabelText('right panel width').textContent).toBe(
+      String(DEFAULT_RIGHT_PANEL_WIDTH)
+    );
     expect(window.localStorage.getItem('veritas.desktop.bottomPanel')).toBeNull();
+    expect(window.localStorage.getItem('veritas.workbench.dockPosition')).toBeNull();
   });
 
-  it('closes transient chat layout with Escape or browser Back', async () => {
+  it('persists a valid dock position without closing the conversation', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    await user.click(screen.getByRole('button', { name: 'Dock bottom' }));
+
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
+    expect(screen.getByLabelText('dock position').textContent).toBe('bottom');
+    expect(window.localStorage.getItem('veritas.workbench.dockPosition')).toBe('bottom');
+
+    view.unmount();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    expect(screen.getByLabelText('dock position').textContent).toBe('bottom');
+  });
+
+  it('closes transient chat layout with Escape or browser Back and restores focus', async () => {
     const user = userEvent.setup();
 
     render(
@@ -93,11 +133,13 @@ describe('desktop shell recovery', () => {
       </DesktopShellProvider>
     );
 
-    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    await user.click(trigger);
     expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
 
     await user.keyboard('{Escape}');
     expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
 
     await user.click(screen.getByRole('button', { name: 'Open board chat' }));
     act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: {} })));
@@ -122,11 +164,15 @@ describe('desktop shell recovery', () => {
     expect(screen.getByLabelText('left rail').textContent).toBe('true');
     expect(screen.getByLabelText('right rail').textContent).toBe('false');
     expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
-    expect(screen.getByLabelText('bottom panel height').textContent).toBe(
-      String(DEFAULT_BOTTOM_PANEL_HEIGHT)
+    expect(screen.getByLabelText('dock position').textContent).toBe('right');
+    expect(screen.getByLabelText('bottom panel height').textContent).toBe('280');
+    expect(screen.getByLabelText('right panel width').textContent).toBe(
+      String(DEFAULT_RIGHT_PANEL_WIDTH)
     );
     expect(window.localStorage.getItem('veritas.desktop.leftRailOpen')).toBeNull();
     expect(window.localStorage.getItem('veritas.desktop.rightRailOpen')).toBeNull();
     expect(window.localStorage.getItem('veritas.workbench.bottomPanelHeight')).toBeNull();
+    expect(window.localStorage.getItem('veritas.workbench.rightPanelWidth')).toBeNull();
+    expect(window.localStorage.getItem('veritas.workbench.dockPosition')).toBeNull();
   });
 });

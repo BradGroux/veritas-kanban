@@ -194,7 +194,7 @@ export function ChatPanel({
   const chatContent = (
     <>
       <ScrollArea
-        className="min-h-0 flex-1 px-4"
+        className="chat-dock-scroll-area min-h-0 flex-1 px-4"
         onScrollCapture={handleScroll}
         ref={scrollAreaRef}
       >

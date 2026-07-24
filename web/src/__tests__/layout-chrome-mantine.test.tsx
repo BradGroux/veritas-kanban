@@ -256,7 +256,7 @@ describe('layout chrome Mantine migration', () => {
 
     expect(screen.getByRole('button', { name: 'Collapse left sidebar' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Expand right sidebar' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open bottom panel' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open chat dock' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Board Chat' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Squad Chat' })).toBeDefined();
 

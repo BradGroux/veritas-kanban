@@ -160,6 +160,7 @@ export function Header() {
     leftRailOpen,
     rightRailOpen,
     bottomPanel,
+    dockPosition,
     setLeftRailOpen,
     setRightRailOpen,
     openBottomPanel,
@@ -426,14 +427,18 @@ export function Header() {
                   color={bottomPanel ? 'veritas' : 'gray'}
                   size={32}
                   onClick={() => toggleBottomPanel('board-chat')}
-                  aria-label={bottomPanel ? 'Close bottom panel' : 'Open bottom panel'}
+                  aria-label={bottomPanel ? `Close ${dockPosition} chat dock` : 'Open chat dock'}
                   aria-pressed={Boolean(bottomPanel)}
-                  title={bottomPanel ? 'Close bottom panel' : 'Open bottom panel'}
+                  title={bottomPanel ? `Close ${dockPosition} chat dock` : 'Open chat dock'}
                 >
-                  {bottomPanel ? (
+                  {bottomPanel && dockPosition === 'bottom' ? (
                     <PanelBottomClose className="h-4 w-4" aria-hidden="true" />
-                  ) : (
+                  ) : bottomPanel ? (
+                    <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                  ) : dockPosition === 'bottom' ? (
                     <PanelBottom className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <PanelRight className="h-4 w-4" aria-hidden="true" />
                   )}
                 </ActionIcon>
               </Group>

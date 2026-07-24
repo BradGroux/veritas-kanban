@@ -372,7 +372,7 @@ export function SquadChatPanel({
 
       {/* Messages */}
       <ScrollArea
-        className="flex-1 min-h-0 px-4"
+        className="chat-dock-scroll-area flex-1 min-h-0 px-4"
         onScrollCapture={handleScroll}
         ref={scrollAreaRef}
       >
