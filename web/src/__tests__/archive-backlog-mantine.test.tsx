@@ -187,4 +187,60 @@ describe('Archive and backlog Mantine surfaces', () => {
     expect(screen.getByText('Archived release audit')).toBeDefined();
     expect(screen.queryByText('Archived research packet')).toBeNull();
   });
+
+  it('keeps long archive card content readable when collapsed and expanded', () => {
+    const longTitle =
+      'Archived provider conformance investigation with a deliberately long title that wraps safely';
+    const longDescription =
+      '**Summary:** Preserve every verification detail.\n\n- First finding with a long path: `/workspace/providers/conformance/results.json`\n- Second finding with an unbroken reference: https://example.com/a/very/long/archive/reference/that/must/wrap';
+    mocks.useArchivedTasks.mockReturnValue({
+      data: [
+        createMockTask({
+          id: 'VK-203',
+          title: longTitle,
+          description: longDescription,
+          project: 'veritas',
+          sprint: 'v5',
+          status: 'done',
+          type: 'code',
+        }),
+      ],
+      isLoading: false,
+      isRefetching: false,
+      refetch: mocks.refetchArchivedTasks,
+    });
+
+    renderWithProviders(<ArchivePage onBack={vi.fn()} />);
+
+    const card = screen.getByTestId('archive-task-card-VK-203');
+    const collapsedTitle = screen.getByTestId('archive-task-title-VK-203');
+    const collapsedDescription = screen.getByTestId('archive-task-description-VK-203');
+    expect(card.className).toContain('overflow-visible');
+    expect(collapsedTitle.getAttribute('title')).toBe(longTitle);
+    expect(collapsedTitle.className).toContain('line-clamp-2');
+    expect(collapsedDescription.getAttribute('title')).toBe(longDescription);
+    expect(collapsedDescription.className).toContain('line-clamp-2');
+    expect(screen.getAllByText('Veritas').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('v5 Release').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Expand archived task ${longTitle}`,
+      })
+    );
+
+    const expandedTitle = screen.getByTestId('archive-task-title-VK-203');
+    const expandedDescription = screen.getByTestId('archive-task-expanded-description-VK-203');
+    expect(expandedTitle.getAttribute('title')).toBeNull();
+    expect(expandedTitle.className).not.toContain('line-clamp-2');
+    expect(expandedDescription.textContent).toBe(longDescription);
+    expect(expandedDescription.className).toContain('[overflow-wrap:anywhere]');
+    expect(
+      screen.getByRole('button', {
+        name: `Collapse archived task ${longTitle}`,
+      })
+    ).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined();
+  });
 });

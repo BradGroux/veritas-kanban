@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made **New Profile** open a focused, validated scoring draft from both Profiles
   and Score Explorer, with cancel returning to the originating tab without
   creating an orphan profile (#943).
+- Let Archive cards grow with expanded content, clamp collapsed text by whole
+  lines with accessible full text, wrap long metadata safely, and keep Restore
+  reachable beside long task content (#939).
 
 ## [6.0.0] - 2026-07-24
 

@@ -301,10 +301,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               radius="md"
               p="md"
               className={cn(
-                'bg-card hover:bg-accent/50 transition-colors cursor-pointer',
+                'overflow-visible bg-card transition-colors hover:bg-accent/50',
                 selectedIds.has(task.id) && 'ring-2 ring-primary',
                 expandedTaskId === task.id && 'ring-2 ring-accent'
               )}
+              data-testid={`archive-task-card-${task.id}`}
             >
               <div className="flex items-start gap-3">
                 <Checkbox
@@ -321,6 +322,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
                   role="button"
                   tabIndex={0}
+                  aria-expanded={expandedTaskId === task.id}
+                  aria-controls={`archive-task-detail-${task.id}`}
+                  aria-label={`${
+                    expandedTaskId === task.id ? 'Collapse' : 'Expand'
+                  } archived task ${task.title}`}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -328,67 +334,96 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     }
                   }}
                 >
-                  <Group align="flex-start" justify="space-between" gap="md" wrap="nowrap">
-                    <div className="flex-1 min-w-0">
-                      <Group gap="xs" wrap="nowrap">
-                        <ThemeIcon size="sm" variant="light" color="violet">
-                          {(() => {
-                            const TypeIcon =
-                              typeIcons[task.type as keyof typeof typeIcons] ?? ClipboardList;
-                            return <TypeIcon className="h-3.5 w-3.5" aria-hidden="true" />;
-                          })()}
-                        </ThemeIcon>
-                        <Text fw={600} truncate>
-                          {task.title}
-                        </Text>
-                      </Group>
-                      {expandedTaskId !== task.id && task.description && (
-                        <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
-                          {task.description}
-                        </Text>
+                  <Group align="flex-start" gap="xs" wrap="nowrap">
+                    <ThemeIcon size="sm" variant="light" color="violet" className="shrink-0">
+                      {(() => {
+                        const TypeIcon =
+                          typeIcons[task.type as keyof typeof typeIcons] ?? ClipboardList;
+                        return <TypeIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+                      })()}
+                    </ThemeIcon>
+                    <Text
+                      fw={600}
+                      title={expandedTaskId === task.id ? undefined : task.title}
+                      className={cn(
+                        'min-w-0 break-words [overflow-wrap:anywhere]',
+                        expandedTaskId !== task.id && 'line-clamp-2'
                       )}
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRestore(task.id);
-                        }}
-                        disabled={restoringIds.has(task.id)}
-                      >
-                        <RotateCcw
-                          className={cn(
-                            'h-3 w-3 mr-1',
-                            restoringIds.has(task.id) && 'animate-spin'
-                          )}
-                        />
-                        Restore
-                      </Button>
-                    </div>
+                      data-testid={`archive-task-title-${task.id}`}
+                    >
+                      {task.title}
+                    </Text>
                   </Group>
+                  {expandedTaskId !== task.id && task.description && (
+                    <Text
+                      size="sm"
+                      c="dimmed"
+                      mt={4}
+                      title={task.description}
+                      className="line-clamp-2 break-words [overflow-wrap:anywhere]"
+                      data-testid={`archive-task-description-${task.id}`}
+                    >
+                      {task.description}
+                    </Text>
+                  )}
 
                   <Group gap="xs" wrap="wrap">
-                    <Badge variant="outline" color="gray" size="xs" tt="none">
+                    <Badge
+                      variant="outline"
+                      color="gray"
+                      size="xs"
+                      tt="none"
+                      title={task.id}
+                      className="max-w-full"
+                    >
                       {task.id}
                     </Badge>
-                    <Badge variant="light" color="gray" size="xs" tt="none">
+                    <Badge
+                      variant="light"
+                      color="gray"
+                      size="xs"
+                      tt="none"
+                      title={task.type}
+                      className="max-w-full"
+                    >
                       {task.type}
                     </Badge>
                     {task.project && (
-                      <Badge variant="light" color="gray" size="xs" tt="none">
+                      <Badge
+                        variant="light"
+                        color="gray"
+                        size="xs"
+                        tt="none"
+                        title={
+                          projects.find((project) => project.id === task.project)?.label ||
+                          task.project
+                        }
+                        className="max-w-full"
+                      >
                         <FolderOpen className="h-3 w-3 mr-1" />
                         {projects.find((p) => p.id === task.project)?.label || task.project}
                       </Badge>
                     )}
                     {task.sprint && (
-                      <Badge variant="light" color="gray" size="xs" tt="none">
+                      <Badge
+                        variant="light"
+                        color="gray"
+                        size="xs"
+                        tt="none"
+                        title={
+                          sprints.find((sprint) => sprint.id === task.sprint)?.label || task.sprint
+                        }
+                        className="max-w-full"
+                      >
                         {sprints.find((s) => s.id === task.sprint)?.label || task.sprint}
                       </Badge>
                     )}
-                    <Text size="xs" c="dimmed" className="ml-auto flex items-center gap-1">
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      className="flex min-w-0 items-center gap-1 sm:ml-auto"
+                      title={`Archived ${new Date(task.updated).toLocaleDateString()}`}
+                    >
                       <Calendar className="h-3 w-3" />
                       {formatDate(task.updated)}
                     </Text>
@@ -396,11 +431,19 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
                   {/* Expanded detail view */}
                   {expandedTaskId === task.id && (
-                    <div className="mt-4 pt-4 border-t space-y-3">
+                    <div
+                      id={`archive-task-detail-${task.id}`}
+                      className="mt-4 min-w-0 space-y-3 border-t pt-4"
+                    >
                       {task.description && (
                         <div>
                           <h4 className="text-sm font-medium mb-1">Description</h4>
-                          <Text size="sm" c="dimmed" className="whitespace-pre-wrap">
+                          <Text
+                            size="sm"
+                            c="dimmed"
+                            className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+                            data-testid={`archive-task-expanded-description-${task.id}`}
+                          >
                             {task.description}
                           </Text>
                         </div>
@@ -453,6 +496,19 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     </div>
                   )}
                 </Stack>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 self-start"
+                  onClick={() => handleRestore(task.id)}
+                  disabled={restoringIds.has(task.id)}
+                >
+                  <RotateCcw
+                    className={cn('h-3 w-3 mr-1', restoringIds.has(task.id) && 'animate-spin')}
+                  />
+                  Restore
+                </Button>
               </div>
             </Paper>
           ))}
