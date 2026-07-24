@@ -1,12 +1,44 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet is the retained evidence target for Veritas Kanban 6.0.0. It
-separates merged implementation, deterministic conformance, live provider
-evidence, local runtime proof, signed publication, and Homebrew availability.
+This packet retains the historical evidence for the quarantined Veritas Kanban
+6.0.0 prerelease and records the 6.0.1 stabilization release. It separates
+merged implementation, deterministic conformance, live provider evidence,
+local runtime proof, signed publication, and Homebrew availability.
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.0.
+Veritas Kanban 6.0.1 is the first supported stable v6 release. Do not use
+6.0.0 for installation or upgrade validation.
 
-## Release Scope
+Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
+
+## 6.0.1 Stabilization Candidate
+
+| Field                  | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Release version        | 6.0.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Stabilization tracker  | [#924](https://github.com/BradGroux/veritas-kanban/issues/924)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Source branch          | `release/v6.0.1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Superseded publication | [`v6.0.0`](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.0.0), retained as a quarantined prerelease                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Stabilization issues   | [#935](https://github.com/BradGroux/veritas-kanban/issues/935), [#936](https://github.com/BradGroux/veritas-kanban/issues/936), [#937](https://github.com/BradGroux/veritas-kanban/issues/937), [#938](https://github.com/BradGroux/veritas-kanban/issues/938), [#939](https://github.com/BradGroux/veritas-kanban/issues/939), [#941](https://github.com/BradGroux/veritas-kanban/issues/941), [#943](https://github.com/BradGroux/veritas-kanban/issues/943), [#944](https://github.com/BradGroux/veritas-kanban/issues/944), [#945](https://github.com/BradGroux/veritas-kanban/issues/945), and [#986](https://github.com/BradGroux/veritas-kanban/issues/986) |
+| Source verification    | Focused tests plus changed-file CI per issue; one full workspace suite is reserved for the release PR                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Signed runtime gate    | Exact 6.0.1 equality across bundle, health, updater, and desktop bridge metadata; Chat recovery; bounded task; clean quit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Distribution gate      | Signed/notarized DMG and ZIP, updater metadata, independent checksums, GitHub release validation, and verified Homebrew cask                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+### Stabilization issue traceability
+
+| Issue                                                          | Pull request                                                 | Outcome                                                                                                      |
+| -------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| [#935](https://github.com/BradGroux/veritas-kanban/issues/935) | [#992](https://github.com/BradGroux/veritas-kanban/pull/992) | Task drawers and shared overlays remain usable at compact heights                                            |
+| [#936](https://github.com/BradGroux/veritas-kanban/issues/936) | [#989](https://github.com/BradGroux/veritas-kanban/pull/989) | Workflow actions normalize omitted collections and surface recoverable failures                              |
+| [#937](https://github.com/BradGroux/veritas-kanban/issues/937) | [#993](https://github.com/BradGroux/veritas-kanban/pull/993) | Navigation and nested overlays preserve the actual route origin and scroll state                             |
+| [#938](https://github.com/BradGroux/veritas-kanban/issues/938) | [#995](https://github.com/BradGroux/veritas-kanban/pull/995) | Scoring profile content has intentional nested scroll ownership                                              |
+| [#939](https://github.com/BradGroux/veritas-kanban/issues/939) | [#991](https://github.com/BradGroux/veritas-kanban/pull/991) | Archive cards and layout remain reachable at compact sizes                                                   |
+| [#941](https://github.com/BradGroux/veritas-kanban/issues/941) | [#996](https://github.com/BradGroux/veritas-kanban/pull/996) | Template editing is a complete visible authoring flow                                                        |
+| [#943](https://github.com/BradGroux/veritas-kanban/issues/943) | [#990](https://github.com/BradGroux/veritas-kanban/pull/990) | New scoring profiles open as visible validated drafts                                                        |
+| [#944](https://github.com/BradGroux/veritas-kanban/issues/944) | [#994](https://github.com/BradGroux/veritas-kanban/pull/994) | Operations Digest reconciles current state, windowed events, exclusions, and source evidence                 |
+| [#945](https://github.com/BradGroux/veritas-kanban/issues/945) | [#988](https://github.com/BradGroux/veritas-kanban/pull/988) | Chat has visible, keyboard, browser-history, persisted-state, compact-window, and native-menu recovery paths |
+| [#986](https://github.com/BradGroux/veritas-kanban/issues/986) | [#997](https://github.com/BradGroux/veritas-kanban/pull/997) | Desktop setup is version-neutral and the bridge consumes Electron's application version                      |
+
+## Historical 6.0.0 Release Scope
 
 | Field                    | Value                                                                                                                                     |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -215,7 +247,21 @@ test.
 No private data, credential value, raw provider conversation, or unrestricted
 runtime profile is retained in this packet.
 
-## Publication Evidence
+## 6.0.1 Publication Evidence
+
+Publication evidence remains incomplete until the release PR merges, the
+annotated tag is pushed, the signed desktop workflow succeeds, independent
+artifact inspection passes, and the Homebrew cask is restored to 6.0.1.
+
+| Publication item                                      | Result                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Release merge SHA                                     | Pending release PR                                                 |
+| Annotated `v6.0.1` tag and GitHub release             | Pending release PR                                                 |
+| Signed/notarized macOS artifacts and updater metadata | Pending tag-triggered workflow                                     |
+| Downloaded signed-app isolated launch                 | Pending exact-version and Chat recovery smoke                      |
+| Homebrew cask                                         | Intentionally held at 5.2.5 until signed 6.0.1 verification passes |
+
+## Historical 6.0.0 Publication Evidence
 
 Source publication completed from reviewed release PR #985. The tag-triggered
 workflow, independent artifact verification, signed-app runtime check, and
@@ -248,9 +294,9 @@ and Homebrew availability are independent gates.
 - Buzz Agent does not resume in-memory sessions; Buzz communication does not
   project files, reactions, forums, DMs, or destructive edit/delete behavior.
 - [Packaged desktop version reporting](https://github.com/BradGroux/veritas-kanban/issues/986)
-  is a v6.0.1 follow-up: health, updater, and bundle metadata report 6.0.0,
-  while the first-run heading retains `v5` wording and the desktop bridge
-  reports `0.0.0`.
+  is fixed in the 6.0.1 source candidate. Exact equality across the downloaded
+  bundle, health endpoint, updater metadata, and desktop bridge remains a
+  signed-publication gate.
 - Linux and Windows desktop packages remain unsigned previews.
 - Provider and Buzz Settings screenshots were captured from the isolated
   profile. No public-safe active approval existed, so approval visual evidence

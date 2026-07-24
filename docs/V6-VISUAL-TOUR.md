@@ -5,7 +5,9 @@ integration, approvals, and run evidence. The general board, desktop shell,
 Workbench, Squad Chat, Maintenance, and mobile/PWA layouts remain represented
 by the retained [v5 Visual Tour](V5-VISUAL-TOUR.md) and its dummy-data assets.
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.0.
+Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1. The retained
+screenshots cover the unchanged v6 provider and Buzz surfaces; 6.0.1
+stabilization behavior is documented in the release notes and evidence packet.
 
 ## Provider Support
 

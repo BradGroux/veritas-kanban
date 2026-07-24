@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.1] - 2026-07-24
+
+Veritas Kanban 6.0.1 is the first supported stable v6 release. It supersedes
+the quarantined 6.0.0 prerelease after closing the post-publication desktop and
+workflow stabilization backlog tracked in #924.
+
 ### Fixed
 
 - Kept desktop Chat in a bounded, reversible workbench panel; Escape and browser
@@ -43,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reporting from Electron's packaged application metadata (#986).
 
 ## [6.0.0] - 2026-07-24
+
+> Quarantined prerelease. Use 6.0.1 or newer. The 6.0.0 artifacts remain
+> available only for investigation and historical release evidence.
 
 Each release entry below names its tracking issue. The complete issue-to-pull
 request mapping, including multi-PR fixes and release engineering, is retained
@@ -2203,7 +2212,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...HEAD
+[6.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...v6.0.0
 [5.2.5]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.4...v5.2.5
 [5.2.4]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.3...v5.2.4

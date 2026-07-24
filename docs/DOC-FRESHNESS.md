@@ -58,6 +58,7 @@ When a doc is older than the current version, it may need review.
 
 | Date       | Scope                                                               | Agent   |
 | ---------- | ------------------------------------------------------------------- | ------- |
+| 2026-07-24 | v6.0.1 stabilization, release, upgrade, API, MCP, and evidence      | Release |
 | 2026-07-24 | v6.0.0 harness, Buzz, release, upgrade, compatibility, and evidence | Release |
 | 2026-07-12 | v5.2.2 UI-audit fixes, release gates, desktop state, and evidence   | Release |
 | 2026-06-05 | v5.0.0 stable release docs, install paths, release assets, RC notes | Codex   |
