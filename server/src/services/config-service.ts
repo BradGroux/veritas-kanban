@@ -31,8 +31,9 @@ const DEFAULT_CONFIG: AppConfig = {
       type: 'claude-code',
       name: 'Claude Code',
       command: 'claude',
-      args: ['--dangerously-skip-permissions'],
+      args: [],
       enabled: false,
+      provider: 'claude-code',
     },
     {
       type: 'amp',
@@ -142,6 +143,16 @@ function mergeDefaultAgents(agents: AgentConfig[]): AgentConfig[] {
 function migrateLegacyAgentProvider(agent: AgentConfig): AgentConfig {
   if (agent.provider) return agent;
   const command = path.basename(agent.command.trim().split(/\s+/)[0] ?? '');
+  if (agent.type === 'claude-code' && command === 'claude') {
+    return {
+      ...agent,
+      provider: 'claude-code',
+      args:
+        agent.args.length === 1 && agent.args[0] === '--dangerously-skip-permissions'
+          ? []
+          : agent.args,
+    };
+  }
   if (agent.type === 'codex' && command === 'codex') {
     return { ...agent, provider: 'codex-cli' };
   }

@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a first-class Claude Code v2.1.218 task adapter with a reproducible
+  no-shell bare-mode launch, static sandbox-derived permissions, explicit
+  environment authentication with provider credentials scrubbed from tool
+  subprocesses, bounded health and agent-discovery diagnostics,
+  immutable task/run manifests, drain-safe stream-json ingestion, causal event
+  mapping for partial text, thinking, tools, hooks, subagents, usage, cost, and
+  results, separate session identity persistence, artifact discovery, and
+  fail-closed capability evidence for lifecycle and broker controls that have
+  not landed yet. Legacy provider-less Claude records migrate only when command
+  identity matches, and the old permission-bypass default is removed (#916).
 - Added `run-event/v1`, a provider-neutral causal event journal for OpenClaw,
   Codex CLI, Codex SDK, and Hermes. Provider mappers now durably append bounded,
   redacted, deduplicated lifecycle, message, reasoning, command, file, tool,

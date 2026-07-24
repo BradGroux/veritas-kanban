@@ -611,6 +611,12 @@ certification evidence. Use `vk doctor --json` for support-safe automation and
 diagnostics, including redacted readiness reasons, safe probe commands, and
 remediation.
 
+For Claude Code, doctor reports the bounded version, auth-status, and agent
+discovery probes, plus separate bare-mode authentication readiness. A
+successful interactive OAuth status is diagnostic only because Veritas
+launches Claude Code with `--bare`; configure an explicit supported
+environment credential before enabling the profile.
+
 ---
 
 ## Workflow Commands Deep Dive

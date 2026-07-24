@@ -41,6 +41,7 @@ import {
 import {
   renderCodexCliTaskEnvelope,
   renderCodexSdkTaskEnvelope,
+  renderClaudeCodeTaskEnvelope,
   renderHermesTaskEnvelope,
   renderOpenClawTaskEnvelope,
   type ProviderTaskEnvelopeRenderInput,
@@ -145,6 +146,17 @@ import {
   type ProviderMappedRunEvent,
   type ProviderRunEventMapper,
 } from './provider-run-event-mappers.js';
+import {
+  buildClaudeCodeArgs,
+  buildSafeClaudeCodeEnv,
+  CLAUDE_CODE_CREDENTIAL_ENV_KEYS,
+  CLAUDE_CODE_MAX_STREAM_RECORD_BYTES,
+  classifyClaudeCodeStreamRecord,
+  parseClaudeCodeStreamLine,
+  type ClaudeCodeStreamClassification,
+  type ClaudeCodeTerminalResult,
+  type ClaudeCodeUsage,
+} from './claude-code-adapter.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -158,6 +170,7 @@ const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
   ],
   [/\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi, '$1=[REDACTED]'],
 ];
+const CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES = 64 * 1024;
 
 export interface AgentProviderStartContext {
   task: Task;
@@ -2401,6 +2414,7 @@ export class ClawdbotAgentService {
         agentConfig.provider === 'openclaw' ||
         agentConfig.provider === 'codex-sdk' ||
         agentConfig.provider === 'codex-cli' ||
+        agentConfig.provider === 'claude-code' ||
         agentConfig.provider === 'hermes-cli'
       ) {
         provider = agentConfig.provider;
@@ -2414,6 +2428,11 @@ export class ClawdbotAgentService {
           }
         );
       }
+    } else if (
+      agent === 'claude-code' &&
+      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'claude'
+    ) {
+      provider = 'claude-code';
     } else if (
       agent === 'codex' &&
       path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'codex'
@@ -2623,6 +2642,55 @@ export class ClawdbotAgentService {
       };
     }
 
+    if (provider === 'claude-code') {
+      return {
+        id: definition.id,
+        label: definition.label,
+        renderTaskEnvelope: renderClaudeCodeTaskEnvelope,
+        probe,
+        runEventMapper: getProviderRunEventMapper(provider),
+        start: async ({
+          task,
+          agentConfig,
+          transport,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+          runLaunchManifest,
+        }) => {
+          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
+          await this.startClaudeCode(
+            task,
+            agentConfig,
+            transport.content,
+            logPath,
+            attemptId,
+            startedAt,
+            emitter,
+            sandboxPolicy,
+            runLaunchManifest
+          );
+        },
+        stop: ({ pending }) => {
+          const child = pending.process;
+          if (!child || child.exitCode != null || child.signalCode != null) return;
+          child.kill('SIGTERM');
+          const forcedStop = setTimeout(() => {
+            if (child.exitCode == null && child.signalCode == null) {
+              child.kill('SIGKILL');
+              log.warn(
+                { taskId: pending.taskId },
+                '[ClawdbotAgent] Claude Code SIGKILL issued after graceful stop timeout'
+              );
+            }
+          }, 5_000);
+          child.once('close', () => clearTimeout(forcedStop));
+        },
+      };
+    }
+
     if (provider === 'hermes-cli') {
       return {
         id: definition.id,
@@ -2791,7 +2859,7 @@ export class ClawdbotAgentService {
       provider === 'codex-sdk' && context.health.providerVersion
         ? `codex-cli:${context.health.providerVersion}`
         : undefined;
-    const diagnostics: string[] = [];
+    const diagnostics: string[] = [...(context.health.diagnostics ?? [])];
 
     if (!providerVersion) {
       diagnostics.push(
@@ -2829,6 +2897,454 @@ export class ClawdbotAgentService {
       },
       capabilities: definition.capabilities,
     };
+  }
+
+  private async startClaudeCode(
+    task: Task,
+    agentConfig: AgentConfig | undefined,
+    prompt: string,
+    logPath: string,
+    attemptId: string,
+    startedAt: string,
+    emitter: EventEmitter,
+    sandboxPolicy: SandboxPolicyDryRunResult | undefined,
+    runLaunchManifest: RunLaunchManifest
+  ): Promise<void> {
+    const worktreePath = this.expandPath(task.git?.worktreePath || '');
+    if (!worktreePath) {
+      throw new Error('Task worktree path is required for Claude Code');
+    }
+    const runtimeSeconds = runLaunchManifest.budget.enabled
+      ? runLaunchManifest.budget.limits?.runtimeSeconds
+      : undefined;
+    if (
+      runtimeSeconds !== undefined &&
+      runtimeSeconds > 0 &&
+      !Number.isSafeInteger(runtimeSeconds * 1_000)
+    ) {
+      throw new Error('Claude Code runtime budget exceeds the supported timer range.');
+    }
+    const repositoryInstructions =
+      (await this.workspaceFiles.readOptionalText(worktreePath, 'AGENTS.md'))?.trim() ?? '';
+    const effectivePrompt = repositoryInstructions
+      ? `${prompt}\n\n# Repository Instructions\n\n${repositoryInstructions}`
+      : prompt;
+    const command = agentConfig?.command || 'claude';
+    const args = buildClaudeCodeArgs({
+      prompt: effectivePrompt,
+      model: agentConfig?.model,
+      extraArgs: agentConfig?.args,
+      sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+      networkAccessEnabled: sandboxPolicy?.effective.networkAccessEnabled ?? true,
+      maxBudgetUsd: runLaunchManifest.budget.enabled
+        ? runLaunchManifest.budget.limits?.costUsd
+        : undefined,
+    });
+    await this.appendLog(
+      logPath,
+      `\n## Claude Code\n\n**Command:** \`${[
+        command,
+        ...args.map((argument) => (argument === effectivePrompt ? '<prompt>' : argument)),
+      ].join(
+        ' '
+      )}\`\n**Worktree:** \`${worktreePath}\`\n**Configuration:** bare mode with Veritas-owned static permissions\n\n`
+    );
+    await this.recordAgentStarted(
+      task,
+      attemptId,
+      agentConfig?.type || 'claude-code',
+      'claude-code',
+      agentConfig
+    );
+
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new ConflictError('Claude Code launch was cancelled before process spawn.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
+    const child = spawn(command, args, {
+      cwd: worktreePath,
+      env: buildSafeClaudeCodeEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      shell: false,
+    });
+    pending.process = child;
+
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    let finalSummary = '';
+    let terminalResult: ClaudeCodeTerminalResult | undefined;
+    let tokenUsage: ClaudeCodeUsage | undefined;
+    let recordedSessionId: string | undefined;
+    let eventProcessing = Promise.resolve();
+    let eventProcessingError: Error | undefined;
+    let runtimeTimedOut = false;
+    const enqueueEventProcessing = (work: () => Promise<void>) => {
+      eventProcessing = eventProcessing.then(async () => {
+        if (eventProcessingError) return;
+        try {
+          await work();
+        } catch (error) {
+          eventProcessingError =
+            error instanceof Error ? error : new Error('Provider event ingestion failed closed.');
+          child.kill('SIGTERM');
+        }
+      });
+    };
+    const processLine = async (line: string) => {
+      const classified = await this.handleClaudeCodeJsonLine(
+        line,
+        task,
+        attemptId,
+        agentConfig,
+        logPath
+      );
+      if (classified.summary) finalSummary = classified.summary;
+      if (classified.usage) tokenUsage = classified.usage;
+      if (classified.terminal) terminalResult = classified.terminal;
+      if (classified.sessionId && classified.sessionId !== recordedSessionId) {
+        recordedSessionId = classified.sessionId;
+        await this.recordClaudeCodeSession(task, attemptId, classified.sessionId);
+      }
+    };
+
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (chunk: string) => {
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        await this.recordStreamChunk(task, attemptId, agentConfig, 'claude-code', 'stdout', chunk);
+        stdoutBuffer += chunk;
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() || '';
+        if (Buffer.byteLength(stdoutBuffer, 'utf8') > CLAUDE_CODE_MAX_STREAM_RECORD_BYTES) {
+          throw new Error('Claude Code stream record exceeded the 1 MiB safety limit.');
+        }
+        for (const line of lines) {
+          if (line.trim()) await processLine(line);
+        }
+      });
+    });
+
+    child.stderr.setEncoding('utf-8');
+    child.stderr.on('data', (chunk: string) => {
+      const accumulated = Buffer.from(`${stderrBuffer}${chunk}`, 'utf8');
+      stderrBuffer =
+        accumulated.byteLength > CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES
+          ? accumulated
+              .subarray(accumulated.byteLength - CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES)
+              .toString('utf8')
+          : accumulated.toString('utf8');
+      enqueueEventProcessing(async () => {
+        await this.assertPendingManifestSnapshotForAttempt(task.id, attemptId);
+        await this.recordStreamChunk(task, attemptId, agentConfig, 'claude-code', 'stderr', chunk);
+        await this.appendLog(
+          logPath,
+          `\n### stderr\n\n\`\`\`\n${this.redactTraceText(chunk.trimEnd())}\n\`\`\`\n`
+        );
+      });
+    });
+
+    child.on('error', (error) => {
+      enqueueEventProcessing(async () => {
+        const message = this.redactTraceText(error.message);
+        const journalEvent = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'process' },
+          {
+            provider: 'claude-code',
+            adapter: 'claude-code',
+            agent: agentConfig?.type || 'claude-code',
+            model: agentConfig?.model,
+          }
+        );
+        this.emitJournalOutput(journalEvent);
+        await this.appendLog(logPath, `\n## Claude Code Process Error\n\n${message}\n`);
+        if (emitter.listenerCount('error') > 0) emitter.emit('error', error);
+      });
+    });
+
+    let runtimeTimer: NodeJS.Timeout | undefined;
+    let remainingRuntimeMs =
+      runtimeSeconds && runtimeSeconds > 0 ? runtimeSeconds * 1_000 : undefined;
+    const onRuntimeTimeout = () => {
+      runtimeTimedOut = true;
+      enqueueEventProcessing(async () => {
+        const message = `Claude Code runtime limit exceeded after ${runtimeSeconds} seconds.`;
+        const event = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'run.error',
+          { summary: message, error: message, phase: 'timeout' },
+          {
+            provider: 'claude-code',
+            adapter: 'claude-code',
+            agent: agentConfig?.type || 'claude-code',
+            model: agentConfig?.model,
+            dedupeKey: 'claude-code.runtime-timeout',
+          }
+        );
+        this.emitJournalOutput(event);
+      });
+      child.kill('SIGTERM');
+    };
+    const scheduleRuntimeTimer = () => {
+      if (remainingRuntimeMs === undefined) return;
+      const delay = Math.min(remainingRuntimeMs, 2_147_483_647);
+      runtimeTimer = setTimeout(() => {
+        remainingRuntimeMs = Math.max(0, (remainingRuntimeMs ?? 0) - delay);
+        if (remainingRuntimeMs > 0) {
+          scheduleRuntimeTimer();
+        } else {
+          onRuntimeTimeout();
+        }
+      }, delay);
+    };
+    if (remainingRuntimeMs !== undefined) scheduleRuntimeTimer();
+
+    child.on('close', (code, signal) => {
+      if (runtimeTimer) clearTimeout(runtimeTimer);
+      if (!pending || pendingAgents.get(task.id) !== pending || pending.attemptId !== attemptId) {
+        return;
+      }
+      void this.finalizePendingAgent(task.id, pending, async () => {
+        await eventProcessing;
+        if (stdoutBuffer.trim() && !eventProcessingError) {
+          try {
+            await processLine(stdoutBuffer);
+          } catch (error) {
+            eventProcessingError =
+              error instanceof Error ? error : new Error('Claude Code final stream record failed.');
+          }
+        }
+
+        const signalError = signal ? `Claude Code terminated by signal ${signal}.` : undefined;
+        const timeoutError = runtimeTimedOut
+          ? `Claude Code runtime limit exceeded after ${runtimeSeconds} seconds.`
+          : undefined;
+        const protocolError =
+          eventProcessingError?.message ??
+          (!terminalResult
+            ? 'Claude Code stream ended without an authoritative result record.'
+            : undefined);
+        const succeeded =
+          code === 0 &&
+          !signal &&
+          !runtimeTimedOut &&
+          !eventProcessingError &&
+          terminalResult?.success === true;
+        const error =
+          timeoutError ??
+          protocolError ??
+          terminalResult?.error ??
+          signalError ??
+          (!succeeded ? `Claude Code exited with code ${code ?? 'unknown'}.` : undefined);
+        const summary =
+          terminalResult?.summary ||
+          finalSummary ||
+          error ||
+          (succeeded ? 'Claude Code completed.' : this.redactTraceText(stderrBuffer.trim()));
+
+        if (tokenUsage && !eventProcessingError) {
+          await this.assertRunControl(task.id, 'token-usage', attemptId);
+          await getTelemetryService().emit<TokenTelemetryEvent>({
+            type: 'run.tokens',
+            taskId: task.id,
+            attemptId,
+            agent: agentConfig?.type || 'claude-code',
+            project: task.project,
+            inputTokens: tokenUsage.inputTokens,
+            outputTokens: tokenUsage.outputTokens,
+            totalTokens: tokenUsage.totalTokens,
+            cost: tokenUsage.cost,
+            model: tokenUsage.model || agentConfig?.model,
+          });
+          await this.evaluatePendingBudget(
+            task.id,
+            attemptId,
+            {
+              inputTokens: tokenUsage.inputTokens,
+              outputTokens: tokenUsage.outputTokens,
+              totalTokens: tokenUsage.totalTokens,
+              costUsd: tokenUsage.cost,
+            },
+            'agent.tokens',
+            false
+          );
+        }
+
+        await this.appendLog(
+          logPath,
+          `\n## Claude Code Exit\n\n**Exit code:** ${code ?? 'none'}\n**Signal:** ${signal ?? 'none'}\n**Duration:** ${Date.now() - new Date(startedAt).getTime()}ms\n**Session:** ${recordedSessionId ?? 'not reported'}\n**Result:** ${terminalResult?.subtype ?? 'missing'}\n`
+        );
+        this.recordTraceStep(attemptId, succeeded ? 'finalize' : 'error', {
+          eventType: 'run.finalizing',
+          exitCode: code,
+          signal,
+          success: succeeded,
+          terminalSubtype: terminalResult?.subtype,
+          sessionId: recordedSessionId,
+          provider: 'claude-code',
+          agent: agentConfig?.type || 'claude-code',
+          model: agentConfig?.model,
+        });
+
+        return {
+          success: succeeded,
+          terminalSource: 'process',
+          summary,
+          error: succeeded ? undefined : error,
+        };
+      }).catch((error) => {
+        if (pendingAgents.get(task.id) !== pending) return;
+        log.error({ err: error, taskId: task.id }, 'Failed to finalize Claude Code attempt');
+      });
+    });
+  }
+
+  private async handleClaudeCodeJsonLine(
+    line: string,
+    task: Task,
+    attemptId: string,
+    agentConfig: AgentConfig | undefined,
+    logPath: string
+  ): Promise<ClaudeCodeStreamClassification> {
+    const record = parseClaudeCodeStreamLine(line);
+    const rawClassification = classifyClaudeCodeStreamRecord(record);
+    const classified: ClaudeCodeStreamClassification = {
+      ...rawClassification,
+      ...(rawClassification.summary
+        ? { summary: this.redactTraceText(rawClassification.summary) }
+        : {}),
+      ...(rawClassification.terminal
+        ? {
+            terminal: {
+              ...rawClassification.terminal,
+              ...(rawClassification.terminal.summary
+                ? { summary: this.redactTraceText(rawClassification.terminal.summary) }
+                : {}),
+              ...(rawClassification.terminal.error
+                ? { error: this.redactTraceText(rawClassification.terminal.error) }
+                : {}),
+            },
+          }
+        : {}),
+    };
+    const agent = agentConfig?.type || 'claude-code';
+    const journalEvent = await this.appendMappedProviderEvent(
+      task,
+      attemptId,
+      agentConfig,
+      'claude-code',
+      this.resolveProviderAdapter('claude-code').runEventMapper.mapEvent(
+        classified.providerType,
+        record,
+        classified.summary
+      )
+    );
+    this.emitJournalOutput(journalEvent);
+    if (classified.usage) {
+      await this.appendRunEvent(
+        task.id,
+        attemptId,
+        'usage.updated',
+        {
+          inputTokens: classified.usage.inputTokens,
+          outputTokens: classified.usage.outputTokens,
+          totalTokens: classified.usage.totalTokens,
+          cost: classified.usage.cost,
+          model: classified.usage.model || agentConfig?.model,
+        },
+        {
+          provider: 'claude-code',
+          adapter: 'claude-code',
+          agent,
+          model: classified.usage.model || agentConfig?.model,
+          causalEventId: journalEvent.eventId,
+          dedupeKey: `${journalEvent.eventId}:usage`,
+        }
+      );
+    }
+    this.recordTraceStep(
+      attemptId,
+      classified.providerType.includes('text_delta')
+        ? 'stream'
+        : classified.terminal?.success
+          ? 'complete'
+          : classified.terminal
+            ? 'error'
+            : classified.providerType.includes('api_retry')
+              ? 'retry'
+              : 'execute',
+      {
+        provider: 'claude-code',
+        eventType: classified.providerType,
+        summary: classified.summary,
+        tool: classified.tool,
+        files: classified.files,
+        sessionId: classified.sessionId,
+        parentToolUseId: classified.parentToolUseId,
+        inputTokens: classified.usage?.inputTokens,
+        outputTokens: classified.usage?.outputTokens,
+        totalTokens: classified.usage?.totalTokens,
+        cost: classified.usage?.cost,
+        model: classified.usage?.model || agentConfig?.model,
+      }
+    );
+    if (classified.tool && classified.providerType === 'assistant.tool_use') {
+      await this.assertRunControl(task.id, 'tool-calls', attemptId);
+      await this.evaluatePendingBudget(task.id, attemptId, { toolCalls: 1 }, 'agent.tool', true);
+    }
+    if (classified.files.length > 0) {
+      await this.attachProviderDeliverables(
+        task,
+        attemptId,
+        agent,
+        'claude-code',
+        'Claude Code',
+        classified.files
+      );
+    }
+    if (
+      classified.tool ||
+      classified.terminal ||
+      classified.providerType.includes('hook_') ||
+      classified.providerType.includes('api_retry')
+    ) {
+      await activityService.logActivity(
+        'agent_event',
+        task.id,
+        task.title,
+        {
+          attemptId,
+          provider: 'claude-code',
+          eventType: classified.providerType,
+          summary: classified.summary,
+        },
+        agent
+      );
+    }
+    await this.appendLog(
+      logPath,
+      `\n### ${classified.providerType}\n\n${
+        classified.summary ? `${this.redactTraceText(classified.summary)}\n\n` : ''
+      }<details><summary>Raw event</summary>\n\n\`\`\`json\n${this.redactTraceText(
+        JSON.stringify(journalEvent.payload.raw ?? {}, null, 2)
+      )}\n\`\`\`\n\n</details>\n`
+    );
+    return classified;
+  }
+
+  private async recordClaudeCodeSession(
+    task: Task,
+    attemptId: string,
+    sessionId: string
+  ): Promise<void> {
+    const pending = pendingAgents.get(task.id);
+    if (pending && pending.attemptId === attemptId) pending.threadId = sessionId;
+    await this.taskService.patchTaskAttempt(task.id, attemptId, { threadId: sessionId });
   }
 
   private startHermesCli(
@@ -3505,6 +4021,7 @@ export class ClawdbotAgentService {
       payload,
       providerEventId: options.providerEventId,
       providerTimestamp: options.providerTimestamp,
+      sessionId: options.sessionId,
       turnId: options.turnId,
       itemId: options.itemId,
       parentEventId: options.parentEventId,
@@ -3613,9 +4130,11 @@ export class ClawdbotAgentService {
           ? 'codex-sdk:workspace-write:approval-never'
           : provider === 'codex-cli'
             ? 'codex-cli:workspace-write'
-            : provider === 'hermes-cli'
-              ? 'hermes-cli:workspace-write'
-              : 'openclaw:delegated',
+            : provider === 'claude-code'
+              ? 'claude-code:static-permissions'
+              : provider === 'hermes-cli'
+                ? 'hermes-cli:workspace-write'
+                : 'openclaw:delegated',
       provider,
       model: agentConfig?.model,
       taskType: task.type,
@@ -3717,7 +4236,14 @@ export class ClawdbotAgentService {
 
     if (files.length > 0) {
       await this.assertRunControl(task.id, 'artifacts', attemptId);
-      await this.attachCodexDeliverables(task, attemptId, agent, files);
+      await this.attachProviderDeliverables(
+        task,
+        attemptId,
+        agent,
+        agentConfig?.provider || 'codex-cli',
+        'Codex',
+        files
+      );
     }
   }
 
@@ -3952,10 +4478,12 @@ export class ClawdbotAgentService {
     return /^[\w.-]+\/[\w./-]+$/.test(trimmed) || /\.[a-z0-9]{1,12}$/i.test(trimmed);
   }
 
-  private async attachCodexDeliverables(
+  private async attachProviderDeliverables(
     task: Task,
     attemptId: string,
     agent: string,
+    provider: string,
+    providerLabel: string,
     files: string[]
   ): Promise<void> {
     await this.assertRunControl(task.id, 'artifacts', attemptId);
@@ -3984,7 +4512,7 @@ export class ClawdbotAgentService {
         sourceRunId: attemptId,
         version: 1,
         created,
-        description: `Codex event artifact from attempt ${attemptId}`,
+        description: `${providerLabel} event artifact from attempt ${attemptId}`,
       });
     }
 
@@ -4000,7 +4528,7 @@ export class ClawdbotAgentService {
       task.title,
       {
         attemptId,
-        provider: 'codex',
+        provider,
         deliverableCount: additions.length,
         paths: additions.map((deliverable) => deliverable.path),
       },
@@ -4406,7 +4934,8 @@ export class ClawdbotAgentService {
       input.task.id,
       input.logPath,
       input.attemptId,
-      input.sandboxPolicy
+      input.sandboxPolicy,
+      input.budgetPolicy
     );
     const worktreePath = input.task.git?.worktreePath
       ? this.expandPath(input.task.git.worktreePath)
@@ -5009,7 +5538,8 @@ export class ClawdbotAgentService {
     taskId: string,
     logPath: string,
     attemptId: string,
-    sandboxPolicy: SandboxPolicyDryRunResult
+    sandboxPolicy: SandboxPolicyDryRunResult,
+    budgetPolicy?: AgentBudgetPolicy
   ): RunLaunchRuntime {
     const environment = this.buildRunLaunchEnvironment(provider, sandboxPolicy);
     const runtimeBase = {
@@ -5043,6 +5573,20 @@ export class ClawdbotAgentService {
           'runStreamed',
           '<prompt>',
         ],
+      };
+    }
+    if (provider === 'claude-code') {
+      return {
+        ...runtimeBase,
+        command: agentConfig?.command || 'claude',
+        args: buildClaudeCodeArgs({
+          prompt: '<prompt>',
+          model: agentConfig?.model,
+          extraArgs: agentConfig?.args,
+          sandboxMode: sandboxPolicy.effective.sandboxMode,
+          networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
+          maxBudgetUsd: budgetPolicy?.enabled ? budgetPolicy.limits?.costUsd : undefined,
+        }),
       };
     }
     if (provider === 'hermes-cli') {
@@ -5140,6 +5684,19 @@ export class ClawdbotAgentService {
           ...environmentKeys
             .filter((key) => key === 'ANTHROPIC_API_KEY' || key === 'HERMES_API_KEY')
             .map((key) => `env:${key}`),
+        ],
+      };
+    }
+    if (provider === 'claude-code') {
+      const environmentKeys = Object.keys(
+        buildSafeClaudeCodeEnv(process.env, sandboxPolicy.effective.envPassthrough)
+      );
+      const credentialKeys = new Set<string>(CLAUDE_CODE_CREDENTIAL_ENV_KEYS);
+      return {
+        environmentKeys,
+        credentialReferences: [
+          ...sandboxPolicy.effective.credentialRefs,
+          ...environmentKeys.filter((key) => credentialKeys.has(key)).map((key) => `env:${key}`),
         ],
       };
     }

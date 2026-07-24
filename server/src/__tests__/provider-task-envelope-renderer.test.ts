@@ -6,6 +6,7 @@ import {
   type CompletionEvidenceSource,
 } from '../services/task-envelope-service.js';
 import {
+  renderClaudeCodeTaskEnvelope,
   renderCodexCliTaskEnvelope,
   renderCodexSdkTaskEnvelope,
   renderHermesTaskEnvelope,
@@ -169,6 +170,24 @@ describe('provider task-envelope renderers', () => {
     expect(transport.content).toContain('## Completion (Codex SDK stream)');
     expect(transport.content).toContain(
       'Return the final response through the SDK event stream captured by Veritas.'
+    );
+    expect(transport.content).not.toContain('/api/agents/task_transport/complete');
+    expect(transport.content).toMatchSnapshot();
+  });
+
+  it('renders a callback-free Claude Code stream transport', async () => {
+    const taskEnvelope = await envelope('claude-code', 'required');
+
+    const transport = renderClaudeCodeTaskEnvelope({ taskEnvelope });
+
+    expect(transport).toMatchObject({
+      provider: 'claude-code',
+      callbackPosture: 'harness-owned',
+      completionNormalization: 'harness',
+    });
+    expect(transport.content).toContain('## Completion (Claude Code stream)');
+    expect(transport.content).toContain(
+      'Return the final response through the terminal result record captured by Veritas.'
     );
     expect(transport.content).not.toContain('/api/agents/task_transport/complete');
     expect(transport.content).toMatchSnapshot();

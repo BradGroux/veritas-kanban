@@ -567,6 +567,104 @@ describe('ClawdbotAgentService Codex providers', () => {
     }
   );
 
+  it('drains a final Claude Code result without a trailing newline before completion', async () => {
+    const fixture = await fs.readFile(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        'fixtures',
+        'claude-code-v2.1.218.stream.jsonl'
+      ),
+      'utf-8'
+    );
+    const records = fixture.trim().split(/\r?\n/);
+    const terminal = {
+      ...(JSON.parse(records.at(-1) as string) as Record<string, unknown>),
+      apiKey: 'sk-must-not-be-persisted',
+    };
+    const stream = [...records.slice(0, -1), JSON.stringify(terminal)].join('\n');
+    mockSpawn.mockReturnValue(createFakeChild(stream));
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-claude-key');
+    task = { ...task, agent: 'claude-code' };
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'claude-code',
+          name: 'Claude Code',
+          command: 'claude',
+          args: [],
+          enabled: true,
+          provider: 'claude-code',
+          model: 'claude-opus-4-6',
+        },
+      ],
+    });
+    mockCheckAgent.mockResolvedValue({
+      type: 'claude-code',
+      name: 'Claude Code',
+      enabled: true,
+      configured: true,
+      command: 'claude',
+      executableFound: true,
+      executablePath: '/usr/local/bin/claude',
+      providerVersion: '2.1.218 (Claude Code)',
+      providerVersionSource: 'claude --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-07-23T00:00:00.000Z',
+    });
+    const service = testableService(tmpDir);
+
+    const active = await service.startAgent(task.id, 'claude-code');
+
+    await waitFor(() => expect(task.status).toBe('done'));
+    expect(active.runLaunchManifest).toMatchObject({
+      runtime: {
+        command: 'claude',
+        args: expect.arrayContaining([
+          '--bare',
+          '--output-format',
+          'stream-json',
+          '--permission-mode',
+          'dontAsk',
+        ]),
+        credentialReferences: expect.arrayContaining(['env:ANTHROPIC_API_KEY']),
+      },
+    });
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'claude',
+      expect.arrayContaining([
+        '--bare',
+        '--output-format',
+        'stream-json',
+        '--permission-mode',
+        'dontAsk',
+      ]),
+      expect.objectContaining({ cwd: tmpDir, shell: false })
+    );
+    expect(task.attempt).toMatchObject({
+      id: active.attemptId,
+      status: 'complete',
+      threadId: '11111111-1111-4111-8111-111111111111',
+      completionResult: {
+        status: 'success',
+        terminalSource: 'process',
+      },
+    });
+    expect(mockTelemetryEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'run.tokens',
+        inputTokens: 120,
+        outputTokens: 80,
+        totalTokens: 200,
+        cost: 0.041,
+      })
+    );
+    const log = await service.getAttemptLog(task.id, active.attemptId);
+    expect(log).toContain('Implemented and verified the requested change.');
+    expect(log).not.toContain('sk-must-not-be-persisted');
+    expect(log).toContain('"apiKey": "[REDACTED]"');
+  });
+
   it('redacts provider identity secrets before emitting harness telemetry', async () => {
     const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
     mockSpawn.mockReturnValue(createFakeChild(fixture));

@@ -40,6 +40,7 @@ export const RunEventEnvelopeSchema: z.ZodType<RunEventEnvelope> = z
     taskId: IdentifierSchema,
     runId: IdentifierSchema,
     attemptId: IdentifierSchema,
+    sessionId: IdentifierSchema.optional(),
     turnId: IdentifierSchema.optional(),
     itemId: IdentifierSchema.optional(),
     providerEventId: IdentifierSchema.optional(),

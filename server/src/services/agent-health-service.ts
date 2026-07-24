@@ -4,6 +4,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { AgentConfig } from '@veritas-kanban/shared';
+import { hasClaudeCodeBareAuthentication } from './claude-code-adapter.js';
 
 const execFileAsync = promisify(execFile);
 const PROVIDER_VERSION_TIMEOUT_MS = 5_000;
@@ -55,6 +56,7 @@ export interface AgentHealthStatus {
   healthy: boolean;
   checkedAt: string;
   reason?: string;
+  diagnostics?: string[];
 }
 
 export interface AgentHealthChecker {
@@ -87,6 +89,7 @@ export class AgentHealthService implements AgentHealthChecker {
       healthy: agent.enabled && executable.found && auth.authenticated !== false,
       checkedAt,
       reason,
+      ...(auth.diagnostics?.length ? { diagnostics: auth.diagnostics } : {}),
     };
   }
 
@@ -113,7 +116,7 @@ export class AgentHealthService implements AgentHealthChecker {
   private async checkAuth(
     agent: AgentConfig,
     versionProbe: ProviderVersionProbe
-  ): Promise<{ authenticated: boolean | null; error?: string }> {
+  ): Promise<{ authenticated: boolean | null; error?: string; diagnostics?: string[] }> {
     const command = path.basename(agent.command);
     const provider = agent.provider ?? '';
 
@@ -154,11 +157,78 @@ export class AgentHealthService implements AgentHealthChecker {
       return { authenticated: true };
     }
 
+    if (provider === 'claude-code') {
+      return this.probeClaudeCodeAuthentication(agent.command);
+    }
+
     if (provider.startsWith('codex') || command === 'codex') {
       return this.runAuthProbe(agent.command, ['login', 'status'], /logged in/i);
     }
 
     return { authenticated: null };
+  }
+
+  private async probeClaudeCodeAuthentication(
+    command: string
+  ): Promise<{ authenticated: boolean; error?: string; diagnostics: string[] }> {
+    const diagnostics: string[] = [];
+    try {
+      const { stdout, stderr } = await this.runCommand(command, ['auth', 'status'], {
+        timeout: PROVIDER_VERSION_TIMEOUT_MS,
+        maxBuffer: PROVIDER_VERSION_MAX_BUFFER_BYTES,
+        shell: false,
+      });
+      const output = boundUtf8(`${stdout}${stderr}`.trim(), PROVIDER_VERSION_MAX_BUFFER_BYTES);
+      const authStatusReady = /"loggedIn"\s*:\s*true|"logged_in"\s*:\s*true|logged in/i.test(
+        output
+      );
+      diagnostics.push(
+        authStatusReady
+          ? 'Claude Code authentication status is ready.'
+          : 'Claude Code authentication status did not report a logged-in session.'
+      );
+    } catch {
+      diagnostics.push('Claude Code authentication status probe failed.');
+    }
+
+    const bareAuthentication = hasClaudeCodeBareAuthentication(process.env);
+    diagnostics.push(
+      bareAuthentication
+        ? 'Explicit bare-mode authentication is configured.'
+        : 'Bare mode requires explicit environment authentication; OAuth and keychain state are not inherited.'
+    );
+
+    try {
+      const { stdout } = await this.runCommand(command, ['agents', '--json'], {
+        timeout: PROVIDER_VERSION_TIMEOUT_MS,
+        maxBuffer: PROVIDER_VERSION_MAX_BUFFER_BYTES,
+        shell: false,
+      });
+      const parsed = JSON.parse(
+        boundUtf8(String(stdout).trim(), PROVIDER_VERSION_MAX_BUFFER_BYTES) || '[]'
+      ) as unknown;
+      const count = Array.isArray(parsed)
+        ? parsed.length
+        : parsed &&
+            typeof parsed === 'object' &&
+            Array.isArray((parsed as { agents?: unknown }).agents)
+          ? (parsed as { agents: unknown[] }).agents.length
+          : 0;
+      diagnostics.push(`Claude Code agent discovery returned ${count} definition(s).`);
+    } catch {
+      diagnostics.push('Claude Code agent discovery probe failed; run `claude agents --json`.');
+    }
+
+    const authenticated = bareAuthentication;
+    return {
+      authenticated,
+      ...(authenticated
+        ? {}
+        : {
+            error: 'Claude Code bare mode requires explicit environment authentication.',
+          }),
+      diagnostics,
+    };
   }
 
   private async runAuthProbe(

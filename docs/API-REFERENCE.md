@@ -1317,6 +1317,7 @@ The server confirms with `run-session:subscribed` after the connection has
     "taskId": "TASK-001",
     "runId": "attempt_001",
     "attemptId": "attempt_001",
+    "sessionId": "provider-session-001",
     "sequence": 42,
     "receivedAt": "2026-07-23T20:00:00.000Z",
     "kind": "message.delta",
@@ -2210,7 +2211,7 @@ controls:
     "providerRuntime": {
       "digest": "sha256:...",
       "provider": "codex-cli",
-      "probeRevision": 3
+      "probeRevision": 4
     },
     "runtime": {
       "command": "codex",
@@ -2267,7 +2268,8 @@ The response contains `schemaVersion`, `taskId`, `attemptId`, ordered `events`,
 `nextCursor`, and `hasMore`. `afterSequence` must be non-negative and `limit`
 must be between 1 and 500. Access uses the same `run.logs` capability check as
 attempt logs. Clients should persist `nextCursor` and reconnect with it rather
-than inferring order from timestamps.
+than inferring order from timestamps. `sessionId`, `turnId`, and `itemId` are
+separate optional identities and appear only when the provider reports them.
 
 Stop and message requests must carry the `attemptId` returned by status so a
 delayed control cannot affect a replacement run:
@@ -2313,8 +2315,9 @@ harness-owned process or stream attempts that were still running when the
 server restarted. OpenClaw attempts remain eligible for their authoritative
 callback after restart.
 
-Codex CLI, Codex SDK, and Hermes do not call this endpoint; Veritas captures
-their terminal process or stream output and owns completion normalization.
+Codex CLI, Codex SDK, Claude Code, and Hermes do not call this endpoint;
+Veritas captures their terminal process or stream output and owns completion
+normalization.
 Claimed success becomes `partial` when required harness evidence is absent,
 commit policy is violated, a required output is missing, or an unauthorized
 side effect is observed. `success` maps the task to `done`, `blocked` maps it
@@ -2332,7 +2335,7 @@ Task and trace responses can therefore include the immutable
 ```json
 {
   "schemaVersion": "provider-runtime-manifest/v1",
-  "probeRevision": 3,
+  "probeRevision": 4,
   "provider": "codex-cli",
   "adapter": "codex-cli",
   "protocolVersion": "codex-exec-json/v1",
@@ -2391,8 +2394,8 @@ launch and finalization services may persist those authoritative contracts.
 
 Before dispatch, the selected adapter renders the envelope through an immutable
 `provider-task-envelope-transport/v1` request. Built-in renderers exist for
-OpenClaw, Codex CLI, Codex SDK, and Hermes. Every rendered request includes the
-envelope and runtime identity, objective and bounded context, workspace
+OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes. Every rendered request
+includes the envelope and runtime identity, objective and bounded context, workspace
 baseline, explicit commit policy, allowed side effects, outputs, verification
 gates, and completion evidence contract. Profile instructions and task
 checkpoint state are separate attributed sections capped at 20,000 characters
@@ -2400,8 +2403,9 @@ each. The exact rendered content is fingerprinted in the run launch manifest
 as `instructions.effective-task-request`.
 
 OpenClaw's transport includes the attempt-bound completion callback. Codex CLI,
-Codex SDK, and Hermes transports explicitly forbid calling that callback and
-return terminal output through harness-owned process or stream capture.
+Codex SDK, Claude Code, and Hermes transports explicitly forbid calling that
+callback and return terminal output through harness-owned process or stream
+capture.
 Provider and adapter identity must match the envelope before dispatch. Veritas
 does not infer native structured-output support from prompt rendering and owns
 completion validation and normalization.

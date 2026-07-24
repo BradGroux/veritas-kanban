@@ -6,6 +6,7 @@ export interface ProviderMappedRunEvent {
   payload: Record<string, unknown>;
   providerEventId?: string;
   providerTimestamp?: string;
+  sessionId?: string;
   turnId?: string;
   itemId?: string;
   parentEventId?: string;
@@ -52,8 +53,10 @@ function nestedRecord(value: unknown): Record<string, unknown> | undefined {
 
 function eventIdentity(event: Record<string, unknown>): {
   providerEventId?: string;
+  sessionId?: string;
   turnId?: string;
   itemId?: string;
+  parentEventId?: string;
   providerTimestamp?: string;
 } {
   const item = nestedRecord(event.item);
@@ -61,7 +64,9 @@ function eventIdentity(event: Record<string, unknown>): {
     boundedIdentifier(event.event_id) ??
     boundedIdentifier(event.eventId) ??
     boundedIdentifier(event.id) ??
+    boundedIdentifier(event.uuid) ??
     boundedIdentifier(item?.id);
+  const sessionId = boundedIdentifier(event.session_id) ?? boundedIdentifier(event.sessionId);
   const turnId =
     boundedIdentifier(event.turn_id) ??
     boundedIdentifier(event.turnId) ??
@@ -78,7 +83,11 @@ function eventIdentity(event: Record<string, unknown>): {
     timestamp && !Number.isNaN(Date.parse(timestamp))
       ? new Date(timestamp).toISOString()
       : undefined;
-  return { providerEventId, turnId, itemId, providerTimestamp };
+  const parentEventId =
+    boundedIdentifier(event.parent_event_id) ??
+    boundedIdentifier(event.parentEventId) ??
+    boundedIdentifier(event.parent_tool_use_id);
+  return { providerEventId, sessionId, turnId, itemId, parentEventId, providerTimestamp };
 }
 
 function itemKind(type: string, event: Record<string, unknown>): RunEventKind {
@@ -187,6 +196,47 @@ const HERMES_MAPPER: ProviderRunEventMapper = {
   },
 };
 
+function claudeCodeKind(type: string): RunEventKind {
+  const normalized = type.toLowerCase();
+  if (normalized.includes('text_delta')) return 'message.delta';
+  if (normalized.includes('thinking_delta')) return 'reasoning.delta';
+  if (normalized === 'assistant.tool_use') return 'tool.started';
+  if (normalized === 'user.tool_result') return 'tool.completed';
+  if (normalized.includes('hook_started')) return 'tool.started';
+  if (
+    normalized.includes('hook_response') ||
+    normalized.includes('hook_completed') ||
+    normalized.includes('hook_progress')
+  ) {
+    return 'tool.completed';
+  }
+  if (normalized === 'assistant.subagent' || normalized === 'assistant') {
+    return 'message.assistant';
+  }
+  if (normalized.includes('permission_denial')) return 'approval.resolved';
+  if (normalized.includes('api_retry') || normalized.startsWith('system.')) return 'progress';
+  if (normalized.startsWith('result.')) return 'progress';
+  return 'provider.unknown';
+}
+
+const CLAUDE_CODE_MAPPER: ProviderRunEventMapper = {
+  mapStream(stream, content) {
+    return {
+      kind: stream === 'stdout' ? 'stream.stdout' : 'stream.stderr',
+      payload: { stream, content },
+    };
+  },
+  mapEvent(providerType, event, summary) {
+    const identity = eventIdentity(event);
+    return {
+      ...identity,
+      kind: claudeCodeKind(providerType),
+      dedupeKey: providerDedupeKey('claude-code', providerType, identity.providerEventId),
+      payload: { providerType, summary, raw: event },
+    };
+  },
+};
+
 const OPENCLAW_MAPPER: ProviderRunEventMapper = {
   mapStream(stream, content) {
     return {
@@ -209,6 +259,7 @@ const MAPPERS: Record<ExecutableAgentProvider, ProviderRunEventMapper> = {
   openclaw: OPENCLAW_MAPPER,
   'codex-cli': codexMapper('codex-cli'),
   'codex-sdk': codexMapper('codex-sdk'),
+  'claude-code': CLAUDE_CODE_MAPPER,
   'hermes-cli': HERMES_MAPPER,
 };
 

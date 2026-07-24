@@ -28,6 +28,7 @@ export const AgentProfileRuntimeSchema = z
         'openclaw',
         'codex-cli',
         'codex-sdk',
+        'claude-code',
         'hermes-cli',
         'codex-cloud',
         'ollama-local',

@@ -36,6 +36,9 @@
     "attemptId": {
       "$ref": "#/$defs/identifier"
     },
+    "sessionId": {
+      "$ref": "#/$defs/identifier"
+    },
     "turnId": {
       "$ref": "#/$defs/identifier"
     },
@@ -106,7 +109,15 @@
       "required": ["provider", "adapter"],
       "properties": {
         "provider": {
-          "enum": ["openclaw", "codex-cli", "codex-sdk", "hermes-cli", "operator", "system"]
+          "enum": [
+            "openclaw",
+            "codex-cli",
+            "codex-sdk",
+            "claude-code",
+            "hermes-cli",
+            "operator",
+            "system"
+          ]
         },
         "adapter": {
           "$ref": "#/$defs/identifier"

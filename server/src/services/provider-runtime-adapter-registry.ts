@@ -76,6 +76,60 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     'network.block-private': supported('Disabling network access blocks private network ranges.'),
     'network.block-metadata': supported('Disabling network access blocks metadata endpoints.'),
   }),
+  'claude-code': definition('claude-code', 'Claude Code', 'claude-code-stream-json/v1', {
+    ...COMMON_SUPPORTED,
+    ...NOT_YET_IMPLEMENTED,
+    'run.stop': supported(
+      'The adapter sends SIGTERM to the supervised Claude Code process with a bounded SIGKILL fallback.'
+    ),
+    'run.streaming': supported(
+      'Claude Code stream-json output is drained and journaled through terminal result.'
+    ),
+    'run.structured-events': supported(
+      'Claude Code emits contract-tested stream-json lifecycle records.'
+    ),
+    'run.interrupt': advisory(
+      'SIGTERM performs cooperative process interruption; semantic steering is not yet exposed.'
+    ),
+    'run.resume': advisory(
+      'Claude session IDs are persisted, but task-level resume remains gated by issue #856.'
+    ),
+    'run.fork': unsupported(
+      'Claude session forking remains gated by provider-neutral lifecycle controls in issue #856.'
+    ),
+    'tool.calls': supported(
+      'Claude assistant tool-use and user tool-result records are journaled and budgeted.'
+    ),
+    'tool.mcp': unsupported(
+      'Bare mode blocks inherited MCP servers until the run-scoped MCP control plane in issue #857 is available.'
+    ),
+    'output.structured': advisory(
+      'The adapter validates bounded JSONL stream records without enforcing a caller output schema.'
+    ),
+    'usage.tokens': supported('Claude terminal usage and cost evidence is parsed and persisted.'),
+    'artifact.write': supported('Write and edit tool records create task deliverable evidence.'),
+    'workspace.worktrees': supported(
+      'Claude Code runs with the task worktree as its working directory.'
+    ),
+    'filesystem.read': advisory(
+      'Claude permission rules restrict tools, while host filesystem enforcement remains provider-dependent.'
+    ),
+    'filesystem.write': advisory(
+      'Claude permission rules restrict writes to the selected static policy; host enforcement remains provider-dependent.'
+    ),
+    'filesystem.deny-paths': advisory(
+      'Sensitive path patterns are denied through Claude permission rules.'
+    ),
+    'network.disable': advisory(
+      'Network tools and Bash are removed when network access is disabled; host egress enforcement remains separate.'
+    ),
+    'environment.allowlist': supported(
+      'The adapter constructs an explicit process environment allowlist.'
+    ),
+    'credential.broker': unsupported(
+      'Claude Code currently receives only explicitly allowlisted environment authentication; brokered handles remain gated by issue #932.'
+    ),
+  }),
   'hermes-cli': definition('hermes-cli', 'Hermes Agent', 'hermes-one-shot/v1', {
     ...COMMON_SUPPORTED,
     ...CLI_SANDBOX,

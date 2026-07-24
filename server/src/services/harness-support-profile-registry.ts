@@ -9,6 +9,12 @@ import {
   containsUnredactedProviderRuntimeSecret,
   sanitizeProviderRuntimeDiagnostic,
 } from '../utils/provider-runtime-manifest-sanitize.js';
+import {
+  buildClaudeCodeArgs,
+  CLAUDE_CODE_CERTIFIED_VERSION,
+  CLAUDE_CODE_CREDENTIAL_ENV_KEYS,
+  CLAUDE_CODE_ENVIRONMENT_KEYS,
+} from './claude-code-adapter.js';
 
 const ALL_PLATFORMS: HarnessSupportProfile['platforms'] = ['darwin', 'linux', 'win32'];
 const INVALIDATION_KEYS: HarnessSupportProfile['compatibility']['invalidateOn'] = [
@@ -50,6 +56,7 @@ interface ProfileDefinition {
     | { kind: 'none' };
   environmentAllowlist?: string[];
   credentialAllowlist?: string[];
+  testedVersions?: string[];
   documentationUrl: string;
   remediation: string[];
 }
@@ -65,12 +72,21 @@ interface RedactedCommand {
 }
 
 const DEFINITIONS: Record<string, ProfileDefinition> = {
-  'claude-code': unsupported(
-    'claude-code',
-    'Claude Code',
-    'process-jsonl',
-    'The Claude Code adapter is tracked by issue #916.'
-  ),
+  'claude-code': {
+    id: 'claude-code',
+    displayName: 'Claude Code',
+    adapterId: 'claude-code',
+    transport: 'process-jsonl',
+    auth: { kind: 'command', commandArgs: ['auth', 'status'] },
+    environmentAllowlist: [...CLAUDE_CODE_ENVIRONMENT_KEYS],
+    credentialAllowlist: [...CLAUDE_CODE_CREDENTIAL_ENV_KEYS],
+    testedVersions: [CLAUDE_CODE_CERTIFIED_VERSION],
+    documentationUrl: '/docs/AGENT-PROVIDERS.md#claude-code-v21218',
+    remediation: [
+      'Install Claude Code v2.1.218 and run `claude auth status`.',
+      'Configure explicit bare-mode authentication such as ANTHROPIC_API_KEY, then run `vk doctor`.',
+    ],
+  },
   amp: unsupported('amp', 'Amp', 'process-text', 'No executable Amp adapter is registered.'),
   copilot: unsupported(
     'github-copilot-cli',
@@ -156,6 +172,7 @@ const PROVIDER_DEFINITIONS: Record<string, ProfileDefinition> = {
   ),
   'codex-cli': DEFINITIONS.codex,
   'codex-sdk': DEFINITIONS['codex-sdk'],
+  'claude-code': DEFINITIONS['claude-code'],
   'hermes-cli': DEFINITIONS.hermes,
 };
 
@@ -175,6 +192,22 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
   const redactedLaunchArgs = redactLaunchArgs(agent.args);
   const unsafeLaunchConfiguration =
     redactedCommand.containsCredentialMaterial || redactedLaunchArgs.containsCredentialMaterial;
+  let providerLaunchError: string | undefined;
+  let normalizedProviderArgs = redactedLaunchArgs.args;
+  if (definition.adapterId === 'claude-code' && !unsafeLaunchConfiguration) {
+    try {
+      normalizedProviderArgs = buildClaudeCodeArgs({
+        prompt: '<prompt>',
+        model: agent.model,
+        extraArgs: agent.args,
+        sandboxMode: 'workspace-write',
+        networkAccessEnabled: true,
+      }).slice(0, -1);
+    } catch (error) {
+      providerLaunchError =
+        error instanceof Error ? error.message : 'Claude Code launch configuration is unsafe.';
+    }
+  }
   const executable = {
     command: redactedCommand.command,
     versionArgs: ['--version'],
@@ -184,7 +217,7 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     nonMutating: true as const,
   };
   const launch = {
-    args: redactedLaunchArgs.args,
+    args: normalizedProviderArgs,
     workingDirectory: 'task-worktree' as const,
     worktree: 'required' as const,
     environmentAllowlist: [
@@ -219,20 +252,20 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     transport: definition.transport,
     supportTier: !executableProfile
       ? 'unsupported'
-      : unsafeLaunchConfiguration
+      : unsafeLaunchConfiguration || providerLaunchError
         ? 'degraded'
         : 'configured',
     supportReason: !executableProfile
       ? (definition.remediation[0] ?? 'No executable adapter is registered.')
-      : unsafeLaunchConfiguration
-        ? unsafeConfigurationReason
+      : unsafeLaunchConfiguration || providerLaunchError
+        ? (providerLaunchError ?? unsafeConfigurationReason)
         : 'An explicit executable adapter is registered; live readiness requires a runtime probe.',
     executable,
     authentication,
     compatibility: {
       policy:
         'When testedVersions is populated, require an exact provider-version match; always invalidate certification on runtime drift.',
-      testedVersions: [],
+      testedVersions: [...(definition.testedVersions ?? [])],
       invalidateOn: [...INVALIDATION_KEYS],
       configurationDigest,
     },
@@ -245,6 +278,9 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     documentationUrl: definition.documentationUrl,
     remediation: [
       ...(unsafeLaunchConfiguration ? [unsafeConfigurationRemediation] : []),
+      ...(providerLaunchError
+        ? ['Remove ungoverned Claude Code launch flags and use Veritas policy fields instead.']
+        : []),
       ...definition.remediation,
     ],
   };

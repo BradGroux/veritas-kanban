@@ -83,6 +83,28 @@ export function renderCodexSdkTaskEnvelope(
   });
 }
 
+export function renderClaudeCodeTaskEnvelope(
+  input: ProviderTaskEnvelopeRenderInput
+): ProviderTaskEnvelopeTransport {
+  assertEnvelopeTransport(input.taskEnvelope, 'claude-code');
+  return immutableTransport({
+    schemaVersion: PROVIDER_TASK_ENVELOPE_TRANSPORT_SCHEMA_VERSION,
+    provider: 'claude-code',
+    taskEnvelopeDigest: input.taskEnvelope.digest,
+    callbackPosture: 'harness-owned',
+    completionNormalization: 'harness',
+    content: renderEnvelopeContent(
+      'Claude Code',
+      input,
+      renderHarnessOwnedCompletion(
+        'Claude Code stream',
+        'Return the final response through the terminal result record captured by Veritas.',
+        'stream-json events'
+      )
+    ),
+  });
+}
+
 export function renderHermesTaskEnvelope(
   input: ProviderTaskEnvelopeRenderInput
 ): ProviderTaskEnvelopeTransport {

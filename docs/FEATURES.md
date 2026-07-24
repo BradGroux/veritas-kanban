@@ -29,6 +29,7 @@ For current v5 screenshots and GIFs, see the
 - [Agent Integration](#agent-integration)
 - [Team Roster & Capability Routing](#team-roster--capability-routing)
 - [OpenAI Codex Integration](#openai-codex-integration-v5)
+- [Claude Code Integration](#claude-code-integration-v6)
 - [Veritas Cutover & Hermes Support](#veritas-cutover--hermes-support)
 - [Multi-Agent System](#multi-agent-system)
 - [Squad Chat](#squad-chat)
@@ -284,8 +285,8 @@ First-class support for autonomous coding agents.
 - **Multi-agent support** — Ships with Codex, Codex SDK, Codex Cloud, Hermes Agent, Claude Code, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
 - **Agent CRUD management** — Full Add/Edit/Remove for agents in Settings → Agents; add agent form with name, type slug (auto-generated), command, and args; inline edit via pencil icon; remove via trash icon with confirmation (blocked for the default agent); `AgentType` accepts any string slug, not just built-in names
 - **Agent request files** — Server writes structured requests to `.veritas-kanban/agent-requests/` for agent pickup
-- **Provider-owned task-envelope transports** — OpenClaw, Codex CLI, Codex SDK, and Hermes each render the immutable task contract through an adapter-owned request with explicit commit policy, bounded attributed profile/checkpoint context, workspace baseline, verification gates, and completion evidence requirements
-- **Provider-specific completion posture** — OpenClaw receives an attempt-bound completion callback; Codex CLI, Codex SDK, and Hermes return terminal output through harness-supervised process or stream capture
+- **Provider-owned task-envelope transports** — OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes each render the immutable task contract through an adapter-owned request with explicit commit policy, bounded attributed profile/checkpoint context, workspace baseline, verification gates, and completion evidence requirements
+- **Provider-specific completion posture** — OpenClaw receives an attempt-bound completion callback; Codex CLI, Codex SDK, Claude Code, and Hermes return terminal output through harness-supervised process or stream capture
 - **Multiple attempts** — Retry tasks with different agents; full attempt history preserved with status (pending, running, complete, failed)
 - **Attempt history viewer** — Browse past attempts with agent name, status, and log output
 - **Time tracking** — Start/stop timer or add manual time entries per task; running timer display with live elapsed counter
@@ -293,17 +294,21 @@ First-class support for autonomous coding agents.
 - **Agent status indicator** — Header-level indicator showing global agent state (idle, working, sub-agent mode with count)
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
-- **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
+- **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
 - **Send message to agent** — Send text messages to running agents
 - **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
 - **OpenAI Codex support** — Local CLI attempts, SDK sessions, GitHub-native Codex Cloud delegation, workflow steps, review actions, Settings health checks, MCP setup, and fresh-install default routing
+- **Claude Code support** — First-class v2.1.218 bare-mode process adapter with
+  static sandbox-derived permissions, bounded JSONL event ingestion, session
+  persistence, usage/cost telemetry, artifact discovery, deterministic health
+  diagnostics, and fail-closed unsupported lifecycle controls
 - **Local LLM provider profiles** — Ollama Local, Ollama Cloud, and LM Studio Local profiles can be enabled, health-checked, and targeted by routing rules in the web app or macOS app
 - **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
-- **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
+- **Task-envelope transports** — Provider-owned renderers for OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes bind the exact task-envelope digest and commit policy to the launched request; the rendered request is fingerprinted in the run launch manifest and mismatched provider/adapter identities fail closed
 - **Sandbox policy presets** — Built-in and custom presets control filesystem scope, network egress, environment passthrough, and credential brokering for agent profiles, workflow agents, and per-run overrides
 - **Agent budget enforcement** — Workspace, agent, workflow, workflow-agent, and per-run budgets can cap tokens, provider cost, tool calls, runtime, retries, and workflow fan-out with warning, approval, downgrade, pause, or cancel actions
 - **Platform-agnostic REST API** — Any platform that can make HTTP calls can drive the full agent lifecycle
@@ -335,6 +340,41 @@ Documentation:
 - [OpenAI Codex Integration Roadmap](CODEX-INTEGRATION.md)
 - [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
 - [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
+
+---
+
+## Claude Code Integration (v6)
+
+The `claude-code` provider runs Claude Code v2.1.218 directly in the assigned
+worktree with `--bare`, `--print`, and `stream-json`. Veritas owns the task
+envelope, static permissions, environment allowlist, process lifecycle, causal
+event journal, terminal result, and completion normalization.
+
+Implemented:
+
+- **Bare-mode launch** — No shell, inherited settings, plugins, MCP config,
+  Chrome integration, slash commands, or permission bypass.
+- **Static permissions** — Read tools are always available; writes, Bash, and
+  web tools are derived from the effective filesystem and network sandbox.
+- **Explicit authentication** — OAuth/keychain status is diagnostic only;
+  launch requires an allowlisted environment credential or supported cloud
+  selector.
+- **Full stream capture** — Partial text/thinking, tool results, hooks,
+  subagents, retries, usage/cost, artifacts, and terminal results map into
+  `run-event/v1`.
+- **Drain-safe completion** — Veritas waits for queued output and parses a final
+  unterminated record after process close. A successful exit without a
+  successful provider result fails closed.
+- **Session continuity evidence** — Claude `session_id` is stored on the attempt
+  and separately from turn/item identity in the event schema.
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 4,
+  authentication posture, and safe agent-discovery summary determine support
+  status.
+- **Capability truth** — Resume/fork, interactive approvals, elicitation, and
+  MCP injection stay unsupported until the shared brokers are implemented.
+
+See [Agent Providers](AGENT-PROVIDERS.md#claude-code-v21218) for setup,
+credentials, arguments, permissions, and limitations.
 
 ---
 
@@ -1017,7 +1057,8 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 - Broker leases are internal until an accepted network or tool boundary can
   consume them without provider bypass. Existing provider authentication and
   explicit environment passthrough are not mislabeled as brokered.
-- Provider capability checks currently distinguish Codex CLI, Codex SDK, Hermes, and OpenClaw execution behavior.
+- Provider capability checks currently distinguish Codex CLI, Codex SDK,
+  Claude Code, Hermes, and OpenClaw execution behavior.
 
 ### Session Isolation
 

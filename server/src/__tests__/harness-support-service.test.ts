@@ -20,7 +20,7 @@ function agent(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe('evaluateHarnessSupportStatus', () => {
-  it('classifies a display-only profile as unsupported even when its executable is installed', () => {
+  it('requires exact Claude Code version evidence before treating the executable as configured', () => {
     const candidate = agent();
 
     expect(
@@ -37,8 +37,8 @@ describe('evaluateHarnessSupportStatus', () => {
       })
     ).toMatchObject({
       profileId: 'claude-code',
-      supportTier: 'unsupported',
-      failureClass: 'adapter-unavailable',
+      supportTier: 'degraded',
+      failureClass: 'incompatible-build',
       executableFound: true,
     });
   });
