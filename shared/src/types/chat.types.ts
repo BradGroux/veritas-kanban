@@ -66,6 +66,18 @@ export interface SquadMessage {
   decision?: boolean; // Message records a decision
   reactions?: SquadReaction[]; // Lightweight acknowledgements/reactions
   replyCount?: number; // Derived count of direct/indirect replies in the current result set
+  external?: SquadExternalMessage;
+}
+
+export interface SquadExternalMessage {
+  provider: 'buzz' | 'msteams' | 'custom';
+  adapterId: string;
+  community?: string;
+  channelId?: string;
+  messageId: string;
+  authorId?: string;
+  kind?: number;
+  url?: string;
 }
 
 export type SquadMentionKind = 'user' | 'agent' | 'role' | 'owner';
@@ -105,8 +117,10 @@ export interface SquadMessageInput {
   mentions?: Array<string | SquadMention>;
   taskId?: string;
   runId?: string;
+  links?: SquadMessageLink[];
   pinned?: boolean;
   decision?: boolean;
+  external?: SquadExternalMessage;
 }
 
 export interface SquadUnreadState {

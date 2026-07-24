@@ -14,6 +14,7 @@ import type {
   ChatSession,
   ChatMessage,
   SquadMention,
+  SquadExternalMessage,
   SquadMessage,
   SquadMessageLink,
   SquadReaction,
@@ -52,6 +53,7 @@ interface SquadMessageMetadata {
   pinned?: boolean;
   decision?: boolean;
   reactions?: SquadReaction[];
+  external?: SquadExternalMessage;
   updatedAt?: string;
 }
 
@@ -567,8 +569,12 @@ export class ChatService {
     return mentions;
   }
 
-  private buildLinks(input: { taskId?: string; runId?: string }): SquadMessageLink[] | undefined {
-    const links: SquadMessageLink[] = [];
+  private buildLinks(input: {
+    taskId?: string;
+    runId?: string;
+    links?: SquadMessageLink[];
+  }): SquadMessageLink[] | undefined {
+    const links: SquadMessageLink[] = [...(input.links ?? []).slice(0, 20)];
     if (input.taskId) links.push({ taskId: input.taskId, label: `Task ${input.taskId}` });
     if (input.runId) links.push({ runId: input.runId, label: `Run ${input.runId}` });
     return links.length > 0 ? links : undefined;
@@ -663,6 +669,8 @@ export class ChatService {
    */
   async sendSquadMessage(
     input: {
+      id?: string;
+      timestamp?: string;
       agent: string;
       message: string;
       tags?: string[];
@@ -676,20 +684,35 @@ export class ChatService {
       mentions?: Array<string | SquadMention>;
       taskId?: string;
       runId?: string;
+      links?: SquadMessageLink[];
       pinned?: boolean;
       decision?: boolean;
+      external?: SquadExternalMessage;
     },
     displayName?: string
   ): Promise<SquadMessage> {
-    const messageId = this.generateMessageId();
-    const timestamp = new Date().toISOString();
+    const messageId = input.id ?? this.generateMessageId();
+    validatePathSegment(messageId);
+    if (input.id) {
+      const existing = await this.findSquadMessage(messageId);
+      if (existing) return existing;
+    }
+    const parsedTimestamp = input.timestamp ? Date.parse(input.timestamp) : Date.now();
+    if (!Number.isFinite(parsedTimestamp)) {
+      throw new Error('Squad message timestamp is invalid');
+    }
+    const timestamp = new Date(parsedTimestamp).toISOString();
     const parentMessage = input.replyToId ? await this.findSquadMessage(input.replyToId) : null;
     const mentions = this.normalizeMentions({
       message: input.message,
       mentions: input.mentions,
       fromAgent: input.agent,
     });
-    const links = this.buildLinks({ taskId: input.taskId, runId: input.runId });
+    const links = this.buildLinks({
+      taskId: input.taskId,
+      runId: input.runId,
+      links: input.links,
+    });
     const threadId = input.replyToId
       ? (parentMessage?.threadId ?? parentMessage?.id ?? input.replyToId)
       : undefined;
@@ -713,6 +736,7 @@ export class ChatService {
       ...(links && { links }),
       ...(input.pinned !== undefined && { pinned: input.pinned }),
       ...(input.decision !== undefined && { decision: input.decision }),
+      ...(input.external && { external: input.external }),
     };
 
     if (this.repository) {
@@ -721,7 +745,7 @@ export class ChatService {
       await this.ensureFileStorageReady();
 
       // Store as daily markdown file: squad/YYYY-MM-DD.md
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const date = timestamp.split('T')[0]; // YYYY-MM-DD
       const filePath = path.join(this.squadDir, `${date}.md`);
       ensureWithinBase(this.squadDir, filePath);
 
@@ -759,6 +783,7 @@ export class ChatService {
       links: squadMessage.links,
       pinned: squadMessage.pinned,
       decision: squadMessage.decision,
+      external: squadMessage.external,
       updatedAt: this.hasSquadMessageMetadata({
         threadId: squadMessage.threadId,
         replyToId: squadMessage.replyToId,
@@ -766,6 +791,7 @@ export class ChatService {
         links: squadMessage.links,
         pinned: squadMessage.pinned,
         decision: squadMessage.decision,
+        external: squadMessage.external,
       })
         ? timestamp
         : undefined,

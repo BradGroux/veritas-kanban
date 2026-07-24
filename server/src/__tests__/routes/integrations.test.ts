@@ -16,6 +16,9 @@ const { mockCommunicationAdapters, mockBroadcastSquadMessage } = vi.hoisted(() =
     getAdapter: vi.fn(),
     configureAdapter: vi.fn(),
     checkHealth: vi.fn(),
+    listBuzzChannelMappings: vi.fn(),
+    configureBuzzChannelMapping: vi.fn(),
+    disableBuzzChannelMapping: vi.fn(),
     send: vi.fn(),
     ingestReply: vi.fn(),
     pollReplies: vi.fn(),
@@ -108,6 +111,27 @@ describe('integrations routes', () => {
       canReceiveReplies: true,
       checkedAt: '2026-06-26T18:00:00.000Z',
       detail: 'ok',
+    });
+    mockCommunicationAdapters.listBuzzChannelMappings.mockResolvedValue([]);
+    mockCommunicationAdapters.configureBuzzChannelMapping.mockResolvedValue({
+      id: 'buzz_map_1',
+      adapterId: 'buzz-default',
+      community: 'relay.example.test',
+      channelId: '123e4567-e89b-42d3-a456-426614174000',
+      target: { kind: 'squad' },
+      enabled: true,
+      createdAt: '2026-07-23T20:00:00.000Z',
+      updatedAt: '2026-07-23T20:00:00.000Z',
+    });
+    mockCommunicationAdapters.disableBuzzChannelMapping.mockResolvedValue({
+      id: 'buzz_map_1',
+      adapterId: 'buzz-default',
+      community: 'relay.example.test',
+      channelId: '123e4567-e89b-42d3-a456-426614174000',
+      target: { kind: 'squad' },
+      enabled: false,
+      createdAt: '2026-07-23T20:00:00.000Z',
+      updatedAt: '2026-07-23T20:01:00.000Z',
     });
     mockCommunicationAdapters.send.mockResolvedValue({
       delivery: {
@@ -415,6 +439,121 @@ describe('integrations routes', () => {
       'buzz-default',
       expect.anything()
     );
+  });
+
+  it('configures, lists, and disables a Buzz Squad Chat channel mapping', async () => {
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+    });
+    const channelId = '123e4567-e89b-42d3-a456-426614174000';
+
+    const configured = await request(app)
+      .put(`/api/integrations/communication/adapters/buzz-default/buzz/channels/${channelId}`)
+      .send({
+        target: { kind: 'squad' },
+        enabled: true,
+        actor: 'operator',
+      });
+    expect(configured.status).toBe(200);
+    expect(mockCommunicationAdapters.configureBuzzChannelMapping).toHaveBeenCalledWith(
+      'buzz-default',
+      channelId,
+      {
+        target: { kind: 'squad' },
+        enabled: true,
+        actor: 'operator',
+      }
+    );
+
+    mockCommunicationAdapters.listBuzzChannelMappings.mockResolvedValueOnce([configured.body]);
+    const listed = await request(app).get(
+      '/api/integrations/communication/adapters/buzz-default/buzz/channels'
+    );
+    expect(listed.status).toBe(200);
+    expect(listed.body).toEqual([configured.body]);
+
+    const disabled = await request(app)
+      .post(
+        `/api/integrations/communication/adapters/buzz-default/buzz/channels/${channelId}/disable`
+      )
+      .send({ actor: 'operator' });
+    expect(disabled.status).toBe(200);
+    expect(disabled.body).toMatchObject({ enabled: false });
+    expect(mockCommunicationAdapters.disableBuzzChannelMapping).toHaveBeenCalledWith(
+      'buzz-default',
+      channelId,
+      'operator'
+    );
+  });
+
+  it('returns deterministic client errors for invalid and conflicting Buzz mappings', async () => {
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+    });
+    const invalid = await request(app)
+      .put('/api/integrations/communication/adapters/buzz-default/buzz/channels/not-a-uuid')
+      .send({ target: { kind: 'squad' } });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('valid UUID'),
+    });
+
+    mockCommunicationAdapters.configureBuzzChannelMapping.mockRejectedValueOnce(
+      new Error('The Buzz adapter target is already mapped to another channel')
+    );
+    const conflict = await request(app)
+      .put(
+        '/api/integrations/communication/adapters/buzz-default/buzz/channels/223e4567-e89b-42d3-a456-426614174000'
+      )
+      .send({ target: { kind: 'squad' } });
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('already mapped'),
+    });
+  });
+
+  it('returns a visible accepted response for delivery-unknown Buzz sends', async () => {
+    mockCommunicationAdapters.getAdapter.mockResolvedValue({
+      id: 'buzz-default',
+      kind: 'buzz',
+      displayName: 'Buzz',
+      enabled: true,
+    });
+    mockCommunicationAdapters.send.mockResolvedValueOnce({
+      delivery: {
+        id: 'comm_buzz_1',
+        adapterId: 'buzz-default',
+        operation: 'send',
+        status: 'delivery_unknown',
+        detail: 'Buzz delivery is ambiguous and will be reconciled by event ID.',
+        createdAt: '2026-07-23T20:00:00.000Z',
+      },
+      mapping: {
+        id: 'map_buzz_1',
+        adapterId: 'buzz-default',
+        externalThreadId: 'a'.repeat(64),
+        target: { kind: 'squad' },
+        createdAt: '2026-07-23T20:00:00.000Z',
+        updatedAt: '2026-07-23T20:00:00.000Z',
+      },
+    });
+
+    const response = await request(app)
+      .post('/api/integrations/communication/adapters/buzz-default/send')
+      .send({ target: { kind: 'squad' }, message: 'message' });
+    expect(response.status).toBe(202);
+    expect(response.body.delivery).toMatchObject({
+      status: 'delivery_unknown',
+      detail: expect.stringContaining('reconciled'),
+    });
   });
 
   it('ingests communication replies and broadcasts the resulting squad message', async () => {

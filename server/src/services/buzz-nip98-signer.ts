@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { finalizeEvent, nip19 } from 'nostr-tools';
+import { finalizeEvent, nip19, type VerifiedEvent } from 'nostr-tools';
 
 const NIP_98_KIND = 27_235;
 
@@ -21,7 +21,7 @@ function invalidPrivateKey(): Error {
   return new Error('Invalid Buzz private key format');
 }
 
-function decodePrivateKey(value: string): Uint8Array {
+export function decodeBuzzPrivateKey(value: string): Uint8Array {
   const candidate = value.trim();
   if (/^[a-fA-F0-9]{64}$/.test(candidate)) {
     return Uint8Array.from(Buffer.from(candidate, 'hex'));
@@ -58,7 +58,7 @@ export class NostrToolsBuzzNip98Signer implements BuzzNip98Signer {
     url: string;
     body: string;
   }): Promise<{ authorization: string; publicKey: string }> {
-    const secretKey = decodePrivateKey(input.privateKey);
+    const secretKey = decodeBuzzPrivateKey(input.privateKey);
     try {
       const event = finalizeEvent(
         {
@@ -78,6 +78,43 @@ export class NostrToolsBuzzNip98Signer implements BuzzNip98Signer {
         authorization: `Nostr ${Buffer.from(JSON.stringify(event), 'utf8').toString('base64')}`,
         publicKey: event.pubkey,
       };
+    } catch {
+      throw invalidPrivateKey();
+    } finally {
+      secretKey.fill(0);
+    }
+  }
+}
+
+export interface BuzzNostrEventSigner {
+  sign(input: {
+    privateKey: string;
+    kind: number;
+    createdAt: number;
+    tags: string[][];
+    content: string;
+  }): Promise<VerifiedEvent>;
+}
+
+export class NostrToolsBuzzEventSigner implements BuzzNostrEventSigner {
+  async sign(input: {
+    privateKey: string;
+    kind: number;
+    createdAt: number;
+    tags: string[][];
+    content: string;
+  }): Promise<VerifiedEvent> {
+    const secretKey = decodeBuzzPrivateKey(input.privateKey);
+    try {
+      return finalizeEvent(
+        {
+          kind: input.kind,
+          created_at: input.createdAt,
+          tags: input.tags,
+          content: input.content,
+        },
+        secretKey
+      );
     } catch {
       throw invalidPrivateKey();
     } finally {

@@ -730,9 +730,9 @@ Search returns redacted snippets only. Mention notifications link back to the sq
 ### Communication Adapters
 
 Communication adapters live under integrations. Microsoft Teams provides the
-existing human reply/send posture. Buzz provides a reference-only connection
-configuration and read-only relay compatibility probe. It does not send or
-subscribe to messages in this slice. External thread mappings remain separate
+existing human reply/send posture. Buzz adds a native signed-event bridge
+between one mapped community channel and Squad Chat. External thread mappings,
+Buzz event coordinates, delivery audits, and replay cursors remain separate
 from message content.
 
 ```
@@ -744,6 +744,9 @@ POST /api/integrations/communication/adapters/:adapterId/send
 POST /api/integrations/communication/adapters/:adapterId/replies
 POST /api/integrations/communication/adapters/:adapterId/poll
 POST /api/integrations/communication/adapters/:adapterId/disconnect
+GET  /api/integrations/communication/adapters/:adapterId/buzz/channels
+PUT  /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId
+POST /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId/disable
 GET  /api/integrations/communication/mappings
 GET  /api/integrations/communication/deliveries
 ```
@@ -801,14 +804,48 @@ Buzz rejects raw credentials, URL userinfo/query/fragment components, and
 credential-like command arguments. Health returns an exact status and
 `reasonCode`, redacted configured/resolved endpoints, expected/observed
 community, public-key fingerprint, tested Buzz release/commit, probe revision,
-relay contract, independent verification checks, and optional command
-diagnostics. `POST .../buzz-default/test` runs the same read-only probe;
-`canSend` and `canReceiveReplies` remain `false`. See
-[Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
+relay contract, independent verification checks, optional command diagnostics,
+and runtime transport/subscription/cursor/send facets.
+
+`POST .../buzz-default/test` runs the read-only compatibility probe. It does
+not send. Runtime `canSend` additionally requires an enabled mapped channel;
+`canReceiveReplies` requires an active authenticated subscription.
 
 Send `null` for `relayWebSocketUrl`, `expectedCommunity`, `authTagRef`, or
 `command` to clear that optional setting. Omitting one preserves its current
 value.
+
+**Buzz channel mapping body**:
+
+```json
+{
+  "target": { "kind": "squad" },
+  "enabled": true,
+  "actor": "operator"
+}
+```
+
+The `channelId` path value is a Buzz channel UUID. One enabled channel may map
+to Squad Chat. Disabling retains the mapping and cursor.
+
+**Buzz send body**:
+
+```json
+{
+  "target": {
+    "kind": "squad",
+    "squadMessageId": "msg_local_reply"
+  },
+  "replyToSquadMessageId": "msg_local_root",
+  "message": "Reply from Veritas",
+  "actor": "VERITAS"
+}
+```
+
+Omit `replyToSquadMessageId` for a root. The response includes the signed Buzz
+coordinate and a delivery status. `delivery_unknown` is a durable visible
+state, not a failure alias. `POST .../poll` queries the event ID before any
+safe resubmission. See [Buzz Communication Adapter](BUZZ-INTEGRATION.md).
 
 **Reply ingest body**:
 

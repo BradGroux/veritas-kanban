@@ -24,8 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   diagnostics with built-in hexadecimal/`nsec` signing, stable machine-readable
   reason codes, evidence invalidation, shell-free optional command discovery,
   Settings controls, `vk doctor` reporting, and operator/API/security
-  documentation. Buzz message delivery and reply subscription remain
-  fail-closed for their dedicated follow-up issue (#905).
+  documentation. The resulting compatibility evidence is the fail-closed gate
+  consumed by Buzz communication delivery (#906).
+- Added a native bidirectional Buzz channel bridge for Squad Chat with signed
+  Nostr root/reply events, channel mapping APIs and Settings controls, NIP-42
+  WebSocket subscriptions, source author/timestamp/deep-link metadata,
+  `(created_at,event_id)` cursors, overlap dedupe, out-of-order reply recovery,
+  loop prevention, non-destructive edit/delete auditing, delivery-unknown
+  reconciliation, runtime health facets, safe disable/rollback, fake-relay
+  contract coverage, and operator/API/security documentation (#906).
 - Added transactional, remote-safe worktree lifecycle management with
   versioned manifests, exact fetched base commits, reasoned offline fallback,
   task/attempt ownership leases, active-run locks, recovery states, and

@@ -10,7 +10,12 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 import { ConfigService } from '../services/config-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../middleware/error-handler.js';
 import { validate } from '../middleware/validate.js';
 import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { CoolifyServiceConfig, CoolifyServicesConfig } from '@veritas-kanban/shared';
@@ -63,6 +68,7 @@ const sendSchema = z.object({
   target: replyTargetSchema,
   message: z.string().min(1),
   actor: z.string().optional(),
+  replyToSquadMessageId: z.string().optional(),
   externalThreadId: z.string().optional(),
   externalUrl: z.string().optional(),
 });
@@ -77,8 +83,23 @@ const replyIngestSchema = z.object({
   externalUrl: z.string().optional(),
 });
 
+const buzzChannelMappingSchema = z.object({
+  target: replyTargetSchema.extend({ kind: z.literal('squad') }),
+  enabled: z.boolean().optional(),
+  actor: z.string().trim().min(1).max(200).optional(),
+});
+const buzzChannelIdSchema = z.uuid();
+
 function adapterIdParam(value: unknown): string {
   return typeof value === 'string' && value.trim() ? value : DEFAULT_ADAPTER_ID;
+}
+
+function buzzChannelIdParam(value: unknown): string {
+  const parsed = buzzChannelIdSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new BadRequestError('Buzz channel ID must be a valid UUID');
+  }
+  return parsed.data.toLowerCase();
 }
 
 async function ensureAdapterExists(adapterId: string): Promise<void> {
@@ -230,6 +251,63 @@ router.get(
 
     log.debug({ results }, 'Integration status check complete');
     res.json({ data: results });
+  })
+);
+
+// GET /api/integrations/communication/adapters/:adapterId/buzz/channels
+router.get(
+  '/communication/adapters/:adapterId/buzz/channels',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    res.json(await communicationAdapters.listBuzzChannelMappings(adapterId));
+  })
+);
+
+// PUT /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId
+router.put(
+  '/communication/adapters/:adapterId/buzz/channels/:channelId',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    const input = buzzChannelMappingSchema.parse(req.body);
+    const channelId = buzzChannelIdParam(req.params.channelId);
+    try {
+      res.json(
+        await communicationAdapters.configureBuzzChannelMapping(adapterId, channelId, input)
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Buzz channel mapping failed';
+      if (message.includes('already mapped')) throw new ConflictError(message);
+      if (
+        message.includes('requires a Buzz adapter') ||
+        message.includes('configuration is invalid')
+      ) {
+        throw new BadRequestError(message);
+      }
+      throw error;
+    }
+  })
+);
+
+// POST /api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId/disable
+router.post(
+  '/communication/adapters/:adapterId/buzz/channels/:channelId/disable',
+  asyncHandler(async (req, res) => {
+    const adapterId = adapterIdParam(req.params.adapterId);
+    await ensureAdapterExists(adapterId);
+    const channelId = buzzChannelIdParam(req.params.channelId);
+    const actor =
+      typeof req.body?.actor === 'string' && req.body.actor.trim()
+        ? req.body.actor.trim().slice(0, 200)
+        : undefined;
+    try {
+      res.json(await communicationAdapters.disableBuzzChannelMapping(adapterId, channelId, actor));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Buzz channel mapping failed';
+      if (message.includes('not found')) throw new NotFoundError(message);
+      throw error;
+    }
   })
 );
 

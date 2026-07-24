@@ -134,6 +134,16 @@ const mocks = vi.hoisted(() => ({
           checkedAt: '2026-07-23T18:00:00.000Z',
           detail: 'Buzz relay and read capabilities are compatible.',
           reasonCode: 'ok',
+          buzzRuntime: {
+            relayConnected: true,
+            subscriptionActive: true,
+            mappedChannels: 1,
+            reconnectAttempts: 0,
+            cursorLagSeconds: 4,
+            lastEventAt: '2026-07-23T18:00:00.000Z',
+            lastSendAt: '2026-07-23T18:00:00.000Z',
+            lastSendStatus: 'delivery_unknown',
+          },
           buzz: {
             schemaVersion: 'buzz-compatibility/v1',
             probeRevision: 1,
@@ -189,7 +199,48 @@ const mocks = vi.hoisted(() => ({
       target: { kind: 'notification' },
       createdAt: '2026-06-04T08:00:00.000Z',
     },
+    {
+      id: 'comm_buzz_1',
+      adapterId: 'buzz-default',
+      operation: 'send',
+      status: 'delivery_unknown',
+      detail: 'Buzz delivery is ambiguous and will be reconciled by event ID.',
+      target: { kind: 'squad' },
+      createdAt: '2026-07-23T18:00:00.000Z',
+    },
   ]),
+  buzzChannelMappings: vi.fn(async () => [
+    {
+      id: 'buzz_map_1',
+      adapterId: 'buzz-default',
+      community: 'relay.example.test',
+      channelId: '123e4567-e89b-42d3-a456-426614174000',
+      target: { kind: 'squad' },
+      enabled: true,
+      createdAt: '2026-07-23T18:00:00.000Z',
+      updatedAt: '2026-07-23T18:00:00.000Z',
+    },
+  ]),
+  configureBuzzChannelMapping: vi.fn(async () => ({
+    id: 'buzz_map_1',
+    adapterId: 'buzz-default',
+    community: 'relay.example.test',
+    channelId: '123e4567-e89b-42d3-a456-426614174000',
+    target: { kind: 'squad' },
+    enabled: true,
+    createdAt: '2026-07-23T18:00:00.000Z',
+    updatedAt: '2026-07-23T18:00:00.000Z',
+  })),
+  disableBuzzChannelMapping: vi.fn(async () => ({
+    id: 'buzz_map_1',
+    adapterId: 'buzz-default',
+    community: 'relay.example.test',
+    channelId: '123e4567-e89b-42d3-a456-426614174000',
+    target: { kind: 'squad' },
+    enabled: false,
+    createdAt: '2026-07-23T18:00:00.000Z',
+    updatedAt: '2026-07-23T18:01:00.000Z',
+  })),
   configureCommunicationAdapter: vi.fn(async () => ({
     id: 'msteams-default',
     kind: 'msteams',
@@ -301,6 +352,9 @@ vi.mock('@/lib/api', () => ({
       communicationAdapters: mocks.communicationAdapters,
       communicationHealth: mocks.communicationHealth,
       communicationDeliveries: mocks.communicationDeliveries,
+      buzzChannelMappings: mocks.buzzChannelMappings,
+      configureBuzzChannelMapping: mocks.configureBuzzChannelMapping,
+      disableBuzzChannelMapping: mocks.disableBuzzChannelMapping,
       configureCommunicationAdapter: mocks.configureCommunicationAdapter,
       testCommunicationAdapter: mocks.testCommunicationAdapter,
       disconnectCommunicationAdapter: mocks.disconnectCommunicationAdapter,
@@ -378,6 +432,7 @@ describe('Settings tab Mantine controls', () => {
     expect(screen.getByLabelText(/Relay HTTP URL/)).toBeDefined();
     expect(screen.getByLabelText(/Relay WebSocket URL/)).toBeDefined();
     expect(screen.getByLabelText(/Expected community/)).toBeDefined();
+    expect(await screen.findByDisplayValue('123e4567-e89b-42d3-a456-426614174000')).toBeDefined();
     expect(screen.getByLabelText(/Public key/)).toBeDefined();
     expect(screen.getByLabelText(/Signing key reference/)).toBeDefined();
     expect(screen.getByText('Signing reference:').parentElement?.textContent).toContain(
@@ -385,6 +440,10 @@ describe('Settings tab Mantine controls', () => {
     );
     expect(await screen.findByText('Buzz 0.4.24, probe 1')).toBeDefined();
     expect(screen.getByText('Compatibility chain')).toBeDefined();
+    expect(screen.getByText('Runtime and delivery')).toBeDefined();
+    expect(screen.getByText('connected')).toBeDefined();
+    expect(screen.getByText('active')).toBeDefined();
+    expect(screen.getAllByText('delivery_unknown').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Community binding')).toBeDefined();
     expect(screen.queryByText(/nsec1/)).toBeNull();
     expect(screen.getAllByText('Squad Chat Webhook').length).toBeGreaterThanOrEqual(1);
@@ -447,6 +506,29 @@ describe('Settings tab Mantine controls', () => {
     expect(
       screen.getByText('relay_membership_required: Add the public identity as a relay member.')
     ).toBeDefined();
+  });
+
+  it('saves the Buzz connection and Squad Chat channel mapping together', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationsTab />);
+
+    await screen.findByDisplayValue('123e4567-e89b-42d3-a456-426614174000');
+    await user.click(screen.getByRole('button', { name: 'Save Buzz' }));
+
+    expect(mocks.configureCommunicationAdapter).toHaveBeenCalledWith(
+      'buzz-default',
+      expect.objectContaining({
+        kind: 'buzz',
+        enabled: true,
+        relayHttpUrl: 'https://relay.example.test',
+      })
+    );
+    expect(mocks.configureBuzzChannelMapping).toHaveBeenCalledWith(
+      'buzz-default',
+      '123e4567-e89b-42d3-a456-426614174000',
+      { kind: 'squad' },
+      true
+    );
   });
 
   it('renders Enforcement ceremony and agent selection through direct Mantine Select', async () => {
