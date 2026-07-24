@@ -8,6 +8,7 @@ import type { RunTelemetryEvent, Task, TokenTelemetryEvent } from '@veritas-kanb
 import { DigestService, type DailyDigest } from '../services/digest-service.js';
 
 const mockPendingApprovals = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockRunApprovals = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 const mockQueueMonitorList = vi.hoisted(() =>
   vi.fn().mockResolvedValue({
     generatedAt: '2026-06-04T12:00:00.000Z',
@@ -47,6 +48,12 @@ vi.mock('../services/task-service.js', () => ({
 vi.mock('../services/agent-permission-service.js', () => ({
   getAgentPermissionService: () => ({
     getPendingApprovals: mockPendingApprovals,
+  }),
+}));
+
+vi.mock('../services/run-approval-broker-service.js', () => ({
+  getRunApprovalBrokerService: () => ({
+    list: mockRunApprovals,
   }),
 }));
 
@@ -112,6 +119,7 @@ describe('DigestService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPendingApprovals.mockResolvedValue([]);
+    mockRunApprovals.mockResolvedValue([]);
     mockQueueMonitorList.mockResolvedValue({
       generatedAt: '2026-06-04T12:00:00.000Z',
       summary: { total: 0, enabled: 0, paused: 0, blocked: 0, failed: 0, due: 0 },

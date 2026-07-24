@@ -79,7 +79,7 @@ describe('Run Session Routes', () => {
       .send({
         taskId: 'task-721',
         permission: 'view',
-        mobileSafeApprovalClasses: ['human-review'],
+        mobileSafeApprovalClasses: ['elicitation'],
       });
     const update = await request(app).patch('/api/run-sessions/run_share_1').send({
       permission: 'edit',
@@ -94,8 +94,11 @@ describe('Run Session Routes', () => {
       .post('/api/run-sessions/run_share_1/approvals')
       .set('x-client-mode', 'mobile-pwa')
       .send({
-        actionClass: 'human-review',
+        approvalId: 'runapproval_mobile_safe1',
+        actionClass: 'elicitation',
         response: 'approved',
+        expectedRevision: 1,
+        expectedActionHash: 'a'.repeat(64),
       });
     const fork = await request(app).post('/api/run-sessions/run_share_1/fork').send({
       title: 'Fork run session',
@@ -129,7 +132,13 @@ describe('Run Session Routes', () => {
     );
     expect(mockRunSessionShareService.respondToApproval).toHaveBeenCalledWith(
       'run_share_1',
-      { actionClass: 'human-review', response: 'approved' },
+      {
+        approvalId: 'runapproval_mobile_safe1',
+        actionClass: 'elicitation',
+        response: 'approved',
+        expectedRevision: 1,
+        expectedActionHash: 'a'.repeat(64),
+      },
       expect.objectContaining({ clientMode: 'mobile-pwa' })
     );
     expect(mockRunSessionShareService.fork).toHaveBeenCalledWith(

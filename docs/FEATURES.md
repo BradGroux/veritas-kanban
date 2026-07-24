@@ -295,6 +295,7 @@ First-class support for autonomous coding agents.
 - **Running indicator on cards** — Animated spinner on task cards when an agent is actively working
 - **Agent output stream** — Real-time agent output via WebSocket with auto-scroll and clear
 - **Causal run-event journal** — OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes map provider output into one bounded, redacted, append-only `run-event/v1` stream with per-attempt ordering, provider deduplication, REST cursor replay, gap-free WebSocket reconnect, and compatible legacy output projections
+- **Provider-native approval broker** — Provider requests pause on an exact action hash, persist a bounded workspace-scoped review record, and resume only after an authenticated compare-and-set approve/reject decision; expiry, interruption, cancellation, stale evidence, changed arguments, and duplicate decisions fail closed
 - **Send message to agent** — Send text messages to running agents
 - **Optional OpenClaw support** — Built-in integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot) via gateway URL when you want OpenClaw to execute or wake agents
 - **HermesAgent operating support** — v4.3 documents HermesAgent/Hermes Gateway as the active control plane, with Veritas tracking task truth, QA evidence, and GitHub delivery state
@@ -328,7 +329,7 @@ Implemented:
 - **Codex agent defaults** — Fresh installs enable the OpenAI Codex CLI profile by default with `codex exec --sandbox workspace-write --json`; existing configs keep their selected default agent.
 - **Ollama and LM Studio profiles** — Adds disabled-by-default Ollama Local, Ollama Cloud, and LM Studio Local profiles with provider metadata and health probes.
 - **Codex SDK provider** — Uses `@openai/codex-sdk` to start durable local Codex threads, stream SDK events into attempt logs, persist `threadId` on attempts, and emit token telemetry from completed turns.
-- **Codex app-server provider** — Runs the exact v0.145.0 JSON-RPC v2 app-server over strict stdio, validates the pinned generated schemas, persists task-bound thread identity, streams item/usage/completion events, supports cooperative interruption, and fails closed on deferred approvals, elicitation, lifecycle, MCP, and remote-control surfaces.
+- **Codex app-server provider** — Runs the exact v0.145.0 JSON-RPC v2 app-server over strict stdio, validates the pinned generated schemas, persists task-bound thread identity, streams item/usage/completion events, supports cooperative interruption, and brokers command, file, permission, tool-question, and elicitation requests through exact method-specific response contracts. Unsupported lifecycle, inherited MCP, and remote-control surfaces still fail closed.
 - **Codex Cloud delegation** — Creates scoped `@codex` GitHub issue/PR prompts, records cloud attempt metadata, and links the GitHub artifact back to the Veritas task.
 - **Workflow Codex steps** — Executes workflow-engine agent steps through Codex SDK streaming, writes step outputs, and stores Codex thread IDs in workflow session context.
 - **Codex review actions** — Reviews task branch diffs in read-only Codex SDK mode, maps structured findings to Veritas review comments, and stores review decisions.
@@ -371,8 +372,10 @@ Implemented:
 - **Versioned readiness** — The exact v2.1.218 runtime, probe revision 5,
   authentication posture, and safe agent-discovery summary determine support
   status.
-- **Capability truth** — Resume/fork, interactive approvals, elicitation, and
-  MCP injection stay unsupported until the shared brokers are implemented.
+- **Capability truth** — The shared approval broker is available, but this
+  Claude adapter still uses static `dontAsk` permissions and reports
+  interactive approval and elicitation as unsupported. Resume/fork and MCP
+  injection also remain unsupported.
 
 See [Agent Providers](AGENT-PROVIDERS.md#claude-code-v21218) for setup,
 credentials, arguments, permissions, and limitations.
@@ -474,7 +477,7 @@ Workspace-scoped live collaboration for active task runs. Added in v5.1.
 
 - **View-only shares** — Create stable `/runs/shared/:id` links from task detail so permitted workspace members can watch live output, tool-call/status events, artifacts, and share history without refresh.
 - **Co-drive access** — Upgrade a share to edit access or revoke it from task detail. Editors can send messages into the active run, and the server records the editor as the actor instead of the original operator.
-- **Mobile-safe approvals** — Paired mobile/PWA clients can respond only to approval classes marked safe for that share; unsafe classes fail closed at the API layer.
+- **Mobile-safe approvals** — Paired mobile/PWA clients can respond only when the exact provider request is marked mobile-safe and its action class is allowlisted on the share; unsafe, stale, or changed requests fail closed at the API layer.
 - **Fork isolation** — Fork shares create a new linked task with redacted parent context and run excerpt. The fork does not inherit worktrees, thread IDs, credentials, or other local-only handles, and it does not change parent run state.
 - **Live delivery** — The `run-sessions` WebSocket channel fans out share, message, approval, revoke, and fork events to authorized same-workspace clients.
 

@@ -44,6 +44,7 @@ function actorFromRequest(req: AuthenticatedRequest): RunSessionActor {
     label: auth?.tokenName || auth?.keyName || auth?.clientId || auth?.userId || id,
     type: auth?.actorType,
     authMethod: auth?.authMethod,
+    authenticatedAt: auth?.authenticatedAt,
     clientMode: auth?.clientMode,
     workspaceId: auth?.workspaceId || 'local',
   };

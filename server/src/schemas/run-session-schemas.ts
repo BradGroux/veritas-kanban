@@ -1,14 +1,10 @@
 import { z } from 'zod';
+import { RUN_APPROVAL_ACTION_CLASSES } from '@veritas-kanban/shared';
 
 export const runSessionPermissionSchema = z.enum(['view', 'edit', 'fork']);
 export const runSessionStatusSchema = z.enum(['active', 'revoked', 'expired']);
 
-const mobileSafeApprovalClassSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(80)
-  .regex(/^[a-z0-9][a-z0-9._:-]*$/i, 'Invalid approval class');
+const mobileSafeApprovalClassSchema = z.enum(RUN_APPROVAL_ACTION_CLASSES);
 
 export const createRunSessionShareSchema = z.object({
   taskId: z.string().min(1).max(120),
@@ -43,9 +39,13 @@ export const sendRunSessionMessageSchema = z.object({
 });
 
 export const runSessionApprovalResponseSchema = z.object({
+  approvalId: z.string().regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/),
   actionClass: mobileSafeApprovalClassSchema,
   response: z.enum(['approved', 'rejected']),
+  expectedRevision: z.number().int().positive(),
+  expectedActionHash: z.string().regex(/^[a-f0-9]{64}$/),
   note: z.string().trim().max(1000).optional(),
+  responseData: z.record(z.string().max(160), z.json()).optional(),
 });
 
 export const forkRunSessionSchema = z.object({

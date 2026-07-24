@@ -102,11 +102,11 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'run.fork': unsupported(
         'The upstream method is not exposed until provider-neutral lifecycle issue #856 owns authorization and persistence.'
       ),
-      'run.approvals': unsupported(
-        'Provider approval requests are deterministically denied until the Veritas approval broker in issue #852 is available.'
+      'run.approvals': supported(
+        'Provider approval requests are bound to durable Veritas requests and resolved with authenticated compare-and-set decisions.'
       ),
-      'run.elicitation': unsupported(
-        'Provider elicitation requests are deterministically declined until the shared brokers in issues #852 and #857 are available.'
+      'run.elicitation': supported(
+        'Provider questions and elicitation requests use the same durable broker with bounded, schema-validated responses.'
       ),
       'tool.calls': supported(
         'Command, file, tool, and item lifecycle notifications are journaled and budgeted.'

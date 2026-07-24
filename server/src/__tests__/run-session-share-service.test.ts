@@ -57,6 +57,10 @@ describe('RunSessionShareService', () => {
     sendMessage: ReturnType<typeof vi.fn>;
     assertActiveRunControl: ReturnType<typeof vi.fn>;
   };
+  let approvalBroker: {
+    get: ReturnType<typeof vi.fn>;
+    decide: ReturnType<typeof vi.fn>;
+  };
   let service: RunSessionShareService;
 
   const owner = {
@@ -93,10 +97,47 @@ describe('RunSessionShareService', () => {
       sendMessage: vi.fn().mockResolvedValue({ delivered: true }),
       assertActiveRunControl: vi.fn().mockResolvedValue(undefined),
     };
+    approvalBroker = {
+      get: vi.fn().mockImplementation(async (approvalId: string) => ({
+        schemaVersion: 'run-approval/v1',
+        id: approvalId,
+        workspaceId: 'local',
+        taskId: mockTask.id,
+        attemptId: 'attempt-721',
+        provider: 'codex-app-server',
+        agentId: 'codex-app-server',
+        requestKind: approvalId === 'runapproval_mobile_safe' ? 'elicitation' : 'approval',
+        actionClass: approvalId === 'runapproval_mobile_safe' ? 'elicitation' : 'shell',
+        action:
+          approvalId === 'runapproval_mobile_safe' ? 'Choose a test gate' : 'Run a shell command',
+        actionHash: 'a'.repeat(64),
+        resourceScope: [],
+        riskClass: approvalId === 'runapproval_mobile_safe' ? 'low' : 'high',
+        evidenceRevision: 'provider-runtime-probe/v6',
+        providerRequestId: `provider-${approvalId}`,
+        mobileSafe: approvalId === 'runapproval_mobile_safe',
+        status: 'pending',
+        revision: 1,
+        createdAt: '2026-07-24T07:00:00.000Z',
+        updatedAt: '2026-07-24T07:00:00.000Z',
+        expiresAt: '2026-07-24T07:05:00.000Z',
+      })),
+      decide: vi.fn().mockImplementation(async (approvalId, input, actor) => ({
+        ...(await approvalBroker.get(approvalId)),
+        status: input.decision,
+        revision: 2,
+        resolution: {
+          decision: input.decision,
+          actor,
+          decidedAt: '2026-07-24T07:01:00.000Z',
+        },
+      })),
+    };
     service = new RunSessionShareService({
       filePath: path.join(tmpDir, 'run-session-shares.json'),
       taskService: taskService as unknown as TaskService,
       agentService: agentService as never,
+      approvalBroker: approvalBroker as never,
     });
   });
 
@@ -189,7 +230,7 @@ describe('RunSessionShareService', () => {
       {
         taskId: mockTask.id,
         permission: 'edit',
-        mobileSafeApprovalClasses: ['human-review'],
+        mobileSafeApprovalClasses: ['elicitation'],
       },
       owner
     );
@@ -198,12 +239,18 @@ describe('RunSessionShareService', () => {
     await expect(
       service.respondToApproval(
         share.id,
-        { actionClass: 'human-review', response: 'approved' },
+        {
+          approvalId: 'runapproval_mobile_safe',
+          actionClass: 'elicitation',
+          response: 'approved',
+          expectedRevision: 1,
+          expectedActionHash: 'a'.repeat(64),
+        },
         mobileActor
       )
     ).resolves.toMatchObject({
       type: 'approval.responded',
-      actionClass: 'human-review',
+      actionClass: 'elicitation',
       approvalResponse: 'approved',
     });
     expect(agentService.assertActiveRunControl).toHaveBeenCalledWith(
@@ -215,7 +262,13 @@ describe('RunSessionShareService', () => {
     await expect(
       service.respondToApproval(
         share.id,
-        { actionClass: 'shell-command', response: 'approved' },
+        {
+          approvalId: 'runapproval_mobile_unsafe',
+          actionClass: 'shell',
+          response: 'approved',
+          expectedRevision: 1,
+          expectedActionHash: 'a'.repeat(64),
+        },
         mobileActor
       )
     ).rejects.toBeInstanceOf(ForbiddenError);

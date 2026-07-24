@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   useAgentRunTraces: vi.fn(),
   useActiveRuns: vi.fn(),
   usePendingAgentApprovals: vi.fn(),
+  decideApprovalMutateAsync: vi.fn(),
   useRecentRuns: vi.fn(),
   useTaskTelemetryEvents: vi.fn(),
   useTaskNotifications: vi.fn(),
@@ -35,6 +36,10 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
 
 vi.mock('@/hooks/useAgent', () => ({
   usePendingAgentApprovals: mocks.usePendingAgentApprovals,
+  useDecideRunApproval: () => ({
+    mutateAsync: mocks.decideApprovalMutateAsync,
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/useNotifications', () => ({
@@ -268,13 +273,28 @@ const product: WorkProductPreview = {
 };
 
 const approval = {
-  id: 'approval-1',
+  schemaVersion: 'run-approval/v1' as const,
+  id: 'runapproval_timeline_001',
+  workspaceId: 'local',
   agentId: 'veritas',
-  action: 'write_file',
+  attemptId: 'attempt-1',
+  provider: 'codex-app-server' as const,
+  requestKind: 'approval' as const,
+  actionClass: 'filesystem' as const,
+  action: 'Update replay documentation',
+  actionHash: 'a'.repeat(64),
   taskId: 'task-timeline',
   details: 'Needs permission to update replay docs',
+  resourceScope: ['docs/replay.md'],
+  riskClass: 'high' as const,
+  evidenceRevision: 'provider-runtime-probe/v6',
+  providerRequestId: 'provider-approval-1',
+  mobileSafe: false,
   status: 'pending' as const,
+  revision: 1,
   createdAt: '2026-06-01T10:02:00.000Z',
+  updatedAt: '2026-06-01T10:02:00.000Z',
+  expiresAt: '2026-06-01T10:07:00.000Z',
 };
 
 const notification = {

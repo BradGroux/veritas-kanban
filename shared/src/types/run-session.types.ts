@@ -1,4 +1,6 @@
 import type { AgentType, AttemptStatus, TaskPriority } from './task.types.js';
+import type { RunEventJsonValue } from './run-event.types.js';
+import type { RunApprovalActionClass } from './run-approval.types.js';
 
 export type RunSessionPermission = 'view' | 'edit' | 'fork';
 export type RunSessionShareStatus = 'active' | 'revoked' | 'expired';
@@ -16,6 +18,7 @@ export interface RunSessionActor {
   label?: string;
   type?: 'user' | 'agent' | 'service' | 'device' | 'localhost-bypass';
   authMethod?: string;
+  authenticatedAt?: string;
   clientMode?: string;
   workspaceId?: string;
 }
@@ -52,7 +55,7 @@ export interface RunSessionShare {
   revokedReason?: string;
   actorLabel?: string;
   stablePath: string;
-  mobileSafeApprovalClasses: string[];
+  mobileSafeApprovalClasses: RunApprovalActionClass[];
   snapshot: RunSessionSnapshot;
   forkedTaskIds: string[];
 }
@@ -62,14 +65,14 @@ export interface CreateRunSessionShareInput {
   permission: RunSessionPermission;
   expiresAt?: string;
   actorLabel?: string;
-  mobileSafeApprovalClasses?: string[];
+  mobileSafeApprovalClasses?: RunApprovalActionClass[];
 }
 
 export interface UpdateRunSessionShareInput {
   permission?: RunSessionPermission;
   expiresAt?: string | null;
   actorLabel?: string;
-  mobileSafeApprovalClasses?: string[];
+  mobileSafeApprovalClasses?: RunApprovalActionClass[];
 }
 
 export interface RunSessionShareListFilters {
@@ -82,9 +85,13 @@ export interface SendRunSessionMessageInput {
 }
 
 export interface RunSessionApprovalResponseInput {
-  actionClass: string;
+  approvalId: string;
+  actionClass: RunApprovalActionClass;
   response: 'approved' | 'rejected';
+  expectedRevision: number;
+  expectedActionHash: string;
   note?: string;
+  responseData?: Record<string, RunEventJsonValue>;
 }
 
 export interface ForkRunSessionInput {

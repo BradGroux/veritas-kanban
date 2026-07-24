@@ -2,10 +2,12 @@ import { getMetricsService, type MetricsService } from './metrics/index.js';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { TaskService } from './task-service.js';
 import { getAgentPermissionService, type ApprovalRequest } from './agent-permission-service.js';
+import { getRunApprovalBrokerService } from './run-approval-broker-service.js';
 import { getQueueIntakeMonitorService } from './queue-intake-monitor-service.js';
 import type {
   QueueMonitorEvent,
   RunTelemetryEvent,
+  RunApprovalRequest,
   Task,
   TaskTelemetryEvent,
   TokenTelemetryEvent,
@@ -291,7 +293,7 @@ export class DigestService {
   ): Promise<AgentOperationsDigest> {
     const filters = normalizeOperationsOptions(options);
     const period = resolveOperationsPeriod(filters);
-    const [tasks, events, approvals, queueMonitorList] = await Promise.all([
+    const [tasks, events, legacyApprovals, runApprovals, queueMonitorList] = await Promise.all([
       this.taskService.listTasks(),
       this.telemetry.getEvents({
         since: period.start,
@@ -301,8 +303,13 @@ export class DigestService {
         limit: 10000,
       }),
       getAgentPermissionService().getPendingApprovals(),
+      getRunApprovalBrokerService().list({ workspaceId: 'local', status: 'pending' }),
       getQueueIntakeMonitorService().list(new Date(period.end)),
     ]);
+    const approvals: Array<ApprovalRequest | RunApprovalRequest> = [
+      ...legacyApprovals,
+      ...runApprovals,
+    ];
 
     const taskById = new Map(tasks.map((task) => [task.id, task]));
     const monitorById = new Map(queueMonitorList.monitors.map((monitor) => [monitor.id, monitor]));
@@ -858,7 +865,9 @@ function telemetrySourceLink(event: TokenTelemetryEvent): AgentOperationsSourceL
   };
 }
 
-function approvalSourceLink(approval: ApprovalRequest): AgentOperationsApproval {
+function approvalSourceLink(
+  approval: ApprovalRequest | RunApprovalRequest
+): AgentOperationsApproval {
   return {
     kind: 'approval',
     id: approval.id,

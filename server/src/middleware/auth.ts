@@ -78,6 +78,7 @@ export interface AuthContext {
   workspaceId?: string;
   actorType?: AuthActorType;
   authMethod?: AuthMethod;
+  authenticatedAt?: string;
   tokenName?: string;
   permissions?: AuthPermission[];
   apiTokenId?: string;
@@ -133,6 +134,7 @@ function buildAuthContext(input: {
   keyName?: string;
   isLocalhost: boolean;
   authMethod: AuthMethod;
+  authenticatedAt?: string;
 }): NonNullable<AuthenticatedRequest['auth']> {
   return {
     role: input.role,
@@ -142,13 +144,15 @@ function buildAuthContext(input: {
     workspaceId: DEFAULT_WORKSPACE_ID,
     actorType: actorTypeFor(input.role, input.authMethod),
     authMethod: input.authMethod,
+    authenticatedAt: input.authenticatedAt ?? new Date().toISOString(),
     tokenName: input.authMethod === 'api-key' ? input.keyName : undefined,
     permissions: permissionsForRole(input.role),
   };
 }
 
 function buildLocalOwnerPasswordSessionContext(
-  isLocalhost: boolean
+  isLocalhost: boolean,
+  authenticatedAt?: string
 ): NonNullable<AuthenticatedRequest['auth']> {
   return {
     ...buildAuthContext({
@@ -156,6 +160,7 @@ function buildLocalOwnerPasswordSessionContext(
       keyName: 'session',
       isLocalhost,
       authMethod: 'session',
+      authenticatedAt,
     }),
     // Production deliberately keeps isLocalhost=false so loopback never enables
     // passwordless bypass. A verified local-owner password session still needs
@@ -500,7 +505,19 @@ export function verifySessionJwtToken(token: string): {
   return { valid: false, error: 'Invalid session' };
 }
 
-function verifyJwtCookie(req: Request): { valid: boolean; error?: string } {
+function sessionAuthenticatedAt(payload: SessionJwtPayload | undefined): string | undefined {
+  if (typeof payload?.iat !== 'number' || !Number.isSafeInteger(payload.iat) || payload.iat < 0) {
+    return undefined;
+  }
+  const timestamp = new Date(payload.iat * 1_000);
+  return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+}
+
+function verifyJwtCookie(req: Request): {
+  valid: boolean;
+  error?: string;
+  payload?: SessionJwtPayload;
+} {
   // Get cookie from request
   const token = req.cookies?.veritas_session;
   if (!token) {
@@ -538,7 +555,10 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
         blockedPasswordSession = true;
       } else {
-        req.auth = buildLocalOwnerPasswordSessionContext(isLocalhost);
+        req.auth = buildLocalOwnerPasswordSessionContext(
+          isLocalhost,
+          sessionAuthenticatedAt(jwtResult.payload)
+        );
         return next();
       }
     }
@@ -560,13 +580,13 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 
     const scopedAuth = validateDatabaseApiToken(apiKey, req, isLocalhost);
     if (scopedAuth) {
-      req.auth = scopedAuth;
+      req.auth = { ...scopedAuth, authenticatedAt: new Date().toISOString() };
       return next();
     }
 
     const deviceAuth = validateDatabaseDeviceSession(apiKey, req, isLocalhost);
     if (deviceAuth) {
-      req.auth = deviceAuth;
+      req.auth = { ...deviceAuth, authenticatedAt: new Date().toISOString() };
       return next();
     }
   }
@@ -830,7 +850,10 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
         } else {
           return {
             authenticated: true,
-            ...buildLocalOwnerPasswordSessionContext(isLocalhost),
+            ...buildLocalOwnerPasswordSessionContext(
+              isLocalhost,
+              sessionAuthenticatedAt(result.payload)
+            ),
           };
         }
       }

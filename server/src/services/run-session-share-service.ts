@@ -13,6 +13,7 @@ import type {
   RunSessionShareListFilters,
   RunSessionShareStatus,
   RunSessionSnapshot,
+  RunApprovalActionClass,
   SendRunSessionMessageInput,
   Task,
   UpdateRunSessionShareInput,
@@ -20,10 +21,14 @@ import type {
 import { getDataDir } from '../utils/paths.js';
 import { validatePathSegment } from '../utils/sanitize.js';
 import { redactString } from '../lib/redact.js';
-import { ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
 import { getTaskService, type TaskService } from './task-service.js';
 import { clawdbotAgentService } from './clawdbot-agent-service.js';
 import { broadcastRunSessionEvent } from './broadcast-service.js';
+import {
+  getRunApprovalBrokerService,
+  type RunApprovalBrokerService,
+} from './run-approval-broker-service.js';
 
 interface RunSessionShareState {
   shares: RunSessionShare[];
@@ -31,10 +36,11 @@ interface RunSessionShareState {
   forks: RunSessionFork[];
 }
 
-interface RunSessionShareServiceOptions {
+export interface RunSessionShareServiceOptions {
   filePath?: string;
   taskService?: TaskService;
   agentService?: typeof clawdbotAgentService;
+  approvalBroker?: RunApprovalBrokerService;
 }
 
 interface ShareAccessOptions {
@@ -44,7 +50,7 @@ interface ShareAccessOptions {
 }
 
 const DEFAULT_WORKSPACE_ID = 'local';
-const DEFAULT_MOBILE_SAFE_APPROVAL_CLASSES = ['human-review', 'task-comment', 'low-risk'];
+const DEFAULT_MOBILE_SAFE_APPROVAL_CLASSES = ['elicitation'] as const;
 const MAX_EVENT_HISTORY = 5000;
 const LOG_CONTEXT_LIMIT = 4000;
 
@@ -52,6 +58,7 @@ export class RunSessionShareService {
   private readonly filePath: string;
   private readonly taskService: TaskService;
   private readonly agentService: typeof clawdbotAgentService;
+  private readonly approvalBroker: RunApprovalBrokerService;
   private state: RunSessionShareState | null = null;
 
   constructor(options: RunSessionShareServiceOptions = {}) {
@@ -59,6 +66,7 @@ export class RunSessionShareService {
       options.filePath ?? path.join(getDataDir(), 'storage', 'run-session-shares.json');
     this.taskService = options.taskService ?? getTaskService();
     this.agentService = options.agentService ?? clawdbotAgentService;
+    this.approvalBroker = options.approvalBroker ?? getRunApprovalBrokerService();
   }
 
   async create(
@@ -235,17 +243,51 @@ export class RunSessionShareService {
   ): Promise<RunSessionEvent> {
     const share = await this.get(id, { actor, permission: 'edit' });
     await this.agentService.assertActiveRunControl(share.taskId, 'approvals', share.sourceId);
+    const approval = await this.approvalBroker.get(input.approvalId, share.workspaceId);
+    if (approval.taskId !== share.taskId || approval.attemptId !== share.sourceId) {
+      throw new ForbiddenError('Approval does not belong to this shared run.', {
+        approvalId: approval.id,
+      });
+    }
+    if (approval.actionClass !== input.actionClass) {
+      throw new ConflictError('Approval action class changed before the decision.', {
+        approvalId: approval.id,
+        expected: approval.actionClass,
+        received: input.actionClass,
+      });
+    }
     const mobileClient = actor.clientMode === 'mobile-pwa';
-    if (mobileClient && !share.mobileSafeApprovalClasses.includes(input.actionClass)) {
+    if (
+      mobileClient &&
+      (!approval.mobileSafe || !share.mobileSafeApprovalClasses.includes(input.actionClass))
+    ) {
       throw new ForbiddenError('Approval class is not mobile-safe for this share', {
         actionClass: input.actionClass,
+        requestMobileSafe: approval.mobileSafe,
         mobileSafeApprovalClasses: share.mobileSafeApprovalClasses,
       });
     }
+    const resolved = await this.approvalBroker.decide(
+      approval.id,
+      {
+        decision: input.response,
+        expectedRevision: input.expectedRevision,
+        expectedActionHash: input.expectedActionHash,
+        note: input.note,
+        responseData: input.responseData,
+      },
+      {
+        ...actor,
+        workspaceId: share.workspaceId,
+      }
+    );
 
     const event = this.createEvent(share, 'approval.responded', actor, {
       note: input.note,
       mobileClient,
+      approvalId: resolved.id,
+      actionHash: resolved.actionHash,
+      revision: resolved.revision,
     });
     event.actionClass = input.actionClass;
     event.approvalResponse = input.response;
@@ -346,7 +388,7 @@ export class RunSessionShareService {
     };
   }
 
-  private normalizeApprovalClasses(classes?: string[]): string[] {
+  private normalizeApprovalClasses(classes?: RunApprovalActionClass[]): RunApprovalActionClass[] {
     return [...new Set([...(classes ?? DEFAULT_MOBILE_SAFE_APPROVAL_CLASSES)])].sort();
   }
 

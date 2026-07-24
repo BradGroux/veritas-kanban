@@ -5,6 +5,7 @@ import {
   Code,
   Group,
   Loader,
+  Modal,
   Paper,
   ScrollArea,
   Select,
@@ -44,7 +45,11 @@ import type {
   TelemetryEventType,
   WorkProductPreview,
 } from '@veritas-kanban/shared';
-import { usePendingAgentApprovals, type AgentApprovalRequest } from '@/hooks/useAgent';
+import {
+  useDecideRunApproval,
+  usePendingAgentApprovals,
+  type AgentApprovalRequest,
+} from '@/hooks/useAgent';
 import { useAgentRunTraces, useTaskTelemetryEvents } from '@/hooks/useAgentRunTimeline';
 import { useTaskNotifications, type AgentNotification } from '@/hooks/useNotifications';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
@@ -1054,6 +1059,11 @@ export function AgentRunTimelinePanel({
     task.id
   );
   const { data: approvals = [], isLoading: approvalsLoading } = usePendingAgentApprovals();
+  const decideApproval = useDecideRunApproval();
+  const [pendingDecision, setPendingDecision] = useState<{
+    approval: AgentApprovalRequest;
+    decision: 'approved' | 'rejected';
+  } | null>(null);
   const { data: activeRuns = [], isLoading: activeRunsLoading } = useActiveRuns();
   const { data: recentRuns = [], isLoading: recentRunsLoading } = useRecentRuns();
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(
@@ -1147,6 +1157,7 @@ export function AgentRunTimelinePanel({
   const linkedWorkProducts = workProducts.filter(
     (product) => !selectedAttemptId || product.sourceRunId === selectedAttemptId
   );
+  const pendingTaskApprovals = approvals.filter((approval) => approval.taskId === task.id);
 
   useEffect(() => {
     setVisibleCount(TIMELINE_PAGE_SIZE);
@@ -1173,6 +1184,106 @@ export function AgentRunTimelinePanel({
 
   return (
     <Stack gap="md">
+      {pendingTaskApprovals.map((approval) => (
+        <Paper key={approval.id} withBorder p="md" radius="md">
+          <Stack gap="xs">
+            <Group justify="space-between" align="flex-start">
+              <div>
+                <Text fw={700}>{approval.action}</Text>
+                <Text size="sm" c="dimmed">
+                  {approval.details ||
+                    `${approval.provider} requested ${approval.actionClass} approval.`}
+                </Text>
+              </div>
+              <Badge color={approval.riskClass === 'critical' ? 'red' : 'orange'} variant="light">
+                {approval.riskClass} risk
+              </Badge>
+            </Group>
+            <Text size="xs" c="dimmed">
+              Bound action {approval.actionHash.slice(0, 12)} · expires{' '}
+              {new Date(approval.expiresAt).toLocaleString()}
+            </Text>
+            <Group justify="flex-end">
+              <Button
+                color="red"
+                variant="light"
+                onClick={() => setPendingDecision({ approval, decision: 'rejected' })}
+              >
+                Reject
+              </Button>
+              <Button
+                color="green"
+                onClick={() => setPendingDecision({ approval, decision: 'approved' })}
+              >
+                Approve once
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+      ))}
+      <Modal
+        opened={pendingDecision !== null}
+        onClose={() => setPendingDecision(null)}
+        title={pendingDecision?.decision === 'approved' ? 'Approve exact action' : 'Reject action'}
+        centered
+      >
+        {pendingDecision && (
+          <Stack gap="md">
+            <Text fw={700}>{pendingDecision.approval.action}</Text>
+            <Text size="sm">{pendingDecision.approval.details || 'No additional details.'}</Text>
+            {pendingDecision.approval.workingDirectory && (
+              <Text size="sm">
+                Working directory: <Code>{pendingDecision.approval.workingDirectory}</Code>
+              </Text>
+            )}
+            {pendingDecision.approval.resourceScope.length > 0 && (
+              <Stack gap={4}>
+                <Text size="sm" fw={600}>
+                  Resource scope
+                </Text>
+                {pendingDecision.approval.resourceScope.map((resource) => (
+                  <Code key={resource} block>
+                    {resource}
+                  </Code>
+                ))}
+              </Stack>
+            )}
+            {pendingDecision.approval.policyReason && (
+              <Text size="sm">Policy reason: {pendingDecision.approval.policyReason}</Text>
+            )}
+            <Code block>{pendingDecision.approval.actionHash}</Code>
+            {decideApproval.error && (
+              <Text size="sm" c="red">
+                {decideApproval.error instanceof Error
+                  ? decideApproval.error.message
+                  : 'Approval decision failed.'}
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setPendingDecision(null)}>
+                Cancel
+              </Button>
+              <Button
+                color={pendingDecision.decision === 'approved' ? 'green' : 'red'}
+                loading={decideApproval.isPending}
+                onClick={async () => {
+                  await decideApproval.mutateAsync({
+                    approvalId: pendingDecision.approval.id,
+                    decision: {
+                      decision: pendingDecision.decision,
+                      expectedRevision: pendingDecision.approval.revision,
+                      expectedActionHash: pendingDecision.approval.actionHash,
+                    },
+                  });
+                  setPendingDecision(null);
+                }}
+              >
+                Confirm {pendingDecision.decision === 'approved' ? 'approval' : 'rejection'}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
       <Paper withBorder p="md" radius="md">
         <Stack gap="sm">
           <Group justify="space-between" align="flex-start" gap="md" wrap="nowrap">

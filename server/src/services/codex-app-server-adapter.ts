@@ -1,11 +1,25 @@
 import { Ajv, type ValidateFunction } from 'ajv';
-import type { SandboxPolicyDryRunResult } from '@veritas-kanban/shared';
+import type {
+  RunApprovalActionClass,
+  RunApprovalRequestKind,
+  RunApprovalRiskClass,
+  RunApprovalStatus,
+  RunEventJsonValue,
+  SandboxPolicyDryRunResult,
+} from '@veritas-kanban/shared';
+import applyPatchApprovalResponseSchema from '../contracts/codex-app-server-v0.145.0/ApplyPatchApprovalResponse.json' with { type: 'json' };
 import clientNotificationSchema from '../contracts/codex-app-server-v0.145.0/ClientNotification.json' with { type: 'json' };
 import clientRequestSchema from '../contracts/codex-app-server-v0.145.0/ClientRequest.json' with { type: 'json' };
+import commandExecutionRequestApprovalResponseSchema from '../contracts/codex-app-server-v0.145.0/CommandExecutionRequestApprovalResponse.json' with { type: 'json' };
+import execCommandApprovalResponseSchema from '../contracts/codex-app-server-v0.145.0/ExecCommandApprovalResponse.json' with { type: 'json' };
+import fileChangeRequestApprovalResponseSchema from '../contracts/codex-app-server-v0.145.0/FileChangeRequestApprovalResponse.json' with { type: 'json' };
 import jsonRpcErrorSchema from '../contracts/codex-app-server-v0.145.0/JSONRPCError.json' with { type: 'json' };
 import jsonRpcResponseSchema from '../contracts/codex-app-server-v0.145.0/JSONRPCResponse.json' with { type: 'json' };
+import mcpServerElicitationRequestResponseSchema from '../contracts/codex-app-server-v0.145.0/McpServerElicitationRequestResponse.json' with { type: 'json' };
+import permissionsRequestApprovalResponseSchema from '../contracts/codex-app-server-v0.145.0/PermissionsRequestApprovalResponse.json' with { type: 'json' };
 import serverNotificationSchema from '../contracts/codex-app-server-v0.145.0/ServerNotification.json' with { type: 'json' };
 import serverRequestSchema from '../contracts/codex-app-server-v0.145.0/ServerRequest.json' with { type: 'json' };
+import toolRequestUserInputResponseSchema from '../contracts/codex-app-server-v0.145.0/ToolRequestUserInputResponse.json' with { type: 'json' };
 import initializeResponseSchema from '../contracts/codex-app-server-v0.145.0/v1/InitializeResponse.json' with { type: 'json' };
 import threadStartResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/ThreadStartResponse.json' with { type: 'json' };
 import turnInterruptResponseSchema from '../contracts/codex-app-server-v0.145.0/v2/TurnInterruptResponse.json' with { type: 'json' };
@@ -14,7 +28,7 @@ import { buildSafeCodexEnv } from '../utils/codex-env.js';
 
 export const CODEX_APP_SERVER_CERTIFIED_VERSION = 'codex-cli 0.145.0';
 export const CODEX_APP_SERVER_CERTIFIED_BUILD =
-  'openai/codex@25af12f7e61572b0bc18ddb1008be543b91519b0;schema-set:21378ac910dd6408502cde3ff421a5014bbc0b9c4ae191ce95debe74f43c40bc';
+  'openai/codex@25af12f7e61572b0bc18ddb1008be543b91519b0;schema-set:b59f4df6df8d00b3e665b533416efcfef9b5530bcd22a1e4a15dfe7bbd3a8624';
 export const CODEX_APP_SERVER_PROTOCOL_VERSION = 'codex-app-server-jsonrpc/v2';
 export const CODEX_APP_SERVER_MAX_RECORD_BYTES = 4 * 1024 * 1024;
 export const CODEX_APP_SERVER_OVERLOAD_ERROR = -32_001;
@@ -52,6 +66,19 @@ const responseValidators: Record<CodexAppServerOutboundMethod, ValidateFunction<
   'thread/start': ajv.compile(threadStartResponseSchema as object),
   'turn/start': ajv.compile(turnStartResponseSchema as object),
   'turn/interrupt': ajv.compile(turnInterruptResponseSchema as object),
+};
+const serverRequestResponseValidators: Partial<Record<string, ValidateFunction<unknown>>> = {
+  'item/commandExecution/requestApproval': ajv.compile(
+    commandExecutionRequestApprovalResponseSchema as object
+  ),
+  'item/fileChange/requestApproval': ajv.compile(fileChangeRequestApprovalResponseSchema as object),
+  'item/tool/requestUserInput': ajv.compile(toolRequestUserInputResponseSchema as object),
+  'mcpServer/elicitation/request': ajv.compile(mcpServerElicitationRequestResponseSchema as object),
+  'item/permissions/requestApproval': ajv.compile(
+    permissionsRequestApprovalResponseSchema as object
+  ),
+  applyPatchApproval: ajv.compile(applyPatchApprovalResponseSchema as object),
+  execCommandApproval: ajv.compile(execCommandApprovalResponseSchema as object),
 };
 
 export interface CodexAppServerThreadInput {
@@ -95,6 +122,29 @@ export interface CodexAppServerInbound {
   method: string;
   record: Record<string, unknown>;
   denied?: boolean;
+}
+
+export interface CodexAppServerBrokerRequest {
+  requestKind: RunApprovalRequestKind;
+  actionClass: RunApprovalActionClass;
+  action: string;
+  exactAction: Record<string, unknown>;
+  details?: string;
+  resourceScope: string[];
+  workingDirectory?: string;
+  riskClass: RunApprovalRiskClass;
+  providerRequestId: string;
+  threadId?: string;
+  turnId?: string;
+  itemId?: string;
+  mobileSafe: boolean;
+  ttlMs?: number;
+}
+
+export interface CodexAppServerBrokerResolution {
+  status: Exclude<RunApprovalStatus, 'pending'>;
+  responseData?: Record<string, RunEventJsonValue>;
+  note?: string;
 }
 
 export interface CodexAppServerRpcClientOptions {
@@ -273,7 +323,7 @@ export class CodexAppServerRpcClient {
     this.assertInitialized();
     const result = await this.request('thread/start', {
       cwd: input.cwd,
-      approvalPolicy: 'never',
+      approvalPolicy: 'on-request',
       approvalsReviewer: 'user',
       sandbox: input.sandboxMode,
       serviceName: 'veritas-kanban',
@@ -288,7 +338,7 @@ export class CodexAppServerRpcClient {
     const result = await this.request('turn/start', {
       threadId: requiredIdentifier(input.threadId, 'Codex app-server thread ID'),
       input: [{ type: 'text', text: input.prompt }],
-      approvalPolicy: 'never',
+      approvalPolicy: 'on-request',
       approvalsReviewer: 'user',
       cwd: input.cwd,
       ...(input.model?.trim() ? { model: input.model.trim() } : {}),
@@ -310,13 +360,10 @@ export class CodexAppServerRpcClient {
 
     if (method && hasId) {
       validateWithSchema(validateServerRequest, record, 'Codex app-server server request');
-      const response = denialForServerRequest(method);
-      this.writeRecord({ id: record.id, ...response });
       return {
         kind: 'server-request',
         method,
         record,
-        denied: true,
       };
     }
 
@@ -364,6 +411,25 @@ export class CodexAppServerRpcClient {
       }
     }
     return { kind: 'response', method: pending.method, record };
+  }
+
+  respondToServerRequest(
+    record: Record<string, unknown>,
+    resolution?: CodexAppServerBrokerResolution
+  ): void {
+    validateWithSchema(validateServerRequest, record, 'Codex app-server server request');
+    const method = requiredIdentifier(record.method, 'Codex app-server server request method');
+    const id = record.id;
+    rpcIdKey(id);
+    const response = responseForServerRequest(method, recordValue(record.params) ?? {}, resolution);
+    if ('result' in response) {
+      const validator = serverRequestResponseValidators[method];
+      if (!validator) {
+        throw new Error(`Codex app-server ${method} has no pinned response validator.`);
+      }
+      validateWithSchema(validator, response.result, `Codex app-server ${method} response`);
+    }
+    this.writeRecord({ id, ...response });
   }
 
   close(error = new Error('Codex app-server connection closed.')): void {
@@ -455,29 +521,205 @@ export class CodexAppServerRpcClient {
   }
 }
 
-function denialForServerRequest(
-  method: string
-): { result: Record<string, unknown> } | { error: Record<string, unknown> } {
+export function classifyCodexAppServerServerRequest(
+  record: Record<string, unknown>
+): CodexAppServerBrokerRequest | undefined {
+  validateWithSchema(validateServerRequest, record, 'Codex app-server server request');
+  const method = requiredIdentifier(record.method, 'Codex app-server server request method');
+  const params = recordValue(record.params) ?? {};
+  const providerRequestId = rpcIdKey(record.id);
+  const threadId = boundedIdentifier(params.threadId) ?? boundedIdentifier(params.conversationId);
+  const turnId = boundedIdentifier(params.turnId);
+  const itemId =
+    boundedIdentifier(params.itemId) ??
+    boundedIdentifier(params.callId) ??
+    boundedIdentifier(params.approvalId);
+  const reason = boundedSummary(stringValue(params.reason));
+
   if (method === 'item/commandExecution/requestApproval') {
-    return { result: { decision: 'decline' } };
+    const command = stringValue(params.command) ?? 'provider command';
+    const networkContext = recordValue(params.networkApprovalContext);
+    const networkHost = boundedIdentifier(networkContext?.host, 2_048);
+    return {
+      requestKind: 'approval',
+      actionClass: networkContext ? 'network' : 'shell',
+      action: boundedDisplay(`Execute command: ${command}`),
+      exactAction: params,
+      ...(reason ? { details: reason } : {}),
+      resourceScope: collectResourceScope(params, [
+        boundedIdentifier(params.cwd, 4_096),
+        networkHost,
+      ]),
+      ...(boundedIdentifier(params.cwd, 4_096)
+        ? { workingDirectory: boundedIdentifier(params.cwd, 4_096) }
+        : {}),
+      riskClass: networkContext ? 'critical' : 'high',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      ...(itemId ? { itemId } : {}),
+      mobileSafe: false,
+    };
+  }
+
+  if (method === 'item/fileChange/requestApproval' || method === 'applyPatchApproval') {
+    const fileChanges = recordValue(params.fileChanges);
+    const paths = fileChanges ? Object.keys(fileChanges).slice(0, 100) : [];
+    const grantRoot = boundedIdentifier(params.grantRoot, 4_096);
+    return {
+      requestKind: 'approval',
+      actionClass: 'filesystem',
+      action:
+        method === 'applyPatchApproval' ? 'Apply provider patch' : 'Apply provider file changes',
+      exactAction: params,
+      ...(reason ? { details: reason } : {}),
+      resourceScope: collectResourceScope(params, [grantRoot, ...paths]),
+      riskClass: 'high',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      ...(itemId ? { itemId } : {}),
+      mobileSafe: false,
+    };
+  }
+
+  if (method === 'execCommandApproval') {
+    const command = Array.isArray(params.command)
+      ? params.command.filter((entry): entry is string => typeof entry === 'string').join(' ')
+      : 'provider command';
+    const cwd = boundedIdentifier(params.cwd, 4_096);
+    return {
+      requestKind: 'approval',
+      actionClass: 'shell',
+      action: boundedDisplay(`Execute command: ${command}`),
+      exactAction: params,
+      ...(reason ? { details: reason } : {}),
+      resourceScope: collectResourceScope(params, [cwd]),
+      ...(cwd ? { workingDirectory: cwd } : {}),
+      riskClass: 'high',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      ...(itemId ? { itemId } : {}),
+      mobileSafe: false,
+    };
+  }
+
+  if (method === 'item/permissions/requestApproval') {
+    const cwd = boundedIdentifier(params.cwd, 4_096);
+    return {
+      requestKind: 'approval',
+      actionClass: recordValue(params.permissions)?.network ? 'network' : 'filesystem',
+      action: 'Grant additional provider permissions for this turn',
+      exactAction: params,
+      ...(reason ? { details: reason } : {}),
+      resourceScope: collectResourceScope(params, [cwd]),
+      ...(cwd ? { workingDirectory: cwd } : {}),
+      riskClass: 'critical',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      ...(itemId ? { itemId } : {}),
+      mobileSafe: false,
+    };
+  }
+
+  if (method === 'mcpServer/elicitation/request') {
+    const message = boundedSummary(stringValue(params.message));
+    return {
+      requestKind: 'elicitation',
+      actionClass: 'elicitation',
+      action: boundedDisplay(message ?? 'Respond to MCP server elicitation'),
+      exactAction: params,
+      ...(boundedIdentifier(params.serverName)
+        ? { details: `MCP server: ${boundedIdentifier(params.serverName)}` }
+        : {}),
+      resourceScope: collectResourceScope(params),
+      riskClass: 'medium',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      mobileSafe: false,
+    };
+  }
+
+  if (method === 'item/tool/requestUserInput') {
+    const questions = Array.isArray(params.questions) ? params.questions : [];
+    const firstQuestion = recordValue(questions[0]);
+    const ttl =
+      typeof params.autoResolutionMs === 'number' &&
+      Number.isSafeInteger(params.autoResolutionMs) &&
+      params.autoResolutionMs >= 1_000 &&
+      params.autoResolutionMs <= 24 * 60 * 60 * 1_000
+        ? params.autoResolutionMs
+        : undefined;
+    return {
+      requestKind: 'elicitation',
+      actionClass: 'elicitation',
+      action: boundedDisplay(
+        stringValue(firstQuestion?.question) ?? 'Respond to provider question'
+      ),
+      exactAction: params,
+      resourceScope: [],
+      riskClass: 'low',
+      providerRequestId,
+      ...(threadId ? { threadId } : {}),
+      ...(turnId ? { turnId } : {}),
+      ...(itemId ? { itemId } : {}),
+      mobileSafe: true,
+      ...(ttl ? { ttlMs: ttl } : {}),
+    };
+  }
+
+  return undefined;
+}
+
+function responseForServerRequest(
+  method: string,
+  params: Record<string, unknown>,
+  resolution?: CodexAppServerBrokerResolution
+): { result: Record<string, unknown> } | { error: Record<string, unknown> } {
+  const approved = resolution?.status === 'approved';
+  const cancelled = resolution?.status === 'cancelled';
+  const responseData = resolution?.responseData;
+  const rejection = boundedSummary(resolution?.note) ?? 'Veritas denied this provider request.';
+
+  if (method === 'item/commandExecution/requestApproval') {
+    return { result: { decision: approved ? 'accept' : cancelled ? 'cancel' : 'decline' } };
   }
   if (method === 'item/fileChange/requestApproval') {
-    return { result: { decision: 'decline' } };
+    return { result: { decision: approved ? 'accept' : cancelled ? 'cancel' : 'decline' } };
   }
   if (method === 'mcpServer/elicitation/request') {
-    return { result: { action: 'decline', content: null } };
+    return {
+      result: approved
+        ? { action: 'accept', content: responseData?.content ?? responseData ?? null }
+        : { action: cancelled ? 'cancel' : 'decline', content: null },
+    };
   }
   if (method === 'item/tool/requestUserInput') {
-    return { result: { answers: {} } };
+    const answers = recordValue(responseData?.answers);
+    return { result: { answers: approved && answers ? answers : {} } };
+  }
+  if (method === 'item/permissions/requestApproval') {
+    return {
+      result: {
+        permissions: approved ? (recordValue(params.permissions) ?? {}) : {},
+        scope: 'turn',
+        strictAutoReview: false,
+      },
+    };
   }
   if (method === 'applyPatchApproval' || method === 'execCommandApproval') {
     return {
       result: {
-        decision: {
-          denied: {
-            rejection: 'Veritas approval broker is unavailable for this run.',
-          },
-        },
+        decision: approved
+          ? 'approved'
+          : resolution?.status === 'expired'
+            ? 'timed_out'
+            : cancelled
+              ? 'abort'
+              : { denied: { rejection } },
       },
     };
   }
@@ -517,6 +759,38 @@ function extractFileChanges(item: Record<string, unknown> | undefined): string[]
     if (path) files.add(path);
   }
   return [...files].slice(0, 20);
+}
+
+function collectResourceScope(
+  value: Record<string, unknown>,
+  seed: Array<string | undefined> = []
+): string[] {
+  const resources = new Set(seed.filter((entry): entry is string => Boolean(entry)));
+  const visit = (candidate: unknown, depth: number): void => {
+    if (depth > 5 || resources.size >= 100) return;
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate.slice(0, 100)) visit(entry, depth + 1);
+      return;
+    }
+    const record = recordValue(candidate);
+    if (!record) return;
+    for (const [key, entry] of Object.entries(record)) {
+      if (['path', 'cwd', 'host', 'url', 'grantRoot'].includes(key) && typeof entry === 'string') {
+        const bounded = boundedIdentifier(entry, 2_048);
+        if (bounded) resources.add(bounded);
+      } else {
+        visit(entry, depth + 1);
+      }
+      if (resources.size >= 100) return;
+    }
+  };
+  visit(value, 0);
+  return [...resources];
+}
+
+function boundedDisplay(value: string): string {
+  const normalized = value.trim();
+  return normalized.length > 1_900 ? `${normalized.slice(0, 1_900)}[truncated]` : normalized;
 }
 
 function validateWithSchema(
