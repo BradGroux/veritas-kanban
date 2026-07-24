@@ -13,6 +13,7 @@ const FULL_SUITE_PATH_PATTERNS = [
   /^server\/src\/storage\//,
   /^server\/src\/__tests__\/storage\//,
   /^scripts\/select-ci-test-scope(?:\.test)?\.mjs$/,
+  /^scripts\/verify-full-suite-job-evidence(?:\.test)?\.mjs$/,
   /(^|\/)package\.json$/,
   /(^|\/)(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
   /(^|\/)tsconfig(?:\.[^/]+)?\.json$/,
