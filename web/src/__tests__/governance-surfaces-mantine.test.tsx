@@ -528,6 +528,35 @@ describe('governance surfaces Mantine migration', () => {
     expectNoLegacySlots(baseElement);
   });
 
+  it('opens and cancels a focused scoring profile draft from Score Explorer', async () => {
+    const user = userEvent.setup();
+    const confirmDiscard = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithProviders(<ScoringProfiles onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole('tab', { name: /score explorer/i }));
+    expect(await screen.findByText('Composite Score Trend')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'New Profile' }));
+
+    expect(screen.getByRole('tab', { name: 'Profiles' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    expect(screen.getByRole('heading', { name: 'New scoring profile' })).toBeDefined();
+    const name = screen.getByRole('textbox', { name: 'Profile name' });
+    const save = screen.getByRole('button', { name: 'Save Profile' });
+    expect(document.activeElement).toBe(name);
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Profile name is required')).toBeDefined();
+
+    await user.type(name, 'Explorer profile');
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByText('Composite Score Trend')).toBeDefined();
+    expect(mocks.createScoringProfile).not.toHaveBeenCalled();
+    confirmDiscard.mockRestore();
+  });
+
   it('supports compact scoring list and detail flows with unsaved-change protection', async () => {
     const user = userEvent.setup();
     const confirmDiscard = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -565,7 +594,9 @@ describe('governance surfaces Mantine migration', () => {
 
     await user.click(screen.getByRole('button', { name: 'New Profile' }));
     expect(screen.getByRole('heading', { name: 'New scoring profile' })).toBeDefined();
-    await user.type(screen.getByRole('textbox', { name: 'Profile name' }), 'Phone profile');
+    const profileName = screen.getByRole('textbox', { name: 'Profile name' });
+    expect(document.activeElement).toBe(profileName);
+    await user.type(profileName, 'Phone profile');
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
     expect(mocks.createScoringProfile).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Phone profile' })

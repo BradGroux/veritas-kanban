@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preventing undefined length crashes and providing a recoverable load error
   with Retry instead of replacing the task surface with an error boundary
   (#936).
+- Made **New Profile** open a focused, validated scoring draft from both Profiles
+  and Score Explorer, with cancel returning to the originating tab without
+  creating an orphan profile (#943).
 
 ## [6.0.0] - 2026-07-24
 
