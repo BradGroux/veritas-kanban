@@ -97,6 +97,9 @@ export type { ReflectionListFilters } from './reflections';
 export type { TraceStatus } from './traces';
 export type { SqlitePortabilityReport } from './maintenance';
 export type {
+  BuzzChannelMapping,
+  BuzzExternalCoordinate,
+  BuzzRuntimeHealth,
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,

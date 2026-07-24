@@ -119,13 +119,25 @@ describe('v1 REST permission guard presets', () => {
         ])
       ).next
     ).toHaveBeenCalled();
+    expect(
+      runGuard(
+        integrationsAccess,
+        mockRequest('GET', '/communication/adapters/buzz-default/buzz/channels', 'read-only', [
+          'settings:read',
+        ])
+      ).next
+    ).toHaveBeenCalled();
 
-    for (const path of [
-      '/communication/adapters/buzz-default',
-      '/communication/adapters/buzz-default/test',
-      '/communication/adapters/buzz-default/disconnect',
+    for (const [method, path] of [
+      ['PUT', '/communication/adapters/buzz-default'],
+      ['POST', '/communication/adapters/buzz-default/test'],
+      ['POST', '/communication/adapters/buzz-default/disconnect'],
+      [
+        'PUT',
+        '/communication/adapters/buzz-default/buzz/channels/123e4567-e89b-42d3-a456-426614174000',
+      ],
+      ['POST', '/communication/adapters/buzz-default/send'],
     ]) {
-      const method = path.endsWith('buzz-default') ? 'PUT' : 'POST';
       const { res, next } = runGuard(
         integrationsAccess,
         mockRequest(method, path, 'read-only', ['settings:read'])

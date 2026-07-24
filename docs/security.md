@@ -154,9 +154,10 @@ limits are tracked in
 Compatibility errors and debug bundles must redact tokens, cookies, private
 keys, local private paths, raw chat content, and task body text.
 
-Buzz communication diagnostics store environment-variable references and
-public/redacted metadata only. The Nostr private key and optional NIP-OA auth
-tag are resolved only for the active read-only probe and are never returned.
+Buzz communication diagnostics and delivery store environment-variable
+references and public/redacted metadata only. The Nostr private key and
+optional NIP-OA auth tag are resolved only for an active probe or signing
+operation and are never returned.
 The built-in signer accepts hexadecimal or `nsec` private-key material,
 constructs the Buzz-required nonce and exact request-body hash, and clears its
 decoded key bytes after signing on a best-effort basis.
@@ -164,11 +165,16 @@ Relay URLs reject userinfo, query strings, and fragments. Outbound requests use
 scheme validation, explicit plaintext/local/RFC1918/ULA opt-ins, DNS pinning,
 manual redirects, fixed timeouts, and bounded response reads. Link-local,
 cloud-metadata, and CGNAT ranges remain blocked under the private-network
-opt-in. The default probe reads NIP-11 metadata and authenticated query filters
-only; it does not send a Buzz event. Optional command discovery runs without a
-shell and receives a minimal environment that excludes provider and Buzz
-credentials. See
-[Buzz Connection Diagnostics](BUZZ-INTEGRATION.md).
+opt-in. The compatibility probe reads NIP-11 metadata and authenticated query
+filters only. The communication worker uses a DNS-pinned, channel-allowlisted
+NIP-42 WebSocket subscription and verifies event signatures, kinds, channel
+IDs, timestamps, and bounded sizes before projection. Outbound signed events
+are persisted before submission. Ambiguous writes are queried by event ID and
+the persisted signature, configured identity, and mapped channel are
+re-verified before any resubmission. Echoed adapter event IDs are suppressed.
+Optional command discovery runs without a shell and receives a minimal
+environment that excludes provider and Buzz credentials. See
+[Buzz Communication Adapter](BUZZ-INTEGRATION.md).
 
 ## Provider Runtime Capability Enforcement
 

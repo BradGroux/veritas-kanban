@@ -128,6 +128,50 @@ describe('ChatService', () => {
     expect((await service.getSquadMessages({ limit: 1 })).length).toBe(1);
   });
 
+  it('deduplicates deterministic external message IDs and preserves source metadata', async () => {
+    const timestamp = '2026-07-23T20:15:00.000Z';
+    const input = {
+      id: `msg_buzz_${'a'.repeat(64)}`,
+      timestamp,
+      agent: 'BUZZ',
+      message: 'Signed relay message',
+      links: [
+        {
+          href: `buzz://message?channel=123e4567-e89b-42d3-a456-426614174000&id=${'a'.repeat(64)}`,
+          label: 'Open in Buzz',
+        },
+      ],
+      external: {
+        provider: 'buzz' as const,
+        adapterId: 'buzz-default',
+        community: 'relay.example.test',
+        channelId: '123e4567-e89b-42d3-a456-426614174000',
+        messageId: 'a'.repeat(64),
+        authorId: 'b'.repeat(64),
+        kind: 9,
+      },
+    };
+
+    const first = await service.sendSquadMessage(input, 'Buzz member');
+    const replay = await service.sendSquadMessage(
+      { ...input, message: 'must not duplicate or replace' },
+      'Buzz member'
+    );
+    const stored = (await service.getSquadMessages()).filter(
+      (message: any) => message.id === input.id
+    );
+
+    expect(replay).toEqual(first);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      id: input.id,
+      timestamp,
+      message: 'Signed relay message',
+      links: input.links,
+      external: input.external,
+    });
+  });
+
   it('tracks squad threads, mentions, unread state, pins, reactions, and redacted search', async () => {
     const root = await service.sendSquadMessage({
       agent: 'VERITAS',

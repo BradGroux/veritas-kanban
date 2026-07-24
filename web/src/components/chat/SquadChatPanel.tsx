@@ -60,6 +60,35 @@ const agentColors: Record<string, string> = {
   Marvin: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 };
 
+function safeSquadLinkHref(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      if (parsed.username || parsed.password) return undefined;
+      return parsed.toString();
+    }
+    if (parsed.protocol !== 'buzz:' || parsed.hostname !== 'message') return undefined;
+    const channelId = parsed.searchParams.get('channel');
+    const eventId = parsed.searchParams.get('id');
+    const threadId = parsed.searchParams.get('thread');
+    if (
+      !channelId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        channelId
+      ) ||
+      !eventId ||
+      !/^[a-f0-9]{64}$/i.test(eventId) ||
+      (threadId && !/^[a-f0-9]{64}$/i.test(threadId))
+    ) {
+      return undefined;
+    }
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
 function readIncludeSystemPreference(): boolean {
   try {
     const saved = window.localStorage.getItem('squadChat.includeSystem');
@@ -605,15 +634,26 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
               ))}
             </div>
           )}
-          {message.links?.map((link) => (
-            <Badge
-              key={`${link.taskId ?? ''}-${link.runId ?? ''}-${link.href ?? ''}`}
-              size="xs"
-              variant="outline"
-            >
-              {link.label || link.taskId || link.runId || 'link'}
-            </Badge>
-          ))}
+          {message.links?.map((link) => {
+            const safeHref = safeSquadLinkHref(link.href);
+            return (
+              <Badge
+                key={`${link.taskId ?? ''}-${link.runId ?? ''}-${link.href ?? ''}`}
+                size="xs"
+                variant="outline"
+                {...(safeHref
+                  ? {
+                      component: 'a',
+                      href: safeHref,
+                      rel: 'noreferrer',
+                      'aria-label': link.label || 'Open linked item',
+                    }
+                  : {})}
+              >
+                {link.label || link.taskId || link.runId || 'link'}
+              </Badge>
+            );
+          })}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-xs opacity-70">

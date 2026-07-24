@@ -11,7 +11,12 @@ import {
 } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CommunicationAdapterInput, type CommunicationAdapterRecord } from '@/lib/api';
+import {
+  api,
+  type BuzzChannelMapping,
+  type CommunicationAdapterInput,
+  type CommunicationAdapterRecord,
+} from '@/lib/api';
 import { SectionHeader, ToggleRow } from '../shared';
 
 const BUZZ_ADAPTER_ID = 'buzz-default';
@@ -28,9 +33,13 @@ interface BuzzFormState {
   commandArgs: string[];
   allowLocalhost: boolean;
   allowPrivateNetwork: boolean;
+  channelId: string;
 }
 
-function adapterToForm(adapter?: CommunicationAdapterRecord): BuzzFormState {
+function adapterToForm(
+  adapter?: CommunicationAdapterRecord,
+  mapping?: BuzzChannelMapping
+): BuzzFormState {
   return {
     enabled: adapter?.enabled ?? false,
     relayHttpUrl: adapter?.relayHttpUrl ?? '',
@@ -43,6 +52,7 @@ function adapterToForm(adapter?: CommunicationAdapterRecord): BuzzFormState {
     commandArgs: adapter?.command?.args ?? [],
     allowLocalhost: adapter?.allowLocalhost ?? false,
     allowPrivateNetwork: adapter?.allowPrivateNetwork ?? false,
+    channelId: mapping?.channelId ?? '',
   };
 }
 
@@ -91,6 +101,21 @@ export function BuzzConnectionPanel() {
     retry: false,
   });
   const adapter = adapters.find((candidate) => candidate.id === BUZZ_ADAPTER_ID);
+  const { data: mappings = [] } = useQuery({
+    queryKey: ['integrations', 'communication', 'buzz-mappings', BUZZ_ADAPTER_ID],
+    queryFn: () => api.integrations.buzzChannelMappings(BUZZ_ADAPTER_ID),
+    enabled: Boolean(adapter),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const activeMapping = mappings.find((mapping) => mapping.enabled) ?? mappings[0];
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ['integrations', 'communication', 'deliveries', BUZZ_ADAPTER_ID, 8],
+    queryFn: () => api.integrations.communicationDeliveries(8, BUZZ_ADAPTER_ID),
+    enabled: Boolean(adapter),
+    staleTime: 10_000,
+    retry: false,
+  });
   const { data: health } = useQuery({
     queryKey: ['integrations', 'communication', 'health', BUZZ_ADAPTER_ID],
     queryFn: () => api.integrations.communicationHealth(BUZZ_ADAPTER_ID),
@@ -100,19 +125,55 @@ export function BuzzConnectionPanel() {
   });
   const effectiveHealth = health ?? adapter?.lastHealth;
   const compatibility = effectiveHealth?.buzz ?? adapter?.compatibility;
-  const [form, setForm] = useState<BuzzFormState>(() => adapterToForm(adapter));
+  const [form, setForm] = useState<BuzzFormState>(() => adapterToForm(adapter, activeMapping));
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (!dirty) setForm(adapterToForm(adapter));
-  }, [adapter, dirty]);
+    if (!dirty) setForm(adapterToForm(adapter, activeMapping));
+  }, [activeMapping, adapter, dirty]);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['integrations', 'communication'] });
   };
   const save = useMutation({
-    mutationFn: () =>
-      api.integrations.configureCommunicationAdapter(BUZZ_ADAPTER_ID, formToInput(form)),
+    mutationFn: async () => {
+      const configured = await api.integrations.configureCommunicationAdapter(
+        BUZZ_ADAPTER_ID,
+        formToInput(form)
+      );
+      const channelId = form.channelId.trim();
+      let disabledPrevious = false;
+      if (
+        activeMapping?.enabled &&
+        activeMapping.channelId.toLowerCase() !== channelId.toLowerCase()
+      ) {
+        await api.integrations.disableBuzzChannelMapping(BUZZ_ADAPTER_ID, activeMapping.channelId);
+        disabledPrevious = true;
+      }
+      try {
+        if (channelId) {
+          await api.integrations.configureBuzzChannelMapping(
+            BUZZ_ADAPTER_ID,
+            channelId,
+            { kind: 'squad' },
+            form.enabled
+          );
+        }
+      } catch (error) {
+        if (disabledPrevious && activeMapping) {
+          await api.integrations
+            .configureBuzzChannelMapping(
+              BUZZ_ADAPTER_ID,
+              activeMapping.channelId,
+              activeMapping.target,
+              true
+            )
+            .catch(() => undefined);
+        }
+        throw error;
+      }
+      return configured;
+    },
     onSuccess: () => {
       setDirty(false);
       invalidate();
@@ -203,6 +264,15 @@ export function BuzzConnectionPanel() {
               size="xs"
             />
             <TextInput
+              label="Squad Chat channel mapping"
+              value={form.channelId}
+              onChange={(event) => update('channelId', event.target.value)}
+              placeholder="Buzz channel UUID"
+              description="Maps this Buzz channel to the local Squad Chat surface."
+              required={form.enabled}
+              size="xs"
+            />
+            <TextInput
               label="Public key"
               value={form.publicKey}
               onChange={(event) => update('publicKey', event.target.value)}
@@ -238,8 +308,8 @@ export function BuzzConnectionPanel() {
           </SimpleGrid>
 
           <ToggleRow
-            label="Enable Buzz diagnostics"
-            description="Allow read-only relay and identity probes. Message delivery remains disabled."
+            label="Enable Buzz adapter"
+            description="Enable compatibility checks, signed outbound delivery, and the supervised inbound subscription."
             checked={form.enabled}
             onCheckedChange={(value) => update('enabled', value)}
           />
@@ -282,6 +352,77 @@ export function BuzzConnectionPanel() {
                 </Paper>
               ))}
             </SimpleGrid>
+          </Paper>
+
+          <Paper withBorder radius="sm" p="xs">
+            <Text size="xs" fw={600} mb={6}>
+              Runtime and delivery
+            </Text>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={4}>
+              <Text size="xs">
+                Relay:{' '}
+                <Code>
+                  {effectiveHealth?.buzzRuntime?.relayConnected ? 'connected' : 'disconnected'}
+                </Code>
+              </Text>
+              <Text size="xs">
+                Subscription:{' '}
+                <Code>
+                  {effectiveHealth?.buzzRuntime?.subscriptionActive ? 'active' : 'inactive'}
+                </Code>
+              </Text>
+              <Text size="xs">
+                Mapped channels:{' '}
+                <Code>{effectiveHealth?.buzzRuntime?.mappedChannels ?? mappings.length}</Code>
+              </Text>
+              <Text size="xs">
+                Cursor lag:{' '}
+                <Code>
+                  {effectiveHealth?.buzzRuntime?.cursorLagSeconds === undefined
+                    ? 'not established'
+                    : `${effectiveHealth.buzzRuntime.cursorLagSeconds}s`}
+                </Code>
+              </Text>
+              <Text size="xs">
+                Last event:{' '}
+                <Code>
+                  {effectiveHealth?.buzzRuntime?.lastEventAt
+                    ? new Date(effectiveHealth.buzzRuntime.lastEventAt).toLocaleString()
+                    : 'not recorded'}
+                </Code>
+              </Text>
+              <Text size="xs">
+                Last send:{' '}
+                <Code>{effectiveHealth?.buzzRuntime?.lastSendStatus ?? 'not recorded'}</Code>
+              </Text>
+            </SimpleGrid>
+            {deliveries.length > 0 && (
+              <Stack gap={3} mt="xs" aria-label="Recent Buzz deliveries">
+                {deliveries.slice(0, 5).map((delivery) => (
+                  <Group key={delivery.id} justify="space-between" gap="xs" wrap="nowrap">
+                    <Text size="xs" truncate>
+                      {delivery.operation}: {delivery.detail ?? delivery.error ?? 'recorded'}
+                    </Text>
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color={
+                        delivery.status === 'success'
+                          ? 'green'
+                          : delivery.status === 'delivery_unknown'
+                            ? 'yellow'
+                            : delivery.status === 'failed' || delivery.status === 'blocked'
+                              ? 'red'
+                              : 'gray'
+                      }
+                      tt="none"
+                    >
+                      {delivery.status}
+                    </Badge>
+                  </Group>
+                ))}
+              </Stack>
+            )}
           </Paper>
 
           <Paper withBorder radius="sm" p="xs">

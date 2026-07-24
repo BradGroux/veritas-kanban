@@ -27,15 +27,16 @@ fields used for approved external human replies.
 
 ## Terminology
 
-| Term                    | What it means                                                                                                                                    | External delivery?                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| **Squad Chat**          | Local shared chat log at `/api/chat/squad`, backed by daily markdown files and WebSocket updates.                                                | No. It stores and streams messages to VK clients only.                                                |
-| **Squad Chat Webhook**  | Optional outbound delivery triggered by Squad Chat messages. Supports generic HTTP and OpenClaw Direct modes.                                    | Yes, when enabled and configured. HTTP success means VK delivered the event to the configured URL.    |
-| **Human reply adapter** | Adapter posture, thread mapping, health, and reply ingestion for approved external channels such as Teams.                                       | Yes. External replies are accepted through an authenticated ingest API and become Squad Chat replies. |
-| **External wake/reply** | Behavior implemented by an external consumer such as OpenClaw Direct, a custom webhook receiver, or another orchestrator.                        | Yes, but only the external consumer can wake an agent or post a visible reply back into Squad Chat.   |
-| **Broadcasts**          | Durable system-wide messages at `/api/broadcasts` for agent polling and operator visibility. Priorities are `info`, `action-required`, `urgent`. | No. Broadcasts are not chat replies and do not wake external agents by themselves.                    |
-| **Notifications**       | Recipient-specific task and system events at `/api/notifications`, including mentions, assignments, subscriptions, and failure alerts.           | Optional. Local records exist even when delivery channels are disabled.                               |
-| **Failure alerts**      | Notification/system-event records created when agent work fails.                                                                                 | Optional. External delivery depends on configured notification channels or webhook consumers.         |
+| Term                           | What it means                                                                                                                                    | External delivery?                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Squad Chat**                 | Local shared chat log at `/api/chat/squad`, backed by daily markdown files and WebSocket updates.                                                | No. It stores and streams messages to VK clients only.                                                |
+| **Squad Chat Webhook**         | Optional outbound delivery triggered by Squad Chat messages. Supports generic HTTP and OpenClaw Direct modes.                                    | Yes, when enabled and configured. HTTP success means VK delivered the event to the configured URL.    |
+| **Human reply adapter**        | Adapter posture, thread mapping, health, and reply ingestion for approved external channels such as Teams.                                       | Yes. External replies are accepted through an authenticated ingest API and become Squad Chat replies. |
+| **Buzz communication adapter** | Native signed-event bridge between one mapped Buzz channel and Squad Chat, with durable cursor replay and send reconciliation.                   | Yes. Enabled mappings publish and subscribe through the configured Buzz relay.                        |
+| **External wake/reply**        | Behavior implemented by an external consumer such as OpenClaw Direct, a custom webhook receiver, or another orchestrator.                        | Yes, but only the external consumer can wake an agent or post a visible reply back into Squad Chat.   |
+| **Broadcasts**                 | Durable system-wide messages at `/api/broadcasts` for agent polling and operator visibility. Priorities are `info`, `action-required`, `urgent`. | No. Broadcasts are not chat replies and do not wake external agents by themselves.                    |
+| **Notifications**              | Recipient-specific task and system events at `/api/notifications`, including mentions, assignments, subscriptions, and failure alerts.           | Optional. Local records exist even when delivery channels are disabled.                               |
+| **Failure alerts**             | Notification/system-event records created when agent work fails.                                                                                 | Optional. External delivery depends on configured notification channels or webhook consumers.         |
 
 ## Features
 
@@ -51,6 +52,7 @@ fields used for approved external human replies.
 - **Message persistence** — Daily markdown files stored in `.veritas-kanban/chats/squad/`
 - **Webhook integration** — Route messages to external systems (OpenClaw, custom webhooks)
 - **Human reply ingestion** — Map external threads to Squad Chat targets and ingest human replies with attribution, sanitization, idempotency, and audit records
+- **Buzz channel bridge** — Publish and ingest signed Buzz roots/replies with source attribution, threaded projection, overlap dedupe, external links, and visible delivery state
 
 ## API Endpoints
 
@@ -207,6 +209,20 @@ same approval-capable authority as in-app approvals. Inbound reply bodies are
 HTML-stripped, secret-redacted, size-limited, and deduped by external reply ID.
 Adapter responses expose only redacted connection posture such as
 `webhookUrlConfigured`, `webhookUrlRedacted`, and `hasCredential`.
+
+### Buzz Channel Bridge
+
+Buzz uses the same communication-adapter APIs with an additional channel
+mapping. Its supervised NIP-42 subscription projects verified roots and
+replies with deterministic local IDs, public author identity, source
+timestamps, and `buzz://message` links. A `(created_at,event_id)` cursor and
+five-second overlap prevent loss without treating same-second events as
+duplicates. Ambiguous outbound writes remain `delivery_unknown` until an
+event-ID query proves acceptance or absence.
+
+See [Buzz Communication Adapter](../BUZZ-INTEGRATION.md) for identity setup,
+mapping and send examples, edit/delete policy, health facets, least privilege,
+replay behavior, and rollback.
 
 ## System Message Events
 

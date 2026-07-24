@@ -1,5 +1,6 @@
 import { API_BASE, apiFetch } from './helpers';
 import type {
+  BuzzChannelMapping,
   CommunicationAdapterHealth,
   CommunicationAdapterInput,
   CommunicationAdapterRecord,
@@ -106,6 +107,38 @@ export const integrationsApi = {
   communicationHealth: async (adapterId: string): Promise<CommunicationAdapterHealth> => {
     return apiFetch<CommunicationAdapterHealth>(
       `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/health`
+    );
+  },
+
+  buzzChannelMappings: async (adapterId: string): Promise<BuzzChannelMapping[]> => {
+    return apiFetch<BuzzChannelMapping[]>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/channels`
+    );
+  },
+
+  configureBuzzChannelMapping: async (
+    adapterId: string,
+    channelId: string,
+    target: CommunicationReplyIngestInput['target'],
+    enabled = true
+  ): Promise<BuzzChannelMapping> => {
+    return apiFetch<BuzzChannelMapping>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/channels/${encodeURIComponent(channelId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, enabled }),
+      }
+    );
+  },
+
+  disableBuzzChannelMapping: async (
+    adapterId: string,
+    channelId: string
+  ): Promise<BuzzChannelMapping> => {
+    return apiFetch<BuzzChannelMapping>(
+      `${API_BASE}/integrations/communication/adapters/${encodeURIComponent(adapterId)}/buzz/channels/${encodeURIComponent(channelId)}/disable`,
+      { method: 'POST' }
     );
   },
 

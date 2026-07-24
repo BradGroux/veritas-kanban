@@ -505,21 +505,24 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 - **Squad Chat Webhook** — Optional outbound delivery for chat messages; supports generic HTTP and OpenClaw Direct modes
 - **OpenClaw Direct gateway wake** — Optional real-time Squad Chat events pushed to OpenClaw gateway for agent orchestration
 - **Human reply adapters** — Configure Teams reply posture, run health checks and test sends, store external thread mappings, and ingest audited human replies back into the correct Squad Chat thread
+- **Buzz channel bridge** — Map a Buzz community channel to Squad Chat, publish and ingest signed roots/replies exactly once, retain source author/timestamp/deep links, resume through a durable cursor with overlap dedupe, and reconcile ambiguous sends before retry
 - **Searchable history** — Browse and search past squad chat messages
 
 ### API Endpoints
 
-| Endpoint                                                      | Method | Description                                    |
-| ------------------------------------------------------------- | ------ | ---------------------------------------------- |
-| `/api/chat/squad`                                             | POST   | Send a squad chat message                      |
-| `/api/chat/squad`                                             | GET    | Retrieve squad chat history                    |
-| `/api/chat/squad/search`                                      | GET    | Search redacted snippets                       |
-| `/api/chat/squad/unread`                                      | GET    | Get actor-scoped unread state                  |
-| `/api/chat/squad/read`                                        | POST   | Mark messages read for an actor                |
-| `/api/chat/squad/:messageId/thread`                           | GET    | Read a compact thread                          |
-| `/api/chat/squad/:messageId/pin`                              | POST   | Pin/unpin or mark/unmark a decision            |
-| `/api/chat/squad/:messageId/react`                            | POST   | Add a lightweight reaction or acknowledgement  |
-| `/api/integrations/communication/adapters/:adapterId/replies` | POST   | Ingest an external human reply into Squad Chat |
+| Endpoint                                                                       | Method | Description                                       |
+| ------------------------------------------------------------------------------ | ------ | ------------------------------------------------- |
+| `/api/chat/squad`                                                              | POST   | Send a squad chat message                         |
+| `/api/chat/squad`                                                              | GET    | Retrieve squad chat history                       |
+| `/api/chat/squad/search`                                                       | GET    | Search redacted snippets                          |
+| `/api/chat/squad/unread`                                                       | GET    | Get actor-scoped unread state                     |
+| `/api/chat/squad/read`                                                         | POST   | Mark messages read for an actor                   |
+| `/api/chat/squad/:messageId/thread`                                            | GET    | Read a compact thread                             |
+| `/api/chat/squad/:messageId/pin`                                               | POST   | Pin/unpin or mark/unmark a decision               |
+| `/api/chat/squad/:messageId/react`                                             | POST   | Add a lightweight reaction or acknowledgement     |
+| `/api/integrations/communication/adapters/:adapterId/replies`                  | POST   | Ingest an external human reply into Squad Chat    |
+| `/api/integrations/communication/adapters/:adapterId/send`                     | POST   | Publish a mapped Teams/Buzz communication message |
+| `/api/integrations/communication/adapters/:adapterId/buzz/channels/:channelId` | PUT    | Map a Buzz channel to Squad Chat                  |
 
 ---
 
@@ -1224,7 +1227,7 @@ Notification and broadcast features provide local visibility and optional delive
 - **Broadcast messages** — Durable system-wide messages at `/api/broadcasts` with `info`, `action-required`, and `urgent` priorities
 - **External delivery boundary** — Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled
 - **Human reply adapter health** — Settings -> Notifications shows Teams reply posture, redacted webhook state, recent delivery audit, test send, and disconnect controls
-- **Buzz compatibility diagnostics** — Reference-only Buzz relay setup verifies host-derived community identity, NIP-98 authentication, relay membership, channel/message read capability, tested release evidence, and optional command versions without sending a message
+- **Buzz communication adapter** — Reference-only relay setup verifies community identity, NIP-98 authentication, membership, and read capability before enabling signed root/reply delivery, supervised subscriptions, durable cursor replay, loop prevention, and delivery-unknown reconciliation
 
 ### API Endpoints
 

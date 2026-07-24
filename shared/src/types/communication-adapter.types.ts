@@ -184,6 +184,52 @@ export interface CommunicationAdapterHealth {
   reasonCode?: BuzzCompatibilityReasonCode;
   remediation?: string;
   buzz?: BuzzCompatibilityResult;
+  buzzRuntime?: BuzzRuntimeHealth;
+}
+
+export interface BuzzExternalCoordinate {
+  community: string;
+  channelId: string;
+  eventId?: string;
+  authorPubkey?: string;
+  kind?: number;
+  rootEventId?: string;
+  parentEventId?: string;
+  externalUrl?: string;
+}
+
+export interface BuzzChannelMapping {
+  id: string;
+  adapterId: string;
+  community: string;
+  channelId: string;
+  target: CommunicationReplyTarget;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
+export interface BuzzCursor {
+  adapterId: string;
+  community: string;
+  channelId: string;
+  createdAt: number;
+  eventId: string;
+  committedAt: string;
+}
+
+export interface BuzzRuntimeHealth {
+  relayConnected: boolean;
+  subscriptionActive: boolean;
+  mappedChannels: number;
+  reconnectAttempts: number;
+  lastConnectedAt?: string;
+  lastEventAt?: string;
+  cursorLagSeconds?: number;
+  lastSendAt?: string;
+  lastSendStatus?: CommunicationDeliveryStatus;
+  lastError?: string;
 }
 
 export interface CommunicationThreadMapping {
@@ -195,12 +241,28 @@ export interface CommunicationThreadMapping {
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
+  buzz?: BuzzExternalCoordinate;
 }
 
 export type CommunicationDeliveryOperation =
-  'configure' | 'health' | 'send' | 'reply-ingest' | 'poll' | 'disconnect';
+  | 'configure'
+  | 'health'
+  | 'send'
+  | 'reply-ingest'
+  | 'event-ingest'
+  | 'reconcile'
+  | 'poll'
+  | 'disconnect';
 
-export type CommunicationDeliveryStatus = 'success' | 'queued' | 'failed' | 'blocked' | 'skipped';
+export type CommunicationDeliveryStatus =
+  | 'success'
+  | 'queued'
+  | 'delivery_unknown'
+  | 'replayed'
+  | 'ignored'
+  | 'failed'
+  | 'blocked'
+  | 'skipped';
 
 export interface CommunicationDeliveryAudit {
   id: string;
@@ -212,6 +274,8 @@ export interface CommunicationDeliveryAudit {
   squadMessageId?: string;
   actor?: string;
   error?: string;
+  detail?: string;
+  buzz?: BuzzExternalCoordinate;
   createdAt: string;
 }
 
@@ -219,6 +283,7 @@ export interface CommunicationSendInput {
   target: CommunicationReplyTarget;
   message: string;
   actor?: string;
+  replyToSquadMessageId?: string;
   externalThreadId?: string;
   externalUrl?: string;
 }

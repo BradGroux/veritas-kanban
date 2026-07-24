@@ -242,7 +242,7 @@ describe('CommunicationAdapterService', () => {
     });
     expect(adapter.relayWebSocketUrl).toBeUndefined();
     expect(health).toMatchObject({
-      status: 'healthy',
+      status: 'degraded',
       reasonCode: 'ok',
       canSend: false,
       canReceiveReplies: false,
@@ -370,7 +370,7 @@ describe('CommunicationAdapterService', () => {
     expect(adapter?.lastHealth).toBeUndefined();
   });
 
-  it('fails closed for Buzz sends while leaving Microsoft Teams behavior intact', async () => {
+  it('fails closed for Buzz sends without current compatibility evidence or a channel mapping', async () => {
     await service.configureAdapter('buzz-default', {
       kind: 'buzz',
       enabled: true,
@@ -387,15 +387,20 @@ describe('CommunicationAdapterService', () => {
     expect(result.delivery).toMatchObject({
       operation: 'send',
       status: 'blocked',
-      error: expect.stringContaining('not implemented'),
+      error: expect.stringContaining('compatibility evidence'),
     });
-    expect(await service.listMappings('buzz-default')).toEqual([]);
+    expect(await service.listMappings('buzz-default')).toEqual([
+      expect.objectContaining({
+        adapterId: 'buzz-default',
+        target: expect.objectContaining({ kind: 'squad', squadMessageId: 'message-1' }),
+      }),
+    ]);
 
     const poll = await service.pollReplies('buzz-default');
     expect(poll.delivery).toMatchObject({
-      operation: 'poll',
-      status: 'skipped',
-      error: expect.stringContaining('Buzz reply polling is not implemented'),
+      operation: 'reconcile',
+      status: 'blocked',
+      error: expect.stringContaining('compatibility evidence'),
     });
     expect(outboundIntegrations.deliver).not.toHaveBeenCalled();
   });

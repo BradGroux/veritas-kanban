@@ -207,9 +207,15 @@ export interface UrlValidationResult {
   normalized?: string;
 }
 
-interface ResolvedOutboundAddress {
+export interface ResolvedOutboundAddress {
   address: string;
   family: 4 | 6;
+}
+
+export interface ResolvedOutboundUrl {
+  url: string;
+  hostname: string;
+  resolvedAddress: ResolvedOutboundAddress;
 }
 
 interface ResolvedUrlValidationResult extends UrlValidationResult {
@@ -502,20 +508,31 @@ export async function safeFetch(
   init?: RequestInit,
   validationOptions?: UrlValidationOptions
 ): Promise<Response | null> {
-  const opts = { ...DEFAULT_OPTIONS, ...validationOptions };
-  const validation = validateWebhookUrl(url, opts);
-  if (!validation.valid) {
-    return null;
-  }
-
-  const parsed = new URL(validation.normalized ?? url);
-  const resolved = await validateResolvedHostname(parsed, opts);
-  if (!resolved.valid || !resolved.resolvedAddress) {
-    return null;
-  }
+  const resolved = await resolveOutboundUrl(url, validationOptions);
+  if (!resolved) return null;
+  const parsed = new URL(resolved.url);
 
   return fetchPinnedUrl(parsed, resolved.resolvedAddress, {
     ...init,
     redirect: 'manual',
   });
+}
+
+export async function resolveOutboundUrl(
+  url: string,
+  validationOptions?: UrlValidationOptions
+): Promise<ResolvedOutboundUrl | null> {
+  const opts = { ...DEFAULT_OPTIONS, ...validationOptions };
+  const validation = validateWebhookUrl(url, opts);
+  if (!validation.valid) return null;
+
+  const parsed = new URL(validation.normalized ?? url);
+  const resolved = await validateResolvedHostname(parsed, opts);
+  if (!resolved.valid || !resolved.resolvedAddress) return null;
+
+  return {
+    url: parsed.href,
+    hostname: unbracketHostname(parsed.hostname),
+    resolvedAddress: resolved.resolvedAddress,
+  };
 }

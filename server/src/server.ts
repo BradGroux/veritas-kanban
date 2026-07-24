@@ -77,6 +77,7 @@ import {
 } from './services/websocket-permissions.js';
 import { closeWebSocketSafely } from './utils/websocket-close.js';
 import { startAfterInitialization } from './utils/startup-gate.js';
+import { getCommunicationAdapterService } from './services/communication-adapter-service.js';
 
 const log = createLogger('server');
 
@@ -577,6 +578,8 @@ async function initializeServices(): Promise<void> {
     storageInitialized = true;
     log.info('SQLite storage initialized');
   }
+  await getCommunicationAdapterService().start();
+  log.info('Communication adapter workers initialized');
 
   // 4. Reconcile any agent attempts that were left in `running` state from
   //    a previous server crash/restart (issue #781).
@@ -1115,6 +1118,9 @@ async function gracefulShutdown(signal: string) {
 
     stopScheduledDeliverablesRunner();
     log.info('Scheduled deliverables runner stopped');
+
+    await getCommunicationAdapterService().shutdown();
+    log.info('Communication adapter workers stopped');
 
     // Flush pending telemetry writes (timeout: 5s)
     await Promise.race([

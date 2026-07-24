@@ -174,4 +174,42 @@ describe('SquadChatPanel', () => {
       reaction: 'ack',
     });
   });
+
+  it('renders a Buzz external-message deep link as an accessible action', () => {
+    const eventId = 'a'.repeat(64);
+    const href = `buzz://message?channel=123e4567-e89b-42d3-a456-426614174000&id=${eventId}`;
+    mocks.useSquadMessages.mockReturnValue({
+      data: [
+        {
+          id: `msg_buzz_${eventId}`,
+          agent: 'BUZZ',
+          displayName: 'Buzz member',
+          message: 'Signed relay message',
+          timestamp: '2026-07-23T20:00:00.000Z',
+          links: [
+            { href, label: 'Open in Buzz' },
+            { href: 'javascript:alert(1)', label: 'Unsafe link' },
+          ],
+          external: {
+            provider: 'buzz',
+            adapterId: 'buzz-default',
+            community: 'relay.example.test',
+            channelId: '123e4567-e89b-42d3-a456-426614174000',
+            messageId: eventId,
+            authorId: 'b'.repeat(64),
+            kind: 9,
+            url: href,
+          },
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderWithProviders(<SquadChatPanel open={true} onOpenChange={vi.fn()} />);
+
+    const link = screen.getByRole('link', { name: 'Open in Buzz' });
+    expect(link.getAttribute('href')).toBe(href);
+    expect(screen.queryByRole('link', { name: 'Unsafe link' })).toBeNull();
+    expect(screen.getByText('Signed relay message')).toBeDefined();
+  });
 });

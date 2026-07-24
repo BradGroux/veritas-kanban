@@ -95,7 +95,7 @@ describe('Buzz compatibility fake relay', () => {
     const persisted = await fs.readFile(path.join(temporaryDirectory, 'state.json'), 'utf8');
 
     expect(result).toMatchObject({
-      status: 'healthy',
+      status: 'degraded',
       reasonCode: 'ok',
       canSend: false,
       canReceiveReplies: false,
