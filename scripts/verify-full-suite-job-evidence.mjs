@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,7 +35,11 @@ async function main() {
   let job;
 
   try {
-    job = JSON.parse(await readFile(0, 'utf8'));
+    let input = '';
+    for await (const chunk of process.stdin) {
+      input += chunk;
+    }
+    job = JSON.parse(input);
   } catch {
     process.exitCode = 1;
     return;
