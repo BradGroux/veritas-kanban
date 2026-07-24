@@ -40,9 +40,10 @@ export function buildSafeCodexEnv(
   passthroughKeys?: Iterable<string>
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  const allowlist = passthroughKeys
-    ? new Set(Array.from(passthroughKeys, (key) => key.toUpperCase()))
-    : CODEX_ENV_ALLOWLIST;
+  const allowlist = new Set(CODEX_ENV_ALLOWLIST);
+  if (passthroughKeys) {
+    for (const key of passthroughKeys) allowlist.add(key.toUpperCase());
+  }
 
   for (const key of allowlist) {
     const value = source[key];

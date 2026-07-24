@@ -28,6 +28,25 @@ describe('Codex environment filtering', () => {
     });
   });
 
+  it('adds policy passthrough without dropping the safe process baseline', () => {
+    expect(
+      buildSafeCodexEnv(
+        {
+          PATH: '/usr/bin',
+          OPENAI_API_KEY: 'test-openai-key',
+          EXTRA_SAFE: 'allowed-by-policy',
+          GITHUB_TOKEN: 'must-not-pass',
+        },
+        ['EXTRA_SAFE', 'GITHUB_TOKEN']
+      )
+    ).toEqual({
+      EXTRA_SAFE: 'allowed-by-policy',
+      OPENAI_API_KEY: 'test-openai-key',
+      PATH: '/usr/bin',
+      VK_API_URL: 'http://localhost:3001',
+    });
+  });
+
   it('does not classify the required Codex auth keys as sensitive', () => {
     expect(isSensitiveCodexEnvKey('OPENAI_API_KEY')).toBe(false);
     expect(isSensitiveCodexEnvKey('CODEX_API_KEY')).toBe(false);

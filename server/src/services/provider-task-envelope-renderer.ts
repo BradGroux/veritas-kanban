@@ -83,6 +83,28 @@ export function renderCodexSdkTaskEnvelope(
   });
 }
 
+export function renderCodexAppServerTaskEnvelope(
+  input: ProviderTaskEnvelopeRenderInput
+): ProviderTaskEnvelopeTransport {
+  assertEnvelopeTransport(input.taskEnvelope, 'codex-app-server');
+  return immutableTransport({
+    schemaVersion: PROVIDER_TASK_ENVELOPE_TRANSPORT_SCHEMA_VERSION,
+    provider: 'codex-app-server',
+    taskEnvelopeDigest: input.taskEnvelope.digest,
+    callbackPosture: 'harness-owned',
+    completionNormalization: 'harness',
+    content: renderEnvelopeContent(
+      'Codex app-server',
+      input,
+      renderHarnessOwnedCompletion(
+        'Codex app-server stream',
+        'Return the final response through the terminal turn/completed notification captured by Veritas.',
+        'JSON-RPC notifications'
+      )
+    ),
+  });
+}
+
 export function renderClaudeCodeTaskEnvelope(
   input: ProviderTaskEnvelopeRenderInput
 ): ProviderTaskEnvelopeTransport {

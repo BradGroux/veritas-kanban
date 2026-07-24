@@ -44,6 +44,7 @@ export type AgentProvider =
   | 'openclaw'
   | 'codex-cli'
   | 'codex-sdk'
+  | 'codex-app-server'
   | 'claude-code'
   | 'codex-cloud'
   | 'hermes-cli'
@@ -56,6 +57,7 @@ export const EXECUTABLE_AGENT_PROVIDERS = [
   'openclaw',
   'codex-cli',
   'codex-sdk',
+  'codex-app-server',
   'claude-code',
   'hermes-cli',
 ] as const satisfies readonly AgentProvider[];

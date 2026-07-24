@@ -2211,7 +2211,7 @@ controls:
     "providerRuntime": {
       "digest": "sha256:...",
       "provider": "codex-cli",
-      "probeRevision": 4
+      "probeRevision": 5
     },
     "runtime": {
       "command": "codex",
@@ -2315,9 +2315,11 @@ harness-owned process or stream attempts that were still running when the
 server restarted. OpenClaw attempts remain eligible for their authoritative
 callback after restart.
 
-Codex CLI, Codex SDK, Claude Code, and Hermes do not call this endpoint;
-Veritas captures their terminal process or stream output and owns completion
-normalization.
+Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes do not call this
+endpoint; Veritas captures their terminal process or stream output and owns
+completion normalization. Codex app-server completion is authoritative only
+after a schema-valid `turn/completed` notification for the correlated task
+thread and turn.
 Claimed success becomes `partial` when required harness evidence is absent,
 commit policy is violated, a required output is missing, or an unauthorized
 side effect is observed. `success` maps the task to `done`, `blocked` maps it
@@ -2335,7 +2337,7 @@ Task and trace responses can therefore include the immutable
 ```json
 {
   "schemaVersion": "provider-runtime-manifest/v1",
-  "probeRevision": 4,
+  "probeRevision": 5,
   "provider": "codex-cli",
   "adapter": "codex-cli",
   "protocolVersion": "codex-exec-json/v1",
@@ -2394,16 +2396,18 @@ launch and finalization services may persist those authoritative contracts.
 
 Before dispatch, the selected adapter renders the envelope through an immutable
 `provider-task-envelope-transport/v1` request. Built-in renderers exist for
-OpenClaw, Codex CLI, Codex SDK, Claude Code, and Hermes. Every rendered request
-includes the envelope and runtime identity, objective and bounded context, workspace
-baseline, explicit commit policy, allowed side effects, outputs, verification
-gates, and completion evidence contract. Profile instructions and task
-checkpoint state are separate attributed sections capped at 20,000 characters
-each. The exact rendered content is fingerprinted in the run launch manifest
-as `instructions.effective-task-request`.
+OpenClaw, Codex CLI, Codex SDK, Codex app-server, Claude Code, and Hermes.
+Every rendered request includes the envelope and runtime identity, objective
+and bounded context, workspace baseline, explicit commit policy, allowed side
+effects, outputs, verification gates, and completion evidence contract.
+Profile instructions and task checkpoint state are separate attributed
+sections capped at 20,000 characters each. The exact rendered content is
+fingerprinted in the run launch manifest as
+`instructions.effective-task-request`.
 
 OpenClaw's transport includes the attempt-bound completion callback. Codex CLI,
-Codex SDK, Claude Code, and Hermes transports explicitly forbid calling that
+Codex SDK, Codex app-server, Claude Code, and Hermes transports explicitly
+forbid calling that
 callback and return terminal output through harness-owned process or stream
 capture.
 Provider and adapter identity must match the envelope before dispatch. Veritas

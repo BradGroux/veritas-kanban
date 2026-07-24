@@ -7,6 +7,7 @@ import {
 } from '../services/task-envelope-service.js';
 import {
   renderClaudeCodeTaskEnvelope,
+  renderCodexAppServerTaskEnvelope,
   renderCodexCliTaskEnvelope,
   renderCodexSdkTaskEnvelope,
   renderHermesTaskEnvelope,
@@ -170,6 +171,24 @@ describe('provider task-envelope renderers', () => {
     expect(transport.content).toContain('## Completion (Codex SDK stream)');
     expect(transport.content).toContain(
       'Return the final response through the SDK event stream captured by Veritas.'
+    );
+    expect(transport.content).not.toContain('/api/agents/task_transport/complete');
+    expect(transport.content).toMatchSnapshot();
+  });
+
+  it('renders a callback-free Codex app-server transport', async () => {
+    const taskEnvelope = await envelope('codex-app-server', 'required');
+
+    const transport = renderCodexAppServerTaskEnvelope({ taskEnvelope });
+
+    expect(transport).toMatchObject({
+      provider: 'codex-app-server',
+      callbackPosture: 'harness-owned',
+      completionNormalization: 'harness',
+    });
+    expect(transport.content).toContain('## Completion (Codex app-server stream)');
+    expect(transport.content).toContain(
+      'Return the final response through the terminal turn/completed notification captured by Veritas.'
     );
     expect(transport.content).not.toContain('/api/agents/task_transport/complete');
     expect(transport.content).toMatchSnapshot();

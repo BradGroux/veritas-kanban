@@ -6,10 +6,10 @@ exports[`provider task-envelope renderers > renders a callback-free Claude Code 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:fce321af942e8df197cd72f07cbd79ecf6f816883dea983369570c3ce348e4c8\`
+- Digest: \`sha256:6b697a1d674f74de1e839831a11861a20dc8aae20cab442dec08c98079aa11c6\`
 - Provider: \`claude-code\`
 - Adapter: \`claude-code\`
-- Runtime manifest: \`sha256:81797719b9f52b60ef06c360b4c22ab58266ecfd16709fe848996dc8c9103c71\`
+- Runtime manifest: \`sha256:20da7c1c60c3ee6738bb82c0666916b16f1306a497a232f50dfc90a967feb037\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -97,10 +97,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex CLI tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:06cf84e060e67a0c1d571095f52e2a5cf23a2248f0ad380035649da277a9fa54\`
+- Digest: \`sha256:39328f02173381b20931e8e2410cbf0350fcbe32b2f828fde841244873377801\`
 - Provider: \`codex-cli\`
 - Adapter: \`codex-cli\`
-- Runtime manifest: \`sha256:a9b0eaa76b547be237e5aa15d4e086dd8dd276f56b2bfd946bf9525d303a1dc8\`
+- Runtime manifest: \`sha256:398213abdc0ee59bc7917c1e2c29c61633a2a499b56ab1bf9957293acc7254b3\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -185,10 +185,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex SDK tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:ac0141209cc24ace565b5129478512298ab1158961e52d699d12d6931a2ba419\`
+- Digest: \`sha256:f9c8ba4e462a5219c5eccfa55163efe54b7b9f0ec4af10fa252327b65aba731d\`
 - Provider: \`codex-sdk\`
 - Adapter: \`codex-sdk\`
-- Runtime manifest: \`sha256:21c5ddc1f5125634a9033069f3122894d866d6f70d357c7975c61bced5305f1d\`
+- Runtime manifest: \`sha256:dd29a68c29375ebd62fdc56a9ae5954874375922303085c1e5d44ba8d9002a60\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -268,16 +268,107 @@ Do not call the Veritas completion callback. The harness owns terminal-state cap
 No native structured-output support is assumed; Veritas validates and normalizes SDK stream events."
 `;
 
+exports[`provider task-envelope renderers > renders a callback-free Codex app-server transport 1`] = `
+"# Codex app-server Task Envelope
+
+## Transport
+
+- Envelope: \`task-envelope/v1\`
+- Digest: \`sha256:516022123b0c2ab654f61399c36299a18f7a114882d86f5e1d2c1653404f2273\`
+- Provider: \`codex-app-server\`
+- Adapter: \`codex-app-server\`
+- Runtime manifest: \`sha256:b15be0df8370474e515ec7025e08c112a95cc0af3fc4a79e31ffddda1a682ec5\`
+- Protocol: \`fixture-runtime/v1\`
+- Task: \`task_transport\`
+- Attempt: \`attempt_transport\`
+
+## Objective
+
+Ship the provider transport
+
+## Background
+
+- Translate the immutable task contract without changing completion ownership.
+
+
+## Constraints
+
+- Follow the release checklist.
+- Operate only inside the assigned worktree: /tmp/veritas-kanban-transport
+
+
+## Workspace
+
+- Repository: \`veritas-kanban\`
+- Branch: \`feat/codex-app-server-transport\`
+- Base branch: \`main\`
+- Worktree: \`/tmp/veritas-kanban-transport\`
+- Launch HEAD: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Launch state: clean
+
+### Launch Baseline Files
+
+- None.
+
+
+
+## Commit Policy
+
+Required: create at least one new commit attributable to this attempt.
+
+## Acceptance Criteria
+
+- The provider receives the persisted envelope.
+
+
+## Allowed Side Effects
+
+- \`filesystem-write\` within \`/tmp/veritas-kanban-transport\`
+- \`process-execute\` within \`/tmp/veritas-kanban-transport\`
+- \`git-commit\` within \`/tmp/veritas-kanban-transport\`
+- \`network-egress\` within \`sandbox policy\`
+
+
+## Expected Outputs
+
+- Required \`text\` \`completion-summary\`: A concise summary of the completed work and remaining risks.
+- Required \`commit\` \`git-commit\`: At least one new commit attributable to this attempt.
+
+
+## Verification Gates
+
+- Required \`provider-snapshot\`: Run the provider transport snapshot. Evidence is required.
+
+
+## Completion Evidence Contract
+
+- Schema: \`completion-result/v1\`
+- Required \`provider-output\` \`terminal-state\`: Harness-verified provider terminal state from the native transport.
+- Required \`verification\` \`verification\`: Harness-verified evidence for every required verification gate.
+- Required \`commit\` \`commit\`: Harness-verified commit created after the launch baseline.
+
+
+
+
+## Completion (Codex app-server stream)
+
+Return the final response through the terminal turn/completed notification captured by Veritas.
+
+Do not call the Veritas completion callback. The harness owns terminal-state capture.
+
+No native structured-output support is assumed; Veritas validates and normalizes JSON-RPC notifications."
+`;
+
 exports[`provider task-envelope renderers > renders a callback-free Hermes scripted transport 1`] = `
 "# Hermes Task Envelope
 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:b266ef347ab66676420169da055797f6d940a406e5e0f57d58bae94c4c0663f3\`
+- Digest: \`sha256:e5c004af76b90e656dddc4b08843147a602d5d0181fdbbc57db4cbb5b5a3f741\`
 - Provider: \`hermes-cli\`
 - Adapter: \`hermes-cli\`
-- Runtime manifest: \`sha256:08072e6dfdf09b99490b739f638fb1d71484ea9b5963f2f0a8828c9b51212204\`
+- Runtime manifest: \`sha256:701342b8d87b58a466d17e35241cabdba5a87ffccb2563d150fc4648fbe9eede\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -365,10 +456,10 @@ exports[`provider task-envelope renderers > renders an OpenClaw callback transpo
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:28896d406f7b2fa91aeb5fcff9ddc599f27c8d333f3b8b3399b26658033d3b15\`
+- Digest: \`sha256:dc102415c2050151ff7a79e3db6a19192c72d5515b53bb9b5d350ddd24ea62e9\`
 - Provider: \`openclaw\`
 - Adapter: \`openclaw\`
-- Runtime manifest: \`sha256:0fb8600110961c719fd719ca519ef3dc33d99854dbafa011b6f6a44543a12d7f\`
+- Runtime manifest: \`sha256:10a44fac26d6720b98ca4ef3c1cd475c07150a8db28684c237045a3483c6d305\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -467,7 +558,7 @@ When the work reaches a terminal state, report it to Veritas.
 \`\`\`bash
 curl -X POST http://localhost:3001/api/agents/task_transport/complete \\
   -H "Content-Type: application/json" \\
-  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:0fb8600110961c719fd719ca519ef3dc33d99854dbafa011b6f6a44543a12d7f","success":true,"summary":"Brief description of what was done"}'
+  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:10a44fac26d6720b98ca4ef3c1cd475c07150a8db28684c237045a3483c6d305","success":true,"summary":"Brief description of what was done"}'
 \`\`\`
 
 For failure, send \`success: false\` and include an \`error\` message.

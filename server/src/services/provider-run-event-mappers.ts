@@ -154,7 +154,9 @@ function itemKind(type: string, event: Record<string, unknown>): RunEventKind {
   return 'provider.unknown';
 }
 
-function codexMapper(provider: 'codex-cli' | 'codex-sdk'): ProviderRunEventMapper {
+function codexMapper(
+  provider: 'codex-cli' | 'codex-sdk' | 'codex-app-server'
+): ProviderRunEventMapper {
   return {
     mapStream(stream, content) {
       return {
@@ -259,6 +261,7 @@ const MAPPERS: Record<ExecutableAgentProvider, ProviderRunEventMapper> = {
   openclaw: OPENCLAW_MAPPER,
   'codex-cli': codexMapper('codex-cli'),
   'codex-sdk': codexMapper('codex-sdk'),
+  'codex-app-server': codexMapper('codex-app-server'),
   'claude-code': CLAUDE_CODE_MAPPER,
   'hermes-cli': HERMES_MAPPER,
 };

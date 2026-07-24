@@ -73,6 +73,14 @@ const DEFAULT_CONFIG: AppConfig = {
       provider: 'codex-sdk',
     },
     {
+      type: 'codex-app-server',
+      name: 'OpenAI Codex app-server',
+      command: 'codex',
+      args: [],
+      enabled: false,
+      provider: 'codex-app-server',
+    },
+    {
       type: 'codex-cloud',
       name: 'OpenAI Codex Cloud',
       command: 'gh',
