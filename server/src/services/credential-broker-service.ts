@@ -41,6 +41,7 @@ import {
 import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
 import { TaskService } from './task-service.js';
 import { auditLog } from './audit-service.js';
+import { getRunApprovalBrokerService } from './run-approval-broker-service.js';
 
 const CREDENTIAL_PLACEHOLDER_PATTERN = /\{\{vk-credential:(vkcred_[A-Za-z0-9_-]{3,})\}\}/g;
 const MAX_AUDIT_EVENTS = 5000;
@@ -89,6 +90,8 @@ export interface CredentialApprovalVerifier {
     binding: CredentialRunBinding;
     action: CredentialAction;
     actionFingerprint: string;
+    approvalId?: string;
+    operationId?: string;
   }): Promise<{
     approved: boolean;
     approvalId?: string;
@@ -145,9 +148,23 @@ class TaskCredentialRunBindingReader implements CredentialRunBindingReader {
   }
 }
 
-const denyRequiredApproval: CredentialApprovalVerifier = {
-  async verify({ actionFingerprint }) {
-    return { approved: false, actionFingerprint };
+const durableRunApprovalVerifier: CredentialApprovalVerifier = {
+  async verify({ binding, actionFingerprint, approvalId, operationId }) {
+    if (!approvalId || !operationId) return { approved: false, actionFingerprint };
+    try {
+      const approval = await getRunApprovalBrokerService().get(approvalId);
+      return {
+        approved:
+          approval.status === 'approved' &&
+          approval.taskId === binding.taskId &&
+          approval.attemptId === binding.attemptId &&
+          approval.providerRequestId === `tool:${operationId}:${actionFingerprint}`,
+        approvalId: approval.id,
+        actionFingerprint,
+      };
+    } catch {
+      return { approved: false, actionFingerprint };
+    }
   },
 };
 
@@ -164,7 +181,7 @@ export class CredentialBrokerService {
     this.repository = options.repository ?? new FileCredentialBrokerRepository();
     this.secretSources = options.secretSources ?? [new EnvironmentCredentialSecretSource()];
     this.runBindings = options.runBindings ?? new TaskCredentialRunBindingReader();
-    this.approvals = options.approvals ?? denyRequiredApproval;
+    this.approvals = options.approvals ?? durableRunApprovalVerifier;
     this.auditSink =
       options.audit ??
       (async (event) => {
@@ -419,6 +436,8 @@ export class CredentialBrokerService {
           binding,
           action,
           actionFingerprint,
+          approvalId: request.approvalId,
+          operationId: request.operationId,
         })
         .catch(() => ({
           approved: false,

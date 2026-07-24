@@ -12,9 +12,14 @@ import type {
   ToolServerDefinitionInput,
 } from '@veritas-kanban/shared';
 import { ToolControlPlaneService } from '../services/tool-control-plane-service.js';
+import {
+  CredentialBrokerService,
+  EnvironmentCredentialSecretSource,
+} from '../services/credential-broker-service.js';
 import type { RunApprovalBrokerService } from '../services/run-approval-broker-service.js';
 import { RunEventJournalService } from '../services/run-event-journal-service.js';
 import { FileRunEventRepository } from '../storage/run-event-repository.js';
+import { InMemoryCredentialBrokerRepository } from '../storage/credential-broker-repository.js';
 import {
   FileToolControlPlaneRepository,
   InMemoryToolControlPlaneRepository,
@@ -24,6 +29,8 @@ import { SqliteToolControlPlaneRepository } from '../storage/sqlite/tool-control
 import { calculateCredentialDefinitionDigest } from '../utils/credential-broker-digest.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
+const MANIFEST_DIGEST = `sha256:${'f'.repeat(64)}`;
+const CREDENTIAL_SECRET = 'credential-sensitive-value';
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -68,10 +75,10 @@ function credentialDefinition(
     scope: {
       dispatchTypes: ['mcp'],
       hosts: [],
-      tools: ['fixture/search'],
+      tools: ['search'],
       destinations: [],
       methods: [],
-      actions: ['fixture/search'],
+      actions: ['fixture.search'],
       pathPrefixes: [],
     },
     lease: {
@@ -103,6 +110,10 @@ function fixture(
     environment?: NodeJS.ProcessEnv;
     journal?: RunEventJournalService;
     credentialDefinitions?: CredentialDefinition[];
+    credentialBroker?: Pick<
+      CredentialBrokerService,
+      'getDefinition' | 'issueLease' | 'withCredential'
+    >;
   } = {}
 ) {
   const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -164,12 +175,25 @@ function fixture(
     runtime: { open },
     journal: options.journal ?? ({ append } as unknown as RunEventJournalService),
     approvals: { request: requestApproval } as unknown as RunApprovalBrokerService,
-    credentialBroker: {
-      getDefinition: vi.fn(async (id: string) => {
-        const credential = options.credentialDefinitions?.find((candidate) => candidate.id === id);
-        return credential ? structuredClone(credential) : null;
-      }),
-    },
+    credentialBroker:
+      options.credentialBroker ??
+      ({
+        getDefinition: vi.fn(async (id: string) => {
+          const credential = options.credentialDefinitions?.find(
+            (candidate) => candidate.id === id
+          );
+          return credential ? structuredClone(credential) : null;
+        }),
+        issueLease: vi.fn(async () => {
+          throw new Error('Credential lease fixture was not configured.');
+        }),
+        withCredential: vi.fn(async () => {
+          throw new Error('Credential use fixture was not configured.');
+        }),
+      } as unknown as Pick<
+        CredentialBrokerService,
+        'getDefinition' | 'issueLease' | 'withCredential'
+      >),
     now: () => new Date('2026-07-24T12:00:00.000Z'),
     environment: options.environment ?? {},
   });
@@ -554,7 +578,234 @@ describe('ToolControlPlaneService', () => {
         },
         'agent-a'
       )
-    ).rejects.toThrow('mediated lease consumption');
+    ).rejects.toThrow('server-owned launch manifest digest');
+  });
+
+  it('issues, consumes, dispatches, and revokes a credential lease inside one mediated call', async () => {
+    const repository = new InMemoryCredentialBrokerRepository();
+    let handleSequence = 0;
+    const credentialEnvironment: NodeJS.ProcessEnv = {
+      FIXTURE_TOKEN: CREDENTIAL_SECRET,
+    };
+    const broker = new CredentialBrokerService({
+      repository,
+      secretSources: [new EnvironmentCredentialSecretSource(credentialEnvironment)],
+      runBindings: {
+        read: vi.fn(async () => ({
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          status: 'running' as const,
+          runLaunchManifestDigest: MANIFEST_DIGEST,
+          credentialReferences: ['github-token'],
+        })),
+      },
+      audit: vi.fn(async () => undefined),
+      createHandle: () => `vkcred_tool_bridge_fixture_${++handleSequence}`,
+      now: () => new Date('2026-07-24T12:00:00.000Z'),
+    });
+    const {
+      schemaVersion: _schemaVersion,
+      digest: _digest,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...credentialInput
+    } = credentialDefinition({
+      lease: { ttlSeconds: 60, maxUses: 2, renewable: false },
+    });
+    await broker.createDefinition(credentialInput);
+    const { service, open, append } = fixture({ credentialBroker: broker });
+    const runCatalog = await catalog(service, {
+      transport: {
+        kind: 'stdio',
+        command: '/usr/bin/fixture',
+        args: [],
+        environmentKeys: ['FIXTURE_TOKEN'],
+        credentialReferences: ['github-token'],
+      },
+    });
+    if (!runCatalog) throw new Error('Expected a run tool catalog.');
+
+    const result = await service.invoke(
+      {
+        taskId: 'task-tools',
+        attemptId: 'attempt-tools',
+        serverId: 'fixture',
+        tool: 'search',
+        arguments: { query: 'kanban' },
+        operationId: 'brokered-operation',
+      },
+      'agent-a',
+      '/tmp/worktree',
+      MANIFEST_DIGEST
+    );
+
+    expect(result).toMatchObject({
+      serverId: 'fixture',
+      tool: 'search',
+      isError: false,
+    });
+    expect(open.mock.calls.at(-1)?.[2]).toEqual({
+      environment: { FIXTURE_TOKEN: CREDENTIAL_SECRET },
+      headers: {},
+    });
+    expect(append).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify({ runCatalog, result })).not.toContain(CREDENTIAL_SECRET);
+    expect(await broker.listLeases()).toEqual([
+      expect.objectContaining({
+        definitionId: 'github-token',
+        state: 'active',
+        uses: 1,
+        runLaunchManifestDigest: MANIFEST_DIGEST,
+      }),
+    ]);
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'search',
+          arguments: { query: 'changed' },
+          operationId: 'brokered-operation',
+        },
+        'agent-a',
+        '/tmp/worktree',
+        MANIFEST_DIGEST
+      )
+    ).rejects.toThrow('already dispatched');
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'search',
+          arguments: { query: 'kanban' },
+          operationId: 'stale-manifest-operation',
+        },
+        'agent-a',
+        '/tmp/worktree',
+        `sha256:${'e'.repeat(64)}`
+      )
+    ).rejects.toThrow('run or launch manifest binding is stale');
+    delete credentialEnvironment.FIXTURE_TOKEN;
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'search',
+          arguments: { query: 'kanban' },
+          operationId: 'source-unavailable-operation',
+        },
+        'agent-a',
+        '/tmp/worktree',
+        MANIFEST_DIGEST
+      )
+    ).rejects.toThrow('source is unavailable');
+
+    await broker.revokeRun({
+      taskId: 'task-tools',
+      attemptId: 'attempt-tools',
+      runLaunchManifestDigest: MANIFEST_DIGEST,
+      reason: 'run-completed',
+    });
+    expect(await broker.listLeases()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: 'revoked', terminalReason: 'run-completed' }),
+        expect.objectContaining({ state: 'blocked', terminalReason: 'source-unavailable' }),
+      ])
+    );
+  });
+
+  it('correlates credential approval with the exact durable tool action', async () => {
+    const verifyApproval = vi.fn(
+      async ({
+        actionFingerprint,
+        approvalId,
+        operationId,
+      }: {
+        actionFingerprint: string;
+        approvalId?: string;
+        operationId?: string;
+      }) => ({
+        approved: approvalId === 'runapproval_fixture001' && operationId === 'approval-operation',
+        approvalId,
+        actionFingerprint,
+      })
+    );
+    const broker = new CredentialBrokerService({
+      repository: new InMemoryCredentialBrokerRepository(),
+      secretSources: [
+        new EnvironmentCredentialSecretSource({
+          FIXTURE_TOKEN: CREDENTIAL_SECRET,
+        }),
+      ],
+      runBindings: {
+        read: vi.fn(async () => ({
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          status: 'running' as const,
+          runLaunchManifestDigest: MANIFEST_DIGEST,
+          credentialReferences: ['github-token'],
+        })),
+      },
+      approvals: { verify: verifyApproval },
+      audit: vi.fn(async () => undefined),
+      createHandle: () => 'vkcred_tool_approval_fixture',
+      now: () => new Date('2026-07-24T12:00:00.000Z'),
+    });
+    const {
+      schemaVersion: _schemaVersion,
+      digest: _digest,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...credentialInput
+    } = credentialDefinition({ approval: 'required' });
+    await broker.createDefinition(credentialInput);
+    const { service } = fixture({ credentialBroker: broker, approval: 'approved' });
+    await catalog(service, {
+      transport: {
+        kind: 'stdio',
+        command: '/usr/bin/fixture',
+        args: [],
+        environmentKeys: ['FIXTURE_TOKEN'],
+        credentialReferences: ['github-token'],
+      },
+    });
+    const invocation = {
+      taskId: 'task-tools',
+      attemptId: 'attempt-tools',
+      serverId: 'fixture',
+      tool: 'search',
+      arguments: { query: 'kanban' },
+      operationId: 'approval-operation',
+    };
+
+    await expect(
+      service.invoke(
+        { ...invocation, approvalId: 'wrong-approval' },
+        'agent-a',
+        '/tmp/worktree',
+        MANIFEST_DIGEST
+      )
+    ).rejects.toThrow('Approval identity does not match');
+    await expect(
+      service.invoke(
+        { ...invocation, approvalId: 'runapproval_fixture001' },
+        'agent-a',
+        '/tmp/worktree',
+        MANIFEST_DIGEST
+      )
+    ).resolves.toMatchObject({ isError: false });
+    expect(verifyApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalId: 'runapproval_fixture001',
+        operationId: 'approval-operation',
+        actionFingerprint: expect.stringMatching(/^sha256:/),
+      })
+    );
   });
 
   it('fails closed when credential evidence is missing, disabled, out of scope, or unmapped', async () => {
@@ -587,8 +838,8 @@ describe('ToolControlPlaneService', () => {
           credentialDefinition({
             scope: {
               ...credentialDefinition().scope,
-              tools: ['fixture/other'],
-              actions: ['fixture/other'],
+              tools: ['other'],
+              actions: ['fixture.other'],
             },
           }),
         ],

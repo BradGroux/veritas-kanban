@@ -77,7 +77,12 @@ router.post(
       throw new ConflictError('Active launch evidence does not match the run tool catalog.');
     }
     res.json(
-      await service.invoke(input, actorId(req as AuthenticatedRequest), task.git?.worktreePath)
+      await service.invoke(
+        input,
+        actorId(req as AuthenticatedRequest),
+        task.git?.worktreePath,
+        task.attempt.runLaunchManifest.digest
+      )
     );
   })
 );

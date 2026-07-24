@@ -8,6 +8,7 @@ import {
   TOOL_SERVER_DEFINITION_SCHEMA_VERSION,
   type ExecutableAgentProvider,
   type AcpMcpServer,
+  type CredentialAction,
   type CredentialDefinition,
   type RunToolCatalog,
   type RunToolCatalogEntry,
@@ -39,7 +40,10 @@ import {
   calculateToolDiscoveryDigest,
   calculateToolServerDefinitionDigest,
 } from '../utils/tool-control-plane-digest.js';
-import { calculateCredentialScopeDigest } from '../utils/credential-broker-digest.js';
+import {
+  calculateCredentialActionFingerprint,
+  calculateCredentialScopeDigest,
+} from '../utils/credential-broker-digest.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { RunApprovalBrokerService } from './run-approval-broker-service.js';
 import { RunEventJournalService } from './run-event-journal-service.js';
@@ -65,7 +69,16 @@ interface RpcSession {
 }
 
 interface ToolControlPlaneRuntime {
-  open(definition: ToolServerDefinition, cwd?: string): Promise<RpcSession>;
+  open(
+    definition: ToolServerDefinition,
+    cwd?: string,
+    credentials?: ToolCredentialDelivery
+  ): Promise<RpcSession>;
+}
+
+interface ToolCredentialDelivery {
+  environment: Record<string, string>;
+  headers: Record<string, string>;
 }
 
 export interface PrepareRunToolCatalogInput {
@@ -86,7 +99,10 @@ export interface ToolControlPlaneServiceOptions {
   runtime?: ToolControlPlaneRuntime;
   journal?: RunEventJournalService;
   approvals?: RunApprovalBrokerService;
-  credentialBroker?: Pick<CredentialBrokerService, 'getDefinition'>;
+  credentialBroker?: Pick<
+    CredentialBrokerService,
+    'getDefinition' | 'issueLease' | 'withCredential'
+  >;
   now?: () => Date;
   environment?: NodeJS.ProcessEnv;
 }
@@ -105,7 +121,10 @@ export class ToolControlPlaneService {
   private readonly runtime: ToolControlPlaneRuntime;
   private readonly journal: RunEventJournalService;
   private readonly approvals: RunApprovalBrokerService;
-  private readonly credentialBroker: Pick<CredentialBrokerService, 'getDefinition'>;
+  private readonly credentialBroker: Pick<
+    CredentialBrokerService,
+    'getDefinition' | 'issueLease' | 'withCredential'
+  >;
   private readonly now: () => Date;
   private readonly environment: NodeJS.ProcessEnv;
   private readonly sessions = new Map<string, Promise<RpcSession>>();
@@ -388,7 +407,8 @@ export class ToolControlPlaneService {
   async invoke(
     request: ToolInvocationRequest,
     actorId: string,
-    cwd?: string
+    cwd?: string,
+    runLaunchManifestDigest?: string
   ): Promise<ToolInvocationResult> {
     const catalog = await this.getRunCatalog(request.taskId, request.attemptId);
     const entry = catalog.entries.find((candidate) => candidate.serverId === request.serverId);
@@ -410,18 +430,21 @@ export class ToolControlPlaneService {
       });
     }
     const definition = await this.getCatalogDefinition(entry);
-    if ((entry.credentialBindings?.length ?? 0) > 0) {
-      throw new ConflictError(
-        'Credential-bound tool calls require mediated lease consumption through the Veritas bridge.',
-        {
-          serverId: entry.serverId,
-          catalogDigest: catalog.digest,
-          remediation: 'Complete #969 before invoking this credential-bound tool.',
-        }
-      );
-    }
+    const credentialBound = (entry.credentialBindings?.length ?? 0) > 0;
+    const credentialAction = credentialBound
+      ? this.credentialAction(catalog, entry, tool.name, request.arguments)
+      : undefined;
+    const credentialActionFingerprint = credentialAction
+      ? calculateCredentialActionFingerprint(credentialAction)
+      : undefined;
+    const credentialApprovalRequired =
+      credentialBound && (await this.credentialApprovalRequired(entry));
+    let approvedRequestId: string | undefined;
 
-    if (tool.decision === 'approval') {
+    if (tool.decision === 'approval' || credentialApprovalRequired) {
+      const providerRequestId = credentialActionFingerprint
+        ? `tool:${request.operationId}:${credentialActionFingerprint}`
+        : `tool:${request.operationId}`;
       const approval = await this.approvals.request({
         taskId: request.taskId,
         attemptId: request.attemptId,
@@ -435,11 +458,12 @@ export class ToolControlPlaneService {
           tool: tool.name,
           arguments: request.arguments,
           catalogDigest: catalog.digest,
+          ...(credentialActionFingerprint ? { credentialActionFingerprint } : {}),
         },
         resourceScope: [entry.serverId, tool.name],
         riskClass: 'high',
         evidenceRevision: catalog.digest,
-        providerRequestId: `tool:${request.operationId}`,
+        providerRequestId,
         mobileSafe: false,
       });
       if (request.approvalId && request.approvalId !== approval.id) {
@@ -453,6 +477,7 @@ export class ToolControlPlaneService {
           actionHash: approval.actionHash,
         });
       }
+      approvedRequestId = approval.id;
     }
 
     const started = await this.journal.append({
@@ -484,17 +509,46 @@ export class ToolControlPlaneService {
     let sessionPromise: Promise<RpcSession> | undefined;
     let session: RpcSession | undefined;
     try {
-      sessionPromise = this.sessions.get(sessionKey);
-      if (!sessionPromise) {
-        sessionPromise = this.openSession(definition, cwd);
-        this.sessions.set(sessionKey, sessionPromise);
+      let response: unknown;
+      if (credentialBound && credentialAction) {
+        if (!runLaunchManifestDigest) {
+          throw new ConflictError(
+            'Credential-bound tool calls require the server-owned launch manifest digest.'
+          );
+        }
+        response = await this.withCredentialDelivery({
+          request,
+          entry,
+          action: credentialAction,
+          runLaunchManifestDigest,
+          approvalId: approvedRequestId,
+          dispatch: async (credentials) => {
+            session = await this.openSession(definition, cwd, credentials);
+            try {
+              return await session.request(
+                'tools/call',
+                { name: tool.name, arguments: request.arguments },
+                definition.toolTimeoutMs
+              );
+            } finally {
+              await session.close().catch(() => undefined);
+              session = undefined;
+            }
+          },
+        });
+      } else {
+        sessionPromise = this.sessions.get(sessionKey);
+        if (!sessionPromise) {
+          sessionPromise = this.openSession(definition, cwd);
+          this.sessions.set(sessionKey, sessionPromise);
+        }
+        session = await sessionPromise;
+        response = await session.request(
+          'tools/call',
+          { name: tool.name, arguments: request.arguments },
+          definition.toolTimeoutMs
+        );
       }
-      session = await sessionPromise;
-      const response = await session.request(
-        'tools/call',
-        { name: tool.name, arguments: request.arguments },
-        definition.toolTimeoutMs
-      );
       assertBoundedJson(response, MAX_RPC_BYTES, 'Tool result');
       const resultRecord =
         response && typeof response === 'object' && !Array.isArray(response)
@@ -744,8 +798,97 @@ export class ToolControlPlaneService {
     return validator;
   }
 
-  private async openSession(definition: ToolServerDefinition, cwd?: string): Promise<RpcSession> {
-    const session = await this.runtime.open(definition, cwd);
+  private credentialAction(
+    catalog: RunToolCatalog,
+    entry: RunToolCatalogEntry,
+    tool: string,
+    argumentsValue: Record<string, unknown>
+  ): CredentialAction {
+    return {
+      dispatchType: 'mcp',
+      tool,
+      action: `${entry.serverId}.${tool}`,
+      argumentsDigest: digestRunLaunchValue({
+        catalogDigest: catalog.digest,
+        serverId: entry.serverId,
+        tool,
+        arguments: argumentsValue,
+      }),
+    };
+  }
+
+  private async credentialApprovalRequired(entry: RunToolCatalogEntry): Promise<boolean> {
+    for (const binding of entry.credentialBindings ?? []) {
+      const definition = await this.credentialBroker.getDefinition(binding.credentialReference);
+      if (
+        !definition ||
+        !definition.enabled ||
+        definition.digest !== binding.credentialDefinitionDigest
+      ) {
+        throw new ConflictError('Credential definition changed before approval evaluation.', {
+          credentialReference: binding.credentialReference,
+          serverId: entry.serverId,
+        });
+      }
+      if (definition.approval === 'required') return true;
+    }
+    return false;
+  }
+
+  private async withCredentialDelivery<T>(input: {
+    request: ToolInvocationRequest;
+    entry: RunToolCatalogEntry;
+    action: CredentialAction;
+    runLaunchManifestDigest: string;
+    approvalId?: string;
+    dispatch: (credentials: ToolCredentialDelivery) => Promise<T>;
+  }): Promise<T> {
+    const bindings = input.entry.credentialBindings ?? [];
+    const delivery: ToolCredentialDelivery = { environment: {}, headers: {} };
+    const consume = async (index: number): Promise<T> => {
+      const binding = bindings[index];
+      if (!binding) return input.dispatch(delivery);
+      const issued = await this.credentialBroker.issueLease({
+        definitionId: binding.credentialReference,
+        taskId: input.request.taskId,
+        attemptId: input.request.attemptId,
+        runLaunchManifestDigest: input.runLaunchManifestDigest,
+        action: input.action,
+        approvalId: input.approvalId,
+        operationId: input.request.operationId,
+      });
+      const leaseOperationId = digestRunLaunchValue({
+        operationId: input.request.operationId,
+        credentialReference: binding.credentialReference,
+      });
+      return this.credentialBroker.withCredential(
+        {
+          handle: issued.handle,
+          operationId: leaseOperationId,
+          taskId: input.request.taskId,
+          attemptId: input.request.attemptId,
+          runLaunchManifestDigest: input.runLaunchManifestDigest,
+          action: input.action,
+        },
+        async (credential) => {
+          if (binding.target.kind === 'environment') {
+            delivery.environment[binding.target.name] = credential;
+          } else {
+            delivery.headers[binding.target.name] = credential;
+          }
+          return consume(index + 1);
+        }
+      );
+    };
+    return consume(0);
+  }
+
+  private async openSession(
+    definition: ToolServerDefinition,
+    cwd?: string,
+    credentials?: ToolCredentialDelivery
+  ): Promise<RpcSession> {
+    const session = await this.runtime.open(definition, cwd, credentials);
     try {
       await initializeSession(session, definition.startupTimeoutMs, definition.version);
       return session;
@@ -855,6 +998,7 @@ export class ToolControlPlaneService {
       }
       for (const tool of discovery.tools) {
         const qualifiedName = `${definition.id}/${tool.name}`;
+        const credentialAction = `${definition.id}.${tool.name}`;
         if (
           scope.tools.length > 0 &&
           !scope.tools.includes(tool.name) &&
@@ -869,14 +1013,14 @@ export class ToolControlPlaneService {
         if (
           scope.actions.length > 0 &&
           !scope.actions.includes(tool.name) &&
-          !scope.actions.includes(qualifiedName)
+          !scope.actions.includes(credentialAction)
         ) {
           throw new ConflictError(
             'Credential definition does not accept every discovered MCP action.',
             {
               credentialReference: credential.id,
               serverId: definition.id,
-              action: qualifiedName,
+              action: credentialAction,
             }
           );
         }
@@ -1008,10 +1152,14 @@ export function getToolControlPlaneService(): ToolControlPlaneService {
 class McpJsonRpcRuntime implements ToolControlPlaneRuntime {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
 
-  async open(definition: ToolServerDefinition, cwd?: string): Promise<RpcSession> {
+  async open(
+    definition: ToolServerDefinition,
+    cwd?: string,
+    credentials?: ToolCredentialDelivery
+  ): Promise<RpcSession> {
     return definition.transport.kind === 'stdio'
-      ? new StdioRpcSession(definition, this.environment, cwd)
-      : new HttpRpcSession(definition, this.environment);
+      ? new StdioRpcSession(definition, this.environment, cwd, credentials?.environment)
+      : new HttpRpcSession(definition, this.environment, credentials?.headers);
   }
 }
 
@@ -1030,9 +1178,17 @@ class StdioRpcSession implements RpcSession {
   private stderr = '';
   private closed = false;
 
-  constructor(definition: ToolServerDefinition, environment: NodeJS.ProcessEnv, cwd?: string) {
+  constructor(
+    definition: ToolServerDefinition,
+    environment: NodeJS.ProcessEnv,
+    cwd?: string,
+    credentialEnvironment: Record<string, string> = {}
+  ) {
     if (definition.transport.kind !== 'stdio') throw new Error('Expected stdio definition.');
-    const env = minimalProcessEnvironment(environment, definition.transport.environmentKeys);
+    const env = {
+      ...minimalProcessEnvironment(environment, definition.transport.environmentKeys),
+      ...credentialEnvironment,
+    };
     this.child = spawn(definition.transport.command, definition.transport.args, {
       cwd,
       env,
@@ -1141,7 +1297,8 @@ class HttpRpcSession implements RpcSession {
 
   constructor(
     private readonly definition: ToolServerDefinition,
-    private readonly environment: NodeJS.ProcessEnv
+    private readonly environment: NodeJS.ProcessEnv,
+    private readonly credentialHeaders: Record<string, string> = {}
   ) {}
 
   async request(
@@ -1182,7 +1339,7 @@ class HttpRpcSession implements RpcSession {
     };
     if (this.protocolVersion) headers['mcp-protocol-version'] = this.protocolVersion;
     for (const header of this.definition.transport.headers) {
-      const value = this.environment[header.environmentKey];
+      const value = this.credentialHeaders[header.name] ?? this.environment[header.environmentKey];
       if (value) headers[header.name] = value;
     }
     const response = await fetch(this.definition.transport.url, {
@@ -1209,7 +1366,7 @@ class HttpRpcSession implements RpcSession {
     if (this.sessionId) headers['mcp-session-id'] = this.sessionId;
     if (this.protocolVersion) headers['mcp-protocol-version'] = this.protocolVersion;
     for (const header of this.definition.transport.headers) {
-      const value = this.environment[header.environmentKey];
+      const value = this.credentialHeaders[header.name] ?? this.environment[header.environmentKey];
       if (!value) throw new Error(`Required tool server header ${header.name} is unavailable.`);
       headers[header.name] = value;
     }

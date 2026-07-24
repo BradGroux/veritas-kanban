@@ -134,8 +134,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and
-  mediated invocation remains blocked until exact-action lease consumption is
-  available.
+  mediated invocation issues exact-action leases using the server-owned launch
+  manifest digest. Credential-bound sessions are one-shot and raw values may
+  exist only inside the controlled downstream dispatch callback.
 - Classify launch credentials through `run-launch-credential-plan/v1`.
   Provider boot authentication, task integration definition IDs, and explicit
   high-risk environment passthrough are separate classes. Task integration
