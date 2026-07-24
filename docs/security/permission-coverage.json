@@ -84,6 +84,14 @@
       "denialReason": "Shared run session events require task read access in the event workspace."
     },
     {
+      "id": "websocket:run-approval:changed",
+      "kind": "websocket",
+      "classification": "authenticated-read",
+      "permissions": ["task:read"],
+      "source": "server/src/services/broadcast-service.ts",
+      "denialReason": "Run approval changes require task read access in the approval workspace."
+    },
+    {
       "id": "websocket:tasks:subscribed",
       "kind": "websocket",
       "classification": "authenticated-read",
