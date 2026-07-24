@@ -12,7 +12,7 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
       merged, focused pull requests.
 - [x] The equal-footing harness epic and every required child are closed
       through merged, focused pull requests.
-- [ ] The release tracker lists the exact main baseline, release branch, release
+- [x] The release tracker lists the exact main baseline, release branch, release
       PR, deferred v6.x work, and no unresolved release blocker.
 - [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.0.1.
 - [x] `AGENTS.md`, README badge, health, CLI, MCP, desktop bundle, artifact
@@ -32,11 +32,11 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.1.
       semantics, run de-duplication, and data quality reconcile in JSON,
       Markdown, scheduled snapshots, and UI tests (#944).
 - [x] Chat has visible, Escape, browser Back, persisted-state, compact-window,
-      and native menu recovery coverage; signed-app validation remains a
-      publication gate (#945).
+      and native menu recovery coverage; the independently downloaded signed
+      app passes the same recovery checks (#945).
 - [x] Desktop setup is version-neutral and the bridge consumes Electron's
-      application version; bundle, health, updater, and bridge equality remains
-      a signed-app publication gate (#986).
+      application version; the published bundle, health endpoint, updater, and
+      bridge all report 6.0.1 (#986).
 
 ## Provider Certification
 
@@ -161,26 +161,26 @@ quota are available.
 
 ## Distribution And Post-Publication
 
-- [ ] The ready release PR passes required CI and the `ci:full` workspace suite,
+- [x] The ready release PR passes required CI and the `ci:full` workspace suite,
       receives focused standards/spec review, and merges to main.
-- [ ] Annotated tag `v6.0.1` peels to the exact release merge commit.
-- [ ] The GitHub release is published from reviewed v6 release notes.
-- [ ] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
+- [x] Annotated tag `v6.0.1` peels to the exact release merge commit.
+- [x] The GitHub release is published from reviewed v6 release notes.
+- [x] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
       blockmaps, `latest-mac.yml`, and SHA-256 sidecars.
-- [ ] Independent downloads match GitHub digests, sidecars, updater metadata,
+- [x] Independent downloads match GitHub digests, sidecars, updater metadata,
       byte sizes, and SHA-256 values.
-- [ ] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
+- [x] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
       stapling pass.
-- [ ] The downloaded signed app launches with an isolated profile, reports
+- [x] The downloaded signed app launches with an isolated profile, reports
       6.0.1 through bundle, health, updater, and desktop bridge metadata,
       verifies Chat recovery, executes a bounded task,
       and quits cleanly.
-- [ ] `pnpm validate:release -- --version 6.0.1 --github --repo BradGroux/veritas-kanban`
+- [x] `pnpm validate:release -- --version 6.0.1 --github --repo BradGroux/veritas-kanban`
       passes.
-- [ ] The Homebrew cask PR uses the published ZIP checksum, merges, and the
+- [x] The Homebrew cask PR uses the published ZIP checksum, merges, and the
       registered tap passes style, strict online audit, dry-run install, and
       livecheck.
-- [ ] The evidence packet contains release/workflow/asset/Homebrew links,
+- [x] The evidence packet contains release/workflow/asset/Homebrew links,
       exact hashes, runtime results, limitations, and deferred v6.x issues.
-- [ ] The release tracker closes only after every distribution surface above is
+- [x] The release tracker closes only after every distribution surface above is
       independently verified.
