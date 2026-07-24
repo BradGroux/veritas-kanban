@@ -118,6 +118,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Dark/light mode** — Ships dark by default with a toggle in Settings → General → Appearance; persists to localStorage; inline script in `index.html` prevents flash of wrong theme on load
 - **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
 - **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and bounded left/right/chat dock controls shared by the web and macOS app shells
+- **Native version identity** — The macOS application menu opens an offline About panel and copies a redacted support string from the same authoritative Electron version, embedded release commit, release channel, OS, and architecture record exposed by the desktop bridge
 - **Mobile shell controls** — Compact navigation uses bounded labels and full accessible names; Board Chat stays fixed above the bottom navigation and device safe area
 - **Resizable Workbench** — Board Chat and Squad Chat open in a right dock by default, can switch to Bottom without losing the active conversation, and clamp their width or height to keep the application shell recoverable
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle

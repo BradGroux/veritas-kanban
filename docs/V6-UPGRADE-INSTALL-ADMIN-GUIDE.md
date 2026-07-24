@@ -223,3 +223,9 @@ runtime-manifest, support-profile, compatibility-matrix, launch-manifest,
 approval, run-event, and completion evidence. Never paste raw private relay
 events, provider output, credentials, or unrestricted support bundles into a
 public issue.
+
+In the packaged macOS app, choose **Veritas Kanban → About Veritas Kanban** for
+the authoritative running version. **Copy Version Information** in the same
+native menu produces a redacted offline support string with the build identity,
+release channel, macOS version, and architecture even when the renderer or local
+API is unavailable.

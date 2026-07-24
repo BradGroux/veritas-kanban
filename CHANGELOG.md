@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chat scrolling cannot move the application shell, wheel input cannot resize the
   dock, and Close, Escape, Back, or Reset Layout always preserve a visible board
   and restore focus (#1004).
+- Added a native **About Veritas Kanban** panel and offline **Copy Version
+  Information** action using Electron's authoritative application version. The
+  same record now reports the embedded release commit, stable/beta/development
+  channel, OS, and architecture through About, clipboard support text, the
+  desktop bridge, and updater fallback without depending on the renderer or
+  network (#1005).
 
 ## [6.0.1] - 2026-07-24
 
