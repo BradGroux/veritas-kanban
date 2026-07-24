@@ -179,28 +179,28 @@ quota are available.
 
 ## Distribution And Post-Publication
 
-- [ ] The ready release PR passes required CI and the milestone-wide workspace
+- [x] The ready release PR passes required CI and the milestone-wide workspace
       suite, then merges to main.
-- [ ] Annotated tag `v6.0.2` peels to the exact release merge commit.
-- [ ] The GitHub release is published from reviewed
+- [x] Annotated tag `v6.0.2` peels to the exact release merge commit.
+- [x] The GitHub release is published from reviewed
       `docs/releases/v6.0.2.md` without hard-wrapped prose.
-- [ ] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
+- [x] Desktop Release completes with signed/notarized arm64 DMG and ZIP,
       blockmaps, `latest-mac.yml`, and SHA-256 sidecars.
-- [ ] Independent downloads match GitHub digests, sidecars, updater metadata,
+- [x] Independent downloads match GitHub digests, sidecars, updater metadata,
       byte sizes, and SHA-256 values.
-- [ ] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
+- [x] DMG and ZIP app signatures, hardened runtime, Gatekeeper, and notarization
       stapling pass.
-- [ ] The downloaded signed app launches with an isolated profile, reports
+- [x] The downloaded signed app launches with an isolated profile, reports
       6.0.2 through bundle, health, updater, native About, copied support
       information, and desktop bridge metadata; verifies Right and Bottom Chat
       recovery at the minimum supported window; executes a bounded task; and
       quits cleanly.
-- [ ] `pnpm validate:release -- --version 6.0.2 --github --repo BradGroux/veritas-kanban`
+- [x] `pnpm validate:release -- --version 6.0.2 --github --repo BradGroux/veritas-kanban`
       passes.
-- [ ] The Homebrew cask PR uses the published ZIP checksum, merges, and the
+- [x] The Homebrew cask PR uses the published ZIP checksum, merges, and the
       registered tap passes style, strict online audit, dry-run install, and
       livecheck.
-- [ ] The evidence packet contains release/workflow/asset/Homebrew links,
+- [x] The evidence packet contains release/workflow/asset/Homebrew links,
       exact hashes, runtime results, limitations, and deferred v6.x issues.
-- [ ] The release tracker closes only after every distribution surface above is
+- [x] The release tracker closes only after every distribution surface above is
       independently verified.
