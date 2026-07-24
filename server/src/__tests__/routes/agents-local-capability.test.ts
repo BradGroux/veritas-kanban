@@ -8,7 +8,14 @@ const {
   mockStartAgent,
   mockPreviewAgentLaunch,
   mockStopAgent,
+  mockInterruptConversation,
   mockSendMessage,
+  mockResumeConversation,
+  mockFollowUpConversation,
+  mockForkConversation,
+  mockCompactConversation,
+  mockArchiveConversation,
+  mockCloseConversation,
   mockCompleteAgent,
   mockGetAgentStatus,
   mockAssertActiveRunControl,
@@ -20,7 +27,14 @@ const {
   mockStartAgent: vi.fn(),
   mockPreviewAgentLaunch: vi.fn(),
   mockStopAgent: vi.fn(),
+  mockInterruptConversation: vi.fn(),
   mockSendMessage: vi.fn(),
+  mockResumeConversation: vi.fn(),
+  mockFollowUpConversation: vi.fn(),
+  mockForkConversation: vi.fn(),
+  mockCompactConversation: vi.fn(),
+  mockArchiveConversation: vi.fn(),
+  mockCloseConversation: vi.fn(),
   mockCompleteAgent: vi.fn(),
   mockGetAgentStatus: vi.fn(),
   mockAssertActiveRunControl: vi.fn(),
@@ -43,7 +57,14 @@ vi.mock('../../services/clawdbot-agent-service.js', () => ({
     startAgent: mockStartAgent,
     previewAgentLaunch: mockPreviewAgentLaunch,
     stopAgent: mockStopAgent,
+    interruptConversation: mockInterruptConversation,
     sendMessage: mockSendMessage,
+    resumeConversation: mockResumeConversation,
+    followUpConversation: mockFollowUpConversation,
+    forkConversation: mockForkConversation,
+    compactConversation: mockCompactConversation,
+    archiveConversation: mockArchiveConversation,
+    closeConversation: mockCloseConversation,
     completeAgent: mockCompleteAgent,
     getAgentStatus: mockGetAgentStatus,
     assertRunControl: vi.fn(),
@@ -101,7 +122,42 @@ describe('agent local capability enforcement', () => {
       },
     });
     mockStopAgent.mockResolvedValue(undefined);
+    mockInterruptConversation.mockResolvedValue({
+      action: 'interrupt',
+      attemptId: 'attempt_1',
+      delivered: true,
+    });
     mockSendMessage.mockResolvedValue({ delivered: true, note: 'delivered' });
+    mockResumeConversation.mockResolvedValue({
+      taskId: 'task_1',
+      attemptId: 'attempt_2',
+      status: 'running',
+    });
+    mockFollowUpConversation.mockResolvedValue({
+      taskId: 'task_1',
+      attemptId: 'attempt_2',
+      status: 'running',
+    });
+    mockForkConversation.mockResolvedValue({
+      taskId: 'task_1',
+      attemptId: 'attempt_2',
+      status: 'running',
+    });
+    mockCompactConversation.mockResolvedValue({
+      action: 'compact',
+      attemptId: 'attempt_1',
+      delivered: true,
+    });
+    mockArchiveConversation.mockResolvedValue({
+      action: 'archive',
+      attemptId: 'attempt_1',
+      delivered: true,
+    });
+    mockCloseConversation.mockResolvedValue({
+      action: 'close',
+      attemptId: 'attempt_1',
+      delivered: true,
+    });
     mockCompleteAgent.mockResolvedValue(undefined);
     mockGetAgentStatus.mockReturnValue(null);
     mockAssertActiveRunControl.mockResolvedValue(undefined);
@@ -309,6 +365,73 @@ describe('agent local capability enforcement', () => {
       source: 'agent-route',
       expectedAttemptId: 'attempt_1',
     });
+  });
+
+  it('exposes attributed provider-neutral conversation lifecycle routes', async () => {
+    const app = createApp(
+      auth({
+        userId: 'operator_1',
+        clientMode: 'desktop-local',
+        capabilities: ['desktop:local'],
+      })
+    );
+
+    const resume = await request(app).post('/api/agents/task_1/conversation/resume').send({
+      sourceAttemptId: 'attempt_parent',
+      message: 'Continue from the durable provider history',
+      commitPolicy: 'forbidden',
+    });
+    expect(resume.status).toBe(201);
+    expect(mockResumeConversation).toHaveBeenCalledWith(
+      'task_1',
+      'attempt_parent',
+      'Continue from the durable provider history',
+      expect.objectContaining({ commitPolicy: 'forbidden' })
+    );
+
+    const fork = await request(app).post('/api/agents/task_1/conversation/fork').send({
+      sourceAttemptId: 'attempt_parent',
+      message: 'Explore another branch',
+      forkTurnId: 'turn_7',
+    });
+    expect(fork.status).toBe(201);
+    expect(mockForkConversation).toHaveBeenCalledWith(
+      'task_1',
+      'attempt_parent',
+      'Explore another branch',
+      'turn_7',
+      expect.any(Object)
+    );
+
+    const spoofedSteer = await request(app).post('/api/agents/task_1/conversation/steer').send({
+      attemptId: 'attempt_1',
+      message: 'Pretend another actor sent this',
+      actor: 'spoofed-operator',
+    });
+    expect(spoofedSteer.status).toBe(400);
+
+    const steer = await request(app).post('/api/agents/task_1/conversation/steer').send({
+      attemptId: 'attempt_1',
+      message: 'Use the narrow fix',
+    });
+    expect(steer.status).toBe(200);
+    expect(mockSendMessage).toHaveBeenCalledWith('task_1', 'Use the narrow fix', {
+      actor: 'operator_1',
+      source: 'conversation-route',
+      expectedAttemptId: 'attempt_1',
+    });
+
+    const compact = await request(app).post('/api/agents/task_1/conversation/compact').send({
+      attemptId: 'attempt_1',
+    });
+    expect(compact.status).toBe(200);
+    expect(mockCompactConversation).toHaveBeenCalledWith('task_1', 'attempt_1', 'operator_1');
+
+    const interrupt = await request(app).post('/api/agents/task_1/conversation/interrupt').send({
+      attemptId: 'attempt_1',
+    });
+    expect(interrupt.status).toBe(200);
+    expect(mockInterruptConversation).toHaveBeenCalledWith('task_1', 'attempt_1', 'operator_1');
   });
 
   it('requires and forwards completion attempt provenance', async () => {

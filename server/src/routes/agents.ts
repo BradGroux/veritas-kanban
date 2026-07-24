@@ -1,6 +1,10 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
-import { AgentReadinessError, clawdbotAgentService } from '../services/clawdbot-agent-service.js';
+import {
+  AgentReadinessError,
+  clawdbotAgentService,
+  type AgentStartOptions,
+} from '../services/clawdbot-agent-service.js';
 import { getTelemetryService } from '../services/telemetry-service.js';
 import { getTaskService } from '../services/task-service.js';
 import type {
@@ -139,9 +143,27 @@ const sendAgentMessageSchema = z.object({
   actor: z.string().trim().min(1).max(120).optional(),
 });
 
+const conversationSteerSchema = sendAgentMessageSchema.omit({ actor: true }).strict();
+
 const runControlSchema = z.object({
   attemptId: z.string().trim().min(1).max(120),
 });
+
+const conversationTurnSchema = z
+  .object({
+    sourceAttemptId: z.string().trim().min(1).max(120),
+    message: z.string().trim().min(1).max(20_000),
+    forkTurnId: z.string().trim().min(1).max(240).optional(),
+    profileId: AgentTypeSchema.optional(),
+    overrideReason: z.string().trim().min(8).max(1000).optional(),
+    sandboxPresetId: z.string().trim().min(1).max(80).optional(),
+    budget: AgentBudgetPolicySchema.optional(),
+    requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
+    commitPolicy: TaskCommitPolicySchema.optional(),
+  })
+  .strict();
+
+const conversationControlSchema = runControlSchema.strict();
 
 const reportTokensSchema = z.object({
   attemptId: z.string().trim().min(1).max(120),
@@ -324,12 +346,10 @@ router.post(
   asyncHandler(async (req, res) => {
     let message: string;
     let attemptId: string;
-    let actorOverride: string | undefined;
     try {
       const parsed = sendAgentMessageSchema.parse(req.body);
       message = parsed.message;
       attemptId = parsed.attemptId;
-      actorOverride = parsed.actor;
     } catch (err) {
       if (err instanceof z.ZodError) {
         throw new ValidationError('Validation failed', err.issues);
@@ -337,23 +357,131 @@ router.post(
       throw err;
     }
 
-    const auth = (req as AuthenticatedRequest).auth;
-    const actor =
-      actorOverride ||
-      auth?.userId ||
-      auth?.tokenName ||
-      auth?.keyName ||
-      auth?.clientId ||
-      auth?.role ||
-      'operator';
     const delivery = await clawdbotAgentService.sendMessage(req.params.taskId as string, message, {
-      actor,
+      actor: requestActor(req),
       source: 'agent-route',
       expectedAttemptId: attemptId,
     });
     res.json(delivery);
   })
 );
+
+// POST /api/agents/:taskId/conversation/resume - Continue a terminal provider conversation.
+router.post(
+  '/:taskId/conversation/resume',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    const body = parseConversationTurn(req.body);
+    if (body.forkTurnId) {
+      throw new ValidationError('Resume cannot specify forkTurnId');
+    }
+    const status = await clawdbotAgentService.resumeConversation(
+      req.params.taskId as string,
+      body.sourceAttemptId,
+      body.message,
+      conversationStartOptions(body)
+    );
+    res.status(201).json(status);
+  })
+);
+
+// POST /api/agents/:taskId/conversation/follow-up - Start a native follow-up turn.
+router.post(
+  '/:taskId/conversation/follow-up',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    const body = parseConversationTurn(req.body);
+    if (body.forkTurnId) {
+      throw new ValidationError('Follow-up cannot specify forkTurnId');
+    }
+    const status = await clawdbotAgentService.followUpConversation(
+      req.params.taskId as string,
+      body.sourceAttemptId,
+      body.message,
+      conversationStartOptions(body)
+    );
+    res.status(201).json(status);
+  })
+);
+
+// POST /api/agents/:taskId/conversation/fork - Fork native history into this task run.
+router.post(
+  '/:taskId/conversation/fork',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    const body = parseConversationTurn(req.body);
+    const status = await clawdbotAgentService.forkConversation(
+      req.params.taskId as string,
+      body.sourceAttemptId,
+      body.message,
+      body.forkTurnId,
+      conversationStartOptions(body)
+    );
+    res.status(201).json(status);
+  })
+);
+
+// POST /api/agents/:taskId/conversation/steer - Steer the exact active provider turn.
+router.post(
+  '/:taskId/conversation/steer',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    const parsed = parseConversationSteer(req.body);
+    res.json(
+      await clawdbotAgentService.sendMessage(req.params.taskId as string, parsed.message, {
+        actor: requestActor(req),
+        source: 'conversation-route',
+        expectedAttemptId: parsed.attemptId,
+      })
+    );
+  })
+);
+
+// POST /api/agents/:taskId/conversation/interrupt - Interrupt the exact active attempt.
+router.post(
+  '/:taskId/conversation/interrupt',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    const body = parseConversationControl(req.body);
+    res.json(
+      await clawdbotAgentService.interruptConversation(
+        req.params.taskId as string,
+        body.attemptId,
+        requestActor(req)
+      )
+    );
+  })
+);
+
+for (const action of ['compact', 'archive', 'close'] as const) {
+  router.post(
+    `/:taskId/conversation/${action}`,
+    requireLocalAgentCapability,
+    asyncHandler(async (req, res) => {
+      const body = parseConversationControl(req.body);
+      const actor = requestActor(req);
+      const result =
+        action === 'compact'
+          ? await clawdbotAgentService.compactConversation(
+              req.params.taskId as string,
+              body.attemptId,
+              actor
+            )
+          : action === 'archive'
+            ? await clawdbotAgentService.archiveConversation(
+                req.params.taskId as string,
+                body.attemptId,
+                actor
+              )
+            : await clawdbotAgentService.closeConversation(
+                req.params.taskId as string,
+                body.attemptId,
+                actor
+              );
+      res.json(result);
+    })
+  );
+}
 
 // GET /api/agents/:taskId/status - Get agent status
 router.get(
@@ -496,3 +624,57 @@ router.post(
 
 // Export service for WebSocket use
 export { router as agentRoutes, clawdbotAgentService as agentService };
+
+function parseConversationTurn(input: unknown): z.infer<typeof conversationTurnSchema> {
+  try {
+    return conversationTurnSchema.parse(input);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ValidationError('Validation failed', error.issues);
+    }
+    throw error;
+  }
+}
+
+function parseConversationControl(input: unknown): z.infer<typeof conversationControlSchema> {
+  try {
+    return conversationControlSchema.parse(input);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ValidationError('Validation failed', error.issues);
+    }
+    throw error;
+  }
+}
+
+function parseConversationSteer(input: unknown): z.infer<typeof conversationSteerSchema> {
+  try {
+    return conversationSteerSchema.parse(input);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ValidationError('Validation failed', error.issues);
+    }
+    throw error;
+  }
+}
+
+function conversationStartOptions(
+  body: z.infer<typeof conversationTurnSchema>
+): Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> {
+  return {
+    profileId: body.profileId,
+    overrideReason: body.overrideReason,
+    sandboxPresetId: body.sandboxPresetId,
+    budget: body.budget,
+    requiredRuntimeCapabilities: body.requiredRuntimeCapabilities as
+      ProviderRuntimeCapabilityId[] | undefined,
+    commitPolicy: body.commitPolicy as TaskCommitPolicy | undefined,
+  };
+}
+
+function requestActor(req: AuthenticatedRequest): string {
+  const auth = req.auth;
+  return (
+    auth?.userId || auth?.tokenName || auth?.keyName || auth?.clientId || auth?.role || 'operator'
+  );
+}

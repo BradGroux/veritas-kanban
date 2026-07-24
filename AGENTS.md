@@ -173,8 +173,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - App-server launch arguments are system-owned. Inherited MCP servers, hooks,
   plugins, apps, browser/computer tools, and remote control remain disabled.
 - App-server consumes only the checked-in v0.145.0 schemas and exposes
-  `initialize`, `thread/start`, `turn/start`, and `turn/interrupt`.
-  `thread/shellCommand` is never reachable.
+  `initialize`, thread start/resume/fork/compact/archive, and turn
+  start/steer/interrupt. `thread/shellCommand` is never reachable.
+- `conversation-lifecycle/v1` persists opaque thread, turn, item, parent, and
+  fork identities. Resume and fork validate the source launch manifest,
+  provider/model/policy, base revision, and worktree compatibility before a new
+  attempt is created.
 - App-server command, file, permission, tool-question, and elicitation requests
   use `run-approval/v1`. Decisions must preserve the persisted revision and
   exact action hash; interruption and cancellation invalidate pending requests.
@@ -190,9 +194,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - The terminal `result` record is authoritative. Veritas drains stdout after
   process close, persists `session_id`, and maps partial, hook, tool, subagent,
   usage, cost, and result records into `run-event/v1`.
-- Resume, fork, and MCP injection remain fail-closed. The shared approval broker
-  is available, but Claude stays on static `dontAsk` permissions until its
-  adapter exposes a pinned interactive request/response contract.
+- Resume uses the exact persisted session through system-owned `--resume`.
+  Native history fork adds `--fork-session`; caller-supplied lifecycle flags
+  remain prohibited. MCP injection remains fail-closed.
+- The shared approval broker is available, but Claude stays on static
+  `dontAsk` permissions until its adapter exposes a pinned interactive
+  request/response contract.
 
 ---
 

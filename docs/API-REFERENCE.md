@@ -2306,6 +2306,39 @@ Current task adapters reject every non-empty named-tool or MCP catalog. The
 run-scoped tool-server control plane tracked in #857 owns positive catalog
 injection; prompt text is never accepted as equivalent enforcement.
 
+### Conversation Lifecycle
+
+```
+POST /api/agents/:taskId/conversation/resume
+POST /api/agents/:taskId/conversation/follow-up
+POST /api/agents/:taskId/conversation/fork
+POST /api/agents/:taskId/conversation/steer
+POST /api/agents/:taskId/conversation/interrupt
+POST /api/agents/:taskId/conversation/compact
+POST /api/agents/:taskId/conversation/archive
+POST /api/agents/:taskId/conversation/close
+```
+
+Resume, follow-up, and fork require a terminal source attempt with durable
+provider identity:
+
+```json
+{
+  "sourceAttemptId": "attempt_parent",
+  "message": "Continue from the verified history",
+  "forkTurnId": "turn_7",
+  "commitPolicy": "allowed"
+}
+```
+
+`forkTurnId` is accepted only for fork. The remaining controls require the
+exact active `attemptId`; steer also requires `message`. Every action validates
+capability and immutable launch evidence before invoking a provider-native
+operation. Unsupported steering fails with an explicit capability error, and
+any recorded-only fallback returns `delivered: false` with a reason. Veritas
+does not claim that recording a message or writing process stdin reached the
+provider.
+
 `commitPolicy` accepts `forbidden`, `allowed`, or `required`. A run value
 overrides `task.executionPolicy.commitPolicy`, then the legacy
 `features.agents.autoCommitOnComplete` setting. Legacy `true` maps to
@@ -2327,7 +2360,7 @@ controls:
     "providerRuntime": {
       "digest": "sha256:...",
       "provider": "codex-cli",
-      "probeRevision": 5
+      "probeRevision": 8
     },
     "runtime": {
       "command": "codex",

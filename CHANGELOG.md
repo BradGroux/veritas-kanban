@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `conversation-lifecycle/v1` with durable provider conversation, turn,
+  item, parent, and fork identities; launch-manifest and worktree compatibility
+  checks; context-window posture; causal lifecycle events; attributed REST,
+  CLI, MCP, and web controls; and explicit unsupported delivery results.
+  Codex CLI and SDK can resume exact persisted sessions, Claude Code can resume
+  or fork with system-owned native flags, and Codex app-server can resume,
+  follow up, steer, fork, compact, archive, interrupt, and close through
+  schema-validated JSON-RPC methods. Generic process stdin is no longer treated
+  as a successful provider follow-up path, and capability evidence advances to
+  probe revision 8 (#856).
 - Added `run-supervisor/v1`, a durable provider-run ownership record with exact
   provider, task-envelope, launch-manifest, and worktree bindings; persisted
   process groups or remote-session handles; budget and event cursors; expiring

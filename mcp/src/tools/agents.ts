@@ -22,6 +22,68 @@ const TaskIdSchema = z.object({
   id: z.string().min(1),
 });
 
+const ConversationActionSchema = z.enum([
+  'resume',
+  'follow-up',
+  'fork',
+  'steer',
+  'interrupt',
+  'compact',
+  'archive',
+  'close',
+]);
+
+const ConversationControlSchema = z
+  .object({
+    id: z.string().min(1),
+    action: ConversationActionSchema,
+    sourceAttemptId: z.string().trim().min(1).max(120).optional(),
+    attemptId: z.string().trim().min(1).max(120).optional(),
+    message: z.string().trim().min(1).max(20_000).optional(),
+    forkTurnId: z.string().trim().min(1).max(240).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (['resume', 'follow-up', 'fork'].includes(value.action)) {
+      if (!value.sourceAttemptId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sourceAttemptId'],
+          message: `${value.action} requires sourceAttemptId`,
+        });
+      }
+      if (!value.message) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['message'],
+          message: `${value.action} requires message`,
+        });
+      }
+    } else {
+      if (!value.attemptId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['attemptId'],
+          message: `${value.action} requires attemptId`,
+        });
+      }
+      if (value.action === 'steer' && !value.message) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['message'],
+          message: 'steer requires message',
+        });
+      }
+    }
+    if (value.forkTurnId && value.action !== 'fork') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['forkTurnId'],
+        message: 'forkTurnId is only valid for fork',
+      });
+    }
+  });
+
 export const agentTools = [
   {
     name: 'start_agent',
@@ -68,6 +130,42 @@ export const agentTools = [
         },
       },
       required: ['id'],
+    },
+  },
+  {
+    name: 'control_agent_conversation',
+    description:
+      'Resume, follow up, fork, steer, interrupt, compact, archive, or close a provider conversation using verified native controls',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Task ID or partial ID',
+        },
+        action: {
+          type: 'string',
+          enum: ConversationActionSchema.options,
+          description: 'Provider-neutral lifecycle action',
+        },
+        sourceAttemptId: {
+          type: 'string',
+          description: 'Terminal source attempt for resume, follow-up, or fork',
+        },
+        attemptId: {
+          type: 'string',
+          description: 'Exact active attempt for steer, interrupt, compact, archive, or close',
+        },
+        message: {
+          type: 'string',
+          description: 'New-turn or steering message',
+        },
+        forkTurnId: {
+          type: 'string',
+          description: 'Optional provider turn boundary for a native history fork',
+        },
+      },
+      required: ['id', 'action'],
     },
   },
 ];
@@ -148,6 +246,38 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
 
       return {
         content: [{ type: 'text', text: 'Agent stopped' }],
+      };
+    }
+
+    case 'control_agent_conversation': {
+      const { id, action, sourceAttemptId, attemptId, message, forkTurnId } =
+        ConversationControlSchema.parse(args);
+      const task = await findTask(id);
+      if (!task) {
+        return {
+          content: [{ type: 'text', text: `Task not found: ${id}` }],
+          isError: true,
+        };
+      }
+
+      const startsTurn = ['resume', 'follow-up', 'fork'].includes(action);
+      const body = startsTurn
+        ? {
+            sourceAttemptId,
+            message,
+            ...(action === 'fork' && forkTurnId ? { forkTurnId } : {}),
+          }
+        : {
+            attemptId,
+            ...(action === 'steer' ? { message } : {}),
+          };
+      const result = await api(`/api/agents/${task.id}/conversation/${action}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
 

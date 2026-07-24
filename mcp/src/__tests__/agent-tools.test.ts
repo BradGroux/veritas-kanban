@@ -38,6 +38,13 @@ describe('MCP agent runtime capability controls', () => {
     });
   });
 
+  it('publishes provider-neutral lifecycle actions in one MCP tool', () => {
+    const control = agentTools.find((tool) => tool.name === 'control_agent_conversation');
+    expect(control?.inputSchema.properties.action).toMatchObject({
+      enum: ['resume', 'follow-up', 'fork', 'steer', 'interrupt', 'compact', 'archive', 'close'],
+    });
+  });
+
   it('forwards a parent attempt for material launch drift', async () => {
     await handleAgentTool('start_agent', {
       id: 'task_1',
@@ -108,6 +115,49 @@ describe('MCP agent runtime capability controls', () => {
     expect(mockApi).toHaveBeenNthCalledWith(2, '/api/agents/task_1/stop', {
       method: 'POST',
       body: JSON.stringify({ attemptId: 'attempt_1' }),
+    });
+  });
+
+  it('forwards a native history fork with its source turn boundary', async () => {
+    await handleAgentTool('control_agent_conversation', {
+      id: 'task_1',
+      action: 'fork',
+      sourceAttemptId: 'attempt_parent',
+      message: 'Try the alternate implementation',
+      forkTurnId: 'turn_5',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/conversation/fork', {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceAttemptId: 'attempt_parent',
+        message: 'Try the alternate implementation',
+        forkTurnId: 'turn_5',
+      }),
+    });
+  });
+
+  it('requires exact active-attempt provenance for in-flight controls', async () => {
+    await expect(
+      handleAgentTool('control_agent_conversation', {
+        id: 'task_1',
+        action: 'steer',
+        message: 'Use the smaller patch',
+      })
+    ).rejects.toThrow('steer requires attemptId');
+
+    await handleAgentTool('control_agent_conversation', {
+      id: 'task_1',
+      action: 'steer',
+      attemptId: 'attempt_1',
+      message: 'Use the smaller patch',
+    });
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/conversation/steer', {
+      method: 'POST',
+      body: JSON.stringify({
+        attemptId: 'attempt_1',
+        message: 'Use the smaller patch',
+      }),
     });
   });
 });

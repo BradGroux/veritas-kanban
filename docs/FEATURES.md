@@ -369,13 +369,13 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 5,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 8,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this
   Claude adapter still uses static `dontAsk` permissions and reports
-  interactive approval and elicitation as unsupported. Resume/fork and MCP
-  injection also remain unsupported.
+  interactive approval and elicitation as unsupported. Exact-session resume
+  and native fork are supported; steering and MCP injection remain unsupported.
 
 See [Agent Providers](AGENT-PROVIDERS.md#claude-code-v21218) for setup,
 credentials, arguments, permissions, and limitations.
@@ -1687,6 +1687,14 @@ Added in v3.3.2.
 | `vk start <id>`                                                               | Start an agent on a code task (`--agent` to choose) |
 | `vk launch-preview <id>`                                                      | Preview immutable launch evidence without dispatch  |
 | `vk stop <id>`                                                                | Stop a running agent                                |
+| `vk agent:resume <id> --source-attempt <id> -m <text>`                        | Resume an exact provider conversation               |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                     | Start a native follow-up turn                       |
+| `vk agent:fork <id> --source-attempt <id> -m <text>`                          | Fork native provider history                        |
+| `vk agent:steer <id> --attempt <id> -m <text>`                                | Steer the exact active provider turn                |
+| `vk agent:interrupt <id> --attempt <id>`                                      | Interrupt the exact active attempt                  |
+| `vk agent:compact <id> --attempt <id>`                                        | Compact a supported provider conversation           |
+| `vk agent:archive <id> --attempt <id>`                                        | Archive a supported provider conversation           |
+| `vk agent:close <id> --attempt <id>`                                          | Close a supported provider conversation             |
 | `vk agents:pending`                                                           | List pending agent requests                         |
 | `vk agents:status <id>`                                                       | Check agent running status                          |
 | `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)  |

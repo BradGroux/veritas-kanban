@@ -450,6 +450,14 @@ Manage AI agents on code tasks.
 | `vk start <id>`                                                               | Start an agent; optionally require runtime capabilities   |
 | `vk launch-preview <id>`                                                      | Preview effective launch inputs, blockers, and drift      |
 | `vk stop <id>`                                                                | Stop a run only when its persisted manifest supports stop |
+| `vk agent:resume <id> --source-attempt <id> -m <text>`                        | Resume the exact persisted provider conversation          |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                     | Start a provider-native follow-up turn                    |
+| `vk agent:fork <id> --source-attempt <id> -m <text>`                          | Fork provider history without mutating its source         |
+| `vk agent:steer <id> --attempt <id> -m <text>`                                | Steer the exact active provider turn                      |
+| `vk agent:interrupt <id> --attempt <id>`                                      | Interrupt the exact active provider turn                  |
+| `vk agent:compact <id> --attempt <id>`                                        | Compact a supported provider conversation                 |
+| `vk agent:archive <id> --attempt <id>`                                        | Archive a supported provider conversation                 |
+| `vk agent:close <id> --attempt <id>`                                          | Close a supported provider conversation                   |
 | `vk agents:pending`                                                           | List pending agent requests                               |
 | `vk agents:status <id>`                                                       | Check agent running status                                |
 | `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)        |
@@ -485,6 +493,13 @@ unknown, missing, or backed by an invalid/failed manifest.
 It overrides a task default and the legacy auto-commit setting. Omitting the
 flag keeps existing tasks compatible: commits are allowed but not required
 unless a task or legacy setting explicitly requires one.
+
+Lifecycle commands fail closed from the persisted runtime manifest. Resume
+requires the exact source worktree; fork permits a compatible worktree at the
+same repository and base revision. `--fork-turn <id>` selects an optional
+provider-native history boundary. Unsupported controls preserve the server's
+reason, and a recorded operator message is never reported as delivered unless
+the adapter executed a verified native steering operation.
 
 Use `vk agents:status TASK-001 --json` to inspect the persisted manifest and
 capability-derived `controls` set. `vk stop` does not infer support from the

@@ -366,11 +366,17 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Stop Agent' }));
 
-    expect(mocks.sendMessageMutate).toHaveBeenCalledWith({
-      taskId: 'task-agent-running',
-      attemptId: 'attempt-1',
-      message: 'continue with tests',
-    });
+    expect(mocks.sendMessageMutate).toHaveBeenCalledWith(
+      {
+        taskId: 'task-agent-running',
+        attemptId: 'attempt-1',
+        message: 'continue with tests',
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    );
     expect(mocks.stopAgentMutate).toHaveBeenCalledWith({
       taskId: 'task-agent-running',
       attemptId: 'attempt-1',

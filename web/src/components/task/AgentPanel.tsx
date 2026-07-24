@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils';
 import { sanitizeText } from '@/lib/sanitize';
 import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { useIdentity } from '@/hooks/useIdentity';
+import { useToast } from '@/hooks/useToast';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 import { RunSessionSharesSection } from './RunSessionSharesSection';
 
@@ -78,6 +79,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const { data: attempts, refetch: refetchAttempts } = useAgentAttempts(task.id);
   const { data: routingResult } = useResolveAgent(task.id);
   const { authContext, hasPermission } = useIdentity();
+  const { toast } = useToast();
 
   const startAgent = useStartAgent();
   const stopAgent = useStopAgent();
@@ -183,12 +185,33 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     e.preventDefault();
     if (!message.trim() || !canSendMessage || !agentStatus?.attemptId) return;
 
-    sendMessage.mutate({
-      taskId: task.id,
-      attemptId: agentStatus.attemptId,
-      message: message.trim(),
-    });
-    setMessage('');
+    sendMessage.mutate(
+      {
+        taskId: task.id,
+        attemptId: agentStatus.attemptId,
+        message: message.trim(),
+      },
+      {
+        onSuccess: (result) => {
+          if (result.delivered) {
+            setMessage('');
+            return;
+          }
+          toast({
+            title: 'Message not delivered',
+            description: result.note,
+            variant: 'destructive',
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: 'Message not delivered',
+            description: error instanceof Error ? error.message : 'Unknown error',
+            variant: 'destructive',
+          });
+        },
+      }
+    );
   };
 
   // Check if we can start an agent

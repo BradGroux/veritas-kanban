@@ -110,7 +110,7 @@ export interface HarnessSupportStatus {
 
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
-export const PROVIDER_RUNTIME_PROBE_REVISION = 7 as const;
+export const PROVIDER_RUNTIME_PROBE_REVISION = 8 as const;
 
 export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.start',
@@ -125,6 +125,9 @@ export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.interrupt',
   'run.resume',
   'run.fork',
+  'run.compact',
+  'run.archive',
+  'run.close',
   'run.reattach',
   'run.approvals',
   'run.elicitation',
@@ -242,7 +245,12 @@ export const PROVIDER_RUNTIME_CONTROL_ACTIONS = [
   'stop',
   'interrupt',
   'message',
+  'follow-up',
   'resume',
+  'fork',
+  'compact',
+  'archive',
+  'close',
   'reattach',
   'approvals',
   'tool-calls',

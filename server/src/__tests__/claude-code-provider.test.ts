@@ -71,6 +71,42 @@ describe('Claude Code v2.1.218 adapter contract', () => {
     }
   });
 
+  it('builds provider-owned resume and fork invocations from exact session identities', () => {
+    const resumed = buildClaudeCodeArgs({
+      prompt: 'Continue with the focused fix.',
+      resumeSessionId: '11111111-1111-4111-8111-111111111111',
+      sandboxMode: 'workspace-write',
+      networkAccessEnabled: false,
+    });
+    expect(resumed.slice(-3)).toEqual([
+      '--resume',
+      '11111111-1111-4111-8111-111111111111',
+      'Continue with the focused fix.',
+    ]);
+
+    const forked = buildClaudeCodeArgs({
+      prompt: 'Explore the alternate implementation.',
+      resumeSessionId: '11111111-1111-4111-8111-111111111111',
+      forkSession: true,
+      sandboxMode: 'workspace-write',
+      networkAccessEnabled: false,
+    });
+    expect(forked.slice(-4)).toEqual([
+      '--resume',
+      '11111111-1111-4111-8111-111111111111',
+      '--fork-session',
+      'Explore the alternate implementation.',
+    ]);
+    expect(() =>
+      buildClaudeCodeArgs({
+        prompt: 'invalid',
+        forkSession: true,
+        sandboxMode: 'workspace-write',
+        networkAccessEnabled: false,
+      })
+    ).toThrow('requires an exact source session ID');
+  });
+
   it('passes only explicit Claude Code credentials and safe process context', () => {
     const source = {
       HOME: '/home/operator',
@@ -189,7 +225,7 @@ describe('Claude Code v2.1.218 adapter contract', () => {
     });
   });
 
-  it('publishes fail-closed capabilities until shared lifecycle and approval brokers land', () => {
+  it('publishes verified lifecycle capabilities while keeping unbrokered surfaces closed', () => {
     const capabilities = getProviderRuntimeAdapterDefinition('claude-code').capabilities;
     const state = (id: string) => capabilities.find((capability) => capability.id === id)?.state;
 
@@ -197,7 +233,9 @@ describe('Claude Code v2.1.218 adapter contract', () => {
     expect(state('run.streaming')).toBe('supported');
     expect(state('run.structured-events')).toBe('supported');
     expect(state('usage.tokens')).toBe('supported');
-    expect(state('run.resume')).toBe('advisory');
+    expect(state('run.follow-up')).toBe('supported');
+    expect(state('run.resume')).toBe('supported');
+    expect(state('run.fork')).toBe('supported');
     expect(state('run.approvals')).toBe('unsupported');
     expect(state('run.elicitation')).toBe('unsupported');
     expect(state('tool.mcp')).toBe('unsupported');
