@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-07-24
+
+Each release entry below names its tracking issue. The complete issue-to-pull
+request mapping, including multi-PR fixes and release engineering, is retained
+in the [v6 Release Candidate Evidence Packet](docs/V6-RC-EVIDENCE-PACKET.md#issue-and-pull-request-traceability).
+
 ### Changed
 
 - Tiered GitHub Actions so pull requests run changed test files with
@@ -17,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Prevented the packaged desktop updater from treating an older stable release
+  as downloadable. Stable, beta, and dev channel assignment now explicitly
+  restores `allowDowngrade=false` after the `electron-updater` channel setter
+  changes it internally (#983).
+- Deferred the default run-supervisor SQLite repository lookup until the first
+  supervisor operation. Packaged SQLite startup can now import and initialize
+  routes before storage bootstrap without crashing (#981).
 - Added bounded macOS desktop startup verification that retries through the
   LaunchServices readiness window, requires the installed app and health
   endpoint versions to agree, and reports process, port, and log diagnostics on
@@ -259,6 +272,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replaced by callbacks, completion writes use compare-and-swap retries, and
   harness-owned restart reconciliation remains inside the same result contract
   while OpenClaw stays eligible for its callback (#893).
+
+### Security
+
+- Removed the legacy Claude Code permission-bypass default. Every executable
+  provider now launches through an explicit adapter, immutable launch manifest,
+  bounded environment allowlist, capability evidence, exact-action approval
+  broker, and credential plan. Unsupported controls, adapter/profile drift,
+  stale evidence, and unknown provider-less records fail closed (#919, #916,
+  #852, #932).
+- Added value-free credential definitions and one-shot run-bound leases.
+  Credential values are resolved only inside the mediated downstream call and
+  are excluded from provider-native configuration, manifests, logs, telemetry,
+  fixtures, and API responses (#931, #968, #969, #970).
+- Added bounded, redacted causal protocol storage and supervised no-shell
+  process lifecycles for ACP, Codex app-server, Claude Code, and Buzz relay
+  integration. The deferred fine-grained HTTP egress proxy remains tracked in
+  #855; any required network rule that current runtime evidence cannot enforce
+  blocks launch.
+
+### Migration
+
+- Existing provider configurations are normalized to
+  `harness-support-profile/v1`. Only known legacy records whose command and
+  built-in type both identify Codex, Hermes, or Claude are migrated to their
+  matching adapter. Provider-less, ambiguous, disabled, or mismatched records
+  remain disabled or fail closed; no migration starts a provider.
+- The public API remains `v1`. New run, approval, lifecycle, tool, credential,
+  compatibility, Buzz, and conformance contracts are additive. Existing v5
+  board and desktop SQLite data remains in place; operators must back up before
+  upgrade and keep the v5.2.5 backup for rollback.
+- Buzz, Grok Build, GitHub Copilot CLI, Claude Code, and Codex app-server
+  support is exact-version and evidence-bound. Unknown builds do not inherit
+  certification. Grok Build and Copilot CLI retain source-provenance limits,
+  ACP lifecycle support varies by runtime, and credential-gated live smoke
+  remains separate from deterministic certification.
 
 ## [5.2.5] - 2026-07-23
 
@@ -2120,7 +2168,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...v6.0.0
 [5.2.5]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.4...v5.2.5
 [5.2.4]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.3...v5.2.4
 [5.2.3]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.2...v5.2.3

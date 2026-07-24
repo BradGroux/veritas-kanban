@@ -10,7 +10,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-5.2.5-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.0.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -50,7 +50,7 @@ brew install --cask veritas-kanban
 ```
 
 Existing desktop users should follow the
-[routine Mac upgrade](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade)
+[routine Mac upgrade](docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md#routine-mac-desktop-upgrade)
 path so backup, heartbeat pause, app replacement, launch, and exact-version
 server readiness happen in the right order.
 
@@ -94,17 +94,18 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 41 tools, architecture, tool catalog, security model, and read/write smoke checks.
 - [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed runtime manifests, Codex and Hermes execution, optional model profiles, routing, and host behavior.
+- [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [v5 Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
 - [v5 Mantine Migration Plan](docs/UI-MANTINE-MIGRATION.md) — component inventory, migration order, retained custom surfaces, rollback strategy, and cleanup gates.
-- [v5 GA Checklist](docs/V5-GA-CHECKLIST.md) — release-gate reference, follow-up evidence tracking, Mantine visual/accessibility cleanup evidence, and bundle checks.
-- [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) — release-safe dummy screenshots and GIFs for the v5 desktop shell, resizable workbench, Squad Chat coordination, agent providers, task work view, Maintenance Center, and mobile/PWA shell.
-- [v5 Upgrade, Install, Remote, And Admin Guide](docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v4-to-v5 upgrade, desktop setup, remote/server, mobile/PWA, admin, backup, and diagnostics paths.
-- [v5 Compatibility And Release Policy](docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md) — supported version combinations, update channels, stale-client behavior, rollback limits, and release validation.
-- [v5 Release Notes](docs/V5-RELEASE-NOTES.md) — current source release notes, breaking changes, migration warnings, published v5 artifacts, and deferred post-GA backlog.
+- [v6 GA Checklist](docs/V6-GA-CHECKLIST.md) — release gates for harness certification, migration, runtime, desktop, and distribution evidence.
+- [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) — release-safe views of provider support, Buzz setup, approvals, and run evidence.
+- [v6 Upgrade, Install, Remote, And Admin Guide](docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v5-to-v6 upgrade, harness setup, desktop, backup, and diagnostics paths.
+- [v6 Compatibility And Release Policy](docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md) — provider support tiers, tested builds, platform combinations, update channels, and rollback limits.
+- [v6 Release Notes](docs/V6-RELEASE-NOTES.md) — harness control-plane outcomes, migrations, known limits, release artifacts, and deferred v6.x work.
 - [v5 Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
 - [Post-GA Desktop Agent Workbench Spec](docs/DESKTOP-AGENT-WORKBENCH.md) — desktop workbench UX, run controls, approvals, evidence, native affordances, and safety coverage.
 - [Post-GA Native Mobile Offline ADR](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md) — native mobile authority model, offline queue semantics, conflict handling, and security review.
@@ -120,7 +121,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
   setup, safety policy, and known limitations.
 - [Sprint Planning SOP](docs/SOP-sprint-planning.md) — epic → sprint → task breakdown.
 - [Multi-Agent Orchestration](docs/SOP-multi-agent-orchestration.md) — PM + worker handoffs.
-- [Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — enforce Claude ↔ GPT reviews.
+- [Optional Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — add an independent model only when the issue or release owner requires it.
 - [Agent Governance SOPs](docs/) — [Policy engine](docs/SOP-agent-policy-engine.md), [drift detection](docs/SOP-behavioral-drift-detection.md), [decision audit](docs/SOP-decision-audit-trail.md), [output evaluation](docs/SOP-output-evaluation.md), [user feedback](docs/SOP-user-feedback.md).
 - [Operational SOPs](docs/) — [Broadcasts](docs/SOP-broadcasts.md), [delegation](docs/SOP-delegation.md), [deliverables](docs/SOP-deliverables.md), [work products](docs/features/work-products.md), [prompt registry](docs/SOP-prompt-registry.md), [squad chat](docs/SOP-squad-chat.md), [system health](docs/SOP-system-health-monitoring.md).
 - [Best Practices](docs/BEST-PRACTICES.md) & [Tips + Tricks](docs/TIPS-AND-TRICKS.md) — patterns, shortcuts, integrations.
@@ -823,20 +824,20 @@ pnpm validate:release # Release readiness checks
 
 ## 📚 Documentation
 
-| Document                                       | Description                                  |
-| ---------------------------------------------- | -------------------------------------------- |
-| [Features](docs/FEATURES.md)                   | Complete feature reference                   |
-| [v5 Visual Tour](docs/V5-VISUAL-TOUR.md)       | Release-safe dummy screenshots and GIFs      |
-| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs              |
-| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                |
-| [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker |
-| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config               |
-| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues & solutions                    |
-| [Contributing](CONTRIBUTING.md)                | How to contribute, PR guidelines             |
-| [Security Policy](SECURITY.md)                 | Vulnerability reporting                      |
-| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                         |
-| [Changelog](CHANGELOG.md)                      | Release history                              |
-| [Sprint Docs](docs/)                           | Sprint planning & audit reports              |
+| Document                                       | Description                                      |
+| ---------------------------------------------- | ------------------------------------------------ |
+| [Features](docs/FEATURES.md)                   | Complete feature reference                       |
+| [v6 Visual Tour](docs/V6-VISUAL-TOUR.md)       | Provider, Buzz, approval, and run evidence views |
+| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs                  |
+| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                    |
+| [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker     |
+| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config                   |
+| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues & solutions                        |
+| [Contributing](CONTRIBUTING.md)                | How to contribute, PR guidelines                 |
+| [Security Policy](SECURITY.md)                 | Vulnerability reporting                          |
+| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                             |
+| [Changelog](CHANGELOG.md)                      | Release history                                  |
+| [Sprint Docs](docs/)                           | Sprint planning & audit reports                  |
 
 ---
 
@@ -845,7 +846,7 @@ pnpm validate:release # Release readiness checks
 <details>
 <summary><strong>Click to expand v5 screenshots and GIFs</strong></summary>
 
-These captures use release-safe dummy content against the current v5 app surfaces. See the [v5 Visual Tour](docs/V5-VISUAL-TOUR.md) for the full set and capture notes.
+These captures use release-safe dummy content against the current app surfaces. See the [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) for the current release views and retained v5 shell captures.
 
 ### Desktop
 

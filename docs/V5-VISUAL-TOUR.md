@@ -1,5 +1,8 @@
 # Veritas Kanban v5 Visual Tour
 
+> Historical v5 visual record. Current release visual guidance is in
+> [v6 Visual Tour](V6-VISUAL-TOUR.md).
+
 This page is the v5 documentation media index. The screenshots and GIFs use
 release-safe dummy content captured from the current app surfaces so the docs
 can show realistic workflows without exposing real tasks, prompts, logs, paths,

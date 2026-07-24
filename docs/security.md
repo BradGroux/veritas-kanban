@@ -150,7 +150,7 @@ password-session local-owner boundary.
 
 Release compatibility, stale-client behavior, update channels, and rollback
 limits are tracked in
-[`docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md`](V5-COMPATIBILITY-AND-RELEASE-POLICY.md).
+[`docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md`](V6-COMPATIBILITY-AND-RELEASE-POLICY.md).
 Compatibility errors and debug bundles must redact tokens, cookies, private
 keys, local private paths, raw chat content, and task body text.
 

@@ -6,10 +6,10 @@ exports[`provider task-envelope renderers > renders a callback-free Claude Code 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:302d54afba41110c4ed97282ab10301369f4f7cd20fc5cea2e4e5cfee34e7490\`
+- Digest: \`sha256:a9b954910af8aee6cdab3c77835c4de5c7770d6f94f914d65d659b709a785824\`
 - Provider: \`claude-code\`
 - Adapter: \`claude-code\`
-- Runtime manifest: \`sha256:bba91360a18d6eb62bf796a02a3fb84b7a46f4022a128a7d96a847e4b5e1ca3d\`
+- Runtime manifest: \`sha256:f59fef36ffecca9e79a4c8111d468ed99390127204988822d1e1cefbac9d4e70\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -97,10 +97,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex CLI tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:f5d72f998347e18fda695872a4099e04c9f168d7d7d156322425424f6fdadf7a\`
+- Digest: \`sha256:f3eae04bc91f19459125d5249bd15969991999c3140742e8d2f446c382a63da8\`
 - Provider: \`codex-cli\`
 - Adapter: \`codex-cli\`
-- Runtime manifest: \`sha256:d97ad73be9a5666117bc668d52ce83f22f66247d9447d85d5637495daf44297f\`
+- Runtime manifest: \`sha256:4918e2a4aa2b52045edbaab4246e8589a90edfd8c24b1e4ad107228e98b8ee90\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -185,10 +185,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex SDK tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:70d21d2d4d8794a3d0184d3cc502399785b2a813d7ce490a6c1d6a38060c7426\`
+- Digest: \`sha256:7145e8f4bced534c92636f201b5bd62da00714dad1a6a030ea0acee3c89ae838\`
 - Provider: \`codex-sdk\`
 - Adapter: \`codex-sdk\`
-- Runtime manifest: \`sha256:c18a59a46b676143337dda5df499c81a5d7a19b78c75984779cb34771aee91d5\`
+- Runtime manifest: \`sha256:b9e73da8bbf1f47aee66dd76d5e1539145cadba05445a1c953c55e8a38bde2d6\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -274,10 +274,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex app-se
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:a4af5ccd13ab1c275c06206f54c5bdb43cbb6ba04ba7c52a484dd25db0640022\`
+- Digest: \`sha256:b5e627f4946064782e157ada0eaf582d608f302dac96885e63a8b1ced8146b83\`
 - Provider: \`codex-app-server\`
 - Adapter: \`codex-app-server\`
-- Runtime manifest: \`sha256:eecb1d923e33ade9a316ef8728a7a70d1a15c948f82eb4cf5ae8e183ceaad459\`
+- Runtime manifest: \`sha256:71f59cd4d634c36ca258d6eb6293f2732a04a2a9730c1fc50af42db1736c4f91\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -365,10 +365,10 @@ exports[`provider task-envelope renderers > renders a callback-free Hermes scrip
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:11c3bb44d4151b173a8638e923d111ad60e27d2253825bc22447ee9658ba7fac\`
+- Digest: \`sha256:6246e0a1655000866778d437e61ce27d0075fe50cca424cdd743a0b8fd6bd200\`
 - Provider: \`hermes-cli\`
 - Adapter: \`hermes-cli\`
-- Runtime manifest: \`sha256:3e776421f98dbb09dfd589c34876a84375763d8ba7d25ff6d637d93eefb4a9ee\`
+- Runtime manifest: \`sha256:15af6a520273ebe140e54cb41c4750c0594c54adc6ef1543fe479d137bae63ea\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -456,10 +456,10 @@ exports[`provider task-envelope renderers > renders an OpenClaw callback transpo
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:561cc34a738673a3416aa5e870058d95c67c775b92eb95299f795ac2d05c6afa\`
+- Digest: \`sha256:44c08860dc5aa9dc0779c0e17f69c7b2ae427fecdbc1125a68b64b0f9116c676\`
 - Provider: \`openclaw\`
 - Adapter: \`openclaw\`
-- Runtime manifest: \`sha256:e48e449a859828453b857c8f46d1c071cf491eb8284096a5a8c9143aabc8f772\`
+- Runtime manifest: \`sha256:6aa40f21483094484c5d68a949de4a9c917797ee7310f93eccbef551c213ac4d\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -558,7 +558,7 @@ When the work reaches a terminal state, report it to Veritas.
 \`\`\`bash
 curl -X POST http://localhost:3001/api/agents/task_transport/complete \\
   -H "Content-Type: application/json" \\
-  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:e48e449a859828453b857c8f46d1c071cf491eb8284096a5a8c9143aabc8f772","success":true,"summary":"Brief description of what was done"}'
+  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:6aa40f21483094484c5d68a949de4a9c917797ee7310f93eccbef551c213ac4d","success":true,"summary":"Brief description of what was done"}'
 \`\`\`
 
 For failure, send \`success: false\` and include an \`error\` message.

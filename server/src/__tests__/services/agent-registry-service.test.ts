@@ -167,6 +167,45 @@ describe('AgentRegistryService', () => {
   });
 
   describe('load()', () => {
+    it('loads and preserves a v5.2.5 registry record', () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          agents: {
+            'legacy-codex': {
+              id: 'legacy-codex',
+              name: 'Legacy Codex',
+              model: 'gpt-5.2-codex',
+              provider: 'openai-codex',
+              capabilities: [{ name: 'code' }, { name: 'review' }],
+              version: '5.2.5-profile',
+              metadata: { host: 'v5-desktop', profile: 'owner' },
+              status: 'idle',
+              registeredAt: '2026-07-20T12:00:00.000Z',
+              lastHeartbeat: '2026-07-20T12:05:00.000Z',
+              sessionKey: 'legacy-session-reference',
+            },
+          },
+          lastUpdated: '2026-07-20T12:05:00.000Z',
+        })
+      );
+
+      const service = getAgentRegistryService();
+      const restored = service.get('legacy-codex');
+
+      expect(restored).toMatchObject({
+        id: 'legacy-codex',
+        name: 'Legacy Codex',
+        model: 'gpt-5.2-codex',
+        provider: 'openai-codex',
+        capabilities: [{ name: 'code' }, { name: 'review' }],
+        version: '5.2.5-profile',
+        metadata: { host: 'v5-desktop', profile: 'owner' },
+        status: 'idle',
+        sessionKey: 'legacy-session-reference',
+      });
+    });
+
     it('ignores invalid persisted runtime evidence', () => {
       const invalid = {
         ...providerRuntimeManifestFixture(),

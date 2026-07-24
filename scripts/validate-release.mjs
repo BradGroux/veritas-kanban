@@ -51,28 +51,98 @@ const buildOutputs = [
   { label: 'desktop build output', file: 'desktop/out/main/index.js' },
 ];
 
-const requiredReleaseDocs = [
-  {
-    label: 'v5 compatibility and release policy',
-    file: 'docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md',
-    terms: ['Compatibility Matrix', 'Release Channels', 'Rollback Policy'],
-  },
-  {
-    label: 'v5 upgrade install admin guide',
-    file: 'docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md',
-    terms: ['Fresh Mac Desktop Install', 'v4 To v5 Upgrade', 'Multi-User Admin'],
-  },
-  {
-    label: 'v5 release notes',
-    file: 'docs/V5-RELEASE-NOTES.md',
-    terms: ['Breaking Changes And Migration Warnings', 'Release Artifacts'],
-  },
-  {
-    label: 'v5 GA checklist',
-    file: 'docs/V5-GA-CHECKLIST.md',
-    terms: ['Final Release Validation Commands', 'Post-GA backlog'],
-  },
-];
+function releaseDocsForVersion(version) {
+  const major = Number.parseInt(version.split('.')[0] ?? '', 10);
+
+  if (major === 6) {
+    return [
+      {
+        label: 'v6 compatibility and release policy',
+        file: 'docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md',
+        terms: [
+          'Harness Support Tiers',
+          'Compatibility Matrix',
+          'Release Channels',
+          'Rollback Policy',
+        ],
+      },
+      {
+        label: 'v6 upgrade install admin guide',
+        file: 'docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md',
+        terms: [
+          'Fresh Mac Desktop Install',
+          'v5 To v6 Upgrade',
+          'Harness Installation And Authentication',
+          'Backup And Recovery',
+        ],
+      },
+      {
+        label: 'v6 release notes',
+        file: 'docs/V6-RELEASE-NOTES.md',
+        terms: [
+          'Breaking Changes And Migration Warnings',
+          'Known Limitations',
+          'Release Artifacts',
+        ],
+      },
+      {
+        label: 'v6 GA checklist',
+        file: 'docs/V6-GA-CHECKLIST.md',
+        terms: [
+          'Provider Certification',
+          'Final Release Validation Commands',
+          'Distribution And Post-Publication',
+        ],
+      },
+      {
+        label: 'v6 release candidate evidence packet',
+        file: 'docs/V6-RC-EVIDENCE-PACKET.md',
+        terms: [
+          'Issue And Pull Request Traceability',
+          'Verification Matrix',
+          'Publication Evidence',
+        ],
+      },
+      {
+        label: 'v6 visual tour',
+        file: 'docs/V6-VISUAL-TOUR.md',
+        terms: ['Provider Support', 'Buzz Integration', 'Approval And Run Evidence'],
+      },
+      {
+        label: 'v6 agent runtime architecture',
+        file: 'docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md',
+        terms: ['Authority Model', 'Adapter Boundaries', 'Run Lifecycle', 'Security Boundaries'],
+      },
+    ];
+  }
+
+  if (major === 5) {
+    return [
+      {
+        label: 'v5 compatibility and release policy',
+        file: 'docs/V5-COMPATIBILITY-AND-RELEASE-POLICY.md',
+        terms: ['Compatibility Matrix', 'Release Channels', 'Rollback Policy'],
+      },
+      {
+        label: 'v5 upgrade install admin guide',
+        file: 'docs/V5-UPGRADE-INSTALL-ADMIN-GUIDE.md',
+        terms: ['Fresh Mac Desktop Install', 'v4 To v5 Upgrade', 'Multi-User Admin'],
+      },
+      {
+        label: 'v5 release notes',
+        file: 'docs/V5-RELEASE-NOTES.md',
+        terms: ['Breaking Changes And Migration Warnings', 'Release Artifacts'],
+      },
+      {
+        label: 'v5 GA checklist',
+        file: 'docs/V5-GA-CHECKLIST.md',
+        terms: ['Final Release Validation Commands', 'Post-GA backlog'],
+      },
+    ];
+  }
+
+  throw new Error(`Release document validation is not defined for major version ${major}.`);
+}
 
 const checks = [];
 
@@ -250,6 +320,7 @@ async function main() {
 
   const rootPackage = packages.find((pkg) => pkg.label === 'root').json;
   const expectedVersion = options.version ?? rootPackage.version;
+  const requiredReleaseDocs = releaseDocsForVersion(expectedVersion);
 
   check(
     'Release version is valid semver',

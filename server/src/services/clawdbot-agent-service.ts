@@ -515,9 +515,9 @@ export class ClawdbotAgentService {
    *
    * After an unexpected restart the in-memory `pendingAgents` map is empty,
    * but task files can still contain attempts with status `'running'`.
-   * Current task-envelope attempts receive a digest-bound interrupted completion
-   * result. Legacy attempts without an envelope retain the older failed/todo
-   * migration behavior so the UI and operators have an actionable state.
+   * Attempts with complete durable supervisor bindings are recovered through
+   * their supervisor. Older attempts receive a digest-bound interrupted
+   * completion when possible, or are blocked for operator recovery.
    *
    * Safe to call multiple times; only tasks whose current attempt is `'running'`
    * and whose taskId is NOT in `pendingAgents` are touched.

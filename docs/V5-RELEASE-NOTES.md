@@ -1,9 +1,10 @@
 # v5 Release Notes
 
-These notes describe the Veritas Kanban v5 stable release line.
+> Historical v5 record. Current release notes are in
+> [v6 Release Notes](V6-RELEASE-NOTES.md).
 
-- Current source version: `v5.2.5`
-- Latest published GitHub release:
+- Final v5 source version: `v5.2.5`
+- Final published v5 GitHub release:
   [Veritas Kanban v5.2.5](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5)
 - Supported packaged install:
   `brew tap BradGroux/tap && brew install --cask veritas-kanban`

@@ -1,10 +1,10 @@
 # Features
 
-Complete feature reference for Veritas Kanban, including the v5 release surfaces. Every feature, every API endpoint, every configuration option.
+Complete feature reference for Veritas Kanban, including the v6 release surfaces. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different).
-For current v5 screenshots and GIFs, see the
-[v5 Visual Tour](V5-VISUAL-TOUR.md). For troubleshooting, see
+For current release screenshots and retained v5 shell captures, see the
+[v6 Visual Tour](V6-VISUAL-TOUR.md). For troubleshooting, see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
@@ -82,7 +82,7 @@ For current v5 screenshots and GIFs, see the
 - [Infrastructure & DevOps](#infrastructure--devops)
 - [Testing](#testing)
 - [Accessibility](#accessibility)
-- [v5 Visual Tour](V5-VISUAL-TOUR.md)
+- [v6 Visual Tour](V6-VISUAL-TOUR.md)
 
 ---
 
@@ -398,9 +398,9 @@ See [Tool Control Plane v1](architecture/TOOL-CONTROL-PLANE-V1.md).
 
 ---
 
-## OpenAI Codex Integration (v5)
+## OpenAI Codex Integration (v6)
 
-v5 uses OpenAI Codex as the default fresh-install agent profile and supports local `codex exec` attempts, SDK-backed Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
+v6 uses OpenAI Codex as the default fresh-install agent profile and supports local `codex exec` attempts, SDK-backed Codex sessions, the Codex app-server lifecycle adapter, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, Settings health checks, and MCP setup through the existing Veritas task lifecycle.
 
 Implemented:
 
@@ -1143,9 +1143,12 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   records, opaque hashed handles, exact action/manifest binding, atomic
   TTL/use-count enforcement, and terminal-run reconciliation. Required
   brokered mode rejects advisory or externally delegated capability evidence.
-- Broker leases are internal until an accepted network or tool boundary can
-  consume them without provider bypass. Existing provider authentication and
-  explicit environment passthrough are not mislabeled as brokered.
+- Broker leases remain internal and are consumed only through a reviewed
+  non-bypassable boundary. The current system-owned `veritas-run` bridge
+  mediates exact catalog actions for Codex CLI/SDK, Codex app-server, Claude
+  Code, and ACP stdio; Hermes and OpenClaw fail closed for credential-bound
+  catalogs. Existing provider authentication and explicit environment
+  passthrough are not mislabeled as brokered.
 - Provider capability checks currently distinguish Codex CLI, Codex SDK,
   Codex app-server, Claude Code, Hermes, and OpenClaw execution behavior.
 
@@ -1600,7 +1603,7 @@ Generate daily standup summary reports via API or CLI.
 
 Real-time project metrics and telemetry.
 
-Current v5 visual references live in [v5 Visual Tour](V5-VISUAL-TOUR.md).
+Current v6 visual references live in [v6 Visual Tour](V6-VISUAL-TOUR.md).
 
 ### Dashboard Widgets
 
@@ -2261,7 +2264,7 @@ Production-ready deployment and development tooling.
 - **Concurrency control** — In-progress runs cancelled when new commits push
 - **Pipeline jobs** — Lint and warning budget, type check, workspace unit tests, production build, and security audit
 - **Scheduled QA** — Weekly and manually triggered Playwright and k6 gates run outside the fast PR path
-- **Release validation** — `pnpm validate:release` checks root/shared/server/web/CLI/MCP/desktop versions, required v5 release docs, built artifacts, and optional GitHub tag/release state
+- **Release validation** — `pnpm validate:release` checks root/shared/server/web/CLI/MCP/desktop versions, the release-major document set, built artifacts, and optional GitHub tag/release state
 - **pnpm caching** — Dependency cache for faster CI runs
 
 ### Development

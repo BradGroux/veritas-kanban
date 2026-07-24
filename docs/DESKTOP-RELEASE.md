@@ -4,7 +4,7 @@ This guide covers desktop packaging paths for macOS GA artifacts and
 Linux/Windows preview artifact scaffolding: unsigned PR artifacts, signed
 release artifacts, update metadata, and smoke testing.
 
-For v5 GA, macOS is the only supported desktop release target. Linux and
+For v6 GA, macOS is the only supported desktop release target. Linux and
 Windows artifacts are unsigned preview artifacts for post-GA validation unless a
 later release guide explicitly promotes the platform.
 
@@ -60,7 +60,7 @@ dispatch. It builds unsigned artifacts on:
 
 Unsigned artifact jobs do not require platform signing credentials.
 
-For v5 GA, the Linux and Windows jobs are preview signals only. They keep
+For v6 GA, the Linux and Windows jobs are preview signals only. They keep
 packaging paths and artifact names exercised, but they are not supported release
 deliverables and must not be linked from stable release notes as install
 targets.
@@ -132,13 +132,13 @@ and update policy requirements are promoted into the supported release path.
 
 ## Desktop Support Boundary
 
-| Platform | v5 GA stance                  | Validation matrix                               | Artifact formats             | Update stance                                      |
+| Platform | v6 GA stance                  | Validation matrix                               | Artifact formats             | Update stance                                      |
 | -------- | ----------------------------- | ----------------------------------------------- | ---------------------------- | -------------------------------------------------- |
 | macOS    | Supported desktop GA target   | macOS 14+ Apple Silicon                         | signed DMG, ZIP              | Supported through signed electron-updater metadata |
 | Linux    | Preview only; not a GA target | Ubuntu 24.04 x64 and Fedora 40+ x64 smoke hosts | unsigned AppImage, deb, rpm  | Deferred until Linux release policy is promoted    |
 | Windows  | Preview only; not a GA target | Windows 11 23H2+ x64 smoke host                 | unsigned NSIS installer, ZIP | Blocked until Windows code signing and smoke pass  |
 
-Linux and Windows support is post-GA. Do not mention Linux/Windows as v5 GA
+Linux and Windows support is post-GA. Do not mention Linux/Windows as v6 GA
 install targets until the corresponding release artifact has passed the smoke
 matrix below and the compatibility policy has been updated to promote the
 platform.
@@ -160,9 +160,9 @@ available, downloading, ready, failed, and unsupported states. The menu enables
 download only when an update is available and install only when an update has
 downloaded.
 
-The full v5 channel, staged rollout, version-skew, stale-client, and rollback
+The full v6 channel, staged rollout, version-skew, stale-client, and rollback
 policy is tracked in
-[v5 Compatibility And Release Policy](V5-COMPATIBILITY-AND-RELEASE-POLICY.md).
+[v6 Compatibility And Release Policy](V6-COMPATIBILITY-AND-RELEASE-POLICY.md).
 
 ## Release Checklist
 
@@ -180,10 +180,10 @@ policy is tracked in
 - Run `pnpm desktop:package:mac:unsigned` and inspect artifact names.
 - Run `pnpm desktop:package:linux:unsigned` on Linux or the
   `Desktop Artifacts` Linux job and inspect preview artifact names. This is not
-  a v5 GA release gate.
+  a v6 GA release gate.
 - Run `pnpm desktop:package:windows:unsigned` on Windows or the
   `Desktop Artifacts` Windows job and inspect preview artifact names. This is
-  not a v5 GA release gate.
+  not a v6 GA release gate.
 - Run `Desktop Artifacts` and download the uploaded DMG/ZIP/update metadata.
 - Run `Desktop Release` only after Developer ID signing secrets and exactly one
   complete notarization credential set are configured.
@@ -202,7 +202,7 @@ policy is tracked in
   `pnpm desktop:wait:ready -- --expected-version <version>` tolerates normal
   startup delay and proves the packaged server owns `3001`.
 - Confirm `pnpm validate:release` passes and verifies root/shared/server/web,
-  CLI, MCP, and desktop package versions plus required v5 release docs.
+  CLI, MCP, and desktop package versions plus required v6 release docs.
 
 ## Smoke Tests
 
@@ -227,7 +227,7 @@ Signed release artifact:
 
 Linux preview unsigned artifact:
 
-These steps generate post-GA readiness evidence only. They are not v5 GA
+These steps generate post-GA readiness evidence only. They are not v6 GA
 install instructions.
 
 1. Download `veritas-kanban-linux-unsigned` from the workflow run.
@@ -246,7 +246,7 @@ install instructions.
 
 Windows preview unsigned artifact:
 
-These steps generate post-GA readiness evidence only. They are not v5 GA
+These steps generate post-GA readiness evidence only. They are not v6 GA
 install instructions.
 
 1. Download `veritas-kanban-windows-unsigned` from the workflow run.
@@ -272,7 +272,7 @@ Rollback:
 
 ## Platform Notes
 
-Linux and Windows packages are intentionally not v5 GA blockers. The post-GA
+Linux and Windows packages are intentionally not v6 GA blockers. The post-GA
 artifact jobs keep artifact naming and update-channel conventions portable, but
 Windows release and update support stay blocked until code signing and
 signed-installer smoke coverage are in place. Linux release and updater support

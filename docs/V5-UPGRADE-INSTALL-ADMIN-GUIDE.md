@@ -1,10 +1,13 @@
 # v5 Upgrade, Install, Remote, And Admin Guide
 
-This guide is the release-facing entry point for v5 operators. It links the
+> Historical v5 guide. Current install and upgrade guidance is in
+> [v6 Upgrade, Install, Remote, And Admin Guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md).
+
+This guide is the retained release-facing entry point for v5 operators. It links the
 existing detailed docs and keeps the happy path separate from optional
 automation layers.
 
-For current release-safe dummy screenshots and GIFs of the v5 desktop shell,
+For release-safe dummy screenshots and GIFs captured from the v5 desktop shell,
 resizable Workbench, agent provider settings, task work view, Maintenance
 Center, and mobile/PWA shell, see
 [v5 Visual Tour](V5-VISUAL-TOUR.md). Release evidence, when needed for a future
@@ -33,7 +36,7 @@ candidate, belongs in the reusable
    ```
 
    Manual install is also supported from the
-   [current stable GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5)
+   [final v5 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v5.2.5)
    by downloading `Veritas-Kanban-5.2.5-mac-arm64.zip`, unzipping it, and
    moving `Veritas Kanban.app` into `/Applications`.
 

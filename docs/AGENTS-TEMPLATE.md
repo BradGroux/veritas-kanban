@@ -109,7 +109,8 @@ curl http://localhost:3001/api/agents/register/stats
 
 ## Task Integration
 
-When picking up a task:
+For an externally registered agent that is not launched by a built-in v6
+provider adapter:
 
 1. Send heartbeat with `status: "busy"` and `currentTaskId`
 2. Use existing task APIs: `POST /api/agents/:taskId/start`
@@ -117,6 +118,13 @@ When picking up a task:
 4. Complete: `POST /api/agents/:taskId/complete` with the active `attemptId` and
    `providerRuntimeManifestDigest` returned by the start/status response
 5. Send heartbeat with `status: "idle"` and clear task
+
+Managed Buzz, Grok Build, Codex, Claude Code, GitHub Copilot CLI, Hermes, and
+OpenClaw runs must not emulate these callbacks. Their selected adapter owns the
+task envelope, launch manifest, run supervision, causal events, approvals,
+tools, credentials, lifecycle, and authoritative completion result. Run
+`vk doctor --json` and use [Agent Providers](AGENT-PROVIDERS.md) before enabling
+a harness profile.
 
 ## OpenAI Codex Notes
 
@@ -151,11 +159,15 @@ codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
 
 See [SOP-codex-integration.md](SOP-codex-integration.md) for the full Codex workflow.
 
-## Telemetry Emission (MANDATORY)
+## Telemetry Emission For External Agents
 
-The dashboard's **Success Rate**, **Token Usage**, and **Average Run Duration** graphs require `run.*` telemetry events. These are **NOT auto-captured** — your agent must emit them.
+The dashboard's **Success Rate**, **Token Usage**, and **Average Run Duration**
+graphs require `run.*` telemetry events. Managed v6 provider runs project these
+from the causal event and completion contracts. Only an externally registered
+agent operating outside a built-in adapter must emit them manually.
 
-> Add these to your `AGENTS.md`. Without them, the dashboard graphs go blank.
+> Do not double-report managed provider runs. Manual events are for the
+> external self-reporting path only.
 
 ### When Starting a Task
 
@@ -189,14 +201,14 @@ curl -X POST http://localhost:3001/api/telemetry/events \
 
 ### What's auto-captured vs. manual
 
-| Event Type            | Auto? | Source          |
-| --------------------- | ----- | --------------- |
-| `task.created`        | ✅    | VK server       |
-| `task.status_changed` | ✅    | VK server       |
-| `task.archived`       | ✅    | VK server       |
-| `run.started`         | ❌    | Agent must POST |
-| `run.completed`       | ❌    | Agent must POST |
-| `run.tokens`          | ❌    | Agent must POST |
+| Event Type            | Managed adapter                       | External self-reporting agent |
+| --------------------- | ------------------------------------- | ----------------------------- |
+| `task.created`        | VK server                             | VK server                     |
+| `task.status_changed` | VK server                             | VK server                     |
+| `task.archived`       | VK server                             | VK server                     |
+| `run.started`         | Automatic                             | Agent must POST               |
+| `run.completed`       | Automatic                             | Agent must POST               |
+| `run.tokens`          | Automatic when provider reports usage | Agent must POST               |
 
 ## Multi-Agent Coordination
 
