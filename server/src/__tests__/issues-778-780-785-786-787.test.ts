@@ -379,7 +379,7 @@ describe('#780 — Bounded retry_step cycles', () => {
           type: 'agent',
           agent: 'a1',
           name: 'Step',
-          on_fail: { retry: 2 },
+          on_fail: { retry: 2, retry_delay_ms: 100 },
         },
       ])
     );

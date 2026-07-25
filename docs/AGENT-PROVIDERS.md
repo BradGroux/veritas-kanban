@@ -916,8 +916,8 @@ durable `run-recovery/v1` decision record:
 - Only transient transport, provider unavailable, rate-limit, timeout, and
   verification failures are automatically retryable.
 - Invalid configuration and policy blocks require operator action. Explicit
-  cancellation stops recovery. A partial result with destructive side effects
-  requires approval before another launch.
+  cancellation stops recovery. A failed or partial run with destructive side
+  effects requires approval before another launch.
 - Retry backoff is exponential, capped at 30 seconds, and jittered by 20
   percent. The attempt chain retains its root and parent IDs, route, source and
   launched manifest digests, and cumulative budget.

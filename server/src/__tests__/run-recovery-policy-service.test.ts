@@ -11,7 +11,7 @@ describe('RunRecoveryPolicyService', () => {
     ['invalid-request', { status: 'failed', error: 'Invalid configuration' }],
     ['task-failure', { status: 'failed', error: 'Implementation did not work' }],
     ['verification-failure', { status: 'partial', error: 'Required verification failed' }],
-    ['policy-block', { status: 'blocked', error: 'Sandbox policy denied launch' }],
+    ['policy-block', { status: 'failed', error: 'Sandbox policy denied launch' }],
     [
       'cancellation',
       {
@@ -23,8 +23,8 @@ describe('RunRecoveryPolicyService', () => {
     [
       'partial-side-effect',
       {
-        status: 'partial',
-        error: 'Upload failed after write',
+        status: 'failed',
+        error: 'ECONNRESET after write',
         sideEffects: [
           {
             kind: 'external-write',
@@ -105,12 +105,13 @@ describe('RunRecoveryPolicyService', () => {
   });
 
   it.each([
-    ['policy-block', { status: 'blocked', error: 'Policy denied' }],
+    ['policy-block', { status: 'failed', error: 'Permission denied by sandbox policy' }],
     ['invalid-request', { status: 'failed', error: 'Invalid configuration' }],
     [
       'partial-side-effect',
       {
-        status: 'partial',
+        status: 'failed',
+        error: 'Transient provider failure after commit',
         sideEffects: [
           {
             kind: 'git-commit',

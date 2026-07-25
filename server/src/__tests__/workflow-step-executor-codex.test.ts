@@ -35,6 +35,7 @@ vi.mock('../services/governance-trace-service.js', () => ({
 
 import { WorkflowStepExecutor } from '../services/workflow-step-executor.js';
 import type { WorkflowRun, WorkflowStep } from '../types/workflow.js';
+import type { RunRecoveryRecord } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
 const runtimeManifestResolver = vi.fn();
@@ -177,6 +178,73 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(persistRun.mock.invocationCallOrder[0]).toBeLessThan(
       mockStartThread.mock.invocationCallOrder[0]
     );
+  });
+
+  it('persists exact capability and manifest evidence for a launched recovery', async () => {
+    const persistRun = vi.fn().mockResolvedValue(undefined);
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver, persistRun });
+    const manifest = codexRuntimeManifest();
+    const recovery: RunRecoveryRecord = {
+      schemaVersion: 'run-recovery/v1',
+      rootRunId: 'run_root',
+      parentRunId: 'run_parent',
+      sequence: 1,
+      fallbackUsed: false,
+      state: 'launched',
+      action: 'retry',
+      failure: {
+        classification: 'transient-transport',
+        summary: 'ECONNRESET',
+        retryable: true,
+        approvalRequired: false,
+        destructiveSideEffects: false,
+      },
+      reason: 'Retry after transient transport failure.',
+      backoffMs: 100,
+      selectedAgent: 'codex',
+      routingDecision: 'Workflow retry policy.',
+      requiredRuntimeCapabilities: [],
+      cumulativeBudget: {
+        tokens: 0,
+        cost: 0,
+        runtimeSeconds: 0,
+        idleRuntimeSeconds: 0,
+        retries: 0,
+        fanOut: 1,
+      },
+    };
+    const run = {
+      id: 'run_1234567890_recover',
+      workflowId: 'wf-codex',
+      workflowVersion: 1,
+      status: 'running',
+      context: {},
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'recover', status: 'running', retries: 1, runRetry: recovery }],
+    } as WorkflowRun;
+    const step = { id: 'recover', type: 'agent', agent: 'codex' } as WorkflowStep;
+
+    await (
+      executor as unknown as {
+        recordRuntimeManifest(
+          run: WorkflowRun,
+          step: WorkflowStep,
+          manifest: typeof manifest,
+          required: string[]
+        ): Promise<void>;
+      }
+    ).recordRuntimeManifest(run, step, manifest, ['run.start', 'artifact.write']);
+
+    expect(run.steps[0]).toMatchObject({
+      providerRuntimeManifest: { digest: manifest.digest },
+      requiredRuntimeCapabilities: ['artifact.write', 'run.start'],
+      runRetry: {
+        state: 'launched',
+        launchedManifestDigest: manifest.digest,
+        requiredRuntimeCapabilities: ['artifact.write', 'run.start'],
+      },
+    });
+    expect(persistRun).toHaveBeenCalledWith(run);
   });
 
   it('rejects providers that have no workflow execution adapter before probing or launch', async () => {

@@ -2197,7 +2197,10 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(task.attempt?.completionResult?.idempotencyKey).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(
       mockUpdateTask.mock.calls.filter(
-        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
       )
     ).toHaveLength(1);
     expect(
@@ -2252,7 +2255,10 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(
       mockUpdateTask.mock.calls.filter(
-        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
       )
     ).toHaveLength(1);
     expect(revokeRun).toHaveBeenCalledWith({
@@ -2489,7 +2495,10 @@ describe('ClawdbotAgentService Codex providers', () => {
     ).toHaveLength(1);
     expect(
       mockUpdateTask.mock.calls.filter(
-        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
       )
     ).toHaveLength(1);
     expect(task.attempt?.completionResult).toMatchObject({
@@ -2522,11 +2531,19 @@ describe('ClawdbotAgentService Codex providers', () => {
     ).toHaveLength(1);
     expect(
       mockUpdateTask.mock.calls.filter(
-        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
       )
     ).toHaveLength(2);
     const completionDigests = mockUpdateTask.mock.calls
-      .filter(([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended)
+      .filter(
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
+      )
       .map(([, update]) => update.attempt?.completionResult?.digest);
     expect(new Set(completionDigests)).toEqual(new Set([task.attempt?.completionResult?.digest]));
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
@@ -2551,7 +2568,10 @@ describe('ClawdbotAgentService Codex providers', () => {
 
     expect(
       mockUpdateTask.mock.calls.filter(
-        ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+        ([, update]) =>
+          update.attempt?.id === active.attemptId &&
+          update.attempt?.ended &&
+          !update.attempt?.runRetry
       )
     ).toHaveLength(1);
     expect(mockTelemetryEmit).toHaveBeenCalledWith(
@@ -2630,11 +2650,18 @@ describe('ClawdbotAgentService Codex providers', () => {
     await service.stopAgent(task.id, active.attemptId);
 
     const completionWrites = mockUpdateTask.mock.calls.filter(
-      ([, update]) => update.attempt?.id === active.attemptId && update.attempt?.ended
+      ([, update]) =>
+        update.attempt?.id === active.attemptId &&
+        update.attempt?.ended &&
+        !update.attempt?.runRetry
     );
     expect(completionWrites.map(([, update]) => update.expectedRevision)).toEqual([7, 8]);
     expect(task.priority).toBe('high');
-    expect(task.revision).toBe(9);
+    expect(task.revision).toBe(10);
+    expect(task.attempt?.runRetry).toMatchObject({
+      state: 'cancelled',
+      action: 'cancelled',
+    });
   });
 
   it('rejects a completion retry when immutable attempt bindings change under the same ID', async () => {

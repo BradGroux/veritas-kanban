@@ -399,6 +399,139 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     );
   });
 
+  it('plans retry policy for a failed supervisor completion discovered after restart', async () => {
+    const completedAt = '2026-07-23T18:30:00.000Z';
+    const evidence: CompletionEvidenceSource = {
+      captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
+        capturedAt,
+        headSha: 'a'.repeat(40),
+        dirty: false,
+        files: [],
+      }),
+      captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+        capturedAt,
+        headSha: taskEnvelope.workspace.baseline.headSha,
+        changedFiles: [],
+        commits: [],
+        artifacts: [],
+        verification: [],
+        sideEffects: [],
+      }),
+    };
+    const envelopes = new TaskEnvelopeService(evidence);
+    const completions = new ProviderCompletionService(evidence, () => completedAt);
+    const providerRuntimeManifest = providerRuntimeManifestFixture({
+      provider: 'codex-cli',
+      adapter: 'codex-cli',
+    });
+    let currentTask = {
+      ...makeTask('task-supervisor-failure', 'running'),
+      revision: 1,
+      verificationSteps: [],
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/recovery',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-supervisor-recovery',
+      },
+    } as Task;
+    const runningAttempt = currentTask.attempt;
+    if (!runningAttempt) throw new Error('Expected a running attempt fixture');
+    const taskEnvelope = await envelopes.build({
+      task: currentTask,
+      attemptId: runningAttempt.id,
+      createdAt: '2026-07-23T17:00:00.000Z',
+      worktreePath: currentTask.git?.worktreePath ?? '/tmp/veritas-supervisor-recovery',
+      providerRuntimeManifest,
+      commitPolicy: 'allowed',
+    });
+    currentTask.attempt = {
+      ...runningAttempt,
+      provider: 'codex-cli',
+      providerRuntimeManifest,
+      taskEnvelope,
+    };
+    currentTask.attempts = [currentTask.attempt];
+    const completionResult = await completions.complete({
+      task: currentTask,
+      taskEnvelope,
+      claim: {
+        terminalSource: 'process',
+        status: 'failed',
+        summary: 'ECONNRESET after restart',
+        error: 'ECONNRESET after restart',
+      },
+    });
+    mockGetTask.mockImplementation(async () => currentTask);
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (
+        update.expectedRevision !== undefined &&
+        update.expectedRevision !== (currentTask.revision ?? 1)
+      ) {
+        throw Object.assign(new Error('stale revision'), { statusCode: 409 });
+      }
+      currentTask = {
+        ...currentTask,
+        ...update,
+        revision: (currentTask.revision ?? 1) + 1,
+      } as Task;
+      return currentTask;
+    });
+    const append = vi.fn(async (input: { taskId: string; attemptId: string; kind: string }) => ({
+      event: {
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        kind: input.kind,
+        sequence: 1,
+      },
+    }));
+    service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      envelopes,
+      undefined,
+      completions,
+      undefined,
+      undefined,
+      { append } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new RunRecoveryPolicyService(() => 0.5)
+    );
+    const schedule = vi
+      .spyOn(service as never, 'scheduleTaskRecovery')
+      .mockImplementation(() => undefined);
+
+    await (
+      service as unknown as {
+        persistSupervisorCompletion(
+          task: Task,
+          attempt: TaskAttempt,
+          result: typeof completionResult
+        ): Promise<void>;
+      }
+    ).persistSupervisorCompletion(currentTask, currentTask.attempt, completionResult);
+
+    expect(currentTask.attempt).toMatchObject({
+      id: runningAttempt.id,
+      status: 'failed',
+      runRetry: {
+        parentRunId: runningAttempt.id,
+        state: 'scheduled',
+        action: 'retry',
+        failure: { classification: 'transient-transport' },
+      },
+    });
+    expect(schedule).toHaveBeenCalledWith(
+      currentTask.id,
+      runningAttempt.id,
+      expect.objectContaining({ state: 'scheduled', action: 'retry' })
+    );
+  });
+
   it('persists one retry branch for duplicate failure planning and cancels the exact parent', async () => {
     let currentTask = {
       ...makeTask('task-retry-once', 'failed'),
@@ -502,7 +635,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       action: 'cancelled',
       cancelledBy: 'test-operator',
     });
-    expect(currentTask.status).toBe('blocked');
+    expect(currentTask.status).toBe('in-progress');
     await expect(
       service.cancelTaskRecovery(currentTask.id, 'attempt_wrong', 'test-operator')
     ).rejects.toMatchObject({ statusCode: 409 });

@@ -303,41 +303,80 @@ export class SqliteWorkflowRunRepository {
     }));
   }
 
-  save(run: WorkflowRun): void {
-    this.database
-      .getConnection()
+  save(run: WorkflowRun, expectedRevision = 0): boolean {
+    const connection = this.database.getConnection();
+    const row = connection
       .prepare(
         `
-          INSERT INTO workflow_runs (
-            id,
-            workspace_id,
-            workflow_id,
-            workflow_version,
-            task_id,
-            status,
-            current_step,
-            run_json,
-            started_at,
-            completed_at,
-            last_checkpoint,
-            error
-          )
-          VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            workflow_id = excluded.workflow_id,
-            workflow_version = excluded.workflow_version,
-            task_id = excluded.task_id,
-            status = excluded.status,
-            current_step = excluded.current_step,
-            run_json = excluded.run_json,
-            started_at = excluded.started_at,
-            completed_at = excluded.completed_at,
-            last_checkpoint = excluded.last_checkpoint,
-            error = excluded.error
+          SELECT run_json
+          FROM workflow_runs
+          WHERE workspace_id = 'local'
+            AND id = ?
+        `
+      )
+      .get(run.id) as WorkflowRunRow | undefined;
+
+    if (!row) {
+      if (expectedRevision !== 0) return false;
+      const inserted = connection
+        .prepare(
+          `
+            INSERT OR IGNORE INTO workflow_runs (
+              id,
+              workspace_id,
+              workflow_id,
+              workflow_version,
+              task_id,
+              status,
+              current_step,
+              run_json,
+              started_at,
+              completed_at,
+              last_checkpoint,
+              error
+            )
+            VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+        )
+        .run(
+          run.id,
+          run.workflowId,
+          run.workflowVersion,
+          run.taskId ?? null,
+          run.status,
+          run.currentStep ?? null,
+          JSON.stringify(run),
+          run.startedAt,
+          run.completedAt ?? null,
+          run.lastCheckpoint ?? null,
+          run.error ?? null
+        );
+      return inserted.changes === 1;
+    }
+
+    const current = JSON.parse(row.run_json) as WorkflowRun;
+    if ((current.revision ?? 0) !== expectedRevision) return false;
+
+    const updated = connection
+      .prepare(
+        `
+          UPDATE workflow_runs
+          SET workflow_id = ?,
+              workflow_version = ?,
+              task_id = ?,
+              status = ?,
+              current_step = ?,
+              run_json = ?,
+              started_at = ?,
+              completed_at = ?,
+              last_checkpoint = ?,
+              error = ?
+          WHERE workspace_id = 'local'
+            AND id = ?
+            AND run_json = ?
         `
       )
       .run(
-        run.id,
         run.workflowId,
         run.workflowVersion,
         run.taskId ?? null,
@@ -347,8 +386,11 @@ export class SqliteWorkflowRunRepository {
         run.startedAt,
         run.completedAt ?? null,
         run.lastCheckpoint ?? null,
-        run.error ?? null
+        run.error ?? null,
+        run.id,
+        row.run_json
       );
+    return updated.changes === 1;
   }
 
   saveWorkflowSnapshot(runId: string, workflow: WorkflowDefinition): void {

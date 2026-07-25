@@ -221,7 +221,7 @@ export class WorkflowStepExecutor {
       requiredRuntimeCapabilities,
       `workflow step ${step.id} launch`
     );
-    await this.recordRuntimeManifest(run, step, runtimeManifest);
+    await this.recordRuntimeManifest(run, step, runtimeManifest, requiredRuntimeCapabilities);
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId: agentDef?.sandboxPresetId,
       provider: runtimeManifest.provider,
@@ -543,12 +543,23 @@ export class WorkflowStepExecutor {
   private async recordRuntimeManifest(
     run: WorkflowRun,
     step: WorkflowStep,
-    manifest: ProviderRuntimeManifest
+    manifest: ProviderRuntimeManifest,
+    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[]
   ): Promise<void> {
     const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
     if (stepRun) {
       stepRun.providerRuntimeManifest = manifest;
+      stepRun.requiredRuntimeCapabilities = [...new Set(requiredRuntimeCapabilities)].sort(
+        (left, right) => left.localeCompare(right)
+      );
       stepRun.runtimeControls = providerRuntimeControls(manifest);
+      if (stepRun.runRetry?.state === 'launched') {
+        stepRun.runRetry = {
+          ...stepRun.runRetry,
+          launchedManifestDigest: manifest.digest,
+          requiredRuntimeCapabilities: [...stepRun.requiredRuntimeCapabilities],
+        };
+      }
     }
     await this.persistRun(run);
   }

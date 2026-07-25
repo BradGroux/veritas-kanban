@@ -872,7 +872,6 @@ export class ClawdbotAgentService {
     const cancelledAttempt = { ...attempt, runRetry: cancelled };
     const updated = await this.taskService.updateTask(taskId, {
       expectedRevision: normalizedTaskRevision(task),
-      status: 'blocked',
       attempt: cancelledAttempt,
       attempts: upsertAttemptHistory(task.attempts, cancelledAttempt),
     });
@@ -993,7 +992,7 @@ export class ClawdbotAgentService {
     try {
       const updated = await this.taskService.updateTask(taskId, {
         expectedRevision: normalizedTaskRevision(task),
-        ...(decision.state !== 'scheduled' ? { status: 'blocked' as const } : {}),
+        ...(decision.state === 'approval-required' ? { status: 'blocked' as const } : {}),
         attempt: recoveredAttempt,
         attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
       });
@@ -2670,6 +2669,13 @@ export class ClawdbotAgentService {
           'Failed to release worktree ownership after supervisor completion recovery'
         );
       });
+    }
+    if (completionResult.status !== 'success') {
+      await this.planTaskRecovery(
+        task.id,
+        completedAttempt,
+        this.runRecoveryPolicy.classifyCompletion(completionResult)
+      );
     }
   }
 

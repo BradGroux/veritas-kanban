@@ -35,6 +35,8 @@ import { getGovernanceTraceService } from './governance-trace-service.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
+import { atomicWriteFile } from '../storage/fs-helpers.js';
+import { withFileLock } from './file-lock.js';
 
 const log = createLogger('workflow-run');
 
@@ -47,7 +49,6 @@ const scheduledWorkflowRecoveries = new Map<
   string,
   { stepId: string; timer: ReturnType<typeof setTimeout> }
 >();
-const activeWorkflowRecoveryClaims = new Set<string>();
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
 const RESERVED_CONTEXT_KEYS = new Set([
   'task',
@@ -676,6 +677,10 @@ export class WorkflowRunService {
       routingDecision: explicitFallback
         ? `Workflow failure policy selected fallback ${explicitFallback}.`
         : `Workflow step ${step.id} uses workspace recovery policy.`,
+      ...(stepRun.providerRuntimeManifest?.digest
+        ? { sourceManifestDigest: stepRun.providerRuntimeManifest.digest }
+        : {}),
+      requiredRuntimeCapabilities: [...(stepRun.requiredRuntimeCapabilities ?? [])],
       cumulativeBudget: run.budget?.usage ?? { ...ZERO_AGENT_BUDGET_USAGE },
       previousSequence,
       fallbackUsed: stepRun.runRetry?.fallbackUsed,
@@ -706,15 +711,28 @@ export class WorkflowRunService {
     }
 
     if (decision.state === 'approval-required') {
+      if (policy?.escalate_to === 'skip') {
+        stepRun.status = 'skipped';
+        this.syncPipelineSummary(run, workflow);
+        await this.saveRun(run);
+        return true;
+      }
       run.status = 'blocked';
-      run.error = decision.handoff?.summary ?? decision.reason;
+      run.error =
+        policy?.escalate_to === 'human'
+          ? policy.escalate_message || `Step ${step.id} failed`
+          : decision.handoff?.summary || decision.reason;
       this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       return true;
     }
 
     // Strategy 2: Retry a different step after automatic recovery is exhausted.
-    if (policy?.retry_step && failure.retryable) {
+    if (
+      policy?.retry_step &&
+      !failure.approvalRequired &&
+      failure.classification !== 'cancellation'
+    ) {
       const retryStep = workflow.steps.find((s) => s.id === policy.retry_step);
       if (!retryStep) {
         throw new Error(`retry_step references unknown step: ${policy.retry_step}`);
@@ -884,38 +902,36 @@ export class WorkflowRunService {
     parentRunId: string,
     actor: string
   ): Promise<WorkflowRun> {
-    return this.withWorkflowRecoveryClaim(runId, 'cancel', async () => {
-      const run = await this.getRun(runId);
-      if (!run) throw new NotFoundError(`Run ${runId} not found`);
-      const stepRun = run.steps.find((step) => step.stepId === stepId);
-      const recovery = stepRun?.runRetry;
-      if (!stepRun || !recovery || recovery.parentRunId !== parentRunId) {
-        throw new ConflictError('Recovery cancellation does not match the pending workflow step');
-      }
-      if (!['scheduled', 'launching'].includes(recovery.state)) {
-        throw new ConflictError(`Workflow recovery is not pending (state: ${recovery.state})`);
-      }
-      this.clearScheduledWorkflowRecovery(runId, stepId);
-      const cancelled: RunRecoveryRecord = {
-        ...recovery,
-        state: 'cancelled',
-        action: 'cancelled',
-        reason: 'Automatic workflow recovery was cancelled by an operator.',
-        backoffMs: 0,
-        cancelledAt: new Date().toISOString(),
-        cancelledBy: actor,
-        handoff: {
-          summary: 'Automatic workflow recovery was cancelled.',
-          nextActions: ['Resume or restart the workflow explicitly if it should continue.'],
-        },
-      };
-      stepRun.runRetry = cancelled;
-      run.status = 'blocked';
-      run.error = cancelled.handoff?.summary ?? cancelled.reason;
-      await this.saveRun(run);
-      broadcastWorkflowStatus(run);
-      return run;
-    });
+    const run = await this.getRun(runId);
+    if (!run) throw new NotFoundError(`Run ${runId} not found`);
+    const stepRun = run.steps.find((step) => step.stepId === stepId);
+    const recovery = stepRun?.runRetry;
+    if (!stepRun || !recovery || recovery.parentRunId !== parentRunId) {
+      throw new ConflictError('Recovery cancellation does not match the pending workflow step');
+    }
+    if (!['scheduled', 'launching'].includes(recovery.state)) {
+      throw new ConflictError(`Workflow recovery is not pending (state: ${recovery.state})`);
+    }
+    const cancelled: RunRecoveryRecord = {
+      ...recovery,
+      state: 'cancelled',
+      action: 'cancelled',
+      reason: 'Automatic workflow recovery was cancelled by an operator.',
+      backoffMs: 0,
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: actor,
+      handoff: {
+        summary: 'Automatic workflow recovery was cancelled.',
+        nextActions: ['Resume or restart the workflow explicitly if it should continue.'],
+      },
+    };
+    stepRun.runRetry = cancelled;
+    run.status = 'blocked';
+    run.error = cancelled.handoff?.summary ?? cancelled.reason;
+    await this.saveRun(run);
+    this.clearScheduledWorkflowRecovery(runId, stepId);
+    broadcastWorkflowStatus(run);
+    return run;
   }
 
   private scheduleWorkflowRecovery(
@@ -948,83 +964,65 @@ export class WorkflowRunService {
 
   private async resumeScheduledWorkflowRecovery(runId: string, stepId: string): Promise<void> {
     let recoveryToReschedule: RunRecoveryRecord | undefined;
-    const resumed = await this.withWorkflowRecoveryClaim(runId, 'launch', async () => {
-      const run = await this.getRun(runId);
-      const stepRun = run?.steps.find((step) => step.stepId === stepId);
-      const recovery = stepRun?.runRetry;
-      if (!run || !stepRun || recovery?.state !== 'scheduled' || run.status !== 'pending') {
-        return null;
-      }
-      if (recovery.notBefore && Date.parse(recovery.notBefore) > Date.now()) {
-        recoveryToReschedule = recovery;
-        return null;
-      }
-      const launchedAt = new Date().toISOString();
-      stepRun.runRetry = {
-        ...recovery,
-        state: 'launched',
-        launchedAt,
-        launchedRunId: `${run.id}:${stepId}:${recovery.sequence}`,
-        selectedAgent: stepRun.agent ?? recovery.selectedAgent,
-      };
-      stepRun.status = 'pending';
-      stepRun.error = undefined;
-      run.status = 'running';
-      run.error = undefined;
-      await this.saveRun(run);
-
-      const workflow = await this.workflowService.loadWorkflow(run.workflowId);
-      if (!workflow) {
-        stepRun.runRetry = {
-          ...stepRun.runRetry,
-          state: 'exhausted',
-          action: 'terminal',
-          reason: `Workflow ${run.workflowId} no longer exists.`,
-          backoffMs: 0,
-          handoff: {
-            summary: 'The persisted workflow recovery cannot be resumed.',
-            nextActions: ['Restore the workflow definition or start a replacement run.'],
-          },
-        };
-        run.status = 'failed';
-        run.error = stepRun.runRetry.reason;
-        run.completedAt = new Date().toISOString();
-        await this.saveRun(run);
-        broadcastWorkflowStatus(run);
-        return null;
-      }
-      return { run, workflow };
-    });
-
+    const run = await this.getRun(runId);
+    const stepRun = run?.steps.find((step) => step.stepId === stepId);
+    const recovery = stepRun?.runRetry;
+    if (!run || !stepRun || recovery?.state !== 'scheduled' || run.status !== 'pending') {
+      return;
+    }
+    if (recovery.notBefore && Date.parse(recovery.notBefore) > Date.now()) {
+      recoveryToReschedule = recovery;
+    }
     if (recoveryToReschedule) {
       this.scheduleWorkflowRecovery(runId, stepId, recoveryToReschedule);
       return;
     }
-
-    if (resumed) {
-      void this.executeRun(resumed.run, resumed.workflow).catch((error) => {
-        log.error({ err: error, runId, stepId }, 'Workflow recovery execution failed');
-      });
-    }
-  }
-
-  private async withWorkflowRecoveryClaim<T>(
-    runId: string,
-    operation: 'cancel' | 'launch',
-    action: () => Promise<T>
-  ): Promise<T> {
-    if (activeWorkflowRecoveryClaims.has(runId)) {
-      throw new ConflictError(`Workflow recovery is already being claimed for ${operation}`, {
-        runId,
-        operation,
-      });
-    }
-    activeWorkflowRecoveryClaims.add(runId);
+    const launchedAt = new Date().toISOString();
+    stepRun.runRetry = {
+      ...recovery,
+      state: 'launched',
+      launchedAt,
+      launchedRunId: `${run.id}:${stepId}:${recovery.sequence}`,
+      selectedAgent: stepRun.agent ?? recovery.selectedAgent,
+    };
+    stepRun.status = 'pending';
+    stepRun.error = undefined;
+    run.status = 'running';
+    run.error = undefined;
     try {
-      return await action();
-    } finally {
-      activeWorkflowRecoveryClaims.delete(runId);
+      await this.saveRun(run);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        log.info({ runId, stepId }, 'Workflow recovery claim lost to another process');
+        return;
+      }
+      throw error;
     }
+
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) {
+      stepRun.runRetry = {
+        ...stepRun.runRetry,
+        state: 'exhausted',
+        action: 'terminal',
+        reason: `Workflow ${run.workflowId} no longer exists.`,
+        backoffMs: 0,
+        handoff: {
+          summary: 'The persisted workflow recovery cannot be resumed.',
+          nextActions: ['Restore the workflow definition or start a replacement run.'],
+        },
+      };
+      run.status = 'failed';
+      run.error = stepRun.runRetry.reason;
+      run.completedAt = new Date().toISOString();
+      await this.saveRun(run);
+      broadcastWorkflowStatus(run);
+      return;
+    }
+
+    void this.executeRun(run, workflow).catch((error) => {
+      log.error({ err: error, runId, stepId }, 'Workflow recovery execution failed');
+    });
   }
 
   /**
@@ -1505,11 +1503,21 @@ export class WorkflowRunService {
    * Phase 2: Updates lastCheckpoint timestamp on every save
    */
   private async saveRun(run: WorkflowRun): Promise<void> {
-    // Update checkpoint timestamp
-    run.lastCheckpoint = new Date().toISOString();
+    const expectedRevision = run.revision ?? 0;
+    const nextRun: WorkflowRun = {
+      ...run,
+      revision: expectedRevision + 1,
+      lastCheckpoint: new Date().toISOString(),
+    };
 
     if (this.repository) {
-      this.repository.save(run);
+      if (!this.repository.save(nextRun, expectedRevision)) {
+        throw new ConflictError('Workflow run changed during persistence', {
+          runId: run.id,
+          expectedRevision,
+        });
+      }
+      Object.assign(run, nextRun);
       return;
     }
 
@@ -1517,7 +1525,29 @@ export class WorkflowRunService {
     await fs.mkdir(runDir, { recursive: true });
 
     const runPath = path.join(runDir, 'run.json');
-    await fs.writeFile(runPath, JSON.stringify(run, null, 2), 'utf-8');
+    await withFileLock(runPath, async () => {
+      let current: WorkflowRun | null = null;
+      try {
+        current = JSON.parse(await fs.readFile(runPath, 'utf-8')) as WorkflowRun;
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
+          throw error;
+        }
+      }
+      const currentRevision = current?.revision ?? 0;
+      if (
+        (current && currentRevision !== expectedRevision) ||
+        (!current && expectedRevision !== 0)
+      ) {
+        throw new ConflictError('Workflow run changed during persistence', {
+          runId: run.id,
+          expectedRevision,
+          currentRevision: current?.revision,
+        });
+      }
+      await atomicWriteFile(runPath, JSON.stringify(nextRun, null, 2));
+    });
+    Object.assign(run, nextRun);
   }
 
   /**

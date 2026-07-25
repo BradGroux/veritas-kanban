@@ -21,7 +21,7 @@ const TIMEOUT_PATTERN = /\b(?:timed? ?out|timeout|deadline exceeded|etimedout|eh
 const PROVIDER_UNAVAILABLE_PATTERN =
   /\b(?:provider unavailable|service unavailable|temporarily unavailable|unhealthy|not found on path|command not found|enoent|connection refused|econnrefused|gateway unavailable)\b/i;
 const TRANSIENT_TRANSPORT_PATTERN =
-  /\b(?:econnreset|epipe|socket hang up|connection (?:closed|reset|lost)|network error|fetch failed|http 5\d\d|bad gateway|gateway timeout|dns|eai_again)\b/i;
+  /\b(?:transient|econnreset|epipe|socket hang up|connection (?:closed|reset|lost)|network error|fetch failed|http 5\d\d|bad gateway|gateway timeout|dns|eai_again)\b/i;
 const INVALID_REQUEST_PATTERN =
   /\b(?:invalid (?:request|configuration|config|argument|option|schema)|validation failed|unsupported (?:flag|option|provider)|unknown (?:flag|option)|malformed|zod)\b/i;
 const POLICY_BLOCK_PATTERN =
@@ -85,18 +85,16 @@ export class RunRecoveryPolicyService {
     const text = [summary, ...blockers.flatMap((blocker) => [blocker.code, blocker.detail])].join(
       ' '
     );
-    const destructiveSideEffects =
-      evidence.status === 'partial' &&
-      sideEffects.some((effect) =>
-        [
-          'filesystem-write',
-          'process-execute',
-          'network-egress',
-          'git-commit',
-          'external-write',
-          'task-mutate',
-        ].includes(effect.kind)
-      );
+    const destructiveSideEffects = sideEffects.some((effect) =>
+      [
+        'filesystem-write',
+        'process-execute',
+        'network-egress',
+        'git-commit',
+        'external-write',
+        'task-mutate',
+      ].includes(effect.kind)
+    );
 
     if (evidence.status === 'interrupted' || evidence.terminalSource === 'operator-interruption') {
       return classification('cancellation', summary, false, false, false);
@@ -106,6 +104,7 @@ export class RunRecoveryPolicyService {
     }
     if (
       evidence.status === 'blocked' ||
+      POLICY_BLOCK_PATTERN.test(text) ||
       blockers.some((blocker) => !blocker.retryable || POLICY_BLOCK_PATTERN.test(blocker.code))
     ) {
       return classification('policy-block', summary, false, true, false);
