@@ -133,7 +133,7 @@ can rebase on the exact result.
 
 The complete build, workspace suite, integration suite, and applicable E2E or
 artifact gates run once at the declared milestone. They are not repeated after
-every unrelated merge. 5. Repeat for each branch
+every unrelated merge.
 
 **Why:** Parallel branches often introduce integration issues that are hidden when batch-merging. Sequential merges with testing between each merge catch these immediately.
 
@@ -174,37 +174,28 @@ The `--model` flag is optional but recommended — it shows which AI model is be
 
 See [SQUAD-CHAT-PROTOCOL.md](docs/SQUAD-CHAT-PROTOCOL.md) for full details.
 
-### Pre-Commit Review Protocol (Mandatory)
+### Risk-Proportional Review
 
-Before every commit, run these 4 reviews:
+Review the changed behavior once before committing. In that pass, cover
+correctness and any security, reliability, performance, accessibility, or
+architecture risks that actually apply to the change.
 
-1. **Code Review** — Code quality, anti-patterns, architectural issues, file locking, path validation
-2. **Functionality Review** — All endpoints work, CRUD operations, settings save/load
-3. **Performance Review** — API response times, bundle size, React optimizations, memory leaks
-4. **Security Review** — Auth/authz, injection vectors, secrets exposure, CORS/CSP, rate limiting
-
-All four must pass (10/10) before committing. If ANY review says unsafe:
-
-1. Fix the issue
-2. Have the SAME reviewer who found it verify the fix
-3. Get human approval
-4. Then commit
-
-**Never commit when a review says "unsafe." Never push without human approval.**
-
-These reviews are mandatory, not optional. They catch runtime issues that static analysis and builds miss.
+Do not create separate review tasks for inapplicable categories or require
+numeric review scores. If the review finds an unsafe behavior, fix it and
+recheck the affected path before committing. Independent or cross-model review
+is optional unless a configured governance policy, issue owner, or release
+owner explicitly requires it.
 
 ### Pre-Merge Checklist
 
-Before merging any branch, verify:
+Before merging, verify the checks selected for the changed product boundary:
 
-- [ ] **Type exports:** All new types added to `shared/` are exported in `shared/src/types/index.ts`
-- [ ] **Type checks pass:** `pnpm typecheck` succeeds for all workspace packages (shared, server, web, CLI, MCP)
-- [ ] **Builds pass:** `pnpm build` succeeds for all packages (shared, server, web, CLI, MCP)
-- [ ] **No hardcoded values:** No hardcoded ports, URLs, or timeouts in application code
-- [ ] **CSP/CORS configs:** Security policies work in both `NODE_ENV=development` AND `NODE_ENV=production`
-- [ ] **Frontend hooks:** All HTTP calls use shared helpers (`apiFetch`) and all WebSocket/URL logic uses `window.location.host` (not hardcoded ports)
-- [ ] **Environment variables:** All configurable values use env vars with sensible defaults
+- [ ] **Selected CI tier:** Every required check started for the pull request is green.
+- [ ] **Focused local evidence:** Changed behavior and meaningful failure modes are covered.
+- [ ] **Shared contracts, when changed:** New types are exported and known consumers type-check.
+- [ ] **Configuration, when changed:** Ports, URLs, timeouts, environment variables, CSP, and CORS behave in the affected modes.
+- [ ] **Frontend integration, when changed:** HTTP calls use shared helpers and location-sensitive behavior avoids hardcoded hosts.
+- [ ] **Milestone gate, when selected:** Complete build, typecheck, test, security, integration, E2E, or artifact checks required by `ci:full` or the release plan pass once.
 
 ### Environment Rules
 
@@ -219,17 +210,18 @@ Before merging any branch, verify:
 
 ### Testing Requirements
 
-**"Builds clean" is necessary but NOT sufficient.**
+Run browser or API smoke tests only when the change affects that product
+boundary. Choose the smallest runtime check that proves the behavior:
 
-Before declaring a branch ready to merge, verify **runtime behavior:**
+- **Server or API changes:** Exercise the changed endpoint and its meaningful auth or failure path. Add a health check only when startup or routing changed.
+- **Web changes:** Open the changed route and verify its primary interaction, keyboard flow, and failure state.
+- **Realtime changes:** Verify the changed event path with the minimum number of clients needed to prove propagation.
+- **Desktop changes:** Use the relevant desktop readiness or packaging smoke check.
+- **Documentation and static tooling:** No runtime smoke is required unless deterministic CI escalates the change.
 
-1. **Health check:** `curl http://localhost:3000/api/health` returns 200
-2. **Auth flow:** Log in via the UI, verify token handling works
-3. **Task CRUD:** Create, update, move, and delete a task
-4. **WebSocket connection:** Verify real-time updates work (open two browser tabs, change task in one, see update in the other)
-5. **No stray processes:** Check for leftover Vite dev servers or conflicting processes before starting: `lsof -i :3000`
-
-**Static code reviews (AI or human) cannot catch runtime issues.** You must test in a running browser.
+Static review does not replace runtime evidence when runtime behavior changed,
+but unrelated browser, CRUD, WebSocket, or packaging checks add no useful
+confidence to a focused change.
 
 ### Common Integration Failures
 

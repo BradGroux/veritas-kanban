@@ -5,6 +5,7 @@ import {
   affectedWorkspaces,
   classifyCiTestScope,
   diffRangeFor,
+  isDependencyFreeScopeControlPath,
   isDocumentationPath,
   requiresFullSuite,
 } from './select-ci-test-scope.mjs';
@@ -17,6 +18,34 @@ test('classifies documentation-only pull requests without unit tests', () => {
 
   assert.equal(result.scope, 'none');
   assert.deepEqual(result.packages, []);
+});
+
+test('dependency-free cadence controls do not trigger workspace unit tests', () => {
+  const result = classifyCiTestScope({
+    eventName: 'pull_request',
+    changedFiles: [
+      'CHANGELOG.md',
+      'scripts/check-delivery-cadence.mjs',
+      'scripts/check-delivery-cadence.test.mjs',
+    ],
+  });
+
+  assert.equal(result.scope, 'none');
+  assert.deepEqual(result.packages, []);
+  assert.equal(isDependencyFreeScopeControlPath('scripts/check-delivery-cadence.mjs'), true);
+});
+
+test('cadence controls do not widen a focused workspace change', () => {
+  const result = classifyCiTestScope({
+    eventName: 'pull_request',
+    changedFiles: [
+      'scripts/check-delivery-cadence.mjs',
+      'server/src/routes/tasks.ts',
+    ],
+  });
+
+  assert.equal(result.scope, 'focused');
+  assert.deepEqual(result.packages, ['server']);
 });
 
 test('selects affected workspaces for ordinary code changes', () => {

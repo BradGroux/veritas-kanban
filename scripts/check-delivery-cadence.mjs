@@ -52,6 +52,14 @@ export const CADENCE_CONTRACTS = {
       description: 'direct Vitest exact-file invocation',
       pattern: /exec vitest run/i,
     },
+    {
+      description: 'one risk-proportional review before commit',
+      pattern: /Review the changed behavior once before committing/i,
+    },
+    {
+      description: 'affected-boundary runtime smoke tests',
+      pattern: /Run browser or API smoke tests only when the change affects/i,
+    },
   ],
   '.github/PULL_REQUEST_TEMPLATE.md': [
     {
@@ -105,6 +113,15 @@ function isNarrowlyQualified(sentence) {
     /\bdo not\b/i.test(sentence) ||
     /\b(?:only|unless)\b/i.test(sentence) ||
     /\b(?:deterministic CI|integration|critical-security|release) milestone\b/i.test(sentence)
+  );
+}
+
+function hasUnconditionalCrossModelReview(content) {
+  return (
+    /\bcross-model review\s+(?:is\s+)?(?:required|mandatory)\b/i.test(content) ||
+    /\b(?:must|required to|shall)\s+(?:run|complete|obtain|perform)[^.]{0,120}\bcross-model review\b/i.test(
+      content
+    )
   );
 }
 
@@ -170,15 +187,75 @@ export function findUnsafePromptStatements(files) {
       }
     }
 
+    if (hasUnconditionalCrossModelReview(normalized)) {
+      violations.push({
+        file,
+        message: 'active prompts must not make cross-model review unconditional',
+      });
+    }
+
+    violations.push(...findUnqualifiedFullSuiteStatements(file, content));
+  }
+
+  return violations;
+}
+
+export function findUnsafeCanonicalCadenceStatements(files) {
+  const violations = [];
+
+  for (const [file, content] of Object.entries(files)) {
+    const normalized = normalizeWhitespace(content);
+
     if (
-      /\bcross-model review\s+(?:is\s+)?(?:required|mandatory)\b/i.test(normalized) ||
-      /\b(?:must|required to|shall)\s+(?:run|complete|obtain|perform)[^.]{0,120}\bcross-model review\b/i.test(
+      /\bbefore every commit\b[^.]{0,240}\b(?:[2-9]|multiple|separate|two|three|four)\s+reviews?\b/i.test(
+        normalized
+      ) ||
+      /\b(?:all|each)\s+(?:four|\d+)\s+reviews?\s+must pass\b/i.test(normalized) ||
+      /\bthese reviews are mandatory,? not optional\b/i.test(normalized)
+    ) {
+      violations.push({
+        file,
+        message: 'canonical guidance must not require multiple reviews before every commit',
+      });
+    }
+
+    if (hasUnconditionalCrossModelReview(normalized)) {
+      violations.push({
+        file,
+        message: 'canonical guidance must not make cross-model review unconditional',
+      });
+    }
+
+    if (
+      /\bpnpm\s+typecheck\b[^.]{0,160}\bsucceeds?\s+for\s+all\s+workspace\s+packages\b/i.test(
+        normalized
+      ) ||
+      /\bpnpm\s+build\b[^.]{0,160}\bsucceeds?\s+for\s+all\s+(?:workspace\s+)?packages\b/i.test(
+        normalized
+      ) ||
+      /\bbefore\s+(?:every|any)\s+(?:commit|merge|pull request|pr|change)\b[^.]{0,320}\bpnpm\s+(?:typecheck|build)\b/i.test(
         normalized
       )
     ) {
       violations.push({
         file,
-        message: 'active prompts must not make cross-model review unconditional',
+        message:
+          'canonical guidance must not require workspace-wide build or typecheck for every merge',
+      });
+    }
+
+    if (
+      /\bbefore declaring (?:a|the) branch ready to merge[^.]{0,240}\b(?:runtime|browser)\b/i.test(
+        normalized
+      ) ||
+      /\bmust test in a running browser\b/i.test(normalized) ||
+      /\b(?:before|for)\s+(?:every|any)\s+(?:branch|pull request|pr|merge)\b[^.]{0,260}\b(?:browser|runtime smoke|api smoke)\b/i.test(
+        normalized
+      )
+    ) {
+      violations.push({
+        file,
+        message: 'canonical guidance must scope runtime smoke tests to affected product boundaries',
       });
     }
 
@@ -234,6 +311,7 @@ export function runDeliveryCadenceCheck(rootDir = process.cwd()) {
   const promptFiles = readActivePromptFiles(rootDir);
   const violations = [
     ...findMissingCadenceContracts(cadenceFiles),
+    ...findUnsafeCanonicalCadenceStatements(cadenceFiles),
     ...findUnsafePromptStatements(promptFiles),
     ...findAmbiguousFocusedTestCommands({ ...cadenceFiles, ...promptFiles }),
   ];
@@ -247,7 +325,7 @@ export function runDeliveryCadenceCheck(rootDir = process.cwd()) {
     return false;
   }
 
-  console.log('Delivery cadence contract and active prompts are consistent.');
+  console.log('Canonical delivery guidance and active prompts are consistent.');
   return true;
 }
 

@@ -5,6 +5,7 @@ import {
   CADENCE_CONTRACTS,
   findAmbiguousFocusedTestCommands,
   findMissingCadenceContracts,
+  findUnsafeCanonicalCadenceStatements,
   findUnsafePromptStatements,
 } from './check-delivery-cadence.mjs';
 
@@ -100,6 +101,86 @@ test('allows optional cross-model review language', () => {
     findUnsafePromptStatements({
       'prompt-registry/example.md':
         'Cross-model review is optional unless the issue owner explicitly requires it.',
+    }),
+    []
+  );
+});
+
+test('rejects mandatory multi-review gates before every commit', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'CONTRIBUTING.md':
+        'Before every commit, run these 4 reviews. All four must pass before committing.',
+    }),
+    [
+      {
+        file: 'CONTRIBUTING.md',
+        message: 'canonical guidance must not require multiple reviews before every commit',
+      },
+    ]
+  );
+});
+
+test('rejects mandatory cross-model review in canonical guidance', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'AGENTS.md': 'Cross-model review is mandatory for every code change.',
+    }),
+    [
+      {
+        file: 'AGENTS.md',
+        message: 'canonical guidance must not make cross-model review unconditional',
+      },
+    ]
+  );
+});
+
+test('rejects unconditional workspace build and typecheck gates for every merge', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'CONTRIBUTING.md':
+        'Before merging any branch, verify `pnpm typecheck` succeeds for all workspace packages.',
+    }),
+    [
+      {
+        file: 'CONTRIBUTING.md',
+        message:
+          'canonical guidance must not require workspace-wide build or typecheck for every merge',
+      },
+    ]
+  );
+});
+
+test('rejects unconditional browser smoke tests for every branch', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'CONTRIBUTING.md':
+        'Before declaring a branch ready to merge, verify runtime behavior. You must test in a running browser.',
+    }),
+    [
+      {
+        file: 'CONTRIBUTING.md',
+        message: 'canonical guidance must scope runtime smoke tests to affected product boundaries',
+      },
+    ]
+  );
+});
+
+test('allows one risk-proportional review and affected-boundary smoke tests', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'CONTRIBUTING.md':
+        'Review the changed behavior once before committing. Run browser or API smoke tests only when the change affects that product boundary.',
+    }),
+    []
+  );
+});
+
+test('allows workspace-wide gates at an explicit release milestone', () => {
+  assert.deepEqual(
+    findUnsafeCanonicalCadenceStatements({
+      'CONTRIBUTING.md':
+        'Run the complete workspace suite only at an explicit release milestone. At that milestone, run `pnpm typecheck` and `pnpm build` once.',
     }),
     []
   );
