@@ -73,32 +73,59 @@ veritas-kanban/
 
 2. Make your changes — write code, add tests, update docs.
 
-3. Run type checking, linting, and focused tests before committing:
+3. Run touched-package type checking, changed-file linting, and focused tests
+   before committing:
 
    ```bash
-   pnpm typecheck
-   pnpm lint
+   pnpm --filter @veritas-kanban/server typecheck
+   pnpm exec eslint server/src/path/to/changed.ts
    pnpm --filter @veritas-kanban/server exec vitest run src/path/to/changed.test.ts
    ```
 
-   Use `pnpm test` at integration or release milestones, or when the change
-   affects shared foundations broadly enough that focused selection is unsafe.
+   Build `@veritas-kanban/shared` first and type-check its known consumers when
+   a shared contract changes. Use `pnpm test` at an explicit integration,
+   critical-security, or release milestone, or when the deterministic CI
+   selector classifies the change as high risk.
 
 4. Commit using [conventional commits](#commit-conventions).
 
 5. Push to your fork and open a pull request.
 
+### Scope and Verification Budget
+
+This cadence extends the deterministic CI selector delivered in
+[#1000](https://github.com/BradGroux/veritas-kanban/issues/1000).
+
+- Keep one independently shippable behavior per issue and pull request.
+- Split separable UI work, secondary integrations, refactors, and additional
+  hardening into linked follow-up issues before implementing them.
+- Re-scope when a second unexpected subsystem becomes necessary or the
+  verification effort becomes larger than the changed behavior.
+- Do not rerun an unchanged passing check after documentation, comments, or
+  formatting-only edits.
+- Treat `Select Test Scope` as the CI authority. Focused, full, and no-test
+  selections are recorded in the job summary.
+- Do not wait for optional desktop artifacts, packaging previews, or release
+  workflows unless the pull request changes that product boundary.
+- Test the behavior and meaningful failure modes. Do not use raw test count as
+  a quality measure.
+
 ### Branch Merge Protocol
 
-**Critical:** When merging multiple feature branches, merge **one at a time**. Never batch-merge parallel branches.
+When merging multiple feature branches, merge one at a time so the next branch
+can rebase on the exact result.
 
 **Process:**
 
 1. Merge first branch to `main`
-2. Build all packages: `pnpm build`
-3. Run smoke tests (see [Testing Requirements](#testing-requirements))
-4. Only after smoke tests pass, merge the next branch
-5. Repeat for each branch
+2. Confirm the required GitHub checks for that pull request
+3. Rebase the next branch on the updated `main`
+4. Run only the focused checks affected by conflict resolution
+5. Merge the next branch
+
+The complete build, workspace suite, integration suite, and applicable E2E or
+artifact gates run once at the declared milestone. They are not repeated after
+every unrelated merge. 5. Repeat for each branch
 
 **Why:** Parallel branches often introduce integration issues that are hidden when batch-merging. Sequential merges with testing between each merge catch these immediately.
 
@@ -340,6 +367,11 @@ with no desktop packaging. This is a target rather than an SLA; dependency
 installation and hosted-runner availability still vary. Behavior changes
 should include coverage reachable from the changed source so Vitest's related
 test selection can execute it.
+
+Optional `Desktop Artifacts`, packaging previews, and release workflows are not
+merge blockers outside their path boundary. If one starts without providing
+evidence required by the pull request, continue based on required checks;
+maintainers may cancel the redundant run.
 
 ## Questions?
 
