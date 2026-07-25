@@ -338,6 +338,14 @@ First-class support for autonomous coding agents.
 - **Team roster routing manifests** — Workspace coordinators can define enabled members, capabilities, routing rules, fallbacks, reviewers, and escalation posture before `/api/agents/route` selects an agent
 - **Workspace capability discovery** — Trusted workspace catalogs expose supported task types, SLA/queue posture, intake requirements, and delegated-work packaging so cross-workspace handoffs are explicit
 - **Agent profile packages** — Reusable YAML/JSON packages bundle role, runtime, model, prompt instructions, tools, permissions, sandbox, budget, workflow, and health metadata for portable task launches
+- **Phase capability contract** — Versioned explore, plan, implement, verify,
+  and publish profiles compile a monotonic intersection across parent, agent,
+  sandbox, tool-catalog, and launch policy authority. Unsupported required
+  dimensions fail closed, legacy mode remains explicit, and plan artifacts
+  stay bound to one harness-owned exact path. This is the model/compiler
+  foundation; transition persistence, launch propagation, tool enforcement,
+  and UI remain tracked in #1035, #1036, and #1033. See
+  [Phase Capability Profiles](architecture/PHASE-CAPABILITY-PROFILES.md).
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
 - **Cross-harness compatibility matrix** — Buzz, Grok Build, OpenAI Codex app-server, Claude Code, and GitHub Copilot CLI publish exact reviewed builds, source-availability caveats, deterministic fixture identity, capability evidence, limitations, and live support tiers through one API record consumed by Settings, `vk doctor`, telemetry, and [operator guidance](HARNESS-COMPATIBILITY.md)
 - **Harness conformance suites** — Versioned seeded scenarios compare

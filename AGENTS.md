@@ -184,6 +184,14 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   whose built-in type and command both identify `codex` or `hermes` may infer a
   provider during migration; provider-less or profile/adapter-mismatched records
   fail closed before an attempt is created.
+- Phase authority uses the versioned contracts in
+  `shared/src/types/phase-capability.types.ts`. Compile parent, phase, agent
+  profile, sandbox, tool-catalog, and launch-policy authority only through
+  `phase-capability-service.ts`; never union scopes or infer missing
+  dimensions. The plan artifact exception is one harness-owned exact path and
+  never implies general filesystem write authority. Until #1035, #1036, and
+  #1033 land, this compiler is a contract foundation rather than active
+  transition or runtime enforcement.
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and
