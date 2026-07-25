@@ -83,8 +83,9 @@ veritas-kanban/
    ```
 
    Use direct `exec vitest run` invocation for exact-file slices. Do not use
-   `pnpm --filter <package> test -- --run <test-files>` as a focused command;
-   package wrappers can ignore that file boundary and expand into the entire
+   `pnpm --filter <package> test -- <test-files>` or
+   `pnpm --filter <package> test -- --run <test-files>` as a focused command.
+   Package wrappers can ignore that file boundary and expand into the entire
    package suite.
 
    Build `@veritas-kanban/shared` first and type-check its known consumers when

@@ -267,7 +267,8 @@ export function findUnsafeCanonicalCadenceStatements(files) {
 
 export function findAmbiguousFocusedTestCommands(files) {
   const violations = [];
-  const pattern = /\bpnpm\s+--filter\s+\S+\s+test\s+--\s+--run\b/gi;
+  const pattern =
+    /\bpnpm\s+(?:--filter(?:=|\s+)|-F\s+)\S+\s+(?:run\s+)?test\s+--(?=\s)/gi;
 
   for (const [file, content] of Object.entries(files)) {
     const normalized = normalizeWhitespace(content);

@@ -121,9 +121,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized focused Vitest verification on direct
   `pnpm --filter <package> exec vitest run <exact-test-files>` invocation. The
   dependency-free delivery cadence checker now rejects active guidance that
-  presents the ambiguous package `test -- --run` wrapper as focused
-  verification, preventing an intended file slice from silently expanding into
-  an entire package suite (#1044).
+  presents either of the ambiguous package `test -- <test-files>` or
+  `test -- --run <test-files>` wrappers as focused verification, preventing
+  an intended file slice from silently expanding into an entire package suite
+  (#1044, #1058).
 - Reworked GitHub release notes to use natural page-width prose and concise
   lists instead of ragged hanging-indent blocks or unmarked stacks of bold-led
   paragraphs. The release-format gate now rejects long wrapping list items,

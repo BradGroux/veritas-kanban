@@ -48,7 +48,7 @@ Implement feature: <FEATURE-TITLE>
 vk begin <TASK-ID>
 # ... implement ...
 pnpm --filter <TOUCHED-PACKAGE> typecheck
-pnpm --filter <TOUCHED-PACKAGE> test -- <FOCUSED-TEST>
+pnpm --filter <TOUCHED-PACKAGE> exec vitest run <FOCUSED-TEST>
 vk done <TASK-ID> "Implemented <FEATURE>: <SUMMARY>"
 ````
 

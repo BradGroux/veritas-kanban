@@ -202,6 +202,28 @@ test('rejects package test wrappers that can expand an intended file slice', () 
   );
 });
 
+test('rejects package test wrappers with a direct file argument', () => {
+  for (const command of [
+    'pnpm --filter @veritas-kanban/server test -- src/example.test.ts',
+    'pnpm --filter=@veritas-kanban/server test -- src/example.test.ts',
+    'pnpm -F @veritas-kanban/server test -- src/example.test.ts',
+    'pnpm --filter @veritas-kanban/server run test -- src/example.test.ts',
+  ]) {
+    assert.deepEqual(
+      findAmbiguousFocusedTestCommands({
+        'prompt-registry/example.md': `Run \`${command}\`.`,
+      }),
+      [
+        {
+          file: 'prompt-registry/example.md',
+          message:
+            'focused Vitest files must use direct `pnpm --filter <package> exec vitest run <exact-test-files>` invocation',
+        },
+      ]
+    );
+  }
+});
+
 test('allows direct Vitest exact-file invocation', () => {
   assert.deepEqual(
     findAmbiguousFocusedTestCommands({
@@ -216,7 +238,7 @@ test('allows an explicit warning against the ambiguous package test wrapper', ()
   assert.deepEqual(
     findAmbiguousFocusedTestCommands({
       'AGENTS.md':
-        'Do not use `pnpm --filter <package> test -- --run <test-files>` for focused verification.',
+        'Do not use `pnpm --filter <package> test -- <test-files>` or `pnpm --filter <package> test -- --run <test-files>` for focused verification.',
     }),
     []
   );
