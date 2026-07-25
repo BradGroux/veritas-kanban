@@ -91,6 +91,8 @@ export const RunLaunchManifestSchema = z
         reason: safeTextSchema,
         fallbackAgent: identifierSchema.nullable(),
         fallbackAllowed: z.boolean(),
+        fallbackOnFailure: z.boolean().optional(),
+        maxRetries: z.number().int().min(0).max(3).optional(),
       })
       .strict(),
     profile: z

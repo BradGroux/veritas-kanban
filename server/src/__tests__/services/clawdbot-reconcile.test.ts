@@ -4,13 +4,14 @@
  * attempts after a server restart and move legacy runs into an actionable blocked state.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { Task, TaskAttempt } from '@veritas-kanban/shared';
+import type { RunRecoveryRecord, Task, TaskAttempt } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
 import {
   TaskEnvelopeService,
   type CompletionEvidenceSource,
 } from '../../services/task-envelope-service.js';
 import { ProviderCompletionService } from '../../services/provider-completion-service.js';
+import { RunRecoveryPolicyService } from '../../services/run-recovery-policy-service.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────
 
@@ -396,5 +397,387 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
         }),
       })
     );
+  });
+
+  it('plans retry policy for a failed supervisor completion discovered after restart', async () => {
+    const completedAt = '2026-07-23T18:30:00.000Z';
+    const evidence: CompletionEvidenceSource = {
+      captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
+        capturedAt,
+        headSha: 'a'.repeat(40),
+        dirty: false,
+        files: [],
+      }),
+      captureCompletionEvidence: async ({ taskEnvelope, capturedAt }) => ({
+        capturedAt,
+        headSha: taskEnvelope.workspace.baseline.headSha,
+        changedFiles: [],
+        commits: [],
+        artifacts: [],
+        verification: [],
+        sideEffects: [],
+      }),
+    };
+    const envelopes = new TaskEnvelopeService(evidence);
+    const completions = new ProviderCompletionService(evidence, () => completedAt);
+    const providerRuntimeManifest = providerRuntimeManifestFixture({
+      provider: 'codex-cli',
+      adapter: 'codex-cli',
+    });
+    let currentTask = {
+      ...makeTask('task-supervisor-failure', 'running'),
+      revision: 1,
+      verificationSteps: [],
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/recovery',
+        baseBranch: 'main',
+        worktreePath: '/tmp/veritas-supervisor-recovery',
+      },
+    } as Task;
+    const runningAttempt = currentTask.attempt;
+    if (!runningAttempt) throw new Error('Expected a running attempt fixture');
+    const taskEnvelope = await envelopes.build({
+      task: currentTask,
+      attemptId: runningAttempt.id,
+      createdAt: '2026-07-23T17:00:00.000Z',
+      worktreePath: currentTask.git?.worktreePath ?? '/tmp/veritas-supervisor-recovery',
+      providerRuntimeManifest,
+      commitPolicy: 'allowed',
+    });
+    currentTask.attempt = {
+      ...runningAttempt,
+      provider: 'codex-cli',
+      providerRuntimeManifest,
+      taskEnvelope,
+    };
+    currentTask.attempts = [currentTask.attempt];
+    const completionResult = await completions.complete({
+      task: currentTask,
+      taskEnvelope,
+      claim: {
+        terminalSource: 'process',
+        status: 'failed',
+        summary: 'ECONNRESET after restart',
+        error: 'ECONNRESET after restart',
+      },
+    });
+    mockGetTask.mockImplementation(async () => currentTask);
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (
+        update.expectedRevision !== undefined &&
+        update.expectedRevision !== (currentTask.revision ?? 1)
+      ) {
+        throw Object.assign(new Error('stale revision'), { statusCode: 409 });
+      }
+      currentTask = {
+        ...currentTask,
+        ...update,
+        revision: (currentTask.revision ?? 1) + 1,
+      } as Task;
+      return currentTask;
+    });
+    const append = vi.fn(async (input: { taskId: string; attemptId: string; kind: string }) => ({
+      event: {
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        kind: input.kind,
+        sequence: 1,
+      },
+    }));
+    service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      envelopes,
+      undefined,
+      completions,
+      undefined,
+      undefined,
+      { append } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new RunRecoveryPolicyService(() => 0.5)
+    );
+    const schedule = vi
+      .spyOn(service as never, 'scheduleTaskRecovery')
+      .mockImplementation(() => undefined);
+
+    await (
+      service as unknown as {
+        persistSupervisorCompletion(
+          task: Task,
+          attempt: TaskAttempt,
+          result: typeof completionResult
+        ): Promise<void>;
+      }
+    ).persistSupervisorCompletion(currentTask, currentTask.attempt, completionResult);
+
+    expect(currentTask.attempt).toMatchObject({
+      id: runningAttempt.id,
+      status: 'failed',
+      runRetry: {
+        parentRunId: runningAttempt.id,
+        state: 'scheduled',
+        action: 'retry',
+        failure: { classification: 'transient-transport' },
+      },
+    });
+    expect(schedule).toHaveBeenCalledWith(
+      currentTask.id,
+      runningAttempt.id,
+      expect.objectContaining({ state: 'scheduled', action: 'retry' })
+    );
+  });
+
+  it('persists one retry branch for duplicate failure planning and cancels the exact parent', async () => {
+    let currentTask = {
+      ...makeTask('task-retry-once', 'failed'),
+      revision: 1,
+    } as Task;
+    const failedAttempt = currentTask.attempt;
+    if (!failedAttempt) throw new Error('Expected a failed attempt fixture');
+    failedAttempt.runLaunchManifest = {
+      digest: `sha256:${'a'.repeat(64)}`,
+      routing: {
+        requestedAgent: 'openclaw',
+        selectedAgent: 'openclaw',
+        selectedHost: 'local-process',
+        reason: 'Test routing decision.',
+        fallbackAgent: null,
+        fallbackAllowed: false,
+        fallbackOnFailure: false,
+        maxRetries: 3,
+      },
+      providerRequirements: { required: [], capabilities: [] },
+    } as TaskAttempt['runLaunchManifest'];
+    currentTask.attempts = [failedAttempt];
+    mockGetTask.mockImplementation(async () => currentTask);
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      if (
+        update.expectedRevision !== undefined &&
+        update.expectedRevision !== (currentTask.revision ?? 1)
+      ) {
+        throw Object.assign(new Error('stale revision'), { statusCode: 409 });
+      }
+      currentTask = {
+        ...currentTask,
+        ...update,
+        revision: (currentTask.revision ?? 1) + 1,
+      } as Task;
+      return currentTask;
+    });
+    const append = vi.fn(async (input: { taskId: string; attemptId: string; kind: string }) => ({
+      event: {
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        kind: input.kind,
+        sequence: 1,
+      },
+    }));
+    service = new ClawdbotAgentService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { append } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new RunRecoveryPolicyService(() => 0.5)
+    );
+    const testable = service as unknown as {
+      planTaskRecovery(
+        taskId: string,
+        attempt: TaskAttempt,
+        failure: RunRecoveryRecord['failure']
+      ): Promise<RunRecoveryRecord | null>;
+    };
+    const failure: RunRecoveryRecord['failure'] = {
+      classification: 'transient-transport',
+      summary: 'ECONNRESET',
+      retryable: true,
+      approvalRequired: false,
+      destructiveSideEffects: false,
+    };
+
+    const [first, duplicate] = await Promise.all([
+      testable.planTaskRecovery(currentTask.id, failedAttempt, failure),
+      testable.planTaskRecovery(currentTask.id, failedAttempt, failure),
+    ]);
+
+    expect(first?.state).toBe('scheduled');
+    expect(duplicate?.state).toBe('scheduled');
+    expect(mockUpdateTask).toHaveBeenCalledTimes(2);
+    expect(append).toHaveBeenCalledTimes(1);
+    const scheduled = currentTask.attempt?.runRetry;
+    expect(scheduled).toMatchObject({
+      parentRunId: failedAttempt.id,
+      sequence: 1,
+      action: 'retry',
+      state: 'scheduled',
+    });
+
+    const cancelled = await service.cancelTaskRecovery(
+      currentTask.id,
+      failedAttempt.id,
+      'test-operator'
+    );
+    expect(cancelled).toMatchObject({
+      state: 'cancelled',
+      action: 'cancelled',
+      cancelledBy: 'test-operator',
+    });
+    expect(currentTask.status).toBe('in-progress');
+    await expect(
+      service.cancelTaskRecovery(currentTask.id, 'attempt_wrong', 'test-operator')
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('launches the exact scheduled task recovery with its causal record', async () => {
+    const recovery: RunRecoveryRecord = {
+      schemaVersion: 'run-recovery/v1',
+      rootRunId: 'attempt_root',
+      parentRunId: 'attempt_parent',
+      sequence: 1,
+      fallbackUsed: false,
+      state: 'scheduled',
+      action: 'retry',
+      failure: {
+        classification: 'transient-transport',
+        summary: 'ECONNRESET',
+        retryable: true,
+        approvalRequired: false,
+        destructiveSideEffects: false,
+      },
+      reason: 'Retry 1 of 1 after transient-transport.',
+      backoffMs: 100,
+      scheduledAt: '2026-07-24T00:00:00.000Z',
+      notBefore: '2026-07-24T00:00:00.100Z',
+      selectedAgent: 'openclaw',
+      routingDecision: 'Matched code rule.',
+      requiredRuntimeCapabilities: [],
+      cumulativeBudget: {
+        tokens: 0,
+        cost: 0,
+        runtimeSeconds: 0,
+        idleRuntimeSeconds: 0,
+        retries: 0,
+        fanOut: 1,
+      },
+    };
+    let currentTask = {
+      ...makeTask('task-launch-recovery', 'failed'),
+      revision: 1,
+    } as Task;
+    const parentAttempt = currentTask.attempt;
+    if (!parentAttempt) throw new Error('Expected a failed attempt fixture');
+    parentAttempt.id = recovery.parentRunId;
+    parentAttempt.runRetry = recovery;
+    currentTask.attempts = [parentAttempt];
+    mockGetTask.mockImplementation(async () => currentTask);
+    mockUpdateTask.mockImplementation(async (_id, update) => {
+      currentTask = {
+        ...currentTask,
+        ...update,
+        revision: (currentTask.revision ?? 1) + 1,
+      } as Task;
+      return currentTask;
+    });
+    const appendRunEvent = vi
+      .spyOn(service as never, 'appendRunEvent')
+      .mockResolvedValue({} as never);
+    const startAgent = vi.spyOn(service, 'startAgent').mockResolvedValue({
+      taskId: currentTask.id,
+      attemptId: 'attempt_child',
+      agent: 'openclaw',
+      runLaunchManifest: { digest: `sha256:${'b'.repeat(64)}` },
+    } as never);
+
+    await (
+      service as unknown as {
+        launchScheduledTaskRecovery(taskId: string, attemptId: string): Promise<void>;
+      }
+    ).launchScheduledTaskRecovery(currentTask.id, parentAttempt.id);
+
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      currentTask.id,
+      expect.objectContaining({
+        expectedRevision: 1,
+        attempt: expect.objectContaining({
+          id: parentAttempt.id,
+          runRetry: expect.objectContaining({ state: 'launching', sequence: 1 }),
+        }),
+      })
+    );
+    expect(startAgent).toHaveBeenCalledWith(
+      currentTask.id,
+      'openclaw',
+      expect.objectContaining({
+        parentAttemptId: parentAttempt.id,
+        recovery: expect.objectContaining({
+          parentRunId: parentAttempt.id,
+          state: 'launching',
+        }),
+      })
+    );
+    expect(appendRunEvent).toHaveBeenCalledWith(
+      currentTask.id,
+      'attempt_child',
+      'recovery.launched',
+      expect.objectContaining({ parentAttemptId: parentAttempt.id }),
+      expect.any(Object)
+    );
+  });
+
+  it('keeps a scheduled task recovery armed when cancellation persistence fails', async () => {
+    const task = {
+      ...makeTask('task-cancel-race', 'failed'),
+      revision: 1,
+    } as Task;
+    const attempt = task.attempt;
+    if (!attempt) throw new Error('Expected a failed attempt fixture');
+    const recovery = new RunRecoveryPolicyService(() => 0.5).decide(
+      {
+        classification: 'transient-transport',
+        summary: 'ECONNRESET',
+        retryable: true,
+        approvalRequired: false,
+        destructiveSideEffects: false,
+      },
+      {
+        rootRunId: attempt.id,
+        parentRunId: attempt.id,
+        selectedAgent: attempt.agent,
+        routingDecision: 'Test route.',
+        maxRetries: 1,
+        fallbackOnFailure: false,
+        now: new Date(Date.now() + 60_000),
+      }
+    );
+    attempt.runRetry = recovery;
+    mockGetTask.mockResolvedValue(task);
+    mockUpdateTask.mockRejectedValue(new Error('concurrent task mutation'));
+    const testable = service as unknown as {
+      scheduleTaskRecovery(taskId: string, attemptId: string, recovery: RunRecoveryRecord): void;
+      clearScheduledRecovery(taskId: string, attemptId: string): void;
+    };
+    testable.scheduleTaskRecovery(task.id, attempt.id, recovery);
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    await expect(service.cancelTaskRecovery(task.id, attempt.id, 'test-operator')).rejects.toThrow(
+      'concurrent task mutation'
+    );
+    expect(clearTimeoutSpy).not.toHaveBeenCalled();
+
+    testable.clearScheduledRecovery(task.id, attempt.id);
+    clearTimeoutSpy.mockRestore();
   });
 });

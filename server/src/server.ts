@@ -37,6 +37,7 @@ import { initBroadcast, nextWebSocketEventSequence } from './services/broadcast-
 import { runStartupMigrations } from './services/migration-service.js';
 import { getPolicyService } from './services/policy-service.js';
 import { getCredentialBrokerService } from './services/credential-broker-service.js';
+import { getWorkflowRunService } from './services/workflow-run-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
 import { errorHandler, AppError } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -593,9 +594,11 @@ async function initializeServices(): Promise<void> {
   //    a previous server crash/restart (issue #781).
   try {
     await agentService.reconcileRunningAttempts();
+    await agentService.reconcilePendingRecoveries();
+    await getWorkflowRunService().reconcilePendingRecoveries();
   } catch (reconcileErr) {
     // Non-fatal: log and continue — the server can still serve requests.
-    log.warn({ err: reconcileErr }, 'Startup: agent attempt reconciliation failed');
+    log.warn({ err: reconcileErr }, 'Startup: agent run reconciliation failed');
   }
   await reconcileCredentialLeases('startup');
   credentialReconciliationInterval ??= setInterval(

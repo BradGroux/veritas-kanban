@@ -101,19 +101,75 @@ export class WorkflowStepExecutor {
    */
   async executeStep(step: WorkflowStep, run: WorkflowRun): Promise<StepExecutionResult> {
     log.info({ runId: run.id, stepId: step.id, type: step.type }, 'Executing step');
+    const selectedAgent = run.steps.find((candidate) => candidate.stepId === step.id)?.agent;
+    const effectiveStep = selectedAgent ? { ...step, agent: selectedAgent } : step;
 
-    switch (step.type) {
+    switch (effectiveStep.type) {
       case 'agent':
-        return this.executeAgentStep(step, run);
+        return this.executeAgentStep(effectiveStep, run);
       case 'loop':
-        return this.executeLoopStep(step, run);
+        return this.executeLoopStep(effectiveStep, run);
       case 'gate':
-        return this.executeGateStep(step, run);
+        return this.executeGateStep(effectiveStep, run);
       case 'parallel':
-        return this.executeParallelStep(step, run);
+        return this.executeParallelStep(effectiveStep, run);
       default:
-        throw new Error(`Unknown step type: ${step.type}`);
+        throw new Error(`Unknown step type: ${effectiveStep.type}`);
     }
+  }
+
+  /**
+   * Probe a fallback through the same capability and sandbox gates used by a
+   * real workflow launch, without creating a provider session.
+   */
+  async validateFallbackAgent(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    agentId: string
+  ): Promise<ProviderRuntimeManifest> {
+    const effectiveStep = { ...step, agent: agentId };
+    let agentDef = this.getAgentDefinition(run, agentId);
+    if (!agentDef) {
+      throw new Error(`Workflow fallback agent ${agentId} is not defined in the workflow`);
+    }
+    if (run.budget?.modelOverride) {
+      agentDef = { ...agentDef, model: run.budget.modelOverride };
+    }
+    const workflowConfig = run.context.workflow as
+      { config?: { fresh_session_default?: boolean } } | undefined;
+    const sessionConfig = this.buildSessionConfig(effectiveStep, run, workflowConfig?.config);
+    const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
+    const runtimeProvider = this.resolveWorkflowProvider(effectiveStep, agentDef);
+    const runtimeManifest = await this.resolveRuntimeManifest(
+      effectiveStep,
+      agentDef,
+      runtimeProvider
+    );
+    const requiredRuntimeCapabilities = this.requiredRuntimeCapabilities(
+      effectiveStep,
+      run,
+      agentDef,
+      runtimeProvider,
+      sessionConfig,
+      toolPolicyFilter
+    );
+    assertProviderRuntimeCapabilities(
+      runtimeManifest,
+      requiredRuntimeCapabilities,
+      `workflow fallback ${agentId} for step ${step.id}`
+    );
+    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+      presetId: agentDef.sandboxPresetId,
+      provider: runtimeManifest.provider,
+      workspacePath: this.expandPath(this.getWorkflowWorkingDirectory(run)),
+      providerRuntimeManifest: runtimeManifest,
+    });
+    if (sandboxPolicy.result.decision === 'block') {
+      throw new Error(
+        `Workflow fallback ${agentId} cannot enforce sandbox preset ${sandboxPolicy.result.preset.id}`
+      );
+    }
+    return runtimeManifest;
   }
 
   /**
@@ -165,7 +221,7 @@ export class WorkflowStepExecutor {
       requiredRuntimeCapabilities,
       `workflow step ${step.id} launch`
     );
-    await this.recordRuntimeManifest(run, step, runtimeManifest);
+    await this.recordRuntimeManifest(run, step, runtimeManifest, requiredRuntimeCapabilities);
     const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId: agentDef?.sandboxPresetId,
       provider: runtimeManifest.provider,
@@ -487,12 +543,23 @@ export class WorkflowStepExecutor {
   private async recordRuntimeManifest(
     run: WorkflowRun,
     step: WorkflowStep,
-    manifest: ProviderRuntimeManifest
+    manifest: ProviderRuntimeManifest,
+    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[]
   ): Promise<void> {
     const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
     if (stepRun) {
       stepRun.providerRuntimeManifest = manifest;
+      stepRun.requiredRuntimeCapabilities = [...new Set(requiredRuntimeCapabilities)].sort(
+        (left, right) => left.localeCompare(right)
+      );
       stepRun.runtimeControls = providerRuntimeControls(manifest);
+      if (stepRun.runRetry?.state === 'launched') {
+        stepRun.runRetry = {
+          ...stepRun.runRetry,
+          launchedManifestDigest: manifest.digest,
+          requiredRuntimeCapabilities: [...stepRun.requiredRuntimeCapabilities],
+        };
+      }
     }
     await this.persistRun(run);
   }

@@ -22,6 +22,11 @@ const TaskIdSchema = z.object({
   id: z.string().min(1),
 });
 
+const CancelAgentRecoverySchema = z.object({
+  id: z.string().min(1),
+  attemptId: z.string().trim().min(1).max(120),
+});
+
 const ConversationActionSchema = z.enum([
   'resume',
   'follow-up',
@@ -130,6 +135,24 @@ export const agentTools = [
         },
       },
       required: ['id'],
+    },
+  },
+  {
+    name: 'cancel_agent_recovery',
+    description: 'Cancel the exact pending automatic retry or fallback for a task',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Task ID or partial ID',
+        },
+        attemptId: {
+          type: 'string',
+          description: 'Exact parent attempt that owns the pending recovery',
+        },
+      },
+      required: ['id', 'attemptId'],
     },
   },
   {
@@ -246,6 +269,24 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
 
       return {
         content: [{ type: 'text', text: 'Agent stopped' }],
+      };
+    }
+
+    case 'cancel_agent_recovery': {
+      const { id, attemptId } = CancelAgentRecoverySchema.parse(args);
+      const task = await findTask(id);
+      if (!task) {
+        return {
+          content: [{ type: 'text', text: `Task not found: ${id}` }],
+          isError: true,
+        };
+      }
+      const result = await api(`/api/agents/${task.id}/recovery/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ attemptId }),
+      });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
 

@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { WorkflowDefinition } from '../../types/workflow.js';
+import {
+  ZERO_AGENT_BUDGET_USAGE,
+  type RunRecoveryRecord,
+} from '@veritas-kanban/shared';
+import type { WorkflowDefinition, WorkflowRun } from '../../types/workflow.js';
 import { WorkflowService } from '../../services/workflow-service.js';
 import {
   createTestSqliteDatabase,
@@ -53,7 +57,7 @@ function workflow(): WorkflowDefinition {
         type: 'agent',
         agent: 'agent-1',
         input: 'retry once',
-        on_fail: { retry: 1 },
+        on_fail: { retry: 1, retry_delay_ms: 100 },
       },
       {
         id: 'approval',
@@ -152,5 +156,103 @@ describe('SQLite workflow run execution', () => {
     expect(counts).toEqual({ retryable: 2, approval: 2 });
     expect(mockBroadcastWorkflowStatus).toHaveBeenCalled();
     await expect(fs.access(runsDir)).rejects.toThrow();
+  });
+
+  it('allows only one service instance to claim a persisted workflow recovery', async () => {
+    const { WorkflowRunService } = await import('../../services/workflow-run-service.js');
+    const definition = workflow();
+    await workflowService.saveWorkflow(definition);
+    const runsDir = path.join(testRoot, 'storage', 'workflow-runs');
+    const first = new WorkflowRunService({
+      runsDir,
+      storageType: 'sqlite',
+      sqliteDatabase: fixture.database,
+      workflowService,
+    });
+    const second = new WorkflowRunService({
+      runsDir,
+      storageType: 'sqlite',
+      sqliteDatabase: fixture.database,
+      workflowService,
+    });
+    const recovery: RunRecoveryRecord = {
+      schemaVersion: 'run-recovery/v1',
+      rootRunId: 'run_root',
+      parentRunId: 'run_parent',
+      sequence: 1,
+      fallbackUsed: false,
+      state: 'scheduled',
+      action: 'retry',
+      failure: {
+        classification: 'transient-transport',
+        summary: 'ECONNRESET',
+        retryable: true,
+        approvalRequired: false,
+        destructiveSideEffects: false,
+      },
+      reason: 'Retry after transient transport failure.',
+      backoffMs: 100,
+      scheduledAt: '2026-07-24T00:00:00.000Z',
+      notBefore: '2026-07-24T00:00:00.100Z',
+      selectedAgent: 'agent-1',
+      routingDecision: 'Workflow retry policy.',
+      requiredRuntimeCapabilities: ['run.start'],
+      cumulativeBudget: { ...ZERO_AGENT_BUDGET_USAGE },
+    };
+    const run: WorkflowRun = {
+      id: 'run_1784941000000_race01',
+      workflowId: definition.id,
+      workflowVersion: definition.version,
+      status: 'pending',
+      currentStep: 'retryable',
+      context: {},
+      startedAt: '2026-07-24T00:00:00.000Z',
+      steps: [
+        {
+          stepId: 'retryable',
+          status: 'failed',
+          agent: 'agent-1',
+          retries: 1,
+          runRetry: recovery,
+        },
+      ],
+    };
+    await (
+      first as unknown as { saveRun(run: WorkflowRun): Promise<void> }
+    ).saveRun(run);
+    const executeFirst = vi
+      .spyOn(first as never, 'executeRun')
+      .mockResolvedValue(undefined as never);
+    const executeSecond = vi
+      .spyOn(second as never, 'executeRun')
+      .mockResolvedValue(undefined as never);
+
+    await Promise.all([
+      (
+        first as unknown as {
+          resumeScheduledWorkflowRecovery(runId: string, stepId: string): Promise<void>;
+        }
+      ).resumeScheduledWorkflowRecovery(run.id, 'retryable'),
+      (
+        second as unknown as {
+          resumeScheduledWorkflowRecovery(runId: string, stepId: string): Promise<void>;
+        }
+      ).resumeScheduledWorkflowRecovery(run.id, 'retryable'),
+    ]);
+
+    expect(executeFirst.mock.calls.length + executeSecond.mock.calls.length).toBe(1);
+    expect(await first.getRun(run.id)).toMatchObject({
+      revision: 2,
+      status: 'running',
+      steps: [
+        expect.objectContaining({
+          runRetry: expect.objectContaining({
+            state: 'launched',
+            parentRunId: recovery.parentRunId,
+            sequence: recovery.sequence,
+          }),
+        }),
+      ],
+    });
   });
 });

@@ -652,6 +652,22 @@
       "denialReason": "Stopping an agent requires task read and task write access."
     },
     {
+      "id": "cli:agents:agent:recovery",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Reading a task recovery decision requires task and agent read access."
+    },
+    {
+      "id": "cli:agents:agent:cancel-recovery",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Cancelling an exact pending recovery requires task read and task write access."
+    },
+    {
       "id": "cli:agents:agent:resume",
       "kind": "cli",
       "classification": "agent-scoped",
@@ -1370,6 +1386,14 @@
       "permissions": ["task:read", "task:write"],
       "source": "mcp/src/tools/agents.ts",
       "denialReason": "Stopping an agent requires task read and task write access."
+    },
+    {
+      "id": "mcp:cancel_agent_recovery",
+      "kind": "mcp",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "mcp/src/tools/agents.ts",
+      "denialReason": "Cancelling an exact pending recovery requires task read and task write access."
     },
     {
       "id": "mcp:list_tool_servers",

@@ -225,6 +225,8 @@ export type StepRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'sk
 
 export interface WorkflowRun {
   id: string; // run_<timestamp>_<nanoid>
+  /** Monotonic persistence revision used for compare-and-set workflow mutations. */
+  revision?: number;
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // Optional task association
@@ -252,7 +254,11 @@ export interface StepRun {
   error?: string;
   /** Exact provider evidence snapshot used for this step's launch and controls. */
   providerRuntimeManifest?: import('./provider-runtime.types.js').ProviderRuntimeManifest;
+  /** Exact runtime capabilities required by the recorded provider launch. */
+  requiredRuntimeCapabilities?: import('./provider-runtime.types.js').ProviderRuntimeCapabilityId[];
   runtimeControls?: import('./provider-runtime.types.js').ProviderRuntimeControlSet;
+  /** Durable retry/fallback decision for this workflow step. */
+  runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
 
   // Loop-specific state
   loopState?: {

@@ -1,6 +1,6 @@
 # MCP Server — Veritas Kanban
 
-> **41 tools · 9 categories · stdio transport · zero external dependencies**
+> **42 tools · 9 categories · stdio transport · zero external dependencies**
 
 The Veritas Kanban MCP server lets any [Model Context Protocol](https://modelcontextprotocol.io/) client — Claude Desktop, OpenClaw, Cursor, Cline, Codex, or your own tooling — manage tasks, sprints, projects, comments, agents, automation, notifications, and summaries through a single stdio process.
 
@@ -24,7 +24,7 @@ MCP is optional. The board, REST API, and CLI do not require MCP or OpenClaw. Us
 - [Configuration Reference](#configuration-reference)
 - [Tool Catalog](#tool-catalog)
   - [Task Management (6 tools)](#task-management-6-tools)
-  - [Agent Control (2 tools)](#agent-control-2-tools)
+  - [Agent Control (4 tools)](#agent-control-4-tools)
   - [Automation (4 tools)](#automation-4-tools)
   - [Notifications (3 tools)](#notifications-3-tools)
   - [Summaries (2 tools)](#summaries-2-tools)
@@ -45,7 +45,7 @@ MCP is optional. The board, REST API, and CLI do not require MCP or OpenClaw. Us
 Use the MCP server when:
 
 - Your AI assistant (Claude Desktop, Cursor, etc.) needs **structured tool access** to VK — not raw HTTP calls.
-- You want **one process** that exposes all 36 VK operations with typed inputs and validated outputs.
+- You want **one process** that exposes all 42 VK operations with typed inputs and validated outputs.
 - You're building **agent orchestration** and need task/sprint/automation lifecycle management over MCP.
 
 Don't use it when:
@@ -71,7 +71,7 @@ Don't use it when:
 │  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
 │  │ Tool       │  │ Resource   │  │ Transport  │  │
 │  │ Registry   │  │ Provider   │  │ (stdio)    │  │
-│  │ (41 tools) │  │ (kanban:// │  │            │  │
+│  │ (42 tools) │  │ (kanban:// │  │            │  │
 │  │            │  │  URIs)     │  │            │  │
 │  └──────┬─────┘  └──────┬─────┘  └───────────┘  │
 │         │               │                        │
@@ -356,12 +356,13 @@ Task write tools return concise confirmations. Use `get_task`, `list_tasks`, or 
 
 ---
 
-### Agent Control (3 tools)
+### Agent Control (4 tools)
 
 | Tool                         | Description                               | Required Inputs             | Key Options                                                           |
 | ---------------------------- | ----------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
 | `start_agent`                | Start a coding agent on a task            | `id`                        | `agent`; `requiredRuntimeCapabilities`; `commitPolicy`                |
 | `stop_agent`                 | Stop a running agent                      | `id`                        | Resolves status and binds the stop to that exact attempt and manifest |
+| `cancel_agent_recovery`      | Cancel a pending retry or fallback        | `id`, `attemptId`           | Requires the exact persisted parent attempt                           |
 | `control_agent_conversation` | Invoke a supported conversation lifecycle | `id`, `attemptId`, `action` | `message`, `forkTurnId`, `commitPolicy`                               |
 
 > **Constraints:** Only works on tasks with `type: "code"` that already have a git worktree attached.
@@ -887,4 +888,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-07-24 · VK v6.0.2 · 41 tools / 9 categories_
+_Last updated: 2026-07-24 · VK v6.0.2 · 42 tools / 9 categories_

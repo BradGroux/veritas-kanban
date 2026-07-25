@@ -92,7 +92,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
-- [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 41 tools, architecture, tool catalog, security model, and read/write smoke checks.
+- [MCP Server Guide](docs/mcp/README.md) — optional MCP setup, 42 tools, architecture, tool catalog, security model, and read/write smoke checks.
 - [Agent Guide and `AGENTS.md` Template](docs/AGENTS-TEMPLATE.md) — shared managed-run protocol, external self-reporting template, and unmanaged MCP setup.
 - [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, OpenClaw, and optional model profiles.
 - [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
@@ -214,7 +214,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ### 🔌 Optional Integration Surfaces
 
-- **MCP Server** — 41 tools across 9 categories via Model Context Protocol
+- **MCP Server** — 42 tools across 9 categories via Model Context Protocol
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 
@@ -353,7 +353,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 #### Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — 41 tools across 9 categories via Model Context Protocol
+- **MCP Server** — 42 tools across 9 categories via Model Context Protocol
 - **Codex MCP setup** — documented `codex mcp add veritas-kanban` setup for local and API-key-backed deployments
 - **Notifications** — Teams integration for task updates
 
@@ -391,7 +391,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 | **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
 | **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
 | **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
-| **MCP server**                  |             ✅ 41 tools             |              ❌              |          ❌           |
+| **MCP server**                  |             ✅ 42 tools             |              ❌              |          ❌           |
 | **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
 | **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
 | **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
@@ -753,7 +753,7 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-Optional. The MCP server exposes 41 tools across 9 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects, and run-scoped tool control) via [Model Context Protocol](https://modelcontextprotocol.io/). Skip this for board-only use.
+Optional. The MCP server exposes 42 tools across 9 categories (tasks, agents, automation, notifications, summaries, sprints, comments, projects, and run-scoped tool control) via [Model Context Protocol](https://modelcontextprotocol.io/). Skip this for board-only use.
 
 **→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, read/write smoke checks, and troubleshooting.
 

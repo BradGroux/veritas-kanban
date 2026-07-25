@@ -1205,7 +1205,19 @@ If the server crashes mid-workflow, runs can be recovered:
    curl -X POST http://localhost:3001/api/workflow-runs/run_XYZ/resume
    ```
 
-> **📝 Note**: Automatic recovery is planned for a future release.
+Automatic transient-failure recovery is persisted on the step as
+`runRetry`. Scheduled retry and fallback timers are restored after server
+restart. Cancel an exact pending workflow recovery with:
+
+```bash
+curl -X POST http://localhost:3001/api/workflows/runs/run_XYZ/recovery/cancel \
+  -H 'Content-Type: application/json' \
+  -d '{"stepId":"implement","parentRunId":"run_XYZ:implement:0"}'
+```
+
+Only explicitly transient failures retry automatically. Policy and
+configuration failures do not retry, while fallback agents must pass the same
+runtime capability and sandbox preflight as a normal workflow launch.
 
 ### Performance Issues
 

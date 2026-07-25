@@ -8,11 +8,14 @@ import path from 'path';
 import { nanoid } from 'nanoid';
 import {
   buildWorkflowPipelineSummary,
+  DEFAULT_ROUTING_CONFIG,
   ZERO_AGENT_BUDGET_USAGE,
   type AgentBudgetDecision,
   type AgentBudgetPolicy,
   type AgentBudgetThresholdEvent,
   type AgentBudgetUsage,
+  type AgentType,
+  type RunRecoveryRecord,
   type WorkflowPipelineRoleStatusPatch,
   type WorkflowSubagentRunStatus,
   type WorkflowSubagentTelemetry,
@@ -29,7 +32,11 @@ import { SqliteWorkflowRunRepository } from '../storage/sqlite/workflow-reposito
 import { getConfigService } from './config-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
+import { getAgentRoutingService } from './agent-routing-service.js';
+import { atomicWriteFile } from '../storage/fs-helpers.js';
+import { withFileLock } from './file-lock.js';
 
 const log = createLogger('workflow-run');
 
@@ -38,6 +45,10 @@ const MAX_CONCURRENT_RUNS = 10;
 /** Default maximum cross-step reroutes per run before exhaustion policy fires (#780) */
 const MAX_REROUTES_DEFAULT = 10;
 let activeRunCount = 0;
+const scheduledWorkflowRecoveries = new Map<
+  string,
+  { stepId: string; timer: ReturnType<typeof setTimeout> }
+>();
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
 const RESERVED_CONTEXT_KEYS = new Set([
   'task',
@@ -57,11 +68,13 @@ export class WorkflowRunService {
   private readonly repository: SqliteWorkflowRunRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
+  private readonly runRecoveryPolicy: RunRecoveryPolicyService;
 
   constructor(options: string | WorkflowRunServiceOptions = {}) {
     const resolvedOptions = typeof options === 'string' ? { runsDir: options } : options;
     this.runsDir = resolvedOptions.runsDir || getWorkflowRunsDir();
     this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
+    this.runRecoveryPolicy = resolvedOptions.runRecoveryPolicy ?? new RunRecoveryPolicyService();
     this.stepExecutor = new WorkflowStepExecutor(resolvedOptions.runsDir, {
       persistRun: (run) => this.saveRun(run),
     });
@@ -453,8 +466,18 @@ export class WorkflowRunService {
         broadcastWorkflowStatus(run);
 
         const stepRun = existingStepRun;
+        stepRun.agent ??= step.agent;
         stepRun.status = 'running';
         stepRun.startedAt = new Date().toISOString();
+        if (stepRun.runRetry?.state === 'launching') {
+          stepRun.runRetry = {
+            ...stepRun.runRetry,
+            state: 'launched',
+            launchedAt: stepRun.startedAt,
+            launchedRunId: `${run.id}:${step.id}:${stepRun.runRetry.sequence}`,
+            selectedAgent: stepRun.agent ?? stepRun.runRetry.selectedAgent,
+          };
+        }
         this.syncPipelineSummary(run, workflow);
         await this.saveRun(run);
 
@@ -525,10 +548,30 @@ export class WorkflowRunService {
           broadcastWorkflowStatus(run);
 
           // Handle failure policy
-          const handled = await this.handleStepFailure(step, stepRun, stepQueue, workflow, run);
+          const handled = await this.handleStepFailure(
+            step,
+            stepRun,
+            stepQueue,
+            workflow,
+            run,
+            err
+          );
           if (!handled) {
             // No retry policy — fail the entire workflow
             throw err;
+          }
+
+          if (stepRun.runRetry?.state === 'scheduled') {
+            log.info(
+              {
+                runId: run.id,
+                stepId: step.id,
+                action: stepRun.runRetry.action,
+                notBefore: stepRun.runRetry.notBefore,
+              },
+              'Workflow recovery scheduled'
+            );
+            return;
           }
 
           if ((run.status as WorkflowRun['status']) === 'blocked') {
@@ -576,37 +619,120 @@ export class WorkflowRunService {
     stepRun: StepRun,
     stepQueue: string[],
     workflow: WorkflowDefinition,
-    run: WorkflowRun
+    run: WorkflowRun,
+    error: unknown
   ): Promise<boolean> {
     const policy = step.on_fail;
-    if (!policy) return false;
+    const config = await getConfigService().getConfig();
+    const routingPolicy = config.agentRouting ?? DEFAULT_ROUTING_CONFIG;
+    const failure = this.runRecoveryPolicy.classifyError(error);
+    const selectedAgent = stepRun.agent ?? step.agent ?? step.id;
+    const previousSequence = stepRun.runRetry?.sequence ?? stepRun.retries;
+    const maxRetries = policy?.retry ?? (policy?.retry_step ? 0 : routingPolicy.maxRetries);
+    const explicitFallback = policy?.escalate_to?.startsWith('agent:')
+      ? policy.escalate_to.slice('agent:'.length)
+      : undefined;
+    const fallbackOnFailure = Boolean(
+      explicitFallback || (!policy?.retry_step && routingPolicy.fallbackOnFailure)
+    );
+    let fallbackAgent: string | undefined = explicitFallback;
+    let fallbackEligible: boolean | undefined;
+    let fallbackReason: string | undefined;
 
-    // Strategy 1: Retry the same step
-    if (policy.retry && stepRun.retries < policy.retry) {
-      stepRun.retries++;
-      stepRun.status = 'pending';
-      stepRun.error = undefined;
-
-      // Phase 2: Apply retry delay if specified (#113)
-      if (policy.retry_delay_ms && policy.retry_delay_ms > 0) {
-        log.info(
-          { stepId: step.id, retry: stepRun.retries, delayMs: policy.retry_delay_ms },
-          'Delaying retry'
-        );
-        await new Promise((resolve) => setTimeout(resolve, policy.retry_delay_ms));
+    if (
+      failure.retryable &&
+      previousSequence >= maxRetries &&
+      !stepRun.runRetry?.fallbackUsed &&
+      fallbackOnFailure
+    ) {
+      if (!fallbackAgent && run.taskId && step.agent) {
+        const task = await getTaskService().getTask(run.taskId);
+        if (task) {
+          const fallback = await getAgentRoutingService().getFallback(
+            task,
+            step.agent as AgentType
+          );
+          if (fallback && workflow.agents.some((agent) => agent.id === fallback.agent)) {
+            fallbackAgent = fallback.agent;
+            fallbackReason = fallback.reason;
+          }
+        }
       }
+      if (fallbackAgent) {
+        try {
+          await this.stepExecutor.validateFallbackAgent(step, run, fallbackAgent);
+          fallbackEligible = true;
+        } catch (fallbackError) {
+          fallbackEligible = false;
+          fallbackReason =
+            fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        }
+      }
+    }
 
-      // Re-queue this step at the front
-      stepQueue.unshift(step.id);
+    const decision = this.runRecoveryPolicy.decide(failure, {
+      rootRunId: stepRun.runRetry?.rootRunId ?? `${run.id}:${step.id}:0`,
+      parentRunId: `${run.id}:${step.id}:${previousSequence}`,
+      selectedAgent,
+      routingDecision: explicitFallback
+        ? `Workflow failure policy selected fallback ${explicitFallback}.`
+        : `Workflow step ${step.id} uses workspace recovery policy.`,
+      ...(stepRun.providerRuntimeManifest?.digest
+        ? { sourceManifestDigest: stepRun.providerRuntimeManifest.digest }
+        : {}),
+      requiredRuntimeCapabilities: [...(stepRun.requiredRuntimeCapabilities ?? [])],
+      cumulativeBudget: run.budget?.usage ?? { ...ZERO_AGENT_BUDGET_USAGE },
+      previousSequence,
+      fallbackUsed: stepRun.runRetry?.fallbackUsed,
+      maxRetries,
+      fallbackOnFailure,
+      ...(fallbackAgent ? { fallbackAgent } : {}),
+      ...(fallbackEligible !== undefined ? { fallbackEligible } : {}),
+      ...(fallbackReason ? { fallbackReason } : {}),
+      ...(policy?.retry_delay_ms !== undefined
+        ? { baseBackoffMs: Math.max(100, policy.retry_delay_ms) }
+        : {}),
+    });
+    stepRun.runRetry = decision;
 
+    if (decision.state === 'scheduled') {
+      stepRun.retries = decision.sequence;
+      stepRun.status = 'failed';
+      stepRun.error = decision.reason;
+      if (decision.action === 'fallback') {
+        stepRun.agent = decision.selectedAgent;
+      }
+      run.status = 'pending';
+      run.error = decision.reason;
       this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
-      log.info({ stepId: step.id, retry: stepRun.retries }, 'Retrying step');
+      this.scheduleWorkflowRecovery(run.id, step.id, decision);
       return true;
     }
 
-    // Strategy 2: Retry a different step
-    if (policy.retry_step) {
+    if (decision.state === 'approval-required') {
+      if (policy?.escalate_to === 'skip') {
+        stepRun.status = 'skipped';
+        this.syncPipelineSummary(run, workflow);
+        await this.saveRun(run);
+        return true;
+      }
+      run.status = 'blocked';
+      run.error =
+        policy?.escalate_to === 'human'
+          ? policy.escalate_message || `Step ${step.id} failed`
+          : decision.handoff?.summary || decision.reason;
+      this.syncPipelineSummary(run, workflow);
+      await this.saveRun(run);
+      return true;
+    }
+
+    // Strategy 2: Retry a different step after automatic recovery is exhausted.
+    if (
+      policy?.retry_step &&
+      !failure.approvalRequired &&
+      failure.classification !== 'cancellation'
+    ) {
       const retryStep = workflow.steps.find((s) => s.id === policy.retry_step);
       if (!retryStep) {
         throw new Error(`retry_step references unknown step: ${policy.retry_step}`);
@@ -686,7 +812,7 @@ export class WorkflowRunService {
     }
 
     // Strategy 3: Escalation
-    if (policy.escalate_to === 'human') {
+    if (policy?.escalate_to === 'human') {
       run.status = 'blocked';
       run.error = policy.escalate_message || `Step ${step.id} failed`;
       this.syncPipelineSummary(run, workflow);
@@ -696,7 +822,7 @@ export class WorkflowRunService {
       return true; // Handled (blocked, not failed)
     }
 
-    if (policy.escalate_to === 'skip') {
+    if (policy?.escalate_to === 'skip') {
       stepRun.status = 'skipped';
       this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
@@ -704,12 +830,199 @@ export class WorkflowRunService {
       return true;
     }
 
-    if (policy.escalate_to?.startsWith('agent:')) {
-      // Delegate to another agent (future feature)
-      throw new Error('Agent escalation not yet implemented');
+    if (explicitFallback) {
+      throw new Error(decision.reason);
     }
 
     return false; // No policy matched — fail the workflow
+  }
+
+  async reconcilePendingRecoveries(): Promise<void> {
+    const runs = (await this.listRuns()).filter(
+      (run) => run.status === 'pending' || run.status === 'running'
+    );
+    let scheduledCount = 0;
+    for (const run of runs) {
+      const stepRun = run.steps.find((step) => step.stepId === run.currentStep);
+      const recovery = stepRun?.runRetry;
+      if (!stepRun || !recovery) {
+        continue;
+      }
+      if (recovery.state === 'launched' && run.status === 'running') {
+        stepRun.runRetry = {
+          ...recovery,
+          state: 'approval-required',
+          action: 'approval',
+          reason:
+            'The server restarted after recovery launch and cannot prove the provider terminal state.',
+          backoffMs: 0,
+          handoff: {
+            summary: 'Workflow recovery requires operator reconciliation after restart.',
+            nextActions: [
+              'Inspect the provider session and persisted step output.',
+              'Confirm no provider work remains before resuming or replacing the run.',
+            ],
+          },
+        };
+        run.status = 'blocked';
+        run.error = stepRun.runRetry.handoff?.summary ?? stepRun.runRetry.reason;
+        await this.saveRun(run);
+        broadcastWorkflowStatus(run);
+        continue;
+      }
+      if (!['scheduled', 'launching'].includes(recovery.state)) continue;
+      const reconciledRecovery: RunRecoveryRecord =
+        recovery.state === 'launching'
+          ? {
+              ...recovery,
+              state: 'scheduled',
+              notBefore: new Date().toISOString(),
+              reason: `${recovery.reason} Re-queued after server restart before provider launch.`,
+            }
+          : recovery;
+      if (recovery.state === 'launching') {
+        stepRun.runRetry = reconciledRecovery;
+        stepRun.status = 'failed';
+        stepRun.error = reconciledRecovery.reason;
+        run.status = 'pending';
+        run.error = reconciledRecovery.reason;
+        await this.saveRun(run);
+      }
+      this.scheduleWorkflowRecovery(run.id, stepRun.stepId, reconciledRecovery);
+      scheduledCount += 1;
+    }
+    if (scheduledCount > 0) {
+      log.info({ scheduledCount }, 'Workflow retry/fallback reconciliation complete');
+    }
+  }
+
+  async cancelPendingRecovery(
+    runId: string,
+    stepId: string,
+    parentRunId: string,
+    actor: string
+  ): Promise<WorkflowRun> {
+    const run = await this.getRun(runId);
+    if (!run) throw new NotFoundError(`Run ${runId} not found`);
+    const stepRun = run.steps.find((step) => step.stepId === stepId);
+    const recovery = stepRun?.runRetry;
+    if (!stepRun || !recovery || recovery.parentRunId !== parentRunId) {
+      throw new ConflictError('Recovery cancellation does not match the pending workflow step');
+    }
+    if (!['scheduled', 'launching'].includes(recovery.state)) {
+      throw new ConflictError(`Workflow recovery is not pending (state: ${recovery.state})`);
+    }
+    const cancelled: RunRecoveryRecord = {
+      ...recovery,
+      state: 'cancelled',
+      action: 'cancelled',
+      reason: 'Automatic workflow recovery was cancelled by an operator.',
+      backoffMs: 0,
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: actor,
+      handoff: {
+        summary: 'Automatic workflow recovery was cancelled.',
+        nextActions: ['Resume or restart the workflow explicitly if it should continue.'],
+      },
+    };
+    stepRun.runRetry = cancelled;
+    run.status = 'blocked';
+    run.error = cancelled.handoff?.summary ?? cancelled.reason;
+    await this.saveRun(run);
+    this.clearScheduledWorkflowRecovery(runId, stepId);
+    broadcastWorkflowStatus(run);
+    return run;
+  }
+
+  private scheduleWorkflowRecovery(
+    runId: string,
+    stepId: string,
+    recovery: RunRecoveryRecord
+  ): void {
+    if (recovery.state !== 'scheduled') return;
+    this.clearScheduledWorkflowRecovery(runId);
+    const notBefore = recovery.notBefore ? Date.parse(recovery.notBefore) : Date.now();
+    const delay = Math.max(0, Math.min(2_147_483_647, notBefore - Date.now()));
+    const timer = setTimeout(() => {
+      const scheduled = scheduledWorkflowRecoveries.get(runId);
+      if (!scheduled || scheduled.stepId !== stepId) return;
+      scheduledWorkflowRecoveries.delete(runId);
+      void this.resumeScheduledWorkflowRecovery(runId, stepId).catch((error) => {
+        log.error({ err: error, runId, stepId }, 'Scheduled workflow recovery failed');
+      });
+    }, delay);
+    timer.unref?.();
+    scheduledWorkflowRecoveries.set(runId, { stepId, timer });
+  }
+
+  private clearScheduledWorkflowRecovery(runId: string, expectedStepId?: string): void {
+    const scheduled = scheduledWorkflowRecoveries.get(runId);
+    if (!scheduled || (expectedStepId && scheduled.stepId !== expectedStepId)) return;
+    clearTimeout(scheduled.timer);
+    scheduledWorkflowRecoveries.delete(runId);
+  }
+
+  private async resumeScheduledWorkflowRecovery(runId: string, stepId: string): Promise<void> {
+    let recoveryToReschedule: RunRecoveryRecord | undefined;
+    const run = await this.getRun(runId);
+    const stepRun = run?.steps.find((step) => step.stepId === stepId);
+    const recovery = stepRun?.runRetry;
+    if (!run || !stepRun || recovery?.state !== 'scheduled' || run.status !== 'pending') {
+      return;
+    }
+    if (recovery.notBefore && Date.parse(recovery.notBefore) > Date.now()) {
+      recoveryToReschedule = recovery;
+    }
+    if (recoveryToReschedule) {
+      this.scheduleWorkflowRecovery(runId, stepId, recoveryToReschedule);
+      return;
+    }
+    const launchedAt = new Date().toISOString();
+    stepRun.runRetry = {
+      ...recovery,
+      state: 'launched',
+      launchedAt,
+      launchedRunId: `${run.id}:${stepId}:${recovery.sequence}`,
+      selectedAgent: stepRun.agent ?? recovery.selectedAgent,
+    };
+    stepRun.status = 'pending';
+    stepRun.error = undefined;
+    run.status = 'running';
+    run.error = undefined;
+    try {
+      await this.saveRun(run);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        log.info({ runId, stepId }, 'Workflow recovery claim lost to another process');
+        return;
+      }
+      throw error;
+    }
+
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) {
+      stepRun.runRetry = {
+        ...stepRun.runRetry,
+        state: 'exhausted',
+        action: 'terminal',
+        reason: `Workflow ${run.workflowId} no longer exists.`,
+        backoffMs: 0,
+        handoff: {
+          summary: 'The persisted workflow recovery cannot be resumed.',
+          nextActions: ['Restore the workflow definition or start a replacement run.'],
+        },
+      };
+      run.status = 'failed';
+      run.error = stepRun.runRetry.reason;
+      run.completedAt = new Date().toISOString();
+      await this.saveRun(run);
+      broadcastWorkflowStatus(run);
+      return;
+    }
+
+    void this.executeRun(run, workflow).catch((error) => {
+      log.error({ err: error, runId, stepId }, 'Workflow recovery execution failed');
+    });
   }
 
   /**
@@ -1190,11 +1503,21 @@ export class WorkflowRunService {
    * Phase 2: Updates lastCheckpoint timestamp on every save
    */
   private async saveRun(run: WorkflowRun): Promise<void> {
-    // Update checkpoint timestamp
-    run.lastCheckpoint = new Date().toISOString();
+    const expectedRevision = run.revision ?? 0;
+    const nextRun: WorkflowRun = {
+      ...run,
+      revision: expectedRevision + 1,
+      lastCheckpoint: new Date().toISOString(),
+    };
 
     if (this.repository) {
-      this.repository.save(run);
+      if (!this.repository.save(nextRun, expectedRevision)) {
+        throw new ConflictError('Workflow run changed during persistence', {
+          runId: run.id,
+          expectedRevision,
+        });
+      }
+      Object.assign(run, nextRun);
       return;
     }
 
@@ -1202,7 +1525,29 @@ export class WorkflowRunService {
     await fs.mkdir(runDir, { recursive: true });
 
     const runPath = path.join(runDir, 'run.json');
-    await fs.writeFile(runPath, JSON.stringify(run, null, 2), 'utf-8');
+    await withFileLock(runPath, async () => {
+      let current: WorkflowRun | null = null;
+      try {
+        current = JSON.parse(await fs.readFile(runPath, 'utf-8')) as WorkflowRun;
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
+          throw error;
+        }
+      }
+      const currentRevision = current?.revision ?? 0;
+      if (
+        (current && currentRevision !== expectedRevision) ||
+        (!current && expectedRevision !== 0)
+      ) {
+        throw new ConflictError('Workflow run changed during persistence', {
+          runId: run.id,
+          expectedRevision,
+          currentRevision: current?.revision,
+        });
+      }
+      await atomicWriteFile(runPath, JSON.stringify(nextRun, null, 2));
+    });
+    Object.assign(run, nextRun);
   }
 
   /**
@@ -1235,6 +1580,7 @@ export interface WorkflowRunServiceOptions {
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
   workflowService?: ReturnType<typeof getWorkflowService>;
+  runRecoveryPolicy?: RunRecoveryPolicyService;
 }
 
 // Singleton

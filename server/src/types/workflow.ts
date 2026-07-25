@@ -197,6 +197,8 @@ export type StepRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'sk
 
 export interface WorkflowRun {
   id: string; // run_<timestamp>_<nanoid>
+  /** Monotonic persistence revision used for compare-and-set workflow mutations. */
+  revision?: number;
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // Optional task association
@@ -225,7 +227,11 @@ export interface StepRun {
   output?: string; // Path to output file
   error?: string;
   providerRuntimeManifest?: import('@veritas-kanban/shared').ProviderRuntimeManifest;
+  /** Exact runtime capabilities required by the recorded provider launch. */
+  requiredRuntimeCapabilities?: import('@veritas-kanban/shared').ProviderRuntimeCapabilityId[];
   runtimeControls?: import('@veritas-kanban/shared').ProviderRuntimeControlSet;
+  /** Durable retry/fallback decision for this workflow step. */
+  runRetry?: import('@veritas-kanban/shared').RunRecoveryRecord;
 
   // Loop-specific state
   loopState?: {
