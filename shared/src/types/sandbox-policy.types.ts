@@ -5,11 +5,17 @@ export type SandboxNetworkDefault = 'allow' | 'deny';
 export type SandboxCredentialMode = 'none' | 'brokered' | 'env-passthrough';
 export type SandboxPolicyDecision = 'allow' | 'warn' | 'block';
 export type SandboxPolicyRuleStatus = 'supported' | 'unsupported' | 'advisory';
+export type FilesystemSandboxBackendId = 'codex-sandbox' | 'provider-native' | 'none';
+export type FilesystemSandboxBackendState = 'available' | 'native' | 'unavailable';
 export type SandboxProviderCapabilityId =
   | 'filesystem.read'
   | 'filesystem.write'
   | 'filesystem.deny-paths'
   | 'filesystem.dotfile-masking'
+  | 'filesystem.protected-metadata'
+  | 'filesystem.descendants'
+  | 'filesystem.run-scoped-temp'
+  | 'filesystem.cleanup'
   | 'network.disable'
   | 'network.allowlist'
   | 'network.block-private'
@@ -67,6 +73,18 @@ export interface SandboxProviderCapabilities {
   advisory?: SandboxProviderCapabilityId[];
 }
 
+export interface FilesystemSandboxBackendStatus {
+  backend: FilesystemSandboxBackendId;
+  state: FilesystemSandboxBackendState;
+  capabilityVersion: string;
+  backendVersion?: string;
+  backendExecutableDigest?: string;
+  platformBackend:
+    'seatbelt' | 'landlock-bubblewrap' | 'restricted-token' | 'provider-native' | 'none';
+  supported: SandboxProviderCapabilityId[];
+  reason: string;
+}
+
 export interface SandboxPolicyEvaluationInput {
   presetId?: string;
   preset?: SandboxPolicyPreset;
@@ -102,6 +120,7 @@ export interface SandboxPolicyDryRunResult {
     networkAccessEnabled: boolean;
     envPassthrough: string[];
     credentialRefs: string[];
+    filesystemBackend: FilesystemSandboxBackendStatus;
   };
   evaluations: SandboxPolicyRuleEvaluation[];
   unsupportedRules: SandboxPolicyRuleEvaluation[];

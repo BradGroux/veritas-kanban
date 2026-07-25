@@ -51,11 +51,9 @@ describe('AgentHostService', () => {
       posture: 'connected',
       workspaceLabels: ['workspace:veritas-kanban'],
     });
-    expect(health.hosts[0].sandboxCapabilities).toEqual([
-      'environment.allowlist',
-      'filesystem.read',
-      'filesystem.write',
-    ]);
+    expect(health.hosts[0].sandboxCapabilities).toEqual(['environment.allowlist']);
+    expect(health.hosts[0].sandboxCapabilities).not.toContain('filesystem.read');
+    expect(health.hosts[0].sandboxCapabilities).not.toContain('filesystem.write');
     expect(health.hosts[0].sandboxCapabilities).not.toContain('network.disable');
     expect(JSON.stringify(health.hosts)).not.toContain('/Users/bradgroux');
   });

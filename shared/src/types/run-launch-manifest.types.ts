@@ -4,6 +4,7 @@ import type { ProviderRuntimeCapabilityState } from './provider-runtime.types.js
 
 export const RUN_LAUNCH_MANIFEST_SCHEMA_VERSION = 'run-launch-manifest/v1' as const;
 export const RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION = 'run-launch-credential-plan/v1' as const;
+export const FILESYSTEM_SANDBOX_EVIDENCE_SCHEMA_VERSION = 'filesystem-sandbox-evidence/v1' as const;
 
 export type RunLaunchManifestEnforcementState = 'enforced' | 'not-required' | 'unavailable';
 
@@ -176,6 +177,41 @@ export interface RunLaunchSandboxRule {
   status: 'supported' | 'unsupported' | 'advisory';
 }
 
+export type RunLaunchFilesystemRootAccess = 'read' | 'write' | 'deny' | 'protected';
+export type RunLaunchFilesystemRootScope =
+  | 'platform-runtime'
+  | 'protected-metadata'
+  | 'workspace'
+  | 'home'
+  | 'absolute'
+  | 'run-temp'
+  | 'run-cache';
+
+export interface RunLaunchFilesystemRootEvidence {
+  id: string;
+  access: RunLaunchFilesystemRootAccess;
+  scope: RunLaunchFilesystemRootScope;
+  pathDigest: string;
+}
+
+export interface RunLaunchFilesystemSandboxEvidence {
+  schemaVersion: typeof FILESYSTEM_SANDBOX_EVIDENCE_SCHEMA_VERSION;
+  providerRuntimeManifestDigest: string;
+  backend: import('./sandbox-policy.types.js').FilesystemSandboxBackendId;
+  state: 'enforced' | 'native' | 'advisory' | 'unavailable';
+  platformBackend:
+    'seatbelt' | 'landlock-bubblewrap' | 'restricted-token' | 'provider-native' | 'none';
+  capabilityVersion: string;
+  backendVersion?: string;
+  backendExecutableDigest?: string;
+  policyHash: string;
+  roots: RunLaunchFilesystemRootEvidence[];
+  protectedPaths: string[];
+  dotfileMasking: boolean;
+  descendantsEnforced: boolean;
+  cleanupOwner: 'run-supervisor' | 'provider-native' | 'none';
+}
+
 export interface RunLaunchSandbox {
   presetId: string;
   enforcement: 'required' | 'advisory';
@@ -188,6 +224,8 @@ export interface RunLaunchSandbox {
   };
   unsupportedRules: RunLaunchSandboxRule[];
   warnings: string[];
+  /** Present on manifests compiled after filesystem-sandbox-evidence/v1 shipped. */
+  filesystem?: RunLaunchFilesystemSandboxEvidence;
 }
 
 export interface RunLaunchWorkspaceTrust {

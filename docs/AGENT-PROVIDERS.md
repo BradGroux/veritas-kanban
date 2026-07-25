@@ -65,7 +65,7 @@ Readiness runs bounded `claude --version`, `claude auth status`, and
 `claude agents --json` probes without a shell. The auth status probe is useful
 diagnostic evidence, but only the explicit bare-mode environment satisfies
 launch authentication. The runtime profile requires an exact
-`2.1.218 (Claude Code)` version match and probe revision 14; version or build
+`2.1.218 (Claude Code)` version match and probe revision 15; version or build
 drift invalidates conformance evidence.
 
 Claude's stream is consumed as bounded JSONL. Partial text/thinking, tool
@@ -192,7 +192,7 @@ starts it without a shell in the assigned task worktree.
 Before changing attempt state, Veritas starts a bounded probe process and sends
 ACP `initialize` with protocol version `1`. The returned agent name, version,
 capabilities, and a deterministic capability digest become
-`provider-runtime-manifest/v1` evidence at probe revision 14. Launch starts a
+`provider-runtime-manifest/v1` evidence at probe revision 15. Launch starts a
 fresh process and rejects capability drift before opening or prompting a
 session.
 
@@ -782,12 +782,47 @@ Presets can be assigned to:
 - A workflow agent, as the guardrail for that workflow role.
 - A one-off agent start request, by passing `sandboxPresetId`.
 
-The launch path dry-runs the selected preset before starting Codex CLI, Codex
-SDK, Claude Code, or OpenClaw-backed work. Required controls fail closed when
-the provider cannot support them. Advisory controls continue with warnings and
-a governance trace. Settings also includes a dry-run panel that shows effective
+The launch path dry-runs the selected preset before starting any executable
+provider adapter. Required controls fail closed when the provider or execution
+host cannot support them. Advisory controls continue with warnings and a
+governance trace. Settings also includes a dry-run panel that shows effective
 sandbox mode, network access, environment allowlist, unsupported controls, and
 the trace ID.
+
+Local ACP, Claude Code, Codex app-server, Codex CLI, and Hermes processes use a
+version-bound `codex sandbox` wrapper when its credential-free conformance
+probe passes. The wrapper enforces the compiled read, write, deny, dotfile, and
+protected-metadata rules before the provider starts and applies to descendant
+processes. Codex SDK and remote OpenClaw runs cannot use that outer process
+wrapper. They satisfy required filesystem policies only when the exact
+provider runtime manifest proves every active filesystem capability, including
+descendant inheritance, run-scoped temporary storage, and cleanup. Coarse
+provider modes such as `workspace-write` remain advisory.
+
+Workspace and home aliases cannot escape their canonical base. Nested mounts
+below an allowed root are denied unless explicitly granted or denied, and the
+mount topology is rechecked before activation. Provider-native local
+enforcement blocks if Veritas finds an ambiguous nested mount that it cannot
+add to the native policy. The bounded workspace tree is also scanned before
+compilation and immediately before activation for pre-existing hard links that
+alias inaccessible external inodes.
+
+The immutable launch manifest records the backend, versioned capability
+contract, executable-content digest, provider runtime manifest digest, policy
+hash, and only hashes of canonical paths. `.git`, `.agents`, `.codex`, and
+`.veritas-kanban` remain explicitly read-only directly beneath writable roots,
+and cannot themselves be selected as writable policy roots. Local wrapper and
+provider-native runs use supervisor-owned temporary and cache directories;
+remote native backends must prove their own run-scoped storage and cleanup
+contract. See
+[Run-scoped filesystem sandbox backends](architecture/FILESYSTEM-SANDBOX-BACKENDS.md)
+for the enforcement and failure contract.
+
+There is no per-run override for a required filesystem boundary. The
+`overrideReason` launch field applies only to task readiness. Intentionally
+relaxing filesystem enforcement requires an authorized advisory preset, and
+the effective decision remains recorded in policy and launch governance
+evidence.
 
 Credential references and environment-style `name=value` values are redacted from dry-run output and governance traces. Prefer brokered credential presets for workflows that need scoped secrets instead of exposing broad environment passthrough.
 

@@ -450,7 +450,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 14,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 15,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this
@@ -1150,6 +1150,14 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 
 - Required controls fail closed before agent or workflow launch when the selected provider cannot support them.
 - Advisory controls warn and record trace evidence without blocking the run.
+- Required filesystem rules compile into a pre-spawn, descendant-inherited
+  boundary with exact read, write, deny, dotfile, protected-metadata,
+  run-scoped temporary-directory, and cleanup evidence. Ambiguous mounts,
+  external hard-link aliases, backend byte drift, or cleanup paths with
+  symlinked ancestors fail closed.
+- Provider-native enforcement qualifies only when the exact runtime manifest
+  proves every active filesystem and lifecycle capability. Coarse sandbox
+  modes remain advisory.
 - Credential references and environment-style `name=value` values are redacted in dry-run output and governance traces.
 - Credential definitions and run-bound leases use metadata-only versioned
   records, opaque hashed handles, exact action/manifest binding, atomic

@@ -6,11 +6,16 @@ import type {
   SandboxPolicyRuleEvaluation,
   SandboxProviderCapabilityId,
   SandboxProviderCapabilities,
+  FilesystemSandboxBackendStatus,
 } from '@veritas-kanban/shared';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sandboxPolicyPresetSchema } from '../schemas/sandbox-policy-schemas.js';
 import { ConfigService, getConfigService } from './config-service.js';
 import { sandboxCapabilitiesFromManifest } from './provider-runtime-control-service.js';
+import {
+  getFilesystemSandboxService,
+  type FilesystemSandboxService,
+} from './filesystem-sandbox-service.js';
 
 const BUILT_IN_TIMESTAMP = '2026-06-18T00:00:00.000Z';
 
@@ -181,7 +186,13 @@ export const BUILT_IN_SANDBOX_PRESETS: SandboxPolicyPreset[] = [
 ];
 
 export class SandboxPolicyService {
-  constructor(private readonly configService: ConfigService = getConfigService()) {}
+  constructor(
+    private readonly configService: ConfigService = getConfigService(),
+    private readonly filesystemSandbox: Pick<
+      FilesystemSandboxService,
+      'probe'
+    > = getFilesystemSandboxService()
+  ) {}
 
   async listPresets(): Promise<SandboxPolicyPreset[]> {
     const config = await this.configService.getConfig();
@@ -261,24 +272,59 @@ export class SandboxPolicyService {
     const preset = input.preset
       ? this.normalizePreset(input.preset)
       : await this.resolvePreset(input.presetId);
+    const filesystemBackend = await this.filesystemSandbox.probe(
+      input.provider ?? input.providerRuntimeManifest?.provider
+    );
     if (!preset.enabled) {
-      return this.resultForDisabledPreset(preset, input);
+      return this.resultForDisabledPreset(preset, input, filesystemBackend);
     }
 
-    const capabilities = sandboxCapabilitiesFromManifest(input.providerRuntimeManifest);
-    const evaluations = this.evaluateRules(preset, capabilities).map((rule) =>
-      preset.enforcement === 'required' &&
-      rule.capability === 'credential.broker' &&
-      rule.status === 'advisory'
-        ? {
-            ...rule,
-            status: 'unsupported' as const,
-            detail:
-              `${rule.detail} Advisory or externally delegated credential handling does not ` +
-              'satisfy required brokered mode.',
-          }
-        : rule
+    const providerCapabilities = sandboxCapabilitiesFromManifest(input.providerRuntimeManifest);
+    const effectiveFilesystemBackend = nativeFilesystemBackend(
+      filesystemBackend,
+      providerCapabilities,
+      input,
+      preset
     );
+    const capabilities = mergeSandboxCapabilities(
+      {
+        ...providerCapabilities,
+        supported: providerCapabilities.supported.filter(
+          (capability) => !capability.startsWith('filesystem.')
+        ),
+      },
+      effectiveFilesystemBackend.supported
+    );
+    const evaluations = [
+      ...this.evaluateRules(preset, capabilities),
+      ...this.evaluateLocalHandleRule(preset, input.provider, effectiveFilesystemBackend),
+    ].map((rule) => {
+      if (
+        preset.enforcement === 'required' &&
+        rule.capability.startsWith('filesystem.') &&
+        rule.status === 'advisory'
+      ) {
+        return {
+          ...rule,
+          status: 'unsupported' as const,
+          detail: `${rule.detail} Advisory filesystem evidence does not satisfy required enforcement.`,
+        };
+      }
+      if (
+        preset.enforcement === 'required' &&
+        rule.capability === 'credential.broker' &&
+        rule.status === 'advisory'
+      ) {
+        return {
+          ...rule,
+          status: 'unsupported' as const,
+          detail:
+            `${rule.detail} Advisory or externally delegated credential handling does not ` +
+            'satisfy required brokered mode.',
+        };
+      }
+      return rule;
+    });
     const unsupportedRules = evaluations.filter((rule) => rule.status === 'unsupported');
     const advisoryRules = evaluations.filter((rule) => rule.status === 'advisory');
     const advisoryUnsupportedRules = preset.enforcement === 'advisory' ? unsupportedRules : [];
@@ -298,6 +344,7 @@ export class SandboxPolicyService {
         networkAccessEnabled,
         envPassthrough: preset.environment.passthrough.slice().sort(),
         credentialRefs: redactBrokerRefs(preset.credentials.brokerRefs),
+        filesystemBackend: effectiveFilesystemBackend,
       },
       evaluations,
       unsupportedRules,
@@ -404,6 +451,12 @@ export class SandboxPolicyService {
     const supported = new Set(capabilities.supported);
     const advisory = new Set(capabilities.advisory ?? []);
     const evaluations: SandboxPolicyRuleEvaluation[] = [];
+    const filesystemBoundaryRequested =
+      preset.filesystem.readPaths.length > 0 ||
+      preset.filesystem.writePaths.length > 0 ||
+      preset.filesystem.deniedPaths.length > 0 ||
+      preset.filesystem.dotfileMasking ||
+      preset.filesystem.localOnlyHandles;
     const add = (
       id: string,
       label: string,
@@ -449,6 +502,34 @@ export class SandboxPolicyService {
       'filesystem.dotfile-masking',
       preset.filesystem.dotfileMasking,
       'Dotfile masking must be enforced before launch.'
+    );
+    add(
+      'filesystem-protected-metadata',
+      'Protected repository metadata',
+      'filesystem.protected-metadata',
+      preset.filesystem.writePaths.length > 0,
+      'Repository and harness metadata below writable roots must remain protected.'
+    );
+    add(
+      'filesystem-descendants',
+      'Descendant process inheritance',
+      'filesystem.descendants',
+      preset.filesystem.readPaths.length > 0 || preset.filesystem.writePaths.length > 0,
+      'The compiled filesystem boundary must apply to provider descendants.'
+    );
+    add(
+      'filesystem-run-scoped-temp',
+      'Run-scoped temporary storage',
+      'filesystem.run-scoped-temp',
+      filesystemBoundaryRequested,
+      'Temporary and cache writes must stay inside attempt-scoped roots.'
+    );
+    add(
+      'filesystem-cleanup',
+      'Filesystem sandbox cleanup',
+      'filesystem.cleanup',
+      filesystemBoundaryRequested,
+      'Attempt-scoped filesystem roots must have a durable cleanup owner.'
     );
     add(
       'network-disabled',
@@ -500,7 +581,8 @@ export class SandboxPolicyService {
 
   private resultForDisabledPreset(
     preset: SandboxPolicyPreset,
-    input: SandboxPolicyEvaluationInput
+    input: SandboxPolicyEvaluationInput,
+    filesystemBackend: FilesystemSandboxBackendStatus
   ): SandboxPolicyDryRunResult {
     return {
       decision: preset.enforcement === 'required' ? 'block' : 'warn',
@@ -511,6 +593,7 @@ export class SandboxPolicyService {
         networkAccessEnabled: true,
         envPassthrough: [],
         credentialRefs: [],
+        filesystemBackend,
       },
       evaluations: [],
       unsupportedRules: [],
@@ -529,6 +612,28 @@ export class SandboxPolicyService {
     if (hasWrites && workspaceOnly) return 'workspace-write';
     if (!hasWrites && preset.filesystem.readPaths.length > 0) return 'read-only';
     return 'danger-full-access';
+  }
+
+  private evaluateLocalHandleRule(
+    preset: SandboxPolicyPreset,
+    provider: string | undefined,
+    filesystemBackend: FilesystemSandboxBackendStatus
+  ): SandboxPolicyRuleEvaluation[] {
+    if (!preset.filesystem.localOnlyHandles) return [];
+    const supported =
+      provider !== 'openclaw' &&
+      (filesystemBackend.state === 'available' || filesystemBackend.state === 'native');
+    return [
+      {
+        id: 'filesystem-local-handles',
+        label: 'Local-only filesystem handles',
+        capability: 'filesystem.write',
+        status: supported ? 'supported' : 'unsupported',
+        detail: supported
+          ? 'Filesystem handles remain on the selected local execution host.'
+          : 'The selected provider cannot prove local-only filesystem handle ownership.',
+      },
+    ];
   }
 
   private buildTrace(
@@ -616,6 +721,80 @@ function uniqueSorted(values: string[]): string[] {
 
 function redactBrokerRefs(refs: string[]): string[] {
   return uniqueSorted(refs.map((ref) => ref.replace(/=.*/, '=[redacted]')));
+}
+
+function mergeSandboxCapabilities(
+  provider: SandboxProviderCapabilities,
+  filesystemCapabilities: SandboxProviderCapabilityId[]
+): SandboxProviderCapabilities {
+  return {
+    provider: provider.provider,
+    supported: uniqueSorted([
+      ...provider.supported,
+      ...filesystemCapabilities,
+    ]) as SandboxProviderCapabilityId[],
+    advisory: uniqueSorted(provider.advisory ?? []) as SandboxProviderCapabilityId[],
+  };
+}
+
+function nativeFilesystemBackend(
+  hostBackend: FilesystemSandboxBackendStatus,
+  providerCapabilities: SandboxProviderCapabilities,
+  input: SandboxPolicyEvaluationInput,
+  preset: SandboxPolicyPreset
+): FilesystemSandboxBackendStatus {
+  if (hostBackend.state === 'available') return hostBackend;
+  const native = uniqueSorted([...providerCapabilities.supported, ...hostBackend.supported]).filter(
+    (capability): capability is SandboxProviderCapabilityId => capability.startsWith('filesystem.')
+  );
+  const required = requiredFilesystemCapabilities(preset);
+  if (required.length === 0 || !required.every((capability) => native.includes(capability))) {
+    return hostBackend;
+  }
+  if (input.providerRuntimeManifest?.probe.state !== 'ready') {
+    return {
+      ...hostBackend,
+      reason: `Provider-native filesystem evidence requires a ready runtime probe; received ${
+        input.providerRuntimeManifest?.probe.state ?? 'missing'
+      }.`,
+    };
+  }
+  return {
+    backend: 'provider-native',
+    state: 'native',
+    capabilityVersion: `provider-runtime-manifest/v1@${input.providerRuntimeManifest?.probeRevision ?? 0}`,
+    ...(input.providerRuntimeManifest?.providerVersion
+      ? { backendVersion: input.providerRuntimeManifest.providerVersion }
+      : {}),
+    platformBackend: 'provider-native',
+    supported: native,
+    reason:
+      'The persisted provider runtime manifest and any host-supplied lifecycle evidence together satisfy the required filesystem contract.',
+  };
+}
+
+function requiredFilesystemCapabilities(
+  preset: SandboxPolicyPreset
+): SandboxProviderCapabilityId[] {
+  const required: SandboxProviderCapabilityId[] = [];
+  if (preset.filesystem.readPaths.length > 0) required.push('filesystem.read');
+  if (preset.filesystem.writePaths.length > 0) required.push('filesystem.write');
+  if (preset.filesystem.deniedPaths.length > 0) required.push('filesystem.deny-paths');
+  if (preset.filesystem.dotfileMasking) required.push('filesystem.dotfile-masking');
+  if (preset.filesystem.writePaths.length > 0) required.push('filesystem.protected-metadata');
+  if (preset.filesystem.readPaths.length > 0 || preset.filesystem.writePaths.length > 0) {
+    required.push('filesystem.descendants');
+  }
+  if (
+    preset.filesystem.readPaths.length > 0 ||
+    preset.filesystem.writePaths.length > 0 ||
+    preset.filesystem.deniedPaths.length > 0 ||
+    preset.filesystem.dotfileMasking ||
+    preset.filesystem.localOnlyHandles
+  ) {
+    required.push('filesystem.run-scoped-temp', 'filesystem.cleanup');
+  }
+  return required;
 }
 
 function presetsChanged(existing: SandboxPolicyPreset[], merged: SandboxPolicyPreset[]): boolean {

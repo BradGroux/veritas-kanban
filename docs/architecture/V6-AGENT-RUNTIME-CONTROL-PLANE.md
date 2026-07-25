@@ -5,6 +5,7 @@ harnesses and Buzz integration. It is the version-level composition of the
 individual contract documents for
 [ACP](ACP-PROVIDER-V1.md),
 [harness conformance](HARNESS-CONFORMANCE-V1.md),
+[filesystem sandbox backends](FILESYSTEM-SANDBOX-BACKENDS.md),
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 

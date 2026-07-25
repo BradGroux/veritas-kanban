@@ -133,6 +133,22 @@ const sandboxPolicy: SandboxPolicyDryRunResult = {
     networkAccessEnabled: false,
     envPassthrough: ['PATH', 'OPENAI_API_KEY'],
     credentialRefs: [],
+    filesystemBackend: {
+      backend: 'codex-sandbox',
+      state: 'available',
+      capabilityVersion: 'codex-sandbox-state/v0.145',
+      backendVersion: '0.145.0',
+      platformBackend: 'seatbelt',
+      supported: [
+        'filesystem.read',
+        'filesystem.write',
+        'filesystem.deny-paths',
+        'filesystem.dotfile-masking',
+        'filesystem.protected-metadata',
+        'filesystem.descendants',
+      ],
+      reason: 'Credential-free conformance passed.',
+    },
   },
   evaluations: [],
   unsupportedRules: [],
@@ -217,6 +233,29 @@ function input(
     },
     requiredHealthChecks: [],
     sandboxPolicy,
+    filesystemSandbox: {
+      schemaVersion: 'filesystem-sandbox-evidence/v1',
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+      backend: 'codex-sandbox',
+      state: 'enforced',
+      platformBackend: 'seatbelt',
+      capabilityVersion: 'codex-sandbox-state/v0.145',
+      backendVersion: '0.145.0',
+      backendExecutableDigest: `sha256:${'d'.repeat(64)}`,
+      policyHash: `sha256:${'f'.repeat(64)}`,
+      roots: [
+        {
+          id: 'workspace-write',
+          access: 'write',
+          scope: 'workspace',
+          pathDigest: `sha256:${'e'.repeat(64)}`,
+        },
+      ],
+      protectedPaths: ['.agents', '.codex', '.git', '.veritas-kanban'],
+      dotfileMasking: false,
+      descendantsEnforced: true,
+      cleanupOwner: 'run-supervisor',
+    },
     budgetPolicy: {
       enabled: true,
       scope: 'run',
@@ -243,6 +282,13 @@ function input(
     ],
     ...overrides,
   };
+}
+
+function requireFilesystemSandbox(
+  value: ReturnType<typeof input>['filesystemSandbox']
+): NonNullable<ReturnType<typeof input>['filesystemSandbox']> {
+  if (!value) throw new Error('Expected filesystem sandbox fixture evidence');
+  return value;
 }
 
 function brokeredCatalog(): RunToolCatalog {
@@ -325,6 +371,14 @@ describe('RunLaunchManifestService', () => {
         enforceable: true,
         blockers: [],
       },
+      sandbox: {
+        filesystem: {
+          backend: 'codex-sandbox',
+          providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+          policyHash: `sha256:${'f'.repeat(64)}`,
+          cleanupOwner: 'run-supervisor',
+        },
+      },
     });
     expect(manifest.instructions).toEqual([
       expect.objectContaining({
@@ -351,6 +405,20 @@ describe('RunLaunchManifestService', () => {
     expect(Object.isFrozen(manifest)).toBe(true);
     expect(Object.isFrozen(manifest.runtime.args)).toBe(true);
     expect(() => manifest.runtime.args.push('--tamper')).toThrow(TypeError);
+  });
+
+  it('rejects filesystem evidence linked to a different provider manifest', () => {
+    const compileInput = input();
+
+    expect(() =>
+      new RunLaunchManifestService().compile({
+        ...compileInput,
+        filesystemSandbox: {
+          ...requireFilesystemSandbox(compileInput.filesystemSandbox),
+          providerRuntimeManifestDigest: `sha256:${'9'.repeat(64)}`,
+        },
+      })
+    ).toThrow('Filesystem sandbox evidence does not match the provider runtime manifest');
   });
 
   it('fails closed when task credentials lack a controlled broker boundary', () => {
@@ -496,6 +564,10 @@ describe('RunLaunchManifestService', () => {
           adapterId: 'hermes-cli',
         },
         sandboxPolicy: brokeredPolicy,
+        filesystemSandbox: {
+          ...requireFilesystemSandbox(input().filesystemSandbox),
+          providerRuntimeManifestDigest: hermesRuntime.digest,
+        },
         runToolCatalog,
         tools: {
           allowed: [],
@@ -781,6 +853,10 @@ describe('RunLaunchManifestService', () => {
         createdAt: '2026-07-23T20:30:00.000Z',
         taskEnvelope: refreshedEnvelope,
         providerRuntimeManifest: refreshedProviderRuntime,
+        filesystemSandbox: {
+          ...requireFilesystemSandbox(input().filesystemSandbox),
+          providerRuntimeManifestDigest: refreshedProviderRuntime.digest,
+        },
       })
     );
 

@@ -730,6 +730,10 @@ const SANDBOX_CAPABILITY_IDS = new Set<SandboxProviderCapabilityId>([
   'filesystem.write',
   'filesystem.deny-paths',
   'filesystem.dotfile-masking',
+  'filesystem.protected-metadata',
+  'filesystem.descendants',
+  'filesystem.run-scoped-temp',
+  'filesystem.cleanup',
   'network.disable',
   'network.allowlist',
   'network.block-private',
@@ -753,11 +757,11 @@ function sandboxCapabilityArray(value: unknown): SandboxProviderCapabilityId[] {
 function inferredSandboxCapabilities(provider: string | undefined): SandboxProviderCapabilityId[] {
   switch (provider) {
     case 'codex-cli':
-      return ['filesystem.read', 'filesystem.write', 'environment.allowlist'];
+      return ['environment.allowlist'];
     case 'codex-sdk':
-      return ['filesystem.read', 'filesystem.write', 'network.disable', 'environment.allowlist'];
+      return ['network.disable', 'environment.allowlist'];
     case 'openclaw':
-      return ['filesystem.read', 'filesystem.write', 'environment.allowlist'];
+      return ['environment.allowlist'];
     default:
       return [];
   }

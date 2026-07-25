@@ -19,6 +19,7 @@ import type {
   RunLaunchRuntime,
   RunLaunchTools,
   RunLaunchWorkspaceTrust,
+  RunLaunchFilesystemSandboxEvidence,
   SandboxPolicyDryRunResult,
   TaskEnvelope,
   TaskReadinessSummary,
@@ -68,6 +69,7 @@ export interface RunLaunchManifestCompileInput {
   requiredHealthChecks: string[];
   satisfiedHealthChecks?: string[];
   sandboxPolicy: SandboxPolicyDryRunResult;
+  filesystemSandbox?: RunLaunchFilesystemSandboxEvidence;
   runToolCatalog?: RunToolCatalog;
   budgetPolicy: AgentBudgetPolicy;
   workspaceTrust: RunLaunchWorkspaceTrust;
@@ -153,6 +155,7 @@ export class RunLaunchManifestService {
         }))
         .sort((left, right) => left.id.localeCompare(right.id)),
       warnings: uniqueSorted(input.sandboxPolicy.warnings.map(sanitizeProviderRuntimeDiagnostic)),
+      ...(input.filesystemSandbox ? { filesystem: input.filesystemSandbox } : {}),
     };
     const runtime = normalizeRuntime(input.runtime);
     const brokeredCredentialReferences = brokeredReferencesFromCatalog(input, providerRuntime);
@@ -343,7 +346,9 @@ export function diffRunLaunchManifests(
               ? materialRuntime(parentManifest)
               : field === 'credentials'
                 ? materialCredentials(parentManifest)
-                : parentManifest[field];
+                : field === 'sandbox'
+                  ? materialSandbox(parentManifest)
+                  : parentManifest[field];
     const afterValue =
       field === 'taskEnvelope'
         ? {
@@ -361,7 +366,9 @@ export function diffRunLaunchManifests(
               ? materialRuntime(currentManifest)
               : field === 'credentials'
                 ? materialCredentials(currentManifest)
-                : currentManifest[field];
+                : field === 'sandbox'
+                  ? materialSandbox(currentManifest)
+                  : currentManifest[field];
     const beforeDigest = digestRunLaunchValue(beforeValue);
     const afterDigest = digestRunLaunchValue(afterValue);
     return beforeDigest === afterDigest ? [] : [{ field, beforeDigest, afterDigest }];
@@ -408,6 +415,17 @@ function materialCredentials(
     ...material
   } = manifest.credentials;
   return material;
+}
+
+function materialSandbox(manifest: RunLaunchManifest): unknown {
+  const filesystem = manifest.sandbox.filesystem;
+  if (!filesystem) return manifest.sandbox;
+  const { providerRuntimeManifestDigest: _providerRuntimeManifestDigest, ...materialFilesystem } =
+    filesystem;
+  return {
+    ...manifest.sandbox,
+    filesystem: materialFilesystem,
+  };
 }
 
 function normalizeRuntime(runtime: RunLaunchRuntime): RunLaunchRuntime {

@@ -20,7 +20,7 @@ import { TaskService } from './task-service.js';
 import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
-import { getSandboxPolicyService } from './sandbox-policy-service.js';
+import { getSandboxPolicyService, type SandboxPolicyService } from './sandbox-policy-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import {
   AgentHealthService,
@@ -229,6 +229,11 @@ import {
 } from './run-tool-bridge-service.js';
 import { getToolPolicyService } from './tool-policy-service.js';
 import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
+import {
+  FilesystemSandboxService,
+  getFilesystemSandboxService,
+  type FilesystemSandboxLaunchPlan,
+} from './filesystem-sandbox-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -382,6 +387,7 @@ interface PendingAgent {
   };
   acpControl?: AcpStdioControl;
   runToolBridge?: RunToolBridgeLaunch;
+  filesystemSandboxPlan?: FilesystemSandboxLaunchPlan;
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
@@ -478,6 +484,11 @@ export class ClawdbotAgentService {
   private toolControlPlane: ToolControlPlaneService;
   private runToolBridge: RunToolBridgeService;
   private runRecoveryPolicy: RunRecoveryPolicyService;
+  private filesystemSandbox: Pick<
+    FilesystemSandboxService,
+    'compile' | 'activate' | 'cleanup' | 'wrap'
+  >;
+  private sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'>;
   private logsDir: string;
 
   constructor(
@@ -494,7 +505,12 @@ export class ClawdbotAgentService {
     conversationLifecycle = new ConversationLifecycleService(),
     toolControlPlane: ToolControlPlaneService = getToolControlPlaneService(),
     runToolBridge: RunToolBridgeService = getRunToolBridgeService(),
-    runRecoveryPolicy = new RunRecoveryPolicyService()
+    runRecoveryPolicy = new RunRecoveryPolicyService(),
+    filesystemSandbox: Pick<
+      FilesystemSandboxService,
+      'compile' | 'activate' | 'cleanup' | 'wrap'
+    > = getFilesystemSandboxService(),
+    sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'> = getSandboxPolicyService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -518,6 +534,8 @@ export class ClawdbotAgentService {
     this.toolControlPlane = toolControlPlane;
     this.runToolBridge = runToolBridge;
     this.runRecoveryPolicy = runRecoveryPolicy;
+    this.filesystemSandbox = filesystemSandbox;
+    this.sandboxPolicies = sandboxPolicies;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -1454,7 +1472,7 @@ export class ClawdbotAgentService {
       budgetPolicy,
       options.requiredRuntimeCapabilities
     );
-    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+    const sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
         profileLaunch?.sandboxPresetId ??
@@ -1467,6 +1485,15 @@ export class ClawdbotAgentService {
     const startedAt = new Date().toISOString();
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const worktreePath = this.expandPath(task.git.worktreePath);
+    const filesystemSandboxPlan = await this.filesystemSandbox.compile({
+      taskId,
+      attemptId,
+      provider,
+      workspacePath: worktreePath,
+      sandboxPolicy: sandboxPolicy.result,
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+      providerCommand: launchAgentConfig?.command,
+    });
     const taskEnvelope = await this.taskEnvelopes.build({
       task,
       attemptId,
@@ -1530,6 +1557,7 @@ export class ClawdbotAgentService {
       budgetSources,
       options,
       runToolCatalog,
+      filesystemSandboxPlan,
     });
     const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
     return {
@@ -1703,7 +1731,7 @@ export class ClawdbotAgentService {
         ...conversationLaunchCapabilities(conversationRequest.mode),
       ]
     );
-    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+    const sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
         profileLaunch?.sandboxPresetId ??
@@ -1741,6 +1769,15 @@ export class ClawdbotAgentService {
     }
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const worktreePath = this.expandPath(task.git.worktreePath);
+    const filesystemSandboxPlan = await this.filesystemSandbox.compile({
+      taskId,
+      attemptId,
+      provider,
+      workspacePath: worktreePath,
+      sandboxPolicy: sandboxPolicy.result,
+      providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+      providerCommand: launchAgentConfig?.command,
+    });
     const commitPolicy = resolveTaskCommitPolicy({
       runPolicy: options.commitPolicy,
       taskPolicy: task.executionPolicy,
@@ -1826,6 +1863,7 @@ export class ClawdbotAgentService {
       budgetSources,
       options,
       runToolCatalog,
+      filesystemSandboxPlan,
     });
     const parentAttempt = await this.resolveParentAttempt(
       task,
@@ -1911,6 +1949,7 @@ export class ClawdbotAgentService {
       runLaunchManifestDrift,
       runRetry,
       conversation,
+      filesystemSandboxPlan,
       budget: budgetPolicy
         ? {
             ...budgetService.initialState(budgetPolicy),
@@ -2054,6 +2093,14 @@ export class ClawdbotAgentService {
         worktreeLeaseId: taskEnvelope.workspace.ownershipLeaseId,
         recoveryOperations,
         budget: pendingAgents.get(taskId)?.budget,
+        ...(filesystemSandboxPlan.directories
+          ? {
+              sandbox: {
+                rootPath: filesystemSandboxPlan.directories.rootPath,
+                policyHash: filesystemSandboxPlan.evidence.policyHash,
+              },
+            }
+          : {}),
       });
       supervisorId = supervisor.id;
       const pending = pendingAgents.get(taskId);
@@ -2143,6 +2190,7 @@ export class ClawdbotAgentService {
         harnessSupport: this.harnessTelemetry(harnessSupport),
       });
 
+      await this.filesystemSandbox.activate(filesystemSandboxPlan);
       await adapter.start({
         task,
         agentConfig: launchAgentConfig,
@@ -2240,6 +2288,10 @@ export class ClawdbotAgentService {
             this.revokeRunCredentialLeases(taskId, attemptId, 'failed', runLaunchManifest.digest),
         ],
         ['close run tool sessions', () => this.toolControlPlane.closeRun(taskId, attemptId)],
+        [
+          'remove run filesystem sandbox',
+          () => this.filesystemSandbox.cleanup(filesystemSandboxPlan),
+        ],
       ];
       for (const [effect, cleanup] of launchCleanupEffects) {
         try {
@@ -4652,6 +4704,38 @@ export class ClawdbotAgentService {
     }
   }
 
+  private filesystemSandboxLaunch(
+    pending: PendingAgent,
+    command: string,
+    args: string[],
+    cwd: string
+  ) {
+    const plan = pending.filesystemSandboxPlan;
+    const evidence = pending.runLaunchManifest.sandbox.filesystem;
+    if (!plan || !evidence) {
+      throw new ConflictError('Provider launch is missing compiled filesystem sandbox evidence.', {
+        taskId: pending.taskId,
+        attemptId: pending.attemptId,
+      });
+    }
+    if (
+      plan.evidence.policyHash !== evidence.policyHash ||
+      plan.evidence.backend !== evidence.backend ||
+      plan.evidence.capabilityVersion !== evidence.capabilityVersion
+    ) {
+      throw new ConflictError(
+        'Filesystem sandbox launch plan changed after manifest compilation.',
+        {
+          taskId: pending.taskId,
+          attemptId: pending.attemptId,
+          manifestPolicyHash: evidence.policyHash,
+          launchPolicyHash: plan.evidence.policyHash,
+        }
+      );
+    }
+    return this.filesystemSandbox.wrap(plan, command, args, cwd);
+  }
+
   private async startAcpStdio(
     task: Task,
     agentConfig: AgentConfig | undefined,
@@ -4694,16 +4778,23 @@ export class ClawdbotAgentService {
     pending.abortController = approvalAbort;
     let activeSessionId: string | undefined;
     const summaryChunks: string[] = [];
+    const launch = this.filesystemSandboxLaunch(
+      pending,
+      agentConfig.command,
+      this.buildAcpProviderArgs(agentConfig, supportProfile.id),
+      worktreePath
+    );
     const control = await openAcpStdio({
-      command: agentConfig.command,
-      args: this.buildAcpProviderArgs(agentConfig, supportProfile.id),
-      cwd: worktreePath,
-      environment: process.env,
+      command: launch.command,
+      args: launch.args,
+      cwd: launch.cwd,
+      environment: { ...process.env, ...launch.environment },
       environmentKeys: [
         ...(sandboxPolicy?.effective.envPassthrough ?? []),
         ...toolEnvironmentKeys,
         ...supportProfile.launch.environmentAllowlist,
         ...supportProfile.launch.credentialAllowlist,
+        ...Object.keys(launch.environment),
       ],
       runtimeProfileId: supportProfile.id,
       onSpawn: async (child) => {
@@ -4963,15 +5054,17 @@ export class ClawdbotAgentService {
       : [];
     const command = agentConfig?.command || 'codex';
     const args = buildCodexAppServerArgs(agentConfig?.args);
-    const child = spawn(command, args, {
-      cwd: worktreePath,
-      env: this.runToolBridge.launchEnvironment(
-        buildSafeCodexAppServerEnv(process.env, [
-          ...(sandboxPolicy?.effective.envPassthrough ?? []),
-          ...toolEnvironmentKeys,
-        ]),
-        pending.runToolBridge
-      ),
+    const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
+    const launchEnvironment = this.runToolBridge.launchEnvironment(
+      buildSafeCodexAppServerEnv(process.env, [
+        ...(sandboxPolicy?.effective.envPassthrough ?? []),
+        ...toolEnvironmentKeys,
+      ]),
+      pending.runToolBridge
+    );
+    const child = spawn(launch.command, launch.args, {
+      cwd: launch.cwd,
+      env: { ...launchEnvironment, ...launch.environment },
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -5827,12 +5920,16 @@ export class ClawdbotAgentService {
       agentConfig
     );
 
-    const child = spawn(command, args, {
-      cwd: worktreePath,
-      env: buildSafeClaudeCodeEnv(process.env, [
-        ...(sandboxPolicy?.effective.envPassthrough ?? []),
-        ...toolEnvironmentKeys,
-      ]),
+    const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
+    const child = spawn(launch.command, launch.args, {
+      cwd: launch.cwd,
+      env: {
+        ...buildSafeClaudeCodeEnv(process.env, [
+          ...(sandboxPolicy?.effective.envPassthrough ?? []),
+          ...toolEnvironmentKeys,
+        ]),
+        ...launch.environment,
+      },
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -6239,21 +6336,23 @@ export class ClawdbotAgentService {
     // -z = non-interactive one-shot mode (final response text only)
     const args = ['-z', ...extraArgs, prompt];
 
-    const child = spawn(command, args, {
-      cwd: worktreePath,
-      env: buildSafeHermesEnv(process.env, sandboxPolicy?.effective.envPassthrough),
-      shell: false,
-      detached: process.platform !== 'win32',
-    });
-
     const pending = pendingAgents.get(task.id);
     if (!pending || pending.attemptId !== attemptId) {
-      child.kill('SIGTERM');
       throw new ConflictError('Hermes launch was cancelled before process spawn.', {
         taskId: task.id,
         attemptId,
       });
     }
+    const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
+    const child = spawn(launch.command, launch.args, {
+      cwd: launch.cwd,
+      env: {
+        ...buildSafeHermesEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+        ...launch.environment,
+      },
+      shell: false,
+      detached: process.platform !== 'win32',
+    });
     pending.process = child;
     await this.attachSpawnedProcess(pending, child);
 
@@ -6428,12 +6527,14 @@ export class ClawdbotAgentService {
       pending.conversation,
       pending.runToolBridge ? this.runToolBridge.codexCliOverride(pending.runToolBridge) : undefined
     );
-    const child = spawn(command, args, {
-      cwd: worktreePath,
-      env: this.runToolBridge.launchEnvironment(
-        buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
-        pending.runToolBridge
-      ),
+    const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
+    const launchEnvironment = this.runToolBridge.launchEnvironment(
+      buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      pending.runToolBridge
+    );
+    const child = spawn(launch.command, launch.args, {
+      cwd: launch.cwd,
+      env: { ...launchEnvironment, ...launch.environment },
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -6692,10 +6793,13 @@ export class ClawdbotAgentService {
     const { Codex } = await import('@openai/codex-sdk');
     const codex = new Codex({
       codexPathOverride: sdkExecutable.codexPathOverride,
-      env: this.runToolBridge.launchEnvironment(
-        buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
-        pending.runToolBridge
-      ),
+      env: {
+        ...this.runToolBridge.launchEnvironment(
+          buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+          pending.runToolBridge
+        ),
+        ...pending.filesystemSandboxPlan?.environment,
+      },
       ...(pending.runToolBridge
         ? {
             config: this.runToolBridge.codexConfig(pending.runToolBridge) as NonNullable<
@@ -7917,6 +8021,7 @@ export class ClawdbotAgentService {
     };
     options: AgentStartOptions;
     runToolCatalog?: RunToolCatalog;
+    filesystemSandboxPlan: FilesystemSandboxLaunchPlan;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
     const toolCatalogDelivery = input.launchAgentConfig
@@ -7954,6 +8059,12 @@ export class ClawdbotAgentService {
       input.budgetPolicy,
       input.options.conversation
     );
+    runtime.environmentKeys = [
+      ...new Set([
+        ...runtime.environmentKeys,
+        ...Object.keys(input.filesystemSandboxPlan.environment),
+      ]),
+    ].sort();
     if (input.runToolCatalog) {
       runtime.environmentKeys = [
         ...new Set([
@@ -8286,6 +8397,16 @@ export class ClawdbotAgentService {
         source: 'host-environment:configured-key-presence',
         precedence: 0,
       },
+      ...(Object.keys(input.filesystemSandboxPlan.environment).length > 0
+        ? [
+            {
+              field: 'runtime.environmentKeys',
+              scope: 'system-default' as const,
+              source: 'filesystem-sandbox:run-environment',
+              precedence: 150,
+            },
+          ]
+        : []),
       ...(sandboxAffectsEnvironment
         ? [
             {
@@ -8577,6 +8698,7 @@ export class ClawdbotAgentService {
       },
       requiredHealthChecks,
       sandboxPolicy: input.sandboxPolicy,
+      filesystemSandbox: input.filesystemSandboxPlan.evidence,
       runToolCatalog: input.runToolCatalog,
       budgetPolicy: input.budgetPolicy ?? {
         enabled: false,

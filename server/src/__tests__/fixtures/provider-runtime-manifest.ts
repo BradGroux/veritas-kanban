@@ -27,9 +27,11 @@ export function providerRuntimeManifestFixture(
     'run.start',
     'run.status',
     'tool.calls',
+    'environment.allowlist',
+  ]);
+  const defaultAdvisory = new Set<ProviderRuntimeCapabilityId>([
     'filesystem.read',
     'filesystem.write',
-    'environment.allowlist',
   ]);
   const payload: Omit<ProviderRuntimeManifest, 'digest'> = {
     schemaVersion: PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION,
@@ -42,7 +44,8 @@ export function providerRuntimeManifestFixture(
     models: options.models ?? ['gpt-5'],
     capabilities: KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS.map((id) => {
       const state =
-        options.capabilityStates?.[id] ?? (defaultSupported.has(id) ? 'supported' : 'unknown');
+        options.capabilityStates?.[id] ??
+        (defaultSupported.has(id) ? 'supported' : defaultAdvisory.has(id) ? 'advisory' : 'unknown');
       return {
         id,
         state,

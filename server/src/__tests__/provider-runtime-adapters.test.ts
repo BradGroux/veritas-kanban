@@ -191,6 +191,22 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
     }
   );
 
+  it.each(['codex-cli', 'codex-sdk', 'codex-app-server'] as const)(
+    'keeps coarse %s sandbox modes advisory until exact root conformance is proven',
+    async (provider) => {
+      const manifest = await new ClawdbotAgentService(health).probeProviderRuntime(
+        config(provider)
+      );
+
+      expect(manifest.capabilities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'filesystem.read', state: 'advisory' }),
+          expect.objectContaining({ id: 'filesystem.write', state: 'advisory' }),
+        ])
+      );
+    }
+  );
+
   it.each(['codex-cloud', 'ollama-local', 'ollama-cloud', 'lm-studio-local', 'custom'] as const)(
     'fails closed instead of routing the configured %s provider through OpenClaw',
     async (provider) => {

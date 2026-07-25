@@ -111,7 +111,7 @@ export interface HarnessSupportStatus {
 
 export const PROVIDER_RUNTIME_MANIFEST_SCHEMA_VERSION = 'provider-runtime-manifest/v1' as const;
 
-export const PROVIDER_RUNTIME_PROBE_REVISION = 14 as const;
+export const PROVIDER_RUNTIME_PROBE_REVISION = 15 as const;
 
 export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'run.start',
@@ -143,6 +143,10 @@ export const KNOWN_PROVIDER_RUNTIME_CAPABILITY_IDS = [
   'filesystem.write',
   'filesystem.deny-paths',
   'filesystem.dotfile-masking',
+  'filesystem.protected-metadata',
+  'filesystem.descendants',
+  'filesystem.run-scoped-temp',
+  'filesystem.cleanup',
   'network.disable',
   'network.allowlist',
   'network.block-private',

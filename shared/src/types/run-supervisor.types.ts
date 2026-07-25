@@ -88,6 +88,16 @@ export interface RunSupervisorBindings {
   worktreeManifestId?: string;
   worktreeLeaseId?: string;
   worktreeFingerprint: string;
+  sandbox?: {
+    rootPath: string;
+    policyHash: string;
+  };
+}
+
+export interface RunSupervisorSandboxCleanup {
+  state: 'pending' | 'complete' | 'failed';
+  recordedAt?: string;
+  detail?: string;
 }
 
 export interface RunSupervisorRecoveryRecord {
@@ -121,6 +131,7 @@ export interface RunSupervisorRecord {
   lease: RunSupervisorLease;
   recovery?: RunSupervisorRecoveryRecord;
   terminal?: RunSupervisorTerminalRecord;
+  sandboxCleanup?: RunSupervisorSandboxCleanup;
   createdAt: string;
   updatedAt: string;
 }
