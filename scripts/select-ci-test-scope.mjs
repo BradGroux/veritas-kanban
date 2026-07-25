@@ -31,6 +31,10 @@ const DOCUMENTATION_PATH_PATTERNS = [
   /^(?:CODE_OF_CONDUCT|LICENSE|SECURITY)(?:\.[^/]+)?$/,
 ];
 
+const DEPENDENCY_FREE_SCOPE_CONTROL_PATH_PATTERNS = [
+  /^scripts\/check-delivery-cadence(?:\.test)?\.mjs$/,
+];
+
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
 
 function normalizeFiles(files) {
@@ -45,6 +49,10 @@ function summarizePaths(files) {
 
 export function isDocumentationPath(file) {
   return DOCUMENTATION_PATH_PATTERNS.some((pattern) => pattern.test(file));
+}
+
+export function isDependencyFreeScopeControlPath(file) {
+  return DEPENDENCY_FREE_SCOPE_CONTROL_PATH_PATTERNS.some((pattern) => pattern.test(file));
 }
 
 export function requiresFullSuite(file) {
@@ -151,18 +159,24 @@ export function classifyCiTestScope({
     };
   }
 
-  if (files.every(isDocumentationPath)) {
+  if (
+    files.every(
+      (file) => isDocumentationPath(file) || isDependencyFreeScopeControlPath(file)
+    )
+  ) {
     return {
       scope: 'none',
       packages: [],
       files,
-      reason: 'Only documentation or issue-template paths changed.',
+      reason:
+        'Only documentation or dependency-free delivery-cadence controls checked by the selector changed.',
     };
   }
 
   const unclassifiedCodePaths = files.filter(
     (file) =>
       !isDocumentationPath(file) &&
+      !isDependencyFreeScopeControlPath(file) &&
       !WORKSPACE_NAMES.some((workspace) => file.startsWith(`${workspace}/`))
   );
   if (unclassifiedCodePaths.length > 0) {

@@ -97,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Aligned contributor verification with the sustainable delivery cadence: each change now gets one risk-proportional review, focused checks for the affected product boundary, and runtime smoke tests only when runtime behavior changes. Complete workspace build, typecheck, test, security, integration, E2E, and artifact gates remain milestone-only, while the dependency-free cadence checker now rejects the retired per-commit multi-review, per-merge broad-gate, and unconditional browser-smoke language if it returns (#1048).
+- Aligned contributor verification with the sustainable delivery cadence: each change now gets one risk-proportional review, focused checks for the affected product boundary, and runtime smoke tests only when runtime behavior changes. Complete workspace build, typecheck, test, security, integration, E2E, and artifact gates remain milestone-only, while the dependency-free cadence checker now rejects the retired per-commit multi-review, per-merge broad-gate, and unconditional browser-smoke language if it returns. Cadence checker changes are verified inside the CI scope-control job and no longer trigger an unrelated workspace unit suite (#1048).
 - Standardized focused Vitest verification on direct
   `pnpm --filter <package> exec vitest run <exact-test-files>` invocation. The
   dependency-free delivery cadence checker now rejects active guidance that
