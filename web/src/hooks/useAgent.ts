@@ -12,6 +12,7 @@ import type {
   ProviderRuntimeCapabilityId,
   RunApprovalDecisionInput,
   RunApprovalRequest,
+  RunPhaseAuthoritySnapshot,
   TaskCommitPolicy,
 } from '@veritas-kanban/shared';
 import type { ConversationTurnRequest } from '@/lib/api/agent';
@@ -180,6 +181,22 @@ export function useAgentAttempts(taskId: string | undefined) {
     queryKey: ['agent', 'attempts', taskId],
     queryFn: () => api.agent.listAttempts(requiredQueryParam(taskId, 'taskId')),
     enabled: !!taskId,
+  });
+}
+
+export function useAgentPhase(
+  taskId: string | undefined,
+  attemptId: string | undefined,
+  live = false
+) {
+  return useQuery({
+    queryKey: ['agent', 'phase', taskId, attemptId],
+    queryFn: () =>
+      apiFetch<{ phase: RunPhaseAuthoritySnapshot | null }>(
+        `${API_BASE}/agents/${encodeURIComponent(requiredQueryParam(taskId, 'taskId'))}/phase?attemptId=${encodeURIComponent(requiredQueryParam(attemptId, 'attemptId'))}`
+      ).then((result) => result.phase),
+    enabled: !!taskId && !!attemptId,
+    refetchInterval: live ? 2_000 : false,
   });
 }
 

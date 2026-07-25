@@ -8,6 +8,7 @@ import {
   type RunApprovalListQuery,
   type RunApprovalRequest,
   type RunApprovalRequestKind,
+  type RunApprovalPhaseBinding,
   type RunApprovalRiskClass,
   type RunEventJsonValue,
 } from '@veritas-kanban/shared';
@@ -25,6 +26,7 @@ import { FileRunApprovalRepository } from '../storage/run-approval-repository.js
 import { getStorage, getStorageTypeFromEnv } from '../storage/index.js';
 import { broadcastRunApprovalChange } from './broadcast-service.js';
 import { RunEventJournalService } from './run-event-journal-service.js';
+import type { RunPhaseAuthorityService } from './run-phase-authority-service.js';
 
 const DEFAULT_APPROVAL_TTL_MS = 5 * 60 * 1_000;
 const MIN_APPROVAL_TTL_MS = 1_000;
@@ -58,6 +60,7 @@ export interface CreateRunApprovalRequestInput {
   turnId?: string;
   itemId?: string;
   mobileSafe?: boolean;
+  phase?: RunApprovalPhaseBinding;
   ttlMs?: number;
 }
 
@@ -76,6 +79,7 @@ export interface RunApprovalBrokerServiceOptions {
   journal?: RunEventJournalService;
   now?: () => Date;
   broadcast?: (request: RunApprovalRequest) => void;
+  phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes'>;
 }
 
 let fileRepository: FileRunApprovalRepository | undefined;
@@ -124,6 +128,7 @@ export class RunApprovalBrokerService {
           policyReason: input.policyReason,
           evidenceRevision: input.evidenceRevision,
           mobileSafe: input.mobileSafe ?? false,
+          phase: input.phase,
           exactAction,
         })
       )
@@ -172,6 +177,7 @@ export class RunApprovalBrokerService {
       turnId: input.turnId,
       itemId: input.itemId,
       mobileSafe: input.mobileSafe ?? false,
+      phase: input.phase,
       status: 'pending',
       revision: 1,
       createdAt: now.toISOString(),
@@ -252,6 +258,34 @@ export class RunApprovalBrokerService {
         approvalId: current.id,
         actionClass: current.actionClass,
       });
+    }
+    if (input.decision === 'approved' && current.phase) {
+      const phaseAuthority =
+        this.options.phaseAuthority ??
+        (await import('./run-phase-authority-service.js')).getRunPhaseAuthorityService();
+      const active = await phaseAuthority.getActive(
+        current.workspaceId,
+        current.taskId,
+        current.attemptId,
+        1
+      );
+      if (
+        !active ||
+        active.manifestDigest !== current.phase.manifestDigest ||
+        active.effectiveEvidence.digest !== current.phase.evidenceDigest ||
+        active.transitionSequence !== current.phase.transitionSequence
+      ) {
+        throw new ConflictError('Run approval phase evidence is stale.', {
+          approvalId: current.id,
+          expectedPhaseEvidenceDigest: current.phase.evidenceDigest,
+          activePhaseEvidenceDigest: active?.effectiveEvidence.digest,
+          expectedTransitionSequence: current.phase.transitionSequence,
+          activeTransitionSequence: active?.transitionSequence,
+        });
+      }
+      for (const requirement of current.phase.requirements) {
+        phaseAuthority.assertScopes(active, requirement.dimension, requirement.requestedScopes);
+      }
     }
 
     const decidedAt = this.now().toISOString();

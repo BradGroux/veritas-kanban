@@ -149,6 +149,7 @@ const discoveryToolSchema = z
     description: z.string().max(4_000).optional(),
     inputSchema,
     inputSchemaDigest: digestSchema,
+    externalAction: z.enum(['read', 'mutate']).optional(),
   })
   .strict();
 
@@ -224,6 +225,7 @@ export const runToolCatalogSchema: z.ZodType<RunToolCatalog> = z
     provider: z.enum(EXECUTABLE_AGENT_PROVIDERS),
     providerRuntimeManifestDigest: digestSchema,
     taskEnvelopeDigest: digestSchema,
+    phaseEvidenceDigest: digestSchema.optional(),
     entries: z.array(catalogEntrySchema).max(100),
     createdAt: z.string().datetime(),
     digest: digestSchema,

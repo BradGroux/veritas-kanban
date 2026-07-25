@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   CredentialDefinition,
   CredentialDefinitionInput,
+  PhaseCapabilityEvidence,
   RunEventEnvelope,
   ToolServerDefinition,
   ToolServerDefinitionInput,
@@ -17,6 +18,7 @@ import {
   EnvironmentCredentialSecretSource,
 } from '../services/credential-broker-service.js';
 import type { RunApprovalBrokerService } from '../services/run-approval-broker-service.js';
+import type { RunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
 import { RunEventJournalService } from '../services/run-event-journal-service.js';
 import { FileRunEventRepository } from '../storage/run-event-repository.js';
 import { InMemoryCredentialBrokerRepository } from '../storage/credential-broker-repository.js';
@@ -114,6 +116,7 @@ function fixture(
       CredentialBrokerService,
       'getDefinition' | 'issueLease' | 'withCredential'
     >;
+    phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes' | 'binding'>;
   } = {}
 ) {
   const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -196,6 +199,7 @@ function fixture(
       >),
     now: () => new Date('2026-07-24T12:00:00.000Z'),
     environment: options.environment ?? {},
+    ...(options.phaseAuthority ? { phaseAuthority: options.phaseAuthority } : {}),
   });
   return { service, open, requests, append, requestApproval };
 }
@@ -422,6 +426,126 @@ describe('ToolControlPlaneService', () => {
       ])
     );
     expect(await service.getRunCatalog('task-tools', 'attempt-tools')).toEqual(runCatalog);
+  });
+
+  it('removes mutating MCP tools from a read-only phase catalog', async () => {
+    const { service } = fixture({
+      tools: [
+        {
+          name: 'lookup',
+          annotations: { readOnlyHint: true },
+          inputSchema: { type: 'object' },
+        },
+        {
+          name: 'update',
+          inputSchema: { type: 'object' },
+        },
+      ],
+    });
+    await service.createDefinition(definition());
+    const runCatalog = await service.prepareRunCatalog({
+      taskId: 'task-tools',
+      attemptId: 'attempt-tools',
+      provider: 'codex-app-server',
+      providerRuntimeManifestDigest: DIGEST,
+      taskEnvelopeDigest: DIGEST,
+      serverIds: ['fixture'],
+      phaseEvidence: {
+        digest: DIGEST,
+        effectiveAuthority: {
+          'filesystem.read': ['<workspace>'],
+          'filesystem.write': [],
+          'command.execute': ['inspect'],
+          'network.egress': [],
+          'credential.access': [],
+          'external.action': ['read'],
+          'artifact.plan.write': [],
+        },
+        approvalRequiredDimensions: [],
+      } as PhaseCapabilityEvidence,
+    });
+
+    expect(runCatalog?.entries[0]?.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'lookup',
+          externalAction: 'read',
+          decision: 'allow',
+        }),
+        expect.objectContaining({
+          name: 'update',
+          externalAction: 'mutate',
+          decision: 'deny',
+        }),
+      ])
+    );
+    if (!runCatalog) throw new Error('Expected a phase-filtered run catalog');
+    expect(await service.providerConfig(runCatalog)).toMatchObject({
+      fixture: {
+        enabled_tools: ['lookup'],
+        disabled_tools: ['update'],
+      },
+    });
+  });
+
+  it('rejects a hidden tool call after the active phase narrows', async () => {
+    const phaseAuthority = {
+      getActive: vi.fn(async () => ({
+        launch: {
+          evidence: {
+            digest: DIGEST,
+          },
+        },
+        effectiveEvidence: {
+          approvalRequiredDimensions: [],
+        },
+      })),
+      assertScopes: vi.fn(() => {
+        throw new Error('Active phase authority denies this action.');
+      }),
+      binding: vi.fn(),
+    } as unknown as Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes' | 'binding'>;
+    const { service, requests } = fixture({
+      tools: [{ name: 'update', inputSchema: { type: 'object' } }],
+      phaseAuthority,
+    });
+    await service.createDefinition(definition());
+    await service.prepareRunCatalog({
+      taskId: 'task-tools',
+      attemptId: 'attempt-tools',
+      provider: 'codex-app-server',
+      providerRuntimeManifestDigest: DIGEST,
+      taskEnvelopeDigest: DIGEST,
+      serverIds: ['fixture'],
+      phaseEvidence: {
+        digest: DIGEST,
+        effectiveAuthority: {
+          'filesystem.read': ['<workspace>'],
+          'filesystem.write': ['<workspace>'],
+          'command.execute': ['publish'],
+          'network.egress': ['*'],
+          'credential.access': ['*'],
+          'external.action': ['read', 'mutate'],
+          'artifact.plan.write': [],
+        },
+        approvalRequiredDimensions: [],
+      } as PhaseCapabilityEvidence,
+    });
+
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'update',
+          arguments: {},
+          operationId: 'stale-phase-call',
+        },
+        'agent-a'
+      )
+    ).rejects.toThrow('Active phase authority denies this action.');
+    expect(requests.some((request) => request.method === 'tools/call')).toBe(false);
   });
 
   it('maps an all-allow run catalog to ACP session MCP configuration', async () => {

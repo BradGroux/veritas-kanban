@@ -199,8 +199,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   control, and provider handoff must bind the effective phase before attempt
   mutation. Descendants inherit and intersect the exact parent launch or
   transition evidence and cannot widen it. Explicit phases fail closed when any
-  required dimension is not enforceable. Tool-command and external-action
-  enforcement remain the separate #1033 delivery boundary.
+  required dimension is not enforceable. Run tool catalogs are filtered by the
+  launch phase, mediated calls re-check the active phase, and approvals bind the
+  exact phase evidence and transition sequence. ACP stdio is the only current
+  adapter with enforceable command and external-action mediation; other
+  adapters return typed blockers for explicit phases.
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and

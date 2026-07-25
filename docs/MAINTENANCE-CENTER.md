@@ -34,7 +34,10 @@ in Settings -> Maintenance and is backed by `/api/v1/maintenance`.
 - Destructive cleanup must require explicit confirmation and must never delete
   active task worktrees or current run state silently.
 - Debug bundles include redacted log tails, health metadata, storage summaries,
-  lifecycle policy metadata, and work-product preview metadata.
+  lifecycle policy metadata, work-product preview metadata, and a bounded
+  `phase-authority.json` diagnostic export. Phase diagnostics retain identities,
+  source kinds, scope counts, transition expansions, and completion bindings
+  while omitting exact scopes, paths, credential references, and full digests.
 - Maintenance summaries and log-tail responses redact local log paths before
   returning data to the UI.
 - SQLite posture diagnostics omit the database path, mount point, and mount

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Enforced active phase authority across run tool discovery, mediated
+  invocation, approvals, completion evidence, REST, CLI, and the task run
+  timeline. MCP `readOnlyHint` annotations now classify external reads while
+  unannotated tools fail closed as mutations; disallowed tools and credentials
+  stay out of launch catalogs, and hidden or stale calls are rejected against
+  the current transition evidence before dispatch. Approval decisions cannot
+  outlive or widen their bound phase, and completion records identify the
+  effective phase plus every authority-expanding transition. Redacted support
+  bundles include bounded phase identities, authority counts, source kinds,
+  transition expansions, and completion bindings without exporting exact
+  paths, credentials, or full digests. ACP stdio exposes the required
+  pre-execution mediation; adapters without equivalent command and
+  external-action controls return typed blockers for explicit phases. Legacy
+  attempts remain readable without invented transition state (#1033).
 - Propagated immutable phase authority through task previews and starts,
   workflow steps, retries and fallbacks, provider changes, conversation resume,
   follow-up and fork operations, and active-run controls. Every executable

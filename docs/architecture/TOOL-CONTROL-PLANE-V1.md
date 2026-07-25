@@ -44,6 +44,7 @@ The catalog binds:
 
 - task and attempt IDs;
 - provider, provider-runtime digest, and task-envelope digest;
+- active launch phase evidence when the run is phase-controlled;
 - definition and discovery digests;
 - required or optional readiness; and
 - each tool's `allow`, `deny`, or `approval` decision.
@@ -85,6 +86,25 @@ Only `allow` decisions enter native provider configuration.
 Approval-required tools are deliberately disabled there because native calls
 would bypass the Veritas approval broker. Those tools use the mediated
 `call_run_tool` path.
+
+## Phase Authority
+
+MCP discovery maps the standard `annotations.readOnlyHint: true` value to an
+external read. Missing or false annotations classify the tool as an external
+mutation. A phase-controlled catalog includes only tools and credential
+bindings allowed by the launch evidence. Approval-required phase dimensions
+also stay out of native provider configuration so they cannot bypass Veritas.
+
+Mediated invocation resolves the current server-owned phase again before
+dispatch. It rejects a hidden tool call, a credential reference outside the
+active phase, or a catalog compiled from different phase evidence. A
+transition can therefore narrow a running attempt immediately without relying
+on the provider to refresh a cached tool list.
+
+Every phase-bound approval records the exact manifest digest, phase evidence
+digest, identity, transition sequence, dimension, and requested scopes. The
+broker re-checks those values at decision time, so an older approval cannot
+authorize an action after narrowing or authorize a wider scope.
 
 ## Mediated Invocation
 

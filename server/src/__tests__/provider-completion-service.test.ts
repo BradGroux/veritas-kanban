@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMPLETION_RESULT_SCHEMA_VERSION,
+  PHASE_AUTHORITY_DIMENSIONS,
   TASK_ENVELOPE_SCHEMA_VERSION,
+  type PhaseAuthorityDimension,
+  type PhaseAuthoritySource,
   type Task,
   type TaskEnvelope,
 } from '@veritas-kanban/shared';
@@ -13,6 +16,10 @@ import {
 } from '../services/provider-completion-service.js';
 import { TaskEnvelopeService } from '../services/task-envelope-service.js';
 import { verifyCompletionResultDigest } from '../utils/completion-result-digest.js';
+import {
+  compilePhaseCapabilityAuthority,
+  getBuiltInPhaseCapabilityProfile,
+} from '../services/phase-capability-service.js';
 
 const completedAt = '2026-07-23T18:00:00.000Z';
 
@@ -167,6 +174,34 @@ describe('ProviderCompletionService', () => {
     expect(duplicate.digest).toBe(result.digest);
   });
 
+  it('preserves effective phase and authority-expansion evidence', async () => {
+    const taskEnvelope = await envelope();
+    const effectiveEvidence = phaseEvidence();
+    const result = await completionService().complete({
+      task: task(),
+      taskEnvelope,
+      claim: {
+        terminalSource: 'process',
+        status: 'success',
+        summary: 'Phase-controlled run completed.',
+      },
+      phase: {
+        launchEvidenceDigest: effectiveEvidence.digest,
+        effectiveEvidence,
+        transitionSequence: 0,
+        authorityExpansions: [],
+      },
+    });
+
+    expect(result.phase).toMatchObject({
+      launchEvidenceDigest: effectiveEvidence.digest,
+      effectiveEvidence: { digest: effectiveEvidence.digest },
+      transitionSequence: 0,
+      authorityExpansions: [],
+    });
+    expect(parseCompletionResultForEnvelope(result, taskEnvelope)).toEqual(result);
+  });
+
   it.each([
     ['callback', 'success', 'success'],
     ['remote-session', 'blocked', 'blocked'],
@@ -294,3 +329,36 @@ describe('ProviderCompletionService', () => {
     );
   });
 });
+
+function phaseEvidence() {
+  return compilePhaseCapabilityAuthority({
+    profile: getBuiltInPhaseCapabilityProfile('implement'),
+    sources: {
+      parent: phaseSource('parent', 'parent'),
+      agentProfile: phaseSource('agent-profile', 'agent-profile'),
+      sandbox: phaseSource('sandbox', 'sandbox'),
+      toolCatalog: phaseSource('tool-catalog', 'tool-catalog'),
+      launchPolicy: phaseSource('launch-policy', 'launch-policy'),
+    },
+  });
+}
+
+function phaseSource<K extends PhaseAuthoritySource['kind']>(
+  id: string,
+  kind: K
+): PhaseAuthoritySource & { kind: K } {
+  return {
+    id,
+    kind,
+    authority: phaseDimensions(() => ['*']),
+    enforcement: phaseDimensions(() => 'enforced' as const),
+  };
+}
+
+function phaseDimensions<T>(
+  value: (dimension: PhaseAuthorityDimension) => T
+): Record<PhaseAuthorityDimension, T> {
+  return Object.fromEntries(
+    PHASE_AUTHORITY_DIMENSIONS.map((dimension) => [dimension, value(dimension)])
+  ) as Record<PhaseAuthorityDimension, T>;
+}

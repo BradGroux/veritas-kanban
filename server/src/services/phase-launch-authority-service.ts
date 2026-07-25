@@ -297,7 +297,7 @@ function toolCatalogSource(
 ): PhaseCapabilityCompilerSources['toolCatalog'] {
   const configured = input.executionEnforcement;
   return {
-    id: input.toolCatalogId ? `tool-catalog:${safeId(input.toolCatalogId)}` : 'tool-catalog:none',
+    id: input.toolCatalogId ? 'tool-catalog:run' : 'tool-catalog:none',
     kind: 'tool-catalog',
     authority: cloneAuthority(WILDCARD_AUTHORITY),
     enforcement: {

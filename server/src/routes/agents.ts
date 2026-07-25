@@ -42,6 +42,7 @@ import {
   getPhaseTransitionService,
   type PhaseTransitionActorContext,
 } from '../services/phase-transition-service.js';
+import { getRunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
 
 const router: RouterType = Router();
 const workspaceExecutionTrust = getWorkspaceExecutionTrustService();
@@ -431,19 +432,17 @@ router.get(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const query = phaseReadQuerySchema.parse(req.query);
     const workspaceId = req.auth?.workspaceId || 'local';
-    const service = getPhaseTransitionService();
-    const current = await service.getCurrent(
-      workspaceId,
-      req.params.taskId as string,
-      query.attemptId
-    );
-    const history = await service.list(
+    const phase = await getRunPhaseAuthorityService().get(
       workspaceId,
       req.params.taskId as string,
       query.attemptId,
       query.limit
     );
-    res.json({ current, history });
+    res.json({
+      phase,
+      current: phase?.current ?? null,
+      history: phase?.history ?? [],
+    });
   })
 );
 

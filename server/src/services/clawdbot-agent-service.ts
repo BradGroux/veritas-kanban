@@ -93,6 +93,7 @@ import type {
   TaskEnvelope,
   TaskTerminalSource,
   CompletionResult,
+  CompletionPhaseAuthorityEvidence,
   HarnessSupportStatus,
   HarnessSupportTelemetry,
   RunLaunchManifest,
@@ -102,6 +103,7 @@ import type {
   RunLaunchRuntime,
   RunLaunchPhaseAuthority,
   PhaseName,
+  PhaseAuthorityDimension,
   PhaseCapabilityEvidence,
   CredentialRunRevocationRequest,
   CredentialLeaseTerminalReason,
@@ -198,6 +200,7 @@ import {
   CodexAppServerRpcClient,
   parseCodexAppServerLine,
   type CodexAppServerClassification,
+  type CodexAppServerBrokerRequest,
   type CodexAppServerTerminalResult,
   type CodexAppServerUsage,
 } from './codex-app-server-adapter.js';
@@ -247,6 +250,7 @@ import {
   PhaseLaunchAuthorityService,
   type PhaseLaunchParentSnapshot,
 } from './phase-launch-authority-service.js';
+import { RunPhaseAuthorityService } from './run-phase-authority-service.js';
 import {
   getPhaseTransitionService,
   type PhaseTransitionService,
@@ -515,7 +519,9 @@ export class ClawdbotAgentService {
     'scan' | 'evaluateForLaunch' | 'assertFresh'
   >;
   private phaseAuthority: PhaseLaunchAuthorityService;
-  private phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'>;
+  private phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'> &
+    Partial<Pick<PhaseTransitionService, 'list'>>;
+  private runPhaseAuthority: RunPhaseAuthorityService;
   private logsDir: string;
 
   constructor(
@@ -543,7 +549,8 @@ export class ClawdbotAgentService {
       'scan' | 'evaluateForLaunch' | 'assertFresh'
     > = getWorkspaceExecutionTrustService(),
     phaseAuthority = new PhaseLaunchAuthorityService(),
-    phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'>
+    phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'> &
+      Partial<Pick<PhaseTransitionService, 'list'>>
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -572,6 +579,25 @@ export class ClawdbotAgentService {
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
+    const transitionAuthority = phaseTransitions
+      ? {
+          getCurrent: (...args: Parameters<PhaseTransitionService['getCurrent']>) =>
+            phaseTransitions.getCurrent(...args),
+          list: (...args: Parameters<PhaseTransitionService['list']>) =>
+            phaseTransitions.list?.(...args) ?? Promise.resolve([]),
+        }
+      : {
+          getCurrent: (...args: Parameters<PhaseTransitionService['getCurrent']>) =>
+            getPhaseTransitionService().getCurrent(...args),
+          list: (...args: Parameters<PhaseTransitionService['list']>) =>
+            getPhaseTransitionService().list(...args),
+        };
+    this.runPhaseAuthority = new RunPhaseAuthorityService({
+      tasks: {
+        findById: (id) => this.taskService.getTask(id),
+      },
+      transitions: transitionAuthority,
+    });
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -1572,6 +1598,16 @@ export class ClawdbotAgentService {
       executionPolicy: task.executionPolicy,
     });
     const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
+    const launchPhaseAuthority = this.compileLaunchPhaseAuthority({
+      requestedPhase: options.phase,
+      parentPhase,
+      profileLaunch,
+      sandboxPolicy: trustSandbox.policy,
+      providerRuntimeManifest,
+      filesystemSandboxPlan,
+      provider,
+      toolCatalogSelected: (profileLaunch?.profile.tools?.mcpServers?.length ?? 0) > 0,
+    });
     const runToolCatalog = await this.toolControlPlane.prepareRunCatalog({
       taskId,
       attemptId,
@@ -1586,6 +1622,9 @@ export class ClawdbotAgentService {
       deniedTools: toolPolicy.denied,
       cwd: worktreePath,
       persist: false,
+      ...(launchPhaseAuthority.evidence.identity.mode === 'profile'
+        ? { phaseEvidence: launchPhaseAuthority.evidence }
+        : {}),
     });
     const taskTransport = adapter.renderTaskEnvelope({
       taskEnvelope,
@@ -1622,6 +1661,7 @@ export class ClawdbotAgentService {
       filesystemSandboxPlan,
       workspaceTrustEvaluation,
       parentPhase,
+      phaseAuthority: launchPhaseAuthority,
     });
     return {
       manifest,
@@ -1886,6 +1926,16 @@ export class ClawdbotAgentService {
       executionPolicy: task.executionPolicy,
     });
     const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
+    const launchPhaseAuthority = this.compileLaunchPhaseAuthority({
+      requestedPhase: options.phase,
+      parentPhase,
+      profileLaunch,
+      sandboxPolicy: trustSandbox.policy,
+      providerRuntimeManifest,
+      filesystemSandboxPlan,
+      provider,
+      toolCatalogSelected: (profileLaunch?.profile.tools?.mcpServers?.length ?? 0) > 0,
+    });
     const runToolCatalog = await this.toolControlPlane.prepareRunCatalog({
       taskId,
       attemptId,
@@ -1899,6 +1949,9 @@ export class ClawdbotAgentService {
       ),
       deniedTools: toolPolicy.denied,
       cwd: worktreePath,
+      ...(launchPhaseAuthority.evidence.identity.mode === 'profile'
+        ? { phaseEvidence: launchPhaseAuthority.evidence }
+        : {}),
     });
 
     // Validate path segments for log file
@@ -1957,6 +2010,7 @@ export class ClawdbotAgentService {
       filesystemSandboxPlan,
       workspaceTrustEvaluation,
       parentPhase,
+      phaseAuthority: launchPhaseAuthority,
     });
     const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
       ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
@@ -2848,6 +2902,11 @@ export class ClawdbotAgentService {
       task,
       taskEnvelope: attempt.taskEnvelope,
       claim,
+      ...(await this.completionPhaseEvidence(
+        task.id,
+        attempt.id,
+        attempt.runLaunchManifest?.phase
+      )),
     });
     const completedAttempt: TaskAttempt = {
       ...attempt,
@@ -3153,6 +3212,11 @@ export class ClawdbotAgentService {
           task: taskBeforeCompletion,
           taskEnvelope: pending.taskEnvelope,
           claim,
+          ...(await this.completionPhaseEvidence(
+            taskId,
+            attemptId,
+            pending.runLaunchManifest.phase
+          )),
         });
         const status: AttemptStatus = completionResult.status === 'success' ? 'complete' : 'failed';
         const completedAttempt: TaskAttempt = {
@@ -5062,6 +5126,12 @@ export class ClawdbotAgentService {
     }
     const actionClass = acpApprovalActionClass(request.toolCall.kind);
     const riskClass = acpApprovalRisk(request.toolCall.kind);
+    const phase = await this.bindPhaseApproval(
+      task.id,
+      attemptId,
+      pending.runLaunchManifest,
+      phaseRequirementsForAcpRequest(request)
+    );
     const approval = await this.approvalBroker.request({
       workspaceId: 'local',
       taskId: task.id,
@@ -5093,6 +5163,7 @@ export class ClawdbotAgentService {
           kind: option.kind,
         })),
       },
+      ...(phase ? { phase } : {}),
     });
     let decision: Awaited<ReturnType<RunApprovalBrokerService['awaitDecision']>>;
     try {
@@ -5114,6 +5185,49 @@ export class ClawdbotAgentService {
         : { outcome: { outcome: 'cancelled' } };
     }
     return { outcome: { outcome: 'cancelled' } };
+  }
+
+  private async bindPhaseApproval(
+    taskId: string,
+    attemptId: string,
+    manifest: RunLaunchManifest,
+    requirements: Array<{
+      dimension: PhaseAuthorityDimension;
+      requestedScopes: string[];
+    }>
+  ) {
+    if (manifest.phase?.evidence.identity.mode !== 'profile' || requirements.length === 0) {
+      return undefined;
+    }
+    const authority = this.runPhaseAuthority;
+    const snapshot = await authority.getActive('local', taskId, attemptId, 1);
+    if (!snapshot) {
+      throw new ConflictError('Phase-controlled approval lost its active authority snapshot.', {
+        taskId,
+        attemptId,
+      });
+    }
+    return authority.binding(snapshot, requirements);
+  }
+
+  private async completionPhaseEvidence(
+    taskId: string,
+    attemptId: string,
+    launchPhase?: RunLaunchPhaseAuthority
+  ): Promise<{ phase: CompletionPhaseAuthorityEvidence } | Record<string, never>> {
+    if (!launchPhase) return {};
+    const snapshot = await this.runPhaseAuthority.get('local', taskId, attemptId, 100);
+    if (!snapshot) return {};
+    return {
+      phase: {
+        launchEvidenceDigest: snapshot.launch.evidence.digest,
+        effectiveEvidence: snapshot.effectiveEvidence,
+        transitionSequence: snapshot.transitionSequence,
+        authorityExpansions: snapshot.history.filter((record) =>
+          record.authorityDelta.entries.some((entry) => entry.addedScopes.length > 0)
+        ),
+      },
+    };
   }
 
   private async startCodexAppServer(
@@ -8205,6 +8319,41 @@ export class ClawdbotAgentService {
     };
   }
 
+  private compileLaunchPhaseAuthority(input: {
+    requestedPhase?: PhaseName;
+    parentPhase?: PhaseLaunchParentSnapshot;
+    profileLaunch?: AgentProfileResolvedLaunch;
+    sandboxPolicy: SandboxPolicyDryRunResult;
+    providerRuntimeManifest: ProviderRuntimeManifest;
+    filesystemSandboxPlan: FilesystemSandboxLaunchPlan;
+    provider: ExecutableAgentProvider;
+    toolCatalogSelected: boolean;
+  }): RunLaunchPhaseAuthority {
+    const actionMediation = input.provider === 'acp-stdio';
+    return this.phaseAuthority.compile({
+      requestedPhase: input.requestedPhase,
+      parent: input.parentPhase,
+      ...(input.profileLaunch
+        ? {
+            agentProfile: {
+              id: input.profileLaunch.profile.id,
+              version: input.profileLaunch.profile.version,
+            },
+          }
+        : {}),
+      sandboxPolicy: input.sandboxPolicy,
+      providerRuntimeManifest: input.providerRuntimeManifest,
+      filesystemSandbox: input.filesystemSandboxPlan.evidence,
+      selectedHost: input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process',
+      ...(input.toolCatalogSelected ? { toolCatalogId: 'run' } : {}),
+      executionEnforcement: {
+        commandExecute: actionMediation ? 'enforced' : 'unsupported',
+        externalAction: actionMediation ? 'enforced' : 'unsupported',
+        planArtifactWrite: 'enforced',
+      },
+    });
+  }
+
   private async compileRunLaunchManifest(input: {
     task: Task;
     taskEnvelope: TaskEnvelope;
@@ -8240,6 +8389,7 @@ export class ClawdbotAgentService {
     filesystemSandboxPlan: FilesystemSandboxLaunchPlan;
     workspaceTrustEvaluation: WorkspaceExecutionTrustEvaluation;
     parentPhase?: PhaseLaunchParentSnapshot;
+    phaseAuthority?: RunLaunchPhaseAuthority;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
     const toolCatalogDelivery = input.launchAgentConfig
@@ -8268,23 +8418,18 @@ export class ClawdbotAgentService {
         : []),
     ];
     const selectedHost = input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process';
-    const phase = this.phaseAuthority.compile({
-      requestedPhase: input.options.phase,
-      parent: input.parentPhase,
-      ...(profile
-        ? {
-            agentProfile: {
-              id: profile.id,
-              version: profile.version,
-            },
-          }
-        : {}),
-      sandboxPolicy: input.sandboxPolicy,
-      providerRuntimeManifest: input.providerRuntimeManifest,
-      filesystemSandbox: input.filesystemSandboxPlan.evidence,
-      selectedHost,
-      toolCatalogId: input.runToolCatalog?.digest,
-    });
+    const phase =
+      input.phaseAuthority ??
+      this.compileLaunchPhaseAuthority({
+        requestedPhase: input.options.phase,
+        parentPhase: input.parentPhase,
+        profileLaunch: input.profileLaunch,
+        sandboxPolicy: input.sandboxPolicy,
+        providerRuntimeManifest: input.providerRuntimeManifest,
+        filesystemSandboxPlan: input.filesystemSandboxPlan,
+        provider: input.provider,
+        toolCatalogSelected: Boolean(input.runToolCatalog),
+      });
     const runtime = this.buildRunLaunchRuntime(
       input.provider,
       input.launchAgentConfig,
@@ -9571,6 +9716,94 @@ function acpApprovalRisk(kind: string | null | undefined): RunApprovalRiskClass 
   if (['read', 'search', 'think'].includes(normalized ?? '')) return 'low';
   if (['delete', 'execute', 'fetch'].includes(normalized ?? '')) return 'high';
   return 'medium';
+}
+
+function phaseRequirementsForAcpRequest(
+  request: AcpRequestPermissionRequest
+): Array<{ dimension: PhaseAuthorityDimension; requestedScopes: string[] }> {
+  const kind = request.toolCall.kind?.toLowerCase();
+  if (kind === 'read' || kind === 'search') {
+    return [{ dimension: 'filesystem.read', requestedScopes: ['<workspace>'] }];
+  }
+  if (kind === 'edit' || kind === 'delete' || kind === 'move') {
+    return [{ dimension: 'filesystem.write', requestedScopes: ['<workspace>'] }];
+  }
+  if (kind === 'execute') {
+    const commandClass = classifyPhaseCommand(request.toolCall.rawInput);
+    return [
+      { dimension: 'command.execute', requestedScopes: [commandClass] },
+      ...(commandClass === 'publish'
+        ? [
+            {
+              dimension: 'external.action' as const,
+              requestedScopes: ['mutate'],
+            },
+          ]
+        : []),
+    ];
+  }
+  if (kind === 'fetch') {
+    return [
+      { dimension: 'network.egress', requestedScopes: ['*'] },
+      { dimension: 'external.action', requestedScopes: ['read'] },
+    ];
+  }
+  if (kind === 'think') return [];
+  return [{ dimension: 'external.action', requestedScopes: ['mutate'] }];
+}
+
+function classifyPhaseCommand(value: unknown): string {
+  const command = commandText(value).toLowerCase();
+  if (!command) return 'unclassified';
+  if (
+    /\b(?:git\s+push|npm\s+publish|pnpm\s+publish|gh\s+(?:issue|pr|release|api)\s+(?:create|edit|close|merge|comment|delete)|curl\b[^|\\n]*(?:-[^-\\s]*x|--request)\s+(?:post|put|patch|delete))\b/.test(
+      command
+    )
+  ) {
+    return 'publish';
+  }
+  if (
+    /\b(?:apply_patch|git\s+(?:add|commit|reset|checkout|switch|rebase|merge|cherry-pick)|rm|mv|cp|mkdir|touch|install|unlink)\b/.test(
+      command
+    )
+  ) {
+    return 'mutate';
+  }
+  if (/\b(?:prettier|eslint)\b.*(?:--write|--fix)\b/.test(command)) return 'format';
+  if (
+    /\b(?:vitest|jest|playwright|pytest|cargo\s+test|go\s+test|pnpm\s+(?:run\s+)?test)\b/.test(
+      command
+    )
+  ) {
+    return 'test';
+  }
+  if (
+    /\b(?:tsc|vite\s+build|cargo\s+build|go\s+build|pnpm\s+(?:run\s+)?(?:build|typecheck|lint))\b/.test(
+      command
+    )
+  ) {
+    return 'build';
+  }
+  if (
+    /^(?:\s*(?:pwd|ls|cat|head|tail|sed|rg|grep|find|stat|wc|which|command\s+-v|git\s+(?:status|diff|log|show|rev-parse)|gh\s+(?:issue|pr|release|run)\s+(?:view|list|status))\b)/.test(
+      command
+    )
+  ) {
+    return 'inspect';
+  }
+  return 'unclassified';
+}
+
+function commandText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.filter((item) => typeof item === 'string').join(' ');
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  for (const key of ['command', 'cmd', 'script', 'input']) {
+    const candidate = commandText(record[key]);
+    if (candidate) return candidate;
+  }
+  return '';
 }
 
 // Export singleton

@@ -2403,9 +2403,10 @@ current transition evidence before attempt mutation. Descendants, retries,
 fallbacks, and provider changes cannot widen parent authority. An unsupported
 phase dimension returns `409 Conflict` with typed `phase-*` enforcement
 blockers. Omitting `phase` creates explicit legacy evidence only when no
-profile-authoritative parent exists. During the staged v6.x rollout, explicit
-phase starts remain blocked until #1033 supplies command and external-action
-enforcement; launch preview exposes that blocker without mutation.
+profile-authoritative parent exists. ACP stdio can enforce the required
+pre-execution command and external-action mediation. Other adapters return
+typed blockers for explicit phases instead of treating prompts or
+post-execution events as enforcement.
 
 Codex app-server and Claude Code accept a positive MCP catalog through native,
 run-scoped configuration. Other task adapters reject non-empty MCP selections.
@@ -2420,8 +2421,12 @@ GET  /api/agents/:taskId/phase?attemptId=attempt_123&limit=100
 POST /api/agents/:taskId/phase/transitions
 ```
 
-The GET endpoint returns `current` plus bounded append-only `history` for one
-exact run. The POST body is a compare-and-set request:
+The GET endpoint returns a server-owned `phase` snapshot plus compatible
+`current` and bounded append-only `history` fields for one exact run. The
+snapshot includes the launch phase, effective evidence, manifest digest,
+transition sequence, and history. A launch with no transition is therefore
+visible before the first journal record. The POST body is a compare-and-set
+request:
 
 ```json
 {
@@ -2644,9 +2649,11 @@ Every terminal path persists one digest-bound `completion-result/v1` on the
 current attempt and attempt history. It includes `digest`, `idempotencyKey`,
 `completedAt`, `terminalSource`, envelope/runtime bindings, normalized status,
 bounded redacted claims, harness evidence, attributable files and artifacts,
-verification, side effects, and continuation. Exact duplicate callbacks
-return success without mutating the task again, including after restart.
-Conflicting terminal claims return `409 Conflict`.
+verification, side effects, continuation, and phase evidence when the launch
+was phase-bound. Phase evidence identifies the launch digest, final effective
+authority, transition sequence, and every authority-expanding transition.
+Exact duplicate callbacks return success without mutating the task again,
+including after restart. Conflicting terminal claims return `409 Conflict`.
 Startup reconciliation also persists `interrupted` completion results for
 harness-owned process or stream attempts that were still running when the
 server restarted. OpenClaw attempts remain eligible for their authoritative
@@ -5328,7 +5335,11 @@ POST /api/v1/maintenance/debug-bundle
 
 Creates a redacted debug bundle under the runtime debug-bundles directory and
 returns the output path plus a manifest of included categories, excluded
-sensitive categories, redaction rules, and redacted file metadata.
+sensitive categories, redaction rules, and redacted file metadata. The
+`phase-authority.json` member includes at most 200 phase-bound runs with phase
+identity, authority scope counts, source kinds, transition expansion counts,
+and completion bindings. Exact authority scopes, paths, credential
+references, and full digests are not exported.
 
 #### SQLite Export and Import
 

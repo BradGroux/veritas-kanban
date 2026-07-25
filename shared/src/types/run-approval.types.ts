@@ -60,6 +60,8 @@ export interface RunApprovalRequest {
   turnId?: string;
   itemId?: string;
   mobileSafe: boolean;
+  /** Present when approval authority is constrained by an active run phase. */
+  phase?: import('./phase-capability.types.js').RunApprovalPhaseBinding;
   status: RunApprovalStatus;
   revision: number;
   createdAt: string;

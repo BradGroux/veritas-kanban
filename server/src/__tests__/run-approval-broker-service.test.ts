@@ -17,6 +17,7 @@ import {
   type CreateRunApprovalRequestInput,
 } from '../services/run-approval-broker-service.js';
 import type { RunEventJournalService } from '../services/run-event-journal-service.js';
+import type { RunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
 
 class InMemoryRunApprovalRepository implements RunApprovalRepository {
   readonly requests = new Map<string, RunApprovalRequest>();
@@ -117,7 +118,11 @@ function requestInput(
   };
 }
 
-function service(repository = new InMemoryRunApprovalRepository(), now?: () => Date) {
+function service(
+  repository = new InMemoryRunApprovalRepository(),
+  now?: () => Date,
+  phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes'>
+) {
   const append = vi.fn(async () => ({ appended: true, event: {} }));
   const broadcast = vi.fn();
   return {
@@ -129,6 +134,7 @@ function service(repository = new InMemoryRunApprovalRepository(), now?: () => D
       now,
       journal: { append } as unknown as RunEventJournalService,
       broadcast,
+      ...(phaseAuthority ? { phaseAuthority } : {}),
     }),
   };
 }
@@ -262,6 +268,57 @@ describe('RunApprovalBrokerService', () => {
         }
       )
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+  });
+
+  it('rejects approval when the bound phase snapshot is stale', async () => {
+    const phaseAuthority = {
+      getActive: vi.fn(async () => ({
+        manifestDigest: `sha256:${'1'.repeat(64)}`,
+        transitionSequence: 3,
+        effectiveEvidence: { digest: `sha256:${'2'.repeat(64)}` },
+      })),
+      assertScopes: vi.fn(),
+    } as unknown as Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes'>;
+    const fixture = service(new InMemoryRunApprovalRepository(), undefined, phaseAuthority);
+    const pending = await fixture.broker.request(
+      requestInput({
+        phase: {
+          evidenceDigest: `sha256:${'3'.repeat(64)}`,
+          manifestDigest: `sha256:${'1'.repeat(64)}`,
+          identity: {
+            mode: 'profile',
+            phase: 'implement',
+            profileId: 'builtin-implement',
+            profileVersion: 1,
+          },
+          transitionSequence: 2,
+          requirements: [
+            {
+              dimension: 'command.execute',
+              requestedScopes: ['test'],
+            },
+          ],
+        },
+      })
+    );
+
+    await expect(
+      fixture.broker.decide(
+        pending.id,
+        {
+          decision: 'approved',
+          expectedRevision: pending.revision,
+          expectedActionHash: pending.actionHash,
+        },
+        {
+          id: 'reviewer',
+          type: 'user',
+          authMethod: 'session',
+          workspaceId: 'local',
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    expect(phaseAuthority.assertScopes).not.toHaveBeenCalled();
   });
 
   it('blocks mobile decisions unless the exact request is explicitly mobile-safe', async () => {

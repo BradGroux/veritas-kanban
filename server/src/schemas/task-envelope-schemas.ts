@@ -16,6 +16,10 @@ import {
   type CompletionResult,
   type TaskEnvelope,
 } from '@veritas-kanban/shared';
+import {
+  phaseCapabilityEvidenceSchema,
+  phaseTransitionRecordSchema,
+} from './phase-capability-schemas.js';
 import { verifyTaskEnvelopeDigest } from '../utils/task-envelope-digest.js';
 import { verifyCompletionResultDigest } from '../utils/completion-result-digest.js';
 
@@ -277,6 +281,15 @@ export const CompletionResultSchema = z
       })
       .strict()
       .nullable(),
+    phase: z
+      .object({
+        launchEvidenceDigest: digestSchema,
+        effectiveEvidence: phaseCapabilityEvidenceSchema,
+        transitionSequence: z.number().int().nonnegative(),
+        authorityExpansions: z.array(phaseTransitionRecordSchema).max(100),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((result, ctx) => {

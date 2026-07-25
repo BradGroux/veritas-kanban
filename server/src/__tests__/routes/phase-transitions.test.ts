@@ -13,17 +13,20 @@ import {
   getBuiltInPhaseCapabilityProfile,
 } from '../../services/phase-capability-service.js';
 
-const { mockGetCurrent, mockList, mockTransition } = vi.hoisted(() => ({
-  mockGetCurrent: vi.fn(),
-  mockList: vi.fn(),
+const { mockGetPhase, mockTransition } = vi.hoisted(() => ({
+  mockGetPhase: vi.fn(),
   mockTransition: vi.fn(),
 }));
 
 vi.mock('../../services/phase-transition-service.js', () => ({
   getPhaseTransitionService: () => ({
-    getCurrent: mockGetCurrent,
-    list: mockList,
     transition: mockTransition,
+  }),
+}));
+
+vi.mock('../../services/run-phase-authority-service.js', () => ({
+  getRunPhaseAuthorityService: () => ({
+    get: mockGetPhase,
   }),
 }));
 
@@ -49,8 +52,7 @@ import { agentRoutes } from '../../routes/agents.js';
 describe('phase transition routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCurrent.mockResolvedValue(null);
-    mockList.mockResolvedValue([]);
+    mockGetPhase.mockResolvedValue(null);
   });
 
   it('reads current state and bounded history for one exact run', async () => {
@@ -59,9 +61,8 @@ describe('phase transition routes', () => {
       .query({ attemptId: 'attempt-1', limit: 25 });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ current: null, history: [] });
-    expect(mockGetCurrent).toHaveBeenCalledWith('local', 'task-1', 'attempt-1');
-    expect(mockList).toHaveBeenCalledWith('local', 'task-1', 'attempt-1', 25);
+    expect(response.body).toEqual({ phase: null, current: null, history: [] });
+    expect(mockGetPhase).toHaveBeenCalledWith('local', 'task-1', 'attempt-1', 25);
   });
 
   it('forwards a validated compare-and-set transition and actor authority', async () => {

@@ -47,6 +47,7 @@ import type {
 } from '@veritas-kanban/shared';
 import {
   useDecideRunApproval,
+  useAgentPhase,
   usePendingAgentApprovals,
   type AgentApprovalRequest,
 } from '@/hooks/useAgent';
@@ -111,6 +112,12 @@ const SOURCE_COLORS: Record<AgentRunTimelineEventSource, string> = {
   live: 'blue',
   stored: 'green',
 };
+
+function phaseSourceLabel(kind: string): string {
+  if (kind === 'parent') return 'inherited';
+  if (kind === 'agent-profile') return 'profile';
+  return kind;
+}
 
 const EVENT_ICONS: Record<AgentRunTimelineEventType, React.ElementType> = {
   approval: CheckCircle2,
@@ -1069,6 +1076,11 @@ export function AgentRunTimelinePanel({
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(
     initialAttemptId ?? task.attempt?.id ?? null
   );
+  const { data: phase, isLoading: phaseLoading } = useAgentPhase(
+    task.id,
+    selectedAttemptId ?? undefined,
+    hasLiveAttempt && selectedAttemptId === task.attempt?.id
+  );
   const [filter, setFilter] = useState<AgentRunTimelineEventType | 'all'>('all');
   const [visibleCount, setVisibleCount] = useState(TIMELINE_PAGE_SIZE);
   const highlightedEventRef = useRef<HTMLDivElement | null>(null);
@@ -1151,8 +1163,10 @@ export function AgentRunTimelinePanel({
     workProductsLoading ||
     notificationsLoading ||
     approvalsLoading ||
+    phaseLoading ||
     activeRunsLoading ||
     recentRunsLoading;
+  const phaseIdentity = phase?.effectiveEvidence.identity;
   const source = sourceForTrace(selectedTrace);
   const linkedWorkProducts = workProducts.filter(
     (product) => !selectedAttemptId || product.sourceRunId === selectedAttemptId
@@ -1184,6 +1198,58 @@ export function AgentRunTimelinePanel({
 
   return (
     <Stack gap="md">
+      {phase && (
+        <Paper withBorder p="md" radius="md">
+          <Stack gap="sm">
+            <Group justify="space-between" align="flex-start">
+              <div>
+                <Group gap="xs">
+                  <ShieldCheck className="h-4 w-4" />
+                  <Text fw={700}>Effective phase authority</Text>
+                  <Badge color={phase.effectiveEvidence.status === 'blocked' ? 'red' : 'blue'}>
+                    {phaseIdentity?.mode === 'profile' ? phaseIdentity.phase : 'legacy'}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  Sequence {phase.transitionSequence} · evidence{' '}
+                  {phase.effectiveEvidence.digest.slice(0, 19)}
+                </Text>
+              </div>
+              {phase.current?.emergencyOverride && (
+                <Badge color="red" variant="light">
+                  Override until{' '}
+                  {new Date(phase.current.emergencyOverride.expiresAt).toLocaleString()}
+                </Badge>
+              )}
+            </Group>
+            <Group gap="xs" wrap="wrap">
+              {phase.launch.sourceReferences.map((reference) => (
+                <Badge key={`${reference.kind}:${reference.sourceDigest}`} variant="outline">
+                  {phaseSourceLabel(reference.kind)}: {reference.originScope}
+                </Badge>
+              ))}
+            </Group>
+            {phase.effectiveEvidence.blockers.map((blocker) => (
+              <Text key={`${blocker.code}:${blocker.dimension ?? ''}`} size="sm" c="red">
+                {blocker.code}: {blocker.message}
+              </Text>
+            ))}
+            {phase.history.length > 0 && (
+              <Stack gap={4}>
+                <Text size="sm" fw={600}>
+                  Transition history
+                </Text>
+                {phase.history.slice(0, 8).map((transition) => (
+                  <Text key={transition.id} size="xs" c="dimmed">
+                    #{transition.sequence} {transition.policyDecision} by{' '}
+                    {transition.actor.label ?? transition.actor.id}: {transition.reason}
+                  </Text>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </Paper>
+      )}
       {pendingTaskApprovals.map((approval) => (
         <Paper key={approval.id} withBorder p="md" radius="md">
           <Stack gap="xs">
@@ -1203,6 +1269,16 @@ export function AgentRunTimelinePanel({
               Bound action {approval.actionHash.slice(0, 12)} · expires{' '}
               {new Date(approval.expiresAt).toLocaleString()}
             </Text>
+            {approval.phase && (
+              <Text size="xs" c="dimmed">
+                Phase{' '}
+                {approval.phase.identity.mode === 'profile'
+                  ? approval.phase.identity.phase
+                  : 'legacy'}{' '}
+                · sequence {approval.phase.transitionSequence} ·{' '}
+                {approval.phase.requirements.map((requirement) => requirement.dimension).join(', ')}
+              </Text>
+            )}
             <Group justify="flex-end">
               <Button
                 color="red"
@@ -1250,6 +1326,17 @@ export function AgentRunTimelinePanel({
             )}
             {pendingDecision.approval.policyReason && (
               <Text size="sm">Policy reason: {pendingDecision.approval.policyReason}</Text>
+            )}
+            {pendingDecision.approval.phase && (
+              <Text size="sm">
+                Phase-bound authority: sequence {pendingDecision.approval.phase.transitionSequence},{' '}
+                {pendingDecision.approval.phase.requirements
+                  .map(
+                    (requirement) =>
+                      `${requirement.dimension}=${requirement.requestedScopes.join('|')}`
+                  )
+                  .join(', ')}
+              </Text>
             )}
             <Code block>{pendingDecision.approval.actionHash}</Code>
             {decideApproval.error && (
