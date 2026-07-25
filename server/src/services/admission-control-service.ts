@@ -542,11 +542,10 @@ export class AdmissionControlService {
   }
 
   async bindQueuedAttempt(
-    queueId: string,
+    _queueId: string,
     reservationId: string,
     attemptId: string
   ): Promise<AdmissionReservation> {
-    this.stopQueueHeartbeat(queueId);
     return this.bindAttempt(reservationId, attemptId);
   }
 

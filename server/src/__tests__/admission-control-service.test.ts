@@ -279,8 +279,14 @@ describe('AdmissionControlService', () => {
       'release-heartbeat-active'
     );
     const claim = await service.claimNextQueued();
+    await service.bindQueuedAttempt(
+      claim?.entry.id as string,
+      claim?.reservation.id as string,
+      claim?.entry.attemptId as string
+    );
     const initialQueueRevision = claim?.entry.revision as number;
-    const initialReservationRevision = claim?.reservation.revision as number;
+    const initialReservationRevision = (await repository.get(claim?.reservation.id as string))
+      ?.revision as number;
 
     await vi.waitFor(
       async () => {
