@@ -147,22 +147,70 @@ describe('MaintenanceService', () => {
   });
 
   it('creates a redacted debug bundle manifest and redacted log tails', async () => {
-    const service = new MaintenanceService(async () => ({
-      generatedAt: '2026-07-25T00:00:00.000Z',
-      status: 'ok',
-      truncated: false,
-      records: [
-        {
-          taskId: 'task-phase',
-          attemptId: 'attempt-phase',
-          effective: {
-            identity: { mode: 'profile', phase: 'verify' },
-            digest: 'sha256:123456789012',
+    const service = new MaintenanceService(
+      async () => ({
+        generatedAt: '2026-07-25T00:00:00.000Z',
+        status: 'ok',
+        truncated: false,
+        records: [
+          {
+            taskId: 'task-phase',
+            attemptId: 'attempt-phase',
+            effective: {
+              identity: { mode: 'profile', phase: 'verify' },
+              digest: 'sha256:123456789012',
+            },
+            authorityExpansions: [{ sequence: 2, dimensions: ['filesystem.write'] }],
           },
-          authorityExpansions: [{ sequence: 2, dimensions: ['filesystem.write'] }],
+        ],
+      }),
+      async () => ({
+        generatedAt: '2026-07-25T00:00:00.000Z',
+        status: 'ok',
+        truncated: false,
+        depth: {
+          global: { current: 1, limit: 64 },
+          workspaces: [],
         },
-      ],
-    }));
+        entries: [
+          {
+            schemaVersion: 'admission-queue-inspection/v1',
+            id: 'admission-queue-support',
+            state: 'queued',
+            position: 1,
+            rawPriority: 5,
+            effectivePriority: 5,
+            agePromotion: 0,
+            ageMs: 100,
+            readiness: 'conditional',
+            lease: { posture: 'none' },
+            limitingPolicies: [],
+            conditionalStartFactors: ['capacity-recheck'],
+            launch: {
+              source: 'conversation',
+              target: 'agent-launch',
+              workspaceId: 'workspace-a',
+              taskKey: `sha256:${'a'.repeat(64)}`,
+              rootTaskKey: `sha256:${'b'.repeat(64)}`,
+              workspaceKey: `sha256:${'c'.repeat(64)}`,
+              provider: 'codex-cli',
+              hostKey: `sha256:${'d'.repeat(64)}`,
+            },
+            navigation: {
+              taskId: 'task-support',
+              attemptId: 'attempt-support',
+            },
+            retry: {
+              count: 0,
+              maximum: 3,
+              availableAt: '2026-07-25T00:00:00.000Z',
+            },
+            createdAt: '2026-07-25T00:00:00.000Z',
+            updatedAt: '2026-07-25T00:00:00.000Z',
+          },
+        ],
+      })
+    );
 
     const bundle = await service.createDebugBundle();
     const manifest = JSON.parse(
@@ -176,15 +224,34 @@ describe('MaintenanceService', () => {
     const phaseAuthority = JSON.parse(
       await fs.readFile(path.join(bundle.outputPath, 'phase-authority.json'), 'utf-8')
     ) as { records: Array<Record<string, unknown>> };
+    const admissionQueue = JSON.parse(
+      await fs.readFile(path.join(bundle.outputPath, 'admission-queue.json'), 'utf-8')
+    ) as { entries: Array<Record<string, unknown>> };
     const bundleText = await readDirectoryText(bundle.outputPath);
 
     expect(bundle.redacted).toBe(true);
     expect(manifest.includedCategories).toEqual(
-      expect.arrayContaining(['health', 'storage', 'phase-authority', 'redacted-log-tails'])
+      expect.arrayContaining([
+        'health',
+        'storage',
+        'phase-authority',
+        'admission-queue',
+        'redacted-log-tails',
+      ])
     );
     expect(phaseAuthority.records).toContainEqual(
       expect.objectContaining({ taskId: 'task-phase', attemptId: 'attempt-phase' })
     );
+    expect(admissionQueue.entries).toContainEqual(
+      expect.objectContaining({
+        state: 'queued',
+        launch: expect.objectContaining({
+          source: 'conversation',
+          target: 'agent-launch',
+        }),
+      })
+    );
+    expect(JSON.stringify(admissionQueue)).not.toContain('options');
     expect(manifest.files.find((file) => file.id === 'server')?.path).toContain('[redacted-logs]');
     expect(serverLog).not.toContain('sk_supersecret1234567890');
     expect(summary).not.toContain(root);

@@ -173,6 +173,18 @@ describe('AdmissionControlService', () => {
 
     const sources = ['direct', 'conversation', 'recovery', 'fallback', 'child-agent'] as const;
     for (const source of sources) {
+      const options =
+        source === 'conversation'
+          ? {
+              overrideReason: 'Private operator justification',
+              conversation: {
+                mode: 'resume' as const,
+                intent: 'follow-up' as const,
+                sourceAttemptId: 'attempt-private-parent',
+                message: 'Private queued conversation message',
+              },
+            }
+          : {};
       const decision = await service.admitOrQueue(
         {
           ...request(`task-source-${source}`),
@@ -184,7 +196,7 @@ describe('AdmissionControlService', () => {
             kind: 'agent-launch',
             agent: 'codex',
             source,
-            options: {},
+            options,
           },
         }
       );
@@ -200,6 +212,22 @@ describe('AdmissionControlService', () => {
         },
       });
     }
+
+    const inspection = await service.inspectQueue({ limit: 10 });
+    expect(inspection.entries).toHaveLength(sources.length);
+    expect(inspection.entries).toEqual(
+      expect.arrayContaining(
+        sources.map((source) =>
+          expect.objectContaining({
+            launch: expect.objectContaining({ source, target: 'agent-launch' }),
+          })
+        )
+      )
+    );
+    const serialized = JSON.stringify(inspection);
+    expect(serialized).not.toContain('Private operator justification');
+    expect(serialized).not.toContain('Private queued conversation message');
+    expect(serialized).not.toContain('attempt-private-parent');
   });
 
   it('admits maximum-length scope identifiers without overflowing generated policy IDs', async () => {

@@ -5497,7 +5497,12 @@ sensitive categories, redaction rules, and redacted file metadata. The
 `phase-authority.json` member includes at most 200 phase-bound runs with phase
 identity, authority scope counts, source kinds, transition expansion counts,
 and completion bindings. Exact authority scopes, paths, credential
-references, and full digests are not exported.
+references, and full digests are not exported. The `admission-queue.json`
+member includes at most 200 entries from the same bounded inspection projection
+used by the API, CLI, and Operations UI. It identifies launch source, queue
+state, readiness, retry posture, and redacted navigation keys without exporting
+the durable replay target, prompts, messages, override text, credentials, or
+raw idempotency keys.
 
 #### SQLite Export and Import
 

@@ -347,7 +347,7 @@ export interface AdmissionQueueInspectionEntry {
   >;
   launch: {
     source: AdmissionLaunchSource;
-    target: 'direct' | 'workflow-root' | 'workflow-step' | 'legacy-direct';
+    target: 'direct' | 'agent-launch' | 'workflow-root' | 'workflow-step' | 'legacy-direct';
     workspaceId: string;
     taskKey: string;
     rootTaskKey: string;
