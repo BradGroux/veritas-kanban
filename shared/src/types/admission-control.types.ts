@@ -15,6 +15,8 @@ export const ADMISSION_RESERVATION_SCHEMA_VERSION = 'admission-reservation/v1' a
 export const ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION = 'admission-queue-entry/v1' as const;
 export const ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION = 'admission-queue-selection/v1' as const;
 export const ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION = 'admission-queue-scheduler/v1' as const;
+export const ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION = 'admission-queue-inspection/v1' as const;
+export const ADMISSION_QUEUE_LIST_SCHEMA_VERSION = 'admission-queue-list/v1' as const;
 export const ADMISSION_CONTROL_PROVIDER = 'workflow-control' as const;
 export type AdmissionProvider = ExecutableAgentProvider | typeof ADMISSION_CONTROL_PROVIDER;
 
@@ -70,15 +72,17 @@ export interface AdmissionLimitPolicy {
   limits: AdmissionCapacityLimit;
 }
 
-export type AdmissionLaunchSource =
-  | 'direct'
-  | 'conversation'
-  | 'recovery'
-  | 'fallback'
-  | 'scheduled'
-  | 'watcher'
-  | 'workflow'
-  | 'child-agent';
+export const ADMISSION_LAUNCH_SOURCES = [
+  'direct',
+  'conversation',
+  'recovery',
+  'fallback',
+  'scheduled',
+  'watcher',
+  'workflow',
+  'child-agent',
+] as const;
+export type AdmissionLaunchSource = (typeof ADMISSION_LAUNCH_SOURCES)[number];
 
 export interface AdmissionRequest {
   schemaVersion: typeof ADMISSION_REQUEST_SCHEMA_VERSION;
@@ -266,6 +270,116 @@ export interface AdmissionQueueListQuery {
   limit?: number;
   order?: 'fifo' | 'updated-desc';
   withSelectionEvidence?: boolean;
+}
+
+export interface AdmissionQueueInspectionQuery {
+  workspaceId?: string;
+  rootObjectiveId?: string;
+  nodeId?: string;
+  sources?: AdmissionLaunchSource[];
+  states?: AdmissionQueueState[];
+  priority?: number;
+  limitingScopes?: AdmissionScope[];
+  minAgeMs?: number;
+  maxAgeMs?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface AdmissionQueueInspectionEntry {
+  schemaVersion: typeof ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION;
+  id: string;
+  state: AdmissionQueueState;
+  position?: number;
+  rawPriority: number;
+  effectivePriority: number;
+  agePromotion: number;
+  ageMs: number;
+  readiness: 'conditional' | 'delayed' | 'reserved' | 'dispatched' | 'terminal';
+  lease: {
+    posture: 'none' | 'active' | 'expired' | 'dispatched' | 'terminal';
+    expiresAt?: string;
+  };
+  limitingPolicies: Array<{
+    scope: AdmissionScope;
+    scopeKey: string;
+    limits: AdmissionCapacityLimit;
+  }>;
+  conditionalStartFactors: Array<
+    | 'queue-eligibility'
+    | 'capacity-available'
+    | 'capacity-recheck'
+    | 'active-reservation-release'
+    | 'policy-recheck'
+    | 'lease-expiry'
+    | 'retry-backoff'
+  >;
+  launch: {
+    source: AdmissionLaunchSource;
+    target: 'direct' | 'workflow-root' | 'workflow-step' | 'legacy-direct';
+    workspaceId: string;
+    taskKey: string;
+    rootTaskKey: string;
+    workspaceKey: string;
+    provider: AdmissionProvider;
+    hostKey: string;
+    workflowRunKey?: string;
+    workflowStepKey?: string;
+    rootObjectiveKey?: string;
+    nodeKey?: string;
+  };
+  navigation: {
+    taskId?: string;
+    attemptId: string;
+    workflowId?: string;
+    workflowRunId?: string;
+    workflowStepId?: string;
+    executionTree?: ExecutionTreeIdentity;
+  };
+  selectionEvidence?: AdmissionQueueSelectionEvidence;
+  retry: {
+    count: number;
+    maximum: number;
+    availableAt: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdmissionQueueDepth {
+  global: {
+    current: number;
+    limit: number;
+  };
+  workspaces: Array<{
+    workspaceId: string;
+    workspaceKey: string;
+    current: number;
+    limit: number;
+  }>;
+}
+
+export interface AdmissionQueueListResponse {
+  schemaVersion: typeof ADMISSION_QUEUE_LIST_SCHEMA_VERSION;
+  generatedAt: string;
+  conditional: true;
+  depth: AdmissionQueueDepth;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+    snapshotTruncated: boolean;
+  };
+  entries: AdmissionQueueInspectionEntry[];
+}
+
+export interface AdmissionQueueGetResponse {
+  schemaVersion: typeof ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION;
+  generatedAt: string;
+  conditional: true;
+  depth: AdmissionQueueDepth;
+  entry: AdmissionQueueInspectionEntry;
 }
 
 export interface AdmissionQueueDraft {

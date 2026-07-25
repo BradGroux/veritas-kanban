@@ -605,6 +605,10 @@ vk admission list --root-objective objective_0123456789abcdef --json
 vk admission get admission_0123456789abcdef --json
 vk admission tree objective_0123456789abcdef
 vk admission tree objective_0123456789abcdef --limit 25 --json
+vk admission queue list
+vk admission queue list --state queued requeued --source workflow --min-age 60000 --json
+vk admission queue get admission_queue_0123456789abcdef
+vk admission queue get admission_queue_0123456789abcdef --json
 ```
 
 `admission list` filters by workspace, task, root task, provider, host, state,
@@ -618,6 +622,14 @@ operator diagnosis. `admission tree` reports committed and reserved tokens,
 cost, tool calls, runtime, retries, fan-out, policy availability, and bounded
 contributors without double counting descendant totals. These are read-only
 commands and require `agent:read`.
+
+`admission queue list` filters by workspace, root objective, node, launch
+source, queue state, raw numeric priority, limiting scope, age window, page,
+and result limit. `admission queue get` shows one entry with position,
+priority aging, readiness, lease posture, redacted launch identity, limiting
+policy, conditional start factors, selection evidence, and safe navigation
+identifiers. Human output labels the snapshot as conditional and never presents
+an ETA or exact start time. Use `--json` for the complete versioned REST shape.
 
 ---
 

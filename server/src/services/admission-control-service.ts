@@ -7,8 +7,13 @@ import type {
   AdmissionLimitPolicy,
   AdmissionProvider,
   AdmissionQueueClaim,
+  AdmissionQueueDepth,
   AdmissionQueueEntry,
+  AdmissionQueueGetResponse,
+  AdmissionQueueInspectionEntry,
+  AdmissionQueueInspectionQuery,
   AdmissionQueueListQuery,
+  AdmissionQueueListResponse,
   AdmissionQueuePriority,
   AdmissionQueueSelectionEvidence,
   AdmissionQueueTarget,
@@ -26,6 +31,8 @@ import type {
 } from '@veritas-kanban/shared';
 import {
   ADMISSION_DECISION_SCHEMA_VERSION,
+  ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION,
+  ADMISSION_QUEUE_LIST_SCHEMA_VERSION,
   ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION,
   ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION,
   ADMISSION_REQUEST_SCHEMA_VERSION,
@@ -52,11 +59,25 @@ import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
 import {
   admissionScopeKey,
   assertSchedulerSettings,
+  orderAdmissionQueueEntries,
   rankAdmissionQueueEntries,
   resolveAdmissionQueuePriority,
+  scoreAdmissionQueueEntry,
+  workspaceKey,
 } from './admission-queue-scheduler.js';
 
 const MAX_CAS_ATTEMPTS = 8;
+const ACTIVE_INSPECTION_SNAPSHOT_LIMIT = 100_000;
+const TERMINAL_INSPECTION_SNAPSHOT_LIMIT = 1_000;
+const ACTIVE_QUEUE_STATES = ['queued', 'leased', 'requeued', 'dispatched'] as const;
+
+interface AdmissionQueueInspectionContext {
+  settings: AdmissionSettings;
+  now: Date;
+  activeEntries: AdmissionQueueEntry[];
+  positions: Map<string, number>;
+  depth: AdmissionQueueDepth;
+}
 
 export interface AdmissionRequestInput {
   taskId: string;
@@ -544,6 +565,280 @@ export class AdmissionControlService {
   async listQueue(query: AdmissionQueueListQuery = {}): Promise<AdmissionQueueEntry[]> {
     await this.repository.expireQueueLeases(this.now().toISOString());
     return this.repository.listQueue(query);
+  }
+
+  async inspectQueue(
+    query: AdmissionQueueInspectionQuery = {}
+  ): Promise<AdmissionQueueListResponse> {
+    const context = await this.queueInspectionContext();
+    const requestedStates = new Set(query.states ?? ACTIVE_QUEUE_STATES);
+    const includeTerminal = requestedStates.has('terminal');
+    const terminalSnapshot = includeTerminal
+      ? await this.repository.listQueue({
+          states: ['terminal'],
+          order: 'updated-desc',
+          limit: TERMINAL_INSPECTION_SNAPSHOT_LIMIT + 1,
+        })
+      : [];
+    const snapshotTruncated = terminalSnapshot.length > TERMINAL_INSPECTION_SNAPSHOT_LIMIT;
+    const records = [
+      ...context.activeEntries,
+      ...terminalSnapshot.slice(0, TERMINAL_INSPECTION_SNAPSHOT_LIMIT),
+    ];
+    const filtered = records
+      .map((entry) => ({
+        entry,
+        inspection: this.projectQueueInspection(entry, context),
+      }))
+      .filter(({ entry }) => requestedStates.has(entry.state))
+      .filter(({ entry }) => !query.workspaceId || entry.request.workspaceId === query.workspaceId)
+      .filter(
+        ({ entry }) =>
+          !query.rootObjectiveId ||
+          entry.request.executionTree?.rootObjectiveId === query.rootObjectiveId
+      )
+      .filter(({ entry }) => !query.nodeId || entry.request.executionTree?.nodeId === query.nodeId)
+      .filter(({ entry }) => !query.sources?.length || query.sources.includes(entry.request.source))
+      .filter(
+        ({ inspection }) =>
+          query.priority === undefined || inspection.rawPriority === query.priority
+      )
+      .filter(
+        ({ entry }) =>
+          !query.limitingScopes?.length ||
+          entry.limitingPolicies.some((policy) => query.limitingScopes?.includes(policy.scope))
+      )
+      .filter(
+        ({ inspection }) => query.minAgeMs === undefined || inspection.ageMs >= query.minAgeMs
+      )
+      .filter(
+        ({ inspection }) => query.maxAgeMs === undefined || inspection.ageMs <= query.maxAgeMs
+      )
+      .sort(
+        (left, right) =>
+          (left.inspection.position ?? Number.MAX_SAFE_INTEGER) -
+            (right.inspection.position ?? Number.MAX_SAFE_INTEGER) ||
+          left.entry.enqueueSequence - right.entry.enqueueSequence ||
+          left.entry.id.localeCompare(right.entry.id)
+      );
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const limit = Math.min(200, Math.max(1, Math.floor(query.limit ?? 100)));
+    const offset = (page - 1) * limit;
+
+    return {
+      schemaVersion: ADMISSION_QUEUE_LIST_SCHEMA_VERSION,
+      generatedAt: context.now.toISOString(),
+      conditional: true,
+      depth: context.depth,
+      pagination: {
+        page,
+        limit,
+        total: filtered.length,
+        hasMore: offset + limit < filtered.length,
+        snapshotTruncated,
+      },
+      entries: filtered.slice(offset, offset + limit).map(({ inspection }) => inspection),
+    };
+  }
+
+  async inspectQueueEntry(id: string): Promise<AdmissionQueueGetResponse> {
+    const context = await this.queueInspectionContext();
+    const entry =
+      context.activeEntries.find((candidate) => candidate.id === id) ??
+      (await this.repository.getQueueEntry(id));
+    if (!entry) throw new NotFoundError('Admission queue entry not found.');
+    return {
+      schemaVersion: ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION,
+      generatedAt: context.now.toISOString(),
+      conditional: true,
+      depth: context.depth,
+      entry: this.projectQueueInspection(entry, context),
+    };
+  }
+
+  private async queueInspectionContext(): Promise<AdmissionQueueInspectionContext> {
+    const settings = await this.settings();
+    const now = this.now();
+    await this.repository.expireQueueLeases(now.toISOString());
+    const activeEntries = await this.repository.listQueue({
+      states: [...ACTIVE_QUEUE_STATES],
+      limit: ACTIVE_INSPECTION_SNAPSHOT_LIMIT,
+    });
+    const history = (
+      await this.repository.listQueue({
+        limit: Math.max(settings.queue.scheduler.workspaceBurstLimit, 1),
+        order: 'updated-desc',
+        withSelectionEvidence: true,
+      })
+    )
+      .map((entry) => entry.selectionEvidence)
+      .filter((evidence): evidence is AdmissionQueueSelectionEvidence => Boolean(evidence));
+    const pending = activeEntries.filter((entry) => ['queued', 'requeued'].includes(entry.state));
+    const ordering = orderAdmissionQueueEntries({
+      entries: pending,
+      history,
+      now: now.toISOString(),
+      settings: settings.queue.scheduler,
+    });
+    const positioned = new Set(ordering.candidates.map(({ entry }) => entry.id));
+    const delayed = pending
+      .filter((entry) => !positioned.has(entry.id))
+      .sort(
+        (left, right) =>
+          left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
+      );
+    const positions = new Map(
+      [...ordering.candidates.map(({ entry }) => entry), ...delayed].map((entry, index) => [
+        entry.id,
+        index + 1,
+      ])
+    );
+    const workspaceDepth = new Map<string, number>();
+    for (const entry of activeEntries) {
+      workspaceDepth.set(
+        entry.request.workspaceId,
+        (workspaceDepth.get(entry.request.workspaceId) ?? 0) + 1
+      );
+    }
+    const depth: AdmissionQueueDepth = {
+      global: {
+        current: activeEntries.length,
+        limit: settings.queue.globalLimit,
+      },
+      workspaces: [...workspaceDepth.entries()]
+        .map(([workspaceId, current]) => ({
+          workspaceId,
+          workspaceKey: workspaceKey(workspaceId),
+          current,
+          limit: settings.queue.workspaceLimit,
+        }))
+        .sort((left, right) => left.workspaceKey.localeCompare(right.workspaceKey)),
+    };
+    return { settings, now, activeEntries, positions, depth };
+  }
+
+  private projectQueueInspection(
+    entry: AdmissionQueueEntry,
+    context: AdmissionQueueInspectionContext
+  ): AdmissionQueueInspectionEntry {
+    const score = scoreAdmissionQueueEntry(
+      entry,
+      context.now.toISOString(),
+      context.settings.queue.scheduler
+    );
+    const available = Date.parse(entry.availableAt) <= context.now.getTime();
+    const readiness: AdmissionQueueInspectionEntry['readiness'] =
+      entry.state === 'leased'
+        ? 'reserved'
+        : entry.state === 'dispatched'
+          ? 'dispatched'
+          : entry.state === 'terminal'
+            ? 'terminal'
+            : available
+              ? 'conditional'
+              : 'delayed';
+    const leasePosture: AdmissionQueueInspectionEntry['lease']['posture'] =
+      entry.state === 'dispatched'
+        ? 'dispatched'
+        : entry.state === 'terminal'
+          ? 'terminal'
+          : entry.lease
+            ? Date.parse(entry.lease.expiresAt) > context.now.getTime()
+              ? 'active'
+              : 'expired'
+            : 'none';
+    const conditionalStartFactors = new Set<
+      AdmissionQueueInspectionEntry['conditionalStartFactors'][number]
+    >(entry.selectionEvidence?.conditionalStartFactors ?? []);
+    if (entry.state === 'queued' || entry.state === 'requeued') {
+      conditionalStartFactors.add('queue-eligibility');
+      conditionalStartFactors.add(available ? 'capacity-recheck' : 'retry-backoff');
+      conditionalStartFactors.add('policy-recheck');
+      if (entry.limitingPolicies.length > 0) {
+        conditionalStartFactors.add('active-reservation-release');
+      }
+    }
+    if (entry.state === 'leased') conditionalStartFactors.add('lease-expiry');
+    const target = entry.target?.kind ?? 'legacy-direct';
+    const taskId =
+      entry.target?.kind === 'workflow-root'
+        ? entry.target.associatedTaskId
+        : entry.target?.kind === 'workflow-step'
+          ? undefined
+          : entry.request.taskId;
+    const workflowRunId =
+      entry.request.workflowRunId ??
+      (entry.target?.kind === 'workflow-root' || entry.target?.kind === 'workflow-step'
+        ? entry.target.workflowRunId
+        : undefined);
+    const workflowStepId =
+      entry.request.workflowStepId ??
+      (entry.target?.kind === 'workflow-step' ? entry.target.workflowStepId : undefined);
+
+    return {
+      schemaVersion: ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION,
+      id: entry.id,
+      state: entry.state,
+      ...(context.positions.has(entry.id) ? { position: context.positions.get(entry.id) } : {}),
+      rawPriority: score.rawPriority,
+      effectivePriority: score.effectivePriority,
+      agePromotion: score.agePromotion,
+      ageMs: score.ageMs,
+      readiness,
+      lease: {
+        posture: leasePosture,
+        ...(entry.lease ? { expiresAt: entry.lease.expiresAt } : {}),
+      },
+      limitingPolicies: entry.limitingPolicies.map((policy) => ({
+        scope: policy.scope,
+        scopeKey: admissionScopeKey(policy.scope, policy.scopeId),
+        limits: policy.limits,
+      })),
+      conditionalStartFactors: [...conditionalStartFactors],
+      launch: {
+        source: entry.request.source,
+        target,
+        workspaceId: entry.request.workspaceId,
+        taskKey: queueInspectionKey('task', entry.request.taskId),
+        rootTaskKey: queueInspectionKey('root-task', entry.request.rootTaskId),
+        workspaceKey: workspaceKey(entry.request.workspaceId),
+        provider: entry.request.provider,
+        hostKey: queueInspectionKey('host', entry.request.hostId),
+        ...(entry.request.workflowRunId
+          ? { workflowRunKey: queueInspectionKey('workflow-run', entry.request.workflowRunId) }
+          : {}),
+        ...(entry.request.workflowStepId
+          ? { workflowStepKey: queueInspectionKey('workflow-step', entry.request.workflowStepId) }
+          : {}),
+        ...(entry.request.executionTree
+          ? {
+              rootObjectiveKey: queueInspectionKey(
+                'root-objective',
+                entry.request.executionTree.rootObjectiveId
+              ),
+              nodeKey: queueInspectionKey('node', entry.request.executionTree.nodeId),
+            }
+          : {}),
+      },
+      navigation: {
+        ...(taskId ? { taskId } : {}),
+        attemptId: entry.attemptId,
+        ...(entry.target?.kind === 'workflow-root' || entry.target?.kind === 'workflow-step'
+          ? { workflowId: entry.target.workflowId }
+          : {}),
+        ...(workflowRunId ? { workflowRunId } : {}),
+        ...(workflowStepId ? { workflowStepId } : {}),
+        ...(entry.request.executionTree ? { executionTree: entry.request.executionTree } : {}),
+      },
+      ...(entry.selectionEvidence ? { selectionEvidence: entry.selectionEvidence } : {}),
+      retry: {
+        count: entry.retryCount,
+        maximum: entry.maxRetries,
+        availableAt: entry.availableAt,
+      },
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
   }
 
   async markQueueDispatched(id: string, attemptId: string): Promise<AdmissionQueueEntry> {
@@ -1181,6 +1476,10 @@ function sameRequestIdentity(
     JSON.stringify(left.budgetRequest) === JSON.stringify(right.budgetRequest) &&
     JSON.stringify(left.requested) === JSON.stringify(right.requested)
   );
+}
+
+function queueInspectionKey(kind: string, value: string): string {
+  return `sha256:${createHash('sha256').update(`${kind}:${value}`).digest('hex')}`;
 }
 
 export function getAdmissionControlService(): AdmissionControlService {
