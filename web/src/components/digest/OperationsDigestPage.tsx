@@ -25,6 +25,8 @@ import {
   Search,
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
+import { AdmissionQueuePanel } from '@/components/digest/AdmissionQueuePanel';
+import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 import { useProjects } from '@/hooks/useProjects';
 import {
   normalizeOperationsDigestFilters,
@@ -45,7 +47,8 @@ import { cn } from '@/lib/utils';
 
 interface OperationsDigestPageProps {
   onBack: () => void;
-  onTaskClick?: (taskId: string) => void;
+  onTaskClick?: (taskId: string, target?: TaskDetailNavigationTarget) => void;
+  onWorkflowClick?: (workflowId: string) => void;
 }
 
 type WindowPreset = '24' | '72' | '168' | 'custom';
@@ -59,7 +62,11 @@ const WINDOW_OPTIONS: Array<{ value: WindowPreset; label: string }> = [
 
 const SOURCE_COLLECTIONS: SearchCollection[] = ['tasks-active', 'agent-runs', 'scheduled-runs'];
 
-export function OperationsDigestPage({ onBack, onTaskClick }: OperationsDigestPageProps) {
+export function OperationsDigestPage({
+  onBack,
+  onTaskClick,
+  onWorkflowClick,
+}: OperationsDigestPageProps) {
   const [windowPreset, setWindowPreset] = useState<WindowPreset>('24');
   const [from, setFrom] = useState(() => toLocalDateTimeInput(hoursAgo(24)));
   const [to, setTo] = useState(() => toLocalDateTimeInput(new Date()));
@@ -307,6 +314,8 @@ export function OperationsDigestPage({ onBack, onTaskClick }: OperationsDigestPa
             'Failed to load operations digest.'}
         </Alert>
       ) : null}
+
+      <AdmissionQueuePanel onTaskClick={onTaskClick} onWorkflowClick={onWorkflowClick} />
 
       {digest ? <InventoryReconciliation digest={digest} onOpenSources={openSources} /> : null}
 

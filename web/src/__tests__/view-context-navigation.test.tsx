@@ -6,7 +6,15 @@ import { ViewProvider, useView } from '@/contexts/ViewContext';
 import { renderWithProviders } from './test-utils';
 
 function NavigationHarness() {
-  const { view, setView, navigateToTask, pendingTaskId, goBack, returnFromTask } = useView();
+  const {
+    view,
+    setView,
+    navigateToTask,
+    navigateToWorkflow,
+    pendingTaskId,
+    goBack,
+    returnFromTask,
+  } = useView();
 
   return (
     <>
@@ -20,6 +28,9 @@ function NavigationHarness() {
       </button>
       <button type="button" onClick={() => navigateToTask('task-route-context')}>
         Open Task
+      </button>
+      <button type="button" onClick={() => navigateToWorkflow('workflow-route-context')}>
+        Open Workflow Detail
       </button>
       <button type="button" onClick={returnFromTask}>
         Close Task
@@ -102,6 +113,19 @@ describe('ViewContext route history', () => {
 
     expect(screen.getByTestId('current-view').textContent).toBe('workflows');
     expect(window.location.pathname).toBe('/workflows/release-blueprint/edit');
+  });
+
+  it('opens workflow detail from a full-page view with an in-app return path', async () => {
+    const user = userEvent.setup();
+    renderNavigationHarness();
+
+    await user.click(screen.getByRole('button', { name: 'Open Activity' }));
+    await user.click(screen.getByRole('button', { name: 'Open Workflow Detail' }));
+
+    expect(screen.getByTestId('current-view').textContent).toBe('workflows');
+    expect(window.location.pathname).toBe('/workflows/workflow-route-context');
+    expect(window.history.state.veritasKanbanNavigation.originView).toBe('activity');
+    expect(window.history.state.veritasWorkflowNavigation).toEqual({ from: '/activity' });
   });
 
   it('maps Cmd+[ to in-app browser Back semantics', async () => {

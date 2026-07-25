@@ -40,6 +40,10 @@ vi.mock('@/components/ui/MarkdownRenderer', () => ({
   ),
 }));
 
+vi.mock('@/components/digest/AdmissionQueuePanel', () => ({
+  AdmissionQueuePanel: () => <div data-testid="admission-queue-panel" />,
+}));
+
 const digest: AgentOperationsDigest = {
   period: {
     start: '2026-06-04T00:00:00.000Z',
@@ -315,6 +319,7 @@ describe('OperationsDigestPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Operations Digest' })).toBeDefined();
+    expect(screen.getByTestId('admission-queue-panel')).toBeDefined();
     expect(screen.getByText('platform / veritas-kanban / /worktrees/platform')).toBeDefined();
     expect(screen.getByText('Daily Delivery')).toBeDefined();
     expect(screen.getByText('Configured')).toBeDefined();
