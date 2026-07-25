@@ -257,6 +257,37 @@ const AdmissionSettingsSchema = z
         leaseMs: z.number().int().min(5_000).max(300_000).optional(),
         retryBackoffMs: z.number().int().min(250).max(60_000).optional(),
         maxRetries: z.number().int().min(0).max(100).optional(),
+        scheduler: z
+          .object({
+            priorityLevels: z.number().int().min(2).max(16).optional(),
+            defaultPriority: z.number().int().min(0).max(15).optional(),
+            agingIntervalMs: z.number().int().min(1_000).max(86_400_000).optional(),
+            maxAgePromotion: z.number().int().min(1).max(15).optional(),
+            workspaceBurstLimit: z.number().int().min(1).max(1_000).optional(),
+            evaluationLimit: z.number().int().min(1).max(256).optional(),
+          })
+          .strict()
+          .superRefine((scheduler, ctx) => {
+            const priorityLevels = scheduler.priorityLevels ?? 4;
+            const defaultPriority = scheduler.defaultPriority ?? 1;
+            const maxAgePromotion = scheduler.maxAgePromotion ?? 3;
+            if (defaultPriority >= priorityLevels) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'admission.queue.scheduler.defaultPriority must be below priorityLevels',
+                path: ['defaultPriority'],
+              });
+            }
+            if (maxAgePromotion < priorityLevels - 1) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message:
+                  'admission.queue.scheduler.maxAgePromotion must let the lowest priority reach the highest level',
+                path: ['maxAgePromotion'],
+              });
+            }
+          })
+          .optional(),
       })
       .strict()
       .optional(),

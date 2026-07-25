@@ -9,6 +9,8 @@ import type {
   AdmissionQueueClaim,
   AdmissionQueueEntry,
   AdmissionQueueListQuery,
+  AdmissionQueuePriority,
+  AdmissionQueueSelectionEvidence,
   AdmissionQueueTarget,
   AdmissionReservation,
   AdmissionReservationClaimOrQueueResult,
@@ -24,6 +26,8 @@ import type {
 } from '@veritas-kanban/shared';
 import {
   ADMISSION_DECISION_SCHEMA_VERSION,
+  ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION,
+  ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION,
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   DEFAULT_FEATURE_SETTINGS,
@@ -45,6 +49,12 @@ import {
 import { getStorage, getStorageTypeFromEnv } from '../storage/index.js';
 import { ConfigService } from './config-service.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
+import {
+  admissionScopeKey,
+  assertSchedulerSettings,
+  rankAdmissionQueueEntries,
+  resolveAdmissionQueuePriority,
+} from './admission-queue-scheduler.js';
 
 const MAX_CAS_ATTEMPTS = 8;
 
@@ -68,11 +78,13 @@ export interface AdmissionRequestInput {
 export interface DirectAdmissionQueueInput {
   agent: AgentType;
   attemptId: string;
+  priority?: AdmissionQueuePriority;
 }
 
 export interface WorkflowAdmissionQueueInput {
   target: Exclude<AdmissionQueueTarget, { kind: 'direct' }>;
   attemptId: string;
+  priority?: AdmissionQueuePriority;
 }
 
 export type AdmissionQueueInput = DirectAdmissionQueueInput | WorkflowAdmissionQueueInput;
@@ -128,7 +140,9 @@ export class AdmissionControlService {
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly heartbeatEligible = new Set<string>();
   private readonly queueHeartbeatTimers = new Map<string, NodeJS.Timeout>();
+  private readonly heartbeatTasks = new Map<string, Promise<void>>();
   private readonly capacityListeners = new Set<() => void>();
+  private disposed = false;
 
   constructor(options: AdmissionControlServiceOptions = {}) {
     this.repositoryOverride = options.repository;
@@ -161,6 +175,7 @@ export class AdmissionControlService {
         queueLeaseMs: settings.queue.leaseMs,
       });
     }
+    assertSchedulerSettings(settings.queue.scheduler);
     return settings;
   }
 
@@ -273,6 +288,7 @@ export class AdmissionControlService {
             ...(queueTarget?.kind === 'direct' ? { agent: queueTarget.agent } : {}),
             target: queueTarget as AdmissionQueueTarget,
             attemptId: queue?.attemptId as string,
+            priority: resolveAdmissionQueuePriority(queue?.priority, settings.queue.scheduler),
             request,
             policies,
             limitingPolicies: [],
@@ -380,66 +396,141 @@ export class AdmissionControlService {
       const now = this.now();
       await this.repository.expireLeases(now.toISOString());
       await this.repository.expireQueueLeases(now.toISOString());
-      const [entry] = await this.repository.listQueue({
+      const entries = await this.repository.listQueue({
         states: ['queued', 'requeued'],
         eligibleAt: now.toISOString(),
-        limit: 1,
+        limit: Math.max(settings.queue.globalLimit, 1),
       });
-      if (!entry) return null;
-      const policies = this.policiesFor(entry.request, settings);
-      const impossible = requestExceedsPolicies(entry.request.requested, policies);
-      if (impossible.length > 0) {
-        await this.terminateQueueEntry(
-          entry.id,
-          'ADMISSION_POLICY_DRIFT',
-          'The queued launch exceeds the current admission policy.'
-        );
-        continue;
-      }
-      const record = AdmissionReservationSchema.parse({
-        schemaVersion: ADMISSION_RESERVATION_SCHEMA_VERSION,
-        id: reservationId(entry.request.idempotencyKey),
-        revision: 1,
-        state: 'active',
-        request: entry.request,
-        policies,
-        ...(entry.request.executionTree
-          ? {
-              executionBudget: initializeExecutionTreeBudget(
-                entry.request.budgetRequest ?? { ...ZERO_AGENT_BUDGET_USAGE }
-              ),
-            }
-          : {}),
-        lease: this.newLease(now, Math.min(settings.leaseMs, settings.queue.leaseMs)),
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
-      });
-      const claimed = await this.repository.claimQueued({
-        queueId: entry.id,
-        expectedRevision: entry.revision,
-        record,
+      if (entries.length === 0) return null;
+      const history = (
+        await this.repository.listQueue({
+          limit: Math.max(settings.queue.scheduler.workspaceBurstLimit, 1),
+          order: 'updated-desc',
+          withSelectionEvidence: true,
+        })
+      )
+        .map((entry) => entry.selectionEvidence)
+        .filter((evidence): evidence is AdmissionQueueSelectionEvidence => Boolean(evidence));
+      const ranking = rankAdmissionQueueEntries({
+        entries,
+        history,
         now: now.toISOString(),
+        settings: settings.queue.scheduler,
       });
-      if (claimed.stale) continue;
-      if (claimed.limitingBudgetPolicies?.length && claimed.budgetRetryable === false) {
-        await this.terminateQueueEntry(
-          entry.id,
-          'ADMISSION_BUDGET_EXHAUSTED',
-          'Committed execution-tree usage exhausts the current budget.'
-        );
-        continue;
+      const skipped: AdmissionQueueSelectionEvidence['skipped'] = [];
+      let snapshotChanged = false;
+
+      for (const [candidateIndex, candidate] of ranking.candidates.entries()) {
+        const entry = candidate.entry;
+        const policies = this.policiesFor(entry.request, settings);
+        const impossible = requestExceedsPolicies(entry.request.requested, policies);
+        if (impossible.length > 0) {
+          await this.terminateQueueEntry(
+            entry.id,
+            'ADMISSION_POLICY_DRIFT',
+            'The queued launch exceeds the current admission policy.'
+          );
+          snapshotChanged = true;
+          continue;
+        }
+        const record = AdmissionReservationSchema.parse({
+          schemaVersion: ADMISSION_RESERVATION_SCHEMA_VERSION,
+          id: reservationId(entry.request.idempotencyKey),
+          revision: 1,
+          state: 'active',
+          request: entry.request,
+          policies,
+          ...(entry.request.executionTree
+            ? {
+                executionBudget: initializeExecutionTreeBudget(
+                  entry.request.budgetRequest ?? { ...ZERO_AGENT_BUDGET_USAGE }
+                ),
+              }
+            : {}),
+          lease: this.newLease(now, Math.min(settings.leaseMs, settings.queue.leaseMs)),
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        });
+        const selectionEvidence: AdmissionQueueSelectionEvidence = {
+          schemaVersion: ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION,
+          policyVersion: ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION,
+          selectedAt: now.toISOString(),
+          selectedQueueEntryId: entry.id,
+          workspaceKey: candidate.workspaceKey,
+          rawPriority: candidate.rawPriority,
+          effectivePriority: candidate.effectivePriority,
+          agePromotion: candidate.agePromotion,
+          ageMs: candidate.ageMs,
+          workspaceTurn: candidate.workspaceTurn,
+          capacityReadiness: 'ready',
+          limitingScopes: [],
+          conditionalStartFactors: [
+            'queue-eligibility',
+            'capacity-available',
+            ...(skipped.length > 0 ? (['active-reservation-release'] as const) : []),
+          ],
+          snapshotSize: ranking.snapshotSize,
+          evaluatedCount: ranking.evaluatedCount,
+          skipped: [
+            ...skipped,
+            ...ranking.candidates.slice(candidateIndex + 1).map((notSelected) => ({
+              queueEntryId: notSelected.entry.id,
+              workspaceKey: notSelected.workspaceKey,
+              rawPriority: notSelected.rawPriority,
+              effectivePriority: notSelected.effectivePriority,
+              agePromotion: notSelected.agePromotion,
+              capacityReadiness: 'not-evaluated' as const,
+              limitingScopes: [],
+              reason:
+                ranking.deferredWorkspaceKey === notSelected.workspaceKey &&
+                candidate.workspaceKey !== ranking.deferredWorkspaceKey
+                  ? ('workspace-burst' as const)
+                  : ('lower-rank' as const),
+            })),
+          ],
+        };
+        const claimed = await this.repository.claimQueued({
+          queueId: entry.id,
+          expectedRevision: entry.revision,
+          record,
+          now: now.toISOString(),
+          selectionEvidence,
+        });
+        if (claimed.stale) {
+          snapshotChanged = true;
+          break;
+        }
+        if (claimed.limitingBudgetPolicies?.length && claimed.budgetRetryable === false) {
+          await this.terminateQueueEntry(
+            entry.id,
+            'ADMISSION_BUDGET_EXHAUSTED',
+            'Committed execution-tree usage exhausts the current budget.'
+          );
+          snapshotChanged = true;
+          continue;
+        }
+        if (claimed.limitingPolicies.length > 0 || claimed.limitingBudgetPolicies?.length) {
+          skipped.push({
+            queueEntryId: entry.id,
+            workspaceKey: candidate.workspaceKey,
+            rawPriority: candidate.rawPriority,
+            effectivePriority: candidate.effectivePriority,
+            agePromotion: candidate.agePromotion,
+            capacityReadiness: 'blocked',
+            limitingScopes: claimed.limitingPolicies.map(({ scope, scopeId }) => ({
+              scope,
+              scopeKey: admissionScopeKey(scope, scopeId),
+            })),
+            reason: 'capacity-blocked',
+          });
+          continue;
+        }
+        if (!claimed.entry || !claimed.reservation) return null;
+        const queueClaim = { entry: claimed.entry, reservation: claimed.reservation };
+        this.startQueueHeartbeat(queueClaim, settings.heartbeatMs);
+        return queueClaim;
       }
-      if (
-        claimed.limitingPolicies.length > 0 ||
-        claimed.limitingBudgetPolicies?.length ||
-        !claimed.entry ||
-        !claimed.reservation
-      ) {
-        return null;
-      }
-      const queueClaim = { entry: claimed.entry, reservation: claimed.reservation };
-      this.startQueueHeartbeat(queueClaim, settings.heartbeatMs);
-      return queueClaim;
+      if (!snapshotChanged) return null;
     }
     return null;
   }
@@ -795,11 +886,17 @@ export class AdmissionControlService {
     return records.find((record) => record.attemptId === attemptId) ?? null;
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
+    if (this.disposed) {
+      await Promise.allSettled([...this.heartbeatTasks.values()]);
+      return;
+    }
+    this.disposed = true;
     for (const id of this.heartbeatTimers.keys()) this.stopHeartbeat(id);
     for (const id of this.queueHeartbeatTimers.keys()) this.stopQueueHeartbeat(id);
     this.heartbeatEligible.clear();
     this.capacityListeners.clear();
+    await Promise.allSettled([...this.heartbeatTasks.values()]);
     this.configService.dispose();
   }
 
@@ -959,6 +1056,7 @@ export class AdmissionControlService {
   }
 
   private startQueueHeartbeat(claim: AdmissionQueueClaim, configuredHeartbeatMs: number): void {
+    if (this.disposed) return;
     const queueId = claim.entry.id;
     if (this.queueHeartbeatTimers.has(queueId)) return;
     const leaseDurationMs =
@@ -969,9 +1067,14 @@ export class AdmissionControlService {
       Math.max(250, Math.floor(leaseDurationMs / 3))
     );
     const timer = setInterval(() => {
-      void this.renewQueueClaim(queueId, claim.reservation.id).catch(() => {
-        this.stopQueueHeartbeat(queueId);
-      });
+      if (this.disposed) return;
+      this.trackHeartbeatTask(`queue:${queueId}`, () =>
+        this.renewQueueClaim(queueId, claim.reservation.id)
+          .then(() => undefined)
+          .catch(() => {
+            this.stopQueueHeartbeat(queueId);
+          })
+      );
     }, heartbeatMs);
     timer.unref();
     this.queueHeartbeatTimers.set(queueId, timer);
@@ -1017,6 +1120,7 @@ export class AdmissionControlService {
   }
 
   private startHeartbeat(record: AdmissionReservation, configuredHeartbeatMs: number): void {
+    if (this.disposed) return;
     const id = record.id;
     this.heartbeatEligible.add(id);
     if (this.heartbeatTimers.has(id)) return;
@@ -1027,11 +1131,14 @@ export class AdmissionControlService {
       Math.max(1_000, Math.floor(leaseDurationMs / 2))
     );
     const timer = setInterval(() => {
-      void this.renew(id)
-        .then((renewed) => {
-          if (renewed.state !== 'active') this.stopHeartbeat(id);
-        })
-        .catch(() => this.stopHeartbeat(id));
+      if (this.disposed) return;
+      this.trackHeartbeatTask(`reservation:${id}`, () =>
+        this.renew(id)
+          .then((renewed) => {
+            if (renewed.state !== 'active') this.stopHeartbeat(id);
+          })
+          .catch(() => this.stopHeartbeat(id))
+      );
     }, heartbeatMs);
     timer.unref();
     this.heartbeatTimers.set(id, timer);
@@ -1042,6 +1149,15 @@ export class AdmissionControlService {
     const timer = this.heartbeatTimers.get(id);
     if (timer) clearInterval(timer);
     this.heartbeatTimers.delete(id);
+  }
+
+  private trackHeartbeatTask(key: string, start: () => Promise<void>): void {
+    if (this.disposed || this.heartbeatTasks.has(key)) return;
+    const task = start();
+    this.heartbeatTasks.set(key, task);
+    void task.finally(() => {
+      if (this.heartbeatTasks.get(key) === task) this.heartbeatTasks.delete(key);
+    });
   }
 }
 

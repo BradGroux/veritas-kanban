@@ -1,5 +1,5 @@
 import type { ExecutableAgentProvider } from './config.types.js';
-import type { AgentType } from './task.types.js';
+import type { AgentType, TaskPriority } from './task.types.js';
 import type {
   ExecutionTreeBudgetPolicy,
   ExecutionTreeBudgetState,
@@ -13,6 +13,8 @@ export const ADMISSION_REQUEST_SCHEMA_VERSION = 'admission-request/v1' as const;
 export const ADMISSION_DECISION_SCHEMA_VERSION = 'admission-decision/v1' as const;
 export const ADMISSION_RESERVATION_SCHEMA_VERSION = 'admission-reservation/v1' as const;
 export const ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION = 'admission-queue-entry/v1' as const;
+export const ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION = 'admission-queue-selection/v1' as const;
+export const ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION = 'admission-queue-scheduler/v1' as const;
 export const ADMISSION_CONTROL_PROVIDER = 'workflow-control' as const;
 export type AdmissionProvider = ExecutableAgentProvider | typeof ADMISSION_CONTROL_PROVIDER;
 
@@ -133,6 +135,52 @@ export interface AdmissionQueueTerminalEvidence {
   recordedAt: string;
 }
 
+export interface AdmissionQueueSchedulerSettings {
+  priorityLevels: number;
+  defaultPriority: number;
+  agingIntervalMs: number;
+  maxAgePromotion: number;
+  workspaceBurstLimit: number;
+  evaluationLimit: number;
+}
+
+export interface AdmissionQueueLimitingScopeEvidence {
+  scope: AdmissionScope;
+  scopeKey: string;
+}
+
+export interface AdmissionQueueSkippedCandidateEvidence {
+  queueEntryId: string;
+  workspaceKey: string;
+  rawPriority: number;
+  effectivePriority: number;
+  agePromotion: number;
+  capacityReadiness: 'blocked' | 'not-evaluated';
+  limitingScopes: AdmissionQueueLimitingScopeEvidence[];
+  reason: 'capacity-blocked' | 'lower-rank' | 'workspace-burst';
+}
+
+export interface AdmissionQueueSelectionEvidence {
+  schemaVersion: typeof ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION;
+  policyVersion: typeof ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION;
+  selectedAt: string;
+  selectedQueueEntryId: string;
+  workspaceKey: string;
+  rawPriority: number;
+  effectivePriority: number;
+  agePromotion: number;
+  ageMs: number;
+  workspaceTurn: 'normal' | 'fairness-promoted';
+  capacityReadiness: 'ready';
+  limitingScopes: AdmissionQueueLimitingScopeEvidence[];
+  conditionalStartFactors: Array<
+    'queue-eligibility' | 'capacity-available' | 'active-reservation-release'
+  >;
+  snapshotSize: number;
+  evaluatedCount: number;
+  skipped: AdmissionQueueSkippedCandidateEvidence[];
+}
+
 export type AdmissionQueueTarget =
   | {
       kind: 'direct';
@@ -174,6 +222,8 @@ export interface AdmissionQueueEntry {
   revision: number;
   state: AdmissionQueueState;
   enqueueSequence: number;
+  /** Numeric scheduling priority. Legacy entries without it use the configured default. */
+  priority?: number;
   /** Legacy direct-launch discriminator. New entries also persist target. */
   agent?: AgentType;
   target?: AdmissionQueueTarget;
@@ -190,6 +240,7 @@ export interface AdmissionQueueEntry {
   reservationId?: string;
   dispatchedAttemptId?: string;
   terminal?: AdmissionQueueTerminalEvidence;
+  selectionEvidence?: AdmissionQueueSelectionEvidence;
   createdAt: string;
   updatedAt: string;
 }
@@ -213,6 +264,8 @@ export interface AdmissionQueueListQuery {
   states?: AdmissionQueueState[];
   eligibleAt?: string;
   limit?: number;
+  order?: 'fifo' | 'updated-desc';
+  withSelectionEvidence?: boolean;
 }
 
 export interface AdmissionQueueDraft {
@@ -220,6 +273,7 @@ export interface AdmissionQueueDraft {
   agent?: AgentType;
   target?: AdmissionQueueTarget;
   attemptId: string;
+  priority?: number;
   request: AdmissionRequest;
   policies: AdmissionLimitPolicy[];
   limitingPolicies: AdmissionLimitPolicy[];
@@ -293,6 +347,7 @@ export interface AdmissionQueuedClaimInput {
   expectedRevision: number;
   record: AdmissionReservation;
   now: string;
+  selectionEvidence: AdmissionQueueSelectionEvidence;
 }
 
 export interface AdmissionQueuedClaimResult {
@@ -351,5 +406,8 @@ export interface AdmissionSettings {
     leaseMs: number;
     retryBackoffMs: number;
     maxRetries: number;
+    scheduler: AdmissionQueueSchedulerSettings;
   };
 }
+
+export type AdmissionQueuePriority = number | TaskPriority;

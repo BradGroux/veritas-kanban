@@ -421,6 +421,14 @@ describe('Feature Settings Schema', () => {
           leaseMs: 30_000,
           retryBackoffMs: 5_000,
           maxRetries: 3,
+          scheduler: {
+            priorityLevels: 4,
+            defaultPriority: 1,
+            agingIntervalMs: 60_000,
+            maxAgePromotion: 3,
+            workspaceBurstLimit: 4,
+            evaluationLimit: 32,
+          },
         },
       },
     });
@@ -428,6 +436,7 @@ describe('Feature Settings Schema', () => {
     expect(result.admission?.providers?.['codex-cli']?.processSlots).toBe(4);
     expect(result.admission?.providers?.['workflow-control']?.concurrentRuns).toBe(3);
     expect(result.admission?.queue?.workspaceLimit).toBe(100);
+    expect(result.admission?.queue?.scheduler?.evaluationLimit).toBe(32);
     expect(() =>
       FeatureSettingsPatchSchema.parse({
         admission: { leaseMs: 10_000, heartbeatMs: 10_000 },
@@ -448,6 +457,32 @@ describe('Feature Settings Schema', () => {
         admission: {
           heartbeatMs: 10_000,
           queue: { leaseMs: 10_000 },
+        },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: {
+          queue: {
+            scheduler: {
+              priorityLevels: 4,
+              defaultPriority: 4,
+              maxAgePromotion: 3,
+            },
+          },
+        },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: {
+          queue: {
+            scheduler: {
+              priorityLevels: 4,
+              defaultPriority: 1,
+              maxAgePromotion: 2,
+            },
+          },
         },
       })
     ).toThrow();

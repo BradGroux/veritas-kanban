@@ -4,6 +4,8 @@ import {
   ADMISSION_DECISION_SCHEMA_VERSION,
   ADMISSION_CONTROL_PROVIDER,
   ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION,
+  ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION,
+  ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION,
   ADMISSION_QUEUE_STATES,
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
@@ -256,6 +258,62 @@ export const AdmissionQueueTargetSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 
+const AdmissionQueueSelectionEvidenceSchema = z
+  .object({
+    schemaVersion: z.literal(ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION),
+    policyVersion: z.literal(ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION),
+    selectedAt: z.string().datetime(),
+    selectedQueueEntryId: identifier,
+    workspaceKey: digest,
+    rawPriority: z.number().int().min(0).max(15),
+    effectivePriority: z.number().int().min(0).max(15),
+    agePromotion: z.number().int().min(0).max(15),
+    ageMs: z.number().int().nonnegative(),
+    workspaceTurn: z.enum(['normal', 'fairness-promoted']),
+    capacityReadiness: z.literal('ready'),
+    limitingScopes: z
+      .array(
+        z
+          .object({
+            scope: z.enum(ADMISSION_SCOPES),
+            scopeKey: digest,
+          })
+          .strict()
+      )
+      .max(6),
+    conditionalStartFactors: z
+      .array(z.enum(['queue-eligibility', 'capacity-available', 'active-reservation-release']))
+      .max(3),
+    snapshotSize: z.number().int().nonnegative(),
+    evaluatedCount: z.number().int().positive().max(256),
+    skipped: z
+      .array(
+        z
+          .object({
+            queueEntryId: identifier,
+            workspaceKey: digest,
+            rawPriority: z.number().int().min(0).max(15),
+            effectivePriority: z.number().int().min(0).max(15),
+            agePromotion: z.number().int().min(0).max(15),
+            capacityReadiness: z.enum(['blocked', 'not-evaluated']),
+            limitingScopes: z
+              .array(
+                z
+                  .object({
+                    scope: z.enum(ADMISSION_SCOPES),
+                    scopeKey: digest,
+                  })
+                  .strict()
+              )
+              .max(6),
+            reason: z.enum(['capacity-blocked', 'lower-rank', 'workspace-burst']),
+          })
+          .strict()
+      )
+      .max(256),
+  })
+  .strict();
+
 export const AdmissionQueueEntrySchema = z
   .object({
     schemaVersion: z.literal(ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION),
@@ -263,6 +321,7 @@ export const AdmissionQueueEntrySchema = z
     revision: z.number().int().positive(),
     state: z.enum(ADMISSION_QUEUE_STATES),
     enqueueSequence: z.number().int().positive(),
+    priority: z.number().int().min(0).max(15).optional(),
     agent: identifier.optional(),
     target: AdmissionQueueTargetSchema.optional(),
     attemptId: identifier,
@@ -285,6 +344,7 @@ export const AdmissionQueueEntrySchema = z
       })
       .strict()
       .optional(),
+    selectionEvidence: AdmissionQueueSelectionEvidenceSchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -341,6 +401,13 @@ export const AdmissionQueueEntrySchema = z
         code: z.ZodIssueCode.custom,
         message: 'Leased queue entries require lease and reservation evidence.',
         path: ['lease'],
+      });
+    }
+    if (entry.selectionEvidence && entry.selectionEvidence.selectedQueueEntryId !== entry.id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Admission selection evidence must identify its queue entry.',
+        path: ['selectionEvidence', 'selectedQueueEntryId'],
       });
     }
     if (entry.state === 'dispatched' && (!entry.reservationId || !entry.dispatchedAttemptId)) {

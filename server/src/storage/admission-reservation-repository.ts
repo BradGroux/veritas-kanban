@@ -145,20 +145,11 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       const queue = await this.readQueueEntries();
       const expired = this.expireQueueMaterialized(queue, input.now);
       const current = queue.get(input.queueId);
-      const eligible = [...queue.values()]
-        .filter(
-          (entry) =>
-            ['queued', 'requeued'].includes(entry.state) &&
-            Date.parse(entry.availableAt) <= Date.parse(input.now)
-        )
-        .sort(
-          (left, right) =>
-            left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
-        );
       if (
         !current ||
         current.revision !== input.expectedRevision ||
-        eligible[0]?.id !== current.id
+        !['queued', 'requeued'].includes(current.state) ||
+        Date.parse(current.availableAt) > Date.parse(input.now)
       ) {
         if (expired.length > 0) await this.replaceQueueEntries([...queue.values()]);
         return { stale: true, limitingPolicies: [] };
@@ -190,6 +181,7 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
         policies: claimed.record.policies,
         lease: claimed.record.lease,
         reservationId: claimed.record.id,
+        selectionEvidence: input.selectionEvidence,
         updatedAt: input.now,
       });
       queue.set(entry.id, entry);
@@ -327,13 +319,17 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       .filter((entry) => !query.workspaceId || entry.request.workspaceId === query.workspaceId)
       .filter((entry) => !query.taskId || entry.request.taskId === query.taskId)
       .filter((entry) => !states || states.has(entry.state))
+      .filter((entry) => !query.withSelectionEvidence || Boolean(entry.selectionEvidence))
       .filter(
         (entry) =>
           !query.eligibleAt || Date.parse(entry.availableAt) <= Date.parse(query.eligibleAt)
       )
-      .sort(
-        (left, right) =>
-          left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
+      .sort((left, right) =>
+        query.order === 'updated-desc'
+          ? Date.parse(right.updatedAt) - Date.parse(left.updatedAt) ||
+            right.enqueueSequence - left.enqueueSequence ||
+            left.id.localeCompare(right.id)
+          : left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
       )
       .slice(0, query.limit ?? 100);
   }

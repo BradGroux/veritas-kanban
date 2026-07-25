@@ -2357,7 +2357,11 @@ export class ClawdbotAgentService {
     const admissionDecision = options.admissionQueueClaim
       ? undefined
       : queueableDirectLaunch
-        ? await this.admission.admitOrQueue(admissionInput, { agent, attemptId })
+        ? await this.admission.admitOrQueue(admissionInput, {
+            agent,
+            attemptId,
+            priority: task.priority,
+          })
         : await this.admission.admit(admissionInput);
     if (admissionDecision?.outcome === 'queued' && admissionDecision.queueEntry) {
       try {

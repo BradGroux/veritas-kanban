@@ -24,9 +24,13 @@ const databases: SqliteDatabase[] = [];
 
 afterEach(async () => {
   for (const run of runs.splice(0)) run.dispose();
-  for (const admission of admissions.splice(0)) admission.dispose();
+  await Promise.all(admissions.splice(0).map((admission) => admission.dispose()));
   for (const database of databases.splice(0)) database.close();
-  await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }))
+  );
 });
 
 function workflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
@@ -146,14 +150,14 @@ async function createHarness(
   return { root, database, repository, admission, definition, service };
 }
 
-function restartHarness(
+async function restartHarness(
   harness: Awaited<ReturnType<typeof createHarness>>,
   admissionSettings: AdmissionSettings,
   stepExecutor: WorkflowStepExecutor,
   ownerId: string
 ) {
   harness.service.dispose();
-  harness.admission.dispose();
+  await harness.admission.dispose();
   const admission = new AdmissionControlService({
     repository: harness.repository,
     settings: async () => structuredClone(admissionSettings),
@@ -326,7 +330,15 @@ describe('workflow admission', () => {
         )
       );
       const claim = await harness.admission.claimNextQueued();
-      expect(claim?.entry.id).toBe(queued?.id);
+      expect(claim?.entry).toMatchObject({
+        id: queued?.id,
+        target: { kind: 'workflow-root' },
+        selectionEvidence: {
+          policyVersion: 'admission-queue-scheduler/v1',
+          selectedQueueEntryId: queued?.id,
+          capacityReadiness: 'ready',
+        },
+      });
       await (
         harness.service as unknown as {
           dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
@@ -395,7 +407,7 @@ describe('workflow admission', () => {
       });
       expect(executeStep).not.toHaveBeenCalled();
 
-      const restarted = restartHarness(
+      const restarted = await restartHarness(
         harness,
         admissionSettings,
         stepExecutor,
@@ -489,7 +501,15 @@ describe('workflow admission', () => {
         `release-step-blocker-${backend}`
       );
       const claim = await harness.admission.claimNextQueued();
-      expect(claim?.entry.id).toBe(queued?.id);
+      expect(claim?.entry).toMatchObject({
+        id: queued?.id,
+        target: { kind: 'workflow-step' },
+        selectionEvidence: {
+          policyVersion: 'admission-queue-scheduler/v1',
+          selectedQueueEntryId: queued?.id,
+          capacityReadiness: 'ready',
+        },
+      });
       await (
         harness.service as unknown as {
           dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
@@ -557,7 +577,7 @@ describe('workflow admission', () => {
       });
       expect(executeStep).not.toHaveBeenCalled();
 
-      const restarted = restartHarness(
+      const restarted = await restartHarness(
         harness,
         admissionSettings,
         stepExecutor,
@@ -793,7 +813,7 @@ describe('workflow admission', () => {
     });
     const rootBinding = (await first.service.getRun(run.id))?.admission;
     expect(rootBinding).toBeDefined();
-    first.admission.dispose();
+    await first.admission.dispose();
 
     const restartedAdmission = new AdmissionControlService({
       repository: first.repository,

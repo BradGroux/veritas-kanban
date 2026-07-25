@@ -573,6 +573,14 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
       leaseMs: 30_000,
       retryBackoffMs: 5_000,
       maxRetries: 3,
+      scheduler: {
+        priorityLevels: 4,
+        defaultPriority: 1,
+        agingIntervalMs: 60_000,
+        maxAgePromotion: 3,
+        workspaceBurstLimit: 4,
+        evaluationLimit: 32,
+      },
     },
   },
   enforcement: {

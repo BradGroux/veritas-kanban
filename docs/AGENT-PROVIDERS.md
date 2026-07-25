@@ -966,7 +966,15 @@ Configure ceilings through `PATCH /api/settings/features`:
       "workspaceLimit": 100,
       "leaseMs": 30000,
       "retryBackoffMs": 5000,
-      "maxRetries": 3
+      "maxRetries": 3,
+      "scheduler": {
+        "priorityLevels": 4,
+        "defaultPriority": 1,
+        "agingIntervalMs": 60000,
+        "maxAgePromotion": 3,
+        "workspaceBurstLimit": 4,
+        "evaluationLimit": 32
+      }
     }
   }
 }
@@ -982,17 +990,32 @@ attempt, and must not submit a duplicate start. Workflow roots and
 provider-backed workflow steps instead persist `state: "waiting"` in their
 admission binding while the run and step remain `pending`.
 
-The queue uses deterministic FIFO order. A worker claims the queue lease and
-admission capacity atomically, then reruns provider, sandbox, budget, workspace
-trust, and launch-manifest checks before any attempt is persisted. Durable
-supervisor ownership changes the entry to `dispatched`; after that point only
-run recovery may restart or finish the work. Abandoned pre-dispatch leases
-requeue with bounded backoff. Terminal drift, retry exhaustion, and queue
-overflow fail closed. Queue records retain task, workspace, agent, execution
-tree, workflow version and revision, retry or fallback sequence, provider,
-host, immutable runtime and phase digests, and limiting-scope evidence. They
-never retain prompts, workflow context, messages, tool arguments, credentials,
-or raw idempotency keys.
+The queue uses the versioned `admission-queue-scheduler/v1` policy for direct
+tasks, workflow roots, and workflow steps. It ranks the bounded eligible queue
+snapshot by task priority, configured age promotion, workspace turns, enqueue
+sequence, and queue identity. After `workspaceBurstLimit` consecutive
+selections, compatible work from another workspace receives the next turn.
+Age promotion is capped at the highest configured priority, and
+`maxAgePromotion` must let the lowest priority eventually reach that level.
+Provider and host limits only determine capacity readiness; they cannot
+override durable ordering or create a hidden provider queue.
+
+A worker tries ranked entries until it atomically claims both a queue lease and
+admission capacity. A capacity-blocked entry stays queued while another ready
+entry may run. The leased entry persists redacted
+`admission-queue-selection/v1` evidence with raw and effective priority, age
+promotion, workspace turn, readiness, limiting scopes for skipped entries, and
+conditional start factors. The evidence never promises an exact start time.
+The worker then reruns provider, sandbox, budget, workspace trust, and
+launch-manifest checks before any attempt is persisted. Durable supervisor
+ownership changes the entry to `dispatched`; after that point only run recovery
+may restart or finish the work. Abandoned pre-dispatch leases requeue with
+bounded backoff. Terminal drift, retry exhaustion, and queue overflow fail
+closed. Queue records retain task, workspace, agent, execution tree, workflow
+version and revision, retry or fallback sequence, provider, host, immutable
+runtime and phase digests, and limiting-scope evidence. They never retain
+prompts, workflow context, messages, tool arguments, credentials, or raw
+idempotency keys.
 
 Active leases renew while the verified run is live; completion, interruption,
 cancellation, or launch failure releases the reservation idempotently.
