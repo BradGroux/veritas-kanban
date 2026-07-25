@@ -6,6 +6,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'yaml';
+import { PHASE_NAMES, type PhaseName } from '@veritas-kanban/shared';
 import type { WorkflowDefinition, WorkflowACL, WorkflowAuditEvent } from '../types/workflow.js';
 import { ValidationError } from '../types/workflow.js';
 import { getWorkflowsDir } from '../utils/paths.js';
@@ -348,6 +349,12 @@ export class WorkflowService {
     }
 
     for (const step of workflow.steps) {
+      if (step.phase !== undefined && !PHASE_NAMES.includes(step.phase as PhaseName)) {
+        throw new ValidationError(
+          `Step ${step.id} phase must be one of: ${PHASE_NAMES.join(', ')}`
+        );
+      }
+
       // Agent steps must reference a valid agent
       if ((step.type === 'agent' || step.type === 'loop') && !agentIdSet.has(step.agent!)) {
         throw new ValidationError(`Step ${step.id} references unknown agent ${step.agent}`);

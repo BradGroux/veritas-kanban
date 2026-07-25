@@ -447,8 +447,8 @@ Manage AI agents on code tasks.
 
 | Command                                                                             | Description                                               |
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `vk start <id>`                                                                     | Start an agent; optionally require runtime capabilities   |
-| `vk launch-preview <id>`                                                            | Preview effective launch inputs, blockers, and drift      |
+| `vk start <id> [--phase <phase>]`                                                   | Start an agent; optionally bind an execution phase        |
+| `vk launch-preview <id> [--phase <phase>]`                                          | Preview effective launch inputs, blockers, and drift      |
 | `vk workspace-trust scan <id>`                                                      | Inventory repository-controlled execution configuration   |
 | `vk workspace-trust decide <id> --mode <mode> --inventory <digest> --reason <text>` | Authorize or deny one exact inventory                     |
 | `vk workspace-trust revoke <id> --inventory <digest> --reason <text>`               | Revoke the current exact-inventory decision               |
@@ -458,9 +458,9 @@ Manage AI agents on code tasks.
 | `vk agent:phase <id> --attempt <id>`                                                | Read durable phase state and transition history           |
 | `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition  |
 | `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion        |
-| `vk agent:resume <id> --source-attempt <id> -m <text>`                              | Resume the exact persisted provider conversation          |
-| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                           | Start a provider-native follow-up turn                    |
-| `vk agent:fork <id> --source-attempt <id> -m <text>`                                | Fork provider history without mutating its source         |
+| `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`            | Resume the exact persisted provider conversation          |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text> [--phase <phase>]`         | Start a provider-native follow-up turn                    |
+| `vk agent:fork <id> --source-attempt <id> -m <text> [--phase <phase>]`              | Fork provider history without mutating its source         |
 | `vk agent:steer <id> --attempt <id> -m <text>`                                      | Steer the exact active provider turn                      |
 | `vk agent:interrupt <id> --attempt <id>`                                            | Interrupt the exact active provider turn                  |
 | `vk agent:compact <id> --attempt <id>`                                              | Compact a supported provider conversation                 |
@@ -485,14 +485,31 @@ vk start TASK-001 --agent codex \
 Preview without dispatching, or compare a new launch with a parent attempt:
 
 ```bash
-vk launch-preview TASK-001 --agent codex --parent-attempt attempt_parent --json
-vk start TASK-001 --agent codex --parent-attempt attempt_parent
+vk launch-preview TASK-001 --agent codex \
+  --phase verify \
+  --parent-attempt attempt_parent \
+  --json
+vk start TASK-001 --agent codex \
+  --phase verify \
+  --parent-attempt attempt_parent
 ```
 
 Preview output includes the immutable run-launch digest, redacted command and
-argument plan, per-field origins, enforcement blockers, and material drift.
-It applies the same readiness gate and override rules as start. Attempt IDs and
-probe timestamps do not count as material drift.
+argument plan, phase evidence and source references, per-field origins,
+enforcement blockers, and material drift. It applies the same readiness gate
+and override rules as start. A parent phase binding is material; attempt IDs and
+probe timestamps alone do not count as material drift.
+
+`--phase` accepts `explore`, `plan`, `implement`, `verify`, or `publish`.
+Explicit phases fail closed before attempt mutation when the selected runtime,
+sandbox, host, or tool policy cannot prove every required dimension. Omitting
+the flag creates an explicit legacy phase for a new launch. Resume, follow-up,
+fork, retry, fallback, and provider changes inherit and intersect the exact
+parent phase, so a descendant cannot widen authority by changing providers or
+omitting the flag. In the current staged v6.x delivery, use
+`launch-preview --phase ...` to inspect the evidence; explicit task or workflow
+starts remain blocked until #1033 supplies command and external-action
+enforcement.
 
 Inspect workspace execution trust before launching a newly cloned or changed
 repository:

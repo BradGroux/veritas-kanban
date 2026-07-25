@@ -194,9 +194,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   only through `phase-transition-service.ts` with exact attempt, sequence,
   evidence-digest, and launch-manifest compare-and-set guards. Authority
   expansion requires an exact-action approval; an emergency override requires
-  `admin:manage`, expires within 24 hours, and is durably reverted. Until #1036
-  and #1033 land, launch propagation and provider/tool enforcement remain
-  separate delivery boundaries.
+  `admin:manage`, expires within 24 hours, and is durably reverted. Every task
+  launch, workflow step, retry or fallback, resume, follow-up, fork, compaction
+  control, and provider handoff must bind the effective phase before attempt
+  mutation. Descendants inherit and intersect the exact parent launch or
+  transition evidence and cannot widen it. Explicit phases fail closed when any
+  required dimension is not enforceable. Tool-command and external-action
+  enforcement remain the separate #1033 delivery boundary.
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and

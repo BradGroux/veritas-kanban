@@ -222,7 +222,7 @@ describe('agent local capability enforcement', () => {
       createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }))
     )
       .post('/api/agents/task_1/start')
-      .send({ agent: 'codex' });
+      .send({ agent: 'codex', phase: 'implement' });
 
     expect(response.status).toBe(201);
     expect(mockStartAgent).toHaveBeenCalledWith('task_1', 'codex', {
@@ -232,6 +232,7 @@ describe('agent local capability enforcement', () => {
       budget: undefined,
       requiredRuntimeCapabilities: undefined,
       commitPolicy: undefined,
+      phase: 'implement',
       parentAttemptId: undefined,
     });
   });
@@ -240,7 +241,7 @@ describe('agent local capability enforcement', () => {
     const app = createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }));
     const response = await request(app)
       .post('/api/agents/task_1/launch-preview')
-      .send({ agent: 'codex', parentAttemptId: 'attempt_parent' });
+      .send({ agent: 'codex', phase: 'explore', parentAttemptId: 'attempt_parent' });
 
     expect(response.status).toBe(200);
     expect(response.body.manifest.digest).toBe(`sha256:${'a'.repeat(64)}`);
@@ -251,6 +252,7 @@ describe('agent local capability enforcement', () => {
       budget: undefined,
       requiredRuntimeCapabilities: undefined,
       commitPolicy: undefined,
+      phase: 'explore',
       parentAttemptId: 'attempt_parent',
     });
     expect(mockStartAgent).not.toHaveBeenCalled();
@@ -451,19 +453,21 @@ describe('agent local capability enforcement', () => {
       sourceAttemptId: 'attempt_parent',
       message: 'Continue from the durable provider history',
       commitPolicy: 'forbidden',
+      phase: 'verify',
     });
     expect(resume.status).toBe(201);
     expect(mockResumeConversation).toHaveBeenCalledWith(
       'task_1',
       'attempt_parent',
       'Continue from the durable provider history',
-      expect.objectContaining({ commitPolicy: 'forbidden' })
+      expect.objectContaining({ commitPolicy: 'forbidden', phase: 'verify' })
     );
 
     const fork = await request(app).post('/api/agents/task_1/conversation/fork').send({
       sourceAttemptId: 'attempt_parent',
       message: 'Explore another branch',
       forkTurnId: 'turn_7',
+      phase: 'explore',
     });
     expect(fork.status).toBe(201);
     expect(mockForkConversation).toHaveBeenCalledWith(
@@ -471,7 +475,7 @@ describe('agent local capability enforcement', () => {
       'attempt_parent',
       'Explore another branch',
       'turn_7',
-      expect.any(Object)
+      expect.objectContaining({ phase: 'explore' })
     );
 
     const spoofedSteer = await request(app).post('/api/agents/task_1/conversation/steer').send({
@@ -516,6 +520,7 @@ describe('agent local capability enforcement', () => {
     const response = await request(app).post('/api/agents/task_1/conversation/fresh').send({
       agent: 'codex',
       message: 'Start this task through ACP',
+      phase: 'plan',
     });
 
     expect(response.status).toBe(201);
@@ -523,6 +528,7 @@ describe('agent local capability enforcement', () => {
       'task_1',
       'codex',
       expect.objectContaining({
+        phase: 'plan',
         conversation: {
           mode: 'fresh',
           intent: 'fresh',

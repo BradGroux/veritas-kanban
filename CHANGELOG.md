@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Propagated immutable phase authority through task previews and starts,
+  workflow steps, retries and fallbacks, provider changes, conversation resume,
+  follow-up and fork operations, and active-run controls. Every executable
+  entry now resolves the exact parent launch or current transition evidence
+  before attempt mutation, persists the compiled phase digest and source
+  references, intersects descendants monotonically, and returns typed blockers
+  when the selected sandbox, runtime, host, or tool policy cannot enforce a
+  required phase dimension. Legacy launches remain explicit and readable
+  without inventing restrictions (#1036).
 - Added the append-only `phase-transition-record/v1` journal for active runs.
   Every transition is bound to the exact attempt, prior sequence, compiled
   phase evidence, and launch-manifest digest. Narrowing transitions apply

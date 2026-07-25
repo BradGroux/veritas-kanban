@@ -346,8 +346,11 @@ First-class support for autonomous coding agents.
   Active runs persist append-only compare-and-set transitions with actor,
   authority delta, policy, approval or override, manifest, and event evidence.
   Expansion requires exact-action approval; administrator overrides expire and
-  durably restore the prior phase. Launch propagation, tool enforcement, and UI
-  remain tracked in #1036 and #1033. See
+  durably restore the prior phase. Task and workflow launches, retries and
+  fallbacks, provider changes, conversation continuations, and active-run
+  controls bind the effective phase and exact parent evidence before attempt
+  mutation. Tool-command and external-action enforcement remain tracked in
+  #1033. See
   [Phase Capability Profiles](architecture/PHASE-CAPABILITY-PROFILES.md) and
   [Phase Transition Journal](architecture/PHASE-TRANSITION-JOURNAL.md).
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw
@@ -974,6 +977,12 @@ Execute a single agent prompt with configurable retries.
   classes retry; each decision persists causal parents, jittered backoff,
   route and manifest evidence, and cumulative budget. Fallback agents must pass
   runtime capability and sandbox preflight before launch.
+- Optional `phase` values are `explore`, `plan`, `implement`, `verify`, and
+  `publish`. The phase is resolved before the step enters a running state.
+  Retries, fallbacks, reused sessions, and provider changes intersect the exact
+  parent phase and cannot widen its authority. Explicit phase steps remain
+  fail-closed until the selected adapter and tool policy provide the
+  command/external-action enforcement completed in #1033.
 
 #### 2. Loop Steps
 

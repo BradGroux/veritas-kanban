@@ -724,9 +724,9 @@ its task contract, and records the selected provider/model/transport, redacted
 command and arguments, instruction fingerprints and precedence, environment
 key names and broker references, profile tools/MCP/permissions/health checks,
 sandbox/network posture, readiness and any hashed operator override, budget,
-routing/fallback, workspace trust, and the origin of each effective value.
-Prompt content, override text, and credential values are never stored in this
-manifest.
+routing/fallback, workspace trust, compiled phase evidence and source
+references, and the origin of each effective value. Prompt content, override
+text, and credential values are never stored in this manifest.
 
 `POST /api/agents/:taskId/launch-preview` returns the same compiled contract
 without creating an attempt or dispatching a process. The CLI equivalent is
@@ -735,6 +735,15 @@ A profile restriction that the selected adapter
 cannot enforce is returned as a concrete blocker, and `start` rejects it before
 pending or task attempt state changes. Declaring `tool.calls` support is not
 treated as proof that an adapter can enforce a named allowlist.
+
+Phase authority is resolved at the same pre-mutation boundary for task and
+workflow launches, retries, fallbacks, conversation continuations, compaction
+controls, and provider handoffs. A descendant intersects the exact parent
+launch or current transition evidence, so changing providers or omitting an
+explicit phase cannot widen authority. Explicit phase launches fail closed with
+typed blockers when the runtime, sandbox, host, or tool policy cannot prove a
+required dimension. Tool-command and external-action enforcement support is
+delivered separately in #1033; prompt text is never accepted as enforcement.
 
 Repository-controlled instructions and executable configuration pass through
 the provider-neutral workspace execution trust gate before Veritas reads

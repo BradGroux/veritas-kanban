@@ -19,6 +19,7 @@ import type {
   RunLaunchRuntime,
   RunLaunchTools,
   RunLaunchFilesystemSandboxEvidence,
+  RunLaunchPhaseAuthority,
   SandboxPolicyDryRunResult,
   TaskEnvelope,
   TaskReadinessSummary,
@@ -60,6 +61,7 @@ export interface RunLaunchManifestCompileInput {
   harnessSupport: HarnessSupportStatus;
   routing: RunLaunchRouting;
   profile?: RunLaunchProfileReference;
+  phase: RunLaunchPhaseAuthority;
   readiness: {
     summary: TaskReadinessSummary;
     overrideReason?: string;
@@ -86,6 +88,7 @@ const MATERIAL_SECTIONS: Array<keyof RunLaunchManifest> = [
   'harnessSupport',
   'routing',
   'profile',
+  'phase',
   'readiness',
   'instructions',
   'workspace',
@@ -186,6 +189,7 @@ export class RunLaunchManifestService {
         .filter((capability) => capability.advisory)
         .map((capability) => `${capability.id}: ${capability.reason}`),
       ...(input.harnessSupport.supportTier === 'degraded' ? [input.harnessSupport.reason] : []),
+      ...input.phase.evidence.warnings,
     ]).map(sanitizeProviderRuntimeDiagnostic);
     const payload: Omit<RunLaunchManifest, 'digest'> = {
       schemaVersion: RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
@@ -224,6 +228,7 @@ export class RunLaunchManifestService {
         reason: sanitizeProviderRuntimeDiagnostic(input.routing.reason),
       },
       ...(input.profile ? { profile: { ...input.profile } } : {}),
+      phase: structuredClone(input.phase),
       readiness: {
         ready: input.readiness.summary.ready,
         overridden:
@@ -560,6 +565,16 @@ function collectBlockers({
   const add = (code: string, field: string, detail: string, remediation: string): void => {
     blockers.push({ code, field, detail, remediation });
   };
+  for (const blocker of input.phase.evidence.blockers) {
+    add(
+      `phase-${blocker.code}`,
+      blocker.dimension ? `phase.evidence.${blocker.dimension}` : 'phase.evidence',
+      blocker.message,
+      blocker.sourceId
+        ? `Select launch evidence that enforces ${blocker.dimension ?? 'the required phase authority'} at ${blocker.sourceId}.`
+        : 'Select a compatible phase, provider, host, sandbox, and tool policy before launch.'
+    );
+  }
   if (credentials.brokerState === 'blocked') {
     add(
       'credential-boundary-unavailable',

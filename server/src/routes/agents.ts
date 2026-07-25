@@ -9,6 +9,7 @@ import { getTelemetryService } from '../services/telemetry-service.js';
 import { getTaskService } from '../services/task-service.js';
 import type {
   AgentType,
+  PhaseName,
   ProviderRuntimeCapabilityId,
   TaskCommitPolicy,
   TokenTelemetryEvent,
@@ -33,7 +34,10 @@ import {
   workspaceExecutionTrustRevokeInputSchema,
 } from '../schemas/workspace-execution-trust-schemas.js';
 import { getWorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
-import { phaseTransitionRequestInputSchema } from '../schemas/phase-capability-schemas.js';
+import {
+  phaseNameSchema,
+  phaseTransitionRequestInputSchema,
+} from '../schemas/phase-capability-schemas.js';
 import {
   getPhaseTransitionService,
   type PhaseTransitionActorContext,
@@ -53,6 +57,7 @@ const startAgentSchema = z.object({
   budget: AgentBudgetPolicySchema.optional(),
   requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
   commitPolicy: TaskCommitPolicySchema.optional(),
+  phase: phaseNameSchema.optional(),
   parentAttemptId: z.string().trim().min(1).max(120).optional(),
 });
 
@@ -178,6 +183,7 @@ const conversationTurnSchema = z
     budget: AgentBudgetPolicySchema.optional(),
     requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(64).optional(),
     commitPolicy: TaskCommitPolicySchema.optional(),
+    phase: phaseNameSchema.optional(),
   })
   .strict();
 
@@ -276,6 +282,7 @@ router.post(
           requiredRuntimeCapabilities: parsed.requiredRuntimeCapabilities as
             ProviderRuntimeCapabilityId[] | undefined,
           commitPolicy: parsed.commitPolicy as TaskCommitPolicy | undefined,
+          phase: parsed.phase,
           parentAttemptId: parsed.parentAttemptId,
         }
       );
@@ -303,6 +310,7 @@ router.post(
     let budget: z.infer<typeof AgentBudgetPolicySchema> | undefined;
     let requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[] | undefined;
     let commitPolicy: TaskCommitPolicy | undefined;
+    let phase: PhaseName | undefined;
     let parentAttemptId: string | undefined;
     try {
       ({
@@ -313,6 +321,7 @@ router.post(
         budget,
         requiredRuntimeCapabilities,
         commitPolicy,
+        phase,
         parentAttemptId,
       } = startAgentSchema.parse(req.body) as {
         agent?: AgentType;
@@ -322,6 +331,7 @@ router.post(
         budget?: z.infer<typeof AgentBudgetPolicySchema>;
         requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
         commitPolicy?: TaskCommitPolicy;
+        phase?: PhaseName;
         parentAttemptId?: string;
       });
     } catch (error) {
@@ -339,6 +349,7 @@ router.post(
         budget,
         requiredRuntimeCapabilities,
         commitPolicy,
+        phase,
         parentAttemptId,
       });
     } catch (error) {
@@ -837,6 +848,7 @@ function conversationStartOptions(
     requiredRuntimeCapabilities: body.requiredRuntimeCapabilities as
       ProviderRuntimeCapabilityId[] | undefined,
     commitPolicy: body.commitPolicy as TaskCommitPolicy | undefined,
+    phase: body.phase,
   };
 }
 

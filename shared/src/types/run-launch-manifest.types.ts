@@ -1,4 +1,8 @@
 import type { AgentBudgetPolicy } from './agent-budget.types.js';
+import type {
+  PhaseAuthoritySourceKind,
+  PhaseCapabilityEvidence,
+} from './phase-capability.types.js';
 import type { HarnessSupportTier, HarnessTransport } from './provider-runtime.types.js';
 import type { ProviderRuntimeCapabilityState } from './provider-runtime.types.js';
 
@@ -13,6 +17,7 @@ export type RunLaunchManifestInstructionKind =
 
 export type RunLaunchManifestOriginScope =
   | 'run'
+  | 'parent'
   | 'task-envelope'
   | 'agent-profile'
   | 'workflow'
@@ -266,6 +271,25 @@ export interface RunLaunchManifestOrigin {
   precedence: number;
 }
 
+export interface RunLaunchPhaseSourceReference {
+  sourceId: string;
+  kind: PhaseAuthoritySourceKind;
+  originScope: RunLaunchManifestOriginScope;
+  sourceDigest: string;
+  parentAttemptId?: string;
+  parentManifestDigest?: string;
+  parentEvidenceDigest?: string;
+}
+
+/**
+ * Immutable effective phase authority and the exact source snapshots that
+ * produced it. `phase-capability-evidence/v1` carries no credential values.
+ */
+export interface RunLaunchPhaseAuthority {
+  evidence: PhaseCapabilityEvidence;
+  sourceReferences: RunLaunchPhaseSourceReference[];
+}
+
 export interface RunLaunchManifestBlocker {
   code: string;
   field: string;
@@ -297,6 +321,8 @@ export interface RunLaunchManifest {
   harnessSupport: RunLaunchHarnessSupport;
   routing: RunLaunchRouting;
   profile?: RunLaunchProfileReference;
+  /** Present on manifests compiled after phase launch propagation shipped. */
+  phase?: RunLaunchPhaseAuthority;
   readiness: RunLaunchReadiness;
   instructions: RunLaunchInstructionReference[];
   /** Present on newly compiled manifests; absent only on pre-6.0 legacy records. */

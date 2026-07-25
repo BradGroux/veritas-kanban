@@ -49,6 +49,10 @@ describe('vk agent runtime capability controls', () => {
         'task_1',
         '--agent',
         'codex',
+        '--phase',
+        'implement',
+        '--parent-attempt',
+        'attempt_parent',
         '--require-capability',
         'tool.mcp',
         'output.structured',
@@ -62,7 +66,42 @@ describe('vk agent runtime capability controls', () => {
       body: JSON.stringify({
         agent: 'codex',
         profileId: undefined,
+        phase: 'implement',
         requiredRuntimeCapabilities: ['tool.mcp', 'output.structured'],
+        parentAttemptId: 'attempt_parent',
+      }),
+    });
+  });
+
+  it('previews one explicit phase against exact parent launch evidence', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'launch-preview',
+        'task_1',
+        '--agent',
+        'codex',
+        '--phase',
+        'plan',
+        '--parent-attempt',
+        'attempt_parent',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/launch-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent: 'codex',
+        profileId: undefined,
+        phase: 'plan',
+        requiredRuntimeCapabilities: undefined,
+        commitPolicy: undefined,
+        parentAttemptId: 'attempt_parent',
       }),
     });
   });
@@ -320,6 +359,8 @@ describe('vk agent runtime capability controls', () => {
         'Explore the alternate fix',
         '--fork-turn',
         'turn_7',
+        '--phase',
+        'explore',
         '--require-capability',
         'tool.mcp',
         '--json',
@@ -333,6 +374,7 @@ describe('vk agent runtime capability controls', () => {
         sourceAttemptId: 'attempt_parent',
         message: 'Explore the alternate fix',
         forkTurnId: 'turn_7',
+        phase: 'explore',
         requiredRuntimeCapabilities: ['tool.mcp'],
       }),
     });

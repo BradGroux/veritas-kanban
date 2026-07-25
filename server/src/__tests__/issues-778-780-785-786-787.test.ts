@@ -23,6 +23,8 @@ import type { WorkflowRunService } from '../services/workflow-run-service.js';
 // ─────────────────────────────────────────────────────────────
 
 const mockLoadWorkflow = vi.fn();
+const mockPrepareStep = vi.fn(async (step: unknown) => ({ kind: 'non-agent', step }));
+const mockApplyPreparation = vi.fn();
 const mockExecuteStep = vi.fn();
 const mockBroadcastWorkflowStatus = vi.fn();
 const mockGetTask = vi.fn();
@@ -40,6 +42,8 @@ vi.mock('../services/workflow-step-executor.js', async (importOriginal) => {
   return {
     HumanGateBlockError: actual.HumanGateBlockError,
     WorkflowStepExecutor: class {
+      prepareStep = mockPrepareStep;
+      applyPreparation = mockApplyPreparation;
       executeStep = mockExecuteStep;
     },
   };

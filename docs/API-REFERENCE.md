@@ -2370,6 +2370,7 @@ additional runtime capabilities, and compare against a parent attempt:
 {
   "profileId": "docs-reviewer",
   "sandboxPresetId": "codex-repo-contained",
+  "phase": "implement",
   "requiredRuntimeCapabilities": ["tool.mcp", "output.structured"],
   "commitPolicy": "allowed",
   "parentAttemptId": "attempt_parent"
@@ -2387,14 +2388,24 @@ manifest identity, and remediation.
 
 The preview response contains `manifest`, plus optional `parentAttemptId` and
 `drift`. The manifest contains redacted effective runtime inputs, instruction
-fingerprints, per-field origins, and an `enforcement` object. Prompt content,
-readiness override text, credential values, and raw local output paths are
-excluded. Preview and start apply the same readiness gate; an accepted operator
-override is represented by its digest and run-level origin. Start records the
-same contract in the active attempt, history, run log, and a policy governance
-trace before provider dispatch. Named tool/MCP/permission restrictions and
-required profile health checks block launch when the adapter cannot enforce
-them explicitly.
+fingerprints, compiled phase evidence and source references, per-field origins,
+and an `enforcement` object. Prompt content, readiness override text,
+credential values, and raw local output paths are excluded. Preview and start
+apply the same readiness gate; an accepted operator override is represented by
+its digest and run-level origin. Start records the same contract in the active
+attempt, history, run log, and a policy governance trace before provider
+dispatch. Named tool/MCP/permission restrictions and required profile health
+checks block launch when the adapter cannot enforce them explicitly.
+
+`phase` accepts `explore`, `plan`, `implement`, `verify`, or `publish`.
+Compilation intersects the requested profile with the exact parent launch or
+current transition evidence before attempt mutation. Descendants, retries,
+fallbacks, and provider changes cannot widen parent authority. An unsupported
+phase dimension returns `409 Conflict` with typed `phase-*` enforcement
+blockers. Omitting `phase` creates explicit legacy evidence only when no
+profile-authoritative parent exists. During the staged v6.x rollout, explicit
+phase starts remain blocked until #1033 supplies command and external-action
+enforcement; launch preview exposes that blocker without mutation.
 
 Codex app-server and Claude Code accept a positive MCP catalog through native,
 run-scoped configuration. Other task adapters reject non-empty MCP selections.
@@ -2498,6 +2509,7 @@ provider identity:
   "sourceAttemptId": "attempt_parent",
   "message": "Continue from the verified history",
   "forkTurnId": "turn_7",
+  "phase": "verify",
   "commitPolicy": "allowed"
 }
 ```
@@ -2509,6 +2521,11 @@ operation. Unsupported steering fails with an explicit capability error, and
 any recorded-only fallback returns `delivered: false` with a reason. Veritas
 does not claim that recording a message or writing process stdin reached the
 provider.
+
+Resume, follow-up, and fork bind the exact source attempt as the phase parent.
+An optional `phase` may narrow that authority but cannot widen it. Omitting the
+field inherits a profile-authoritative parent; a legacy source remains
+explicitly legacy.
 
 `commitPolicy` accepts `forbidden`, `allowed`, or `required`. A run value
 overrides `task.executionPolicy.commitPolicy`, then the legacy

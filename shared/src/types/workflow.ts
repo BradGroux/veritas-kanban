@@ -150,6 +150,8 @@ export interface WorkflowStep {
   name: string;
   agent?: string; // agent ID (required for type=agent|loop)
   type: StepType;
+  /** Optional built-in execution phase. Omitted definitions run in explicit legacy mode. */
+  phase?: import('./phase-capability.types.js').PhaseName;
   fresh_session?: boolean; // Legacy: use session config instead
   session?: StepSessionConfig; // Session configuration (#111)
   input?: string; // Jinja2 template
@@ -257,6 +259,10 @@ export interface StepRun {
   /** Exact runtime capabilities required by the recorded provider launch. */
   requiredRuntimeCapabilities?: import('./provider-runtime.types.js').ProviderRuntimeCapabilityId[];
   runtimeControls?: import('./provider-runtime.types.js').ProviderRuntimeControlSet;
+  /** Exact phase authority resolved before this step launch mutated run state. */
+  phaseAuthority?: import('./run-launch-manifest.types.js').RunLaunchPhaseAuthority;
+  /** Digest of the immutable workflow step launch snapshot that owns phaseAuthority. */
+  phaseLaunchDigest?: string;
   /** Durable retry/fallback decision for this workflow step. */
   runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
 
