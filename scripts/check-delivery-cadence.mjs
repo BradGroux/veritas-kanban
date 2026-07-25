@@ -18,6 +18,10 @@ export const CADENCE_CONTRACTS = {
       pattern: /run the narrowest useful loop/i,
     },
     {
+      description: '45-minute split or escalate delivery checkpoint',
+      pattern: /45-minute delivery checkpoint/i,
+    },
+    {
       description: 'direct Vitest exact-file invocation',
       pattern: /exec vitest run/i,
     },

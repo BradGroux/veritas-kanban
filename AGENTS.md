@@ -115,6 +115,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   a linked issue instead of expanding the active pull request.
 - Re-scope before continuing when an issue no longer fits one coherent review, an unexpected
   subsystem becomes necessary, or verification work is larger than the behavior being changed.
+- At the 45-minute delivery checkpoint, if the issue is not pull-request ready, stop adding scope
+  and report the concrete cause. Split independent remaining work into linked issues, or continue
+  only when the next step is required to preserve correctness of the current behavior.
 - During implementation, run the narrowest useful loop: type-check touched packages, lint changed
   files, and run focused tests for changed behavior and high-risk edges.
 - Run focused Vitest slices with
