@@ -13,6 +13,7 @@ import { SqliteOperationalProvenanceRepository } from './provenance-repository.j
 import { SqliteSetupContextRepository } from './setup-context-repository.js';
 import { SqliteRunEventRepository } from './run-event-repository.js';
 import { SqliteRunApprovalRepository } from './run-approval-repository.js';
+import { SqlitePhaseTransitionRepository } from './phase-transition-repository.js';
 import { SqliteRunSupervisorRepository } from './run-supervisor-repository.js';
 import { SqliteToolControlPlaneRepository } from './tool-control-plane-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
@@ -35,6 +36,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly setupContext: SqliteSetupContextRepository;
   readonly runEvents: SqliteRunEventRepository;
   readonly runApprovals: SqliteRunApprovalRepository;
+  readonly phaseTransitions: SqlitePhaseTransitionRepository;
   readonly runSupervisors: SqliteRunSupervisorRepository;
   readonly toolControlPlane: SqliteToolControlPlaneRepository;
 
@@ -58,6 +60,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.setupContext = new SqliteSetupContextRepository(this.sqlite);
     this.runEvents = new SqliteRunEventRepository(this.sqlite);
     this.runApprovals = new SqliteRunApprovalRepository(this.sqlite);
+    this.phaseTransitions = new SqlitePhaseTransitionRepository(this.sqlite);
     this.runSupervisors = new SqliteRunSupervisorRepository(this.sqlite);
     this.toolControlPlane = new SqliteToolControlPlaneRepository(this.sqlite);
   }

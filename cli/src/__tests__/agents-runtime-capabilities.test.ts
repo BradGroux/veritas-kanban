@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 
 const { mockApi, mockFindTask } = vi.hoisted(() => ({
@@ -10,6 +13,14 @@ vi.mock('../utils/api.js', () => ({ api: mockApi }));
 vi.mock('../utils/find.js', () => ({ findTask: mockFindTask }));
 
 import { registerAgentCommands } from '../commands/agents.js';
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))
+  );
+});
 
 describe('vk agent runtime capability controls', () => {
   beforeEach(() => {
@@ -132,6 +143,165 @@ describe('vk agent runtime capability controls', () => {
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/recovery/cancel', {
       method: 'POST',
       body: JSON.stringify({ attemptId: 'attempt_parent' }),
+    });
+  });
+
+  it('reads durable phase state for one exact attempt', async () => {
+    mockApi.mockResolvedValueOnce({ current: null, history: [] });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      ['agent:phase', 'task_1', '--attempt', 'attempt_1', '--limit', '25', '--json'],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/phase?attemptId=attempt_1&limit=25');
+  });
+
+  it('binds the first phase transition to exact evidence and manifest provenance', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
+    temporaryRoots.push(root);
+    const fromPath = path.join(root, 'from.json');
+    const targetPath = path.join(root, 'target.json');
+    const fromEvidence = { digest: `sha256:${'1'.repeat(64)}` };
+    const targetEvidence = { digest: `sha256:${'2'.repeat(64)}` };
+    await fs.writeFile(fromPath, JSON.stringify(fromEvidence));
+    await fs.writeFile(targetPath, JSON.stringify(targetEvidence));
+    mockApi.mockResolvedValueOnce({ current: null, history: [] }).mockResolvedValueOnce({
+      status: 'applied',
+      current: null,
+      targetEvidenceDigest: targetEvidence.digest,
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:transition-phase',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--operation',
+        'phase-op-1',
+        '--from-evidence',
+        fromPath,
+        '--target-evidence',
+        targetPath,
+        '--manifest',
+        `sha256:${'3'.repeat(64)}`,
+        '--reason',
+        'Approved plan is ready.',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenNthCalledWith(2, '/api/agents/task_1/phase/transitions', {
+      method: 'POST',
+      body: JSON.stringify({
+        attemptId: 'attempt_1',
+        operationId: 'phase-op-1',
+        expectedSequence: 0,
+        expectedPhaseEvidenceDigest: fromEvidence.digest,
+        expectedManifestDigest: `sha256:${'3'.repeat(64)}`,
+        reason: 'Approved plan is ready.',
+        fromEvidence,
+        targetEvidence,
+      }),
+    });
+  });
+
+  it('rejects partially numeric phase approval lifetimes before transition', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
+    temporaryRoots.push(root);
+    const fromPath = path.join(root, 'from.json');
+    const targetPath = path.join(root, 'target.json');
+    await fs.writeFile(fromPath, JSON.stringify({ digest: `sha256:${'1'.repeat(64)}` }));
+    await fs.writeFile(targetPath, JSON.stringify({ digest: `sha256:${'2'.repeat(64)}` }));
+    mockApi.mockResolvedValueOnce({ current: null, history: [] });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    try {
+      await expect(
+        program.parseAsync(
+          [
+            'agent:transition-phase',
+            'task_1',
+            '--attempt',
+            'attempt_1',
+            '--operation',
+            'phase-op-1',
+            '--from-evidence',
+            fromPath,
+            '--target-evidence',
+            targetPath,
+            '--manifest',
+            `sha256:${'3'.repeat(64)}`,
+            '--reason',
+            'Approved plan is ready.',
+            '--approval-ttl-ms',
+            '1000x',
+          ],
+          { from: 'user' }
+        )
+      ).rejects.toThrow('process.exit called');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('--approval-ttl-ms must be an integer')
+      );
+      expect(mockApi).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('decides an exact phase approval with revision and action-hash guards', async () => {
+    const approval = {
+      id: 'runapproval_000000000001',
+      revision: 4,
+      actionHash: 'a'.repeat(64),
+      status: 'pending',
+    };
+    mockApi.mockResolvedValueOnce(approval).mockResolvedValueOnce({
+      ...approval,
+      revision: 5,
+      status: 'approved',
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:decide-phase-approval',
+        approval.id,
+        '--decision',
+        'approve',
+        '--note',
+        'Expansion reviewed.',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenNthCalledWith(2, `/api/run-approvals/${approval.id}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({
+        decision: 'approved',
+        expectedRevision: 4,
+        expectedActionHash: approval.actionHash,
+        note: 'Expansion reviewed.',
+      }),
     });
   });
 

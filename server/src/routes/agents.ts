@@ -24,7 +24,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
-import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
 import { RunEventQuerySchema } from '../schemas/run-event-schemas.js';
@@ -33,6 +33,11 @@ import {
   workspaceExecutionTrustRevokeInputSchema,
 } from '../schemas/workspace-execution-trust-schemas.js';
 import { getWorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
+import { phaseTransitionRequestInputSchema } from '../schemas/phase-capability-schemas.js';
+import {
+  getPhaseTransitionService,
+  type PhaseTransitionActorContext,
+} from '../services/phase-transition-service.js';
 
 const router: RouterType = Router();
 const workspaceExecutionTrust = getWorkspaceExecutionTrustService();
@@ -154,6 +159,13 @@ const conversationSteerSchema = sendAgentMessageSchema.omit({ actor: true }).str
 const runControlSchema = z.object({
   attemptId: z.string().trim().min(1).max(120),
 });
+
+const phaseReadQuerySchema = z
+  .object({
+    attemptId: z.string().trim().min(1).max(240),
+    limit: z.coerce.number().int().min(1).max(1_000).default(100),
+  })
+  .strict();
 
 const conversationTurnSchema = z
   .object({
@@ -399,6 +411,42 @@ router.post(
     }
     await clawdbotAgentService.stopAgent(req.params.taskId as string, attemptId);
     res.json({ stopped: true });
+  })
+);
+
+// GET /api/agents/:taskId/phase - Read durable phase authority and transition history.
+router.get(
+  '/:taskId/phase',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = phaseReadQuerySchema.parse(req.query);
+    const workspaceId = req.auth?.workspaceId || 'local';
+    const service = getPhaseTransitionService();
+    const current = await service.getCurrent(
+      workspaceId,
+      req.params.taskId as string,
+      query.attemptId
+    );
+    const history = await service.list(
+      workspaceId,
+      req.params.taskId as string,
+      query.attemptId,
+      query.limit
+    );
+    res.json({ current, history });
+  })
+);
+
+router.post(
+  '/:taskId/phase/transitions',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = phaseTransitionRequestInputSchema.parse(req.body);
+    const result = await getPhaseTransitionService().transition(
+      req.auth?.workspaceId || 'local',
+      req.params.taskId as string,
+      input,
+      phaseActorContext(req)
+    );
+    res.status(result.status === 'approval-required' ? 202 : 201).json(result);
   })
 );
 
@@ -797,4 +845,21 @@ function requestActor(req: AuthenticatedRequest): string {
   return (
     auth?.userId || auth?.tokenName || auth?.keyName || auth?.clientId || auth?.role || 'operator'
   );
+}
+
+function phaseActorContext(req: AuthenticatedRequest): PhaseTransitionActorContext {
+  const auth = req.auth;
+  const id = requestActor(req);
+  return {
+    actor: {
+      id,
+      label: auth?.tokenName || auth?.keyName || auth?.clientId || auth?.userId || id,
+      type: auth?.actorType,
+      authMethod: auth?.authMethod,
+      authenticatedAt: auth?.authenticatedAt,
+      clientMode: auth?.clientMode,
+      workspaceId: auth?.workspaceId || 'local',
+    },
+    administrator: hasPermission(auth, 'admin:manage'),
+  };
 }

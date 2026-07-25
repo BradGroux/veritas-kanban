@@ -2402,6 +2402,49 @@ Approval-required tools are omitted from native provider configuration and use
 the mediated tool-call API below. Prompt text is never accepted as equivalent
 enforcement.
 
+### Durable Phase Transitions
+
+```
+GET  /api/agents/:taskId/phase?attemptId=attempt_123&limit=100
+POST /api/agents/:taskId/phase/transitions
+```
+
+The GET endpoint returns `current` plus bounded append-only `history` for one
+exact run. The POST body is a compare-and-set request:
+
+```json
+{
+  "attemptId": "attempt_123",
+  "operationId": "move-to-implement",
+  "expectedSequence": 1,
+  "expectedPhaseEvidenceDigest": "sha256:...",
+  "expectedManifestDigest": "sha256:...",
+  "reason": "The approved plan is ready to implement.",
+  "targetEvidence": {
+    "schemaVersion": "phase-capability-evidence/v1"
+  }
+}
+```
+
+`targetEvidence` must be the complete compiled evidence document with a valid
+content digest. The first transition also includes `fromEvidence`; subsequent
+requests must match the journal's current sequence and evidence. The active
+attempt and persisted launch-manifest digest must still match.
+
+Same-authority and narrowing transitions return `201` with `status: "applied"`.
+Expansion creates an exact-action run approval and returns `202` with
+`status: "approval-required"`. After approval, retry the identical operation
+with its `approvalId`. Emergency expansion accepts
+`emergencyOverride: { justification, expiresAt }`, requires `admin:manage`, and
+cannot last more than 24 hours. Expiry appends a system-attributed restoration
+of the prior evidence.
+
+Reads require `agent:read`; transition requests require `task:write`. Approval
+decisions use `/api/run-approvals/:approvalId/decision` and require an
+administrator. See
+[Phase Transition Journal](architecture/PHASE-TRANSITION-JOURNAL.md) for
+storage, idempotency, and delivery boundaries.
+
 ### Automatic Run Recovery
 
 ```

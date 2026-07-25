@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the append-only `phase-transition-record/v1` journal for active runs.
+  Every transition is bound to the exact attempt, prior sequence, compiled
+  phase evidence, and launch-manifest digest. Narrowing transitions apply
+  immediately, while authority expansion uses the existing exact-action
+  approval broker. Administrators can apply an auditable emergency expansion
+  for at most 24 hours; expiry durably restores the prior evidence. File and
+  SQLite repositories preserve restart recovery and idempotency, and new REST
+  and CLI controls expose current state, history, transitions, and approval
+  decisions (#1035).
 - Added the provider-neutral `phase-capability-profile/v1` foundation with
   strict schemas and built-in explore, plan, implement, verify, and publish
   profiles. A pure compiler now intersects phase requests with parent, agent,

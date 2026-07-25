@@ -700,6 +700,30 @@
       "denialReason": "Cancelling an exact pending recovery requires task read and task write access."
     },
     {
+      "id": "cli:agents:agent:phase",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Reading active phase state requires task and agent read access."
+    },
+    {
+      "id": "cli:agents:agent:transition-phase",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Requesting a compare-and-set phase transition requires task read and write access; expansions still require exact approval."
+    },
+    {
+      "id": "cli:agents:agent:decide-phase-approval",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["task:read", "admin:manage"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Approving or rejecting an authority expansion requires administrator authority."
+    },
+    {
       "id": "cli:agents:agent:resume",
       "kind": "cli",
       "classification": "agent-scoped",

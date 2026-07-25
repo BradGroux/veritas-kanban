@@ -2,12 +2,14 @@
 
 Issue #1034 establishes the provider-neutral authority contract for execution
 phases. It defines what a phase may request and how Veritas computes the
-effective result before runtime transition, propagation, and tool enforcement
-are added in the remaining #875 slices.
+effective result. Issue #1035 adds durable active-run transitions and operator
+controls; propagation and tool enforcement remain in later #875 slices.
 
-This foundation is intentionally pure. It does not change an active attempt,
+The compiler remains intentionally pure. It does not mutate an active attempt,
 persist a transition, filter a tool catalog, or claim that a provider enforced
-the result.
+the result. The separate
+[Phase Transition Journal](PHASE-TRANSITION-JOURNAL.md) owns active state
+changes and their evidence.
 
 ## Contract
 
@@ -109,12 +111,15 @@ grant.
 
 ## Delivery boundary
 
-This issue supplies the shared types, strict schemas, built-in profiles, pure
-compiler, and focused matrix coverage. The remaining tracking-epic slices add:
+The delivered phase control plane now includes:
 
-- Durable transition state, approvals, and operator controls in #1035
-- Launch, descendant, retry, resume, and handoff propagation in #1036
-- Tool enforcement, evidence surfaces, and UI in #1033
+- Shared types, strict schemas, built-in profiles, and the pure compiler from
+  #1034
+- Durable transition state, approvals, emergency override expiry, restart
+  recovery, REST, and CLI controls from #1035
 
-Until those slices land, compiled phase evidence is an architecture contract,
-not a claim that active runs are phase-restricted.
+The remaining tracking-epic slices add launch, descendant, retry, resume, and
+handoff propagation in #1036, then tool enforcement, evidence surfaces, and UI
+in #1033. Until those slices land, a durable transition is authoritative
+Veritas state, not a claim that every provider process or tool has enforced the
+new phase.

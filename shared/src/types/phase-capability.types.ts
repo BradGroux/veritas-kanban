@@ -1,6 +1,9 @@
+import type { RunApprovalActor, RunApprovalRequest } from './run-approval.types.js';
+
 export const PHASE_CAPABILITY_PROFILE_SCHEMA_VERSION = 'phase-capability-profile/v1' as const;
 export const PHASE_CAPABILITY_EVIDENCE_SCHEMA_VERSION = 'phase-capability-evidence/v1' as const;
 export const PHASE_TRANSITION_INTENT_SCHEMA_VERSION = 'phase-transition-intent/v1' as const;
+export const PHASE_TRANSITION_RECORD_SCHEMA_VERSION = 'phase-transition-record/v1' as const;
 
 export const PHASE_NAMES = ['explore', 'plan', 'implement', 'verify', 'publish'] as const;
 export type PhaseName = (typeof PHASE_NAMES)[number];
@@ -155,4 +158,97 @@ export interface PhaseCapabilityCompilerInput {
   profile?: PhaseCapabilityProfile;
   sources: PhaseCapabilityCompilerSources;
   planArtifact?: PhasePlanArtifactRequest;
+}
+
+export type PhaseTransitionPolicyDecision =
+  'allow' | 'approved-expansion' | 'emergency-override' | 'override-expired';
+
+export interface PhaseAuthorityDeltaEntry {
+  dimension: PhaseAuthorityDimension;
+  addedScopes: string[];
+  removedScopes: string[];
+}
+
+export interface PhaseAuthorityDelta {
+  classification: 'same' | 'narrowing' | 'expanding' | 'mixed';
+  entries: PhaseAuthorityDeltaEntry[];
+}
+
+export interface PhaseEmergencyOverrideEvidence {
+  permission: 'admin:manage';
+  justification: string;
+  expiresAt: string;
+}
+
+/**
+ * One append-only, applied phase transition.
+ *
+ * `eventReference` is the deterministic run-event dedupe key. This lets an
+ * idempotent retry reconcile a missing projection without mutating the
+ * transition.
+ */
+export interface PhaseTransitionRecord {
+  schemaVersion: typeof PHASE_TRANSITION_RECORD_SCHEMA_VERSION;
+  id: string;
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  sequence: number;
+  operationId: string;
+  priorEvidence: PhaseCapabilityEvidence;
+  effectiveEvidence: PhaseCapabilityEvidence;
+  authorityDelta: PhaseAuthorityDelta;
+  actor: RunApprovalActor;
+  reason: string;
+  policyDecision: PhaseTransitionPolicyDecision;
+  approvalId?: string;
+  emergencyOverride?: PhaseEmergencyOverrideEvidence;
+  manifestDigest: string;
+  eventReference: string;
+  createdAt: string;
+}
+
+export interface PhaseTransitionRequestInput {
+  attemptId: string;
+  operationId: string;
+  expectedSequence: number;
+  expectedPhaseEvidenceDigest: string;
+  expectedManifestDigest: string;
+  reason: string;
+  fromEvidence?: PhaseCapabilityEvidence;
+  targetEvidence: PhaseCapabilityEvidence;
+  approvalId?: string;
+  approvalTtlMs?: number;
+  emergencyOverride?: {
+    justification: string;
+    expiresAt: string;
+  };
+}
+
+export interface PhaseTransitionQuery {
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  limit?: number;
+}
+
+export interface PhaseTransitionAppendInput {
+  record: PhaseTransitionRecord;
+  expectedSequence: number;
+  expectedPhaseEvidenceDigest: string;
+  expectedManifestDigest: string;
+}
+
+export interface PhaseTransitionAppendResult {
+  record?: PhaseTransitionRecord;
+  appended: boolean;
+  reason?: 'stale-sequence' | 'stale-phase-evidence' | 'stale-manifest' | 'operation-reused';
+}
+
+export interface PhaseTransitionResult {
+  status: 'applied' | 'approval-required';
+  current: PhaseTransitionRecord | null;
+  record?: PhaseTransitionRecord;
+  approval?: RunApprovalRequest;
+  targetEvidenceDigest: string;
 }

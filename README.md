@@ -97,6 +97,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, OpenClaw, and optional model profiles.
 - [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
 - [Phase Capability Profiles](docs/architecture/PHASE-CAPABILITY-PROFILES.md) — versioned execution-phase authority contracts, deterministic intersections, exact-path plan artifacts, and current delivery boundaries.
+- [Phase Transition Journal](docs/architecture/PHASE-TRANSITION-JOURNAL.md) — durable compare-and-set transitions, approval and override controls, restart recovery, REST, and CLI operations.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.

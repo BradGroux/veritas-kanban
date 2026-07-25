@@ -189,9 +189,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   profile, sandbox, tool-catalog, and launch-policy authority only through
   `phase-capability-service.ts`; never union scopes or infer missing
   dimensions. The plan artifact exception is one harness-owned exact path and
-  never implies general filesystem write authority. Until #1035, #1036, and
-  #1033 land, this compiler is a contract foundation rather than active
-  transition or runtime enforcement.
+  never implies general filesystem write authority. Active phase changes go
+  only through `phase-transition-service.ts` with exact attempt, sequence,
+  evidence-digest, and launch-manifest compare-and-set guards. Authority
+  expansion requires an exact-action approval; an emergency override requires
+  `admin:manage`, expires within 24 hours, and is durably reverted. Until #1036
+  and #1033 land, launch propagation and provider/tool enforcement remain
+  separate delivery boundaries.
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and

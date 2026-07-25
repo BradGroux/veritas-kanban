@@ -183,6 +183,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/[^/]+\/message\/?$/, permissions: 'task:write' },
       {
         methods: ['POST'],
+        path: /^\/[^/]+\/phase\/transitions\/?$/,
+        permissions: 'task:write',
+      },
+      {
+        methods: ['POST'],
         path: /^\/[^/]+\/conversation\/steer\/?$/,
         permissions: 'task:write',
       },

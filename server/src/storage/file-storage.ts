@@ -41,6 +41,7 @@ import type {
   TelemetryRepository,
   RunEventRepository,
   RunApprovalRepository,
+  PhaseTransitionRepository,
   RunSupervisorRepository,
   ToolControlPlaneRepository,
 } from './interfaces.js';
@@ -68,6 +69,7 @@ import { ManagedListService } from '../services/managed-list-service.js';
 import { TelemetryService, type TelemetryServiceOptions } from '../services/telemetry-service.js';
 import { FileRunEventRepository } from './run-event-repository.js';
 import { FileRunApprovalRepository } from './run-approval-repository.js';
+import { FilePhaseTransitionRepository } from './phase-transition-repository.js';
 import { FileRunSupervisorRepository } from './run-supervisor-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 
@@ -488,6 +490,7 @@ export interface FileStorageOptions {
   telemetryServiceOptions?: TelemetryServiceOptions;
   runEventsDir?: string;
   runApprovalsPath?: string;
+  phaseTransitionsPath?: string;
   runSupervisorsPath?: string;
   toolControlPlanePath?: string;
 }
@@ -503,6 +506,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly telemetry: FileTelemetryRepository;
   readonly runEvents: RunEventRepository;
   readonly runApprovals: RunApprovalRepository;
+  readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
 
@@ -556,6 +560,7 @@ export class FileStorageProvider implements StorageProvider {
     this.telemetry = new FileTelemetryRepository(this.telemetryService);
     this.runEvents = new FileRunEventRepository(options.runEventsDir);
     this.runApprovals = new FileRunApprovalRepository(options.runApprovalsPath);
+    this.phaseTransitions = new FilePhaseTransitionRepository(options.phaseTransitionsPath);
     this.runSupervisors = new FileRunSupervisorRepository(options.runSupervisorsPath);
     this.toolControlPlane = new FileToolControlPlaneRepository(options.toolControlPlanePath);
   }
