@@ -218,33 +218,119 @@ describe('WorkflowStepExecutor Codex integration', () => {
       workflowId: 'wf-codex',
       workflowVersion: 1,
       status: 'running',
-      context: {},
+      context: {
+        task: {
+          id: 'task_1',
+          title: 'Recover a Codex workflow step',
+          git: { worktreePath: tmpDir },
+        },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'implementer',
+              provider: 'codex-sdk',
+              description: 'Codex implementer',
+            },
+          ],
+        },
+        _sessions: {},
+      },
       startedAt: new Date().toISOString(),
       steps: [{ stepId: 'recover', status: 'running', retries: 1, runRetry: recovery }],
     } as WorkflowRun;
-    const step = { id: 'recover', type: 'agent', agent: 'codex' } as WorkflowStep;
+    const step = {
+      id: 'recover',
+      type: 'agent',
+      agent: 'codex',
+      input: 'Recover the workflow step',
+    } as WorkflowStep;
 
-    await (
-      executor as unknown as {
-        recordRuntimeManifest(
-          run: WorkflowRun,
-          step: WorkflowStep,
-          manifest: typeof manifest,
-          required: string[]
-        ): Promise<void>;
-      }
-    ).recordRuntimeManifest(run, step, manifest, ['run.start', 'artifact.write']);
+    const original = await executor.prepareStep(step, run);
+    expect(original.kind).toBe('agent');
+    executor.applyPreparation(run, original);
+    const parentManifestDigest = run.steps[0].phaseLaunchDigest;
+    const parentEvidenceDigest = run.steps[0].phaseAuthority?.evidence.digest;
+
+    await executor.executeStep(step, run);
 
     expect(run.steps[0]).toMatchObject({
       providerRuntimeManifest: { digest: manifest.digest },
-      requiredRuntimeCapabilities: ['artifact.write', 'run.start'],
+      requiredRuntimeCapabilities: expect.arrayContaining(['artifact.write', 'run.start']),
+      phaseAuthority: {
+        evidence: {
+          identity: { mode: 'legacy', phase: 'legacy' },
+        },
+      },
+      phaseLaunchDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       runRetry: {
         state: 'launched',
         launchedManifestDigest: manifest.digest,
-        requiredRuntimeCapabilities: ['artifact.write', 'run.start'],
+        requiredRuntimeCapabilities: expect.arrayContaining(['artifact.write', 'run.start']),
       },
     });
+    expect(run.steps[0].phaseAuthority?.sourceReferences).toContainEqual(
+      expect.objectContaining({
+        kind: 'parent',
+        originScope: 'parent',
+        parentAttemptId: `${run.id}:recover:1`,
+        parentManifestDigest,
+        parentEvidenceDigest,
+      })
+    );
     expect(persistRun).toHaveBeenCalledWith(run);
+    expect(persistRun.mock.invocationCallOrder[0]).toBeLessThan(
+      mockStartThread.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('rejects an unenforceable explicit phase before persistence or provider dispatch', async () => {
+    const persistRun = vi.fn().mockResolvedValue(undefined);
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver, persistRun });
+    const step: WorkflowStep = {
+      id: 'explore',
+      name: 'Explore',
+      type: 'agent',
+      agent: 'codex',
+      phase: 'explore',
+      input: 'Inspect the workflow task',
+    };
+    const run = {
+      id: 'run_1234567890_phase',
+      workflowId: 'wf-codex',
+      workflowVersion: 1,
+      status: 'running',
+      context: {
+        task: {
+          id: 'task_1',
+          title: 'Inspect phase enforcement',
+          git: { worktreePath: tmpDir },
+        },
+        workflow: {
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'researcher',
+              provider: 'codex-sdk',
+              description: 'Codex researcher',
+            },
+          ],
+        },
+      },
+      startedAt: new Date().toISOString(),
+      steps: [{ stepId: 'explore', status: 'pending', retries: 0 }],
+    } as WorkflowRun;
+
+    await expect(executor.executeStep(step, run)).rejects.toThrow(
+      /effective phase authority cannot be enforced/i
+    );
+
+    expect(run.steps[0].phaseAuthority).toBeUndefined();
+    expect(run.steps[0].phaseLaunchDigest).toBeUndefined();
+    expect(persistRun).not.toHaveBeenCalled();
+    expect(mockStartThread).not.toHaveBeenCalled();
   });
 
   it('rejects providers that have no workflow execution adapter before probing or launch', async () => {

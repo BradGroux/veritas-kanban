@@ -13,6 +13,7 @@ import type {
   ExecutableAgentProvider,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeManifest,
+  RunLaunchPhaseAuthority,
   SandboxPolicyDryRunResult,
 } from '@veritas-kanban/shared';
 import type {
@@ -46,6 +47,11 @@ import {
   BASELINE_LAUNCH_CAPABILITIES,
   providerRuntimeControls,
 } from './provider-runtime-control-service.js';
+import {
+  PhaseLaunchAuthorityService,
+  type PhaseLaunchParentSnapshot,
+} from './phase-launch-authority-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -73,15 +79,49 @@ interface WorkflowStepExecutorOptions {
   openClawAdapter?: OpenClawWorkflowAdapter;
   runtimeManifestResolver?: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
   persistRun?: (run: WorkflowRun) => Promise<void>;
+  phaseAuthority?: PhaseLaunchAuthorityService;
 }
 
 type WorkflowExecutableProvider = Extract<ExecutableAgentProvider, 'codex-sdk' | 'openclaw'>;
+
+export interface WorkflowAgentStepPreparation {
+  kind: 'agent';
+  step: WorkflowStep;
+  agentDef: WorkflowAgent | null;
+  sessionConfig: StepSessionConfig;
+  sessionContext: Record<string, unknown>;
+  prompt: string;
+  toolPolicyFilter: { allowed?: string[]; denied?: string[] };
+  workingDirectory: string;
+  runtimeProvider: WorkflowExecutableProvider;
+  runtimeManifest: ProviderRuntimeManifest;
+  requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[];
+  sandboxPolicy: SandboxPolicyDryRunResult;
+  hostRouting: AgentHostRoutingDecision;
+  hostRoutingGeneratedAt: string;
+  phaseAuthority: RunLaunchPhaseAuthority;
+  phaseLaunchDigest: string;
+}
+
+export type WorkflowStepExecutionPreparation =
+  | WorkflowAgentStepPreparation
+  | {
+      kind: 'non-agent';
+      step: WorkflowStep;
+    };
+
+interface WorkflowSessionPhaseSnapshot {
+  attemptId: string;
+  manifestDigest: string;
+  phaseAuthority: RunLaunchPhaseAuthority;
+}
 
 export class WorkflowStepExecutor {
   private runsDir: string;
   private openClawAdapter: OpenClawWorkflowAdapter;
   private runtimeManifestResolver: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
   private persistRun: (run: WorkflowRun) => Promise<void>;
+  private phaseAuthority: PhaseLaunchAuthorityService;
   private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
 
   constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
@@ -94,19 +134,31 @@ export class WorkflowStepExecutor {
         return clawdbotAgentService.probeProviderRuntime(agent, agent.type, 'workflow');
       });
     this.persistRun = options.persistRun ?? (async () => undefined);
+    this.phaseAuthority = options.phaseAuthority ?? new PhaseLaunchAuthorityService();
   }
 
   /**
    * Execute a single workflow step
    */
-  async executeStep(step: WorkflowStep, run: WorkflowRun): Promise<StepExecutionResult> {
+  async executeStep(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    preparation?: WorkflowStepExecutionPreparation
+  ): Promise<StepExecutionResult> {
     log.info({ runId: run.id, stepId: step.id, type: step.type }, 'Executing step');
-    const selectedAgent = run.steps.find((candidate) => candidate.stepId === step.id)?.agent;
-    const effectiveStep = selectedAgent ? { ...step, agent: selectedAgent } : step;
+    const resolved = preparation ?? (await this.prepareStep(step, run));
+    if (!preparation) {
+      this.applyPreparation(run, resolved);
+      await this.persistRun(run);
+    }
+    const effectiveStep = resolved.step;
 
     switch (effectiveStep.type) {
       case 'agent':
-        return this.executeAgentStep(effectiveStep, run);
+        if (resolved.kind !== 'agent') {
+          throw new Error(`Workflow step ${effectiveStep.id} is missing agent launch preparation`);
+        }
+        return this.executeAgentStep(resolved, run);
       case 'loop':
         return this.executeLoopStep(effectiveStep, run);
       case 'gate':
@@ -119,6 +171,53 @@ export class WorkflowStepExecutor {
   }
 
   /**
+   * Resolve every launch control before WorkflowRunService mutates step state.
+   */
+  async prepareStep(
+    step: WorkflowStep,
+    run: WorkflowRun
+  ): Promise<WorkflowStepExecutionPreparation> {
+    const selectedAgent = run.steps.find((candidate) => candidate.stepId === step.id)?.agent;
+    const effectiveStep = selectedAgent ? { ...step, agent: selectedAgent } : step;
+    if (effectiveStep.type !== 'agent') {
+      return { kind: 'non-agent', step: effectiveStep };
+    }
+    return this.prepareAgentStep(effectiveStep, run);
+  }
+
+  /**
+   * Persist the exact prepared evidence only after all phase controls pass.
+   */
+  applyPreparation(run: WorkflowRun, preparation: WorkflowStepExecutionPreparation): void {
+    if (preparation.kind !== 'agent') return;
+    const stepRun = run.steps.find((candidate) => candidate.stepId === preparation.step.id);
+    if (!stepRun) {
+      throw new Error(`Workflow run is missing step state for ${preparation.step.id}`);
+    }
+    stepRun.agent = preparation.step.agent;
+    stepRun.providerRuntimeManifest = preparation.runtimeManifest;
+    stepRun.requiredRuntimeCapabilities = [
+      ...new Set(preparation.requiredRuntimeCapabilities),
+    ].sort((left, right) => left.localeCompare(right));
+    stepRun.runtimeControls = providerRuntimeControls(preparation.runtimeManifest);
+    stepRun.phaseAuthority = structuredClone(preparation.phaseAuthority);
+    stepRun.phaseLaunchDigest = preparation.phaseLaunchDigest;
+    if (stepRun.runRetry?.state === 'launched') {
+      stepRun.runRetry = {
+        ...stepRun.runRetry,
+        launchedManifestDigest: preparation.runtimeManifest.digest,
+        requiredRuntimeCapabilities: [...stepRun.requiredRuntimeCapabilities],
+      };
+    }
+    this.recordAgentHostRouting(
+      run,
+      preparation.step,
+      preparation.hostRouting,
+      preparation.hostRoutingGeneratedAt
+    );
+  }
+
+  /**
    * Probe a fallback through the same capability and sandbox gates used by a
    * real workflow launch, without creating a provider session.
    */
@@ -128,58 +227,21 @@ export class WorkflowStepExecutor {
     agentId: string
   ): Promise<ProviderRuntimeManifest> {
     const effectiveStep = { ...step, agent: agentId };
-    let agentDef = this.getAgentDefinition(run, agentId);
-    if (!agentDef) {
+    if (!this.getAgentDefinition(run, agentId)) {
       throw new Error(`Workflow fallback agent ${agentId} is not defined in the workflow`);
     }
-    if (run.budget?.modelOverride) {
-      agentDef = { ...agentDef, model: run.budget.modelOverride };
-    }
-    const workflowConfig = run.context.workflow as
-      { config?: { fresh_session_default?: boolean } } | undefined;
-    const sessionConfig = this.buildSessionConfig(effectiveStep, run, workflowConfig?.config);
-    const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
-    const runtimeProvider = this.resolveWorkflowProvider(effectiveStep, agentDef);
-    const runtimeManifest = await this.resolveRuntimeManifest(
-      effectiveStep,
-      agentDef,
-      runtimeProvider
-    );
-    const requiredRuntimeCapabilities = this.requiredRuntimeCapabilities(
-      effectiveStep,
-      run,
-      agentDef,
-      runtimeProvider,
-      sessionConfig,
-      toolPolicyFilter
-    );
-    assertProviderRuntimeCapabilities(
-      runtimeManifest,
-      requiredRuntimeCapabilities,
-      `workflow fallback ${agentId} for step ${step.id}`
-    );
-    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
-      presetId: agentDef.sandboxPresetId,
-      provider: runtimeManifest.provider,
-      workspacePath: this.expandPath(this.getWorkflowWorkingDirectory(run)),
-      providerRuntimeManifest: runtimeManifest,
-    });
-    if (sandboxPolicy.result.decision === 'block') {
-      throw new Error(
-        `Workflow fallback ${agentId} cannot enforce sandbox preset ${sandboxPolicy.result.preset.id}`
-      );
-    }
-    return runtimeManifest;
+    const preparation = await this.prepareAgentStep(effectiveStep, run);
+    return preparation.runtimeManifest;
   }
 
   /**
    * Execute an agent step through its configured provider.
    * Integrated features: #108 (progress), #110 (tool policies), #111 (session management)
    */
-  private async executeAgentStep(
+  private async prepareAgentStep(
     step: WorkflowStep,
     run: WorkflowRun
-  ): Promise<StepExecutionResult> {
+  ): Promise<WorkflowAgentStepPreparation> {
     if (!step.agent) {
       throw new Error(`Agent step ${step.id} missing agent`);
     }
@@ -221,13 +283,25 @@ export class WorkflowStepExecutor {
       requiredRuntimeCapabilities,
       `workflow step ${step.id} launch`
     );
-    await this.recordRuntimeManifest(run, step, runtimeManifest, requiredRuntimeCapabilities);
-    const sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+    const parentPhase = this.resolveWorkflowPhaseParent(step, run, sessionConfig);
+    let sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
       presetId: agentDef?.sandboxPresetId,
       provider: runtimeManifest.provider,
       workspacePath: workingDirectory,
       providerRuntimeManifest: runtimeManifest,
     });
+    if (step.phase || parentPhase?.evidence?.identity.mode === 'profile') {
+      sandboxPolicy = await getSandboxPolicyService().dryRunWithTrace({
+        preset: this.phaseAuthority.narrowSandboxPreset(
+          sandboxPolicy.result.preset,
+          step.phase,
+          parentPhase
+        ),
+        provider: runtimeManifest.provider,
+        workspacePath: workingDirectory,
+        providerRuntimeManifest: runtimeManifest,
+      });
+    }
     const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
     if (sandboxPolicy.result.decision === 'block') {
       throw new Error(
@@ -244,7 +318,38 @@ export class WorkflowStepExecutor {
       verificationGates: step.acceptance_criteria,
       sandboxPresetId: sandboxPolicy.result.preset.id,
     });
-    this.recordAgentHostRouting(run, step, hostPreview.decision, hostPreview.generatedAt);
+    const selectedHost =
+      hostPreview.decision.selectedHostId ??
+      (runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
+    const phaseAuthority = this.phaseAuthority.compile({
+      requestedPhase: step.phase,
+      parent: parentPhase,
+      ...(agentDef
+        ? {
+            agentProfile: {
+              id: agentDef.id,
+              version: run.workflowVersion,
+            },
+          }
+        : {}),
+      sandboxPolicy: sandboxPolicy.result,
+      providerRuntimeManifest: runtimeManifest,
+      selectedHost,
+      toolCatalogId: digestRunLaunchValue(toolPolicyFilter),
+    });
+    this.phaseAuthority.assertEnforceable(phaseAuthority);
+    const phaseLaunchDigest = digestRunLaunchValue({
+      schemaVersion: 'workflow-phase-launch/v1',
+      workflowId: run.workflowId,
+      workflowVersion: run.workflowVersion,
+      runId: run.id,
+      stepId: step.id,
+      agent: step.agent,
+      providerRuntimeManifestDigest: runtimeManifest.digest,
+      selectedHost,
+      phaseEvidenceDigest: phaseAuthority.evidence.digest,
+      phaseSourceReferences: phaseAuthority.sourceReferences,
+    });
 
     log.info(
       {
@@ -262,30 +367,54 @@ export class WorkflowStepExecutor {
       'Agent step execution configured'
     );
 
-    if (runtimeProvider === 'codex-sdk') {
+    return {
+      kind: 'agent',
+      step,
+      agentDef,
+      sessionConfig,
+      sessionContext,
+      prompt,
+      toolPolicyFilter,
+      workingDirectory,
+      runtimeProvider,
+      runtimeManifest,
+      requiredRuntimeCapabilities,
+      sandboxPolicy: sandboxPolicy.result,
+      hostRouting: hostPreview.decision,
+      hostRoutingGeneratedAt: hostPreview.generatedAt,
+      phaseAuthority,
+      phaseLaunchDigest,
+    };
+  }
+
+  private async executeAgentStep(
+    preparation: WorkflowAgentStepPreparation,
+    run: WorkflowRun
+  ): Promise<StepExecutionResult> {
+    if (preparation.runtimeProvider === 'codex-sdk') {
       return this.executeCodexAgentStep(
-        step,
+        preparation.step,
         run,
-        agentDef,
-        prompt,
-        sessionConfig,
-        toolPolicyFilter,
-        hostPreview.decision,
-        sandboxPolicy.result,
-        runtimeManifest
+        preparation.agentDef,
+        preparation.prompt,
+        preparation.sessionConfig,
+        preparation.toolPolicyFilter,
+        preparation.hostRouting,
+        preparation.sandboxPolicy,
+        preparation.runtimeManifest
       );
     }
 
     return this.executeOpenClawAgentStep(
-      step,
+      preparation.step,
       run,
-      agentDef,
-      prompt,
-      sessionConfig,
-      sessionContext,
-      toolPolicyFilter,
-      hostPreview.decision,
-      runtimeManifest
+      preparation.agentDef,
+      preparation.prompt,
+      preparation.sessionConfig,
+      preparation.sessionContext,
+      preparation.toolPolicyFilter,
+      preparation.hostRouting,
+      preparation.runtimeManifest
     );
   }
 
@@ -408,7 +537,74 @@ export class WorkflowStepExecutor {
     const stepRun = run.steps.find((s) => s.stepId === step.id);
     if (stepRun) {
       stepRun.sessionKey = sessionKey;
+      if (stepRun.phaseAuthority && stepRun.phaseLaunchDigest) {
+        run.context._sessionPhaseAuthority = {
+          ...((run.context._sessionPhaseAuthority as
+            Record<string, WorkflowSessionPhaseSnapshot> | undefined) ?? {}),
+          [agentId]: {
+            attemptId: this.workflowStepAttemptId(run, stepRun.stepId),
+            manifestDigest: stepRun.phaseLaunchDigest,
+            phaseAuthority: structuredClone(stepRun.phaseAuthority),
+          },
+        };
+      }
     }
+  }
+
+  private resolveWorkflowPhaseParent(
+    step: WorkflowStep,
+    run: WorkflowRun,
+    sessionConfig: StepSessionConfig
+  ): PhaseLaunchParentSnapshot | undefined {
+    const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
+    if (stepRun?.phaseAuthority && stepRun.phaseLaunchDigest) {
+      return {
+        attemptId: this.workflowStepAttemptId(run, step.id),
+        manifestDigest: stepRun.phaseLaunchDigest,
+        evidence: stepRun.phaseAuthority.evidence,
+      };
+    }
+
+    if (sessionConfig.mode !== 'reuse') return undefined;
+    const agentId = step.agent ?? step.id;
+    const sessionKey = (run.context._sessions as Record<string, string> | undefined)?.[agentId];
+    if (!sessionKey) return undefined;
+    const sessionPhase = (
+      run.context._sessionPhaseAuthority as Record<string, WorkflowSessionPhaseSnapshot> | undefined
+    )?.[agentId];
+    if (sessionPhase) {
+      if (
+        !sessionPhase.attemptId ||
+        !sessionPhase.manifestDigest ||
+        !sessionPhase.phaseAuthority?.evidence
+      ) {
+        throw new Error(`Workflow session ${agentId} has invalid phase authority evidence`);
+      }
+      return {
+        attemptId: sessionPhase.attemptId,
+        manifestDigest: sessionPhase.manifestDigest,
+        evidence: sessionPhase.phaseAuthority.evidence,
+      };
+    }
+
+    const legacyDigest = digestRunLaunchValue({
+      schemaVersion: 'workflow-legacy-session-phase/v1',
+      workflowId: run.workflowId,
+      workflowVersion: run.workflowVersion,
+      runId: run.id,
+      agentId,
+      sessionKeyDigest: digestRunLaunchValue(sessionKey),
+    });
+    return {
+      attemptId: `legacy-session:${legacyDigest.slice(0, 20)}`,
+      manifestDigest: legacyDigest,
+    };
+  }
+
+  private workflowStepAttemptId(run: WorkflowRun, stepId: string): string {
+    const stepRun = run.steps.find((candidate) => candidate.stepId === stepId);
+    const sequence = stepRun?.runRetry?.sequence ?? stepRun?.retries ?? 0;
+    return `${run.id}:${stepId}:${sequence}`;
   }
 
   private recordAgentHostRouting(
@@ -538,30 +734,6 @@ export class WorkflowStepExecutor {
     }
 
     return [...required].sort((left, right) => left.localeCompare(right));
-  }
-
-  private async recordRuntimeManifest(
-    run: WorkflowRun,
-    step: WorkflowStep,
-    manifest: ProviderRuntimeManifest,
-    requiredRuntimeCapabilities: ProviderRuntimeCapabilityId[]
-  ): Promise<void> {
-    const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
-    if (stepRun) {
-      stepRun.providerRuntimeManifest = manifest;
-      stepRun.requiredRuntimeCapabilities = [...new Set(requiredRuntimeCapabilities)].sort(
-        (left, right) => left.localeCompare(right)
-      );
-      stepRun.runtimeControls = providerRuntimeControls(manifest);
-      if (stepRun.runRetry?.state === 'launched') {
-        stepRun.runRetry = {
-          ...stepRun.runRetry,
-          launchedManifestDigest: manifest.digest,
-          requiredRuntimeCapabilities: [...stepRun.requiredRuntimeCapabilities],
-        };
-      }
-    }
-    await this.persistRun(run);
   }
 
   private assertOpenClawResult(
@@ -728,10 +900,7 @@ export class WorkflowStepExecutor {
       }
       if (event.type === 'thread.started') {
         threadId = event.thread_id;
-        run.context._sessions = {
-          ...((run.context._sessions as Record<string, string> | undefined) || {}),
-          [sessionKey]: threadId,
-        };
+        this.recordWorkflowSession(run, step, sessionKey, threadId);
       }
       if (event.type === 'item.completed' && event.item.type === 'agent_message') {
         finalResponse = event.item.text;

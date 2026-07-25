@@ -5,6 +5,8 @@ import path from 'path';
 
 const mockLoadWorkflow = vi.fn();
 const mockListWorkflowsMetadata = vi.fn();
+const mockPrepareStep = vi.fn();
+const mockApplyPreparation = vi.fn();
 const mockExecuteStep = vi.fn();
 const mockValidateFallbackAgent = vi.fn();
 const mockBroadcastWorkflowStatus = vi.fn();
@@ -24,6 +26,8 @@ vi.mock('../services/workflow-step-executor.js', async (importOriginal) => {
   return {
     HumanGateBlockError: actual.HumanGateBlockError,
     WorkflowStepExecutor: class {
+      prepareStep = mockPrepareStep;
+      applyPreparation = mockApplyPreparation;
       executeStep = mockExecuteStep;
       validateFallbackAgent = mockValidateFallbackAgent;
     },
@@ -75,6 +79,8 @@ describe('WorkflowRunService', () => {
     ]);
     mockGetTask.mockResolvedValue({ id: 'task-1', title: 'Task 1' });
     mockCheckWorkflowPermission.mockResolvedValue(true);
+    mockPrepareStep.mockImplementation(async (step: any) => ({ kind: 'non-agent', step }));
+    mockApplyPreparation.mockImplementation(() => undefined);
     mockExecuteStep.mockImplementation(async (step: any) => ({
       output: { done: step.id },
       outputPath: `/tmp/${step.id}.json`,
@@ -105,6 +111,32 @@ describe('WorkflowRunService', () => {
     const snapshot = await fs.readFile(path.join(tmpDir, run.id, 'workflow.yml'), 'utf8');
     expect(snapshot).toContain('wf-1');
     expect(mockBroadcastWorkflowStatus).toHaveBeenCalled();
+  });
+
+  it('resolves phase launch controls before mutating executable step state', async () => {
+    let observed: { currentStep?: string; stepStatus?: string; startedAt?: string } | undefined;
+    mockPrepareStep.mockImplementationOnce(async (_step: any, run: any) => {
+      observed = {
+        currentStep: run.currentStep,
+        stepStatus: run.steps[0]?.status,
+        startedAt: run.steps[0]?.startedAt,
+      };
+      throw new Error('The effective phase authority cannot be enforced.');
+    });
+
+    const run = await service.startRun('wf-1', 'task-1');
+
+    await vi.waitFor(async () => {
+      const saved = await service.getRun(run.id);
+      expect(saved.status).toBe('failed');
+    });
+    expect(observed).toEqual({
+      currentStep: 'step-1',
+      stepStatus: 'pending',
+      startedAt: undefined,
+    });
+    expect(mockApplyPreparation).not.toHaveBeenCalled();
+    expect(mockExecuteStep).not.toHaveBeenCalled();
   });
 
   it('rejects initial context that overrides server-owned workflow run keys', async () => {

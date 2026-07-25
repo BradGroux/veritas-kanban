@@ -22,6 +22,7 @@ import {
 } from '../utils/run-launch-manifest-digest.js';
 import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
+import { PhaseLaunchAuthorityService } from '../services/phase-launch-authority-service.js';
 
 const providerRuntimeManifest = providerRuntimeManifestFixture({
   provider: 'codex-cli',
@@ -188,6 +189,12 @@ const workspaceTrust: RunLaunchManifestCompileInput['workspaceTrust'] = {
   restrictionChecks: [],
 };
 
+const legacyPhaseAuthority = new PhaseLaunchAuthorityService().compile({
+  sandboxPolicy,
+  providerRuntimeManifest,
+  selectedHost: 'local-process',
+});
+
 function input(
   overrides: Partial<RunLaunchManifestCompileInput> = {}
 ): RunLaunchManifestCompileInput {
@@ -211,6 +218,7 @@ function input(
       version: '1.0.0',
       role: 'developer',
     },
+    phase: legacyPhaseAuthority,
     readiness: {
       summary: {
         checks: [],
@@ -401,6 +409,22 @@ describe('RunLaunchManifestService', () => {
         enforceable: true,
         blockers: [],
       },
+      phase: {
+        evidence: {
+          identity: {
+            mode: 'legacy',
+            phase: 'legacy',
+          },
+          status: expect.stringMatching(/allowed|narrowed/),
+        },
+        sourceReferences: expect.arrayContaining([
+          expect.objectContaining({ kind: 'parent' }),
+          expect.objectContaining({ kind: 'agent-profile' }),
+          expect.objectContaining({ kind: 'sandbox' }),
+          expect.objectContaining({ kind: 'tool-catalog' }),
+          expect.objectContaining({ kind: 'launch-policy' }),
+        ]),
+      },
       sandbox: {
         filesystem: {
           backend: 'codex-sandbox',
@@ -440,8 +464,9 @@ describe('RunLaunchManifestService', () => {
   it('keeps legacy v1 launch manifests readable without treating them as fresh trust evidence', () => {
     const current = new RunLaunchManifestService().compile(input());
     const { digest: _digest, ...currentPayload } = current;
+    const { phase: _phase, ...legacyPhasePayload } = currentPayload;
     const legacyPayload = {
-      ...currentPayload,
+      ...legacyPhasePayload,
       workspaceTrust: {
         status: 'trusted' as const,
         source: 'Legacy workspace trust evidence.',
@@ -453,6 +478,7 @@ describe('RunLaunchManifestService', () => {
     };
 
     expect(parseRunLaunchManifest(legacy).workspaceTrust).toEqual(legacyPayload.workspaceTrust);
+    expect(parseRunLaunchManifest(legacy).phase).toBeUndefined();
   });
 
   it('rejects filesystem evidence linked to a different provider manifest', () => {
@@ -971,6 +997,21 @@ describe('RunLaunchManifestService', () => {
         },
       })
     ).toThrow(/digest/i);
+
+    expect(() =>
+      parseRunLaunchManifest({
+        ...manifest,
+        phase: manifest.phase
+          ? {
+              ...manifest.phase,
+              evidence: {
+                ...manifest.phase.evidence,
+                warnings: [...manifest.phase.evidence.warnings, 'tampered'],
+              },
+            }
+          : undefined,
+      })
+    ).toThrow(/phase|digest/i);
   });
 
   it('does not change persisted evidence when source configuration mutates after compile', () => {

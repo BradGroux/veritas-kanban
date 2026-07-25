@@ -56,6 +56,7 @@ const RESERVED_CONTEXT_KEYS = new Set([
   'run',
   'pipeline',
   '_sessions',
+  '_sessionPhaseAuthority',
   '_retryContext',
   '_gateBlock',
   '_gateApproval',
@@ -75,9 +76,11 @@ export class WorkflowRunService {
     this.runsDir = resolvedOptions.runsDir || getWorkflowRunsDir();
     this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
     this.runRecoveryPolicy = resolvedOptions.runRecoveryPolicy ?? new RunRecoveryPolicyService();
-    this.stepExecutor = new WorkflowStepExecutor(resolvedOptions.runsDir, {
-      persistRun: (run) => this.saveRun(run),
-    });
+    this.stepExecutor =
+      resolvedOptions.stepExecutor ??
+      new WorkflowStepExecutor(resolvedOptions.runsDir, {
+        persistRun: (run) => this.saveRun(run),
+      });
     const storageType =
       resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -460,29 +463,32 @@ export class WorkflowRunService {
           continue;
         }
 
-        // Update current step
-        run.currentStep = step.id;
-        await this.saveRun(run);
-        broadcastWorkflowStatus(run);
-
         const stepRun = existingStepRun;
-        stepRun.agent ??= step.agent;
-        stepRun.status = 'running';
-        stepRun.startedAt = new Date().toISOString();
-        if (stepRun.runRetry?.state === 'launching') {
-          stepRun.runRetry = {
-            ...stepRun.runRetry,
-            state: 'launched',
-            launchedAt: stepRun.startedAt,
-            launchedRunId: `${run.id}:${step.id}:${stepRun.runRetry.sequence}`,
-            selectedAgent: stepRun.agent ?? stepRun.runRetry.selectedAgent,
-          };
-        }
-        this.syncPipelineSummary(run, workflow);
-        await this.saveRun(run);
 
         try {
-          const result = await this.stepExecutor.executeStep(step, run);
+          // Resolve runtime, sandbox, host, and phase authority before creating
+          // or mutating the executable step attempt.
+          const preparation = await this.stepExecutor.prepareStep(step, run);
+          run.currentStep = step.id;
+          stepRun.agent ??= preparation.step.agent ?? step.agent;
+          this.stepExecutor.applyPreparation(run, preparation);
+          stepRun.status = 'running';
+          stepRun.error = undefined;
+          stepRun.startedAt = new Date().toISOString();
+          if (stepRun.runRetry?.state === 'launching') {
+            stepRun.runRetry = {
+              ...stepRun.runRetry,
+              state: 'launched',
+              launchedAt: stepRun.startedAt,
+              launchedRunId: `${run.id}:${step.id}:${stepRun.runRetry.sequence}`,
+              selectedAgent: stepRun.agent ?? stepRun.runRetry.selectedAgent,
+            };
+          }
+          this.syncPipelineSummary(run, workflow);
+          await this.saveRun(run);
+          broadcastWorkflowStatus(run);
+
+          const result = await this.stepExecutor.executeStep(step, run, preparation);
           if (result.budgetUsage) {
             const budgetBlocked = await this.evaluateRunBudget(
               run,
@@ -514,6 +520,7 @@ export class WorkflowRunService {
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
         } catch (err: unknown) {
+          run.currentStep = step.id;
           // --- Gate human-escalation (#778) ---
           // HumanGateBlockError is a clean, expected pause — not a real failure.
           // Handle it before the generic failure path so on_fail is not misapplied.
@@ -1581,6 +1588,7 @@ export interface WorkflowRunServiceOptions {
   sqliteConnectionOptions?: SqliteConnectionOptions;
   workflowService?: ReturnType<typeof getWorkflowService>;
   runRecoveryPolicy?: RunRecoveryPolicyService;
+  stepExecutor?: WorkflowStepExecutor;
 }
 
 // Singleton

@@ -171,6 +171,7 @@ vi.mock('../services/circuit-registry.js', () => ({
 import {
   AgentReadinessError,
   ClawdbotAgentService,
+  type AgentStatus,
   type CredentialLeaseLifecycle,
 } from '../services/clawdbot-agent-service.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
@@ -180,6 +181,7 @@ import type {
   RunApprovalRequest,
   SandboxPolicyDryRunResult,
   Task,
+  TaskAttempt,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
@@ -269,7 +271,9 @@ function testableService(
     undefined,
     filesystemSandbox,
     sandboxPolicies,
-    workspaceExecutionTrust
+    workspaceExecutionTrust,
+    undefined,
+    { getCurrent: vi.fn().mockResolvedValue(null) }
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -695,7 +699,22 @@ describe('ClawdbotAgentService Codex providers', () => {
           enforceable: true,
           blockers: [],
         },
+        phase: {
+          evidence: {
+            identity: { mode: 'legacy', phase: 'legacy' },
+          },
+          sourceReferences: expect.arrayContaining([
+            expect.objectContaining({ kind: 'parent' }),
+            expect.objectContaining({ kind: 'agent-profile' }),
+            expect.objectContaining({ kind: 'sandbox' }),
+            expect.objectContaining({ kind: 'tool-catalog' }),
+            expect.objectContaining({ kind: 'launch-policy' }),
+          ]),
+        },
       });
+      expect(status.activePhaseEvidence?.digest).toBe(
+        status.runLaunchManifest.phase?.evidence.digest
+      );
       expect(status.runLaunchManifest.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(mockSpawn).toHaveBeenCalledWith(
         'codex',
@@ -1692,6 +1711,36 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockUpdateTask).not.toHaveBeenCalled();
   });
 
+  it('returns typed phase blockers before dispatch or attempt mutation', async () => {
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex', {
+      phase: 'explore',
+    });
+
+    expect(preview.manifest.phase?.evidence.identity).toEqual({
+      mode: 'profile',
+      phase: 'explore',
+      profileId: 'builtin-explore',
+      profileVersion: 1,
+    });
+    expect(preview.manifest.enforcement).toMatchObject({
+      enforceable: false,
+      blockers: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'phase-required-authority-unsupported',
+          field: 'phase.evidence.command.execute',
+        }),
+        expect.objectContaining({
+          code: 'phase-required-authority-unsupported',
+          field: 'phase.evidence.external.action',
+        }),
+      ]),
+    });
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
   it('compares replay and fork previews with compatible and incompatible parent manifests', async () => {
     const service = testableService(tmpDir);
     const parent = await service.previewAgentLaunch(task.id, 'codex');
@@ -1710,10 +1759,23 @@ describe('ClawdbotAgentService Codex providers', () => {
     const compatible = await service.previewAgentLaunch(task.id, 'codex', {
       parentAttemptId: 'attempt_parent',
     });
-    expect(compatible).toMatchObject({
-      parentAttemptId: 'attempt_parent',
-      drift: { material: false, changes: [] },
+    expect(compatible.parentAttemptId).toBe('attempt_parent');
+    expect(compatible.drift).toMatchObject({
+      material: true,
+      changes: expect.arrayContaining([
+        expect.objectContaining({ field: 'phase' }),
+        expect.objectContaining({ field: 'origins' }),
+      ]),
     });
+    expect(compatible.manifest.phase?.sourceReferences).toContainEqual(
+      expect.objectContaining({
+        kind: 'parent',
+        originScope: 'parent',
+        parentAttemptId: 'attempt_parent',
+        parentManifestDigest: parent.manifest.digest,
+        parentEvidenceDigest: parent.manifest.phase?.evidence.digest,
+      })
+    );
 
     mockGetConfig.mockResolvedValue({
       agents: [
@@ -1737,6 +1799,43 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(mockSpawn).not.toHaveBeenCalled();
     expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('binds a resumed conversation to the exact parent phase snapshot', async () => {
+    const service = testableService(tmpDir);
+    const sourceAttempt = {
+      id: 'attempt_parent',
+      agent: 'codex',
+      status: 'complete',
+      threadId: 'thread_parent',
+      providerRuntimeManifest: {},
+      taskEnvelope: {},
+      runLaunchManifest: {},
+    } as TaskAttempt;
+    vi.spyOn(
+      service as unknown as {
+        findAttempt(attemptId: string): Promise<TaskAttempt | undefined>;
+      },
+      'findAttempt'
+    ).mockResolvedValue(sourceAttempt);
+    const startAgent = vi
+      .spyOn(service, 'startAgent')
+      .mockResolvedValue({ attemptId: 'attempt_child' } as AgentStatus);
+
+    await service.resumeConversation(task.id, sourceAttempt.id, 'Continue safely', {
+      phase: 'verify',
+    });
+
+    expect(startAgent).toHaveBeenCalledWith(task.id, 'codex', {
+      phase: 'verify',
+      parentAttemptId: sourceAttempt.id,
+      conversation: {
+        mode: 'resume',
+        intent: 'resume',
+        sourceAttemptId: sourceAttempt.id,
+        message: 'Continue safely',
+      },
+    });
   });
 
   it('compiles transient preview and durable start tool catalogs before enforced launch', async () => {

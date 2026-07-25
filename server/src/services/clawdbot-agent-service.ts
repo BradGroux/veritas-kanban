@@ -100,6 +100,9 @@ import type {
   RunLaunchManifestOrigin,
   RunLaunchManifestPreview,
   RunLaunchRuntime,
+  RunLaunchPhaseAuthority,
+  PhaseName,
+  PhaseCapabilityEvidence,
   CredentialRunRevocationRequest,
   CredentialLeaseTerminalReason,
   RunEventEnvelope,
@@ -240,6 +243,15 @@ import {
   getWorkspaceExecutionTrustService,
   type WorkspaceExecutionTrustService,
 } from './workspace-execution-trust-service.js';
+import {
+  PhaseLaunchAuthorityService,
+  type PhaseLaunchParentSnapshot,
+} from './phase-launch-authority-service.js';
+import {
+  getPhaseTransitionService,
+  type PhaseTransitionService,
+} from './phase-transition-service.js';
+import { verifyPhaseCapabilityEvidenceDigest } from './phase-capability-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -306,6 +318,7 @@ export interface AgentStatus {
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   runRetry?: RunRecoveryRecord;
+  activePhaseEvidence?: PhaseCapabilityEvidence;
   conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
 }
@@ -323,6 +336,7 @@ export interface AgentStartOptions {
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
+  phase?: PhaseName;
   parentAttemptId?: string;
   conversation?: ConversationLaunchRequest;
   /** Internal durable recovery context. API callers cannot supply this field. */
@@ -378,6 +392,7 @@ interface PendingAgent {
   runLaunchParentAttemptId?: string;
   runLaunchManifestDrift?: RunLaunchManifestDriftResult;
   runRetry?: RunRecoveryRecord;
+  activePhaseEvidence?: PhaseCapabilityEvidence;
   conversation: ConversationLifecycleRecord;
   supervisorId?: string;
   recoveredControl?: boolean;
@@ -499,6 +514,8 @@ export class ClawdbotAgentService {
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
   >;
+  private phaseAuthority: PhaseLaunchAuthorityService;
+  private phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'>;
   private logsDir: string;
 
   constructor(
@@ -524,7 +541,9 @@ export class ClawdbotAgentService {
     workspaceExecutionTrust: Pick<
       WorkspaceExecutionTrustService,
       'scan' | 'evaluateForLaunch' | 'assertFresh'
-    > = getWorkspaceExecutionTrustService()
+    > = getWorkspaceExecutionTrustService(),
+    phaseAuthority = new PhaseLaunchAuthorityService(),
+    phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'>
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -551,6 +570,8 @@ export class ClawdbotAgentService {
     this.filesystemSandbox = filesystemSandbox;
     this.sandboxPolicies = sandboxPolicies;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
+    this.phaseAuthority = phaseAuthority;
+    this.phaseTransitions = phaseTransitions;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -1266,6 +1287,7 @@ export class ClawdbotAgentService {
       runLaunchParentAttemptId: attempt.runLaunchParentAttemptId,
       runLaunchManifestDrift: attempt.runLaunchManifestDrift,
       runRetry: attempt.runRetry,
+      activePhaseEvidence: attempt.runLaunchManifest.phase?.evidence,
       conversation: recoveredConversation,
       supervisorId: supervisor.id,
       recoveredControl: true,
@@ -1487,7 +1509,9 @@ export class ClawdbotAgentService {
       budgetPolicy,
       options.requiredRuntimeCapabilities
     );
-    const sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
+    const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
+    const parentPhase = await this.resolveParentPhaseSnapshot(parentAttempt);
+    let sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
         profileLaunch?.sandboxPresetId ??
@@ -1496,6 +1520,18 @@ export class ClawdbotAgentService {
       workspacePath: task.git.worktreePath,
       providerRuntimeManifest,
     });
+    if (options.phase || parentPhase?.evidence?.identity.mode === 'profile') {
+      sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
+        preset: this.phaseAuthority.narrowSandboxPreset(
+          sandboxPolicy.result.preset,
+          options.phase,
+          parentPhase
+        ),
+        provider,
+        workspacePath: task.git.worktreePath,
+        providerRuntimeManifest,
+      });
+    }
     const attemptId = `preview_${nanoid(8)}`;
     const startedAt = new Date().toISOString();
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
@@ -1585,8 +1621,8 @@ export class ClawdbotAgentService {
       runToolCatalog,
       filesystemSandboxPlan,
       workspaceTrustEvaluation,
+      parentPhase,
     });
-    const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
     return {
       manifest,
       ...(parentAttempt
@@ -1758,7 +1794,12 @@ export class ClawdbotAgentService {
         ...conversationLaunchCapabilities(conversationRequest.mode),
       ]
     );
-    const sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
+    const parentAttempt = await this.resolveParentAttempt(
+      task,
+      conversationSource?.attempt.id ?? options.parentAttemptId
+    );
+    const parentPhase = await this.resolveParentPhaseSnapshot(parentAttempt);
+    let sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
       presetId:
         options.sandboxPresetId ??
         profileLaunch?.sandboxPresetId ??
@@ -1767,6 +1808,18 @@ export class ClawdbotAgentService {
       workspacePath: task.git.worktreePath,
       providerRuntimeManifest,
     });
+    if (options.phase || parentPhase?.evidence?.identity.mode === 'profile') {
+      sandboxPolicy = await this.sandboxPolicies.dryRunWithTrace({
+        preset: this.phaseAuthority.narrowSandboxPreset(
+          sandboxPolicy.result.preset,
+          options.phase,
+          parentPhase
+        ),
+        provider,
+        workspacePath: task.git.worktreePath,
+        providerRuntimeManifest,
+      });
+    }
     const sandboxTrace = await getGovernanceTraceService().record(sandboxPolicy.trace);
 
     if (!readiness.ready && overrideReason) {
@@ -1903,11 +1956,8 @@ export class ClawdbotAgentService {
       runToolCatalog,
       filesystemSandboxPlan,
       workspaceTrustEvaluation,
+      parentPhase,
     });
-    const parentAttempt = await this.resolveParentAttempt(
-      task,
-      conversationSource?.attempt.id ?? options.parentAttemptId
-    );
     const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
       ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
       : undefined;
@@ -1987,6 +2037,7 @@ export class ClawdbotAgentService {
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
       runRetry,
+      activePhaseEvidence: runLaunchManifest.phase?.evidence,
       conversation,
       filesystemSandboxPlan,
       budget: budgetPolicy
@@ -2163,6 +2214,8 @@ export class ClawdbotAgentService {
           taskEnvelopeDigest: taskEnvelope.digest,
           runLaunchManifestDigest: runLaunchManifest.digest,
           providerRuntimeManifestDigest: providerRuntimeManifest.digest,
+          phaseEvidenceDigest: runLaunchManifest.phase?.evidence.digest,
+          phaseIdentity: runLaunchManifest.phase?.evidence.identity,
           worktreeManifestId: taskEnvelope.workspace.worktreeManifestId,
         },
         {
@@ -2189,6 +2242,8 @@ export class ClawdbotAgentService {
           parentAttemptId: conversation.parentAttemptId,
           parentConversationId: conversation.parentConversationId,
           forkTurnId: conversation.forkTurnId,
+          phaseEvidenceDigest: runLaunchManifest.phase?.evidence.digest,
+          phaseIdentity: runLaunchManifest.phase?.evidence.identity,
         },
         {
           provider,
@@ -2376,6 +2431,7 @@ export class ClawdbotAgentService {
       runLaunchParentAttemptId: parentAttempt?.id,
       runLaunchManifestDrift,
       runRetry,
+      activePhaseEvidence: runLaunchManifest.phase?.evidence,
       conversation,
       controls: providerRuntimeControls(providerRuntimeManifest),
     };
@@ -3797,6 +3853,8 @@ export class ClawdbotAgentService {
         conversationId: conversation.conversationId,
         turnId: conversation.currentTurnId,
         state: conversation.state,
+        phaseEvidenceDigest: pending.activePhaseEvidence?.digest,
+        phaseIdentity: pending.activePhaseEvidence?.identity,
       },
       {
         provider: 'operator',
@@ -7827,6 +7885,7 @@ export class ClawdbotAgentService {
       runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
       runLaunchManifestDrift: pending.runLaunchManifestDrift,
       runRetry: pending.runRetry,
+      activePhaseEvidence: pending.activePhaseEvidence,
       conversation: pending.conversation,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
     };
@@ -7948,6 +8007,53 @@ export class ClawdbotAgentService {
     }
     this.runLaunchManifests.assertEnforceable(persistedAttempt.runLaunchManifest);
     this.runLaunchManifests.assertEnforceable(pending.runLaunchManifest);
+    const persistedPhase = persistedAttempt.runLaunchManifest.phase?.evidence;
+    if (!persistedPhase) {
+      pending.activePhaseEvidence = undefined;
+      return;
+    }
+    if (!verifyPhaseCapabilityEvidenceDigest(persistedPhase)) {
+      throw new ConflictError(
+        'Phase authority is stale or invalid: initial launch evidence digest does not match',
+        {
+          action,
+          phaseEvidenceDigest: persistedPhase.digest,
+          remediation:
+            'Terminate the detached provider, reconcile persisted phase evidence, and launch again.',
+        }
+      );
+    }
+    const currentPhase = await this.getCurrentPhase(
+      pending.taskEnvelope.workspace.workspaceId,
+      taskId,
+      pending.attemptId
+    );
+    if (currentPhase && currentPhase.manifestDigest !== persistedAttempt.runLaunchManifest.digest) {
+      throw new ConflictError(
+        'Phase authority is stale or invalid: transition evidence belongs to another launch manifest',
+        {
+          action,
+          phaseTransitionManifestDigest: currentPhase.manifestDigest,
+          runLaunchManifestDigest: persistedAttempt.runLaunchManifest.digest,
+          remediation:
+            'Terminate the detached provider, reconcile the phase transition journal, and launch again.',
+        }
+      );
+    }
+    const activePhase = currentPhase?.effectiveEvidence ?? persistedPhase;
+    if (!verifyPhaseCapabilityEvidenceDigest(activePhase) || activePhase.status === 'blocked') {
+      throw new ConflictError(
+        'Phase authority is stale or invalid: active evidence cannot authorize run control',
+        {
+          action,
+          phaseEvidenceDigest: activePhase.digest,
+          phaseStatus: activePhase.status,
+          remediation:
+            'Terminate the detached provider, reconcile active phase evidence, and launch again.',
+        }
+      );
+    }
+    pending.activePhaseEvidence = activePhase;
   }
 
   /**
@@ -8133,6 +8239,7 @@ export class ClawdbotAgentService {
     runToolCatalog?: RunToolCatalog;
     filesystemSandboxPlan: FilesystemSandboxLaunchPlan;
     workspaceTrustEvaluation: WorkspaceExecutionTrustEvaluation;
+    parentPhase?: PhaseLaunchParentSnapshot;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
     const toolCatalogDelivery = input.launchAgentConfig
@@ -8160,6 +8267,24 @@ export class ClawdbotAgentService {
         ? [`workflow-entrypoint:${profile.workflow.entrypoint}`]
         : []),
     ];
+    const selectedHost = input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process';
+    const phase = this.phaseAuthority.compile({
+      requestedPhase: input.options.phase,
+      parent: input.parentPhase,
+      ...(profile
+        ? {
+            agentProfile: {
+              id: profile.id,
+              version: profile.version,
+            },
+          }
+        : {}),
+      sandboxPolicy: input.sandboxPolicy,
+      providerRuntimeManifest: input.providerRuntimeManifest,
+      filesystemSandbox: input.filesystemSandboxPlan.evidence,
+      selectedHost,
+      toolCatalogId: input.runToolCatalog?.digest,
+    });
     const runtime = this.buildRunLaunchRuntime(
       input.provider,
       input.launchAgentConfig,
@@ -8373,6 +8498,35 @@ export class ClawdbotAgentService {
         source: `harness-support:${input.harnessSupport.profileId}`,
         precedence: 100,
       },
+      {
+        field: 'phase.evidence',
+        scope: input.options.phase
+          ? ('run' as const)
+          : input.parentPhase
+            ? ('parent' as const)
+            : ('system-default' as const),
+        source: input.options.phase
+          ? `phase-profile:builtin-${input.options.phase}:1`
+          : input.parentPhase
+            ? `parent-attempt:${input.parentPhase.attemptId}:${input.parentPhase.evidence?.digest ?? 'legacy'}`
+            : 'phase-profile:legacy',
+        precedence: input.options.phase ? 300 : input.parentPhase ? 400 : 0,
+      },
+      ...phase.sourceReferences.map((reference) => ({
+        field: `phase.sources.${reference.kind}`,
+        scope: reference.originScope,
+        source: `phase-source:${reference.kind}:${reference.sourceDigest}`,
+        precedence:
+          reference.originScope === 'parent'
+            ? 400
+            : reference.originScope === 'run'
+              ? 300
+              : reference.originScope === 'agent-profile'
+                ? 200
+                : reference.originScope === 'provider'
+                  ? 100
+                  : 0,
+      })),
       {
         field: 'instructions.effective-task-request',
         scope: 'task-envelope',
@@ -8752,7 +8906,7 @@ export class ClawdbotAgentService {
       routing: {
         requestedAgent: input.requestedAgent,
         selectedAgent: input.agent,
-        selectedHost: input.provider === 'openclaw' ? 'openclaw-gateway' : 'local-process',
+        selectedHost,
         reason: input.routingReason,
         fallbackAgent: input.routingFallback ?? null,
         fallbackAllowed: Boolean(input.routingFallback && input.routingFallbackOnFailure),
@@ -8768,6 +8922,7 @@ export class ClawdbotAgentService {
             },
           }
         : {}),
+      phase,
       readiness: {
         summary: input.readiness,
         overrideReason: input.overrideReason,
@@ -9133,6 +9288,45 @@ export class ClawdbotAgentService {
       });
     }
     return parent as TaskAttempt & { runLaunchManifest: RunLaunchManifest };
+  }
+
+  private async resolveParentPhaseSnapshot(
+    parent:
+      | (TaskAttempt & {
+          runLaunchManifest: RunLaunchManifest;
+        })
+      | undefined
+  ): Promise<PhaseLaunchParentSnapshot | undefined> {
+    if (!parent) return undefined;
+    const manifest = parent.runLaunchManifest;
+    const workspaceId = parent.taskEnvelope?.workspace.workspaceId;
+    const current = workspaceId
+      ? await this.getCurrentPhase(workspaceId, manifest.taskId, parent.id)
+      : null;
+    if (current && current.manifestDigest !== manifest.digest) {
+      throw new ConflictError('Parent phase transition evidence references a different launch.', {
+        parentAttemptId: parent.id,
+        parentManifestDigest: manifest.digest,
+        transitionManifestDigest: current.manifestDigest,
+      });
+    }
+    return {
+      attemptId: parent.id,
+      manifestDigest: manifest.digest,
+      ...(current?.effectiveEvidence
+        ? { evidence: current.effectiveEvidence }
+        : manifest.phase?.evidence
+          ? { evidence: manifest.phase.evidence }
+          : {}),
+    };
+  }
+
+  private getCurrentPhase(workspaceId: string, taskId: string, attemptId: string) {
+    return (this.phaseTransitions ?? getPhaseTransitionService()).getCurrent(
+      workspaceId,
+      taskId,
+      attemptId
+    );
   }
 
   private async findAttempt(attemptId: string): Promise<TaskAttempt | undefined> {

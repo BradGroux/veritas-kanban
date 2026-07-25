@@ -30,6 +30,7 @@ interface ConversationTurnOptions {
   message: string;
   forkTurn?: string;
   profile?: string;
+  phase?: string;
   requireCapability?: string[];
   commitPolicy?: string;
   json?: boolean;
@@ -109,6 +110,7 @@ function registerConversationTurnCommand(
     .requiredOption('--source-attempt <attemptId>', 'Terminal attempt with durable conversation')
     .requiredOption('-m, --message <text>', 'Prompt for the new turn')
     .option('-p, --profile <profileId>', 'Agent profile package to launch')
+    .option('--phase <phase>', 'Execution phase (explore, plan, implement, verify, publish)')
     .option(
       '--require-capability <capabilities...>',
       'Require provider runtime capabilities before launch'
@@ -136,6 +138,7 @@ function registerConversationTurnCommand(
           message: options.message,
           ...(action === 'fork' && options.forkTurn ? { forkTurnId: options.forkTurn } : {}),
           profileId: options.profile,
+          phase: options.phase,
           requiredRuntimeCapabilities: options.requireCapability,
           commitPolicy: options.commitPolicy,
         }),
@@ -187,6 +190,7 @@ export function registerAgentCommands(program: Command): void {
       'claude-code'
     )
     .option('-p, --profile <profileId>', 'Agent profile package to launch')
+    .option('--phase <phase>', 'Execution phase (explore, plan, implement, verify, publish)')
     .option(
       '--require-capability <capabilities...>',
       'Require provider runtime capabilities before launch'
@@ -221,6 +225,7 @@ export function registerAgentCommands(program: Command): void {
           body: JSON.stringify({
             agent: options.profile ? undefined : options.agent,
             profileId: options.profile,
+            phase: options.phase,
             requiredRuntimeCapabilities: options.requireCapability,
             commitPolicy: options.commitPolicy,
             parentAttemptId: options.parentAttempt,
@@ -245,6 +250,7 @@ export function registerAgentCommands(program: Command): void {
     .description('Preview the immutable effective launch manifest without starting an agent')
     .option('-a, --agent <agent>', 'Agent to use', 'codex')
     .option('-p, --profile <profileId>', 'Agent profile package to preview')
+    .option('--phase <phase>', 'Execution phase (explore, plan, implement, verify, publish)')
     .option(
       '--require-capability <capabilities...>',
       'Require provider runtime capabilities before launch'
@@ -266,6 +272,7 @@ export function registerAgentCommands(program: Command): void {
             body: JSON.stringify({
               agent: options.profile ? undefined : options.agent,
               profileId: options.profile,
+              phase: options.phase,
               requiredRuntimeCapabilities: options.requireCapability,
               commitPolicy: options.commitPolicy,
               parentAttemptId: options.parentAttempt,
@@ -280,6 +287,16 @@ export function registerAgentCommands(program: Command): void {
         console.log(`  Digest: ${preview.manifest.digest}`);
         console.log(`  Provider: ${preview.manifest.providerRuntime.provider}`);
         console.log(`  Model: ${preview.manifest.runtime.model ?? 'provider default'}`);
+        console.log(
+          `  Phase: ${
+            preview.manifest.phase?.evidence.identity.mode === 'profile'
+              ? preview.manifest.phase.evidence.identity.phase
+              : 'legacy'
+          }`
+        );
+        if (preview.manifest.phase) {
+          console.log(`  Phase evidence: ${preview.manifest.phase.evidence.digest}`);
+        }
         console.log(`  Workspace trust: ${preview.manifest.workspaceTrust.status}`);
         console.log(chalk.dim(`  ${preview.manifest.workspaceTrust.source}`));
         console.log(

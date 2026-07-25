@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
   HARNESS_SUPPORT_TIERS,
+  PHASE_AUTHORITY_SOURCE_KINDS,
   RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION,
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
   type RunLaunchManifest,
 } from '@veritas-kanban/shared';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
+import { phaseCapabilityEvidenceSchema } from './phase-capability-schemas.js';
 import { calculateRunLaunchManifestDigest } from '../utils/run-launch-manifest-digest.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { containsUnredactedProviderRuntimeSecret } from '../utils/provider-runtime-manifest-sanitize.js';
@@ -100,6 +102,37 @@ export const RunLaunchManifestSchema = z
         id: identifierSchema,
         version: identifierSchema,
         role: identifierSchema,
+      })
+      .strict()
+      .optional(),
+    phase: z
+      .object({
+        evidence: phaseCapabilityEvidenceSchema,
+        sourceReferences: z
+          .array(
+            z
+              .object({
+                sourceId: identifierSchema,
+                kind: z.enum(PHASE_AUTHORITY_SOURCE_KINDS),
+                originScope: z.enum([
+                  'run',
+                  'parent',
+                  'task-envelope',
+                  'agent-profile',
+                  'workflow',
+                  'template',
+                  'provider',
+                  'workspace',
+                  'system-default',
+                ]),
+                sourceDigest: digestSchema,
+                parentAttemptId: identifierSchema.optional(),
+                parentManifestDigest: digestSchema.optional(),
+                parentEvidenceDigest: digestSchema.optional(),
+              })
+              .strict()
+          )
+          .length(PHASE_AUTHORITY_SOURCE_KINDS.length),
       })
       .strict()
       .optional(),
@@ -357,6 +390,7 @@ export const RunLaunchManifestSchema = z
             field: identifierSchema,
             scope: z.enum([
               'run',
+              'parent',
               'task-envelope',
               'agent-profile',
               'workflow',
@@ -392,6 +426,53 @@ export const RunLaunchManifestSchema = z
   })
   .strict()
   .superRefine((manifest, context) => {
+    if (manifest.phase) {
+      const { digest, ...phasePayload } = manifest.phase.evidence;
+      if (digest !== digestRunLaunchValue(phasePayload)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['phase', 'evidence', 'digest'],
+          message: 'Phase evidence digest does not match its canonical payload',
+        });
+      }
+      const sourceKinds = manifest.phase.sourceReferences.map((reference) => reference.kind);
+      if (
+        new Set(sourceKinds).size !== PHASE_AUTHORITY_SOURCE_KINDS.length ||
+        PHASE_AUTHORITY_SOURCE_KINDS.some((kind) => !sourceKinds.includes(kind))
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['phase', 'sourceReferences'],
+          message: 'Phase evidence requires exactly one reference for every authority source kind',
+        });
+      }
+      for (const [index, reference] of manifest.phase.sourceReferences.entries()) {
+        const hasParentLink = Boolean(
+          reference.parentAttemptId ||
+          reference.parentManifestDigest ||
+          reference.parentEvidenceDigest
+        );
+        if ((reference.kind === 'parent' && reference.originScope === 'parent') !== hasParentLink) {
+          context.addIssue({
+            code: 'custom',
+            path: ['phase', 'sourceReferences', index],
+            message: 'Parent phase references must carry one complete parent origin link',
+          });
+        }
+        if (
+          reference.kind === 'parent' &&
+          reference.originScope === 'parent' &&
+          (!reference.parentAttemptId || !reference.parentManifestDigest)
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['phase', 'sourceReferences', index],
+            message:
+              'Parent phase references require the attempt, manifest, and applicable evidence digests',
+          });
+        }
+      }
+    }
     if (manifest.credentials) {
       const { digest, ...payload } = manifest.credentials;
       if (digest !== digestRunLaunchValue(payload)) {
