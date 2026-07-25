@@ -107,6 +107,29 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 ---
 
+## Sustainable execution cadence
+
+- Keep each issue and pull request to one independently shippable behavior. When implementation
+  reveals a separable UI surface, secondary integration, refactor, or hardening follow-up, open
+  a linked issue instead of expanding the active pull request.
+- Re-scope before continuing when an issue no longer fits one coherent review, an unexpected
+  subsystem becomes necessary, or verification work is larger than the behavior being changed.
+- During implementation, run the narrowest useful loop: type-check touched packages, lint changed
+  files, and run focused tests for changed behavior and high-risk edges.
+- Do not rerun an unchanged passing gate after documentation, comments, or formatting-only edits.
+  Rerun only the checks affected by the later change.
+- Use the complete workspace suite once at an explicit integration, critical-security, or release
+  milestone. Pull-request label `ci:full`, scheduled CI, and manual full dispatch are the
+  authoritative broad gates.
+- Trust `scripts/select-ci-test-scope.mjs` and the `Select Test Scope` job to choose the required
+  CI tier. Do not add broader local gates merely to duplicate CI.
+- Do not wait for optional desktop packaging, artifact previews, or release workflows when the
+  change does not touch their product boundary. They are evidence only when declared relevant.
+- Add enough regression coverage to prove the behavior and its meaningful failure modes. Test
+  count is not a quality target.
+
+---
+
 ## Architecture rules
 
 ### Server (Express + TypeScript)
