@@ -65,3 +65,4 @@ export * from './conversation-lifecycle.types.js';
 export * from './tool-control-plane.types.js';
 export * from './acp.types.js';
 export * from './workspace-execution-trust.types.js';
+export * from './phase-capability.types.js';

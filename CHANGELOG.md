@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the provider-neutral `phase-capability-profile/v1` foundation with
+  strict schemas and built-in explore, plan, implement, verify, and publish
+  profiles. A pure compiler now intersects phase requests with parent, agent,
+  sandbox, tool-catalog, and launch-policy authority without ever widening a
+  scope. Required unsupported or unenforceable dimensions return typed
+  fail-closed blockers, legacy launches are explicit, and the optional plan
+  artifact is restricted to one normalized harness-owned exact path that
+  cannot grant general filesystem or indirect shell-write authority (#1034).
 - Added a provider-neutral workspace execution trust gate that scans the exact
   task worktree for repository-controlled agent instructions, provider
   configuration, MCP servers, hooks, language-server settings, workflows,

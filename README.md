@@ -96,6 +96,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Agent Guide and `AGENTS.md` Template](docs/AGENTS-TEMPLATE.md) — shared managed-run protocol, external self-reporting template, and unmanaged MCP setup.
 - [Agent Providers](docs/AGENT-PROVIDERS.md) — evidence-backed Buzz, Grok Build, Codex, Claude Code, Copilot CLI, Hermes, OpenClaw, and optional model profiles.
 - [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
+- [Phase Capability Profiles](docs/architecture/PHASE-CAPABILITY-PROFILES.md) — versioned execution-phase authority contracts, deterministic intersections, exact-path plan artifacts, and current delivery boundaries.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
@@ -248,6 +249,11 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Team roster routing** — Workspace coordinator/member manifests route tasks by capabilities, reviewers, fallbacks, and escalation posture
 - **Workspace capability discovery** — Trusted workspace capability catalogs let Veritas package delegated work intake before handing work across workspace boundaries
 - **Agent profile packages** — Portable YAML/JSON packages that bundle role, runtime, prompt, tools, permissions, sandbox, budget, workflow, and health metadata for reusable launches
+- **Phase capability contract** — Built-in explore, plan, implement, verify, and
+  publish profiles compile parent, phase, agent, sandbox, tool, and launch
+  authority without widening it. The current slice defines the shared contract
+  and compiler; runtime transition and enforcement work remains explicitly
+  tracked.
 - **Provider-owned task envelopes** — OpenClaw, Codex CLI, Codex SDK, and Hermes render the same immutable task contract through adapter-owned transports with explicit commit policy and completion posture
 - **Decision review sessions** — Multi-participant decision reviews with independent responses, critique rounds, final synthesis packets, work-product attachment, and decision audit links
 - **Shared live run sessions** — Create workspace-scoped view, co-drive, or fork links for active task runs; viewers receive live output and events, editors send attributed messages and mobile-safe approval responses, and forks create linked tasks without mutating the parent run
