@@ -252,7 +252,7 @@ function testableService(
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
   > = testWorkspaceExecutionTrust(),
-  admission?: AdmissionControlService
+  admission: AdmissionControlService = testAdmissionControl()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -280,6 +280,22 @@ function testableService(
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testAdmissionControl(): AdmissionControlService {
+  let sequence = 0;
+  return {
+    admit: vi.fn(async (input: { taskId: string }) => ({
+      outcome: 'admitted',
+      reservation: { id: `admission-test-${input.taskId}-${++sequence}` },
+    })),
+    bindAttempt: vi.fn(async (id: string) => ({ id })),
+    release: vi.fn(async (id: string) => ({ id })),
+    releaseIfUnbound: vi.fn(async (id: string) => ({ id })),
+    releaseByAttempt: vi.fn(async () => null),
+    expireAbandoned: vi.fn(async () => []),
+    recoverVerifiedRun: vi.fn(async () => null),
+  } as unknown as AdmissionControlService;
 }
 
 function testWorkspaceExecutionTrust(): Pick<
