@@ -67,7 +67,10 @@ targets.
 
 `Desktop Release` runs on manual dispatch or a published GitHub release. It
 requires the signing secrets below, builds signed/notarized macOS artifacts,
-and publishes update metadata with the GitHub provider.
+and publishes update metadata with the GitHub provider. A published-release run
+first verifies that the live GitHub body exactly matches
+`docs/releases/vX.Y.Z.md`; a mismatch stops the workflow before signing or
+packaging.
 
 ## Homebrew Cask
 
@@ -185,8 +188,15 @@ policy is tracked in
   `Desktop Artifacts` Windows job and inspect preview artifact names. This is
   not a v6 GA release gate.
 - Run `Desktop Artifacts` and download the uploaded DMG/ZIP/update metadata.
+- Edit `docs/releases/vX.Y.Z.md`, run
+  `pnpm validate:release -- --version X.Y.Z`, and publish that exact file with
+  `gh release create --notes-file` or `gh release edit --notes-file`. Do not
+  hand-author or repair the live body separately.
 - Run `Desktop Release` only after Developer ID signing secrets and exactly one
   complete notarization credential set are configured.
+- Inspect the rendered release on both the releases index and tag page. Confirm
+  prose uses natural page-width wrapping and no sentence-sized fragments were
+  introduced.
 - Confirm notarization succeeds with the intended credential mode and the DMG
   installs without Gatekeeper warnings on a clean Mac.
 - Confirm a first run creates the profile/workspace app data directories.

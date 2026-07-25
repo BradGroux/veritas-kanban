@@ -92,6 +92,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   exact blocker before changing paths.
 - Source every published GitHub release body from `docs/releases/vX.Y.Z.md` and pass that file
   to `gh release create` or `gh release edit` with `--notes-file`.
+- Never hand-author or repair a release body with `--notes`, the GitHub editor, or a raw API
+  body. Edit the reviewed source file first, validate it, and publish that exact file.
 - Keep each prose paragraph and list item on one logical Markdown source line. Separate blocks
   with blank lines. Do not hard-wrap release prose or add carriage returns, trailing-space hard
   breaks, literal escaped newlines, HTML `<br>` tags, or blockquotes.
@@ -100,6 +102,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   text on GitHub's release index.
 - Run `pnpm validate:release -- --version X.Y.Z`; the post-publication `--github` form also
   requires the published GitHub body to match the reviewed file exactly.
+- After publication, inspect both the releases index and tag page. Raw Markdown validation does
+  not replace a rendered-format check.
 
 ---
 
