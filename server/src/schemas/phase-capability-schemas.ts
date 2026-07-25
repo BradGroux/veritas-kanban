@@ -6,7 +6,11 @@ import {
   PHASE_CAPABILITY_PROFILE_SCHEMA_VERSION,
   PHASE_NAMES,
   PHASE_TRANSITION_INTENT_SCHEMA_VERSION,
+  PHASE_TRANSITION_RECORD_SCHEMA_VERSION,
+  type PhaseTransitionRecord,
+  type PhaseTransitionRequestInput,
 } from '@veritas-kanban/shared';
+import { RunApprovalActorSchema, RunApprovalRequestSchema } from './run-approval-schemas.js';
 
 const identifierSchema = z
   .string()
@@ -250,6 +254,122 @@ export const phaseCapabilityEvidenceSchema = z
       })
       .strict()
       .optional(),
+  })
+  .strict();
+
+const phaseAuthorityDeltaEntrySchema = z
+  .object({
+    dimension: phaseAuthorityDimensionSchema,
+    addedScopes: authorityScopesSchema,
+    removedScopes: authorityScopesSchema,
+  })
+  .strict();
+
+export const phaseAuthorityDeltaSchema = z
+  .object({
+    classification: z.enum(['same', 'narrowing', 'expanding', 'mixed']),
+    entries: z.array(phaseAuthorityDeltaEntrySchema).max(PHASE_AUTHORITY_DIMENSIONS.length),
+  })
+  .strict();
+
+export const phaseTransitionRecordSchema: z.ZodType<PhaseTransitionRecord> = z
+  .object({
+    schemaVersion: z.literal(PHASE_TRANSITION_RECORD_SCHEMA_VERSION),
+    id: z.string().regex(/^phasetransition_[A-Za-z0-9_-]{12,32}$/),
+    workspaceId: identifierSchema,
+    taskId: identifierSchema,
+    attemptId: identifierSchema,
+    sequence: z.number().int().positive(),
+    operationId: identifierSchema,
+    priorEvidence: phaseCapabilityEvidenceSchema,
+    effectiveEvidence: phaseCapabilityEvidenceSchema,
+    authorityDelta: phaseAuthorityDeltaSchema,
+    actor: RunApprovalActorSchema,
+    reason: safeTextSchema,
+    policyDecision: z.enum([
+      'allow',
+      'approved-expansion',
+      'emergency-override',
+      'override-expired',
+    ]),
+    approvalId: z
+      .string()
+      .regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/)
+      .optional(),
+    emergencyOverride: z
+      .object({
+        permission: z.literal('admin:manage'),
+        justification: safeTextSchema,
+        expiresAt: z.string().datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
+    manifestDigest: digestSchema,
+    eventReference: identifierSchema,
+    createdAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((record, context) => {
+    if (record.policyDecision === 'approved-expansion' && !record.approvalId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['approvalId'],
+        message: 'Approved expansions require the exact approval reference',
+      });
+    }
+    if (record.policyDecision === 'emergency-override' && !record.emergencyOverride) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyOverride'],
+        message: 'Emergency override transitions require expiring override evidence',
+      });
+    }
+    if (record.policyDecision !== 'emergency-override' && record.emergencyOverride) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emergencyOverride'],
+        message: 'Only emergency override transitions may carry override evidence',
+      });
+    }
+  });
+
+export const phaseTransitionRequestInputSchema: z.ZodType<PhaseTransitionRequestInput> = z
+  .object({
+    attemptId: identifierSchema,
+    operationId: identifierSchema,
+    expectedSequence: z.number().int().nonnegative(),
+    expectedPhaseEvidenceDigest: digestSchema,
+    expectedManifestDigest: digestSchema,
+    reason: safeTextSchema,
+    fromEvidence: phaseCapabilityEvidenceSchema.optional(),
+    targetEvidence: phaseCapabilityEvidenceSchema,
+    approvalId: z
+      .string()
+      .regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/)
+      .optional(),
+    approvalTtlMs: z
+      .number()
+      .int()
+      .min(1_000)
+      .max(24 * 60 * 60 * 1_000)
+      .optional(),
+    emergencyOverride: z
+      .object({
+        justification: safeTextSchema,
+        expiresAt: z.string().datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export const phaseTransitionResultSchema = z
+  .object({
+    status: z.enum(['applied', 'approval-required']),
+    current: phaseTransitionRecordSchema.nullable(),
+    record: phaseTransitionRecordSchema.optional(),
+    approval: RunApprovalRequestSchema.optional(),
+    targetEvidenceDigest: digestSchema,
   })
   .strict();
 

@@ -455,6 +455,9 @@ Manage AI agents on code tasks.
 | `vk stop <id>`                                                                      | Stop a run only when its persisted manifest supports stop |
 | `vk agent:recovery <id>`                                                            | Inspect the latest retry or fallback decision             |
 | `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                  |
+| `vk agent:phase <id> --attempt <id>`                                                | Read durable phase state and transition history           |
+| `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition  |
+| `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion        |
 | `vk agent:resume <id> --source-attempt <id> -m <text>`                              | Resume the exact persisted provider conversation          |
 | `vk agent:follow-up <id> --source-attempt <id> -m <text>`                           | Start a provider-native follow-up turn                    |
 | `vk agent:fork <id> --source-attempt <id> -m <text>`                                | Fork provider history without mutating its source         |
@@ -542,6 +545,27 @@ vk agent:cancel-recovery TASK-001 --attempt attempt_parent --json
 
 The server rejects stale parent IDs, recoveries that already launched, and
 recoveries that are already terminal.
+
+Inspect and transition the exact active phase:
+
+```bash
+vk agent:phase TASK-001 --attempt attempt_123 --json
+vk agent:transition-phase TASK-001 \
+  --attempt attempt_123 \
+  --operation move-to-implement \
+  --target-evidence ./implement-evidence.json \
+  --reason "The approved plan is ready to implement." \
+  --json
+```
+
+The first transition also requires `--from-evidence <file>` and
+`--manifest <sha256:...>`. Later requests read the current journal record and
+automatically bind its sequence, evidence digest, and manifest. Narrowing
+applies immediately. Expansion returns an exact approval; decide it with
+`vk agent:decide-phase-approval <id> --decision approve`, then retry the same
+transition with the same `--operation` and `--approval-id`. Emergency expansion
+requires `--override-until` and `--override-reason`; the authenticated caller
+must be an administrator and the expiry cannot exceed 24 hours.
 
 ---
 

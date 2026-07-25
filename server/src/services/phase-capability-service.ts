@@ -320,6 +320,15 @@ export function compilePhaseCapabilityAuthority(
   }) as PhaseCapabilityEvidence;
 }
 
+export function calculatePhaseCapabilityEvidenceDigest(evidence: PhaseCapabilityEvidence): string {
+  const { digest: _digest, ...payload } = evidence;
+  return digestRunLaunchValue(payload);
+}
+
+export function verifyPhaseCapabilityEvidenceDigest(evidence: PhaseCapabilityEvidence): boolean {
+  return evidence.digest === calculatePhaseCapabilityEvidenceDigest(evidence);
+}
+
 function profile(
   input: Pick<PhaseCapabilityProfile, 'id' | 'phase' | 'name' | 'description' | 'authority'> & {
     planArtifactPolicy?: PhaseCapabilityProfile['planArtifactPolicy'];

@@ -36,6 +36,10 @@ import type {
   RunApprovalRequest,
   RunApprovalTransitionInput,
   RunApprovalTransitionResult,
+  PhaseTransitionAppendInput,
+  PhaseTransitionAppendResult,
+  PhaseTransitionQuery,
+  PhaseTransitionRecord,
   RunSupervisorCompareAndSetInput,
   RunSupervisorCompareAndSetResult,
   RunSupervisorListQuery,
@@ -373,6 +377,33 @@ export interface RunApprovalRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Phase Transition Repository
+// ---------------------------------------------------------------------------
+
+export interface PhaseTransitionRepository {
+  /** Return the one materialized active phase for an exact run. */
+  getCurrent(
+    workspaceId: string,
+    taskId: string,
+    attemptId: string
+  ): Promise<PhaseTransitionRecord | null>;
+
+  /** Resolve one run-scoped idempotency key without scanning bounded history. */
+  getByOperationId(
+    workspaceId: string,
+    taskId: string,
+    attemptId: string,
+    operationId: string
+  ): Promise<PhaseTransitionRecord | null>;
+
+  /** Return append-only transition history in ascending sequence order. */
+  list(query: PhaseTransitionQuery): Promise<PhaseTransitionRecord[]>;
+
+  /** Append one transition behind exact sequence, phase, and manifest CAS guards. */
+  append(input: PhaseTransitionAppendInput): Promise<PhaseTransitionAppendResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Durable Run Supervisor Repository
 // ---------------------------------------------------------------------------
 
@@ -420,6 +451,7 @@ export interface StorageProvider {
   readonly telemetry: TelemetryRepository;
   readonly runEvents: RunEventRepository;
   readonly runApprovals: RunApprovalRepository;
+  readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
   readonly setupContext?: SetupContextRepository;

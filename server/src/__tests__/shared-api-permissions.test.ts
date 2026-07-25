@@ -34,6 +34,17 @@ describe('shared API permission metadata', () => {
     }
   });
 
+  it('keeps phase reads agent-scoped and transition requests task-write scoped', () => {
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/phase', { method: 'GET' }).permissions
+    ).toEqual(['agent:read']);
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/phase/transitions', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['task:write']);
+  });
+
   it('separates conversation steering from lifecycle mutation authority', () => {
     expect(
       getApiPermissionRequirement('/api/agents/task_1/conversation/steer', {

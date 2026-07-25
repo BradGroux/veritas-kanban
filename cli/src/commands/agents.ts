@@ -11,6 +11,10 @@ import type {
   AgentProfileValidationResult,
   ConversationLifecycleRecord,
   ConversationLifecycleResult,
+  PhaseCapabilityEvidence,
+  PhaseTransitionRecord,
+  PhaseTransitionResult,
+  RunApprovalRequest,
   RunRecoveryRecord,
   RunLaunchManifestPreview,
   WorkspaceExecutionTrustDecision,
@@ -36,6 +40,20 @@ interface ConversationControlOptions {
   json?: boolean;
 }
 
+interface PhaseTransitionOptions {
+  attempt: string;
+  operation: string;
+  targetEvidence: string;
+  fromEvidence?: string;
+  manifest?: string;
+  reason: string;
+  approvalId?: string;
+  approvalTtlMs?: string;
+  overrideUntil?: string;
+  overrideReason?: string;
+  json?: boolean;
+}
+
 function inferProfileFormat(filePath: string): AgentProfilePackageFormat {
   const extension = path.extname(filePath).toLowerCase();
   return extension === '.json' ? 'json' : 'yaml';
@@ -45,6 +63,10 @@ async function resolveTaskId(id: string): Promise<string> {
   const task = await findTask(id);
   if (!task) throw new Error(`Task not found: ${id}`);
   return task.id;
+}
+
+function readPhaseEvidence(filePath: string): PhaseCapabilityEvidence {
+  return JSON.parse(readFileSync(path.resolve(filePath), 'utf8')) as PhaseCapabilityEvidence;
 }
 
 function printConversationResult(
@@ -67,6 +89,13 @@ function printConversationResult(
     console.log(chalk.dim(`Conversation ID: ${result.conversation.conversationId}`));
   }
   if (result.note) console.log(chalk.dim(result.note));
+}
+
+function phaseIdentityLabel(record: PhaseTransitionRecord): string {
+  const identity = record.effectiveEvidence.identity;
+  return identity.mode === 'legacy'
+    ? 'legacy'
+    : `${identity.phase} (${identity.profileId}@${identity.profileVersion})`;
 }
 
 function registerConversationTurnCommand(
@@ -564,6 +593,179 @@ export function registerAgentCommands(program: Command): void {
         process.exit(1);
       }
     });
+
+  program
+    .command('agent:phase <id>')
+    .description('Show the active durable phase and transition history for an exact run')
+    .requiredOption('--attempt <attemptId>', 'Exact attempt ID')
+    .option('--limit <count>', 'Maximum transition records', '100')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        id: string,
+        options: { attempt: string; limit: string; json?: boolean }
+      ): Promise<void> => {
+        try {
+          const taskId = await resolveTaskId(id);
+          const result = await api<{
+            current: PhaseTransitionRecord | null;
+            history: PhaseTransitionRecord[];
+          }>(
+            `/api/agents/${taskId}/phase?attemptId=${encodeURIComponent(options.attempt)}&limit=${encodeURIComponent(options.limit)}`
+          );
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+          } else if (!result.current) {
+            console.log(chalk.dim('No durable phase transition is recorded for this run'));
+          } else {
+            console.log(chalk.cyan(`Phase: ${phaseIdentityLabel(result.current)}`));
+            console.log(chalk.dim(`Sequence: ${result.current.sequence}`));
+            console.log(chalk.dim(`Evidence: ${result.current.effectiveEvidence.digest}`));
+            console.log(chalk.dim(`Manifest: ${result.current.manifestDigest}`));
+            if (result.current.emergencyOverride) {
+              console.log(
+                chalk.yellow(
+                  `Emergency override expires: ${result.current.emergencyOverride.expiresAt}`
+                )
+              );
+            }
+          }
+        } catch (err) {
+          console.error(chalk.red(`Error: ${(err as Error).message}`));
+          process.exit(1);
+        }
+      }
+    );
+
+  program
+    .command('agent:transition-phase <id>')
+    .description('Apply or request approval for one compare-and-set phase transition')
+    .requiredOption('--attempt <attemptId>', 'Exact active attempt ID')
+    .requiredOption('--operation <id>', 'Stable idempotency key for this transition')
+    .requiredOption('--target-evidence <file>', 'Compiled target phase evidence JSON')
+    .requiredOption('--reason <text>', 'Operator reason')
+    .option('--from-evidence <file>', 'Initial phase evidence JSON for the first transition')
+    .option('--manifest <digest>', 'Launch manifest digest for the first transition')
+    .option('--approval-id <id>', 'Exact approval returned by the prior request')
+    .option('--approval-ttl-ms <milliseconds>', 'Approval request lifetime')
+    .option('--override-until <timestamp>', 'Emergency override expiry, at most 24 hours')
+    .option('--override-reason <text>', 'Emergency override justification')
+    .option('--json', 'Output as JSON')
+    .action(async (id: string, options: PhaseTransitionOptions): Promise<void> => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const state = await api<{
+          current: PhaseTransitionRecord | null;
+          history: PhaseTransitionRecord[];
+        }>(`/api/agents/${taskId}/phase?attemptId=${encodeURIComponent(options.attempt)}`);
+        const fromEvidence = options.fromEvidence
+          ? readPhaseEvidence(options.fromEvidence)
+          : undefined;
+        const priorEvidence = state.current?.effectiveEvidence ?? fromEvidence;
+        if (!priorEvidence) {
+          throw new Error('The first transition requires --from-evidence');
+        }
+        const manifestDigest = state.current?.manifestDigest ?? options.manifest;
+        if (!manifestDigest) {
+          throw new Error('The first transition requires --manifest');
+        }
+        if (
+          (options.overrideUntil && !options.overrideReason) ||
+          (!options.overrideUntil && options.overrideReason)
+        ) {
+          throw new Error('--override-until and --override-reason must be used together');
+        }
+        const approvalTtlMs =
+          options.approvalTtlMs && /^\d+$/.test(options.approvalTtlMs)
+            ? Number(options.approvalTtlMs)
+            : undefined;
+        if (options.approvalTtlMs && !Number.isSafeInteger(approvalTtlMs)) {
+          throw new Error('--approval-ttl-ms must be an integer');
+        }
+        const result = await api<PhaseTransitionResult>(`/api/agents/${taskId}/phase/transitions`, {
+          method: 'POST',
+          body: JSON.stringify({
+            attemptId: options.attempt,
+            operationId: options.operation,
+            expectedSequence: state.current?.sequence ?? 0,
+            expectedPhaseEvidenceDigest: priorEvidence.digest,
+            expectedManifestDigest: manifestDigest,
+            reason: options.reason,
+            ...(state.current ? {} : { fromEvidence: priorEvidence }),
+            targetEvidence: readPhaseEvidence(options.targetEvidence),
+            approvalId: options.approvalId,
+            approvalTtlMs,
+            ...(options.overrideUntil && options.overrideReason
+              ? {
+                  emergencyOverride: {
+                    expiresAt: options.overrideUntil,
+                    justification: options.overrideReason,
+                  },
+                }
+              : {}),
+          }),
+        });
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else if (result.status === 'approval-required' && result.approval) {
+          console.log(chalk.yellow('Phase expansion requires approval'));
+          console.log(`  Approval: ${result.approval.id}`);
+          console.log(`  Revision: ${result.approval.revision}`);
+          console.log(`  Action hash: ${result.approval.actionHash}`);
+          console.log(
+            chalk.dim('Approve it, then retry this command with the same --operation value.')
+          );
+        } else if (result.record) {
+          console.log(chalk.green(`✓ Phase transitioned to ${phaseIdentityLabel(result.record)}`));
+          console.log(chalk.dim(`Sequence: ${result.record.sequence}`));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('agent:decide-phase-approval <approvalId>')
+    .description('Approve or reject an exact pending phase transition')
+    .requiredOption('--decision <decision>', 'approve or reject')
+    .option('--note <text>', 'Decision note')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        approvalId: string,
+        options: { decision: string; note?: string; json?: boolean }
+      ): Promise<void> => {
+        try {
+          if (!['approve', 'reject'].includes(options.decision)) {
+            throw new Error('--decision must be approve or reject');
+          }
+          const approval = await api<RunApprovalRequest>(
+            `/api/run-approvals/${encodeURIComponent(approvalId)}`
+          );
+          const decided = await api<RunApprovalRequest>(
+            `/api/run-approvals/${encodeURIComponent(approval.id)}/decision`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                decision: options.decision === 'approve' ? 'approved' : 'rejected',
+                expectedRevision: approval.revision,
+                expectedActionHash: approval.actionHash,
+                note: options.note,
+              }),
+            }
+          );
+          if (options.json) {
+            console.log(JSON.stringify(decided, null, 2));
+          } else {
+            console.log(chalk.green(`✓ Phase transition approval ${decided.status}`));
+          }
+        } catch (err) {
+          console.error(chalk.red(`Error: ${(err as Error).message}`));
+          process.exit(1);
+        }
+      }
+    );
 
   program
     .command('agent:cancel-recovery <id>')

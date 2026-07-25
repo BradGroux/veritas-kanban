@@ -1256,6 +1256,34 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON run_tool_catalogs(provider, created_at DESC);
     `,
   },
+  {
+    version: 22,
+    name: '0022_phase_transition_journal',
+    up: `
+      CREATE TABLE phase_transitions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local'
+          REFERENCES workspaces(id) ON DELETE CASCADE,
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        operation_id TEXT NOT NULL,
+        from_evidence_digest TEXT NOT NULL,
+        to_evidence_digest TEXT NOT NULL,
+        manifest_digest TEXT NOT NULL,
+        transition_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (workspace_id, task_id, attempt_id, sequence),
+        UNIQUE (workspace_id, task_id, attempt_id, operation_id)
+      );
+
+      CREATE INDEX idx_phase_transitions_run_sequence
+        ON phase_transitions(workspace_id, task_id, attempt_id, sequence DESC);
+
+      CREATE INDEX idx_phase_transitions_created
+        ON phase_transitions(workspace_id, created_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
