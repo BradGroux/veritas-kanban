@@ -16,6 +16,7 @@ import { BlockingService } from '../services/blocking-service.js';
 import { HumanGateBlockError } from '../services/workflow-step-executor.js';
 import type { Task, WorkflowAgent } from '@veritas-kanban/shared';
 import type { WorkflowRunService } from '../services/workflow-run-service.js';
+import { workflowAdmissionStub } from './helpers/workflow-admission-stub.js';
 
 // ─────────────────────────────────────────────────────────────
 // Module-level mock state shared across workflow service tests.
@@ -141,7 +142,10 @@ describe('#778 — Human gate blocking', () => {
     );
     mockExecuteStep.mockImplementation(gateAwareImpl);
     const mod = await import('../services/workflow-run-service.js');
-    service = new mod.WorkflowRunService(tmpDir);
+    service = new mod.WorkflowRunService({
+      runsDir: tmpDir,
+      admission: workflowAdmissionStub(),
+    });
   });
 
   afterEach(async () => {
@@ -289,7 +293,10 @@ describe('#780 — Bounded retry_step cycles', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wf-780-'));
     mockGetTask.mockResolvedValue(null);
     const mod = await import('../services/workflow-run-service.js');
-    service = new mod.WorkflowRunService(tmpDir);
+    service = new mod.WorkflowRunService({
+      runsDir: tmpDir,
+      admission: workflowAdmissionStub(),
+    });
   });
 
   afterEach(async () => {
@@ -350,7 +357,10 @@ describe('#780 — Bounded retry_step cycles', () => {
     });
 
     const mod = await import('../services/workflow-run-service.js');
-    const service2 = new mod.WorkflowRunService(tmpDir);
+    const service2 = new mod.WorkflowRunService({
+      runsDir: tmpDir,
+      admission: workflowAdmissionStub(),
+    });
     const persisted = await service2.getRun(run.id);
     expect(persisted?.retryRouteCount).toBeGreaterThan(0);
   });
@@ -417,7 +427,10 @@ describe('#785 — WorkflowRunService errors extend AppError', () => {
     mockGetTask.mockResolvedValue(null);
     mockLoadWorkflow.mockResolvedValue(null);
     const mod = await import('../services/workflow-run-service.js');
-    service = new mod.WorkflowRunService(tmpDir);
+    service = new mod.WorkflowRunService({
+      runsDir: tmpDir,
+      admission: workflowAdmissionStub(),
+    });
   });
 
   afterEach(async () => {

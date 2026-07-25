@@ -411,11 +411,15 @@ describe('Feature Settings Schema', () => {
         leaseMs: 30_000,
         heartbeatMs: 10_000,
         global: { concurrentRuns: 8, estimatedMemoryMb: 16_384 },
-        providers: { 'codex-cli': { processSlots: 4 } },
+        providers: {
+          'codex-cli': { processSlots: 4 },
+          'workflow-control': { concurrentRuns: 3 },
+        },
       },
     });
     expect(result.admission?.global?.concurrentRuns).toBe(8);
     expect(result.admission?.providers?.['codex-cli']?.processSlots).toBe(4);
+    expect(result.admission?.providers?.['workflow-control']?.concurrentRuns).toBe(3);
     expect(() =>
       FeatureSettingsPatchSchema.parse({
         admission: { leaseMs: 10_000, heartbeatMs: 10_000 },

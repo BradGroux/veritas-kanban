@@ -204,6 +204,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // Optional task association
+  admission?: import('@veritas-kanban/shared').WorkflowRootAdmissionBinding;
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps
@@ -238,6 +239,8 @@ export interface StepRun {
   phaseLaunchDigest?: string;
   /** Durable retry/fallback decision for this workflow step. */
   runRetry?: import('@veritas-kanban/shared').RunRecoveryRecord;
+  /** Durable admission evidence for the latest executable step attempt. */
+  admission?: import('@veritas-kanban/shared').WorkflowStepAdmissionBinding;
 
   // Loop-specific state
   loopState?: {

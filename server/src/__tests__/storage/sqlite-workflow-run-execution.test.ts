@@ -12,6 +12,7 @@ import {
   createTestSqliteDatabase,
   type TestSqliteDatabase,
 } from '../../storage/sqlite/test-helpers.js';
+import { workflowAdmissionStub } from '../helpers/workflow-admission-stub.js';
 
 const mockExecuteStep = vi.fn();
 const mockPrepareStep = vi.fn(async (step: unknown) => ({ kind: 'non-agent', step }));
@@ -167,17 +168,20 @@ describe('SQLite workflow run execution', () => {
     const definition = workflow();
     await workflowService.saveWorkflow(definition);
     const runsDir = path.join(testRoot, 'storage', 'workflow-runs');
+    const admission = workflowAdmissionStub();
     const first = new WorkflowRunService({
       runsDir,
       storageType: 'sqlite',
       sqliteDatabase: fixture.database,
       workflowService,
+      admission,
     });
     const second = new WorkflowRunService({
       runsDir,
       storageType: 'sqlite',
       sqliteDatabase: fixture.database,
       workflowService,
+      admission,
     });
     const recovery: RunRecoveryRecord = {
       schemaVersion: 'run-recovery/v1',
@@ -246,12 +250,12 @@ describe('SQLite workflow run execution', () => {
 
     expect(executeFirst.mock.calls.length + executeSecond.mock.calls.length).toBe(1);
     expect(await first.getRun(run.id)).toMatchObject({
-      revision: 2,
-      status: 'running',
+      revision: 3,
+      status: 'pending',
       steps: [
         expect.objectContaining({
           runRetry: expect.objectContaining({
-            state: 'launched',
+            state: 'launching',
             parentRunId: recovery.parentRunId,
             sequence: recovery.sequence,
           }),

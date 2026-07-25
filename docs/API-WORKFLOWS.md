@@ -557,6 +557,14 @@ using the strictest positive limit. Soft thresholds write `budget-policy`
 governance traces. Hard thresholds pause/block, require approval, downgrade the
 model route, or cancel according to the effective policy.
 
+The workflow root reserves durable admission capacity before the run becomes
+active. Every provider-backed step then obtains a child reservation against
+its resolved provider and selected host before its attempt becomes running.
+The response exposes the root binding and the latest step decision without
+including prompts or credentials. Use `/api/admission?workflowRunId=<run-id>`
+or `vk admission list --workflow-run <run-id>` for current lease and limiting
+policy details.
+
 **Response**:
 
 ```json
@@ -2139,6 +2147,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // optional task association
+  admission?: WorkflowRootAdmissionBinding; // durable root reservation identity
   status: WorkflowRunStatus;
   currentStep?: string; // current step ID
   context: Record<string, unknown>; // shared context across steps
@@ -2167,6 +2176,7 @@ export interface StepRun {
   retries: number;
   output?: string; // path to output file
   error?: string;
+  admission?: WorkflowStepAdmissionBinding; // latest executable attempt decision
 
   // Loop-specific state
   loopState?: {

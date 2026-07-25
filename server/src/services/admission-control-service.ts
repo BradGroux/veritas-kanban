@@ -5,11 +5,11 @@ import type {
   AdmissionDecision,
   AdmissionLaunchSource,
   AdmissionLimitPolicy,
+  AdmissionProvider,
   AdmissionReservation,
   AdmissionReservationListQuery,
   AdmissionReservationRelease,
   AdmissionSettings,
-  ExecutableAgentProvider,
 } from '@veritas-kanban/shared';
 import {
   ADMISSION_DECISION_SCHEMA_VERSION,
@@ -34,8 +34,11 @@ export interface AdmissionRequestInput {
   taskId: string;
   rootTaskId?: string;
   workspaceId: string;
-  provider: ExecutableAgentProvider;
+  provider: AdmissionProvider;
   hostId: string;
+  workflowRunId?: string;
+  workflowStepId?: string;
+  rootReservationId?: string;
   source?: AdmissionLaunchSource;
   idempotencyKey?: string;
   requested?: Partial<AdmissionCapacityRequest>;
@@ -135,6 +138,9 @@ export class AdmissionControlService {
       workspaceId: input.workspaceId,
       provider: input.provider,
       hostId: input.hostId,
+      ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
+      ...(input.workflowStepId ? { workflowStepId: input.workflowStepId } : {}),
+      ...(input.rootReservationId ? { rootReservationId: input.rootReservationId } : {}),
       requested: {
         ...requested,
         runSlots: Math.max(1, requested.runSlots),
@@ -341,6 +347,10 @@ export class AdmissionControlService {
     return this.repository.expireLeases(this.now().toISOString());
   }
 
+  getExecutionHostId(): string {
+    return this.executionHostId;
+  }
+
   async get(id: string): Promise<AdmissionReservation> {
     await this.expireAbandoned();
     const record = await this.repository.get(id);
@@ -523,6 +533,9 @@ function sameRequestIdentity(
     left.workspaceId === right.workspaceId &&
     left.provider === right.provider &&
     left.hostId === right.hostId &&
+    left.workflowRunId === right.workflowRunId &&
+    left.workflowStepId === right.workflowStepId &&
+    left.rootReservationId === right.rootReservationId &&
     JSON.stringify(left.requested) === JSON.stringify(right.requested)
   );
 }

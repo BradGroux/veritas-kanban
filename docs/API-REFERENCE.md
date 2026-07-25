@@ -4141,9 +4141,11 @@ configured.
 
 ## Execution Admission
 
-Direct task starts atomically reserve configured run, process, and
-estimated-memory capacity before attempt persistence or provider dispatch.
-Inspection requires `agent:read`.
+Direct task starts, workflow roots, and provider-backed workflow steps
+atomically reserve configured run, process, and estimated-memory capacity
+before attempt persistence or provider dispatch. Workflow roots use the
+`workflow-control` admission provider; child steps use the resolved execution
+provider and selected host. Inspection requires `agent:read`.
 
 | Method | Path                 | Description                                             |
 | ------ | -------------------- | ------------------------------------------------------- |
@@ -4151,19 +4153,27 @@ Inspection requires `agent:read`.
 | `GET`  | `/api/admission/:id` | Inspect one durable reservation                         |
 
 List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,
-repeatable `state` (`active`, `released`, `expired`), and `limit` (1-1000).
+`workflowRunId`, `workflowStepId`, `rootReservationId`, repeatable `state`
+(`active`, `released`, `expired`), and `limit` (1-1000).
 
 ```http
 GET /api/v1/admission?state=active&provider=codex-cli&limit=25
 ```
 
+```http
+GET /api/v1/admission?workflowRunId=run_20260725_abc123&state=active
+```
+
 The response contains `admission-reservation/v1` records with the versioned
 request, requested capacity, evaluated limit policies, attempt binding, lease,
 revision, and terminal release evidence. It never contains provider
-credentials. Overloaded task-start requests return a `409` conflict with
+credentials or prompts. Workflow records identify the run, optional step, and
+root reservation. Overloaded starts return a `409` conflict with
 `details.code` set to `ADMISSION_OVERLOAD`, the limiting scope, and bounded
 `retryAfterMs`. A request larger than a configured ceiling returns
-`ADMISSION_POLICY_DENIED`.
+`ADMISSION_POLICY_DENIED`. A step-level retryable overload blocks the workflow
+without creating a partially active attempt; terminal policy denial fails the
+run and releases its root.
 
 Direct `POST /api/v1/agents/:taskId/start` callers may send an opaque
 `X-Idempotency-Key` header (8-240 characters). The header takes precedence

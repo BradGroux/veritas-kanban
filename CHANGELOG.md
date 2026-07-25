@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Routed workflow roots and every provider-backed workflow step through the
+  durable admission controller. A root now reserves `workflow-control`
+  capacity before the run becomes active, while each executable step reserves
+  against its resolved provider and selected host before step-attempt
+  mutation or adapter dispatch. Retry and fallback attempts use new child
+  reservations only after the prior reservation releases. Terminal,
+  cancellation, and restart-reconciliation paths release idempotently, and
+  restart recovery reclaims only the exact persisted root binding. Workflow
+  run, step, and root-reservation filters are available through REST and
+  `vk admission`; file and SQLite storage preserve the same inspection
+  contract (#1051).
 - Added durable admission reservations for every direct agent task launch. File
   and SQLite backends atomically enforce one active run per task plus optional
   global, workspace, root-task, provider, and host ceilings for run slots,

@@ -29,6 +29,12 @@ describe('vk admission commands', () => {
       'list',
       '--workspace',
       'workspace-a',
+      '--workflow-run',
+      'run_1234567890_abcdef',
+      '--workflow-step',
+      'execute',
+      '--root-reservation',
+      'admission_root',
       '--state',
       'active',
       'released',
@@ -38,7 +44,7 @@ describe('vk admission commands', () => {
     ]);
 
     expect(api).toHaveBeenCalledWith(
-      '/api/admission?workspaceId=workspace-a&state=active&state=released&limit=25'
+      '/api/admission?workspaceId=workspace-a&workflowRunId=run_1234567890_abcdef&workflowStepId=execute&rootReservationId=admission_root&state=active&state=released&limit=25'
     );
     expect(JSON.parse(String(output.mock.calls[0][0]))).toEqual({
       generatedAt: '2026-07-25T10:00:00.000Z',

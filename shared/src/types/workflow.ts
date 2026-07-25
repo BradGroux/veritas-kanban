@@ -243,6 +243,25 @@ export interface ParallelSubStep {
 
 export type WorkflowRunStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed';
 export type StepRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export const WORKFLOW_ADMISSION_SCHEMA_VERSION = 'workflow-admission/v1' as const;
+
+export interface WorkflowRootAdmissionBinding {
+  schemaVersion: typeof WORKFLOW_ADMISSION_SCHEMA_VERSION;
+  workspaceId: string;
+  rootTaskId: string;
+  admissionTaskId: string;
+  attemptId: string;
+  reservationId: string;
+}
+
+export interface WorkflowStepAdmissionBinding {
+  schemaVersion: typeof WORKFLOW_ADMISSION_SCHEMA_VERSION;
+  sequence: number;
+  admissionTaskId: string;
+  attemptId: string;
+  reservationId?: string;
+  decision: import('./admission-control.types.js').AdmissionDecision;
+}
 
 export interface WorkflowRun {
   id: string; // run_<timestamp>_<nanoid>
@@ -251,6 +270,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // Optional task association
+  admission?: WorkflowRootAdmissionBinding;
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps
@@ -284,6 +304,8 @@ export interface StepRun {
   phaseLaunchDigest?: string;
   /** Durable retry/fallback decision for this workflow step. */
   runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
+  /** Durable admission evidence for the latest executable step attempt. */
+  admission?: WorkflowStepAdmissionBinding;
 
   // Loop-specific state
   loopState?: {

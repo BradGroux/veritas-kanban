@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ADMISSION_DECISION_OUTCOMES,
   ADMISSION_DECISION_SCHEMA_VERSION,
+  ADMISSION_CONTROL_PROVIDER,
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   ADMISSION_RESERVATION_STATES,
@@ -11,6 +12,7 @@ import {
 
 const identifier = z.string().trim().min(1).max(240);
 const policyIdentifier = z.string().trim().min(1).max(256);
+const admissionProvider = z.enum([...EXECUTABLE_AGENT_PROVIDERS, ADMISSION_CONTROL_PROVIDER]);
 
 export const AdmissionCapacityRequestSchema = z
   .object({
@@ -54,8 +56,11 @@ export const AdmissionRequestSchema = z
     taskId: identifier,
     rootTaskId: identifier,
     workspaceId: identifier,
-    provider: z.enum(EXECUTABLE_AGENT_PROVIDERS),
+    provider: admissionProvider,
     hostId: identifier,
+    workflowRunId: identifier.optional(),
+    workflowStepId: identifier.optional(),
+    rootReservationId: identifier.optional(),
     requested: AdmissionCapacityRequestSchema,
     requestedAt: z.string().datetime(),
   })
@@ -136,8 +141,11 @@ export const AdmissionReservationListQuerySchema = z
     workspaceId: identifier.optional(),
     taskId: identifier.optional(),
     rootTaskId: identifier.optional(),
-    provider: z.enum(EXECUTABLE_AGENT_PROVIDERS).optional(),
+    provider: admissionProvider.optional(),
     hostId: identifier.optional(),
+    workflowRunId: identifier.optional(),
+    workflowStepId: identifier.optional(),
+    rootReservationId: identifier.optional(),
     states: z.array(z.enum(ADMISSION_RESERVATION_STATES)).max(3).optional(),
     limit: z.number().int().min(1).max(1_000).optional(),
   })
