@@ -7,6 +7,7 @@ import type {
   WorkflowStep,
   WorkflowSkillAuditSummary,
   AgentBudgetPolicy,
+  WorkflowAccess,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -141,6 +142,20 @@ export const workflowsApi = {
     return unwrapData(response);
   },
 
+  get: async (workflowId: string): Promise<WorkflowDefinition> => {
+    const response = await apiFetch<WorkflowDefinition | { data: WorkflowDefinition }>(
+      `${API_BASE}/workflows/${encodeURIComponent(workflowId)}`
+    );
+    return unwrapData(response);
+  },
+
+  access: async (workflowId: string): Promise<WorkflowAccess> => {
+    const response = await apiFetch<WorkflowAccess | { data: WorkflowAccess }>(
+      `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/access`
+    );
+    return unwrapData(response);
+  },
+
   create: async (workflow: WorkflowDefinition): Promise<{ success: true; workflowId: string }> =>
     apiFetch(`${API_BASE}/workflows`, {
       method: 'POST',
@@ -148,9 +163,27 @@ export const workflowsApi = {
       body: JSON.stringify(workflow),
     }),
 
+  update: async (
+    workflowId: string,
+    workflow: WorkflowDefinition,
+    expectedVersion: number
+  ): Promise<{ success: true; version: number }> =>
+    apiFetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Resource-Revision': String(expectedVersion),
+      },
+      body: JSON.stringify(workflow),
+    }),
+
   startRun: async (
     workflowId: string,
-    options: { budget?: AgentBudgetPolicy; context?: Record<string, unknown> } = {}
+    options: {
+      taskId?: string;
+      budget?: AgentBudgetPolicy;
+      context?: Record<string, unknown>;
+    } = {}
   ): Promise<WorkflowRunStartResponse> => {
     const response = await apiFetch<WorkflowRunStartResponse | { data: WorkflowRunStartResponse }>(
       `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/runs`,

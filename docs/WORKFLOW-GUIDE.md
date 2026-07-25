@@ -142,8 +142,20 @@ curl -X POST http://localhost:3001/api/workflows/hello-world/runs \
 
 1. Open Veritas Kanban in your browser
 2. Navigate to **Workflows** tab (header navigation)
-3. Click on "Hello World Workflow"
-4. You'll see your active run with real-time step progress
+3. Select the workflow name or **View details** to inspect its definition before execution
+4. Select **Start Run**, review the optional task association and JSON run context, then confirm the run
+5. Open **View workflow runs** to see real-time step progress
+
+### Browse, Edit, and Duplicate Workflows
+
+The workflow browser separates inspection, authoring, and execution:
+
+- A workflow name or **View details** opens a deep-linkable read-only definition at `/workflows/:id`. The definition shows provenance, variables, agents, ordered steps, phases, gate conditions, loop controls, parallel branches, step inputs, acceptance criteria, and outputs.
+- User-owned workflows with edit permission expose **Edit** and save through the Author builder at `/workflows/:id/edit`. The workflow ID remains fixed and the loaded version is sent with the update, so a stale save fails with a conflict instead of overwriting a newer definition. The draft remains in the editor after validation, permission, or conflict errors.
+- Built-in and shared read-only workflows explain why they cannot be edited. Identities with workflow write permission can choose **Duplicate to customize**, select a new ID and name in Author, and save an independent workflow.
+- **Start Run** always opens a separate configuration dialog. An optional task ID associates the run with an existing task, while the JSON object supplies initial workflow context.
+
+Browser Back returns from edit or duplicate to the source definition and from the definition to the workflow browser. Direct links use the same safe fallback instead of leaving the application.
 
 ---
 

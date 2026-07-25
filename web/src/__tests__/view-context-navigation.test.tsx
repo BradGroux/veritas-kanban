@@ -96,6 +96,14 @@ describe('ViewContext route history', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('keeps deep workflow view and edit links inside the Workflows view', () => {
+    window.history.replaceState({}, '', '/workflows/release-blueprint/edit');
+    renderNavigationHarness();
+
+    expect(screen.getByTestId('current-view').textContent).toBe('workflows');
+    expect(window.location.pathname).toBe('/workflows/release-blueprint/edit');
+  });
+
   it('maps Cmd+[ to in-app browser Back semantics', async () => {
     const user = userEvent.setup();
     renderNavigationHarness();

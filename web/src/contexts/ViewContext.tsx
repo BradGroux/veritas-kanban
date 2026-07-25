@@ -66,7 +66,13 @@ function normalizeAppPath(pathname: string): string {
 function getViewFromLocation(): AppView {
   if (typeof window === 'undefined') return 'board';
   const path = normalizeAppPath(window.location.pathname);
-  const entry = Object.entries(VIEW_PATHS).find(([, value]) => value === path);
+  const entries = Object.entries(VIEW_PATHS).sort(
+    ([, leftPath], [, rightPath]) => rightPath.length - leftPath.length
+  );
+  const entry = entries.find(
+    ([view, value]) =>
+      value === path || (view !== 'board' && value !== '/' && path.startsWith(`${value}/`))
+  );
   return (entry?.[0] as AppView | undefined) || 'board';
 }
 
