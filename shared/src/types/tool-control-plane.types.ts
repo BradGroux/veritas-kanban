@@ -62,6 +62,11 @@ export interface ToolDiscoveryEntry {
   description?: string;
   inputSchema: Record<string, unknown>;
   inputSchemaDigest: string;
+  /**
+   * MCP readOnlyHint normalized into a fail-closed external-action class.
+   * Missing, false, or malformed annotations are treated as mutation.
+   */
+  externalAction?: 'read' | 'mutate';
 }
 
 export interface ToolServerDiscovery {
@@ -110,6 +115,7 @@ export interface RunToolCatalogEntry {
     description?: string;
     inputSchema: Record<string, unknown>;
     inputSchemaDigest: string;
+    externalAction?: 'read' | 'mutate';
     decision: RunToolPolicyDecision;
   }>;
   error?: string;
@@ -128,6 +134,8 @@ export interface RunToolCatalog {
   provider: ExecutableAgentProvider;
   providerRuntimeManifestDigest: string;
   taskEnvelopeDigest: string;
+  /** Launch phase evidence used to filter this immutable catalog. */
+  phaseEvidenceDigest?: string;
   entries: RunToolCatalogEntry[];
   createdAt: string;
   digest: string;

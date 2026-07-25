@@ -2,6 +2,7 @@ import {
   COMPLETION_RESULT_SCHEMA_VERSION,
   TASK_ENVELOPE_SCHEMA_VERSION,
   type CompletionResult,
+  type CompletionPhaseAuthorityEvidence,
   type Task,
   type TaskCompletionArtifact,
   type TaskCompletionBlocker,
@@ -85,6 +86,7 @@ export interface CompleteProviderRunInput {
   task: Task;
   taskEnvelope: TaskEnvelope;
   claim: ProviderTerminalClaim;
+  phase?: CompletionPhaseAuthorityEvidence;
 }
 
 type TerminalEvidenceSource = Pick<CompletionEvidenceSource, 'captureCompletionEvidence'>;
@@ -197,6 +199,7 @@ export class ProviderCompletionService {
             : sideEffect
         ),
       continuation: claim.continuation,
+      ...(input.phase ? { phase: structuredClone(input.phase) } : {}),
     };
     const result = parseCompletionResultForEnvelope(
       {

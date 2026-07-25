@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import {
   EXECUTABLE_AGENT_PROVIDERS,
+  PHASE_AUTHORITY_DIMENSIONS,
   RUN_APPROVAL_ACTION_CLASSES,
   RUN_APPROVAL_SCHEMA_VERSION,
+  PHASE_NAMES,
   type RunApprovalActor,
   type RunApprovalDecisionInput,
   type RunApprovalRequest,
@@ -12,6 +14,19 @@ import {
 
 const IdentifierSchema = z.string().trim().min(1).max(240);
 const IsoTimestampSchema = z.string().datetime();
+const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const PhaseScopeSchema = z.string().trim().min(1).max(2_048);
+const ApprovalPhaseIdentitySchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('legacy'), phase: z.literal('legacy') }).strict(),
+  z
+    .object({
+      mode: z.literal('profile'),
+      phase: z.enum(PHASE_NAMES),
+      profileId: IdentifierSchema,
+      profileVersion: z.number().int().positive().max(10_000),
+    })
+    .strict(),
+]);
 
 const JsonValueSchema: z.ZodType<RunEventJsonValue> = z.lazy(() =>
   z.union([
@@ -70,6 +85,35 @@ export const RunApprovalRequestSchema: z.ZodType<RunApprovalRequest> = z
     turnId: IdentifierSchema.optional(),
     itemId: IdentifierSchema.optional(),
     mobileSafe: z.boolean(),
+    phase: z
+      .object({
+        evidenceDigest: DigestSchema,
+        manifestDigest: DigestSchema,
+        identity: ApprovalPhaseIdentitySchema,
+        transitionSequence: z.number().int().nonnegative(),
+        requirements: z
+          .array(
+            z
+              .object({
+                dimension: z.enum(PHASE_AUTHORITY_DIMENSIONS),
+                requestedScopes: z
+                  .array(PhaseScopeSchema)
+                  .min(1)
+                  .max(100)
+                  .refine((values) => new Set(values).size === values.length),
+              })
+              .strict()
+          )
+          .min(1)
+          .max(PHASE_AUTHORITY_DIMENSIONS.length)
+          .refine(
+            (requirements) =>
+              new Set(requirements.map((requirement) => requirement.dimension)).size ===
+              requirements.length
+          ),
+      })
+      .strict()
+      .optional(),
     status: z.enum(['pending', 'approved', 'rejected', 'expired', 'cancelled']),
     revision: z.number().int().positive(),
     createdAt: IsoTimestampSchema,

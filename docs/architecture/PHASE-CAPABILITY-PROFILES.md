@@ -3,13 +3,14 @@
 Issue #1034 establishes the provider-neutral authority contract for execution
 phases. It defines what a phase may request and how Veritas computes the
 effective result. Issue #1035 adds durable active-run transitions and operator
-controls; propagation and tool enforcement remain in later #875 slices.
+controls. Issues #1036 and #1033 bind that evidence through launch,
+continuation, tools, approvals, completion, API, CLI, and operator UI surfaces.
 
 The compiler remains intentionally pure. It does not mutate an active attempt,
-persist a transition, filter a tool catalog, or claim that a provider enforced
-the result. The separate
+persist a transition, or filter a tool catalog. The separate
 [Phase Transition Journal](PHASE-TRANSITION-JOURNAL.md) owns active state
-changes and their evidence.
+changes and their evidence; launch and tool services consume the compiled
+result.
 
 ## Contract
 
@@ -109,6 +110,28 @@ Only the harness API may perform this write. A provider shell, hook, MCP tool,
 or redirection must not translate the exception into a general filesystem
 grant.
 
+## Legacy migration
+
+Existing attempts and workflow history are not rewritten. A launch with no
+explicit phase and no profile-authoritative parent remains in `legacy` mode;
+its existing sandbox, provider, profile, and tool policies still apply.
+Readers expose that identity without inventing a transition journal.
+
+Migrate one execution path at a time:
+
+1. Add `phase` to the API or CLI launch, or to an agent workflow step.
+2. Run launch preview against the exact provider, agent profile, sandbox, and
+   tool selection.
+3. Resolve typed enforcement blockers instead of weakening the phase.
+4. Start the run only after preview is enforceable, then use `agent:phase` to
+   inspect the server-owned evidence.
+
+Agent profile packages remain independent narrowing sources. They do not
+silently select or widen a phase, so existing packages need no schema rewrite.
+ACP stdio is the current adapter for explicit phase execution. Keep other
+adapters in legacy mode until their runtime exposes equivalent pre-execution
+command and external-action mediation.
+
 ## Delivery boundary
 
 The delivered phase control plane now includes:
@@ -117,9 +140,13 @@ The delivered phase control plane now includes:
   #1034
 - Durable transition state, approvals, emergency override expiry, restart
   recovery, REST, and CLI controls from #1035
+- Launch, descendant, retry, fallback, resume, fork, and handoff propagation
+  from #1036
+- Phase-filtered tool catalogs, stale-call rejection, phase-bound approvals,
+  completion evidence, and shared REST, CLI, and UI projections from #1033
 
-The remaining tracking-epic slices add launch, descendant, retry, resume, and
-handoff propagation in #1036, then tool enforcement, evidence surfaces, and UI
-in #1033. Until those slices land, a durable transition is authoritative
-Veritas state, not a claim that every provider process or tool has enforced the
-new phase.
+Provider enforcement remains capability-bound. ACP stdio exposes a
+pre-execution permission path for command and external actions. Adapters that
+cannot prove equivalent mediation return typed blockers for explicit phases;
+Veritas does not substitute prompt instructions or post-execution events for
+enforcement.

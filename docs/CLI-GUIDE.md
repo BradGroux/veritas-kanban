@@ -445,33 +445,33 @@ vk project create "rubicon" --color "#7c3aed" --description "Main product"
 
 Manage AI agents on code tasks.
 
-| Command                                                                             | Description                                               |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `vk start <id> [--phase <phase>]`                                                   | Start an agent; optionally bind an execution phase        |
-| `vk launch-preview <id> [--phase <phase>]`                                          | Preview effective launch inputs, blockers, and drift      |
-| `vk workspace-trust scan <id>`                                                      | Inventory repository-controlled execution configuration   |
-| `vk workspace-trust decide <id> --mode <mode> --inventory <digest> --reason <text>` | Authorize or deny one exact inventory                     |
-| `vk workspace-trust revoke <id> --inventory <digest> --reason <text>`               | Revoke the current exact-inventory decision               |
-| `vk stop <id>`                                                                      | Stop a run only when its persisted manifest supports stop |
-| `vk agent:recovery <id>`                                                            | Inspect the latest retry or fallback decision             |
-| `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                  |
-| `vk agent:phase <id> --attempt <id>`                                                | Read durable phase state and transition history           |
-| `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition  |
-| `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion        |
-| `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`            | Resume the exact persisted provider conversation          |
-| `vk agent:follow-up <id> --source-attempt <id> -m <text> [--phase <phase>]`         | Start a provider-native follow-up turn                    |
-| `vk agent:fork <id> --source-attempt <id> -m <text> [--phase <phase>]`              | Fork provider history without mutating its source         |
-| `vk agent:steer <id> --attempt <id> -m <text>`                                      | Steer the exact active provider turn                      |
-| `vk agent:interrupt <id> --attempt <id>`                                            | Interrupt the exact active provider turn                  |
-| `vk agent:compact <id> --attempt <id>`                                              | Compact a supported provider conversation                 |
-| `vk agent:archive <id> --attempt <id>`                                              | Archive a supported provider conversation                 |
-| `vk agent:close <id> --attempt <id>`                                                | Close a supported provider conversation                   |
-| `vk acp status --json`                                                              | Check ACP server-view API and permission readiness        |
-| `vk acp serve --stdio [--task <id>]`                                                | Expose a Veritas-managed task to an ACP v1 client         |
-| `vk agents:pending`                                                                 | List pending agent requests                               |
-| `vk agents:status <id>`                                                             | Check agent running status                                |
-| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (success)        |
-| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (failure)        |
+| Command                                                                             | Description                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `vk start <id> [--phase <phase>]`                                                   | Start an agent; optionally bind an execution phase           |
+| `vk launch-preview <id> [--phase <phase>]`                                          | Preview effective launch inputs, blockers, and drift         |
+| `vk workspace-trust scan <id>`                                                      | Inventory repository-controlled execution configuration      |
+| `vk workspace-trust decide <id> --mode <mode> --inventory <digest> --reason <text>` | Authorize or deny one exact inventory                        |
+| `vk workspace-trust revoke <id> --inventory <digest> --reason <text>`               | Revoke the current exact-inventory decision                  |
+| `vk stop <id>`                                                                      | Stop a run only when its persisted manifest supports stop    |
+| `vk agent:recovery <id>`                                                            | Inspect the latest retry or fallback decision                |
+| `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                     |
+| `vk agent:phase <id> --attempt <id>`                                                | Read effective launch phase, sources, and transition history |
+| `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition     |
+| `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion           |
+| `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`            | Resume the exact persisted provider conversation             |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text> [--phase <phase>]`         | Start a provider-native follow-up turn                       |
+| `vk agent:fork <id> --source-attempt <id> -m <text> [--phase <phase>]`              | Fork provider history without mutating its source            |
+| `vk agent:steer <id> --attempt <id> -m <text>`                                      | Steer the exact active provider turn                         |
+| `vk agent:interrupt <id> --attempt <id>`                                            | Interrupt the exact active provider turn                     |
+| `vk agent:compact <id> --attempt <id>`                                              | Compact a supported provider conversation                    |
+| `vk agent:archive <id> --attempt <id>`                                              | Archive a supported provider conversation                    |
+| `vk agent:close <id> --attempt <id>`                                                | Close a supported provider conversation                      |
+| `vk acp status --json`                                                              | Check ACP server-view API and permission readiness           |
+| `vk acp serve --stdio [--task <id>]`                                                | Expose a Veritas-managed task to an ACP v1 client            |
+| `vk agents:pending`                                                                 | List pending agent requests                                  |
+| `vk agents:status <id>`                                                             | Check agent running status                                   |
+| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (success)           |
+| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (failure)           |
 
 Require one or more capabilities before launch:
 
@@ -574,6 +574,10 @@ vk agent:transition-phase TASK-001 \
   --reason "The approved plan is ready to implement." \
   --json
 ```
+
+`agent:phase` reports the launch phase even before the first transition. Human
+output distinguishes parent, agent-profile, sandbox, tool-catalog, and launch
+policy sources; `--json` returns the server-owned snapshot unchanged.
 
 The first transition also requires `--from-evidence <file>` and
 `--manifest <sha256:...>`. Later requests read the current journal record and

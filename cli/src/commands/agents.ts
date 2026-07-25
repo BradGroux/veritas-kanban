@@ -17,6 +17,7 @@ import type {
   RunApprovalRequest,
   RunRecoveryRecord,
   RunLaunchManifestPreview,
+  RunPhaseAuthoritySnapshot,
   WorkspaceExecutionTrustDecision,
   WorkspaceExecutionTrustDecisionMode,
   WorkspaceExecutionTrustScanResult,
@@ -93,7 +94,11 @@ function printConversationResult(
 }
 
 function phaseIdentityLabel(record: PhaseTransitionRecord): string {
-  const identity = record.effectiveEvidence.identity;
+  return phaseEvidenceIdentityLabel(record.effectiveEvidence);
+}
+
+function phaseEvidenceIdentityLabel(evidence: PhaseCapabilityEvidence): string {
+  const identity = evidence.identity;
   return identity.mode === 'legacy'
     ? 'legacy'
     : `${identity.phase} (${identity.profileId}@${identity.profileVersion})`;
@@ -625,6 +630,7 @@ export function registerAgentCommands(program: Command): void {
         try {
           const taskId = await resolveTaskId(id);
           const result = await api<{
+            phase: RunPhaseAuthoritySnapshot | null;
             current: PhaseTransitionRecord | null;
             history: PhaseTransitionRecord[];
           }>(
@@ -632,14 +638,16 @@ export function registerAgentCommands(program: Command): void {
           );
           if (options.json) {
             console.log(JSON.stringify(result, null, 2));
-          } else if (!result.current) {
-            console.log(chalk.dim('No durable phase transition is recorded for this run'));
+          } else if (!result.phase) {
+            console.log(chalk.dim('This legacy run has no phase authority evidence'));
           } else {
-            console.log(chalk.cyan(`Phase: ${phaseIdentityLabel(result.current)}`));
-            console.log(chalk.dim(`Sequence: ${result.current.sequence}`));
-            console.log(chalk.dim(`Evidence: ${result.current.effectiveEvidence.digest}`));
-            console.log(chalk.dim(`Manifest: ${result.current.manifestDigest}`));
-            if (result.current.emergencyOverride) {
+            console.log(
+              chalk.cyan(`Phase: ${phaseEvidenceIdentityLabel(result.phase.effectiveEvidence)}`)
+            );
+            console.log(chalk.dim(`Sequence: ${result.phase.transitionSequence}`));
+            console.log(chalk.dim(`Evidence: ${result.phase.effectiveEvidence.digest}`));
+            console.log(chalk.dim(`Manifest: ${result.phase.manifestDigest}`));
+            if (result.current?.emergencyOverride) {
               console.log(
                 chalk.yellow(
                   `Emergency override expires: ${result.current.emergencyOverride.expiresAt}`
@@ -672,17 +680,20 @@ export function registerAgentCommands(program: Command): void {
       try {
         const taskId = await resolveTaskId(id);
         const state = await api<{
+          phase: RunPhaseAuthoritySnapshot | null;
           current: PhaseTransitionRecord | null;
           history: PhaseTransitionRecord[];
         }>(`/api/agents/${taskId}/phase?attemptId=${encodeURIComponent(options.attempt)}`);
         const fromEvidence = options.fromEvidence
           ? readPhaseEvidence(options.fromEvidence)
           : undefined;
-        const priorEvidence = state.current?.effectiveEvidence ?? fromEvidence;
+        const priorEvidence =
+          state.phase?.effectiveEvidence ?? state.current?.effectiveEvidence ?? fromEvidence;
         if (!priorEvidence) {
           throw new Error('The first transition requires --from-evidence');
         }
-        const manifestDigest = state.current?.manifestDigest ?? options.manifest;
+        const manifestDigest =
+          state.phase?.manifestDigest ?? state.current?.manifestDigest ?? options.manifest;
         if (!manifestDigest) {
           throw new Error('The first transition requires --manifest');
         }

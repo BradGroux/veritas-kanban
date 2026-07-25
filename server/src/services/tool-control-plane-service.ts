@@ -10,6 +10,7 @@ import {
   type AcpMcpServer,
   type CredentialAction,
   type CredentialDefinition,
+  type PhaseCapabilityEvidence,
   type RunToolCatalog,
   type RunToolCatalogEntry,
   type RunToolCredentialBinding,
@@ -51,6 +52,10 @@ import {
   getCredentialBrokerService,
   type CredentialBrokerService,
 } from './credential-broker-service.js';
+import {
+  getRunPhaseAuthorityService,
+  type RunPhaseAuthorityService,
+} from './run-phase-authority-service.js';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const MAX_RPC_BYTES = 4 * 1024 * 1024;
@@ -92,6 +97,7 @@ export interface PrepareRunToolCatalogInput {
   deniedTools?: string[];
   cwd?: string;
   persist?: boolean;
+  phaseEvidence?: PhaseCapabilityEvidence;
 }
 
 export interface ToolControlPlaneServiceOptions {
@@ -105,6 +111,7 @@ export interface ToolControlPlaneServiceOptions {
   >;
   now?: () => Date;
   environment?: NodeJS.ProcessEnv;
+  phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes' | 'binding'>;
 }
 
 let fileRepository: FileToolControlPlaneRepository | undefined;
@@ -127,6 +134,10 @@ export class ToolControlPlaneService {
   >;
   private readonly now: () => Date;
   private readonly environment: NodeJS.ProcessEnv;
+  private readonly phaseAuthority: Pick<
+    RunPhaseAuthorityService,
+    'getActive' | 'assertScopes' | 'binding'
+  >;
   private readonly sessions = new Map<string, Promise<RpcSession>>();
   private readonly validators = new Map<string, ValidateFunction>();
 
@@ -138,6 +149,7 @@ export class ToolControlPlaneService {
     this.approvals = options.approvals ?? new RunApprovalBrokerService();
     this.credentialBroker = options.credentialBroker ?? getCredentialBrokerService();
     this.now = options.now ?? (() => new Date());
+    this.phaseAuthority = options.phaseAuthority ?? getRunPhaseAuthorityService();
   }
 
   async listDefinitions(): Promise<ToolServerDefinition[]> {
@@ -312,12 +324,16 @@ export class ToolControlPlaneService {
           denied.has(qualifiedName);
         const approval =
           definition.approvalMode === 'always' ||
-          matchesTool(definition.approvalRequiredTools, tool.name, qualifiedName);
+          matchesTool(definition.approvalRequiredTools, tool.name, qualifiedName) ||
+          input.phaseEvidence?.approvalRequiredDimensions.includes('external.action') === true;
+        const phaseAllowsAction =
+          !input.phaseEvidence ||
+          authorityAllows(input.phaseEvidence, 'external.action', tool.externalAction ?? 'mutate');
         return {
           ...tool,
           qualifiedName,
           decision:
-            !definitionAllows || !runAllows || isDenied
+            !definitionAllows || !runAllows || isDenied || !phaseAllowsAction
               ? ('deny' as const)
               : approval
                 ? ('approval' as const)
@@ -344,6 +360,22 @@ export class ToolControlPlaneService {
         entries.push(degradedEntry(definition, message, discovery));
         continue;
       }
+      if (input.phaseEvidence && credentialBindings.length > 0) {
+        const credentialAllowed = credentialBindings.every((binding) =>
+          authorityAllows(
+            input.phaseEvidence as PhaseCapabilityEvidence,
+            'credential.access',
+            binding.credentialReference
+          )
+        );
+        const credentialApproval =
+          input.phaseEvidence.approvalRequiredDimensions.includes('credential.access');
+        for (const tool of catalogTools) {
+          if (tool.decision === 'deny') continue;
+          if (!credentialAllowed) tool.decision = 'deny';
+          else if (credentialApproval) tool.decision = 'approval';
+        }
+      }
       entries.push({
         serverId: definition.id,
         serverVersion: definition.version,
@@ -364,6 +396,7 @@ export class ToolControlPlaneService {
       provider: input.provider,
       providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
       taskEnvelopeDigest: input.taskEnvelopeDigest,
+      ...(input.phaseEvidence ? { phaseEvidenceDigest: input.phaseEvidence.digest } : {}),
       entries,
       createdAt: this.now().toISOString(),
       digest: 'sha256:'.padEnd(71, '0'),
@@ -439,9 +472,52 @@ export class ToolControlPlaneService {
       : undefined;
     const credentialApprovalRequired =
       credentialBound && (await this.credentialApprovalRequired(entry));
+    const phaseSnapshot = catalog.phaseEvidenceDigest
+      ? await this.phaseAuthority.getActive('local', request.taskId, request.attemptId, 1)
+      : null;
+    if (
+      catalog.phaseEvidenceDigest &&
+      (!phaseSnapshot || phaseSnapshot.launch.evidence.digest !== catalog.phaseEvidenceDigest)
+    ) {
+      throw new ConflictError('Run tool catalog phase evidence does not match this attempt.', {
+        catalogPhaseEvidenceDigest: catalog.phaseEvidenceDigest,
+        launchPhaseEvidenceDigest: phaseSnapshot?.launch.evidence.digest,
+      });
+    }
+    const phaseRequirements = phaseSnapshot
+      ? [
+          {
+            dimension: 'external.action' as const,
+            requestedScopes: [tool.externalAction ?? 'mutate'],
+          },
+          ...((entry.credentialBindings ?? []).length > 0
+            ? [
+                {
+                  dimension: 'credential.access' as const,
+                  requestedScopes: [
+                    ...new Set(
+                      (entry.credentialBindings ?? []).map((binding) => binding.credentialReference)
+                    ),
+                  ].sort(),
+                },
+              ]
+            : []),
+        ]
+      : [];
+    for (const requirement of phaseRequirements) {
+      this.phaseAuthority.assertScopes(
+        phaseSnapshot as NonNullable<typeof phaseSnapshot>,
+        requirement.dimension,
+        requirement.requestedScopes
+      );
+    }
+    const phaseApprovalRequired =
+      phaseSnapshot?.effectiveEvidence.approvalRequiredDimensions.some((dimension) =>
+        phaseRequirements.some((requirement) => requirement.dimension === dimension)
+      ) === true;
     let approvedRequestId: string | undefined;
 
-    if (tool.decision === 'approval' || credentialApprovalRequired) {
+    if (tool.decision === 'approval' || credentialApprovalRequired || phaseApprovalRequired) {
       const providerRequestId = credentialActionFingerprint
         ? `tool:${request.operationId}:${credentialActionFingerprint}`
         : `tool:${request.operationId}`;
@@ -465,6 +541,9 @@ export class ToolControlPlaneService {
         evidenceRevision: catalog.digest,
         providerRequestId,
         mobileSafe: false,
+        ...(phaseSnapshot
+          ? { phase: this.phaseAuthority.binding(phaseSnapshot, phaseRequirements) }
+          : {}),
       });
       if (request.approvalId && request.approvalId !== approval.id) {
         throw new ConflictError('Approval identity does not match this exact tool call.');
@@ -1494,6 +1573,10 @@ function normalizeDiscoveredTool(tool: Record<string, unknown>) {
       : {};
   assertBoundedJson(inputSchema, MAX_SCHEMA_BYTES, `Input schema for ${name}`);
   assertSafeSchema(inputSchema, `Input schema for ${name}`);
+  const annotations =
+    tool.annotations && typeof tool.annotations === 'object' && !Array.isArray(tool.annotations)
+      ? (tool.annotations as Record<string, unknown>)
+      : undefined;
   return {
     name,
     ...(typeof tool.description === 'string'
@@ -1501,6 +1584,7 @@ function normalizeDiscoveredTool(tool: Record<string, unknown>) {
       : {}),
     inputSchema,
     inputSchemaDigest: calculateSchemaDigest(inputSchema),
+    externalAction: annotations?.readOnlyHint === true ? ('read' as const) : ('mutate' as const),
   };
 }
 
@@ -1574,6 +1658,15 @@ function degradedEntry(
 
 function matchesTool(list: string[], name: string, qualifiedName: string): boolean {
   return list.includes('*') || list.includes(name) || list.includes(qualifiedName);
+}
+
+function authorityAllows(
+  evidence: PhaseCapabilityEvidence,
+  dimension: 'external.action' | 'credential.access',
+  scope: string
+): boolean {
+  const allowed = evidence.effectiveAuthority[dimension];
+  return allowed.includes('*') || allowed.includes(scope);
 }
 
 function minimalProcessEnvironment(

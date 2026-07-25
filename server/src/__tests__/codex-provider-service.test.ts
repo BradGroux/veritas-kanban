@@ -1741,6 +1741,50 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockUpdateTask).not.toHaveBeenCalled();
   });
 
+  it('does not treat Codex untrusted approvals as complete phase command mediation', async () => {
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-app-server',
+          name: 'OpenAI Codex app-server',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-app-server',
+          model: 'gpt-5.6',
+        },
+      ],
+    });
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: agent.enabled,
+      configured: true,
+      command: agent.command,
+      executableFound: true,
+      executablePath: '/opt/homebrew/bin/codex',
+      providerVersion: 'codex-cli 0.145.0',
+      providerVersionSource: 'codex --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-07-23T00:00:00.000Z',
+    }));
+    const service = testableService(tmpDir);
+
+    const preview = await service.previewAgentLaunch(task.id, 'codex-app-server', {
+      phase: 'explore',
+    });
+
+    expect(preview.manifest.enforcement.blockers).toContainEqual(
+      expect.objectContaining({
+        code: 'phase-required-authority-unsupported',
+        field: 'phase.evidence.command.execute',
+      })
+    );
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
+
   it('compares replay and fork previews with compatible and incompatible parent manifests', async () => {
     const service = testableService(tmpDir);
     const parent = await service.previewAgentLaunch(task.id, 'codex');

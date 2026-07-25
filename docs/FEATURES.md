@@ -349,8 +349,12 @@ First-class support for autonomous coding agents.
   durably restore the prior phase. Task and workflow launches, retries and
   fallbacks, provider changes, conversation continuations, and active-run
   controls bind the effective phase and exact parent evidence before attempt
-  mutation. Tool-command and external-action enforcement remain tracked in
-  #1033. See
+  mutation. Run tool catalogs omit disallowed tools and credentials, mediated
+  calls re-check active transition evidence, approvals cannot outlive their
+  bound phase, and completion plus the task timeline expose the same
+  server-owned evidence. ACP stdio provides pre-execution command and external
+  action mediation; other adapters fail explicit phases closed when equivalent
+  controls are unavailable. See
   [Phase Capability Profiles](architecture/PHASE-CAPABILITY-PROFILES.md) and
   [Phase Transition Journal](architecture/PHASE-TRANSITION-JOURNAL.md).
 - **Provider runtime manifests** — Every executable adapter records a versioned, evidence-backed capability snapshot and digest on the attempt, history, trace, and log; provider version skew reruns conformance and unsupported configured providers fail closed instead of falling back to OpenClaw

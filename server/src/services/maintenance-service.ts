@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import {
+  PHASE_AUTHORITY_DIMENSIONS,
+  type PhaseCapabilityEvidence,
   type MaintenanceCleanupPreviewItem,
   type MaintenanceDebugBundle,
   type MaintenanceHealthCheck,
@@ -26,6 +28,8 @@ import {
 } from '../utils/paths.js';
 import { redactString } from '../lib/redact.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
+import { getStorage } from '../storage/index.js';
+import { getRunPhaseAuthorityService } from './run-phase-authority-service.js';
 
 interface DirectoryStats {
   bytes: number;
@@ -40,6 +44,16 @@ interface LogSourceDefinition {
 }
 
 const MAX_TAIL_LINES = 500;
+const MAX_PHASE_DIAGNOSTIC_RUNS = 200;
+
+interface PhaseAuthorityDiagnosticExport {
+  generatedAt: string;
+  status: 'ok' | 'unavailable';
+  truncated: boolean;
+  records: Array<Record<string, unknown>>;
+}
+
+type PhaseAuthorityDiagnosticCollector = () => Promise<PhaseAuthorityDiagnosticExport>;
 
 const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
   [
@@ -61,6 +75,10 @@ const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
 ];
 
 export class MaintenanceService {
+  constructor(
+    private readonly collectPhaseAuthority: PhaseAuthorityDiagnosticCollector = collectPhaseAuthorityDiagnostics
+  ) {}
+
   async buildSummary(): Promise<MaintenanceSummary> {
     const generatedAt = new Date().toISOString();
     const sqlite = getSqliteStorageDiagnostics();
@@ -242,6 +260,7 @@ export class MaintenanceService {
     await fs.mkdir(path.join(bundleDir, 'logs'), { recursive: true });
 
     const summary = await this.buildSummary();
+    const phaseAuthority = await this.collectPhaseAuthority();
     const logTails: MaintenanceLogTail[] = [];
     for (const source of summary.logs.filter((entry) => entry.exists)) {
       const tail = await this.tailLog(source.id, 200);
@@ -254,7 +273,14 @@ export class MaintenanceService {
     }
 
     const manifest: MaintenanceDebugBundle['manifest'] = {
-      includedCategories: ['health', 'storage', 'lifecycle', 'work-products', 'redacted-log-tails'],
+      includedCategories: [
+        'health',
+        'storage',
+        'lifecycle',
+        'work-products',
+        'phase-authority',
+        'redacted-log-tails',
+      ],
       excludedCategories: [
         'raw tokens',
         'token hashes',
@@ -275,6 +301,11 @@ export class MaintenanceService {
     await fs.writeFile(
       path.join(bundleDir, 'summary.json'),
       JSON.stringify(this.redactMaintenanceValue(summary), null, 2),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(bundleDir, 'phase-authority.json'),
+      JSON.stringify(this.redactMaintenanceValue(phaseAuthority), null, 2),
       'utf-8'
     );
     await fs.writeFile(
@@ -625,6 +656,113 @@ export class MaintenanceService {
       .replace(/\/Users\/[^/\s]+\/[^\s)]+/g, '[redacted-local-path]')
       .replace(/[A-Z]:\\Users\\[^\\\s]+\\[^\s)]+/g, '[redacted-local-path]');
   }
+}
+
+async function collectPhaseAuthorityDiagnostics(): Promise<PhaseAuthorityDiagnosticExport> {
+  const generatedAt = new Date().toISOString();
+  let tasks;
+  try {
+    tasks = await getStorage().tasks.findAll();
+  } catch {
+    return { generatedAt, status: 'unavailable', truncated: false, records: [] };
+  }
+
+  const candidates = tasks.flatMap((task) => {
+    const attempts = [...(task.attempts ?? []), ...(task.attempt ? [task.attempt] : [])];
+    const unique = new Map(attempts.map((attempt) => [attempt.id, attempt]));
+    return [...unique.values()]
+      .filter((attempt) => attempt.runLaunchManifest?.phase)
+      .map((attempt) => ({ task, attempt }));
+  });
+  const selected = candidates.slice(0, MAX_PHASE_DIAGNOSTIC_RUNS);
+  const phaseAuthority = getRunPhaseAuthorityService();
+  const records = await Promise.all(
+    selected.map(async ({ task, attempt }) => {
+      try {
+        const snapshot = await phaseAuthority.get('local', task.id, attempt.id, 100);
+        if (!snapshot) return { taskId: task.id, attemptId: attempt.id, status: 'legacy' };
+        return {
+          taskId: task.id,
+          attemptId: attempt.id,
+          provider: attempt.provider,
+          status: 'available',
+          launch: phaseEvidenceDiagnostic(snapshot.launch.evidence),
+          effective: phaseEvidenceDiagnostic(snapshot.effectiveEvidence),
+          transitionSequence: snapshot.transitionSequence,
+          sources: snapshot.launch.sourceReferences.map((source) => ({
+            kind: source.kind,
+            originScope: source.originScope,
+            digest: digestFingerprint(source.sourceDigest),
+          })),
+          authorityExpansions: snapshot.history
+            .filter((transition) =>
+              transition.authorityDelta.entries.some((entry) => entry.addedScopes.length > 0)
+            )
+            .map((transition) => ({
+              sequence: transition.sequence,
+              policyDecision: transition.policyDecision,
+              dimensions: transition.authorityDelta.entries
+                .filter((entry) => entry.addedScopes.length > 0)
+                .map((entry) => ({
+                  dimension: entry.dimension,
+                  addedScopeCount: entry.addedScopes.length,
+                })),
+              ...(transition.emergencyOverride
+                ? { overrideExpiresAt: transition.emergencyOverride.expiresAt }
+                : {}),
+            })),
+          ...(attempt.completionResult?.phase
+            ? {
+                completion: {
+                  launchEvidenceDigest: digestFingerprint(
+                    attempt.completionResult.phase.launchEvidenceDigest
+                  ),
+                  effective: phaseEvidenceDiagnostic(
+                    attempt.completionResult.phase.effectiveEvidence
+                  ),
+                  transitionSequence: attempt.completionResult.phase.transitionSequence,
+                  authorityExpansionCount:
+                    attempt.completionResult.phase.authorityExpansions.length,
+                },
+              }
+            : {}),
+        };
+      } catch {
+        return { taskId: task.id, attemptId: attempt.id, status: 'unavailable' };
+      }
+    })
+  );
+  return {
+    generatedAt,
+    status: 'ok',
+    truncated: candidates.length > selected.length,
+    records,
+  };
+}
+
+function phaseEvidenceDiagnostic(evidence: PhaseCapabilityEvidence) {
+  return {
+    identity: evidence.identity,
+    status: evidence.status,
+    digest: digestFingerprint(evidence.digest),
+    authority: Object.fromEntries(
+      PHASE_AUTHORITY_DIMENSIONS.map((dimension) => [
+        dimension,
+        {
+          scopeCount: evidence.effectiveAuthority[dimension].length,
+          wildcard: evidence.effectiveAuthority[dimension].includes('*'),
+        },
+      ])
+    ),
+    blockers: evidence.blockers.map((blocker) => ({
+      code: blocker.code,
+      dimension: blocker.dimension,
+    })),
+  };
+}
+
+function digestFingerprint(digest: string): string {
+  return digest.slice(0, 19);
 }
 
 let singleton: MaintenanceService | null = null;

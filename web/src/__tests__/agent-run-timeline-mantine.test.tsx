@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   useAgentRunTraces: vi.fn(),
   useActiveRuns: vi.fn(),
   usePendingAgentApprovals: vi.fn(),
+  useAgentPhase: vi.fn(),
   decideApprovalMutateAsync: vi.fn(),
   useRecentRuns: vi.fn(),
   useTaskTelemetryEvents: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
 
 vi.mock('@/hooks/useAgent', () => ({
   usePendingAgentApprovals: mocks.usePendingAgentApprovals,
+  useAgentPhase: mocks.useAgentPhase,
   useDecideRunApproval: () => ({
     mutateAsync: mocks.decideApprovalMutateAsync,
     isPending: false,
@@ -338,6 +340,7 @@ describe('agent run timeline Mantine surface', () => {
     mocks.useAgentRunTraces.mockReturnValue({ data: [trace], isLoading: false });
     mocks.useActiveRuns.mockReturnValue({ data: [workflowRun], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [approval], isLoading: false });
+    mocks.useAgentPhase.mockReturnValue({ data: null, isLoading: false });
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskTelemetryEvents.mockReturnValue({ data: telemetryEvents, isLoading: false });
     mocks.useTaskNotifications.mockReturnValue({ data: [notification], isLoading: false });
@@ -500,6 +503,60 @@ describe('agent run timeline Mantine surface', () => {
     const highlighted = screen.getByTestId('highlighted-timeline-event');
     expect(highlighted.textContent).toContain('Token usage recorded');
     expect(highlighted.querySelector('[data-highlighted="true"]')).toBeDefined();
+  });
+
+  it('renders the server-owned phase and authority sources', () => {
+    mocks.useAgentPhase.mockReturnValue({
+      data: {
+        effectiveEvidence: {
+          identity: {
+            mode: 'profile',
+            phase: 'implement',
+            profileId: 'builtin-implement',
+            profileVersion: 1,
+          },
+          status: 'allowed',
+          digest: `sha256:${'1'.repeat(64)}`,
+          blockers: [],
+        },
+        transitionSequence: 2,
+        current: {
+          emergencyOverride: {
+            expiresAt: '2026-07-26T00:00:00.000Z',
+          },
+        },
+        history: [],
+        launch: {
+          sourceReferences: [
+            {
+              kind: 'parent',
+              originScope: 'parent',
+              sourceDigest: `sha256:${'2'.repeat(64)}`,
+            },
+            {
+              kind: 'agent-profile',
+              originScope: 'agent-profile',
+              sourceDigest: `sha256:${'4'.repeat(64)}`,
+            },
+            {
+              kind: 'sandbox',
+              originScope: 'run',
+              sourceDigest: `sha256:${'3'.repeat(64)}`,
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    });
+
+    renderWithProviders(<AgentRunTimelinePanel task={task} />);
+
+    expect(screen.getByText('Effective phase authority')).toBeDefined();
+    expect(screen.getByText('implement')).toBeDefined();
+    expect(screen.getByText('inherited: parent')).toBeDefined();
+    expect(screen.getByText('profile: agent-profile')).toBeDefined();
+    expect(screen.getByText('sandbox: run')).toBeDefined();
+    expect(screen.getByText(/Override until/)).toBeDefined();
   });
 
   it('pages long timelines so replay rendering stays bounded', async () => {

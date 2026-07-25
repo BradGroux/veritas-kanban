@@ -3,7 +3,8 @@
 Issue #1035 adds the durable state machine that moves one active run between
 compiled phase capability profiles. It builds on the
 [Phase Capability Profiles](PHASE-CAPABILITY-PROFILES.md) contract without
-claiming launch or tool enforcement that belongs to #1036 and #1033.
+duplicating the launch propagation and tool enforcement delivered by #1036 and
+#1033.
 
 ## Durable record
 
@@ -121,8 +122,12 @@ expiry.
 ## Delivery boundary
 
 The journal makes phase state, approval, expiry, restart recovery, and operator
-control durable. Issue #1036 will bind compiled evidence into launch,
-descendant, retry, resume, and handoff behavior. Issue #1033 will enforce the
-active evidence at tool invocation and expose it through evidence and UI
-surfaces. Until those slices land, clients must not describe the journal alone
-as complete provider-side phase enforcement.
+control durable. Launch propagation binds it into descendants, retries,
+continuations, and handoffs. Tool catalogs, mediated invocation, approvals,
+completion results, and the run timeline consume the same server-owned active
+projection.
+
+The journal still does not prove provider enforcement by itself. ACP stdio
+supplies the current pre-execution mediation contract. An adapter without
+equivalent command and external-action controls fails an explicit phase launch
+closed.

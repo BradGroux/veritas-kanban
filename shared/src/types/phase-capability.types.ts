@@ -252,3 +252,39 @@ export interface PhaseTransitionResult {
   approval?: RunApprovalRequest;
   targetEvidenceDigest: string;
 }
+
+/**
+ * Server-owned projection used by run detail, approvals, completion evidence,
+ * and diagnostic exports. The launch snapshot remains immutable while
+ * `effectiveEvidence` follows the append-only transition journal.
+ */
+export interface RunPhaseAuthoritySnapshot {
+  taskId: string;
+  attemptId: string;
+  manifestDigest: string;
+  launch: import('./run-launch-manifest.types.js').RunLaunchPhaseAuthority;
+  effectiveEvidence: PhaseCapabilityEvidence;
+  transitionSequence: number;
+  current: PhaseTransitionRecord | null;
+  history: PhaseTransitionRecord[];
+}
+
+/** Exact active phase snapshot bound into a durable approval request. */
+export interface RunApprovalPhaseBinding {
+  evidenceDigest: string;
+  manifestDigest: string;
+  identity: PhaseIdentity;
+  transitionSequence: number;
+  requirements: Array<{
+    dimension: PhaseAuthorityDimension;
+    requestedScopes: string[];
+  }>;
+}
+
+/** Phase evidence preserved with the normalized provider completion result. */
+export interface CompletionPhaseAuthorityEvidence {
+  launchEvidenceDigest: string;
+  effectiveEvidence: PhaseCapabilityEvidence;
+  transitionSequence: number;
+  authorityExpansions: PhaseTransitionRecord[];
+}

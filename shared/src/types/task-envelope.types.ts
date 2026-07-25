@@ -258,4 +258,6 @@ export interface CompletionResult {
   verification: TaskCompletionVerification[];
   sideEffects: TaskCompletionSideEffect[];
   continuation: TaskContinuationHandle | null;
+  /** Present for phase-controlled runs compiled after phase enforcement shipped. */
+  phase?: import('./phase-capability.types.js').CompletionPhaseAuthorityEvidence;
 }

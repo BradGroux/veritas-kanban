@@ -147,7 +147,22 @@ describe('MaintenanceService', () => {
   });
 
   it('creates a redacted debug bundle manifest and redacted log tails', async () => {
-    const service = new MaintenanceService();
+    const service = new MaintenanceService(async () => ({
+      generatedAt: '2026-07-25T00:00:00.000Z',
+      status: 'ok',
+      truncated: false,
+      records: [
+        {
+          taskId: 'task-phase',
+          attemptId: 'attempt-phase',
+          effective: {
+            identity: { mode: 'profile', phase: 'verify' },
+            digest: 'sha256:123456789012',
+          },
+          authorityExpansions: [{ sequence: 2, dimensions: ['filesystem.write'] }],
+        },
+      ],
+    }));
 
     const bundle = await service.createDebugBundle();
     const manifest = JSON.parse(
@@ -158,11 +173,17 @@ describe('MaintenanceService', () => {
       'utf-8'
     );
     const summary = await fs.readFile(path.join(bundle.outputPath, 'summary.json'), 'utf-8');
+    const phaseAuthority = JSON.parse(
+      await fs.readFile(path.join(bundle.outputPath, 'phase-authority.json'), 'utf-8')
+    ) as { records: Array<Record<string, unknown>> };
     const bundleText = await readDirectoryText(bundle.outputPath);
 
     expect(bundle.redacted).toBe(true);
     expect(manifest.includedCategories).toEqual(
-      expect.arrayContaining(['health', 'storage', 'redacted-log-tails'])
+      expect.arrayContaining(['health', 'storage', 'phase-authority', 'redacted-log-tails'])
+    );
+    expect(phaseAuthority.records).toContainEqual(
+      expect.objectContaining({ taskId: 'task-phase', attemptId: 'attempt-phase' })
     );
     expect(manifest.files.find((file) => file.id === 'server')?.path).toContain('[redacted-logs]');
     expect(serverLog).not.toContain('sk_supersecret1234567890');
