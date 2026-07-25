@@ -82,6 +82,11 @@ veritas-kanban/
    pnpm --filter @veritas-kanban/server exec vitest run src/path/to/changed.test.ts
    ```
 
+   Use direct `exec vitest run` invocation for exact-file slices. Do not use
+   `pnpm --filter <package> test -- --run <test-files>` as a focused command;
+   package wrappers can ignore that file boundary and expand into the entire
+   package suite.
+
    Build `@veritas-kanban/shared` first and type-check its known consumers when
    a shared contract changes. Use `pnpm test` at an explicit integration,
    critical-security, or release milestone, or when the deterministic CI

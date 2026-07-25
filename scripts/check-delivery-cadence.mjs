@@ -18,6 +18,10 @@ export const CADENCE_CONTRACTS = {
       pattern: /run the narrowest useful loop/i,
     },
     {
+      description: 'direct Vitest exact-file invocation',
+      pattern: /exec vitest run/i,
+    },
+    {
       description: 'milestone-only complete workspace suite',
       pattern:
         /complete workspace suite once at an explicit integration, critical-security, or release milestone/i,
@@ -43,6 +47,10 @@ export const CADENCE_CONTRACTS = {
     {
       description: 'test count is not a quality target',
       pattern: /Do not use raw test count as a quality measure/i,
+    },
+    {
+      description: 'direct Vitest exact-file invocation',
+      pattern: /exec vitest run/i,
     },
   ],
   '.github/PULL_REQUEST_TEMPLATE.md': [
@@ -180,6 +188,27 @@ export function findUnsafePromptStatements(files) {
   return violations;
 }
 
+export function findAmbiguousFocusedTestCommands(files) {
+  const violations = [];
+  const pattern = /\bpnpm\s+--filter\s+\S+\s+test\s+--\s+--run\b/gi;
+
+  for (const [file, content] of Object.entries(files)) {
+    const normalized = normalizeWhitespace(content);
+    for (const match of normalized.matchAll(pattern)) {
+      const sentence = sentenceContaining(normalized, match.index ?? 0);
+      if (!/\b(?:do not|never|avoid|reject)\b/i.test(sentence)) {
+        violations.push({
+          file,
+          message:
+            'focused Vitest files must use direct `pnpm --filter <package> exec vitest run <exact-test-files>` invocation',
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 function readCadenceFiles(rootDir) {
   return Object.fromEntries(
     Object.keys(CADENCE_CONTRACTS).map((file) => {
@@ -201,9 +230,12 @@ function readActivePromptFiles(rootDir) {
 }
 
 export function runDeliveryCadenceCheck(rootDir = process.cwd()) {
+  const cadenceFiles = readCadenceFiles(rootDir);
+  const promptFiles = readActivePromptFiles(rootDir);
   const violations = [
-    ...findMissingCadenceContracts(readCadenceFiles(rootDir)),
-    ...findUnsafePromptStatements(readActivePromptFiles(rootDir)),
+    ...findMissingCadenceContracts(cadenceFiles),
+    ...findUnsafePromptStatements(promptFiles),
+    ...findAmbiguousFocusedTestCommands({ ...cadenceFiles, ...promptFiles }),
   ];
 
   if (violations.length > 0) {
