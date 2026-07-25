@@ -369,6 +369,12 @@ export function releaseBodyFormattingIssues(value, options = {}) {
       );
     }
 
+    if (compactLayout && blockLine.listItem && trimmed.length > 160) {
+      issues.push(
+        `line ${lineNumber} uses a long list item that will render with ragged hanging indentation; shorten it or use a full-width prose paragraph`
+      );
+    }
+
     const proseBlock =
       !blockLine.heading && !blockLine.listItem && !blockLine.tableRow && trimmed.length < 160;
 
