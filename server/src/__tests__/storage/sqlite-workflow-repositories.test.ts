@@ -138,6 +138,7 @@ describe('SQLite workflow repositories', () => {
     await internals.snapshotWorkflow(running.id, definition);
 
     const completed = run({
+      revision: running.revision,
       status: 'completed',
       completedAt: '2026-03-01T00:05:00.000Z',
       steps: [
